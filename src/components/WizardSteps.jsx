@@ -23,6 +23,34 @@ function stableSelectionIds(value) {
     .filter(Boolean);
 }
 
+// What-if sweeps (one calculateQuote per catalog item / package) are cached
+// against the immutable `form` object plus the identity of the other pricing
+// inputs, so re-renders that don't change pricing (menu search keystrokes,
+// unrelated app state) never repeat the sweep. A WeakMap keyed by the form
+// keeps this hook-free — these step components are also invoked as plain
+// functions by the element-tree tests — and leak-free across drafts.
+const whatIfSweepCache = new WeakMap();
+
+function computeOncePerForm(form, bucket, deps, compute) {
+  if (!form || typeof form !== "object") return compute();
+  let buckets = whatIfSweepCache.get(form);
+  if (!buckets) {
+    buckets = new Map();
+    whatIfSweepCache.set(form, buckets);
+  }
+  const cached = buckets.get(bucket);
+  if (
+    cached
+    && cached.deps.length === deps.length
+    && cached.deps.every((dep, index) => dep === deps[index])
+  ) {
+    return cached.value;
+  }
+  const value = compute();
+  buckets.set(bucket, { deps, value });
+  return value;
+}
+
 function previewTotalDelta({ form, catalog, settings, totals, patch }) {
   if (!catalog || !settings || !totals || !patch) return null;
   try {
@@ -51,6 +79,23 @@ function PackageComparison({
   packageInclusionCount,
   onSelectionTouched
 }) {
+  // One full-quote preview per package, cached per form so unrelated
+  // re-renders never repeat the per-package calculateQuote sweep.
+  const packagePreviews = computeOncePerForm(form, "packages", [catalog, settings, totals], () => (
+    activePackages.map((pkg) => {
+      let preview = null;
+      try {
+        preview = calculateQuote({ ...form, pkg: pkg.id }, catalog, settings);
+      } catch {
+        preview = null;
+      }
+      const delta = preview && totals
+        ? Math.round((Number(preview.total || 0) - Number(totals.total || 0)) * 100) / 100
+        : null;
+      return { pkg, preview, delta };
+    })
+  ));
+
   if (!activePackages.length) return null;
 
   return (
@@ -63,17 +108,8 @@ function PackageComparison({
         <p>Full-quote draft previews include the current guest count and selections.</p>
       </div>
       <div className="package-choice-grid">
-        {activePackages.map((pkg) => {
+        {packagePreviews.map(({ pkg, preview, delta }) => {
           const selected = pkg.id === form.pkg;
-          let preview = null;
-          try {
-            preview = calculateQuote({ ...form, pkg: pkg.id }, catalog, settings);
-          } catch {
-            preview = null;
-          }
-          const delta = preview && totals
-            ? Math.round((Number(preview.total || 0) - Number(totals.total || 0)) * 100) / 100
-            : null;
           return (
             <button
               key={pkg.id}
@@ -783,23 +819,37 @@ export function StepMenuContent({
     })
   })).filter((section) => section.items.length > 0);
 
-  const menuItemImpact = (item) => {
-    if (!catalog || !pricingSettings || !totals) return null;
-    const selected = selectedMenuIds.has(item.id);
-    const nextMenuItems = selected
-      ? stableSelectionIds(form.menuItems).filter((id) => id !== item.id)
-      : [...stableSelectionIds(form.menuItems), item.id];
-    const nextQuantities = { ...(form.menuItemQuantities || {}) };
-    if (!selected && resolvePricingType(item) === "per_item") nextQuantities[item.id] = 1;
-    if (selected) delete nextQuantities[item.id];
-    return previewTotalDelta({
-      form,
-      catalog,
-      settings: pricingSettings,
-      totals,
-      patch: { menuItems: nextMenuItems, menuItemQuantities: nextQuantities }
-    });
-  };
+  // Per-item what-if deltas cached per form so search/filter keystrokes
+  // (component-local state) re-render this list without re-running a full
+  // calculateQuote per visible item.
+  const menuItemImpactById = computeOncePerForm(form, "menu", [catalog, pricingSettings, totals], () => {
+    const impacts = new Map();
+    if (!catalog || !pricingSettings || !totals) return impacts;
+    const selectedIds = new Set(stableSelectionIds(form.menuItems));
+    resolvedMenuSections
+      .flatMap((section) => section.items || [])
+      .forEach((item) => {
+        const selected = selectedIds.has(item.id);
+        const nextMenuItems = selected
+          ? stableSelectionIds(form.menuItems).filter((id) => id !== item.id)
+          : [...stableSelectionIds(form.menuItems), item.id];
+        const nextQuantities = { ...(form.menuItemQuantities || {}) };
+        if (!selected && resolvePricingType(item) === "per_item") nextQuantities[item.id] = 1;
+        if (selected) delete nextQuantities[item.id];
+        impacts.set(item.id, previewTotalDelta({
+          form,
+          catalog,
+          settings: pricingSettings,
+          totals,
+          patch: { menuItems: nextMenuItems, menuItemQuantities: nextQuantities }
+        }));
+      });
+    return impacts;
+  });
+
+  const menuItemImpact = (item) => (
+    menuItemImpactById.has(item.id) ? menuItemImpactById.get(item.id) : null
+  );
 
   const toggleMenuItem = (item, checked, event = null) => {
     const itemId = String(item?.id || "").trim();
@@ -1136,23 +1186,44 @@ export function StepServices({
     }));
   };
 
-  const selectionImpact = (key, quantityKey, item, fallbackQty = 1) => {
-    if (!pricingSettings || !totals) return null;
-    const selectedIds = stableSelectionIds(form[key]);
-    const selected = selectedIds.includes(item.id);
-    const nextIds = selected
-      ? selectedIds.filter((id) => id !== item.id)
-      : [...selectedIds, item.id];
-    const nextQuantities = { ...(form[quantityKey] || {}) };
-    if (selected) delete nextQuantities[item.id];
-    else nextQuantities[item.id] = Math.max(1, Number(nextQuantities[item.id] || fallbackQty || 1));
-    return previewTotalDelta({
-      form,
-      catalog,
-      settings: pricingSettings,
-      totals,
-      patch: { [key]: nextIds, [quantityKey]: nextQuantities }
+  // Toggle deltas for every catalog add-on/rental, cached per form so
+  // unrelated re-renders never repeat the per-item calculateQuote sweep.
+  const selectionImpactByKey = computeOncePerForm(form, "services", [catalog, pricingSettings, totals], () => {
+    const computeImpact = (key, quantityKey, item, fallbackQty) => {
+      if (!pricingSettings || !totals) return null;
+      const selectedIds = stableSelectionIds(form[key]);
+      const selected = selectedIds.includes(item.id);
+      const nextIds = selected
+        ? selectedIds.filter((id) => id !== item.id)
+        : [...selectedIds, item.id];
+      const nextQuantities = { ...(form[quantityKey] || {}) };
+      if (selected) delete nextQuantities[item.id];
+      else nextQuantities[item.id] = Math.max(1, Number(nextQuantities[item.id] || fallbackQty || 1));
+      return previewTotalDelta({
+        form,
+        catalog,
+        settings: pricingSettings,
+        totals,
+        patch: { [key]: nextIds, [quantityKey]: nextQuantities }
+      });
+    };
+    const addons = new Map();
+    (catalog.addons || []).forEach((item) => {
+      addons.set(item.id, computeImpact("addons", "addonQuantities", item, 1));
     });
+    const rentals = new Map();
+    (catalog.rentals || []).forEach((item) => {
+      const fallbackQty = typeof item.qtyRule === "function"
+        ? item.qtyRule(Math.max(0, Number(form.guests || 0)))
+        : 1;
+      rentals.set(item.id, computeImpact("rentals", "rentalQuantities", item, fallbackQty));
+    });
+    return { addons, rentals };
+  });
+
+  const selectionImpact = (key, quantityKey, item) => {
+    const impacts = key === "rentals" ? selectionImpactByKey.rentals : selectionImpactByKey.addons;
+    return impacts.has(item.id) ? impacts.get(item.id) : null;
   };
 
   const removeMenuItem = (item) => {

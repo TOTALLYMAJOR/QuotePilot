@@ -186,12 +186,12 @@ describe("CommercialChangeImpactPanel", () => {
 
     expect(markup).toContain('data-advisory-class="REVIEW"');
     expect(markup).toContain('data-dependent-node="output.staffing_requirement"');
-    expect(markup).toContain(">REVIEW<");
+    expect(markup).toContain(">Review<");
     expect(markup).toContain('data-advisory-class="STALE"');
     expect(markup).toContain('data-dependent-node="artifact.beo"');
-    expect(markup).toContain(">STALE<");
-    expect(markup).toContain("1 REVIEW · 1 STALE · 2 total dependent results");
-    expect(markup).toContain("Triggered by: fact.guest_count, fact.venue");
+    expect(markup).toContain(">Out of date<");
+    expect(markup).toContain("1 to review · 1 out of date · 2 related items");
+    expect(markup).toContain("Because this changed: Guest count, Venue");
   });
 
   test("exposes exact source, graph, revision, authority, and bound provenance", () => {

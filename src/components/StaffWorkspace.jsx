@@ -6,6 +6,7 @@ import {
   DownloadSimple,
   EnvelopeOpen,
   EnvelopeSimple,
+  MagnifyingGlass,
   MapPin,
   Martini,
   NotePencil,
@@ -148,6 +149,8 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [invitationPreview, setInvitationPreview] = useState(null);
   const [invitationBusy, setInvitationBusy] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [rosterFilter, setRosterFilter] = useState("all");
 
   const load = async ({ recovery = false } = {}) => {
     setState({ status: recovery ? "recovery" : "loading", message: recovery ? "Refreshing staff records…" : "Loading staff records…" });
@@ -352,40 +355,114 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       : "Awaiting staff response";
 
   const records = directory?.records || [];
+  const activeCount = records.filter((entry) => entry.profile.active).length;
+  const needsAttentionCount = records.filter((entry) => (
+    entry.profile.active
+    && (
+      entry.record.contact.emailStatus !== "verified"
+      || !entry.record.contact.emergencyContactPhone
+      || Number(entry.record.compensation.hourlyRate || 0) <= 0
+    )
+  )).length;
+  const normalizedRosterSearch = rosterSearch.trim().toLowerCase();
+  const visibleRecords = records.filter((entry) => {
+    const searchable = [
+      entry.profile.displayName,
+      entry.record.preferredName,
+      entry.record.contact.email,
+      Array.isArray(entry.profile.capabilities) ? entry.profile.capabilities.join(" ") : ""
+    ].join(" ").toLowerCase();
+    const matchesSearch = !normalizedRosterSearch || searchable.includes(normalizedRosterSearch);
+    const matchesFilter = rosterFilter === "all"
+      || (rosterFilter === "active" && entry.profile.active)
+      || (rosterFilter === "needs_attention" && (
+        entry.profile.active
+        && (
+          entry.record.contact.emailStatus !== "verified"
+          || !entry.record.contact.emergencyContactPhone
+          || Number(entry.record.compensation.hourlyRate || 0) <= 0
+        )
+      ));
+    return matchesSearch && matchesFilter;
+  });
+  const selectedDisplayName = draft
+    ? draft.record.preferredName || draft.profile.displayName || "New staff member"
+    : "";
+  const selectedRoles = draft?.profile?.capabilities || [];
+  const contactVerified = draft?.record?.contact?.emailStatus === "verified";
+  const emergencyReady = Boolean(draft?.record?.contact?.emergencyContactPhone);
+  const hourlyRate = Number(draft?.record?.compensation?.hourlyRate || 0);
+  const assignmentAccepted = currentInvitation?.acknowledgement?.state === "accepted";
+  const availabilityWindows = draft?.profile?.availabilityWindows || [];
+  const openAvailabilityCount = availabilityWindows.filter((window) => window.state === "available").length;
+  const readinessItems = draft ? [
+    ["Contact verified", contactVerified ? "Complete" : "Missing", contactVerified],
+    ["Availability", openAvailabilityCount ? `${openAvailabilityCount} window${openAvailabilityCount === 1 ? "" : "s"}` : "Not set", openAvailabilityCount > 0],
+    ["Rate", hourlyRate > 0 ? `${currency(hourlyRate, draft.record.compensation.currency)}/hr` : "Missing", hourlyRate > 0],
+    ["Emergency contact", emergencyReady ? "Complete" : "Missing", emergencyReady]
+  ] : [];
+  const assignmentSteps = [
+    ["Invited", Boolean(currentInvitation)],
+    ["Accepted", assignmentAccepted],
+    ["Briefed", currentInvitation?.state === "provider_accepted" || currentInvitation?.state === "delivered" || assignmentAccepted],
+    ["Completed", selectedAssignment?.state === "completed"]
+  ];
+  const focusStaffDetails = () => {
+    if (typeof document === "undefined") return;
+    const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    document.getElementById("staff-detail-sections")?.scrollIntoView({ block: "start", behavior });
+  };
+  const preferredContactLabel = ({
+    email: "Email",
+    phone: "Phone",
+    either: "Either"
+  }[draft?.record?.contact?.preferredChannel] || "Email");
   return (
     <main className="container workspace-route-main staff-workspace" data-surface-purpose="clarify advance resolve reveal_context">
-      <header className="staff-workspace__header">
-        <div>
-          <p className="eyebrow">Team</p>
-          <h1>Staff</h1>
-          <p>People, availability, rates, qualifications, operational defaults, history and event briefings in one place.</p>
+      <div className="staff-organization-bar">
+        <strong>{organizationName || "Organization workspace"}</strong>
+        <div
+          className={`staff-workspace__status is-${state.status}`}
+          role={state.status === "error" ? "alert" : "status"}
+          aria-live="polite"
+          data-capability-state={state.status}
+        >
+          <span>{state.status === "success" ? "Ready to plan an event" : state.message}</span>
+          {["error", "unavailable"].includes(state.status) ? (
+            <button type="button" className="ghost compact" onClick={() => void load({ recovery: true })}>Refresh staff records</button>
+          ) : null}
         </div>
-        <button type="button" className="cta" onClick={addStaff} disabled={state.status === "unavailable"}>
-          <Plus size={18} aria-hidden="true" /> Add staff member
-        </button>
-      </header>
-
-      <div
-        className={`staff-workspace__status is-${state.status}`}
-        role={state.status === "error" ? "alert" : "status"}
-        aria-live="polite"
-        data-capability-state={state.status}
-      >
-        <span>{state.message}</span>
-        {["error", "unavailable"].includes(state.status) ? (
-          <button type="button" className="ghost compact" onClick={() => void load({ recovery: true })}>Refresh staff records</button>
-        ) : null}
       </div>
 
       <div className="staff-workspace__layout">
         <aside className="staff-roster" aria-label="Staff roster">
-          <div className="staff-roster__summary">
-            <strong>{records.length} {records.length === 1 ? "person" : "people"}</strong>
-            <span>{records.filter((entry) => entry.profile.active).length} active</span>
+          <header className="staff-workspace__header">
+            <p className="eyebrow">Staff</p>
+            <h1>People</h1>
+            <p>{records.length} people · {assignments.length} active event{assignments.length === 1 ? "" : "s"}</p>
+          </header>
+          <label className="staff-roster__search">
+            <MagnifyingGlass size={16} aria-hidden="true" />
+            <span className="sr-only">Search staff</span>
+            <input
+              type="search"
+              value={rosterSearch}
+              placeholder="Search staff"
+              onChange={(event) => setRosterSearch(event.target.value)}
+            />
+          </label>
+          <div className="staff-roster__filters" role="group" aria-label="Staff roster filters">
+            <button type="button" className={rosterFilter === "all" ? "is-selected" : ""} onClick={() => setRosterFilter("all")}>All {records.length}</button>
+            <button type="button" className={rosterFilter === "active" ? "is-selected" : ""} onClick={() => setRosterFilter("active")}>Active {activeCount}</button>
+            <button type="button" className={rosterFilter === "needs_attention" ? "is-selected" : ""} onClick={() => setRosterFilter("needs_attention")}>Needs attention {needsAttentionCount}</button>
           </div>
-          {records.length ? (
+          <div className="staff-roster__summary">
+            <strong>{visibleRecords.length} shown</strong>
+            <span>{activeCount} active</span>
+          </div>
+          {visibleRecords.length ? (
             <ul>
-              {records.map((entry) => (
+              {visibleRecords.map((entry) => (
                 <li key={entry.profile.staffId}>
                   <button
                     type="button"
@@ -398,7 +475,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                     </span>
                     <span className="staff-roster__identity">
                       <strong>{entry.record.preferredName || entry.profile.displayName}</strong>
-                      <small>{entry.record.contact.email || "No email on file"}</small>
+                      <small>{entry.profile.capabilities.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"}</small>
                       <RoleIcons roles={entry.profile.capabilities} />
                     </span>
                     <span className="staff-roster__rate">
@@ -411,10 +488,13 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
           ) : (
             <div className="staff-roster__empty">
               <UserCircle size={30} aria-hidden="true" />
-              <p>No staff records yet.</p>
+              <p>{records.length ? "No staff match this filter." : "No staff records yet."}</p>
               <button type="button" className="ghost" onClick={addStaff}>Add the first person</button>
             </div>
           )}
+          <button type="button" className="staff-add-button" onClick={addStaff} disabled={state.status === "unavailable"}>
+            <Plus size={18} aria-hidden="true" /> Add staff member
+          </button>
         </aside>
 
         <section className="staff-record" aria-label="Selected staff record">
@@ -425,8 +505,18 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                   {draft.record.photoUrl ? <img src={draft.record.photoUrl} alt="" /> : initials(draft)}
                 </span>
                 <div>
-                  <p className="eyebrow">{draft.profile.active ? "Active team member" : "Inactive team member"}</p>
-                  <h2>{draft.record.preferredName || draft.profile.displayName || "New staff member"}</h2>
+                  <p className="eyebrow">Staff profile</p>
+                  <h2>{selectedDisplayName}</h2>
+                  <p className="staff-profile-subtitle">
+                    {selectedRoles.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"}
+                  </p>
+                  <div className="staff-profile-chips" aria-label="Profile status">
+                    <span data-tone={draft.profile.active ? "good" : "neutral"}>{draft.profile.active ? "Active" : "Inactive"}</span>
+                    <span data-tone={contactVerified ? "good" : "warning"}>{contactVerified ? "Verified" : "Contact needed"}</span>
+                    <span data-tone={openAvailabilityCount > 0 ? "good" : "warning"}>
+                      {openAvailabilityCount > 0 ? "Available" : "Availability needed"}
+                    </span>
+                  </div>
                   <RoleIcons
                     roles={draft.profile.capabilities}
                     interactive
@@ -436,13 +526,94 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                     }}
                   />
                 </div>
-                <div className="staff-record__save">
-                  <button type="button" className="cta" onClick={() => void save()} disabled={!dirty || state.status === "saving"}>
-                    {state.status === "saving" ? "Saving…" : "Save staff record"}
-                  </button>
-                  <small>{dirty ? "Unsaved changes" : `Record revision ${draft.record.revision || 0}`}</small>
+                <div className="staff-record__controls">
+                  <div className="staff-profile-actions">
+                    <button type="button" className="ghost" onClick={focusStaffDetails}>More</button>
+                    <button type="button" className="cta" onClick={focusStaffDetails}>
+                      Edit profile
+                    </button>
+                  </div>
+                  <div className="staff-record__save">
+                    <button type="button" className="ghost compact" onClick={() => void save()} disabled={!dirty || state.status === "saving"}>
+                      {state.status === "saving" ? "Saving…" : dirty ? "Save changes" : "Saved"}
+                    </button>
+                    <small>{dirty ? "Unsaved changes" : `Record revision ${draft.record.revision || 0}`}</small>
+                  </div>
                 </div>
               </header>
+
+              {selectedAssignment ? (
+                <section className="staff-next-action" aria-label="Next best action">
+                  <div>
+                    <p className="eyebrow">Next best action</p>
+                    <h3>{assignmentAccepted ? `Prepare ${selectedDisplayName}'s event briefing` : `Confirm ${selectedDisplayName}'s assignment`}</h3>
+                    <p>
+                      {selectedAssignment.event?.name || "Assigned event"} · {selectedAssignment.event?.date || "Date pending"} · {acknowledgementLabel}
+                    </p>
+                  </div>
+                  <button type="button" className="cta" disabled={invitationBusy || dirty || !selectedAssignment} onClick={() => void previewInvitation()}>
+                    {currentInvitation ? "Review assignment" : "Prepare assignment review"}
+                  </button>
+                </section>
+              ) : null}
+
+              <nav className="staff-profile-tabs" aria-label="Staff profile sections">
+                {["Overview", "Availability", "Rates", "Qualifications", "Events", "Notes"].map((label) => (
+                  <a key={label} href={label === "Overview" ? "#staff-overview" : "#staff-detail-sections"}>{label}</a>
+                ))}
+              </nav>
+
+              <section id="staff-overview" className="staff-overview-grid" aria-label="Staff overview">
+                <article className="staff-overview-card staff-contact-card">
+                  <h3>Identity & contact</h3>
+                  <p className="source-note">Primary contact details for this staff member.</p>
+                  <div className="staff-contact-summary">
+                    <span className="staff-avatar">{initials(draft)}</span>
+                    <div>
+                      <strong>{selectedDisplayName}</strong>
+                      <span>{draft.record.contact.email || "No email on file"}</span>
+                      <span>{draft.record.contact.phone || "No phone on file"}</span>
+                    </div>
+                  </div>
+                  <dl className="staff-overview-facts">
+                    <div><dt>Preferred contact</dt><dd>{preferredContactLabel}</dd></div>
+                    <div><dt>Time zone</dt><dd>{draft.record.contact.timeZone || "Not set"}</dd></div>
+                  </dl>
+                </article>
+
+                <article className="staff-overview-card">
+                  <h3>Readiness</h3>
+                  <p className="source-note">Operational checks before assignment.</p>
+                  <ul className="staff-readiness-list">
+                    {readinessItems.map(([label, value, complete]) => (
+                      <li key={label} data-complete={complete ? "true" : "false"}>
+                        <span>{label}</span>
+                        <strong>{value}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+
+                {selectedAssignment ? (
+                  <article className="staff-overview-card staff-assignment-card">
+                    <div>
+                      <h3>Next assignment</h3>
+                      <strong>{selectedAssignment.event?.name || "Event"}</strong>
+                      <p className="source-note">{selectedAssignment.event?.date || "Date pending"} · {selectedAssignment.event?.venue || "Venue pending"}</p>
+                    </div>
+                    <div className="staff-assignment-state">
+                      {currentInvitation?.state === "provider_accepted" ? "Provider accepted" : deliveryLabel}
+                    </div>
+                    <ol className="staff-assignment-progress">
+                      {assignmentSteps.map(([label, complete]) => (
+                        <li key={label} data-complete={complete ? "true" : "false"}>{label}</li>
+                      ))}
+                    </ol>
+                  </article>
+                ) : null}
+              </section>
+
+              <div id="staff-detail-sections">
 
               <Section icon={UserCircle} title="Identity and contact" description="Private contact details and the image used in this workspace." open>
                 <div className="staff-fields-grid">
@@ -626,6 +797,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                   </div>
                 )}
               </Section>
+              </div>
             </>
           ) : (
             <div className="staff-record__empty"><UserCircle size={34} aria-hidden="true" /><h2>Select or add a staff member</h2><p>The relevant record will open here with a clear next action.</p></div>

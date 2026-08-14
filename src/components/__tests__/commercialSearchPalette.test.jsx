@@ -179,8 +179,8 @@ describe("commercial search palette presentation", () => {
       "onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}"
     );
     expect(appSource).not.toMatch(/build(?:Customer|Quote)Path\(query\)/);
-    expect(appSource).toContain("const CommercialSearchPalette = AMBIENT_UI_ENABLED");
-    expect(appSource).toContain("enabled: CUSTOMER_CENTERED_WORKSPACE_ENABLED && !AMBIENT_UI_ENABLED");
+    expect(appSource).toContain("const CommercialSearchPalette = createRecoverableLazy(");
+    expect(appSource).toContain("enabled: CUSTOMER_CENTERED_WORKSPACE_ENABLED");
     expect(appSource).toContain("component={CommercialSearchPalette}");
     expect(appSource).not.toContain(
       'import CommercialSearchPalette from "./components/CommercialSearchPalette"'

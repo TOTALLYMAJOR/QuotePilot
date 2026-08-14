@@ -89,6 +89,13 @@ describe("StaffWorkspace", () => {
     expect(clientMocks.getStaffDirectory).toHaveBeenCalledWith({ organizationId: "org-alpha" });
     expect(container.querySelector('[data-capability-state="success"]')).not.toBeNull();
     expect(container.textContent).toContain("Avery");
+    expect(container.textContent).toContain("People");
+    expect(container.querySelector('input[placeholder="Search staff"]')).not.toBeNull();
+    expect(container.textContent).toContain("Next best action");
+    expect(container.textContent).toContain("Identity & contact");
+    expect(container.textContent).toContain("Readiness");
+    expect(container.textContent).toContain("Next assignment");
+    expect(container.textContent).toContain("Confirm Avery's assignment");
     expect(container.textContent).toContain("$27.50");
     expect(container.querySelector('[aria-label="Server"]')).not.toBeNull();
     expect(container.textContent).toContain("Smith Wedding");

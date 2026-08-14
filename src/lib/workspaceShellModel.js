@@ -23,18 +23,30 @@ function toolAuthorized(feature, adminOnly, features, admin) {
 const HISTORY = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL];
 const BUILDERS = [WORKSPACE_ROUTE_IDS.QUOTE_NEW, WORKSPACE_ROUTE_IDS.QUOTE_EDIT];
 const LEGACY_GAPS = [
+  WORKSPACE_ROUTE_IDS.CLEAR_DECK,
   WORKSPACE_ROUTE_IDS.STAFF,
   WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
   WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
+  WORKSPACE_ROUTE_IDS.EVENT_LIST,
+  WORKSPACE_ROUTE_IDS.EVENT_DETAIL,
+  WORKSPACE_ROUTE_IDS.EVENT_LIVE,
+  WORKSPACE_ROUTE_IDS.EVENT_REPLAY,
+  WORKSPACE_ROUTE_IDS.OPERATIONS,
   WORKSPACE_ROUTE_IDS.MESSAGING
 ];
 const SURFACES = Object.freeze({
+  [WORKSPACE_ROUTE_IDS.CLEAR_DECK]: "clear-the-deck",
   [WORKSPACE_ROUTE_IDS.CUSTOMER_LIST]: "customer-directory",
   [WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL]: "customer-360",
   [WORKSPACE_ROUTE_IDS.QUOTE_LIST]: "quotes",
   [WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]: "quotes",
   [WORKSPACE_ROUTE_IDS.QUOTE_NEW]: "quote-builder",
   [WORKSPACE_ROUTE_IDS.QUOTE_EDIT]: "quote-builder",
+  [WORKSPACE_ROUTE_IDS.EVENT_LIST]: "events",
+  [WORKSPACE_ROUTE_IDS.EVENT_DETAIL]: "event-focus",
+  [WORKSPACE_ROUTE_IDS.EVENT_LIVE]: "event-live",
+  [WORKSPACE_ROUTE_IDS.EVENT_REPLAY]: "event-replay",
+  [WORKSPACE_ROUTE_IDS.OPERATIONS]: "operations",
   [WORKSPACE_ROUTE_IDS.MESSAGING]: "messages"
 });
 
@@ -48,6 +60,7 @@ function deepFreeze(value) {
 function sectionFor(routeId) {
   if (routeId.startsWith("customer-")) return "customers";
   if (routeId.startsWith("quote-")) return "quotes";
+  if (routeId.startsWith("event-")) return "events";
   return routeId;
 }
 

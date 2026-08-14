@@ -3,6 +3,10 @@ import StatusChip from "./StatusChip";
 import ShimmerReveal from "./ShimmerReveal";
 import { COMMERCIAL_CHANGE_IMPACT_BOUNDARY } from "../lib/commercialChangeImpact";
 import {
+  humanizeTriggerList,
+  summarizeExactDiff
+} from "./commercialChangeDiffPresentation";
+import {
   formatWorkspaceInteger,
   formatWorkspaceText,
   humanizeWorkspaceValue
@@ -226,26 +230,53 @@ function CommercialDelta({ model }) {
 function FactDiffs({ factDiffs }) {
   return (
     <section className="workflow-form-section" aria-labelledby="commercial-change-impact-facts-title">
-      <h4 id="commercial-change-impact-facts-title">Changes in this preview</h4>
+      <h4 id="commercial-change-impact-facts-title">What changed</h4>
       {factDiffs.length === 0 ? (
         <p className="muted">No tracked input changed in this simulation.</p>
       ) : (
-        <div className="quote-version-comparison-sections">
-          <dl>
-            {factDiffs.map((diff) => (
-              <div key={diff.nodeId} data-change-fact={diff.nodeId}>
-                <dt>
-                  {factLabel(diff.nodeId)}
-                  <br />
-                  <small><code>{diff.nodeId}</code></small>
-                </dt>
-                <dd>
-                  <span>Before: <code data-value-side="before">{exactFactValue(diff.before)}</code></span>
-                  <span>Proposed: <code data-value-side="proposed-after">{exactFactValue(diff.proposedAfter)}</code></span>
-                </dd>
-              </div>
-            ))}
-          </dl>
+        <div className="commercial-change-facts">
+          {factDiffs.map((diff) => {
+            const summary = summarizeExactDiff(diff.before, diff.proposedAfter);
+            return (
+              <article key={diff.nodeId} data-change-fact={diff.nodeId} className="commercial-change-fact">
+                <p className="commercial-change-fact-title">
+                  <strong>{factLabel(diff.nodeId)}</strong>
+                  <span>
+                    {summary.total === 0
+                      ? "Recorded value updated"
+                      : `${summary.total}${summary.truncated ? "+" : ""} field change${summary.total === 1 ? "" : "s"}`}
+                  </span>
+                </p>
+                {summary.rows.length > 0 && (
+                  <ul className="commercial-change-fact-rows">
+                    {summary.rows.map((row) => (
+                      <li key={row.path} data-diff-kind={row.kind}>
+                        <span className="commercial-change-fact-label">{row.label}</span>
+                        <span className="commercial-change-fact-values">{row.before} → {row.after}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {summary.moreCount > 0 && (
+                  <p className="muted">
+                    …and {summary.moreCount}{summary.truncated ? "+" : ""} more in the exact data below.
+                  </p>
+                )}
+                <details className="commercial-change-exact">
+                  <summary>Exact before and after data</summary>
+                  <dl>
+                    <div>
+                      <dt><code>{diff.nodeId}</code></dt>
+                      <dd>
+                        <span>Before: <code data-value-side="before">{exactFactValue(diff.before)}</code></span>
+                        <span>Proposed: <code data-value-side="proposed-after">{exactFactValue(diff.proposedAfter)}</code></span>
+                      </dd>
+                    </div>
+                  </dl>
+                </details>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
@@ -260,30 +291,34 @@ function DependencyList({ title, titleId, advisoryClass, items }) {
       {items.length === 0 ? (
         <p className="muted">
           {isStale
-            ? "No generated artifact or projection is classified STALE by this simulation."
-            : "No dependent decision is classified REVIEW by this simulation."}
+            ? "Nothing becomes out of date under this change."
+            : "Nothing needs a human review under this change."}
         </p>
       ) : (
         <ol className="command-center-list">
-          {items.map((node) => (
-            <li
-              className="command-center-row"
-              key={node.id || node.nodeId}
-              data-dependent-node={node.id || node.nodeId}
-            >
-              <div className="command-center-row-main">
-                <strong>{dependencyLabel(node.id || node.nodeId)}</strong>
-                <p className="command-center-row-detail"><code>{node.id || node.nodeId}</code></p>
-                <p className="command-center-row-meta">
-                  {humanizeWorkspaceValue(node.kind || node.nodeKind, { emptyLabel: "Dependency" })} · Distance {formatWorkspaceInteger(node.distance)}
-                </p>
-                <p className="command-center-row-meta">
-                  Triggered by: {(Array.isArray(node.triggeredBy) ? node.triggeredBy : []).join(", ") || "Source unavailable"}
-                </p>
-              </div>
-              <StatusChip family={isStale ? "pending" : "action"} label={advisoryClass} />
-            </li>
-          ))}
+          {items.map((node) => {
+            const triggers = humanizeTriggerList(node.triggeredBy);
+            return (
+              <li
+                className="command-center-row"
+                key={node.id || node.nodeId}
+                data-dependent-node={node.id || node.nodeId}
+              >
+                <div className="command-center-row-main">
+                  <strong>{dependencyLabel(node.id || node.nodeId)}</strong>
+                  <p className="command-center-row-meta">
+                    {isStale
+                      ? "Marked out of date when the change applies, until it is regenerated."
+                      : "Look it over before it goes back to the client."}
+                  </p>
+                  <p className="command-center-row-meta">
+                    {triggers ? `Because this changed: ${triggers}` : "Source unavailable"}
+                  </p>
+                </div>
+                <StatusChip family={isStale ? "pending" : "action"} label={isStale ? "Out of date" : "Review"} />
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>
@@ -306,52 +341,55 @@ function SimulationEvidence({ model }) {
 
   return (
     <>
-      <dl className="staff-evidence-details">
-        <div>
-          <dt>Quote scope</dt>
-          <dd><code>{formatWorkspaceText(identity.quoteId, { emptyLabel: "Unavailable" })}</code><small>Tenant: <code>{formatWorkspaceText(identity.organizationId, { emptyLabel: "Unavailable" })}</code></small></dd>
-        </div>
-        <div>
-          <dt>Before source</dt>
-          <dd>{sourceLabel(model.sources?.before)}<small><code>{formatWorkspaceText(model.sources?.before?.label, { emptyLabel: "Unavailable" })}</code> · {authorityLabel(model.sources?.before)} · revision <code>{formatWorkspaceText(identity.beforeRevisionId, { emptyLabel: "Unavailable" })}</code></small></dd>
-        </div>
-        <div>
-          <dt>Proposed source</dt>
-          <dd>{sourceLabel(model.sources?.proposedAfter)}<small><code>{formatWorkspaceText(model.sources?.proposedAfter?.label, { emptyLabel: "Unavailable" })}</code> · {authorityLabel(model.sources?.proposedAfter)} · revision <code>{formatWorkspaceText(identity.proposedRevisionId, { emptyLabel: "Unavailable" })}</code></small></dd>
-        </div>
-        <div>
-          <dt>Dependency graph</dt>
-          <dd><code>{formatWorkspaceText(model.graph?.graphId, { emptyLabel: "Unavailable" })}</code><small>Version <code>{formatWorkspaceText(model.graph?.graphVersion, { emptyLabel: "Unavailable" })}</code></small></dd>
-        </div>
-        <div>
-          <dt>Simulation bounds</dt>
-          <dd>{formatWorkspaceInteger(factDiffs.length)} of {formatWorkspaceInteger(bounds.changedFactLimit)} changed inputs<small>{formatWorkspaceInteger(dependents.length)} of {formatWorkspaceInteger(bounds.dependentNodeLimit)} dependents · {formatWorkspaceInteger(bounds.declaredFactCount)} tracked inputs · {formatWorkspaceInteger(bounds.outputByteLimit)} byte output limit</small></dd>
-        </div>
-      </dl>
-
       <CommercialDelta model={model} />
       <FactDiffs factDiffs={factDiffs} />
 
       <section className="workflow-form-section" aria-labelledby="commercial-change-impact-dependents-title">
-        <h4 id="commercial-change-impact-dependents-title">Related items to review</h4>
+        <h4 id="commercial-change-impact-dependents-title">What this touches after apply</h4>
         <p className="staff-evidence-bounds-note">
-          {formatWorkspaceInteger(model.impact?.counts?.review)} REVIEW · {formatWorkspaceInteger(model.impact?.counts?.stale)} STALE · {formatWorkspaceInteger(model.impact?.counts?.total)} total dependent results
+          {formatWorkspaceInteger(model.impact?.counts?.review)} to review · {formatWorkspaceInteger(model.impact?.counts?.stale)} out of date · {formatWorkspaceInteger(model.impact?.counts?.total)} related items
         </p>
         <div className="workflow-form-grid">
           <DependencyList
-            title="Requires review"
+            title="Review before sending"
             titleId="commercial-change-impact-review-title"
             advisoryClass="REVIEW"
             items={reviewItems}
           />
           <DependencyList
-            title="Projected stale"
+            title="Becomes out of date"
             titleId="commercial-change-impact-stale-title"
             advisoryClass="STALE"
             items={staleItems}
           />
         </div>
       </section>
+
+      <details className="commercial-change-evidence">
+        <summary>Simulation evidence</summary>
+        <dl className="staff-evidence-details">
+          <div>
+            <dt>Quote scope</dt>
+            <dd><code>{formatWorkspaceText(identity.quoteId, { emptyLabel: "Unavailable" })}</code><small>Tenant: <code>{formatWorkspaceText(identity.organizationId, { emptyLabel: "Unavailable" })}</code></small></dd>
+          </div>
+          <div>
+            <dt>Before source</dt>
+            <dd>{sourceLabel(model.sources?.before)}<small><code>{formatWorkspaceText(model.sources?.before?.label, { emptyLabel: "Unavailable" })}</code> · {authorityLabel(model.sources?.before)} · revision <code>{formatWorkspaceText(identity.beforeRevisionId, { emptyLabel: "Unavailable" })}</code></small></dd>
+          </div>
+          <div>
+            <dt>Proposed source</dt>
+            <dd>{sourceLabel(model.sources?.proposedAfter)}<small><code>{formatWorkspaceText(model.sources?.proposedAfter?.label, { emptyLabel: "Unavailable" })}</code> · {authorityLabel(model.sources?.proposedAfter)} · revision <code>{formatWorkspaceText(identity.proposedRevisionId, { emptyLabel: "Unavailable" })}</code></small></dd>
+          </div>
+          <div>
+            <dt>Dependency graph</dt>
+            <dd><code>{formatWorkspaceText(model.graph?.graphId, { emptyLabel: "Unavailable" })}</code><small>Version <code>{formatWorkspaceText(model.graph?.graphVersion, { emptyLabel: "Unavailable" })}</code></small></dd>
+          </div>
+          <div>
+            <dt>Simulation bounds</dt>
+            <dd>{formatWorkspaceInteger(factDiffs.length)} of {formatWorkspaceInteger(bounds.changedFactLimit)} changed inputs<small>{formatWorkspaceInteger(dependents.length)} of {formatWorkspaceInteger(bounds.dependentNodeLimit)} dependents · {formatWorkspaceInteger(bounds.declaredFactCount)} tracked inputs · {formatWorkspaceInteger(bounds.outputByteLimit)} byte output limit</small></dd>
+          </div>
+        </dl>
+      </details>
     </>
   );
 }
@@ -414,14 +452,14 @@ function CommercialChangeAuthorityControls({
     >
       <div className="workflow-attention-head">
         <div>
-          <p className="eyebrow">Authorization & atomic apply</p>
-          <h4 id="commercial-change-authority-title">Govern this exact change</h4>
+          <p className="eyebrow">Approval &amp; apply</p>
+          <h4 id="commercial-change-authority-title">Apply this exact change</h4>
         </div>
         <StatusChip {...mutationPresentation} />
       </div>
 
       {normalizedAuthority !== "enforced" ? (
-        <p className="warning-note" role="status">
+        <p className="source-note" role="status">
           Commercial-change enforcement is dormant for this workspace. This trusted receipt is review evidence only; ordinary quote saving remains on the existing edit path until both server and tenant gates are promoted.
         </p>
       ) : !authorizationRequired ? (
@@ -629,8 +667,8 @@ export default function CommercialChangeImpactPanel({
       />
       <div className="staff-evidence-head">
         <div>
-          <p className="eyebrow">Related quote items · preview only</p>
-          <h3 id={titleId}>Change Impact</h3>
+          <p className="eyebrow">Before you save · preview only</p>
+          <h3 id={titleId}>What this change affects</h3>
         </div>
         <div className="right-actions">
           <StatusChip {...view.presentation} />

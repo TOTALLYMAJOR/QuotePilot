@@ -234,7 +234,7 @@
     },
     {
       "id": "bounded-commercial-search",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -284,7 +284,7 @@
         },
         {
           "path": "src/components/__tests__/workspaceShell.test.jsx",
-          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Home state"
+          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Now state"
         }
       ],
       "documentationPaths": [
@@ -463,7 +463,7 @@
     },
     {
       "id": "quote-conversation-receipts",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -527,7 +527,7 @@
         },
         {
           "path": "src/components/__tests__/workspaceShell.test.jsx",
-          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Home state"
+          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Now state"
         }
       ],
       "documentationPaths": [
@@ -595,7 +595,7 @@
     },
     {
       "id": "event-messaging-station-read",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -693,7 +693,7 @@
         },
         {
           "path": "src/components/__tests__/workspaceShell.test.jsx",
-          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Home state"
+          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Now state"
         }
       ],
       "documentationPaths": [

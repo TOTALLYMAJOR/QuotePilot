@@ -8,6 +8,81 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Added the Proposal Composer as the default quote-builder presentation behind
+  `VITE_PROPOSAL_COMPOSER_ENABLED` (default on; explicit `false/0/no/off`
+  restores the wizard-first presentation). The proposal document becomes the
+  primary editing surface — editorial sheet with inline editing for event,
+  client, experience, menu, staffing, rentals, enhancements, and investment —
+  beside a live Quote Pulse rail (total, per-guest, deposit, fail-closed
+  margin under the existing margins gate, composition, watching board). Guest
+  edits surface a consequence card (staffing house-ratio recommendation and
+  explicit rental-quantity suggestions) that never applies silently; the
+  five-step wizard remains fully available as Guided mode writing the same
+  draft; save authority, server-authoritative pricing, and versioning are
+  unchanged. Covered by presentation-model unit tests and a flag-gated
+  `e2e/proposal-composer.spec.js` lane (including axe color-contrast at
+  desktop and phone widths); the default e2e lane pins the flag off to keep
+  the legacy wizard contract tested. (docs/PROPOSAL_COMPOSER_PLAN.md)
+- Humanized the commercial change-impact preview and made it reachable from
+  the Proposal Composer, not only the wizard's save step. The panel now leads
+  with the price change, reduces each exact before/proposed snapshot to
+  named field-level rows ("Salmon Entrée · Unit price: 28 → 32") via the new
+  `commercialChangeDiffPresentation` model, describes affected items in plain
+  language ("Review before sending" / "Becomes out of date" with the changed
+  inputs that caused it), and moves exact snapshot data and simulation
+  evidence behind disclosures. Authorization, receipts, capability
+  attributes, and the apply flow are unchanged.
+- Composer ergonomics and finish: Save joins the header actions; when editing,
+  the Quote Pulse watching board links straight to the change-impact preview;
+  staffing rate overrides moved from Advanced pricing into the Staffing
+  section with the effective per-role rate shown ("house rate" vs "quote
+  override", repricing live); admins get one-click "edit catalog pricing"
+  shortcuts from the menu and package editors (catalog remains the price
+  authority — no per-quote catalog-price field was invented); an empty menu
+  now reads as a blocking risk in the watching board since saving requires a
+  selection; informational "editing quote" and dormant-authority notes
+  dropped from warning to quiet note styling; editorial finish (brass
+  letterhead rule, menu/investment dot leaders, double-rule ledger lines,
+  save-state pill, ≤180ms rise-in on consequence/recommendation cards,
+  reduced-motion safe).
+- Added local draft recovery for new quotes: a debounced localStorage
+  snapshot of the dirty draft with a "Resume draft / Discard" banner on
+  return to a pristine new-quote route (`src/components/draftRecovery.js`;
+  new drafts only, per organization, 7-day expiry, cleared on save or
+  discard — the ordinary save path remains the only system persistence).
+  Added a session-only Recent activity log to the Quote Pulse behind a
+  toggle, recording each structured change ("Guests → 80", "Added Salmon
+  Entrée", "Package → Premium") with timestamps; saved history remains the
+  version record. Cached the wizard's what-if repricing sweeps (package
+  comparison, per-item menu/add-on/rental impacts) per immutable form via a
+  hook-free WeakMap so search and unrelated re-renders stop repeating full
+  calculateQuote passes. Documented the per-quote price-override spec
+  (data model + both pricing engines + governed-change authority + UI) in
+  docs/PROPOSAL_COMPOSER_PLAN.md rather than shipping a client-side field
+  the server would ignore.
+- Added the first Ambient Live Briefing / Control Room planning slice without
+  claiming live authority: `/app/clear-the-deck`, `/app/events`,
+  `/app/events/:quoteId`, `/app/events/:quoteId/live`,
+  `/app/events/:quoteId/replay`, and `/app/operations` now route to bounded
+  planning views over existing quote/workflow evidence. Missing operational
+  pulse, phase, issue, actual, and replay data is labeled not established
+  instead of inferred, and Ambient Search is restored as the shared
+  search/navigation palette rather than disabled by the Ambient graph.
+- Reframed `/app/staff` as the Staff People workspace from the Control Room
+  design brief: a fixed object rail, search/filter chips, read-first profile
+  header, semantic status chips, next-best assignment action, overview tabs,
+  identity/readiness cards, and assignment progress now lead the page while
+  the existing private-record editing, briefing, invitation, provider, and
+  acknowledgement authority stays intact.
+- Promoted the Staff visual grammar to the shared authenticated workspace:
+  the desktop shell now uses a compact 92px icon-and-label rail, a consistent
+  gold active indicator, warm working surfaces, wider route canvases, and
+  floating role-safe menus. The primary route is visibly named **Now** across
+  compatibility and Ambient navigation, and both Now presentations use a
+  clearer read-first briefing composition with stronger empty, evidence,
+  priority, upcoming-event, and money states. No route, role, pricing, save,
+  payment, provider, or operational authority changed.
+
 - Added the hardened, deployment-owned owner-SMS rail with explicit `none`,
   `twilio`, or `pingram` selection; a provider-neutral admin status and bounded
   diagnostic surface; transactional private outbox and one-call claims;

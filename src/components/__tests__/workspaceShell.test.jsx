@@ -35,6 +35,9 @@ function createProps(overrides = {}) {
     onSearch: vi.fn(),
     onNewQuote: vi.fn(),
     onQuotes: vi.fn(),
+    onEvents: vi.fn(),
+    onClearDeck: vi.fn(),
+    onOperations: vi.fn(),
     onMessages: vi.fn(),
     onWorkflow: vi.fn(),
     onStaff: vi.fn(),
@@ -141,7 +144,7 @@ describe("WorkspaceShell", () => {
     return currentProps;
   }
 
-  test("renders workspace orientation, identity, crew, theme, ambient class, and active Home state", () => {
+  test("renders workspace orientation, identity, crew, theme, ambient class, and active Now state", () => {
     render({
       identity: {
         workspaceName: "Smith Hospitality",
@@ -169,7 +172,7 @@ describe("WorkspaceShell", () => {
     expect(container.querySelector('img[src="/avery.png"]').alt).toBe("Avery");
     expect(container.querySelectorAll('img[src="/tenant-mark.png"]')).toHaveLength(2);
 
-    const home = buttonsByText(container, "Home")[0];
+    const home = buttonsByText(container, "Now")[0];
     expect(home.classList.contains("nav-view-active")).toBe(true);
     expect(home.getAttribute("aria-current")).toBe("page");
     expect(buttonsByText(container, "Customers")).toHaveLength(1);
@@ -188,7 +191,7 @@ describe("WorkspaceShell", () => {
     expect(shell.classList.contains("app-shell-ambient-navigation")).toBe(true);
     expect(shell.dataset.ambientNavigation).toBe("orientation");
     expect(orientation.map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Clients", "Staff", "Library"]);
+      .toEqual(["Now", "Opportunities", "Events", "Clients", "Staff", "Library"]);
     expect(orientation.every((button) => button.classList.contains("ambient-orientation-action"))).toBe(true);
     expect(buttonsByText(container, "Home")).toHaveLength(0);
     expect(buttonsByText(container, "Customers")).toHaveLength(0);
@@ -198,6 +201,7 @@ describe("WorkspaceShell", () => {
 
     const now = buttonsByText(container, "Now")[0];
     const opportunities = buttonsByText(container, "Opportunities")[0];
+    const events = buttonsByText(container, "Events")[0];
     const clients = buttonsByText(container, "Clients")[0];
     const staff = buttonsByText(container, "Staff")[0];
     const library = buttonsByText(container, "Library")[0];
@@ -217,6 +221,7 @@ describe("WorkspaceShell", () => {
 
     act(() => now.click());
     act(() => opportunities.click());
+    act(() => events.click());
     act(() => clients.click());
     act(() => staff.click());
     act(() => library.click());
@@ -225,6 +230,7 @@ describe("WorkspaceShell", () => {
     act(() => pilot.click());
     expect(props.actions.onHome).toHaveBeenCalledTimes(1);
     expect(props.actions.onQuotes).toHaveBeenCalledTimes(1);
+    expect(props.actions.onEvents).toHaveBeenCalledTimes(1);
     expect(props.actions.onCustomers).toHaveBeenCalledTimes(1);
     expect(props.actions.onStaff).toHaveBeenCalledTimes(1);
     expect(props.actions.onCatalog).toHaveBeenCalledTimes(1);
@@ -249,6 +255,14 @@ describe("WorkspaceShell", () => {
     const library = buttonsByText(container, "Library")[0];
     expect(library.classList.contains("nav-view-active")).toBe(true);
     expect(library.getAttribute("aria-current")).toBe("page");
+
+    render({
+      ambientNavigation: true,
+      model: model(WORKSPACE_ROUTE_IDS.EVENT_LIVE, true, true)
+    });
+    const events = buttonsByText(container, "Events")[0];
+    expect(events.classList.contains("nav-view-active")).toBe(true);
+    expect(events.getAttribute("aria-current")).toBe("page");
   });
 
   test("keeps Library absent for sales while retaining role-safe ambient orientation", () => {
@@ -261,7 +275,7 @@ describe("WorkspaceShell", () => {
 
     expect(Array.from(container.querySelectorAll("[data-ambient-orientation]"))
       .map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Clients"]);
+      .toEqual(["Now", "Opportunities", "Events", "Clients"]);
     expect(buttonsByText(container, "Library")).toHaveLength(0);
     expect(buttonsByText(container, "Catalog Admin")).toHaveLength(0);
   });
@@ -274,17 +288,27 @@ describe("WorkspaceShell", () => {
       menu: { openId: "operations", onOpenChange }
     });
     const operations = container.querySelector('[role="menu"][aria-label="Operations"]');
+    const clearDeck = buttonsByText(operations, "Clear the Deck")[0];
+    const switchboard = buttonsByText(operations, "Operations switchboard")[0];
     const messages = buttonsByText(operations, "Messages")[0];
     const workflow = operations.querySelector('button[aria-label="Workflow, 2 quotes need attention"]');
+    expect(clearDeck.dataset.capabilityEntry).toBe("live-operations-planning");
+    expect(switchboard.dataset.capabilityEntry).toBe("live-operations-planning");
     expect(messages.dataset.capabilityEntry).toBe("event-messaging-station");
     expect(workflow.querySelector(".workflow-attention-badge").textContent).toBe("2");
     expect(buttonsByText(operations, "Catalog Admin")).toHaveLength(0);
 
+    act(() => clearDeck.click());
+    act(() => switchboard.click());
     act(() => messages.click());
     act(() => workflow.click());
-    expect(onOpenChange).toHaveBeenCalledTimes(2);
+    expect(onOpenChange).toHaveBeenCalledTimes(4);
     expect(onOpenChange).toHaveBeenNthCalledWith(1, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(2, "");
+    expect(onOpenChange).toHaveBeenNthCalledWith(3, "");
+    expect(onOpenChange).toHaveBeenNthCalledWith(4, "");
+    expect(props.actions.onClearDeck).toHaveBeenCalledTimes(1);
+    expect(props.actions.onOperations).toHaveBeenCalledTimes(1);
     expect(props.actions.onMessages).toHaveBeenCalledTimes(1);
     expect(props.actions.onWorkflow).toHaveBeenCalledTimes(1);
 

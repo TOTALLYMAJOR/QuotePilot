@@ -86,8 +86,8 @@ export default function NowView({
   };
 
   return (
-    <section className="panel now-surface" aria-labelledby="now-heading">
-      <div className="command-center-head">
+    <section className="panel now-surface now-briefing" aria-labelledby="now-heading">
+      <div className="command-center-head now-briefing__masthead">
         <div>
           <p className="eyebrow">Now</p>
           <h2
@@ -99,6 +99,7 @@ export default function NowView({
             What to review today
           </h2>
           <p className="now-date">{dayLabel} · {dateLabel}</p>
+          <p className="now-briefing__intro">Your priorities, upcoming events, and recorded payment steps in one view.</p>
         </div>
         <div className="right-actions">
           <button
@@ -131,11 +132,24 @@ export default function NowView({
 
       <div className="now-grid">
         <div className="now-stream" id="now-attention-items">
+          <div className="now-section-heading">
+            <div>
+              <p className="eyebrow">Requires you</p>
+              <h3>{cards.length ? "What needs attention" : "Your deck is clear"}</h3>
+            </div>
+            {cards.length > 0 && <span>{cards.length} shown</span>}
+          </div>
           {state.loading && !state.attentionSummary && (
             <p className="source-note">Loading attention items...</p>
           )}
           {!state.loading && !cards.length && !state.error && (
-            <p className="source-note">{describeNowEmptyState({ truncated: state.truncated })}</p>
+            <div className="now-empty-state">
+              <span className="now-empty-state__mark" aria-hidden="true">✓</span>
+              <div>
+                <strong>Nothing needs an immediate decision.</strong>
+                <p className="source-note">{describeNowEmptyState({ truncated: state.truncated })}</p>
+              </div>
+            </div>
           )}
           {cards.map((card) => (
             <DecisionCard

@@ -108,7 +108,7 @@ test.describe("customer-centered workspace", () => {
     await expect(evidenceRail).toContainText("Browser-local workspace");
     await expect(evidenceRail).toContainText("does not prove provider delivery");
     const staffHeader = page.locator(".site-header");
-    await expect(staffHeader.getByRole("button", { name: "Home", exact: true })).toHaveAttribute(
+    await expect(staffHeader.getByRole("button", { name: "Now", exact: true })).toHaveAttribute(
       "aria-current",
       "page"
     );
@@ -124,7 +124,7 @@ test.describe("customer-centered workspace", () => {
     await eventName.fill("Sticky command-center draft");
     await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
 
-    await staffHeader.getByRole("button", { name: "Home", exact: true }).click();
+    await staffHeader.getByRole("button", { name: "Now", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
@@ -226,7 +226,7 @@ test.describe("customer-centered workspace", () => {
     await page.goto("/app");
 
     const header = page.locator(".site-header");
-    for (const name of ["Home", "Customers", "Quotes", "Messages"]) {
+    for (const name of ["Now", "Customers", "Quotes", "Messages"]) {
       await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
     }
     await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
@@ -246,14 +246,14 @@ test.describe("customer-centered workspace", () => {
       await page.goto("/app");
 
       const header = page.locator(".site-header");
-      for (const name of ["Home", "Customers", "Quotes", "Messages", "Operations", "Account"]) {
+      for (const name of ["Now", "Customers", "Quotes", "Messages", "Operations", "Account"]) {
         await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
       }
       await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
       await expect(header.getByRole("button", { name: "More", exact: true })).toBeHidden();
 
       const [homeBox, accountBox] = await Promise.all([
-        header.getByRole("button", { name: "Home", exact: true }).boundingBox(),
+        header.getByRole("button", { name: "Now", exact: true }).boundingBox(),
         header.getByRole("button", { name: "Account", exact: true }).boundingBox()
       ]);
       expect(homeBox).not.toBeNull();
@@ -382,7 +382,7 @@ test.describe("customer-centered workspace", () => {
 
     await expect(page.getByRole("heading", { name: "Workspace page not found" })).toBeVisible();
     await expect(page.getByText("/app/not-a-workspace-route is not a QuotePilot staff workspace route.")).toBeVisible();
-    await expect(page.locator(".site-header").getByRole("button", { name: "Home", exact: true })).toBeVisible();
+    await expect(page.locator(".site-header").getByRole("button", { name: "Now", exact: true })).toBeVisible();
   });
 
   test("primary routed staff surfaces focus their heading and use route return language", async ({ page }) => {
@@ -1164,7 +1164,7 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
     const changeImpactPreview = page.locator('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
     await expect(changeImpactPreview).toBeVisible();
-    await expect(changeImpactPreview).toContainText("Preview change blast radius");
+    await expect(changeImpactPreview).toContainText("What will this change affect?");
     await expect(changeImpactPreview).toContainText(
       "Authoritative change impact is unavailable in browser-local mode"
     );

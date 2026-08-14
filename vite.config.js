@@ -129,6 +129,8 @@ export default defineConfig(({ mode }) => {
           if (
             normalizedId.endsWith("/src/components/WizardSteps.jsx")
             || normalizedId.endsWith("/src/lib/wizardUi.js")
+            || normalizedId.endsWith("/src/components/ProposalComposer.jsx")
+            || normalizedId.endsWith("/src/components/proposalComposerPresentation.js")
           ) {
             return "quote-builder-ui";
           }

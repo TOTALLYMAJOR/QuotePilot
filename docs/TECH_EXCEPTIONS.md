@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 13, 2026
+Last updated: August 14, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -21,11 +21,17 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. The current quote-builder source
-  candidate recalibrates compatibility to an absolute ceiling of 2,906,982 aggregate
-  JavaScript bytes and 391,901 bytes for the largest chunk. Ambient is
+  production-equivalent Ambient graphs. The Proposal Composer quote-builder
+  candidate (measured 2,943,941 local compatibility bytes, largest chunk
+  unchanged), the first Live planning and Staff People presentation slice
+  (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
+  shared shell and Now visual-system pass (measured 2,964,327 compatibility
+  bytes, largest chunk unchanged) recalibrate compatibility to an absolute
+  ceiling of 2,964,327 aggregate
+  JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
   temporarily capped at 3,826,220 aggregate bytes and the same 391,901-byte
-  largest-chunk ceiling.
+  largest-chunk ceiling (measured 3,750,363 local Ambient bytes is under that
+  standing ceiling).
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -64,6 +70,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   The quote-builder decision-flow slice then measures 2,899,957 / 391,901 bytes
   for compatibility and 3,825,917 / 391,901 bytes for Ambient. Its ceilings
   retain those same runner offsets and do not increase the largest chunk.
+  The first Live planning and Staff People presentation slice then measures
+  2,963,542 / 391,901 bytes for compatibility and 3,749,888 / 391,901 bytes for
+  Ambient. The compatibility ceiling is set to the exact measured aggregate;
+  Ambient remains below the standing Ambient ceiling, so its ceiling is
+  unchanged.
+  The shared shell and Now visual-system pass adds 785 compatibility bytes and
+  475 Ambient bytes by reusing existing icon glyphs. Its exact measurements are
+  2,964,327 / 391,901 bytes for compatibility and 3,750,363 / 391,901 bytes for
+  Ambient; only the compatibility ceiling changes, with no general headroom.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,

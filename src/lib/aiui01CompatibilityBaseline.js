@@ -1,4 +1,7 @@
 import {
+  buildEventLivePath,
+  buildEventPath,
+  buildEventReplayPath,
   buildCustomerPath,
   buildQuoteEditPath,
   buildQuotePath,
@@ -212,6 +215,46 @@ export const AIUI01_SURFACES = deepFreeze([
     probes: { default: ".messaging-station" }
   },
   {
+    id: "clear-deck",
+    routeId: WORKSPACE_ROUTE_IDS.CLEAR_DECK,
+    path: WORKSPACE_PATHS.clearDeck,
+    roles: ["admin", "sales"],
+    requiresWorkspace: true,
+    probes: { default: ".live-ops-route" }
+  },
+  {
+    id: "events",
+    routeId: WORKSPACE_ROUTE_IDS.EVENT_LIST,
+    path: WORKSPACE_PATHS.events,
+    roles: ["admin", "sales"],
+    requiresWorkspace: true,
+    probes: { default: ".live-ops-route" }
+  },
+  {
+    id: "event-detail",
+    routeId: WORKSPACE_ROUTE_IDS.EVENT_DETAIL,
+    path: buildEventPath(QUOTE_FIXTURE_ID),
+    roles: ["admin", "sales"],
+    requiresWorkspace: true,
+    probes: { default: ".live-ops-route" }
+  },
+  {
+    id: "event-live",
+    routeId: WORKSPACE_ROUTE_IDS.EVENT_LIVE,
+    path: buildEventLivePath(QUOTE_FIXTURE_ID),
+    roles: ["admin", "sales"],
+    requiresWorkspace: true,
+    probes: { default: ".live-ops-route" }
+  },
+  {
+    id: "event-replay",
+    routeId: WORKSPACE_ROUTE_IDS.EVENT_REPLAY,
+    path: buildEventReplayPath(QUOTE_FIXTURE_ID),
+    roles: ["admin", "sales"],
+    requiresWorkspace: true,
+    probes: { default: ".live-ops-route" }
+  },
+  {
     id: "staff",
     routeId: WORKSPACE_ROUTE_IDS.STAFF,
     path: WORKSPACE_PATHS.staff,
@@ -275,11 +318,19 @@ export const AIUI01_SURFACES = deepFreeze([
     roles: ["admin", "sales"],
     requiresWorkspace: false,
     probes: { default: "#session-diagnostics-title" }
+  },
+  {
+    id: "operations",
+    routeId: WORKSPACE_ROUTE_IDS.OPERATIONS,
+    path: WORKSPACE_PATHS.operations,
+    roles: ["admin", "sales"],
+    requiresWorkspace: true,
+    probes: { default: ".live-ops-route" }
   }
 ]);
 
 export const AIUI01_SHELL_ACTIONS = deepFreeze([
-  { id: "home", label: "Home", classification: "primary_route", targetSurfaceId: "home", roles: ["admin", "sales"], requiresWorkspace: true, entry: "header" },
+  { id: "home", label: "Now", classification: "primary_route", targetSurfaceId: "home", roles: ["admin", "sales"], requiresWorkspace: true, entry: "header" },
   { id: "customers", label: "Customers", classification: "primary_route", targetSurfaceId: "customers", roles: ["admin", "sales"], requiresWorkspace: true, entry: "header" },
   { id: "search", label: "Search", classification: "primary_context", targetSurfaceId: "commercial-search", roles: ["admin", "sales"], requiresWorkspace: true, entry: "header" },
   { id: "new-quote", label: "New quote", classification: "primary_route", targetSurfaceId: "quote-new", roles: ["admin", "sales"], requiresWorkspace: false, entry: "header" },

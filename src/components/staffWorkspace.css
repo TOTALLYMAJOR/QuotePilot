@@ -1,6 +1,26 @@
 .staff-workspace {
-  padding-block: clamp(1.4rem, 3vw, 2.6rem) 5rem;
-  color: var(--text, #28231c);
+  --app-bg: #f6f4ef;
+  --surface: #fffefb;
+  --surface-muted: #f1eee7;
+  --ink: #15181b;
+  --text-secondary: #6d716f;
+  --border: #ddd8ce;
+  --rail: #121417;
+  --rail-hover: #1a1d21;
+  --rail-selected: #272b30;
+  --gold: #b7842c;
+  --gold-strong: #8c5f17;
+  --gold-soft: #f8ecd3;
+  --teal: #2e7d71;
+  --teal-soft: #dcebe7;
+  --danger: #b65a53;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  background: var(--app-bg);
+  font-family: Inter, var(--font-ui), system-ui, sans-serif;
 }
 
 .staff-workspace__header,
@@ -21,10 +41,11 @@
 .staff-workspace__header p:last-child {
   max-width: 66ch;
   margin: 0;
-  color: var(--muted, #706656);
+  color: var(--text-secondary);
 }
 
 .staff-workspace__header button,
+.staff-profile-actions button,
 .staff-briefing-buttons button,
 .staff-subsection-heading button {
   display: inline-flex;
@@ -32,13 +53,30 @@
   gap: 0.45rem;
 }
 
+.staff-organization-bar {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 40px 0 44px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.staff-organization-bar > strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
 .staff-workspace__status {
-  min-height: 44px;
-  margin: 1.15rem 0;
-  padding: 0.72rem 0.9rem;
-  border: 1px solid color-mix(in srgb, var(--tone-gold-2, #b88027) 22%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--tone-gold-1, #f6ead1) 55%, white);
+  min-height: 30px;
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: var(--gold-strong);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -59,17 +97,78 @@
 
 .staff-workspace__layout {
   display: grid;
-  grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
-  gap: clamp(1rem, 2vw, 1.7rem);
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: 0;
   align-items: start;
 }
 
 .staff-roster {
   position: sticky;
-  top: 92px;
-  max-height: calc(100vh - 116px);
+  top: 0;
+  min-height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
   overflow: auto;
-  padding-right: 0.25rem;
+  margin: 0;
+  padding: 26px 20px 28px;
+  background: #ece9e2;
+  border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.staff-roster__search {
+  height: 40px;
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 0 0.75rem;
+  color: var(--text-secondary);
+}
+
+.staff-roster__search:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(183, 132, 44, 0.12);
+}
+
+.staff-roster__search input {
+  min-width: 0;
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  color: #171d1a;
+  font: inherit;
+}
+
+.staff-roster__search input:focus {
+  outline: none;
+}
+
+.staff-roster__filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1.15rem;
+}
+
+.staff-roster__filters button {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.staff-roster__filters button.is-selected {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
 }
 
 .staff-roster__summary {
@@ -86,53 +185,66 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.45rem;
+  gap: 12px;
 }
 
 .staff-roster li > button {
   width: 100%;
-  min-height: 76px;
+  min-height: 112px;
+  position: relative;
   border: 1px solid transparent;
-  border-radius: 14px;
-  background: transparent;
+  border-radius: 16px;
+  background: var(--surface);
   color: inherit;
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.65rem;
+  padding: 18px;
   text-align: left;
   cursor: pointer;
 }
 
 .staff-roster li > button:hover {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(114, 92, 55, 0.12);
+  background: var(--surface);
+  border-color: #c9c2b5;
+  box-shadow: 0 4px 14px rgba(21, 24, 27, 0.055);
 }
 
 .staff-roster li > button.is-selected {
-  border-color: color-mix(in srgb, var(--tone-gold-2, #b88027) 36%, transparent);
-  background: color-mix(in srgb, var(--tone-gold-1, #f6ead1) 55%, white);
-  box-shadow: 0 10px 28px rgba(59, 43, 20, 0.07);
+  border: 2px solid var(--gold);
+  background: #fff9ec;
+  box-shadow: none;
+}
+
+.staff-roster li > button.is-selected::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 20px;
+  bottom: 20px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--gold);
 }
 
 .staff-avatar {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   overflow: hidden;
   display: grid;
   place-items: center;
-  background: linear-gradient(140deg, #e8d5b3, #f8f3e9);
-  color: #735524;
+  background: var(--surface-muted);
+  color: var(--ink);
   font-size: 0.78rem;
   font-weight: 800;
 }
 
 .staff-avatar.is-large {
-  width: 66px;
-  height: 66px;
-  font-size: 1rem;
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .staff-avatar img {
@@ -157,13 +269,13 @@
 .staff-roster__identity small,
 .staff-roster__rate small,
 .staff-record__save small {
-  color: var(--muted, #706656);
+  color: var(--text-secondary);
   font-size: 0.76rem;
 }
 
 .staff-roster__rate {
   text-align: right;
-  font-weight: 750;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -213,10 +325,13 @@
 
 .staff-record {
   min-width: 0;
+  padding: 36px 40px 5rem 44px;
+  background: var(--app-bg);
 }
 
 .staff-record__identity {
-  padding: 0.2rem 0 1.1rem;
+  padding: 0 0 1.1rem;
+  align-items: flex-start;
 }
 
 .staff-record__identity > div:nth-child(2) {
@@ -224,10 +339,279 @@
   min-width: 0;
 }
 
+.staff-record__identity h2 {
+  font-size: clamp(2rem, 2.8vw, 2.125rem);
+  line-height: 1.18;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.staff-record__controls {
+  display: grid;
+  justify-items: end;
+  gap: 0.65rem;
+}
+
 .staff-record__save {
   display: grid;
   justify-items: end;
   gap: 0.35rem;
+}
+
+.staff-profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.staff-profile-actions .cta {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  box-shadow: none;
+}
+
+.staff-profile-subtitle {
+  margin: 0 0 0.6rem;
+  color: var(--muted, #706656);
+}
+
+.staff-profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.staff-profile-chips span {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eee9df;
+  color: #4d4940;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+.staff-profile-chips span[data-tone="good"] {
+  background: var(--teal-soft);
+  color: var(--teal);
+}
+
+.staff-profile-chips span[data-tone="warning"] {
+  background: var(--gold-soft);
+  color: var(--gold-strong);
+}
+
+.staff-next-action {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin: 1rem 0 1rem;
+  border: 1px solid #e8d7af;
+  border-radius: 16px;
+  background: #fff9ec;
+  padding: 18px 20px;
+}
+
+.staff-next-action .cta {
+  background: var(--gold-strong);
+  border-color: var(--gold-strong);
+  box-shadow: none;
+}
+
+.staff-next-action h3,
+.staff-next-action p {
+  margin: 0.15rem 0 0;
+}
+
+.staff-profile-tabs {
+  display: flex;
+  gap: 1.35rem;
+  margin: 0 0 1rem;
+  border-bottom: 1px solid #ded8cc;
+}
+
+.staff-profile-tabs a {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.staff-profile-tabs a:first-child {
+  color: var(--ink);
+  border-bottom: 3px solid var(--gold);
+  font-weight: 600;
+}
+
+.staff-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.staff-overview-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 22px;
+  box-shadow: 0 1px 2px rgba(20, 24, 27, 0.03);
+}
+
+.staff-overview-card h3 {
+  margin: 0 0 0.25rem;
+}
+
+.staff-contact-summary {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.staff-contact-summary > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.staff-contact-summary span:not(.staff-avatar) {
+  color: #6b6b65;
+}
+
+.staff-overview-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.staff-overview-facts dt {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.staff-overview-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.staff-readiness-list {
+  list-style: none;
+  display: grid;
+  gap: 0.72rem;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.staff-readiness-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #171d1a;
+}
+
+.staff-readiness-list li::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  margin-top: 0.32rem;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.staff-readiness-list li[data-complete="true"]::before {
+  background: var(--teal);
+}
+
+.staff-readiness-list li span {
+  flex: 1;
+}
+
+.staff-readiness-list li strong {
+  color: var(--teal);
+}
+
+.staff-readiness-list li[data-complete="false"] strong {
+  color: var(--danger);
+}
+
+.staff-assignment-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.staff-assignment-card strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.35rem;
+}
+
+.staff-assignment-state {
+  border-radius: 10px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  padding: 0.75rem 1rem;
+  font-weight: 800;
+}
+
+.staff-assignment-progress {
+  grid-column: 1 / -1;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 1.15rem 0 0;
+  border-top: 3px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.staff-assignment-progress li {
+  position: relative;
+}
+
+.staff-assignment-progress li::before {
+  content: "";
+  position: absolute;
+  top: -1.45rem;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #c8c4ba;
+}
+
+.staff-assignment-progress li[data-complete="true"]::before {
+  background: var(--teal);
+}
+
+.staff-add-button {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .staff-record-section {
@@ -452,9 +836,15 @@
     grid-template-columns: 1fr;
   }
 
+  .staff-overview-grid,
+  .staff-assignment-card {
+    grid-template-columns: 1fr;
+  }
+
   .staff-roster {
     position: static;
     max-height: none;
+    min-height: auto;
     overflow: visible;
   }
 
@@ -466,16 +856,46 @@
 @media (max-width: 680px) {
   .staff-workspace__header,
   .staff-record__identity,
+  .staff-next-action,
   .staff-briefing-buttons {
     align-items: stretch;
     flex-direction: column;
   }
 
   .staff-workspace__header button,
+  .staff-profile-actions,
+  .staff-profile-actions button,
+  .staff-next-action button,
   .staff-record__save,
   .staff-record__save button,
   .staff-briefing-buttons button {
     width: 100%;
+  }
+
+  .staff-roster__filters,
+  .staff-profile-tabs {
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+  }
+
+  .staff-overview-facts,
+  .staff-assignment-progress {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-assignment-progress {
+    gap: 0.6rem;
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .staff-assignment-progress li {
+    padding-left: 1.2rem;
+  }
+
+  .staff-assignment-progress li::before {
+    top: 0.25rem;
+    left: 0;
   }
 
   .staff-record__save {
