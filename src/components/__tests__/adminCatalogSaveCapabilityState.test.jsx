@@ -4,6 +4,21 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AdminCatalogView } from "../AdminCatalogModal";
+import { createMenuItem as createMenuItemMock } from "../../lib/menuService";
+
+vi.mock("../../lib/menuService", () => ({
+  createCategory: vi.fn(async () => ({ id: "cat-1" })),
+  createEventType: vi.fn(async () => ({ id: "evt-1" })),
+  createMenuItem: vi.fn(async () => ({ catalogRevision: 1, id: "menu-item-1" })),
+  deleteMenuItem: vi.fn(),
+  getEventTypes: vi.fn(async () => [{ id: "evt-1", name: "Dinner" }]),
+  getMenuCategories: vi.fn(async () => [{ id: "cat-1", name: "Starters" }]),
+  getMenuItems: vi.fn(async () => []),
+  isMenuCatalogRevisionConflict: vi.fn(() => false),
+  updateCategory: vi.fn(),
+  updateEventType: vi.fn(),
+  updateMenuItem: vi.fn(async () => ({ catalogRevision: 1 }))
+}));
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -14,6 +29,17 @@ function catalog() {
     addons: [],
     rentals: [],
     settings: { pricingSetupConfirmed: true }
+  };
+}
+
+function starterCatalog() {
+  return {
+    packages: [],
+    addons: [],
+    rentals: [],
+    settings: {
+      pricingSetupConfirmed: false
+    }
   };
 }
 
@@ -163,6 +189,70 @@ describe("AdminCatalogModal save capability state", () => {
     expect(onSave).not.toHaveBeenCalled();
     expect(container.querySelector(".modal-foot").textContent)
       .toContain("Finish or discard the separate menu edits first");
+  });
+
+  test("opens manual setup when a starter pack is blocked by existing catalog content", async () => {
+    renderView({
+      catalog: starterCatalog(),
+      onApplyStarterPack: async () => ({
+        ok: false,
+        error: "This organization already has catalog content. Choose replacement only for an untouched staged pack."
+      })
+    });
+    const applyButton = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Use Wedding & events");
+    expect(applyButton).toBeTruthy();
+
+    await act(async () => {
+      applyButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(container.querySelector(".modal-foot").textContent).toContain(
+      "Manual catalog setup has been opened so you can continue editing."
+    );
+    expect([...container.querySelectorAll("button")]
+      .some((button) => button.textContent.trim() === "Packages")).toBe(true);
+  });
+
+  test("allows adding a menu item while a separate package catalog draft is pending", async () => {
+    const onCatalogMutation = vi.fn();
+    renderView({
+      initialTab: "menu",
+      onCatalogMutation
+    });
+    const packagesTab = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Packages");
+    expect(packagesTab).toBeTruthy();
+    act(() => packagesTab.click());
+    await act(async () => Promise.resolve());
+    makeUnsavedEdit();
+    const menuTab = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Menu");
+    act(() => menuTab.click());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const input = container.querySelector('input[aria-label="New menu item name"]');
+    expect(input).toBeTruthy();
+    setInputValue(input, "Seasonal soup");
+
+    const addItem = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Add Item");
+    expect(addItem, "add item button").toBeTruthy();
+    expect(addItem.disabled).toBe(false);
+
+    await act(async () => {
+      addItem.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(createMenuItemMock).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("Menu item added.");
+    expect(container.querySelector(".modal-foot").textContent)
+      .not.toContain("Finish or discard your other Library edits before making this saved change. Nothing changed.");
   });
 
   test("preserves a managed rename across newer evidence and discards it only after confirmation", async () => {

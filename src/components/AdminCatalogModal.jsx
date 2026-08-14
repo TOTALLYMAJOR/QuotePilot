@@ -114,6 +114,15 @@ const UPSELL_KIND_BY_COLLECTION = Object.freeze({
   addons: "addon",
   rentals: "rental"
 });
+const EXISTING_CATALOG_CONTENT_CONFLICTS = [
+  "already has catalog content",
+  "existing catalog content is not attributable"
+];
+
+function hasCatalogConflictFromExistingContent(error = "") {
+  const normalized = String(error || "").toLowerCase();
+  return EXISTING_CATALOG_CONTENT_CONFLICTS.some((needle) => normalized.includes(needle));
+}
 
 export function removeCatalogRowWithInclusions(catalog = {}, key, index) {
   const rows = Array.isArray(catalog?.[key]) ? catalog[key] : [];
@@ -671,8 +680,13 @@ export function AdminCatalogView({
     pushToast(message, "error");
     return true;
   };
-  const blockForOtherDrafts = (ownDraft = "", targetItemId = "") => {
-    const blocked = hasUnsavedChanges
+  const blockForOtherDrafts = (
+    ownDraft = "",
+    targetItemId = "",
+    options = {}
+  ) => {
+    const includeCatalogDraft = options?.includeCatalogDraft !== false;
+    const blocked = (includeCatalogDraft && hasUnsavedChanges)
       || (ownDraft !== "event-create" && Boolean(String(newEventTypeName || "").trim()))
       || (ownDraft !== "category-create" && Boolean(String(newCategoryName || "").trim()))
       || (ownDraft !== "item-create" && newItemDraftDirty)
@@ -817,8 +831,17 @@ export function AdminCatalogView({
     setPackActionId("");
     if (!result?.ok) {
       setCatalogRefreshRequired(result?.refreshRequired === true);
-      setStatus(result?.error || "Failed to apply starter catalog pack.");
-      pushToast(result?.error || "Failed to apply starter catalog pack.", "error");
+      const resultError = result?.error || "Failed to apply starter catalog pack.";
+      if (hasCatalogConflictFromExistingContent(resultError)) {
+        const conflictStatus = `${resultError} Manual catalog setup has been opened so you can continue editing.`;
+        setStatus(conflictStatus);
+        setManualSetupEnabled(true);
+        setActiveTab("packages");
+        pushToast(conflictStatus, "error");
+        return;
+      }
+      setStatus(resultError);
+      pushToast(resultError, "error");
       return;
     }
     setCatalogRefreshRequired(false);
@@ -1286,7 +1309,7 @@ export function AdminCatalogView({
       setStatus("Enter a menu item name first.");
       return;
     }
-    if (blockForOtherDrafts("item-create")) return;
+    if (blockForOtherDrafts("item-create", "", { includeCatalogDraft: false })) return;
     setMenuActionLoading(true);
     try {
       const created = await createMenuItem({
