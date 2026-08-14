@@ -114,6 +114,15 @@ const UPSELL_KIND_BY_COLLECTION = Object.freeze({
   addons: "addon",
   rentals: "rental"
 });
+const EXISTING_CATALOG_CONTENT_CONFLICTS = [
+  "already has catalog content",
+  "existing catalog content is not attributable"
+];
+
+function hasCatalogConflictFromExistingContent(error = "") {
+  const normalized = String(error || "").toLowerCase();
+  return EXISTING_CATALOG_CONTENT_CONFLICTS.some((needle) => normalized.includes(needle));
+}
 
 export function removeCatalogRowWithInclusions(catalog = {}, key, index) {
   const rows = Array.isArray(catalog?.[key]) ? catalog[key] : [];
@@ -342,6 +351,8 @@ export function AdminCatalogView({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [eventTypeEditName, setEventTypeEditName] = useState("");
   const [categoryEditName, setCategoryEditName] = useState("");
+  const [eventTypeRenameTouched, setEventTypeRenameTouched] = useState(false);
+  const [categoryRenameTouched, setCategoryRenameTouched] = useState(false);
   const [newItemDraft, setNewItemDraft] = useState({
     name: "",
     price: 0,
@@ -386,11 +397,13 @@ export function AdminCatalogView({
   const eventTypesLoadScopeKey = JSON.stringify([
     scopedOrganizationId,
     String(selectedEventTypeProp || ""),
+    catalogRevision,
     authoritativeVersion,
     starterPackRevision
   ]);
   const confirmedInventoryLoadScopeKey = JSON.stringify([
     scopedOrganizationId,
+    catalogRevision,
     authoritativeVersion,
     starterPackRevision,
     catalog?.settings?.pricingSetupConfirmed === true
@@ -398,6 +411,7 @@ export function AdminCatalogView({
   const eventMenuLoadScopeKey = JSON.stringify([
     scopedOrganizationId,
     String(selectedEventType || ""),
+    catalogRevision,
     authoritativeVersion,
     starterPackRevision
   ]);
@@ -410,10 +424,16 @@ export function AdminCatalogView({
     || normalizePricingType(newItemDraft.pricingType, "per_event") !== "per_event"
     || newItemDraft.active === false
   );
-  const eventTypeRenameDirty = String(eventTypeEditName || "").trim()
-    !== String(selectedEventTypeRecord?.name || "").trim();
-  const categoryRenameDirty = String(categoryEditName || "").trim()
-    !== String(selectedCategoryRecord?.name || "").trim();
+  const eventTypeRenameDirty = Boolean(
+    eventTypeRenameTouched
+    && selectedEventTypeRecord
+    && String(eventTypeEditName || "").trim() !== String(selectedEventTypeRecord.name || "").trim()
+  );
+  const categoryRenameDirty = Boolean(
+    categoryRenameTouched
+    && selectedCategoryRecord
+    && String(categoryEditName || "").trim() !== String(selectedCategoryRecord.name || "").trim()
+  );
   const hasPendingMenuEditorDraft = Boolean(
     String(newEventTypeName || "").trim()
     || String(newCategoryName || "").trim()
@@ -497,9 +517,13 @@ export function AdminCatalogView({
     setDraft(nextDraft);
     setJsonDrafts(nextJsonDrafts);
     setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
-    setStatus(String(catalog?.error || ""));
+    if (!acceptedRevision || catalog?.error) {
+      setStatus(String(catalog?.error || ""));
+    }
     setUploadingLogo(false);
-    setActiveTab(resolveCatalogAdminTab(catalog, initialTab));
+    if (!acceptedRevision) {
+      setActiveTab(resolveCatalogAdminTab(catalog, initialTab));
+    }
     setSelectedEventType(String(selectedEventTypeProp || "").trim());
     setSelectedCategory("");
     setMenuEventTypes([]);
@@ -511,7 +535,9 @@ export function AdminCatalogView({
     menuItemSaveInFlightRef.current.clear();
     setPackActionId("");
     setCatalogRefreshRequired(false);
-    setManualSetupEnabled(false);
+    if (!acceptedRevision) {
+      setManualSetupEnabled(false);
+    }
     setConfirmedMenuRecoveryAvailable(false);
     setConfirmedMenuRecoveryChecked(false);
     setMenuLoading(false);
@@ -520,6 +546,8 @@ export function AdminCatalogView({
     setNewCategoryName("");
     setEventTypeEditName("");
     setCategoryEditName("");
+    setEventTypeRenameTouched(false);
+    setCategoryRenameTouched(false);
     setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
   }, [open, viewScopeKey]); // Draft state is intentionally read inside this scope-change reconciliation effect.
 
@@ -648,12 +676,14 @@ export function AdminCatalogView({
     if (!open || pendingCatalogEvidenceRef.current) return;
     const selected = menuEventTypes.find((eventType) => eventType.id === selectedEventType);
     setEventTypeEditName(selected?.name || "");
+    setEventTypeRenameTouched(false);
   }, [selectedEventType, menuEventTypes]);
 
   useEffect(() => {
     if (!open || pendingCatalogEvidenceRef.current) return;
     const selected = menuCategories.find((category) => category.id === selectedCategory);
     setCategoryEditName(selected?.name || "");
+    setCategoryRenameTouched(false);
   }, [selectedCategory, menuCategories]);
 
   const blockManagedMenuMutationForDraft = (action, targetItemId) => {
@@ -671,8 +701,13 @@ export function AdminCatalogView({
     pushToast(message, "error");
     return true;
   };
-  const blockForOtherDrafts = (ownDraft = "", targetItemId = "") => {
-    const blocked = hasUnsavedChanges
+  const blockForOtherDrafts = (
+    ownDraft = "",
+    targetItemId = "",
+    options = {}
+  ) => {
+    const includeCatalogDraft = options?.includeCatalogDraft !== false;
+    const blocked = (includeCatalogDraft && hasUnsavedChanges)
       || (ownDraft !== "event-create" && Boolean(String(newEventTypeName || "").trim()))
       || (ownDraft !== "category-create" && Boolean(String(newCategoryName || "").trim()))
       || (ownDraft !== "item-create" && newItemDraftDirty)
@@ -781,6 +816,23 @@ export function AdminCatalogView({
     && draft?.settings?.pricingSetupConfirmed === true;
   const pricingReviewRequired = Boolean(stagedPack.id)
     && draft?.settings?.pricingSetupConfirmed !== true;
+  const hasCatalogContent = Boolean(
+    stagedPack.id
+    || draft?.packages?.length
+    || draft?.addons?.length
+    || draft?.rentals?.length
+    || catalog?.eventTypes?.length
+    || menuEventTypes.length
+  );
+  const showStarterTab = !hasCatalogContent
+    || (draft?.settings?.pricingSetupConfirmed !== true
+      && !recoveryReplacementBlocked
+      && Boolean(stagedPack.id))
+    || confirmedMissingMenuRecovery;
+  const existingContentRequiresManualSetup = String(initialTab || "").trim() === "starter"
+    && hasCatalogContent
+    && !stagedPack.id
+    && !confirmedMissingMenuRecovery;
 
   const handleApplyStarterPack = async (pack) => {
     if (blockForNewerCatalog()) return;
@@ -817,8 +869,17 @@ export function AdminCatalogView({
     setPackActionId("");
     if (!result?.ok) {
       setCatalogRefreshRequired(result?.refreshRequired === true);
-      setStatus(result?.error || "Failed to apply starter catalog pack.");
-      pushToast(result?.error || "Failed to apply starter catalog pack.", "error");
+      const resultError = result?.error || "Failed to apply starter catalog pack.";
+      if (hasCatalogConflictFromExistingContent(resultError)) {
+        const conflictStatus = `${resultError} Manual catalog setup has been opened so you can continue editing.`;
+        setStatus(conflictStatus);
+        setManualSetupEnabled(true);
+        setActiveTab("packages");
+        pushToast(conflictStatus, "error");
+        return;
+      }
+      setStatus(resultError);
+      pushToast(resultError, "error");
       return;
     }
     setCatalogRefreshRequired(false);
@@ -1286,7 +1347,7 @@ export function AdminCatalogView({
       setStatus("Enter a menu item name first.");
       return;
     }
-    if (blockForOtherDrafts("item-create")) return;
+    if (blockForOtherDrafts("item-create", "", { includeCatalogDraft: false })) return;
     setMenuActionLoading(true);
     try {
       const created = await createMenuItem({
@@ -1646,21 +1707,21 @@ export function AdminCatalogView({
   };
   const selectedPortalTheme = findPortalThemePreset(draft?.settings);
   const portalThemePreviewStyle = buildPortalThemeStyle(draft?.settings);
-  const hasCatalogContent = Boolean(
-    stagedPack.id
-    || draft?.packages?.length
-    || draft?.addons?.length
-    || draft?.rentals?.length
-    || menuEventTypes.length
-  );
   const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
   const visibleAdminTabs = starterChoiceOnly
     ? ADMIN_TABS.filter((tab) => tab.id === "starter")
     : ADMIN_TABS.filter(
       (tab) => tab.id !== "starter"
-        || ((!recoveryReplacementBlocked && draft?.settings?.pricingSetupConfirmed !== true)
-          || confirmedMissingMenuRecovery)
+        || showStarterTab
     );
+  const hasActiveVisibleTab = visibleAdminTabs.some((tab) => tab.id === activeTab);
+  const resolvedActiveTab = hasActiveVisibleTab ? activeTab : (visibleAdminTabs[0]?.id || "");
+  useEffect(() => {
+    if (open && !hasActiveVisibleTab && resolvedActiveTab && activeTab !== resolvedActiveTab) {
+      setActiveTab(resolvedActiveTab);
+    }
+  }, [open, hasActiveVisibleTab, resolvedActiveTab, activeTab]);
+
   const handleReload = () => {
     if (pendingCatalogEvidenceRef.current) {
       if (!window.confirm("Discard unsaved Library changes and load the newer version?")) {
@@ -1691,6 +1752,8 @@ export function AdminCatalogView({
       setNewCategoryName("");
       setEventTypeEditName("");
       setCategoryEditName("");
+      setEventTypeRenameTouched(false);
+      setCategoryRenameTouched(false);
       setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
       setCatalogRefreshRequired(false);
       setStatus("The latest Library version is loaded. Review it before making changes.");
@@ -1753,10 +1816,10 @@ export function AdminCatalogView({
               id={`catalog-admin-tab-${tab.id}`}
               type="button"
               role="tab"
-              aria-selected={activeTab === tab.id}
+              aria-selected={resolvedActiveTab === tab.id}
               aria-controls={`catalog-admin-panel-${tab.id}`}
-              tabIndex={activeTab === tab.id ? 0 : -1}
-              className={`admin-tab ${activeTab === tab.id ? "active" : ""}`}
+              tabIndex={resolvedActiveTab === tab.id ? 0 : -1}
+              className={`admin-tab ${resolvedActiveTab === tab.id ? "active" : ""}`}
               data-admin-tab-id={tab.id}
               onClick={() => selectAdminTab(tab.id)}
             >
@@ -1766,9 +1829,9 @@ export function AdminCatalogView({
         </div>
 
         <div
-          id={`catalog-admin-panel-${activeTab}`}
+          id={`catalog-admin-panel-${resolvedActiveTab}`}
           role="tabpanel"
-          aria-labelledby={`catalog-admin-tab-${activeTab}`}
+          aria-labelledby={`catalog-admin-tab-${resolvedActiveTab}`}
           tabIndex={0}
         >
 
@@ -1776,6 +1839,13 @@ export function AdminCatalogView({
           <div className="starter-pack-review-banner" role="status">
             <strong>{stagedPack.name || "Starter pack"} is a draft.</strong>
             <span> Suggested prices are not active until an admin reviews the complete catalog and confirms pricing.</span>
+          </div>
+        )}
+
+        {existingContentRequiresManualSetup && (
+          <div className="starter-pack-review-banner" role="status">
+            <strong>Existing catalog records were found.</strong>
+            <span> To protect them, starter packs only populate a blank catalog. Continue editing this catalog, or close and choose Import Studio.</span>
           </div>
         )}
 
@@ -1803,9 +1873,7 @@ export function AdminCatalogView({
           </div>
         )}
 
-        {activeTab === "starter" && (
-          draft?.settings?.pricingSetupConfirmed !== true || confirmedMissingMenuRecovery
-        ) && (
+        {resolvedActiveTab === "starter" && showStarterTab && (
           <section className="admin-section">
             <div className="admin-section-head"><h3>What kind of catering do you do most?</h3></div>
             <div className="admin-section-body">
@@ -1841,7 +1909,7 @@ export function AdminCatalogView({
                         disabled={saving
                           || Boolean(packActionId)
                           || selected
-                          || (draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery)}
+                          || !showStarterTab}
                       >
                         {packActionId === pack.id
                           ? "Populating your catalog..."
@@ -1857,9 +1925,6 @@ export function AdminCatalogView({
                   );
                 })}
               </div>
-              {draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery && (
-                <p className="warning-note">Starter packs are available only during initial unconfirmed catalog setup.</p>
-              )}
               {starterChoiceOnly && (
                 <div className="starter-pack-manual-path">
                   <span>None of these fit?</span>
@@ -1877,7 +1942,7 @@ export function AdminCatalogView({
           </section>
         )}
 
-        {activeTab === "packages" && (
+        {resolvedActiveTab === "packages" && (
           <Section title="Packages" onAdd={() => addRow("packages")}>
           <p className="source-note">
             Choose which catalog items the package price can cover. These items are not added to a quote automatically: the quote builder must select each one, and selected inclusions are charged $0.
@@ -1980,7 +2045,7 @@ export function AdminCatalogView({
           </Section>
         )}
 
-        {activeTab === "addons" && (
+        {resolvedActiveTab === "addons" && (
           <Section title="Add-ons" onAdd={() => addRow("addons")}>
           <p className="source-note">
             Add-ons are <strong>price-only</strong> and do not change server/chef/bartender counts.
@@ -2049,7 +2114,7 @@ export function AdminCatalogView({
           </Section>
         )}
 
-        {activeTab === "rentals" && (
+        {resolvedActiveTab === "rentals" && (
           <Section title="Rentals" onAdd={() => addRow("rentals")}>
           {draft.rentals.map((item, i) => (
             <div className="admin-row" key={item.id}>
@@ -2105,7 +2170,7 @@ export function AdminCatalogView({
           </Section>
         )}
 
-        {activeTab === "menu" && (
+        {resolvedActiveTab === "menu" && (
           <section className="admin-section">
           <div className="admin-section-head"><h3>Menu Management</h3></div>
           <div className="admin-section-body">
@@ -2129,7 +2194,10 @@ export function AdminCatalogView({
                   placeholder="Edit selected event type"
                   aria-label="Selected event type name"
                   value={eventTypeEditName}
-                  onChange={(e) => setEventTypeEditName(e.target.value)}
+                  onChange={(e) => {
+                    setEventTypeEditName(e.target.value);
+                    setEventTypeRenameTouched(true);
+                  }}
                   disabled={!selectedEventType || menuLoading}
                 />
                 <button
@@ -2175,7 +2243,10 @@ export function AdminCatalogView({
                   placeholder="Edit selected category"
                   aria-label="Selected category name"
                   value={categoryEditName}
-                  onChange={(e) => setCategoryEditName(e.target.value)}
+                  onChange={(e) => {
+                    setCategoryEditName(e.target.value);
+                    setCategoryRenameTouched(true);
+                  }}
                   disabled={!selectedCategory}
                 />
                 <button
@@ -2310,7 +2381,7 @@ export function AdminCatalogView({
         </section>
         )}
 
-        {AMBIENT_UI_ENABLED && EventTemplatesEditor && activeTab === "templates" && (
+        {AMBIENT_UI_ENABLED && EventTemplatesEditor && resolvedActiveTab === "templates" && (
           <Suspense fallback={<div className="admin-section" role="status">Opening event templates…</div>}>
             <EventTemplatesEditor
               templates={draft.settings?.eventTemplates || []}
@@ -2337,7 +2408,7 @@ export function AdminCatalogView({
           </Suspense>
         )}
 
-        {activeTab === "pricing" && (
+        {resolvedActiveTab === "pricing" && (
           <>
             <section className="admin-section">
               <div className="admin-section-head"><h3>Pricing Review Required</h3></div>

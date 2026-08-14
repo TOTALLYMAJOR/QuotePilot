@@ -1913,6 +1913,7 @@ same save path as every other catalog field.
 
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.
+- If starter packs do not appear in Catalog for an admin on hosted deployments, verify the organization has a `settings/config` document in Firestore and that your account is an admin for that same organization. A missing `settings`/`settings/config` document will keep catalog bootstrapping in a recoverable blocked state.
 - If you see `organizationId is required` errors, the signed-in account is missing tenant context (`userRoles/{uid}.organizationId`) and must be re-provisioned/invited into an organization.
 - If quote save fails, verify required fields:
   - customer name

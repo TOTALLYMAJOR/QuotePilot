@@ -1011,6 +1011,7 @@ export default function App({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [importStudioOpen, setImportStudioOpen] = useState(false);
+  const [skipCatalogSetup, setSkipCatalogSetup] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -3710,6 +3711,35 @@ export default function App({
     navigateWorkspace(WORKSPACE_PATHS.home);
   };
 
+  const catalogSetupBypassKey = String(authSession.organizationId || "").trim()
+    ? `quotepilot:skipCatalogSetup:${String(authSession.organizationId).trim()}`
+    : "";
+  useEffect(() => {
+    if (typeof window === "undefined" || !catalogSetupBypassKey) {
+      setSkipCatalogSetup(false);
+      return;
+    }
+    try {
+      setSkipCatalogSetup(window.sessionStorage.getItem(catalogSetupBypassKey) === "1");
+    } catch {
+      setSkipCatalogSetup(false);
+    }
+  }, [catalogSetupBypassKey]);
+  const setCatalogBypassState = useCallback((bypass) => {
+    const nextBypass = Boolean(bypass);
+    setSkipCatalogSetup(nextBypass);
+    if (typeof window === "undefined" || !catalogSetupBypassKey) return;
+    try {
+      if (nextBypass) {
+        window.sessionStorage.setItem(catalogSetupBypassKey, "1");
+      } else {
+        window.sessionStorage.removeItem(catalogSetupBypassKey);
+      }
+    } catch {
+      // Storage failures are non-fatal for setup-gate control.
+    }
+  }, [catalogSetupBypassKey]);
+
   const saveCatalogDuringSetup = async (nextCatalog) => {
     if (!hasConfiguredEventType) {
       return {
@@ -3915,7 +3945,11 @@ export default function App({
     );
   }
 
-  if (!catalogSetupComplete) {
+  // Keep Catalog Admin inside the setup branch so it receives the setup-only
+  // save guard and starter eligibility contract. Import Studio is rendered by
+  // the ordinary workspace branch, so that overlay still suppresses the gate.
+  const shouldSuppressSetupGate = skipCatalogSetup || importStudioOpen;
+  if (!catalogSetupComplete && !shouldSuppressSetupGate) {
     return (
       <div className="app-shell app-shell-neutral" style={appThemeVars}>
         <main className="auth-shell container">
@@ -3935,9 +3969,23 @@ export default function App({
             </ul>
             <div className="auth-actions">
               {authSession.isAdmin && (
-                <button type="button" className="cta" onClick={() => openWorkspaceTool(setAdminOpen)}>
-                  Open Admin Catalog
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="cta"
+                    onClick={() => openWorkspaceTool(setAdminOpen, {
+                      beforeOpen: () => setAdminInitialTab("starter")
+                    })}
+                  >
+                    Open Admin Catalog
+                  </button>
+                  <button type="button" className="ghost" onClick={() => openWorkspaceTool(setImportStudioOpen)}>
+                    Open Import Studio
+                  </button>
+                  <button type="button" className="ghost" onClick={() => setCatalogBypassState(true)}>
+                    Continue to workspace
+                  </button>
+                </>
               )}
               {!authSession.isAdmin && (
                 <button type="button" className="cta" onClick={catalog.reload}>
@@ -3949,6 +3997,9 @@ export default function App({
             {!authSession.isAdmin && (
               <p className="warning-note">Ask an organization admin to configure and save the catalog, then use Refresh Catalog Setup.</p>
             )}
+            <p className="source-note">
+              You can also import catalog records first, or continue with manual edits from workspace if you need to proceed today.
+            </p>
           </WorkspaceStatusCard>
         </main>
 
@@ -3973,6 +4024,7 @@ export default function App({
               onCatalogMutation={handleCatalogMutation}
               onReload={catalog.reload}
               saving={catalog.saving}
+              initialTab={adminInitialTab}
               selectedEventType={globalEventTypeId}
               onEventTypeChange={setGlobalEventTypeId}
               onInteractionStateChange={setCatalogModalInteraction}
