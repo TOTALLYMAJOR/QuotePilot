@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 40,
+  "catalogVersion": 41,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -3381,7 +3381,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 8,
+      "reviewRevision": 9,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -3420,6 +3420,7 @@
         "src/data/__tests__/starterCatalogPacks.test.js",
         "src/hooks/__tests__/useCatalogData.observation.test.jsx",
         "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+        "src/components/__tests__/adminCatalogStarterChoice.test.jsx",
         "src/lib/__tests__/menuService.test.js",
         "src/lib/__tests__/menuService.writeFallback.test.js",
         "src/components/__tests__/marginPresentation.test.js",
@@ -3457,6 +3458,10 @@
         {
           "path": "src/lib/__tests__/menuService.writeFallback.test.js",
           "locator": "rejects a stale firebase menu mutation before any record write"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogStarterChoice.test.jsx",
+          "locator": "empty confirmed pricing still shows starter packs to recover catalog data"
         },
         {
           "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
@@ -3502,7 +3507,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. These changes add no new read, role, pricing, provider, mutation, or persistence authority.",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. Revision 9 treats catalog read failures as recoverable for hosted admin flows while preserving the existing Firebase required-env gate outside local dev.",
       "stateEvidence": [
         {
           "state": "ready",
