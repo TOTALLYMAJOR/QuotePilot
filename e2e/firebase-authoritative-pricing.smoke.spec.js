@@ -16,6 +16,10 @@ async function signInAsStaff(page) {
   }
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
   await quoteButton.click();
+  const guidedMode = page.getByRole("button", { name: "Guided mode" });
+  if (await guidedMode.isVisible()) {
+    await guidedMode.click();
+  }
   await expect(page.getByLabel(/Event type/i)).toBeVisible({ timeout: 45_000 });
 }
 

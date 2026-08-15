@@ -4,11 +4,11 @@ test("public landing page presents QuotePilot for catering teams with truthful r
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
-    name: /Build confident catering quotes without the spreadsheet chase/i
+    name: /Every event is a document that won’t hold still/i
   })).toBeVisible();
-  await expect(page.getByText("Built for catering teams", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", {
-    name: /catering team serving guests at an outdoor dinner event/i
+  await expect(page.getByText("Catering sales + event operations", { exact: true })).toBeVisible();
+  await expect(page.getByRole("article", {
+    name: /Banquet event order for Morgan Wedding, revision six/i
   })).toBeVisible();
 
   const demoLinks = page.getByRole("link", { name: "Book a demo" });
@@ -36,7 +36,7 @@ test("public landing page stays contained on mobile and honors reduced motion", 
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
-    name: /Build confident catering quotes without the spreadsheet chase/i
+    name: /Every event is a document that won’t hold still/i
   })).toBeVisible();
 
   const overflow = await page.evaluate(
@@ -44,7 +44,7 @@ test("public landing page stays contained on mobile and honors reduced motion", 
   );
   expect(overflow).toBeLessThanOrEqual(1);
 
-  const animationDuration = await page.locator(".qp-landing-hero-copy h1").evaluate(
+  const animationDuration = await page.locator(".qp-dh-h1").evaluate(
     (node) => getComputedStyle(node).animationDuration
   );
   expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.01);
@@ -55,7 +55,7 @@ test("customer portal query takes precedence over the public landing page", asyn
 
   await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
   await expect(page.getByRole("heading", {
-    name: /Build confident catering quotes without the spreadsheet chase/i
+    name: /Every event is a document that won’t hold still/i
   })).toHaveCount(0);
 });
 
@@ -67,6 +67,6 @@ test("staff route loads the workspace boundary rather than the public landing pa
   );
   await expect(workspaceSurface).toBeVisible();
   await expect(page.getByRole("heading", {
-    name: /Build confident catering quotes without the spreadsheet chase/i
+    name: /Every event is a document that won’t hold still/i
   })).toHaveCount(0);
 });
