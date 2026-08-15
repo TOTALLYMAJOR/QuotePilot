@@ -454,9 +454,11 @@ Firebase Functions now has two explicit codebases. `functions` is the existing
 and release-candidate workflows. `functions-connect` is the separately pinned
 Stripe Connect control-plane package. It exports no function and accepts no
 provider configuration. Its dormant source now includes an exact named-
-database repository, transactional HMAC-scoped rate limiter, and injected
-Accounts v2 Sandbox adapter, but none is instantiated by the deploy entry
-point. Install its locked
+database repository, a receipt-bound current-role authority projection,
+transactional HMAC-scoped rate limiter, immutable edge commands with leased
+worker receipts, a replay-stable owner handoff, and an injected Accounts v2
+Sandbox adapter with exact platform/mode preflight. None is instantiated by the
+deploy entry point. Install its locked
 dependencies only when validating that codebase with
 `npm ci --prefix functions-connect`, and run
 `npm run check:stripe-connect-foundation`. Do not replace an explicit
@@ -475,17 +477,33 @@ separately authorized evidence gate.
 Dormant Connect status/onboarding contracts can be checked with
 `npm run check:stripe-connect:onboarding`. They bind repository source only to
 the explicit `connect-control` database selector, reserve one immutable
-connection generation and 30-day Accounts v2 idempotency identity before a
-provider attempt, enforce reviewed principal and organization rate windows in
-one fail-closed transaction, and constrain the injected provider adapter to
-Sandbox Accounts v2 merchant configuration with full Stripe Dashboard access
-and Stripe fee/negative-balance responsibility. The repository, limiter, and
-adapter are not imported by the deploy-empty Connect entry point. The one-use
-browser destination is an internal QuotePilot POST handoff whose token stays
-out of the URL/referrer, never a Stripe Account Link. Passing this check is
-source evidence only; it does not establish an applied database, callable,
-HTTP endpoint, connected account, provider request, deployment, or hosted
-acceptance.
+connection generation, authority digest, and 30-day provider-recovery deadline
+before a provider attempt, and enforce reviewed principal and organization rate
+windows in one fail-closed transaction. The reservation has no provider key:
+the immutable command's `qpcmd_<digest>` value is the sole account-creation
+idempotency identity. Edge requests must also match a receipt-bound current
+authority projection, while provider account creation and refresh run only in a
+separately leased worker with terminal, quarantine, and dead-letter receipts.
+After Stripe returns, account binding and Account Link disclosure each recheck
+current authority. Drift or post-create validation failure retains the provider
+identity/occurrence only in private quarantine evidence; an interrupted command
+receipt reconstructs that exact quarantine only while its private occurrence
+and account claim remain intact. Account Link disclosure rechecks authority,
+state, local/provider expiry, and the clock after its issuance receipt. A
+`provider_withheld` attempt returns only to explicit recovery; a receipt-write
+failure also withholds the URL and holds the consumed attempt until local
+expiry without claiming that a receipt committed.
+The injected provider adapter is limited to Sandbox Accounts v2 merchant
+configuration with full Stripe Dashboard access and Stripe fee/negative-balance
+responsibility; it verifies the exact platform account and Sandbox mode before
+access and requires both card payments and payouts before `ready`. The
+repository, authority, command, worker, handoff, limiter, and adapter modules
+are not imported by the deploy-empty Connect entry point. The one-use browser
+destination is an internal QuotePilot POST handoff whose token stays out of the
+URL/referrer, never a Stripe Account Link. Passing this check is source evidence
+only; it does not establish an applied database, App Check enforcement/
+consumption, callable, HTTP endpoint, connected account, provider request,
+deployment, or hosted acceptance.
 
 Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a

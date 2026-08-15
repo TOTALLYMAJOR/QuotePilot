@@ -163,6 +163,8 @@ describe("capability surfacing delivery gate", () => {
 
   test("recognizes backend authority and data paths without treating tests as delivery", () => {
     expect(isBackendDeliveryPath("functions/index.js")).toBe(true);
+    expect(isBackendDeliveryPath("functions-connect/index.js")).toBe(true);
+    expect(isBackendDeliveryPath("functions-connect/connectCommandWorker.js")).toBe(true);
     expect(isBackendDeliveryPath("firestore.rules")).toBe(true);
     expect(isBackendDeliveryPath("src/lib/quoteStore.js")).toBe(true);
     expect(isBackendDeliveryPath("scripts/backfill-customer-ids.mjs")).toBe(true);

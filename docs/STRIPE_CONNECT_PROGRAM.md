@@ -1,6 +1,6 @@
 # Stripe Connect Program
 
-Last updated: August 13, 2026
+Last updated: August 14, 2026
 
 ## Purpose and stopping point
 
@@ -46,8 +46,9 @@ production Connect manifest yet.
    proof, and App Check monitor-then-enforce contracts.
 4. Provision isolated staging database, IAM, identities, network/egress,
    secrets, and GitHub OIDC with Terraform and separate state.
-5. Implement strict status/onboarding interfaces and one-use same-tab Account
-   Link handoff, still Sandbox-only.
+5. Implement strict status/onboarding interfaces, current-role authority
+   projection, an edge-command/leased-worker boundary, and a replay-stable
+   one-use same-tab Account Link handoff, still Sandbox-only and deploy-dormant.
 6. Implement generation-bound routing, preclaims, direct Checkout binding,
    endpoint-specific inboxes, workers, receipt relay, journals, retention locks,
    projection, and no-fallback behavior.
@@ -66,9 +67,9 @@ operation.
 
 | Operation | Principal window | Organization window |
 |---|---:|---:|
-| Provider status refresh | 6 per 5 minutes | 30 per 5 minutes |
+| Provider status refresh | 6 per 5 minutes | 6 per 5 minutes, at least 10 seconds apart |
 | Begin onboarding | 6 per 24 hours | 10 per 24 hours |
-| Prepare onboarding redirect | 5 per 15 minutes | 20 per 15 minutes |
+| Prepare onboarding redirect | 3 per 15 minutes | 10 per 24 hours |
 
 ## Current source checkpoint
 
@@ -108,37 +109,97 @@ operation.
   production infrastructure is absent. Pinned-provider local format/init/
   validate is source evidence only; no cloud plan or resource exists.
 - Dormant status/onboarding contract modules now define exact-key request
-  digests, auth-claim tenant scope, redacted `StripeConnectStatusV1`, owner-only
-  recent-auth/App Check checks, HMAC-only rate-limit principals,
-  reservation-before-provider ordering, redacted
-  mutation receipts, and a one-use same-tab POST handoff. The handoff keeps its
-  token out of URLs/referrers, stores only an HMAC token digest, is consumed
-  before an injected Account Link adapter runs,
-  limits retained provider evidence to the attempt digest and bounded expiry,
-  and recovers without automatic link recreation.
+  digests, redacted `StripeConnectStatusV1`, owner-only recent-auth/App Check
+  checks, HMAC-only rate-limit principals, reservation-before-provider
+  ordering, redacted mutation receipts, and a one-use same-tab POST handoff.
+  Edge authorization no longer treats an identity-token role as current by
+  itself: it also requires a receipt-bound, monotonically revisioned authority
+  projection containing the current enabled, verified administrators and
+  canonical owner. The projection is valid for at most ten minutes, and stale,
+  inactive, removed-admin, owner-missing, publisher-mismatched, or digest-
+  mismatched authority fails closed.
+- Every dormant status callable now requires the exact expected App Check
+  application binding, and provider refresh additionally requires a consumed
+  limited-use token before rate-limit or command work. These are source
+  contracts only until the exported handlers enable Firebase enforcement and
+  token consumption.
+- Account creation and provider-status refresh now cross an immutable private
+  command boundary. The edge freezes an exact payload/request digest without
+  calling Stripe. The immutable command derives the sole provider idempotency
+  key, `qpcmd_<digest>`; the repository reservation contains the generation,
+  authority digest, and 30-day recovery deadline, but no second provider key.
+  A separately composed worker claims a bounded lease, revalidates current
+  authority, revision, generation, unexpired recovery reservation or account
+  binding, executes the injected provider adapter, and writes one terminal
+  receipt. Exact retries reuse the command-owned provider identity; conflicting
+  request-ID reuse is rejected, deterministic authority/provider-contract
+  failures enter `security_review`, and exhausted lease attempts produce a
+  dead-letter receipt.
+- Account binding has a second authority gate after Stripe returns. The
+  completion transaction re-reads the current owner projection with a fresh
+  clock on every transaction attempt before it can bind the account. A
+  provider response that fails post-create validation, an
+  owner/authority change during the provider call, or a binding collision keeps
+  the returned account identity and provider occurrence only in private
+  quarantine records, marks the provider-account claim quarantined, and exposes
+  no usable binding. If command-receipt persistence is interrupted after that
+  quarantine commits, retry validates the exact occurrence and reconstructs
+  the same terminal quarantine without another Stripe call. These command and
+  worker modules are not exported or instantiated by the deployment entry
+  point.
+- The same-tab handoff is now bound to the exact owner UID, authority revision,
+  expected App Check application digest, organization generation/revision,
+  request ID, and payload digest. Its bearer value is deterministically derived
+  but never stored; only its digest and a bounded attempt receipt persist. An
+  exact request replay returns the same still-active attempt, a different
+  active attempt is refused, and the ten-minute handoff is consumed before an
+  injected Account Link adapter runs. Consumption transactionally rechecks the
+  current owner authority, connection state, revision, generation, and private
+  account binding. After Stripe creates the Account Link, a second transaction
+  rechecks that same authority, state, prepared-attempt ceiling, provider
+  expiry, and post-receipt clock before the URL may be disclosed. Authority or
+  state drift records `provider_withheld` and permits a new explicit recovery
+  attempt. If the issuance receipt cannot be committed, the URL is still
+  withheld but the consumed attempt remains blocked until its local expiry;
+  QuotePilot never claims that `provider_withheld` committed. Every withheld
+  path returns only the QuotePilot recovery destination, retains no provider
+  URL, and never silently creates another link.
 - A dormant concrete repository selects Firestore only through the exact named
   `connect-control` database argument. It transactionally reserves one
-  immutable generation and stable 30-day Accounts v2 idempotency identity,
-  binds each platform/mode/account identity to one organization and generation,
-  quarantines collisions, stores redacted replay receipts, refreshes by exact
-  revision, and consumes each HMAC-digested handoff once. The paired limiter
+  immutable generation, exact authority digest, and 30-day provider-recovery
+  deadline before command enqueue. The command—not the reservation—owns the
+  sole Stripe idempotency key. The repository binds each platform/mode/account
+  identity to one organization and generation, preserves private post-provider
+  quarantine occurrences and provider identities, reconstructs exact
+  quarantine replay, stores redacted public receipts, refreshes by exact
+  revision, rejects unreviewed platform/configuration bindings, and consumes
+  each HMAC-digested handoff once. The paired limiter
   stores no raw UID or organization ID and enforces the reviewed principal and
   organization windows atomically with fail-closed database behavior.
 - A dormant injected Stripe adapter is fixed to the exact SDK/API versions,
   Sandbox mode, an explicit platform-account binding, Accounts v2 merchant
   configuration, full Stripe Dashboard access, Stripe fee and negative-balance
-  responsibility, USD, US identity, and requested card payments. It creates
-  merchant-only hosted Account Links with stable v2 idempotency and projects
-  only bounded health evidence. Live mode, responsibility drift, platform
-  mismatch, foreign return origins, and provider identity mismatch fail before
-  a usable binding is returned.
+  responsibility, USD, US identity, and requested card payments. Before every
+  account create, account retrieve, or Account Link request, it independently
+  retrieves the exact v1 platform account and Sandbox balance; wrong platform,
+  wrong mode, or unavailable preflight fails before provider mutation. It
+  validates the provider-shaped RFC 3339
+  `configuration.merchant.applied` timestamp, requires both card payments and
+  payouts to be active before projecting `ready`, creates merchant-only hosted
+  Account Links with stable v2 idempotency, and projects only bounded health
+  evidence. When Stripe returns an account identity whose remaining fields fail
+  post-create validation, the adapter makes that identity available only as
+  non-enumerable private quarantine evidence. Live mode, responsibility drift,
+  foreign return origins, and provider identity mismatch fail before a usable
+  binding is returned.
 - These repository, limiter, and adapter modules are not imported by
   `functions-connect/index.js`. The tracked staging platform remains `unbound`,
   so the adapter cannot be instantiated from the current manifest. Callable and
   HTTP bindings remain absent until the applied infrastructure and App Check
   gates pass.
 
-No connected account, App Check enforcement, applied Terraform resource,
-credential, callable/HTTP export, Stripe call, Account Link, webhook
-destination, provider evidence, Connect deployment, hosted UAT, production
+No connected account, App Check enforcement or callable token consumption,
+applied Terraform resource, credential, callable/HTTP export, Stripe call,
+Account Link, webhook destination, provider evidence, Connect deployment,
+hosted UAT, production
 enablement, or human acceptance is claimed.

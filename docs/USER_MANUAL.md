@@ -1374,11 +1374,35 @@ account. Those contracts include exact tenant/generation receipts, a one-use
 same-tab hosted-onboarding handoff, transactionally enforced request limits,
 and contextual recovery after an interrupted attempt.
 
+The dormant edge contract also requires a short-lived, receipt-bound projection
+of the organization's current enabled administrators and canonical owner; an
+old identity-token role alone is insufficient. Account creation and live status
+refresh are recorded as immutable digest-bound commands for a separately
+leased worker, so the edge layer does not need the Stripe credential and exact
+retries reuse the command-derived `qpcmd` value as the sole provider
+idempotency identity. The repository's separate 30-day value is a recovery
+deadline, not another provider key. The provider adapter must verify the exact
+Sandbox platform account and mode before access, and it cannot report the
+connection `ready` until both card payments and payouts are active. If provider
+creation returns an identity but validation or current owner authority changes
+before binding, that identity is retained only in private security-review
+evidence and is not exposed as a connection. The owner handoff is bound to
+current owner, authority, App Check application, revision, generation, request,
+and payload evidence; it allows one active ten-minute attempt and rechecks those
+bindings both before and after Stripe creates an Account Link, including its
+local and provider expiry immediately before disclosure. Authority/state drift
+records `provider_withheld`. A receipt-write interruption also exposes no
+Stripe URL, but keeps the consumed attempt blocked until its local expiry
+instead of claiming an uncommitted receipt. Both outcomes return only to
+explicit recovery and never silently create another link.
+
 The package still exports no endpoint, the tracked staging platform remains
-unbound, and no browser action can instantiate the repository, limiter, or
-provider adapter. Do not interpret source tests, a local success receipt, or
-the presence of these modules as a connected account, Account Link, payment-
-routing readiness, Stripe provider acceptance, or production availability.
+unbound, and no browser action can instantiate the repository, limiter,
+command bridge, worker, handoff, or provider adapter. App Check enforcement and
+limited-use token consumption are not active. Do not interpret source tests, a
+local success receipt, or the presence of these modules as a connected account,
+Account Link, payment-routing readiness, Stripe provider acceptance, or
+production availability.
 The first operable surface remains blocked on applied isolated infrastructure,
 App Check enforcement evidence, exact staging bindings, and a separate hosted
 Sandbox release.

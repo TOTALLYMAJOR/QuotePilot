@@ -29,7 +29,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   bytes, largest chunk unchanged) recalibrate compatibility to an absolute
   ceiling of 2,964,327 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
-  temporarily capped at 3,826,220 aggregate bytes and the same 391,901-byte
+  temporarily capped at 3,827,245 aggregate bytes and the same 391,901-byte
   largest-chunk ceiling (measured 3,750,363 local Ambient bytes is under that
   standing ceiling).
 - Exception type: `perf-threshold-temp`
@@ -79,6 +79,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   475 Ambient bytes by reusing existing icon glyphs. Its exact measurements are
   2,964,327 / 391,901 bytes for compatibility and 3,750,363 / 391,901 bytes for
   Ambient; only the compatibility ceiling changes, with no general headroom.
+  The catalog onboarding recovery hotfix adds 1,025 Ambient aggregate bytes in
+  CI (`3,827,245 / 391,901`) for the hosted setup, manual, import, and bypass
+  paths; the largest chunk remains unchanged.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,

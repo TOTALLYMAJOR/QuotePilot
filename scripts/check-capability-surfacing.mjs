@@ -141,6 +141,7 @@ export function isBackendDeliveryPath(value, { source = "" } = {}) {
   }
   if (["firestore.rules", "firestore.indexes.json"].includes(file)) return true;
   if (file.startsWith("functions/") && isRuntimeCodeFile(file)) return true;
+  if (file.startsWith("functions-connect/") && isRuntimeCodeFile(file)) return true;
   if (file.startsWith("src/") && isRuntimeCodeFile(file)) {
     // Client authority can appear in any future source folder, so default to
     // review and keep the exclusion surface intentionally presentation-only.
