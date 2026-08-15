@@ -1,4 +1,9 @@
 import { useEffect } from "react";
+import eventScheduleImage from "../assets/marketing/quotepilot/event-schedule.png";
+import importStudioImage from "../assets/marketing/quotepilot/import-studio.png";
+import opportunityTrackingImage from "../assets/marketing/quotepilot/opportunity-tracking.png";
+import quoteDetailsImage from "../assets/marketing/quotepilot/quote-details-connections.png";
+import salesFollowupImage from "../assets/marketing/quotepilot/sales-followup.png";
 import { isBuyerAccessPublicCtaEnabled } from "../lib/buyerAccessConfig";
 import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
 import DocumentHero from "./DocumentHero";
@@ -157,29 +162,47 @@ export default function MarketingPage() {
           </div>
 
           <div className="qp-landing-feature-grid">
-            <article className="qp-landing-feature qp-landing-feature-primary">
+            <article className="qp-landing-feature qp-landing-feature-shot">
+              <img
+                src={quoteDetailsImage}
+                alt="QuotePilot quote detail view showing guest count, package, menu, staffing, pricing, payments, and proposal status all connected to one quote"
+                loading="lazy"
+                decoding="async"
+              />
               <div className="qp-landing-feature-copy">
                 <span>Guided quote builder</span>
-                <h3>Build the offer with the total in view</h3>
+                <h3>Every detail, connected</h3>
                 <p>
-                  Configure the event, menu, services, staffing, and terms while the pricing breakdown stays visible.
+                  Guest count, package, menu, staffing, pricing, and payments stay linked to one quote &mdash; not five spreadsheets.
                 </p>
               </div>
             </article>
 
-            <article className="qp-landing-feature qp-landing-feature-portal">
+            <article className="qp-landing-feature qp-landing-feature-shot">
+              <img
+                src={opportunityTrackingImage}
+                alt="QuotePilot opportunities view showing proposal completeness, pricing and margin, customer state, and event planning for one quote"
+                loading="lazy"
+                decoding="async"
+              />
               <div className="qp-landing-feature-copy">
-                <span>Customer decisions</span>
-                <h3>Make the next decision easy to understand</h3>
-                <p>Customers can accept, decline, or request changes from a focused, time-bound portal.</p>
+                <span>Opportunity tracking</span>
+                <h3>Know where every quote stands</h3>
+                <p>Proposal readiness, pricing, customer state, and event planning, each tracked separately with one useful next step.</p>
               </div>
             </article>
 
-            <article className="qp-landing-feature qp-landing-feature-compare">
+            <article className="qp-landing-feature qp-landing-feature-shot">
+              <img
+                src={importStudioImage}
+                alt="QuotePilot Import Studio showing a CSV drop zone for bringing customer and catalog data into the workspace"
+                loading="lazy"
+                decoding="async"
+              />
               <div className="qp-landing-feature-copy">
-                <span>Scenario comparison</span>
-                <h3>Shape Good, Better, and Best paths</h3>
-                <p>Compare realistic options while keeping the original quote as the baseline.</p>
+                <span>Bring your business with you</span>
+                <h3>Import Studio turns spreadsheets into a workspace</h3>
+                <p>Turn customer and catalog spreadsheets into a clean, reviewable workspace &mdash; nothing writes until you approve the mapping.</p>
               </div>
             </article>
 
@@ -193,7 +216,13 @@ export default function MarketingPage() {
               </div>
             </article>
 
-            <article className="qp-landing-feature qp-landing-feature-followup">
+            <article className="qp-landing-feature qp-landing-feature-shot">
+              <img
+                src={salesFollowupImage}
+                alt="QuotePilot workflow view showing follow-up stage, due date, and quote lifecycle timeline"
+                loading="lazy"
+                decoding="async"
+              />
               <div className="qp-landing-feature-copy">
                 <span>Sales follow-up</span>
                 <h3>Know what needs attention next</h3>
@@ -247,6 +276,12 @@ export default function MarketingPage() {
           </div>
 
           <div className="qp-landing-operations-layout">
+            <img
+              src={eventScheduleImage}
+              alt="QuotePilot event schedule calendar showing booked and accepted events with conflict flags and a day's run of show"
+              loading="lazy"
+              decoding="async"
+            />
             <div className="qp-landing-operations-list">
               {operations.map((item) => (
                 <article key={item.title}>

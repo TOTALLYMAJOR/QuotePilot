@@ -440,27 +440,25 @@
   border: 1px solid var(--landing-line);
   border-radius: 1.15rem;
   background: var(--landing-surface);
-  min-height: 16rem;
-  display: grid;
-  align-items: end;
-}
-
-.qp-landing-feature-primary {
-  background: var(--landing-dark);
-}
-
-.qp-landing-feature-primary .qp-landing-feature-copy {
-  color: #f7f7f2;
-}
-
-.qp-landing-feature-primary .qp-landing-feature-copy p {
-  color: var(--landing-dark-muted);
 }
 
 .qp-landing-feature-versioned {
+  min-height: 16rem;
+  display: grid;
+  align-items: end;
   background:
     linear-gradient(145deg, transparent 42%, color-mix(in srgb, var(--landing-accent) 20%, transparent)),
     var(--landing-surface-strong);
+}
+
+.qp-landing-feature-shot {
+  display: block;
+}
+
+.qp-landing-feature-shot img {
+  width: 100%;
+  display: block;
+  border-bottom: 1px solid var(--landing-line);
 }
 
 .qp-landing-feature-copy {
@@ -594,9 +592,20 @@
 
 .qp-landing-operations-layout {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
   gap: 1rem;
   margin-top: 3.5rem;
+}
+
+.qp-landing-operations-layout > img {
+  width: 100%;
+  height: 100%;
+  min-height: 24rem;
+  display: block;
+  object-fit: cover;
+  object-position: top left;
+  border: 1px solid var(--landing-line);
+  border-radius: 1.15rem;
 }
 
 .qp-landing-operations-list {
@@ -773,12 +782,10 @@
     color: #251402;
   }
 
-  .qp-landing-feature-primary {
+  .qp-landing-feature-shot {
     border-color: #343934;
   }
 
-  .qp-landing-hero-media img,
-  .qp-landing-portal-media img,
   .qp-landing-operations-layout > img {
     filter: brightness(0.92) saturate(0.94);
   }
@@ -838,19 +845,6 @@
 
   .qp-landing-outcome-grid article:last-child {
     border-bottom: 0;
-  }
-
-  .qp-landing-feature-primary,
-  .qp-landing-feature-portal,
-  .qp-landing-feature-compare,
-  .qp-landing-feature-versioned,
-  .qp-landing-feature-followup {
-    grid-column: 1 / -1;
-    grid-row: auto;
-  }
-
-  .qp-landing-feature-primary img {
-    min-height: 22rem;
   }
 
   .qp-landing-workflow,
@@ -970,19 +964,6 @@
   .qp-landing-feature-grid {
     grid-template-columns: 1fr;
     margin-top: 2.5rem;
-  }
-
-  .qp-landing-feature-primary,
-  .qp-landing-feature-portal,
-  .qp-landing-feature-compare,
-  .qp-landing-feature-versioned,
-  .qp-landing-feature-followup {
-    grid-column: 1;
-  }
-
-  .qp-landing-feature-primary img,
-  .qp-landing-feature-followup img {
-    min-height: 16rem;
   }
 
   .qp-landing-feature-versioned {
