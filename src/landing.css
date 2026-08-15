@@ -429,7 +429,7 @@
 
 .qp-landing-feature-grid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
   gap: 1rem;
   margin-top: 3.5rem;
 }
@@ -440,13 +440,12 @@
   border: 1px solid var(--landing-line);
   border-radius: 1.15rem;
   background: var(--landing-surface);
+  min-height: 16rem;
+  display: grid;
+  align-items: end;
 }
 
 .qp-landing-feature-primary {
-  grid-column: span 7;
-  grid-row: span 2;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   background: var(--landing-dark);
 }
 
@@ -458,48 +457,10 @@
   color: var(--landing-dark-muted);
 }
 
-.qp-landing-feature-primary img {
-  height: 100%;
-  min-height: 28rem;
-  object-position: top left;
-}
-
-.qp-landing-feature-portal,
-.qp-landing-feature-compare {
-  grid-column: span 5;
-}
-
 .qp-landing-feature-versioned {
-  grid-column: span 4;
-  min-height: 24rem;
-  display: grid;
-  align-items: end;
   background:
     linear-gradient(145deg, transparent 42%, color-mix(in srgb, var(--landing-accent) 20%, transparent)),
     var(--landing-surface-strong);
-}
-
-.qp-landing-feature-followup {
-  grid-column: span 8;
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(16rem, 0.75fr);
-}
-
-.qp-landing-feature img {
-  width: 100%;
-  display: block;
-  object-fit: cover;
-  object-position: top center;
-}
-
-.qp-landing-feature-portal img,
-.qp-landing-feature-compare img {
-  aspect-ratio: 16 / 9;
-}
-
-.qp-landing-feature-followup img {
-  height: 100%;
-  min-height: 25rem;
 }
 
 .qp-landing-feature-copy {
@@ -578,23 +539,8 @@
 
 .qp-landing-portal {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(20rem, 0.92fr);
-  gap: clamp(3rem, 7vw, 7rem);
-  align-items: center;
-}
-
-.qp-landing-portal-media {
-  position: relative;
-  padding: clamp(1rem, 3vw, 2.2rem);
-  border-radius: 1.4rem;
-  background: var(--landing-accent-soft);
-}
-
-.qp-landing-portal-media img {
-  width: 100%;
-  display: block;
-  border-radius: 0.9rem;
-  box-shadow: 0 1.5rem 4rem color-mix(in srgb, var(--landing-dark) 16%, transparent);
+  grid-template-columns: 1fr;
+  max-width: 52rem;
 }
 
 .qp-landing-portal-copy {
@@ -648,20 +594,9 @@
 
 .qp-landing-operations-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  grid-template-columns: 1fr;
   gap: 1rem;
   margin-top: 3.5rem;
-}
-
-.qp-landing-operations-layout > img {
-  width: 100%;
-  height: 100%;
-  min-height: 34rem;
-  display: block;
-  object-fit: cover;
-  object-position: top left;
-  border: 1px solid var(--landing-line);
-  border-radius: 1.15rem;
 }
 
 .qp-landing-operations-list {

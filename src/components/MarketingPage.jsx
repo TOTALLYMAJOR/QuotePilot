@@ -1,9 +1,4 @@
 import { useEffect } from "react";
-import customerDecisionImage from "../assets/marketing/quotepilot/customer-decision.png";
-import eventProductionImage from "../assets/marketing/quotepilot/event-production.png";
-import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
-import salesWorkflowImage from "../assets/marketing/quotepilot/sales-workflow.png";
-import scenarioCompareImage from "../assets/marketing/quotepilot/scenario-compare.png";
 import { isBuyerAccessPublicCtaEnabled } from "../lib/buyerAccessConfig";
 import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
 import DocumentHero from "./DocumentHero";
@@ -170,25 +165,9 @@ export default function MarketingPage() {
                   Configure the event, menu, services, staffing, and terms while the pricing breakdown stays visible.
                 </p>
               </div>
-              <img
-                src={quoteBuilderImage}
-                alt="QuotePilot quote builder with event fields and a live pricing breakdown"
-                width="1440"
-                height="960"
-                loading="lazy"
-                decoding="async"
-              />
             </article>
 
             <article className="qp-landing-feature qp-landing-feature-portal">
-              <img
-                src={customerDecisionImage}
-                alt="QuotePilot customer portal showing event scope, pricing, and decision controls"
-                width="1440"
-                height="960"
-                loading="lazy"
-                decoding="async"
-              />
               <div className="qp-landing-feature-copy">
                 <span>Customer decisions</span>
                 <h3>Make the next decision easy to understand</h3>
@@ -202,14 +181,6 @@ export default function MarketingPage() {
                 <h3>Shape Good, Better, and Best paths</h3>
                 <p>Compare realistic options while keeping the original quote as the baseline.</p>
               </div>
-              <img
-                src={scenarioCompareImage}
-                alt="QuotePilot scenario comparison with Good, Better, and Best options"
-                width="1440"
-                height="960"
-                loading="lazy"
-                decoding="async"
-              />
             </article>
 
             <article className="qp-landing-feature qp-landing-feature-versioned">
@@ -223,14 +194,6 @@ export default function MarketingPage() {
             </article>
 
             <article className="qp-landing-feature qp-landing-feature-followup">
-              <img
-                src={salesWorkflowImage}
-                alt="QuotePilot sales workflow with readiness gaps, follow-up planning, and lifecycle history"
-                width="1440"
-                height="960"
-                loading="lazy"
-                decoding="async"
-              />
               <div className="qp-landing-feature-copy">
                 <span>Sales follow-up</span>
                 <h3>Know what needs attention next</h3>
@@ -259,17 +222,6 @@ export default function MarketingPage() {
         </section>
 
         <section className="qp-landing-section qp-landing-portal" id="portal" data-landing-reveal>
-          <div className="qp-landing-portal-media">
-            <img
-              src={customerDecisionImage}
-              alt="A customer reviewing a QuotePilot proposal and decision options"
-              width="1440"
-              height="960"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-
           <div className="qp-landing-portal-copy">
             <h2>Make every customer decision easier to review</h2>
             <p>
@@ -295,14 +247,6 @@ export default function MarketingPage() {
           </div>
 
           <div className="qp-landing-operations-layout">
-            <img
-              src={eventProductionImage}
-              alt="QuotePilot event production view with schedule and preparation checklist"
-              width="1440"
-              height="960"
-              loading="lazy"
-              decoding="async"
-            />
             <div className="qp-landing-operations-list">
               {operations.map((item) => (
                 <article key={item.title}>
