@@ -138,7 +138,7 @@ test("operator workspaces load only when first opened and stay mounted after clo
 
 test("workflow attention throttles passive reads and retains a known count on refresh failure", async ({ page }) => {
   const emptyTrigger = page.getByRole("button", {
-    name: /Workflow, no quotes need attention/i
+    name: /Workflow, no quote follow-ups in this view/i
   });
   await expect(emptyTrigger).toBeVisible();
 
@@ -303,7 +303,7 @@ test("New quote confirms only real edits and resets the canonical quote fields",
   expect(dialogCount).toBe(1);
   await expect(page.getByRole("textbox", { name: /Event name/i })).toHaveValue("");
   await expect(page.getByRole("textbox", { name: /Your name/i })).toHaveValue("");
-  await expect(page.getByText("Ready to plan an event")).toBeVisible();
+  await expect(page.getByText("Workspace open")).toBeVisible();
 });
 
 test("step 1 next stays actionable and explains missing required fields", async ({ page }) => {
@@ -383,7 +383,7 @@ test("a menu item created in Catalog Admin appears in the active quote immediate
   const setupCatalogAdmin = page.getByRole("dialog").filter({
     has: page.getByRole("heading", { name: "Catalog Admin" })
   });
-  await expect(setupCatalogAdmin.getByRole("heading", { name: "Pricing Review Required" }))
+  await expect(setupCatalogAdmin.getByRole("heading", { name: "Review Pricing Before Quoting" }))
     .toBeVisible();
   await setupCatalogAdmin.getByLabel("Pricing setup reviewed and approved").check();
   await setupCatalogAdmin.getByRole("button", { name: "Save catalog changes" }).first().click();
@@ -887,7 +887,7 @@ test("portal decision center records a customer change request", async ({ page }
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("button", {
-    name: /Workflow, no quotes need attention/i
+    name: /Workflow, no quote follow-ups in this view/i
   })).toBeVisible();
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("menuitem", { name: "Customer Portal" }).click();
@@ -1016,7 +1016,7 @@ test("portal decision center records a customer change request", async ({ page }
   });
 
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /Workflow, no quotes need attention/i })).toBeFocused();
+  await expect(page.getByRole("button", { name: /Workflow, no quote follow-ups in this view/i })).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
 });
 

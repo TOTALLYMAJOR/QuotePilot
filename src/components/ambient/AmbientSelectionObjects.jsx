@@ -5,7 +5,7 @@ import {
   Minus,
   Plus,
   WarningCircle
-} from "@phosphor-icons/react";
+} from "../ProductIcons";
 import {
   AMBIENT_SELECTION_GESTURE_SEMANTICS,
   selectionScenarioQuantity

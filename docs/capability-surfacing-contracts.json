@@ -89,7 +89,7 @@
         },
         {
           "path": "src/components/AmbientClientsView.jsx",
-          "locator": "Relationship operations"
+          "locator": "Client relationships"
         },
         {
           "path": "src/components/AmbientClientsView.jsx",

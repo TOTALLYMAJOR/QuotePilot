@@ -10,8 +10,6 @@ export const STAFF_DIRECTORY_CALLABLES = Object.freeze({
 
 export const STAFF_DIRECTORY_AUTHORITY_VERSION = "staff-directory-authority-v1";
 export const STAFF_ROLES = Object.freeze(["lead", "server", "chef", "bartender"]);
-const LOCAL_STAFF_FIXTURE_STORAGE = "local_fixture";
-const localStaffDirectories = new Map();
 
 function text(value) {
   return String(value ?? "").trim();
@@ -48,9 +46,15 @@ function envDisabled(value) {
 function shouldUseLocalStaffDirectoryFixture() {
   const env = import.meta.env || {};
   if (!env.DEV) return false;
+  if (envDisabled(env.VITE_E2E_LOCAL_REVIEW_FIXTURES)) return false;
   if (envDisabled(env.VITE_STAFF_DIRECTORY_LOCAL_SEED)) return false;
   return envEnabled(env.VITE_STAFF_DIRECTORY_LOCAL_SEED) || envEnabled(env.VITE_E2E_BYPASS_AUTH);
 }
+
+let localStaffDirectory = null;
+if (import.meta.env.DEV) {
+const LOCAL_STAFF_FIXTURE_STORAGE = "local_fixture";
+const localStaffDirectories = new Map();
 
 function localStaffPortrait({
   background = "#1f766b",
@@ -451,11 +455,14 @@ function buildLocalStaffDirectory(organizationId) {
   };
 }
 
-function localStaffDirectory(organizationId) {
+function readLocalStaffDirectory(organizationId) {
   if (!localStaffDirectories.has(organizationId)) {
     localStaffDirectories.set(organizationId, buildLocalStaffDirectory(organizationId));
   }
   return clone(localStaffDirectories.get(organizationId));
+}
+
+localStaffDirectory = readLocalStaffDirectory;
 }
 
 export function createStaffRecordDraft({
@@ -583,7 +590,7 @@ function normalizeDirectoryResponse(value, organizationId) {
 
 export async function getStaffDirectory({ organizationId } = {}) {
   const scopedOrganizationId = opaqueId(organizationId, "organizationId");
-  if (shouldUseLocalStaffDirectoryFixture()) {
+  if (import.meta.env.DEV && shouldUseLocalStaffDirectoryFixture()) {
     return Object.freeze(localStaffDirectory(scopedOrganizationId));
   }
   if (!firebaseReady || !cloudFunctions) {

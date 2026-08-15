@@ -63,7 +63,7 @@ test("staff route loads the workspace boundary rather than the public landing pa
   await page.goto("/app");
 
   const workspaceSurface = page.getByRole("button", { name: "New Quote" }).first().or(
-    page.getByRole("heading", { name: "Catalog Unavailable" })
+    page.getByRole("heading", { name: "Your Catalog Connection Needs Attention" })
   );
   await expect(workspaceSurface).toBeVisible();
   await expect(page.getByRole("heading", {

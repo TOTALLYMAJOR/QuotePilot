@@ -665,7 +665,9 @@ production graph from mutually exclusive route chunks. CI builds and checks
 both graphs with an explicit matching `BUNDLE_BUDGET_PROFILE`; a mismatch,
 missing marker, or mixed graph fails closed. Temporary profile ceilings live in
 `docs/performance/bundle-exception.json` and do not change the clean-main
-baseline.
+baseline. The same gate also rejects emitted development-only Staff or Client
+fixture chunks and their unique payload sentinels, so local review records
+cannot silently enter a production asset.
 
 `check:capability-surfaces` is the mechanical no-orphan-capability gate. For a
 backend delivery it requires a revision-bumped contract in

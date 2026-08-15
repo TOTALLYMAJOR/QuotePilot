@@ -7,7 +7,7 @@ import {
   Plus,
   StarFour,
   UserCircle
-} from "@phosphor-icons/react";
+} from "./components/ProductIcons";
 import AttentionBadge from "./components/AttentionBadge";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
@@ -3074,7 +3074,7 @@ function LegacyAppCore({
     if (!hasConfiguredEventType) {
       return {
         ok: false,
-        error: "Open the Menu tab and add at least one customer-specific event type before saving setup."
+        error: "Almost there—add at least one event type in Menu, then save your catalog."
       };
     }
     const result = await catalog.saveCatalog(nextCatalog);
@@ -3088,8 +3088,8 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Loading Workspace</h1>
-          <p className="muted">Resolving tenant context for this host...</p>
+          <h1>Opening Your Workspace</h1>
+          <p className="muted">Finding the right organization for this address…</p>
         </WorkspaceStatusCard>
       </main>
     );
@@ -3099,7 +3099,7 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Tenant Not Found</h1>
+          <h1>We Couldn’t Open This Workspace</h1>
           <p className="muted">
             Host <strong>{tenantContext.hostname || "unknown"}</strong> is not active or is not mapped to a tenant.
           </p>
@@ -3109,7 +3109,7 @@ function LegacyAppCore({
           {submitState.message && <p className="warning-note">{submitState.message}</p>}
           <div className="auth-actions">
             <button type="button" className="cta" onClick={handleRetryTenantResolution}>
-              Retry Workspace
+              Try Again
             </button>
             <a
               className="ghost button-link"
@@ -3145,8 +3145,8 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Loading</h1>
-          <p className="muted">Checking your session...</p>
+          <h1>Welcome Back</h1>
+          <p className="muted">Getting your QuotePilot workspace ready…</p>
         </WorkspaceStatusCard>
       </main>
     );
@@ -3247,8 +3247,8 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Loading Catalog</h1>
-          <p className="muted">Checking this organization’s configured products and pricing...</p>
+          <h1>Getting Your Catalog Ready</h1>
+          <p className="muted">Bringing in this organization’s products and pricing…</p>
         </WorkspaceStatusCard>
       </main>
     );
@@ -3258,7 +3258,7 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Catalog Unavailable</h1>
+          <h1>Your Catalog Connection Needs Attention</h1>
           <p className="muted">
             Firebase catalog access is required in this environment.
           </p>
@@ -3279,18 +3279,18 @@ function LegacyAppCore({
       <div className="app-shell app-shell-neutral" style={appThemeVars}>
         <main className="auth-shell container">
           <WorkspaceStatusCard>
-            <p className="eyebrow">Owner Setup Required</p>
-            <h1>Configure Your Catalog</h1>
+            <p className="eyebrow">Let’s make QuotePilot yours</p>
+            <h1>Bring Your Catalog to Life</h1>
             <p className="muted">
-              Quote creation stays locked until this organization has customer-specific products and reviewed pricing.
+              Quote creation unlocks as soon as your real offerings and prices have a quick review.
             </p>
             <p className="source-note">
-              New tenants start blank. Open Catalog Admin to stage an industry starter pack or build a catalog manually; every suggested price still requires your review.
+              Start fast with a starter catalog draft, bring in an existing menu, or create your own. You stay in control of every suggested price.
             </p>
             <ul className="source-note">
-              <li>Starter Packs: populate a complete Wedding, Corporate, BBQ, or Church & community draft in one click.</li>
-              <li>Packages and Menu: review a specifically named package above $0 and at least one event type.</li>
-              <li>Pricing: review every fee, tax, deposit, travel, staffing, tier, and seasonal value, then approve the pricing setup.</li>
+              <li>Pick a starting point: Wedding, Corporate, BBQ, or Church & community.</li>
+              <li>Make it yours: name a package, add an event type, and shape the menu your team loves.</li>
+              <li>Review with confidence: confirm fees, tax, deposits, travel, staffing, tiers, and seasonal pricing.</li>
             </ul>
             <div className="auth-actions">
               {authSession.isAdmin && (
@@ -3302,25 +3302,25 @@ function LegacyAppCore({
                       beforeOpen: () => setAdminInitialTab("starter")
                     })}
                   >
-                    Open Admin Catalog
+                    Choose a starter or build my catalog
                   </button>
                   <button type="button" className="ghost" onClick={() => openWorkspaceTool(setImportStudioOpen)}>
-                    Open Import Studio
+                    Import my menu
                   </button>
                   <button type="button" className="ghost" onClick={() => setCatalogBypassState(true)}>
-                    Continue to workspace
+                    Explore the workspace
                   </button>
                 </>
               )}
               {!authSession.isAdmin && (
                 <button type="button" className="cta" onClick={catalog.reload}>
-                  Refresh Catalog Setup
+                  Check for catalog updates
                 </button>
               )}
               <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
             </div>
             {!authSession.isAdmin && (
-              <p className="warning-note">Ask an organization admin to configure and save the catalog, then use Refresh Catalog Setup.</p>
+              <p className="warning-note">Your organization admin can finish the catalog; then check here for the latest update.</p>
             )}
             <p className="source-note">
               You can also import catalog records first, or continue with manual edits from workspace if you need to proceed today.
@@ -3715,7 +3715,7 @@ function LegacyAppCore({
                 ? "Workflow"
                 : workflowAttentionCount > 0
                   ? `Workflow, ${workflowAttentionCount} ${workflowAttentionCount === 1 ? "quote needs" : "quotes need"} attention`
-                  : "Workflow, no quotes need attention"}
+                  : "Workflow, no quote follow-ups in this view"}
             >
               <NotePencil className="shell-nav-icon" size={20} aria-hidden="true" />
               <span className="shell-nav-label">Workflow</span>
@@ -3838,7 +3838,7 @@ function LegacyAppCore({
             ? "Unsaved changes"
             : isEditingQuote
               ? `Editing ${editingQuote.quoteNumber || "saved quote"} · no unsaved changes`
-              : "Ready to plan an event"}
+              : "Workspace open"}
         </p>
       </section>
 

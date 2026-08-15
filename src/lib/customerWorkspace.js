@@ -224,6 +224,9 @@ function customerMatchesSearch(customer, searchKey) {
 function shouldUseLocalCustomerDirectoryFixture() {
   const env = import.meta.env || {};
   if (!env.DEV) return false;
+  if (["0", "false", "no", "off"].includes(
+    String(env.VITE_E2E_LOCAL_REVIEW_FIXTURES || "").trim().toLowerCase()
+  )) return false;
   return ["1", "true", "yes", "on"].includes(String(env.VITE_E2E_BYPASS_AUTH || "").trim().toLowerCase());
 }
 
@@ -263,7 +266,7 @@ export async function getCustomerDirectoryPage({
   const normalizedCursor = decodeCustomerPathId(cursor);
   const normalizedPageSize = normalizePageSize(pageSize);
 
-  if (shouldUseLocalCustomerDirectoryFixture()) {
+  if (import.meta.env.DEV && shouldUseLocalCustomerDirectoryFixture()) {
     const { getLocalCustomerDirectoryFixturePage } = await import("./localCustomerDirectoryFixture");
     return getLocalCustomerDirectoryFixturePage({
       organizationId: orgId,
@@ -622,7 +625,7 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
   const id = text(customerId);
   if (!orgId || !id) throw new Error("organizationId and customerId are required for Customer 360.");
 
-  if (shouldUseLocalCustomerDirectoryFixture()) {
+  if (import.meta.env.DEV && shouldUseLocalCustomerDirectoryFixture()) {
     const { getLocalCustomerWorkspaceFixture } = await import("./localCustomerDirectoryFixture");
     const fixture = getLocalCustomerWorkspaceFixture({ organizationId: orgId, customerId: id });
     if (!fixture) return null;

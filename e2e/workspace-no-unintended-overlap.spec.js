@@ -40,7 +40,7 @@ const ROUTES = [
   {
     id: "clients-customers",
     path: "/app/customers",
-    heading: "People you’re working with",
+    heading: "Clients",
     headingSelector: "#ambient-clients-title",
     initialFocusSelector: "#ambient-clients-title",
     groupRootSelector: ".ambient-clients__masthead",

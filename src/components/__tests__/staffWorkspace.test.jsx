@@ -88,19 +88,19 @@ describe("StaffWorkspace", () => {
 
     expect(clientMocks.getStaffDirectory).toHaveBeenCalledWith({ organizationId: "org-alpha" });
     expect(container.querySelector('[data-capability-state="success"]')).not.toBeNull();
-    expect(container.querySelector(".staff-command-bar h1")?.textContent).toBe("Staff");
-    expect(container.textContent).toContain("Workforce operations");
+    expect(container.querySelector(".staff-command-bar h1")?.textContent).toBe("People");
+    expect(container.textContent).toContain("Your event team");
     expect(container.textContent).toContain("Avery");
     expect(container.textContent).toContain("People");
     expect(container.textContent).toContain("Assigned today");
-    expect(container.textContent).toContain("Need attention");
+    expect(container.textContent).toContain("Next to complete");
     expect(container.querySelector(".staff-readiness-ledger")).not.toBeNull();
-    expect(container.querySelector('input[placeholder="Search staff…"]')).not.toBeNull();
+    expect(container.querySelector('input[placeholder="Find a teammate…"]')).not.toBeNull();
     expect(container.textContent).toContain("Next assignment");
     expect(container.textContent).toContain("Personal details");
-    expect(container.textContent).toContain("Readiness");
-    expect(container.textContent).toContain("Availability not provided");
-    expect(container.textContent).toContain("No activity history is available");
+    expect(container.textContent).toContain("Profile checklist");
+    expect(container.textContent).toContain("Add availability to make scheduling easier");
+    expect(container.textContent).toContain("A fresh start—team activity will appear here");
     expect(container.textContent).toContain("$27.50");
     expect(container.querySelector('[aria-label="Server"]')).not.toBeNull();
     expect(container.textContent).toContain("Smith Wedding");
@@ -198,8 +198,8 @@ describe("StaffWorkspace", () => {
     });
 
     expect(container.querySelector('[data-capability-state="unavailable"]')).not.toBeNull();
-    expect(container.textContent).toMatch(/connect to the organization workspace/i);
-    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent.includes("Refresh staff records"))).toBe(true);
+    expect(container.textContent).toMatch(/connect your organization to start bringing the team together/i);
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent.includes("Refresh the team"))).toBe(true);
   });
 
   test("renders inactive and incomplete records without invented operational values", async () => {
@@ -227,8 +227,8 @@ describe("StaffWorkspace", () => {
 
     expect(container.textContent).toContain("Inactive");
     expect(container.textContent).toContain("Rate not configured");
-    expect(container.textContent).toContain("Availability not provided");
-    expect(container.textContent).toContain("No upcoming assignment");
+    expect(container.textContent).toContain("Add availability to make scheduling easier");
+    expect(container.textContent).toContain("No event assigned yet");
     expect(container.textContent).not.toContain("$0.00/hr");
   });
 
@@ -267,8 +267,8 @@ describe("StaffWorkspace", () => {
     });
 
     expect(container.querySelector('[data-capability-state="empty"]')).not.toBeNull();
-    expect(container.textContent).toContain("No staff records yet.");
-    expect(container.textContent).toContain("Select or add a staff member");
+    expect(container.textContent).toContain("Ready to welcome your first teammate.");
+    expect(container.textContent).toContain("Choose a teammate or welcome someone new");
     expect(container.querySelector(".staff-readiness-ledger")).toBeNull();
   });
 
@@ -279,13 +279,13 @@ describe("StaffWorkspace", () => {
       await Promise.resolve();
     });
 
-    const search = container.querySelector('input[placeholder="Search staff…"]');
+    const search = container.querySelector('input[placeholder="Find a teammate…"]');
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")
         .set.call(search, "missing person");
       search.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(container.textContent).toContain("No staff match this filter.");
+    expect(container.textContent).toContain("No teammates match this view yet.");
 
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")
@@ -295,7 +295,7 @@ describe("StaffWorkspace", () => {
         .find((button) => button.textContent.trim() === "Available")
         .click();
     });
-    expect(container.textContent).toContain("No staff match this filter.");
+    expect(container.textContent).toContain("No teammates match this view yet.");
   });
 
   test("distinguishes explicit unavailability and withstands long operational values", async () => {
@@ -338,7 +338,7 @@ describe("StaffWorkspace", () => {
     });
 
     expect(container.textContent).toContain("Unavailable");
-    expect(container.textContent).not.toContain("Availability not provided");
+    expect(container.textContent).not.toContain("Add availability to make scheduling easier");
     expect(container.textContent).toContain("$12,345.67");
     expect(container.textContent).toContain("executive-banquet-captain-and-guest-experience-lead");
     expect(container.textContent).toContain("Expired");
@@ -362,7 +362,7 @@ describe("StaffWorkspace", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(container.textContent).toContain("Select or add a staff member");
+    expect(container.textContent).toContain("Choose a teammate or welcome someone new");
     expect(container.querySelector(".staff-record__identity")).toBeNull();
   });
 });

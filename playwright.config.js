@@ -9,7 +9,7 @@ const SALES_BASE_URL = `http://${HOST}:${SALES_PORT}`;
 function buildWebServer(port, role) {
   const baseURL = `http://${HOST}:${port}`;
   return {
-    command: `npm run dev -- --host ${HOST} --port ${port}`,
+    command: `npm run dev -- --mode development --host ${HOST} --port ${port}`,
     url: baseURL,
     env: {
       VITE_E2E_BYPASS_AUTH: "true",
@@ -17,6 +17,7 @@ function buildWebServer(port, role) {
       VITE_E2E_ORGANIZATION_ID: process.env.VITE_E2E_ORGANIZATION_ID ?? "e2e-org",
       VITE_DEFAULT_ORGANIZATION_ID: process.env.VITE_DEFAULT_ORGANIZATION_ID ?? "e2e-org",
       VITE_ALLOW_LOCAL_CATALOG_FALLBACK: "true",
+      VITE_E2E_LOCAL_REVIEW_FIXTURES: process.env.VITE_E2E_LOCAL_REVIEW_FIXTURES ?? "false",
       VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: process.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED ?? "false",
       VITE_PROPOSAL_COMPOSER_ENABLED: process.env.VITE_PROPOSAL_COMPOSER_ENABLED ?? "false",
       VITE_PILOT_NOW_ENABLED: process.env.VITE_PILOT_NOW_ENABLED ?? "false",

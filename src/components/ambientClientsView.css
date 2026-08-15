@@ -28,11 +28,15 @@
 .ambient-clients__label,
 .ambient-client-overview__label {
   margin: 0;
-  color: var(--client-gold);
+  color: #76500f;
   font-size: 0.68rem;
   font-weight: 850;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.ambient-clients__masthead .ambient-clients__label {
+  color: #d7a64e;
 }
 
 .ambient-clients__command {
@@ -121,7 +125,7 @@
 
 .ambient-clients__search input {
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 7px;
   background: #fff;
@@ -141,7 +145,7 @@
 .ambient-client-overview__primary,
 .ambient-client-overview__secondary,
 .ambient-client-overview__back {
-  min-height: 40px;
+  min-height: 44px;
   border: 1px solid transparent;
   border-radius: 7px;
   padding: 0.58rem 0.85rem;
@@ -162,7 +166,7 @@
 .ambient-client-overview__primary {
   border-color: #c79435;
   background: var(--client-gold);
-  color: #fff;
+  color: #151617;
 }
 
 .ambient-clients__toolbar button:hover,
@@ -201,7 +205,8 @@
 }
 
 .ambient-clients__filters button {
-  min-height: 30px;
+  min-width: 44px;
+  min-height: 44px;
   border-color: rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   background: transparent;

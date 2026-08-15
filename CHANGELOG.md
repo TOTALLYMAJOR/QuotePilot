@@ -157,6 +157,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Restored both production bundle gates without raising their ceilings:
+  production builds now use the supported pinned Terser minifier, Staff and
+  Clients review fixtures are eliminated behind literal development-only
+  branches, and the multi-weight third-party icon payload is replaced by one
+  compact, accessible QuotePilot stroke vocabulary. The local review data no
+  longer appears in production assets, while the Firebase and role-authority
+  paths are unchanged.
+- Reworked high-visibility setup, Staff, Clients, shell, and catalog-conflict
+  guidance into warmer, action-oriented product language. Empty and loading
+  states now invite the next useful step; financial, security, provider,
+  delivery, assignment, lifecycle, and audit claims remain deliberately exact.
 - Production-hardened the Ambient Clients directory and relationship view into
   a commercial relationship-operations workspace: compact bounded-page
   metrics, immediate search and filters, dense aligned client rows, one

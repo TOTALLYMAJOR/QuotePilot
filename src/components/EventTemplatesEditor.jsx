@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Plus, TrashSimple, WarningCircle } from "@phosphor-icons/react";
+import { Plus, TrashSimple, WarningCircle } from "./ProductIcons";
 import "./eventTemplatesEditor.css";
 
 const COMMON_EVENT_STYLES = Object.freeze([

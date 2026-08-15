@@ -50,8 +50,8 @@ function actionResult(action, kind, overrides = {}) {
 
 function directoryBoundary(model = {}) {
   return model.boundary || model.readBoundary || {
-    sourceLabel: "Client source unavailable",
-    sourceBoundary: "Client information has not finished loading yet.",
+    sourceLabel: "Client list is catching up",
+    sourceBoundary: "We’re waiting for the client source to confirm this list.",
     messages: []
   };
 }
@@ -92,10 +92,10 @@ function calendarDateKey(value = new Date()) {
 function clientDirectoryState(row = {}) {
   const identity = clientIdentity(row);
   const latest = clientLatest(row);
-  if (!identity.email || !identity.phone) return { key: "contact_gap", label: "Needs contact", tone: "warning" };
-  if (calendarDateKey(latest.eventDate) >= calendarDateKey()) return { key: "upcoming", label: "Upcoming", tone: "good" };
-  if (latest.quoteNumber || latest.eventName) return { key: "linked", label: "Linked record", tone: "neutral" };
-  return { key: "unlinked", label: "No linked work", tone: "neutral" };
+  if (!identity.email || !identity.phone) return { key: "contact_gap", label: "Add contact", tone: "warning" };
+  if (calendarDateKey(latest.eventDate) >= calendarDateKey()) return { key: "upcoming", label: "Event ahead", tone: "good" };
+  if (latest.quoteNumber || latest.eventName) return { key: "linked", label: "Quote or event on file", tone: "neutral" };
+  return { key: "unlinked", label: "No quote yet", tone: "neutral" };
 }
 
 function clientInitials(identity = {}) {
@@ -161,7 +161,9 @@ export function AmbientClientsDirectory({
     const latest = clientLatest(row);
     return Boolean(latest.quoteNumber || latest.eventName);
   }).length;
-  const upcomingCount = rows.filter((row) => clientDirectoryState(row).key === "upcoming").length;
+  const upcomingCount = rows.filter((row) => (
+    calendarDateKey(clientLatest(row).eventDate) >= calendarDateKey()
+  )).length;
   const contactGapCount = rows.filter((row) => clientDirectoryState(row).key === "contact_gap").length;
   const visibleRows = rows.filter((row) => {
     if (directoryFilter === "all") return true;
@@ -290,14 +292,14 @@ export function AmbientClientsDirectory({
         <header className="ambient-clients__masthead ambient-clients__command">
           <div className="ambient-clients__command-topline">
             <div>
-              <p className="ambient-clients__label">Relationship operations</p>
+              <p className="ambient-clients__label">Client relationships</p>
               <h1 ref={headingRef} id="ambient-clients-title" className="workspace-route-heading" tabIndex={-1}>Clients</h1>
             </div>
             <dl className="ambient-clients__metrics" aria-label="Client directory metrics">
-              <div><dt>Shown</dt><dd>{formatWorkspaceInteger(rows.length)}</dd></div>
-              <div><dt>Linked work</dt><dd>{formatWorkspaceInteger(linkedCount)}</dd></div>
-              <div><dt>Upcoming</dt><dd>{formatWorkspaceInteger(upcomingCount)}</dd></div>
-              <div className={contactGapCount ? "is-attention" : ""}><dt>Contact gaps</dt><dd>{formatWorkspaceInteger(contactGapCount)}</dd></div>
+              <div><dt>Clients shown</dt><dd>{formatWorkspaceInteger(rows.length)}</dd></div>
+              <div><dt>With linked work</dt><dd>{formatWorkspaceInteger(linkedCount)}</dd></div>
+              <div><dt>Upcoming events</dt><dd>{formatWorkspaceInteger(upcomingCount)}</dd></div>
+              <div className={contactGapCount ? "is-attention" : ""}><dt>Contact details to add</dt><dd>{formatWorkspaceInteger(contactGapCount)}</dd></div>
             </dl>
           </div>
 
@@ -321,7 +323,7 @@ export function AmbientClientsDirectory({
               disabled={!refreshAction.enabled}
               onClick={refresh}
             >
-              {model.loading ? "Refreshing…" : "Refresh"}
+              {model.loading ? "Freshening up…" : "Freshen list"}
             </button>
             {state !== "empty" && (
               <button
@@ -331,7 +333,7 @@ export function AmbientClientsDirectory({
                 disabled={!startAction.enabled}
                 onClick={start}
               >
-                + New opportunity
+                + Start an opportunity
               </button>
             )}
           </form>
@@ -340,9 +342,9 @@ export function AmbientClientsDirectory({
             <div className="ambient-clients__filters" role="group" aria-label="Client directory filters">
               <span>Filter</span>
               <button type="button" className={directoryFilter === "all" ? "is-selected" : ""} onClick={() => setDirectoryFilter("all")}>All</button>
-              <button type="button" className={directoryFilter === "linked" ? "is-selected" : ""} onClick={() => setDirectoryFilter("linked")}>Linked work</button>
-              <button type="button" className={directoryFilter === "upcoming" ? "is-selected" : ""} onClick={() => setDirectoryFilter("upcoming")}>Upcoming</button>
-              <button type="button" className={directoryFilter === "contact_gap" ? "is-selected" : ""} onClick={() => setDirectoryFilter("contact_gap")}>Contact gaps</button>
+              <button type="button" className={directoryFilter === "linked" ? "is-selected" : ""} onClick={() => setDirectoryFilter("linked")}>With linked work</button>
+              <button type="button" className={directoryFilter === "upcoming" ? "is-selected" : ""} onClick={() => setDirectoryFilter("upcoming")}>Upcoming events</button>
+              <button type="button" className={directoryFilter === "contact_gap" ? "is-selected" : ""} onClick={() => setDirectoryFilter("contact_gap")}>Contact to add</button>
             </div>
           ) : null}
         </header>
@@ -367,25 +369,25 @@ export function AmbientClientsDirectory({
 
         {state === "loading" && rows.length === 0 && (
           <section className="ambient-clients__state" role="status">
-            <p className="ambient-clients__label">Current clients</p>
-            <h2>Loading client records</h2>
-            <p>The client list will appear when loading finishes.</p>
+            <p className="ambient-clients__label">Your relationships</p>
+            <h2>Gathering your clients</h2>
+            <p>Your client list will be here in a moment.</p>
           </section>
         )}
 
         {["error", "stale", "bounded", "incomplete"].includes(state) && rows.length === 0 && (
           <section className="ambient-clients__state">
-            <p className="ambient-clients__label">Current clients</p>
-            <h2>Client information is not available yet</h2>
-            <p>QuotePilot cannot tell whether this list is empty or fully up to date yet. Refresh to try again.</p>
+            <p className="ambient-clients__label">Your relationships</p>
+            <h2>We’re still catching up</h2>
+            <p>QuotePilot can’t confirm whether this list is complete yet. Freshen the list to try again; nothing shown will be changed.</p>
           </section>
         )}
 
         {state === "empty" && (
           <section className="ambient-clients__state">
             <p className="ambient-clients__label">A clear starting point</p>
-            <h2>No clients appear in this view</h2>
-            <p>Start an opportunity when you have someone new to plan for.</p>
+            <h2>Your first client story starts here</h2>
+            <p>Start an opportunity whenever someone new is ready to celebrate.</p>
             <button
               type="button"
               className="ambient-clients__start"
@@ -421,15 +423,15 @@ export function AmbientClientsDirectory({
                       </span>
                     </div>
                     <div className="ambient-client__latest">
-                      <strong>{latest.eventName || latest.quoteNumber || "No linked opportunity"}</strong>
+                      <strong>{latest.eventName || latest.quoteNumber || "No opportunity yet"}</strong>
                       <small>
                         {[latest.quoteNumber, latest.eventDate ? formatWorkspaceDate(latest.eventDate) : ""]
-                          .filter(Boolean).join(" · ") || "No linked event date"}
+                          .filter(Boolean).join(" · ") || "No event date yet"}
                       </small>
                     </div>
                     <div className="ambient-client__contact">
-                      <p>{identity.email || "Email not recorded"}</p>
-                      <small>{identity.phone || "Phone not recorded"}</small>
+                      <p>{identity.email || "Add an email to stay connected"}</p>
+                      <small>{identity.phone || "Add a phone for easy follow-up"}</small>
                     </div>
                     <strong className="ambient-client__state" data-tone={relationshipState.tone}>{relationshipState.label}</strong>
                     <button
@@ -449,8 +451,8 @@ export function AmbientClientsDirectory({
             })}
             </ol> : (
               <div className="ambient-clients__filter-empty">
-                <strong>No clients match this filter.</strong>
-                <span>The current bounded client page is unchanged.</span>
+                <strong>No clients match this view yet.</strong>
+                <span>Try another view—your current client page is unchanged.</span>
                 <button type="button" className="ghost" onClick={() => setDirectoryFilter("all")}>Show all clients</button>
               </div>
             )}
@@ -470,7 +472,7 @@ export function AmbientClientsDirectory({
 
         <aside className="ambient-clients__boundary" aria-labelledby="ambient-clients-boundary-title">
           <div>
-            <p className="ambient-clients__label">Where this came from</p>
+            <p className="ambient-clients__label">How this list stays current</p>
             <h2 id="ambient-clients-boundary-title">{boundary.sourceLabel || "Client records"}</h2>
           </div>
           <div>

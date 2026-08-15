@@ -450,10 +450,10 @@ describe("WorkspaceShell", () => {
 
     render({ draftStatus: { dirty: false, editing: true, quoteNumber: "QP-101" } });
     expect(container.querySelector(".workspace-save-state").textContent)
-      .toBe("Editing QP-101 · no unsaved changes");
+      .toBe("Editing QP-101 · all changes saved");
 
     render({ draftStatus: { dirty: false, editing: false, quoteNumber: "" } });
-    expect(container.querySelector(".workspace-save-state").textContent).toBe("Ready to plan an event");
+    expect(container.querySelector(".workspace-save-state").textContent).toBe("Workspace open");
     expect(container.querySelector(".workspace-intro strong").textContent).toBe("Smith Catering LLC");
   });
 

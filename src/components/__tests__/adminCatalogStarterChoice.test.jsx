@@ -93,7 +93,7 @@ describe("Admin Catalog starter choice", () => {
     expect(html.match(/<strong>Best for:<\/strong>/g)).toHaveLength(4);
     expect(html).toContain("Use Wedding &amp; events");
     expect(html).toContain("Use Corporate drop-off");
-    expect(html).toContain("Build my catalog manually");
+    expect(html).toContain("Create my own catalog");
     expect(html).not.toContain(">Packages</button>");
     expect(html).not.toContain("Save catalog changes");
   });
@@ -124,7 +124,7 @@ describe("Admin Catalog starter choice", () => {
     expect(html).toContain("What kind of catering do you do most?");
     expect(html).toContain("Use Wedding &amp; events");
     expect(html).toContain("Use Corporate drop-off");
-    expect(html).toContain("Build my catalog manually");
+    expect(html).toContain("Create my own catalog");
   });
 
   test("a staged pack opens on the populated catalog with normal editing choices", () => {

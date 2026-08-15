@@ -106,6 +106,19 @@ export default defineConfig(({ mode }) => {
     include: ["commercial-dependency-graph-core"]
   },
   build: {
+    minify: "terser",
+    terserOptions: {
+      ecma: 2020,
+      module: true,
+      toplevel: true,
+      compress: {
+        passes: 3
+      },
+      format: {
+        ecma: 2020,
+        comments: false
+      }
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

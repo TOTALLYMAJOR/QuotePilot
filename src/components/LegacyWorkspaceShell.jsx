@@ -6,7 +6,7 @@ import {
   Plus,
   StarFour,
   UserCircle
-} from "@phosphor-icons/react";
+} from "./ProductIcons";
 import AttentionBadge from "./AttentionBadge";
 import ProductBrandLockup from "./ProductBrandLockup";
 import { PRODUCT_NAME } from "../lib/productIdentity";
@@ -59,7 +59,7 @@ export default function LegacyWorkspaceShell({
   const workspaceName = identity.workspaceName
     || identity.tenantBrandName
     || identity.organizationName
-    || "Organization workspace";
+    || "Your catering team";
   const brandName = identity.tenantBrandName || "";
   const tagline = identity.tenantBrandTagline || "";
   const logo = identity.tenantBrandLogoUrl || "";
@@ -99,7 +99,7 @@ export default function LegacyWorkspaceShell({
     ? "Workflow"
     : attentionCount > 0
       ? `Workflow, ${attentionCount} ${attentionCount === 1 ? "quote needs" : "quotes need"} attention`
-      : "Workflow, no quotes need attention";
+      : "Workflow, no quote follow-ups in this view";
   const menuContent = (id) => {
     const operations = id !== "account";
     const account = id !== "operations";
@@ -152,7 +152,7 @@ export default function LegacyWorkspaceShell({
                 </span>
               )}
               <div className="workspace-brand-copy">
-                <small>Workspace</small>
+                <small>Today at</small>
                 <strong>{workspaceName}</strong>
                 {tagline && brandName !== PRODUCT_NAME && <span>{tagline}</span>}
               </div>
@@ -264,7 +264,7 @@ export default function LegacyWorkspaceShell({
       {searchSurface && <div data-commercial-search-surface="true">{searchSurface}</div>}
 
       <aside className="workspace-intro container" aria-label="Workspace status">
-        <p><strong>{identity.organizationName || brandName || "Catering workspace"}</strong></p>
+        <p><strong>{identity.organizationName || brandName || "Your catering team"}</strong></p>
         <p
           className={`workspace-save-state${draftStatus.dirty === true ? " is-dirty" : ""}`}
           aria-live="polite"
@@ -272,8 +272,8 @@ export default function LegacyWorkspaceShell({
           {draftStatus.dirty === true
             ? "Unsaved changes"
             : draftStatus.editing === true
-              ? `Editing ${draftStatus.quoteNumber || "saved quote"} · no unsaved changes`
-              : "Ready to plan an event"}
+              ? `Editing ${draftStatus.quoteNumber || "saved quote"} · all changes saved`
+              : "Workspace open"}
         </p>
       </aside>
       {children}

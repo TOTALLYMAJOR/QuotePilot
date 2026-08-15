@@ -11,7 +11,7 @@ import {
   UserCircle,
   UsersThree,
   Armchair
-} from "@phosphor-icons/react";
+} from "./ProductIcons";
 import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
 import { buildCascadePresentation } from "./cascadePresentation";
 import { buildDecideStack } from "./decideStackPresentation";

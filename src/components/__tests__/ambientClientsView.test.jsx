@@ -195,14 +195,14 @@ describe("AmbientClientsView", () => {
     parsedLoading.innerHTML = loading;
 
     expect(loading).toContain('data-ambient-clients-state="loading"');
-    expect(loading).toContain("Loading client records");
-    expect(loading).toContain("Refreshing…");
-    expect(loading).not.toContain("No clients appear in this view");
+    expect(loading).toContain("Gathering your clients");
+    expect(loading).toContain("Freshening up…");
+    expect(loading).not.toContain("Your first client story starts here");
     expect(parsedLoading.querySelector('[data-ambient-action-id="refresh-clients"]').disabled).toBe(true);
     expect(parsedLoading.querySelector('[data-ambient-action-id="start-client-opportunity"]').disabled).toBe(true);
 
     expect(empty).toContain('data-ambient-clients-state="empty"');
-    expect(empty).toContain("No clients appear in this view");
+    expect(empty).toContain("Your first client story starts here");
     expect(empty).toContain("Start an opportunity");
 
     expect(success).toContain('data-ambient-clients-state="success"');
@@ -246,7 +246,7 @@ describe("AmbientClientsView", () => {
                 email: "contact-gap@example.com",
                 phone: ""
               },
-              latest: { quoteNumber: "", eventName: "", eventDate: "" }
+              latest: { quoteNumber: "", eventName: "", eventDate: "2099-06-12" }
             })
           ]
         })}
@@ -256,23 +256,29 @@ describe("AmbientClientsView", () => {
 
     const metrics = Object.fromEntries([...container.querySelectorAll(".ambient-clients__metrics > div")]
       .map((metric) => [metric.querySelector("dt").textContent, metric.querySelector("dd").textContent]));
-    expect(metrics).toEqual({ Shown: "2", "Linked work": "1", Upcoming: "1", "Contact gaps": "1" });
+    expect(metrics).toEqual({
+      "Clients shown": "2",
+      "With linked work": "1",
+      "Upcoming events": "2",
+      "Contact details to add": "1"
+    });
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
-    expect(container.textContent).toContain("Needs contact");
-    expect(container.textContent).toContain("No linked opportunity");
+    expect(container.textContent).toContain("Add contact");
+    expect(container.textContent).toContain("No opportunity yet");
 
     act(() => Array.from(container.querySelectorAll(".ambient-clients__filters button"))
-      .find((button) => button.textContent === "Contact gaps")
+      .find((button) => button.textContent === "Contact to add")
       .click());
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
     expect(container.textContent).toContain("Contact Gap Client");
     expect(container.textContent).not.toContain("Client 1");
 
     act(() => Array.from(container.querySelectorAll(".ambient-clients__filters button"))
-      .find((button) => button.textContent === "Upcoming")
+      .find((button) => button.textContent === "Upcoming events")
       .click());
-    expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
     expect(container.textContent).toContain("Client 1");
+    expect(container.textContent).toContain("Contact Gap Client");
   });
 
   test("acknowledges a client selection in context during the same activation that requests navigation", () => {

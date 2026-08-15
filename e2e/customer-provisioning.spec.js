@@ -37,7 +37,7 @@ test("unscoped platform operators see only the customer-provisioning surface", a
   const dialog = page.getByRole("dialog");
   await expect(page.locator("main").getByRole("heading", { name: "Customer Provisioning", exact: true })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Customer Provisioning", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Catalog Unavailable" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Your Catalog Connection Needs Attention" })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: "Provider Config" })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: /Buyer Setup Assistant/i })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: /Buyer Invoice Recovery/i })).toBeVisible();

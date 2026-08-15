@@ -17,7 +17,7 @@ async function signInAsBlankOwner(page, {
 } = {}) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const setupHeading = page.getByRole("heading", { name: "Configure Your Catalog" });
+  const setupHeading = page.getByRole("heading", { name: "Bring Your Catalog to Life" });
   await expect(signInHeading.or(setupHeading)).toBeVisible({ timeout: 45_000 });
   if (await signInHeading.isVisible()) {
     await page.getByLabel(/^Email$/i).fill(email);
@@ -28,14 +28,14 @@ async function signInAsBlankOwner(page, {
 }
 
 async function openCatalogAdmin(page) {
-  await page.getByRole("button", { name: "Open Admin Catalog" }).click();
+  await page.getByRole("button", { name: "Choose a starter or build my catalog" }).click();
   const catalogDialog = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Catalog Admin" }) });
   await expect(catalogDialog).toBeVisible();
   return catalogDialog;
 }
 
 async function openImportStudio(page) {
-  await page.getByRole("button", { name: "Open Import Studio" }).click();
+  await page.getByRole("button", { name: "Import my menu" }).click();
   const importDialog = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Import Studio" }) });
   await expect(importDialog).toBeVisible();
   return importDialog;
@@ -108,7 +108,7 @@ test("blank owner stages a starter pack, reviews pricing, and unlocks quoting", 
 
   await expect(catalogDialog).toBeHidden({ timeout: 60_000 });
   await expect(page.getByRole("button", { name: "New Quote" }).first()).toBeVisible({ timeout: 45_000 });
-  await expect(page.getByRole("heading", { name: "Configure Your Catalog" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Bring Your Catalog to Life" })).toHaveCount(0);
   await advanceBlankOwnerToPopulatedMenu(page);
 });
 
@@ -116,9 +116,9 @@ test("blank owner can bypass setup and enter workspace", async ({ page }) => {
   test.setTimeout(60_000);
   await signInAsBlankOwner(page);
 
-  await page.getByRole("button", { name: "Continue to workspace" }).click();
+  await page.getByRole("button", { name: "Explore the workspace" }).click();
   await expect(page.getByRole("button", { name: "New Quote" }).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "Configure Your Catalog" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Bring Your Catalog to Life" })).toHaveCount(0);
 });
 
 test("blank owner can open import studio during setup", async ({ page }) => {
@@ -127,7 +127,7 @@ test("blank owner can open import studio during setup", async ({ page }) => {
 
   const importDialog = await openImportStudio(page);
   await expect(importDialog.getByRole("heading", { name: "Import Studio" })).toBeVisible();
-  await expect(importDialog).toContainText("Destination locked");
+  await expect(importDialog).toContainText("Adding only to");
 
   await closeOverlayDialog(importDialog).click();
   await expect(importDialog).toBeHidden({ timeout: 30_000 });
@@ -138,7 +138,7 @@ test("blank owner can switch to manual catalog entry path", async ({ page }) => 
   await signInAsBlankOwner(page);
 
   const catalogDialog = await openCatalogAdmin(page);
-  const manualEntry = catalogDialog.getByRole("button", { name: "Build my catalog manually" });
+  const manualEntry = catalogDialog.getByRole("button", { name: "Create my own catalog" });
   if (await manualEntry.isVisible()) {
     await manualEntry.click();
   }

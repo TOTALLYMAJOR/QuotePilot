@@ -1408,7 +1408,7 @@ export function StepServices({
       <div className="recommendation-panel">
         <h4>Recommended Upgrades</h4>
         {!aiAssistEnabled && (
-          <p className="source-note">AI assist is currently disabled in Optional Modules.</p>
+          <p className="source-note">AI assist is currently disabled in Workspace Features.</p>
         )}
         {aiAssistEnabled && !guidedSellingEnabled && (
           <p className="source-note">Guided selling is currently disabled in Catalog Admin.</p>
