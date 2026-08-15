@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
-import customerDecisionImage from "../assets/marketing/quotepilot/customer-decision.png";
-import eventProductionImage from "../assets/marketing/quotepilot/event-production.png";
-import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
-import quoteHistoryImage from "../assets/marketing/quotepilot/quote-history.png";
-import salesWorkflowImage from "../assets/marketing/quotepilot/sales-workflow.png";
-import scenarioCompareImage from "../assets/marketing/quotepilot/scenario-compare.png";
+import eventScopeKitchenBeoImage from "../assets/marketing/quotepilot/event-scope-kitchen-beo.png";
+import portalBrandingImage from "../assets/marketing/quotepilot/portal-branding.png";
+import productionChecklistImage from "../assets/marketing/quotepilot/production-checklist.png";
+import reportingDashboardImage from "../assets/marketing/quotepilot/reporting-dashboard.png";
+import staffRosterImage from "../assets/marketing/quotepilot/staff-roster.png";
 import "../marketing.css";
 
 const operatingModel = [
@@ -39,14 +38,16 @@ const capabilities = ["Lead follow-up", "Guided quoting", "Scenario compare", "C
 
 const featureDrawerItems = [
   {
-    id: "guided-quote",
-    title: "Guided quote builder",
-    summary: "Move from event basics to a customer-ready proposal through one structured five-part flow.",
-    value: "Sales teams can capture the event, configure selections, review pricing, and prepare the proposal without rebuilding context.",
-    boundary: "A complete draft can be ready for review without being accepted, paid, or booked.",
-    image: quoteBuilderImage,
-    imageAlt: "QuotePilot guided quote builder with event fields and a live pricing breakdown",
-    trace: ["Capture event scope", "Configure the offer", "Review and propose"]
+    id: "event-scope",
+    title: "Traceable event scope",
+    summary: "Guided quoting captures event scope and staffing up front, and keeps every number traceable to where it actually came from.",
+    value: "Guest count, hours, and format sit next to staffing inputs, production-check status, and the kitchen BEO basis, each one labeled by its real source.",
+    boundary: "A generated event-day sequence and a derivable BEO are starting points. Neither is treated as a retained BEO artifact or a confirmed timing record until it is reviewed and saved.",
+    image: eventScopeKitchenBeoImage,
+    imageWidth: 312,
+    imageHeight: 689,
+    imageAlt: "QuotePilot event scope panel showing guest count and staffing inputs, production check status, kitchen BEO basis, and a generated event-day sequence with labeled timing sources",
+    trace: ["Capture scope and staffing", "Show the evidence source", "Sequence the event day"]
   },
   {
     id: "scenario-compare",
@@ -54,49 +55,57 @@ const featureDrawerItems = [
     summary: "Shape clear package options while keeping the original quote available as the baseline.",
     value: "Teams can compare realistic alternatives, understand total changes, and apply the selected direction back to the active draft.",
     boundary: "A scenario is a sales option. It does not change the customer decision until the proposal is reviewed and accepted.",
-    image: scenarioCompareImage,
-    imageAlt: "QuotePilot scenario comparison showing Good, Better, and Best pricing options",
+    image: null,
+    imageAlt: "Illustrative Good, Better, and Best package comparison, not a live product screenshot",
     trace: ["Build the baseline", "Compare options", "Apply one direction"]
   },
   {
-    id: "decision-center",
-    title: "Customer decision center",
-    summary: "Give customers a focused place to review scope, pricing, and the next decision.",
-    value: "Customers can accept, decline, or request changes from a time-bound portal while staff retain the operating record.",
-    boundary: "Acceptance records the customer decision. Payment and booking confirmation remain separate facts.",
-    image: customerDecisionImage,
-    imageAlt: "QuotePilot customer decision center with event details, pricing, and decision controls",
-    trace: ["Share the proposal", "Record the decision", "Return context to staff"]
+    id: "portal-branding",
+    title: "Branded customer portal",
+    summary: "Give the customer portal your business's name, tagline, logo, and color palette before a proposal goes out.",
+    value: "Staff choose a portal color theme, set the business identity, and preview exactly what the customer will see before anything is shared.",
+    boundary: "Branding changes presentation only. Outbound CRM delivery stays off until a server-authorized connector is installed, so nothing here creates a live integration.",
+    image: portalBrandingImage,
+    imageWidth: 915,
+    imageHeight: 719,
+    imageAlt: "QuotePilot branding settings with a four-option customer portal color theme picker, business identity fields, and a live customer portal preview",
+    trace: ["Choose a portal theme", "Set the business identity", "Preview before sending"]
   },
   {
-    id: "payment-state",
-    title: "Payment state",
-    summary: "Keep payment context visible beside the proposal without collapsing commercial milestones.",
-    value: "Staff can see where a proposal, deposit request, and payment confirmation sit in the broader event workflow.",
-    boundary: "A payment link is a handoff. Only confirmed provider state should be treated as payment evidence.",
-    image: quoteHistoryImage,
-    imageAlt: "QuotePilot quote history with proposal, payment, contract, and lifecycle controls",
-    trace: ["Prepare the handoff", "Track provider state", "Preserve the record"]
+    id: "commercial-snapshot",
+    title: "Commercial snapshot",
+    summary: "See quoted, accepted, and paid totals in one place, with recorded payment kept separate from provider-confirmed payment.",
+    value: "Stat tiles cover total quoted, accepted and booked value, and decision close rate, while the state breakdown separates payment sent from recorded payment paid from provider-confirmed paid.",
+    boundary: "A recorded payment amount is not proof of funds received. Only provider-confirmed paid state is treated as payment evidence.",
+    image: reportingDashboardImage,
+    imageWidth: 989,
+    imageHeight: 896,
+    imageAlt: "QuotePilot commercial snapshot dashboard with quote and payment stat tiles, a quote-state and payment-state breakdown, and quote wizard funnel metrics",
+    trace: ["Read the snapshot", "Separate recorded from confirmed", "Track the funnel"]
   },
   {
-    id: "sales-workflow",
-    title: "Sales follow-up",
-    summary: "Keep readiness gaps, due follow-ups, lifecycle context, and approval requests in one staff workflow.",
-    value: "Sales can prepare the next customer action while admins retain control of sensitive payment, booking, and deletion operations.",
-    boundary: "An approved request records intent. The authorized admin still completes the separate operational action.",
-    image: salesWorkflowImage,
-    imageAlt: "QuotePilot sales workflow with proposal readiness, follow-up planning, and lifecycle history",
-    trace: ["Find the gap", "Plan the follow-up", "Route sensitive work"]
+    id: "staff-roster",
+    title: "Staff roster & records",
+    summary: "Keep every team member's contact details, timezone, and emergency contact in one directory.",
+    value: "Add a staff record once, display name, legal name, email, phone, timezone, and emergency contact, and the right person can be reached for an event.",
+    boundary: "This is a contact directory. Operational staffing can be disabled per environment, so a roster entry alone does not assign someone to an event.",
+    image: staffRosterImage,
+    imageWidth: 982,
+    imageHeight: 823,
+    imageAlt: "QuotePilot staff roster with an empty team list and a new staff member form for identity, contact, timezone, and emergency contact",
+    trace: ["Add the person", "Capture contact and timezone", "Keep emergency info current"]
   },
   {
     id: "event-production",
     title: "Event production",
-    summary: "Carry approved quote context into a practical checklist for the team preparing the event.",
-    value: "Kitchen, logistics, staffing, service, and closeout tasks stay connected to the event record after the sales decision.",
+    summary: "Carry an accepted quote into a per-event production checklist and kitchen checkpoint schedule.",
+    value: "Staff track a ten-item production checklist across planning, kitchen, logistics, and service, plus editable kitchen checkpoint timestamps from prep kickoff to kitchen reset.",
     boundary: "Checklist completion records work performed. It does not prove inventory availability or final event readiness.",
-    image: eventProductionImage,
-    imageAlt: "QuotePilot event schedule with an accepted event and its production checklist",
-    trace: ["Carry the scope forward", "Coordinate the team", "Close out the work"]
+    image: productionChecklistImage,
+    imageWidth: 330,
+    imageHeight: 788,
+    imageAlt: "QuotePilot quote detail with booking status, a staff lead selector, a ten-item production checklist, and kitchen checkpoint timestamps from prep kickoff to kitchen reset",
+    trace: ["Assign the staff lead", "Work the checklist", "Log kitchen checkpoints"]
   }
 ];
 
@@ -325,14 +334,30 @@ function FeatureDrawer({ open, selectedId, onSelect, onClose, returnFocusRef }) 
             <p className="marketing-feature-summary">{activeFeature.summary}</p>
 
             <figure className="marketing-feature-media">
-              <img
-                src={activeFeature.image}
-                alt={activeFeature.imageAlt}
-                width="1440"
-                height="960"
-                decoding="async"
-              />
-              <figcaption>Actual QuotePilot interface shown with local demo data.</figcaption>
+              {activeFeature.image ? (
+                <>
+                  <img
+                    src={activeFeature.image}
+                    alt={activeFeature.imageAlt}
+                    width={activeFeature.imageWidth}
+                    height={activeFeature.imageHeight}
+                    decoding="async"
+                  />
+                  <figcaption>Actual QuotePilot interface shown with local demo data.</figcaption>
+                </>
+              ) : (
+                <>
+                  <div className="marketing-feature-placeholder" role="img" aria-label={activeFeature.imageAlt}>
+                    <div className="marketing-feature-placeholder-visual">
+                      <span>Good</span>
+                      <span className="is-recommended">Better</span>
+                      <span>Best</span>
+                    </div>
+                    <p>Package comparison</p>
+                  </div>
+                  <figcaption>Illustrative, not a product screenshot.</figcaption>
+                </>
+              )}
             </figure>
 
             <div className="marketing-feature-copy">
