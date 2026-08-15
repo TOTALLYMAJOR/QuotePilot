@@ -103,6 +103,7 @@ describe("StaffWorkspace", () => {
     expect(container.textContent).toContain("A fresh start—team activity will appear here");
     expect(container.textContent).toContain("$27.50");
     expect(container.querySelector('[aria-label="Server"]')).not.toBeNull();
+    expect(container.querySelector('svg[data-icon-weight="fill"]')?.getAttribute("stroke-width")).toBe("2.2");
     expect(container.textContent).toContain("Smith Wedding");
     expect(Array.from(container.querySelectorAll("button")).map((button) => button.textContent.trim()))
       .toEqual(expect.arrayContaining(["Review assignment", "View assignment", "Print sheet", "Download PDF", "Open email app", "Preview invitation"]));

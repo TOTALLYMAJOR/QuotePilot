@@ -44,10 +44,11 @@ function StaffIcon({ name, size = 20, weight = "regular", ...props }) {
       height={size}
       fill="none"
       stroke="currentColor"
-      strokeWidth={weight === "bold" ? 2.2 : 1.8}
+      strokeWidth={["bold", "fill"].includes(weight) ? 2.2 : 1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
       focusable="false"
+      data-icon-weight={weight}
       {...props}
     >
       {STAFF_ICON_DRAWINGS[name]}
