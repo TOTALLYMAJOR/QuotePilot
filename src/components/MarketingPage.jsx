@@ -137,7 +137,15 @@ export default function MarketingPage() {
       </header>
 
       <main id="landing-main">
-        <DocumentHero showBuyCta={BUYER_ACCESS_PUBLIC_CTA_ENABLED} />
+        <DocumentHero
+          buyCta={
+            BUYER_ACCESS_PUBLIC_CTA_ENABLED && (
+              <a className="qp-landing-button qp-landing-button-accent" href="/start">
+                Try $1 test access
+              </a>
+            )
+          }
+        />
 
         <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes">
           <div className="qp-landing-outcome-grid">

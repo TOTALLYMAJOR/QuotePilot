@@ -1,6 +1,7 @@
 /* "The Document" hero -- Morgan Wedding BEO that revises itself, six click-to-reveal
-   surfaces, $1 test-access drawer. Scoped entirely under .qp-document-hero /
-   .qp-dh-drawer-root so nothing here can collide with the rest of the app's CSS. */
+   surfaces. Scoped entirely under .qp-document-hero so nothing here can collide with
+   the rest of the app's CSS. The $1 CTA itself is passed in by MarketingPage.jsx as
+   the `buyCta` prop (a real <a href="/start">), not owned by this component. */
 
 .qp-document-hero {
   --dh-paper: #fcfbf4;
@@ -495,85 +496,3 @@
     animation-iteration-count: 1 !important;
   }
 }
-
-/* ---- $1 test access drawer ---- */
-.qp-dh-scrim { position: fixed; inset: 0; background: rgba(9, 11, 9, 0.44); z-index: 200; opacity: 0; transition: opacity 0.3s ease; }
-.qp-dh-scrim.qp-dh-on { opacity: 1; }
-.qp-dh-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(430px, 94vw);
-  z-index: 210;
-  background: var(--landing-surface);
-  border-left: 1px solid var(--landing-line);
-  box-shadow: var(--dh-shadow-drawer);
-  transform: translateX(102%);
-  transition: transform 0.34s ease;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  color: var(--landing-ink);
-  font-family: var(--font-ui);
-}
-.qp-dh-drawer.qp-dh-on { transform: none; }
-.qp-dh-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 26px 28px 0; }
-.qp-dh-drawer-close {
-  background: transparent;
-  border: 1px solid var(--landing-line);
-  color: var(--landing-muted);
-  border-radius: 50%;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  font-size: 15px;
-  transition: color 0.14s ease, border-color 0.14s ease;
-}
-.qp-dh-drawer-close:hover { color: var(--landing-ink); border-color: var(--landing-muted); }
-.qp-dh-drawer-body { padding: 6px 28px 28px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
-.qp-dh-drawer h5 { font-family: var(--font-editorial); font-weight: 600; font-size: 26px; line-height: 1.12; margin: 8px 0 0; color: var(--landing-ink); }
-.qp-dh-d-lede { color: var(--landing-muted); font-size: 14px; margin: 0; }
-.qp-dh-included { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-.qp-dh-included li { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; font-weight: 500; }
-.qp-dh-included li::before { content: "\2014"; font-family: var(--dh-mono); color: var(--landing-accent-strong); flex: none; }
-.qp-dh-order { border: 1px solid var(--landing-line); border-radius: 10px; background: var(--landing-bg); padding: 16px 18px; font-variant-numeric: tabular-nums; }
-.qp-dh-orow { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 3px 0; }
-.qp-dh-sku { font-family: var(--dh-mono); font-size: 10px; letter-spacing: 0.1em; color: var(--landing-muted); }
-.qp-dh-osum { border-top: 1px solid var(--landing-line); margin-top: 10px; padding-top: 10px; font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; }
-.qp-dh-osub { font-family: var(--dh-mono); font-size: 10px; color: var(--landing-muted); letter-spacing: 0.08em; margin-top: 4px; }
-.qp-dh-pay {
-  width: 100%;
-  justify-content: center;
-  padding: 13px 20px;
-  font-size: 14.5px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: var(--landing-dark);
-  color: #f8f8f4;
-  font-family: var(--font-ui);
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter 0.14s ease;
-}
-.qp-dh-pay:hover:not(:disabled) { filter: brightness(1.12); }
-.qp-dh-pay:disabled { opacity: 0.7; cursor: progress; }
-.qp-dh-secure { display: flex; align-items: center; justify-content: center; gap: 7px; font-family: var(--dh-mono); font-size: 10px; letter-spacing: 0.08em; color: var(--landing-muted); text-align: center; }
-.qp-dh-secure svg { width: 10px; height: 12px; flex: none; }
-.qp-dh-drawer-close svg { width: 14px; height: 14px; }
-.qp-dh-proto-note {
-  font-family: var(--dh-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--landing-accent-strong);
-  background: var(--landing-accent-soft);
-  border-radius: 6px;
-  padding: 8px 12px;
-  text-align: center;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-.qp-dh-proto-note.qp-dh-on { opacity: 1; }
-.qp-dh-drawer-foot { margin-top: auto; padding-top: 8px; border-top: 1px dashed var(--landing-line); font-family: var(--dh-mono); font-size: 9.5px; letter-spacing: 0.1em; color: var(--landing-muted); }

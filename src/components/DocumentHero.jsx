@@ -398,111 +398,13 @@ function EnterpriseSlide({ live }) {
 
 const SLIDE_COMPONENTS = [InquirySlide, ProposalSlide, PaymentSlide, StaffingSlide, KitchenSlide, EnterpriseSlide];
 
-function BuyDrawer({ open, onClose }) {
-  const closeRef = useRef(null);
-  const drawerRef = useRef(null);
-  const [paying, setPaying] = useState(false);
-  const [showProto, setShowProto] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = "hidden";
-    const t = setTimeout(() => closeRef.current?.focus(), 60);
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "Tab") {
-        const focusable = drawerRef.current?.querySelectorAll("button, a, [tabindex]");
-        if (!focusable?.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
-        else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      clearTimeout(t);
-      document.body.style.overflow = "";
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
-  const handlePay = () => {
-    setPaying(true);
-    setTimeout(() => {
-      setShowProto(true);
-      setPaying(false);
-    }, 900);
-  };
-
-  return (
-    <>
-      <div className={cx("qp-dh-scrim", open && "qp-dh-on")} hidden={!open} onClick={onClose} />
-      <aside
-        ref={drawerRef}
-        className={cx("qp-dh-drawer", open && "qp-dh-on")}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dhDrawerTitle"
-        hidden={!open}
-      >
-        <div className="qp-dh-drawer-head">
-          <span className="qp-dh-eyebrow">Test access</span>
-          <button ref={closeRef} type="button" className="qp-dh-drawer-close" onClick={onClose} aria-label="Close panel">
-            &#10005;
-          </button>
-        </div>
-        <div className="qp-dh-drawer-body">
-          <h5 id="dhDrawerTitle">Try QuotePilot for a dollar.</h5>
-          <p className="qp-dh-d-lede">
-            One dollar, one time. You get the full staff workspace with a sample event loaded &mdash; revise it, watch the consequences carry through, decide if it fits.
-          </p>
-          <ul className="qp-dh-included">
-            <li>Full staff workspace access</li>
-            <li>Morgan Wedding sample event, ready to break</li>
-            <li>Quote &rarr; proposal &rarr; customer decision flow</li>
-            <li>Your work carries over if you upgrade</li>
-          </ul>
-          <div className="qp-dh-order" aria-label="Order summary">
-            <div className="qp-dh-orow">
-              <span>
-                QuotePilot test access
-                <br />
-                <span className="qp-dh-sku">TEST-ACCESS-01 &middot; ONE-TIME</span>
-              </span>
-              <span>$1.00</span>
-            </div>
-            <div className="qp-dh-osum"><span>Due today</span><span>$1.00</span></div>
-            <p className="qp-dh-osub">NO SUBSCRIPTION STARTS UNLESS YOU CHOOSE ONE</p>
-          </div>
-          <button type="button" className="qp-dh-pay" onClick={handlePay} disabled={paying}>
-            {paying ? "Contacting Stripe…" : "Continue to Stripe Checkout"}
-          </button>
-          <p className="qp-dh-secure">
-            <svg viewBox="0 0 10 12" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
-              <rect x="1" y="5" width="8" height="6" rx="1.2" />
-              <path d="M3 5V3.5a2 2 0 0 1 4 0V5" />
-            </svg>
-            SECURED BY STRIPE &middot; CARD DETAILS NEVER TOUCH QUOTEPILOT
-          </p>
-          <p className={cx("qp-dh-proto-note", showProto && "qp-dh-on")} role="status">
-            PROTOTYPE &mdash; IN PRODUCTION THIS CONTINUES TO STRIPE CHECKOUT
-          </p>
-          <p className="qp-dh-drawer-foot">QUESTIONS FIRST? BOOK A DEMO INSTEAD &mdash; NO DOLLAR REQUIRED.</p>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-export default function DocumentHero({ showBuyCta = false }) {
+export default function DocumentHero({ buyCta = null }) {
   const reducedMotion = useMemo(
     () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     []
   );
   const [active, setActive] = useState(0); // 0 = "the change" default; 1-6 = tabs
   const [visited, setVisited] = useState(() => new Set());
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const swapTimer = useRef(null);
 
@@ -558,16 +460,12 @@ export default function DocumentHero({ showBuyCta = false }) {
           </div>
 
           <div className="qp-dh-cta-row">
-            {showBuyCta && (
-              <button type="button" className="qp-landing-button qp-landing-button-accent" onClick={() => setDrawerOpen(true)}>
-                Try $1 test access
-              </button>
-            )}
+            {buyCta}
             <a className="qp-landing-button qp-landing-button-dark" href="https://mbmapps.com/contact">
               Book a demo
             </a>
           </div>
-          {showBuyCta && <p className="qp-dh-cta-note">ONE DOLLAR, ONE TIME &middot; NO SUBSCRIPTION STARTS</p>}
+          {buyCta && <p className="qp-dh-cta-note">ONE DOLLAR, ONE TIME &middot; NO SUBSCRIPTION STARTS</p>}
         </div>
 
         <div className="qp-dh-frame">
@@ -578,8 +476,6 @@ export default function DocumentHero({ showBuyCta = false }) {
           )}
         </div>
       </div>
-
-      {showBuyCta && <BuyDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
     </section>
   );
 }
