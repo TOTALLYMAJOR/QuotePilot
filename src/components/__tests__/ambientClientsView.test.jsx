@@ -233,6 +233,48 @@ describe("AmbientClientsView", () => {
     }
   });
 
+  test("renders operational metrics and filters the bounded page without inventing relationship evidence", () => {
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel({
+          rows: [
+            directoryRow(1),
+            directoryRow(2, {
+              identity: {
+                name: "Contact Gap Client",
+                company: "",
+                email: "contact-gap@example.com",
+                phone: ""
+              },
+              latest: { quoteNumber: "", eventName: "", eventDate: "" }
+            })
+          ]
+        })}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+
+    const metrics = Object.fromEntries([...container.querySelectorAll(".ambient-clients__metrics > div")]
+      .map((metric) => [metric.querySelector("dt").textContent, metric.querySelector("dd").textContent]));
+    expect(metrics).toEqual({ Shown: "2", "Linked work": "1", Upcoming: "1", "Contact gaps": "1" });
+    expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
+    expect(container.textContent).toContain("Needs contact");
+    expect(container.textContent).toContain("No linked opportunity");
+
+    act(() => Array.from(container.querySelectorAll(".ambient-clients__filters button"))
+      .find((button) => button.textContent === "Contact gaps")
+      .click());
+    expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
+    expect(container.textContent).toContain("Contact Gap Client");
+    expect(container.textContent).not.toContain("Client 1");
+
+    act(() => Array.from(container.querySelectorAll(".ambient-clients__filters button"))
+      .find((button) => button.textContent === "Upcoming")
+      .click());
+    expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
+    expect(container.textContent).toContain("Client 1");
+  });
+
   test("acknowledges a client selection in context during the same activation that requests navigation", () => {
     const onOpenClient = vi.fn(() => ({ status: "pending" }));
     mount(

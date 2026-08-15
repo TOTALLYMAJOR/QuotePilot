@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   CalendarBlank,
+  CheckCircle,
   CookingPot,
   CurrencyDollar,
   DownloadSimple,
+  DotsThree,
   EnvelopeOpen,
   EnvelopeSimple,
   MagnifyingGlass,
@@ -12,10 +15,12 @@ import {
   NotePencil,
   Plus,
   Printer,
+  SlidersHorizontal,
   StarFour,
   Trash,
   Tray,
-  UserCircle
+  UserCircle,
+  WarningCircle
 } from "@phosphor-icons/react";
 import {
   STAFF_ROLES,
@@ -82,6 +87,70 @@ function assignmentLabel(assignment) {
   const eventName = String(assignment?.event?.name || "Event").trim();
   const date = String(assignment?.event?.date || "Date pending").trim();
   return `${eventName} · ${date}`;
+}
+
+function dateLabel(value, options = {}) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Date not recorded";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: options.year ? "numeric" : undefined,
+    weekday: options.weekday ? "short" : undefined
+  }).format(parsed);
+}
+
+function timeRange(startValue, endValue) {
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Time not recorded";
+  const formatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${formatter.format(start)}–${formatter.format(end)}`;
+}
+
+function activityTime(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Time not recorded";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(parsed);
+}
+
+function calendarDateKey(value = new Date()) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value)) return value;
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function needsAttention(entry) {
+  return Boolean(entry?.profile?.active) && (
+    entry?.record?.contact?.emailStatus !== "verified"
+    || !entry?.record?.contact?.emergencyContactPhone
+    || Number(entry?.record?.compensation?.hourlyRate || 0) <= 0
+    || !entry?.profile?.availabilityWindows?.length
+  );
+}
+
+function qualificationPresentation(qualification) {
+  const status = String(qualification?.status || "").trim().toLowerCase();
+  if (["missing", "pending"].includes(status)) return { label: "Missing", tone: "warning" };
+  const expiryMs = Date.parse(qualification?.expiresOn || "");
+  if (status === "expired" || (Number.isFinite(expiryMs) && expiryMs < Date.now())) {
+    return { label: "Expired", tone: "warning" };
+  }
+  if (Number.isFinite(expiryMs) && expiryMs - Date.now() <= 45 * 24 * 60 * 60 * 1000) {
+    return { label: "Expiring", tone: "warning" };
+  }
+  return status === "current"
+    ? { label: "Verified", tone: "good" }
+    : { label: "Missing", tone: "warning" };
 }
 
 function initials(entry) {
@@ -151,6 +220,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   const [invitationBusy, setInvitationBusy] = useState(false);
   const [rosterSearch, setRosterSearch] = useState("");
   const [rosterFilter, setRosterFilter] = useState("all");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const load = async ({ recovery = false } = {}) => {
     setState({ status: recovery ? "recovery" : "loading", message: recovery ? "Refreshing staff records…" : "Loading staff records…" });
@@ -164,7 +234,9 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       setDirty(false);
       setState(result.storage === "firebase"
         ? { status: result.records.length ? "success" : "empty", message: result.records.length ? "Staff records are current." : "No staff records yet." }
-        : { status: "unavailable", message: "Connect to the organization workspace to manage authoritative staff records." });
+        : result.storage === "local_fixture"
+          ? { status: "context", message: "Local review roster loaded. Firebase staff records are unchanged." }
+          : { status: "unavailable", message: "Connect to the organization workspace to manage authoritative staff records." });
     } catch (error) {
       setState({ status: "error", message: safeError(error, "Staff records could not be loaded.") });
     }
@@ -177,8 +249,13 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   }, [organizationId]);
 
   const assignments = useMemo(() => (
-    (directory?.assignments || []).filter((item) => item.staffId === selectedStaffId)
-      .sort((left, right) => String(right.eventWindow?.startAtISO || "").localeCompare(String(left.eventWindow?.startAtISO || "")))
+    (() => {
+      const ordered = (directory?.assignments || []).filter((item) => item.staffId === selectedStaffId)
+        .sort((left, right) => String(left.eventWindow?.startAtISO || "").localeCompare(String(right.eventWindow?.startAtISO || "")));
+      const nowMs = Date.now();
+      const upcoming = ordered.filter((item) => Date.parse(item.eventWindow?.endAtISO || item.eventWindow?.startAtISO || item.event?.date || "") >= nowMs);
+      return upcoming.length ? upcoming : ordered.reverse();
+    })()
   ), [directory?.assignments, selectedStaffId]);
   const selectedAssignment = assignments.find((item) => item.assignmentId === selectedAssignmentId)
     || assignments[0]
@@ -198,6 +275,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
     setSelectedStaffId(entry.profile.staffId);
     setDraft(clone(entry));
     setDirty(false);
+    setMobileDetailOpen(true);
     setState((current) => ({ ...current, message: "Staff record opened." }));
   };
 
@@ -355,15 +433,35 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       : "Awaiting staff response";
 
   const records = directory?.records || [];
+  const allAssignments = directory?.assignments || [];
+  const currentDay = calendarDateKey();
   const activeCount = records.filter((entry) => entry.profile.active).length;
-  const needsAttentionCount = records.filter((entry) => (
+  const needsAttentionCount = records.filter(needsAttention).length;
+  const availableCount = records.filter((entry) => (
     entry.profile.active
-    && (
-      entry.record.contact.emailStatus !== "verified"
-      || !entry.record.contact.emergencyContactPhone
-      || Number(entry.record.compensation.hourlyRate || 0) <= 0
-    )
+    && !needsAttention(entry)
+    && entry.profile.availabilityWindows?.some((window) => window.state === "available")
   )).length;
+  const assignedTodayCount = new Set(allAssignments
+    .filter((assignment) => calendarDateKey(assignment.eventWindow?.startAtISO || assignment.event?.date || "") === currentDay)
+    .map((assignment) => assignment.staffId)).size;
+  const assignmentsForStaff = (staffId) => {
+    const ordered = allAssignments
+      .filter((assignment) => assignment.staffId === staffId)
+      .sort((left, right) => String(left.eventWindow?.startAtISO || "").localeCompare(String(right.eventWindow?.startAtISO || "")));
+    const nowMs = Date.now();
+    const upcoming = ordered.filter((assignment) => Date.parse(assignment.eventWindow?.endAtISO || assignment.eventWindow?.startAtISO || assignment.event?.date || "") >= nowMs);
+    return upcoming.length ? upcoming : ordered.reverse();
+  };
+  const operationalState = (entry) => {
+    if (!entry.profile.active) return { key: "inactive", label: "Inactive", tone: "neutral" };
+    if (needsAttention(entry)) return { key: "needs_attention", label: "Needs review", tone: "warning" };
+    if (assignmentsForStaff(entry.profile.staffId).length) return { key: "assigned", label: "Assigned", tone: "assigned" };
+    if (entry.profile.availabilityWindows?.some((window) => window.state === "available")) {
+      return { key: "available", label: "Available", tone: "good" };
+    }
+    return { key: "unavailable", label: "Unavailable", tone: "neutral" };
+  };
   const normalizedRosterSearch = rosterSearch.trim().toLowerCase();
   const visibleRecords = records.filter((entry) => {
     const searchable = [
@@ -373,16 +471,9 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       Array.isArray(entry.profile.capabilities) ? entry.profile.capabilities.join(" ") : ""
     ].join(" ").toLowerCase();
     const matchesSearch = !normalizedRosterSearch || searchable.includes(normalizedRosterSearch);
+    const entryState = operationalState(entry).key;
     const matchesFilter = rosterFilter === "all"
-      || (rosterFilter === "active" && entry.profile.active)
-      || (rosterFilter === "needs_attention" && (
-        entry.profile.active
-        && (
-          entry.record.contact.emailStatus !== "verified"
-          || !entry.record.contact.emergencyContactPhone
-          || Number(entry.record.compensation.hourlyRate || 0) <= 0
-        )
-      ));
+      || rosterFilter === entryState;
     return matchesSearch && matchesFilter;
   });
   const selectedDisplayName = draft
@@ -394,13 +485,19 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   const hourlyRate = Number(draft?.record?.compensation?.hourlyRate || 0);
   const assignmentAccepted = currentInvitation?.acknowledgement?.state === "accepted";
   const availabilityWindows = draft?.profile?.availabilityWindows || [];
-  const openAvailabilityCount = availabilityWindows.filter((window) => window.state === "available").length;
+  const availabilityProvided = availabilityWindows.length > 0;
+  const qualificationReady = Boolean(draft?.record?.qualifications?.length)
+    && draft.record.qualifications.every((qualification) => !["expired", "pending"].includes(qualification.status));
   const readinessItems = draft ? [
-    ["Contact verified", contactVerified ? "Complete" : "Missing", contactVerified],
-    ["Availability", openAvailabilityCount ? `${openAvailabilityCount} window${openAvailabilityCount === 1 ? "" : "s"}` : "Not set", openAvailabilityCount > 0],
-    ["Rate", hourlyRate > 0 ? `${currency(hourlyRate, draft.record.compensation.currency)}/hr` : "Missing", hourlyRate > 0],
-    ["Emergency contact", emergencyReady ? "Complete" : "Missing", emergencyReady]
+    { label: "Contact information", value: contactVerified ? "Complete" : "Needs review", state: contactVerified ? "complete" : "warning" },
+    { label: "Emergency contact", value: emergencyReady ? "Complete" : "Not provided", state: emergencyReady ? "complete" : "warning" },
+    { label: "Rate configured", value: hourlyRate > 0 ? "Complete" : "Not configured", state: hourlyRate > 0 ? "complete" : "warning" },
+    { label: "Availability provided", value: availabilityProvided ? "Complete" : "Not provided", state: availabilityProvided ? "complete" : "warning" },
+    { label: "Qualifications", value: qualificationReady ? "Complete" : "Needs review", state: qualificationReady ? "complete" : "warning" },
+    { label: "Acknowledgements", value: !selectedAssignment ? "Not applicable" : assignmentAccepted ? "Complete" : "Pending", state: !selectedAssignment ? "neutral" : assignmentAccepted ? "complete" : "warning" }
   ] : [];
+  const selectedReadinessCompleteCount = readinessItems.filter((item) => item.state === "complete").length;
+  const selectedReadinessTotal = readinessItems.length;
   const assignmentSteps = [
     ["Invited", Boolean(currentInvitation)],
     ["Accepted", assignmentAccepted],
@@ -410,13 +507,30 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   const focusStaffDetails = () => {
     if (typeof document === "undefined") return;
     const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-    document.getElementById("staff-detail-sections")?.scrollIntoView({ block: "start", behavior });
+    const editor = document.getElementById("staff-detail-sections");
+    if (editor) editor.open = true;
+    editor?.scrollIntoView({ block: "start", behavior });
   };
   const preferredContactLabel = ({
     email: "Email",
     phone: "Phone",
     either: "Either"
   }[draft?.record?.contact?.preferredChannel] || "Email");
+  const selectedOperationalState = draft ? operationalState(draft) : null;
+  const selectedActivities = [
+    currentInvitation?.acknowledgement?.respondedAtISO ? {
+      event: currentInvitation.acknowledgement.state === "accepted" ? "Assignment acknowledged" : "Assignment response recorded",
+      value: selectedAssignment?.event?.name || "Assigned event",
+      at: currentInvitation.acknowledgement.respondedAtISO,
+      source: "Staff portal"
+    } : null,
+    currentInvitation?.updatedAtISO ? {
+      event: "Invitation status updated",
+      value: deliveryLabel,
+      at: currentInvitation.updatedAtISO,
+      source: "Email provider"
+    } : null
+  ].filter(Boolean);
   return (
     <main className="container workspace-route-main staff-workspace" data-surface-purpose="clarify advance resolve reveal_context">
       <div className="staff-organization-bar">
@@ -434,56 +548,104 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
         </div>
       </div>
 
-      <div className="staff-workspace__layout">
-        <aside className="staff-roster" aria-label="Staff roster">
-          <header className="staff-workspace__header">
-            <p className="eyebrow">Staff</p>
-            <h1>People</h1>
-            <p>{records.length} people · {assignments.length} active event{assignments.length === 1 ? "" : "s"}</p>
-          </header>
-          <label className="staff-roster__search">
-            <MagnifyingGlass size={16} aria-hidden="true" />
+      <section className="staff-command-bar" aria-label="Staff operations summary">
+        <div className="staff-command-bar__topline">
+          <div className="staff-command-bar__copy">
+            <p className="staff-kicker">Workforce operations</p>
+            <h1>Staff</h1>
+          </div>
+          <dl className="staff-command-metrics" aria-label="Staff operating metrics">
+            <div>
+              <dt>Active</dt>
+              <dd>{activeCount}</dd>
+            </div>
+            <div>
+              <dt>Available</dt>
+              <dd>{availableCount}</dd>
+            </div>
+            <div>
+              <dt>Assigned today</dt>
+              <dd>{assignedTodayCount}</dd>
+            </div>
+            <div className="is-attention">
+              <dt>Need attention</dt>
+              <dd>{needsAttentionCount}</dd>
+            </div>
+          </dl>
+        </div>
+        <div className="staff-command-tools">
+          <label className="staff-command-search">
+            <MagnifyingGlass size={18} aria-hidden="true" />
             <span className="sr-only">Search staff</span>
             <input
               type="search"
               value={rosterSearch}
-              placeholder="Search staff"
+              placeholder="Search staff…"
               onChange={(event) => setRosterSearch(event.target.value)}
             />
           </label>
-          <div className="staff-roster__filters" role="group" aria-label="Staff roster filters">
-            <button type="button" className={rosterFilter === "all" ? "is-selected" : ""} onClick={() => setRosterFilter("all")}>All {records.length}</button>
-            <button type="button" className={rosterFilter === "active" ? "is-selected" : ""} onClick={() => setRosterFilter("active")}>Active {activeCount}</button>
-            <button type="button" className={rosterFilter === "needs_attention" ? "is-selected" : ""} onClick={() => setRosterFilter("needs_attention")}>Needs attention {needsAttentionCount}</button>
+          <div className="staff-command-filters" role="group" aria-label="Staff roster filters">
+            <span><SlidersHorizontal size={16} aria-hidden="true" /> Filters</span>
+            <button type="button" className={rosterFilter === "all" ? "is-selected" : ""} onClick={() => setRosterFilter("all")}>All</button>
+            <button type="button" className={rosterFilter === "needs_attention" ? "is-selected" : ""} onClick={() => setRosterFilter("needs_attention")}>Needs attention</button>
+            <button type="button" className={rosterFilter === "available" ? "is-selected" : ""} onClick={() => setRosterFilter("available")}>Available</button>
+            <button type="button" className={rosterFilter === "assigned" ? "is-selected" : ""} onClick={() => setRosterFilter("assigned")}>Assigned</button>
           </div>
-          <div className="staff-roster__summary">
+          <button type="button" className="staff-command-add" onClick={addStaff} disabled={state.status === "unavailable"}>
+            <Plus size={18} aria-hidden="true" /> Add staff
+          </button>
+        </div>
+      </section>
+
+      <div className={`staff-workspace__layout${mobileDetailOpen ? " is-mobile-detail-open" : ""}`}>
+        <aside className="staff-roster" aria-label="Staff roster">
+          <header className="staff-workspace__header">
+            <div>
+              <p className="eyebrow">Roster</p>
+              <h2>People</h2>
+            </div>
             <strong>{visibleRecords.length} shown</strong>
-            <span>{activeCount} active</span>
-          </div>
+          </header>
           {visibleRecords.length ? (
             <ul>
-              {visibleRecords.map((entry) => (
-                <li key={entry.profile.staffId}>
-                  <button
-                    type="button"
-                    className={selectedStaffId === entry.profile.staffId ? "is-selected" : ""}
-                    onClick={() => choose(entry)}
-                    aria-current={selectedStaffId === entry.profile.staffId ? "true" : undefined}
-                  >
-                    <span className="staff-avatar">
-                      {entry.record.photoUrl ? <img src={entry.record.photoUrl} alt="" /> : initials(entry)}
-                    </span>
-                    <span className="staff-roster__identity">
-                      <strong>{entry.record.preferredName || entry.profile.displayName}</strong>
-                      <small>{entry.profile.capabilities.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"}</small>
-                      <RoleIcons roles={entry.profile.capabilities} />
-                    </span>
-                    <span className="staff-roster__rate">
-                      {currency(entry.record.compensation.hourlyRate, entry.record.compensation.currency)}<small>/hr</small>
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {visibleRecords.map((entry) => {
+                const entryAssignments = assignmentsForStaff(entry.profile.staffId);
+                const nextAssignment = entryAssignments[0];
+                const nextAvailability = entry.profile.availabilityWindows?.find((window) => window.state === "available");
+                const entryState = operationalState(entry);
+                const rate = Number(entry.record.compensation.hourlyRate || 0);
+                return (
+                  <li key={entry.profile.staffId}>
+                    <button
+                      type="button"
+                      className={selectedStaffId === entry.profile.staffId ? "is-selected" : ""}
+                      onClick={() => choose(entry)}
+                      aria-current={selectedStaffId === entry.profile.staffId ? "true" : undefined}
+                    >
+                      <span className="staff-avatar">
+                        {entry.record.photoUrl ? <img src={entry.record.photoUrl} alt="" /> : initials(entry)}
+                      </span>
+                      <span className="staff-roster__identity">
+                        <span className="staff-roster__name-line">
+                          <strong>{entry.record.preferredName || entry.profile.displayName}</strong>
+                          <em data-tone={entryState.tone}>{entryState.label}</em>
+                        </span>
+                        <small>{entry.profile.capabilities.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"}</small>
+                        <small className={entryState.key === "needs_attention" ? "staff-roster__warning" : "staff-roster__meta"}>
+                          {entryState.key === "needs_attention"
+                            ? !entry.record.contact.emergencyContactPhone ? "Emergency contact not provided" : Number(entry.record.compensation.hourlyRate || 0) <= 0 ? "Rate not configured" : !entry.profile.availabilityWindows?.length ? "Availability not provided" : "Contact needs review"
+                            : nextAssignment ? `${dateLabel(nextAssignment.eventWindow?.startAtISO || nextAssignment.event?.date)} · ${nextAssignment.event?.name || "Assigned event"}`
+                              : nextAvailability ? `${dateLabel(nextAvailability.startAtISO)} · ${timeRange(nextAvailability.startAtISO, nextAvailability.endAtISO)}`
+                                : "No upcoming availability"}
+                        </small>
+                      </span>
+                      <span className="staff-roster__rate">
+                        {rate > 0 ? <>{currency(rate, entry.record.compensation.currency)}<small>/hr</small></> : <small>Not set</small>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <div className="staff-roster__empty">
@@ -492,46 +654,32 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
               <button type="button" className="ghost" onClick={addStaff}>Add the first person</button>
             </div>
           )}
-          <button type="button" className="staff-add-button" onClick={addStaff} disabled={state.status === "unavailable"}>
-            <Plus size={18} aria-hidden="true" /> Add staff member
-          </button>
         </aside>
 
-        <section className="staff-record" aria-label="Selected staff record">
+        <section className="staff-record staff-detail-pane" aria-label="Selected staff record">
           {draft ? (
             <>
+              <button type="button" className="staff-mobile-back" onClick={() => setMobileDetailOpen(false)}>
+                <ArrowLeft size={18} aria-hidden="true" /> Back to staff
+              </button>
               <header className="staff-record__identity">
                 <span className="staff-avatar is-large">
                   {draft.record.photoUrl ? <img src={draft.record.photoUrl} alt="" /> : initials(draft)}
                 </span>
                 <div>
-                  <p className="eyebrow">Staff profile</p>
+                  <p className="eyebrow">Staff record</p>
                   <h2>{selectedDisplayName}</h2>
                   <p className="staff-profile-subtitle">
-                    {selectedRoles.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"}
+                    {selectedRoles.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"} · {draft.profile.active ? "Active" : "Inactive"}
                   </p>
-                  <div className="staff-profile-chips" aria-label="Profile status">
-                    <span data-tone={draft.profile.active ? "good" : "neutral"}>{draft.profile.active ? "Active" : "Inactive"}</span>
-                    <span data-tone={contactVerified ? "good" : "warning"}>{contactVerified ? "Verified" : "Contact needed"}</span>
-                    <span data-tone={openAvailabilityCount > 0 ? "good" : "warning"}>
-                      {openAvailabilityCount > 0 ? "Available" : "Availability needed"}
-                    </span>
-                  </div>
-                  <RoleIcons
-                    roles={draft.profile.capabilities}
-                    interactive
-                    onToggle={(role, enabled) => {
-                      setDraft((current) => withStaffRole(current, role, enabled));
-                      setDirty(true);
-                    }}
-                  />
+                  <strong className="staff-primary-state" data-tone={selectedOperationalState?.tone}>{selectedOperationalState?.label}</strong>
                 </div>
                 <div className="staff-record__controls">
                   <div className="staff-profile-actions">
-                    <button type="button" className="ghost" onClick={focusStaffDetails}>More</button>
-                    <button type="button" className="cta" onClick={focusStaffDetails}>
-                      Edit profile
+                    <button type="button" className="cta" disabled={!selectedAssignment || invitationBusy || dirty} onClick={() => void previewInvitation()}>
+                      {selectedAssignment ? "Review assignment" : "Assign staff"}
                     </button>
+                    <button type="button" className="ghost staff-more-button" aria-label="More staff actions" onClick={focusStaffDetails}><DotsThree size={22} weight="bold" aria-hidden="true" /></button>
                   </div>
                   <div className="staff-record__save">
                     <button type="button" className="ghost compact" onClick={() => void save()} disabled={!dirty || state.status === "saving"}>
@@ -542,78 +690,95 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                 </div>
               </header>
 
-              {selectedAssignment ? (
-                <section className="staff-next-action" aria-label="Next best action">
-                  <div>
-                    <p className="eyebrow">Next best action</p>
-                    <h3>{assignmentAccepted ? `Prepare ${selectedDisplayName}'s event briefing` : `Confirm ${selectedDisplayName}'s assignment`}</h3>
-                    <p>
-                      {selectedAssignment.event?.name || "Assigned event"} · {selectedAssignment.event?.date || "Date pending"} · {acknowledgementLabel}
-                    </p>
-                  </div>
-                  <button type="button" className="cta" disabled={invitationBusy || dirty || !selectedAssignment} onClick={() => void previewInvitation()}>
-                    {currentInvitation ? "Review assignment" : "Prepare assignment review"}
-                  </button>
-                </section>
-              ) : null}
-
               <nav className="staff-profile-tabs" aria-label="Staff profile sections">
-                {["Overview", "Availability", "Rates", "Qualifications", "Events", "Notes"].map((label) => (
-                  <a key={label} href={label === "Overview" ? "#staff-overview" : "#staff-detail-sections"}>{label}</a>
-                ))}
+                <a href="#staff-overview">Overview</a>
+                <a href="#staff-next-assignment">Assignments</a>
+                <a href="#staff-availability">Availability</a>
+                <a href="#staff-compensation">Rates</a>
+                <a href="#staff-qualifications">Qualifications</a>
+                <a href="#staff-detail-sections">Notes</a>
               </nav>
 
-              <section id="staff-overview" className="staff-overview-grid" aria-label="Staff overview">
-                <article className="staff-overview-card staff-contact-card">
-                  <h3>Identity & contact</h3>
-                  <p className="source-note">Primary contact details for this staff member.</p>
-                  <div className="staff-contact-summary">
-                    <span className="staff-avatar">{initials(draft)}</span>
-                    <div>
-                      <strong>{selectedDisplayName}</strong>
-                      <span>{draft.record.contact.email || "No email on file"}</span>
-                      <span>{draft.record.contact.phone || "No phone on file"}</span>
+              <section id="staff-overview" className="staff-operational-stack" aria-label="Staff overview">
+                <article id="staff-next-assignment" className="staff-ops-panel staff-next-assignment">
+                  <header><div><p className="eyebrow">Next assignment</p><h3>{selectedAssignment?.event?.name || "No upcoming assignment"}</h3></div><CalendarBlank size={22} aria-hidden="true" /></header>
+                  {selectedAssignment ? (
+                    <>
+                      <dl className="staff-assignment-facts">
+                        <div><dt>Date</dt><dd>{dateLabel(selectedAssignment.eventWindow?.startAtISO || selectedAssignment.event?.date, { weekday: true, year: true })}</dd></div>
+                        <div><dt>Time</dt><dd>{timeRange(selectedAssignment.eventWindow?.startAtISO, selectedAssignment.eventWindow?.endAtISO)}</dd></div>
+                        <div><dt>Role</dt><dd>{ROLE_LABELS[selectedAssignment.role] || selectedAssignment.role || "Not recorded"}</dd></div>
+                        <div><dt>Venue</dt><dd>{selectedAssignment.event?.venue || "Not recorded"}</dd></div>
+                        <div><dt>Guests</dt><dd>{selectedAssignment.event?.guests || "Not recorded"}</dd></div>
+                        <div><dt>Response</dt><dd>{acknowledgementLabel}</dd></div>
+                      </dl>
+                      <div className="staff-panel-action-row">
+                        <button type="button" className="cta" disabled={invitationBusy || dirty} onClick={() => void previewInvitation()}>View assignment</button>
+                        <span>{deliveryLabel}</span>
+                      </div>
+                    </>
+                  ) : <p className="staff-honest-empty">No assignment is recorded for this person. Open an event staffing plan to assign them.</p>}
+                </article>
+
+                <article id="staff-availability" className="staff-ops-panel">
+                  <header><div><p className="eyebrow">Availability</p><h3>Recorded windows</h3></div><button type="button" className="ghost compact" onClick={focusStaffDetails}>Edit availability</button></header>
+                  {availabilityWindows.length ? (
+                    <div className="staff-data-rows">
+                      {availabilityWindows.map((window) => (
+                        <div key={window.availabilityId} className="staff-data-row">
+                          <strong>{dateLabel(window.startAtISO, { weekday: true })}</strong>
+                          <span>{timeRange(window.startAtISO, window.endAtISO)}</span>
+                          <em data-tone={window.state === "available" ? "good" : "neutral"}>{window.state === "available" ? "Available" : "Unavailable"}</em>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  <dl className="staff-overview-facts">
+                  ) : <p className="staff-honest-empty is-warning">Availability not provided.</p>}
+                </article>
+
+                <div className="staff-ops-split">
+                  <article id="staff-compensation" className="staff-ops-panel">
+                    <header><div><p className="eyebrow">Compensation</p><h3>Rates</h3></div><CurrencyDollar size={21} aria-hidden="true" /></header>
+                    <dl className="staff-key-values">
+                      <div><dt>Standard hourly rate</dt><dd>{hourlyRate > 0 ? `${currency(hourlyRate, draft.record.compensation.currency)}/hr` : "Rate not configured"}</dd></div>
+                      <div><dt>Event rate</dt><dd>{Number(draft.record.compensation.eventRate || 0) > 0 ? currency(draft.record.compensation.eventRate, draft.record.compensation.currency) : "Not configured"}</dd></div>
+                      <div><dt>Payroll status</dt><dd>{draft.record.compensation.payrollStatus === "ready" ? "Ready for review" : draft.record.compensation.payrollStatus === "on_hold" ? "On hold" : "Not ready"}</dd></div>
+                    </dl>
+                    <button type="button" className="staff-text-action" onClick={focusStaffDetails}>Manage rates</button>
+                  </article>
+
+                  <article id="staff-qualifications" className="staff-ops-panel">
+                    <header><div><p className="eyebrow">Qualifications</p><h3>Credentials</h3></div><StarFour size={21} aria-hidden="true" /></header>
+                    {draft.record.qualifications.length ? (
+                      <div className="staff-data-rows is-compact">
+                        {draft.record.qualifications.map((qualification) => {
+                          const presentation = qualificationPresentation(qualification);
+                          return (
+                            <div className="staff-data-row" key={qualification.qualificationId}>
+                              <strong>{qualification.type || "Unnamed qualification"}</strong>
+                              <span>{qualification.expiresOn ? `Expires ${dateLabel(qualification.expiresOn)}` : "No expiry recorded"}</span>
+                              <em data-tone={presentation.tone}>{presentation.label}</em>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="staff-honest-empty is-warning">No qualifications recorded.</p>}
+                  </article>
+                </div>
+
+                <article className="staff-ops-panel staff-personal-details">
+                  <header><div><p className="eyebrow">Personal details</p><h3>Contact record</h3></div><UserCircle size={21} aria-hidden="true" /></header>
+                  <dl className="staff-key-values">
+                    <div><dt>Phone</dt><dd>{draft.record.contact.phone || "Not provided"}</dd></div>
+                    <div><dt>Email</dt><dd>{draft.record.contact.email || "Not provided"}</dd></div>
+                    <div><dt>Emergency contact</dt><dd>{draft.record.contact.emergencyContactName && draft.record.contact.emergencyContactPhone ? `${draft.record.contact.emergencyContactName} · ${draft.record.contact.emergencyContactPhone}` : "Not provided"}</dd></div>
                     <div><dt>Preferred contact</dt><dd>{preferredContactLabel}</dd></div>
-                    <div><dt>Time zone</dt><dd>{draft.record.contact.timeZone || "Not set"}</dd></div>
                   </dl>
                 </article>
-
-                <article className="staff-overview-card">
-                  <h3>Readiness</h3>
-                  <p className="source-note">Operational checks before assignment.</p>
-                  <ul className="staff-readiness-list">
-                    {readinessItems.map(([label, value, complete]) => (
-                      <li key={label} data-complete={complete ? "true" : "false"}>
-                        <span>{label}</span>
-                        <strong>{value}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-
-                {selectedAssignment ? (
-                  <article className="staff-overview-card staff-assignment-card">
-                    <div>
-                      <h3>Next assignment</h3>
-                      <strong>{selectedAssignment.event?.name || "Event"}</strong>
-                      <p className="source-note">{selectedAssignment.event?.date || "Date pending"} · {selectedAssignment.event?.venue || "Venue pending"}</p>
-                    </div>
-                    <div className="staff-assignment-state">
-                      {currentInvitation?.state === "provider_accepted" ? "Provider accepted" : deliveryLabel}
-                    </div>
-                    <ol className="staff-assignment-progress">
-                      {assignmentSteps.map(([label, complete]) => (
-                        <li key={label} data-complete={complete ? "true" : "false"}>{label}</li>
-                      ))}
-                    </ol>
-                  </article>
-                ) : null}
               </section>
 
-              <div id="staff-detail-sections">
+              <details id="staff-detail-sections" className="staff-editor-disclosure">
+                <summary><span><NotePencil size={19} aria-hidden="true" /> Edit full staff record</span><small>Contact, roles, scheduling, rates, travel, briefing, reliability, and private notes</small></summary>
+                <div className="staff-editor-disclosure__body">
 
               <Section icon={UserCircle} title="Identity and contact" description="Private contact details and the image used in this workspace." open>
                 <div className="staff-fields-grid">
@@ -635,6 +800,17 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
               </Section>
 
               <Section icon={StarFour} title="Roles and qualifications" description="Icons distinguish roles; proficiency and certifications establish the supporting detail.">
+                <div className="staff-editor-role-picker">
+                  <div><strong>Assignment roles</strong><small>Select every role this person can accept.</small></div>
+                  <RoleIcons
+                    roles={draft.profile.capabilities}
+                    interactive
+                    onToggle={(role, enabled) => {
+                      setDraft((current) => withStaffRole(current, role, enabled));
+                      setDirty(true);
+                    }}
+                  />
+                </div>
                 <div className="staff-role-detail-grid">
                   {draft.record.roleDetails.map((roleDetail, index) => {
                     const Icon = ROLE_ICONS[roleDetail.role];
@@ -797,12 +973,68 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                   </div>
                 )}
               </Section>
-              </div>
+                </div>
+              </details>
             </>
           ) : (
             <div className="staff-record__empty"><UserCircle size={34} aria-hidden="true" /><h2>Select or add a staff member</h2><p>The relevant record will open here with a clear next action.</p></div>
           )}
         </section>
+
+        {draft ? (
+          <aside className="staff-evidence-rail" aria-label="Staff readiness and recent activity">
+            {selectedReadinessCompleteCount < selectedReadinessTotal ? (
+              <section className="staff-attention-callout">
+                <WarningCircle size={22} weight="fill" aria-hidden="true" />
+                <div>
+                  <strong>{selectedReadinessTotal - selectedReadinessCompleteCount} readiness item{selectedReadinessTotal - selectedReadinessCompleteCount === 1 ? "" : "s"} need review</strong>
+                  <p>Complete missing staff details before relying on this record for planning.</p>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="staff-rail-panel">
+              <header><p className="eyebrow">Readiness</p><strong>{selectedReadinessCompleteCount} of {selectedReadinessTotal} complete</strong></header>
+              <ul className="staff-readiness-ledger">
+                {readinessItems.map((item) => (
+                  <li key={item.label} data-state={item.state}>
+                    {item.state === "complete" ? <CheckCircle size={18} weight="fill" aria-hidden="true" /> : item.state === "warning" ? <WarningCircle size={18} weight="fill" aria-hidden="true" /> : <span className="staff-neutral-dot" />}
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {selectedAssignment ? (
+              <section className="staff-rail-panel">
+                <header><p className="eyebrow">Assignment evidence</p><strong>{selectedAssignment.event?.name || "Event"}</strong></header>
+                <ol className="staff-evidence-steps">
+                  {assignmentSteps.map(([label, complete]) => (
+                    <li key={label} data-complete={complete ? "true" : "false"}><span>{label}</span><strong>{complete ? "Recorded" : "Pending"}</strong></li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
+
+            <section className="staff-rail-panel">
+              <header><p className="eyebrow">Recent activity</p><strong>What changed</strong></header>
+              {selectedActivities.length ? (
+                <ol className="staff-activity-list">
+                  {selectedActivities.map((activity) => (
+                    <li key={`${activity.event}-${activity.at}`}>
+                      <strong>{activity.event}</strong>
+                      <span>{activity.value}</span>
+                      <small>{activityTime(activity.at)} · {activity.source}</small>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="staff-honest-empty">No activity history is available for this staff record.</p>
+              )}
+            </section>
+          </aside>
+        ) : null}
       </div>
     </main>
   );

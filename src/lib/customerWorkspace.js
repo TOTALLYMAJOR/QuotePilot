@@ -221,6 +221,12 @@ function customerMatchesSearch(customer, searchKey) {
   return customer.nameKey.startsWith(searchKey) || customer.emailKey.startsWith(searchKey);
 }
 
+function shouldUseLocalCustomerDirectoryFixture() {
+  const env = import.meta.env || {};
+  if (!env.DEV) return false;
+  return ["1", "true", "yes", "on"].includes(String(env.VITE_E2E_BYPASS_AUTH || "").trim().toLowerCase());
+}
+
 function localCustomersFromQuotes(quotes = []) {
   const records = new Map();
   quotes.forEach((quote) => {
@@ -256,6 +262,16 @@ export async function getCustomerDirectoryPage({
   const normalizedSearch = normalizeCustomerSearchKey(search);
   const normalizedCursor = decodeCustomerPathId(cursor);
   const normalizedPageSize = normalizePageSize(pageSize);
+
+  if (shouldUseLocalCustomerDirectoryFixture()) {
+    const { getLocalCustomerDirectoryFixturePage } = await import("./localCustomerDirectoryFixture");
+    return getLocalCustomerDirectoryFixturePage({
+      organizationId: orgId,
+      search: normalizedSearch,
+      cursor: normalizedCursor,
+      pageSize: normalizedPageSize
+    });
+  }
 
   if (!firebaseReady || !db) {
     const history = await getQuoteHistory({ organizationId: orgId });
@@ -605,6 +621,26 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
   const orgId = text(organizationId);
   const id = text(customerId);
   if (!orgId || !id) throw new Error("organizationId and customerId are required for Customer 360.");
+
+  if (shouldUseLocalCustomerDirectoryFixture()) {
+    const { getLocalCustomerWorkspaceFixture } = await import("./localCustomerDirectoryFixture");
+    const fixture = getLocalCustomerWorkspaceFixture({ organizationId: orgId, customerId: id });
+    if (!fixture) return null;
+    return {
+      source: fixture.source,
+      organizationId: orgId,
+      ...buildCustomerWorkspaceDto({
+        customer: fixture.customer,
+        quotes: fixture.quotes,
+        versionsByQuote: fixture.versionsByQuote,
+        revenueAutopilotEmailControls: null,
+        revenueAutopilotEmailControlsError: "Customer email controls are unavailable in local review data.",
+        quotePageInfo: fixture.quotePageInfo,
+        nowISO: "2026-08-15T17:00:00.000Z",
+        todayDate: "2026-08-15"
+      })
+    };
+  }
 
   if (!firebaseReady || !db) {
     const history = await getQuoteHistory({ organizationId: orgId });

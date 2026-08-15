@@ -157,6 +157,30 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Production-hardened the Ambient Clients directory and relationship view into
+  a commercial relationship-operations workspace: compact bounded-page
+  metrics, immediate search and filters, dense aligned client rows, one
+  truthful relationship state, one exact review action, and a structured
+  responsive overview. Added a development-only 24-client August-through-
+  October local review fixture under the existing auth bypass; it is labeled
+  browser-local, opens an exact matching local relationship overview instead
+  of falling through to Firebase permissions, and never writes Firebase or
+  provider data.
+- Production-hardened the Staff People workspace around workforce decisions:
+  a compact search/filter/add command header, four live operating metrics,
+  64px roster rows with one primary state, selected-person operational header,
+  next-assignment-first detail, structured availability/rate/qualification and
+  personal-detail rows, a readiness/evidence/activity rail, honest missing-data
+  states, and roster-first mobile navigation. The complete private staff editor,
+  role selection, briefing, invitation, provider, and acknowledgement authority
+  remain intact under a restrained full-record disclosure.
+- Added a dev-only, bypass-auth Staff directory fixture with portrait images,
+  varied roles, readiness gaps, rates, assignments, and invitation state so
+  local visual review can exercise a realistic roster without writing Firebase
+  tenant records.
+- Hid inactive sticky-mounted workspace tool routes while preserving their
+  component state, preventing the Staff workspace from remaining visible after
+  navigating to Clients or another route in the Ambient shell.
 - Repaired first-run catalog onboarding across the Ambient and compatibility
   workspace graphs. Blank administrators can choose a starter pack, Import
   Studio, manual catalog entry, or a session-only workspace bypass; existing

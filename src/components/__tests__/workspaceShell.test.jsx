@@ -564,6 +564,26 @@ describe("WorkspaceShell", () => {
 
     act(() => root.render(
       <WorkspaceToolSurface
+        mounted
+        open={false}
+        presentation="route"
+        surfaceName="Operational tool"
+        component={ToolSurfaceProbe}
+        onClose={onClose}
+        surfaceProps={commonProps}
+      />
+    ));
+    const inactiveRoute = container.querySelector('[data-workspace-tool-surface="Operational tool"]');
+    probe = container.querySelector('[data-testid="tool-surface-probe"]');
+    expect(inactiveRoute).not.toBeNull();
+    expect(inactiveRoute.hidden).toBe(true);
+    expect(inactiveRoute.getAttribute("aria-hidden")).toBe("true");
+    expect(inactiveRoute.dataset.workspaceToolOpen).toBe("false");
+    expect(probe).not.toBeNull();
+    expect(probe.dataset.open).toBe("false");
+
+    act(() => root.render(
+      <WorkspaceToolSurface
         mounted={false}
         open={false}
         presentation="modal"

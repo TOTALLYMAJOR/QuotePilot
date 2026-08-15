@@ -1,5 +1,6 @@
 import {
   CalendarBlank,
+  ClipboardText,
   EnvelopeSimple,
   MagnifyingGlass,
   NotePencil,

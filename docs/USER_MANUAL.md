@@ -177,6 +177,16 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   briefing defaults, attendance summaries, response history, reliability and
   private notes. Sensitive private fields stay in callable-owned `staffRecords`;
   the safe profile used by assignment planning still excludes them.
+- Use the compact command header to search by person or role, filter by
+  availability, assignment, or attention state, and start **Add staff**. Each
+  roster row shows one primary operational state plus the next useful fact;
+  selecting it opens assignment-first detail with readiness and evidence kept
+  separate from editable profile data.
+- On phones, Staff opens roster-first. Select a person to open a separate detail
+  state, then use **Back to staff** to return. On larger screens the roster and
+  selected record remain visible together. Open **Edit full staff record** only
+  when contact, role, availability, compensation, qualification, or briefing
+  data needs to change.
 - Select an exact operator-confirmed event assignment under **Staff briefing
   sheet** to print or download a role-aware PDF. **Open email app** addresses a
   prefilled message to the email on file and includes the current role, call
@@ -212,6 +222,10 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   quoted staffing context may remain visible, but it cannot claim staff
   availability, an operator-confirmed assignment, schedule-conflict clearance,
   coverage, or a server receipt.
+- An explicit local authentication-bypass review may display a photo-rich
+  `local_fixture` directory. Those records are development-only, are never
+  written to Firebase or a provider, and must not be treated as production
+  staff, assignment, delivery, acknowledgement, attendance, or payroll proof.
 
 ## Workspace Search
 
@@ -238,6 +252,12 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   directory. Search uses normalized customer name or email prefixes; page
   controls keep the read bounded. Routes use an opaque customer ID, never an
   email address.
+- In the Ambient Clients view, use the compact command header to inspect only
+  this page's **Shown**, **Linked work**, **Upcoming**, and **Contact gaps**
+  counts. The filters narrow the current bounded page; they do not rank a
+  relationship, search older pages, or infer engagement. Each dense row keeps
+  identity, the latest recorded link, contact data, one relationship state,
+  and one **Review client** action aligned.
 - Select a customer name or `Open 360` to open
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
@@ -1688,10 +1708,18 @@ receipts for those actions and evidence.
   remains unavailable and points back to the existing governed surface. The
   displayed next operational resolution adds no role or mutation authority.
 - Open **Clients** to use the lighter default-off view over the existing
-  bounded client directory. Each row shows recorded identity, contact details,
-  its most recent linked quote or event, and one **Review client** action. It
+  bounded client directory. Its command header, page filters, dense rows, and
+  responsive relationship record show only recorded identity, contact details,
+  the most recent linked quote or event, and one **Review client** action. It
   does not infer relationship value, unread activity, engagement, or lifetime
   totals from the bounded page.
+- With the explicit local authentication bypass enabled, Clients may show a
+  24-record `local_fixture` review page spanning August through October. The
+  source rail labels it **This browser**. Selecting one of those exact fixture
+  identities opens its matching browser-local relationship overview, including
+  locally generated opportunity and conversation context where present. The
+  fixture is never written to Firebase or a provider and is not production
+  client, engagement, delivery, booking, or payment evidence.
 - **Review client** opens that exact opaque client and focuses a relationship
   overview with identity, active work shown, items needing review, the next
   dated event, and one supported next step. A mismatched or missing arrival

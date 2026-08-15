@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 45,
+  "catalogVersion": 46,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -45,14 +45,14 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 4,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The default-off Ambient presentation reuses the same caller-owned evidence and authority.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The default-off Ambient presentation reuses the same caller-owned evidence and authority in a compact relationship-operations directory. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
@@ -62,6 +62,7 @@
         "src/lib/ambientClients.js",
         "src/lib/customerRebookingRadar.js",
         "src/lib/customerWorkspace.js",
+        "src/lib/localCustomerDirectoryFixture.js",
         "src/lib/quoteStore.js",
         "src/lib/quoteVersionComparison.js"
       ],
@@ -88,7 +89,7 @@
         },
         {
           "path": "src/components/AmbientClientsView.jsx",
-          "locator": "People you’re working with"
+          "locator": "Relationship operations"
         },
         {
           "path": "src/components/AmbientClientsView.jsx",
@@ -120,6 +121,7 @@
         "src/lib/__tests__/customerCommercialMeasures.test.js",
         "src/lib/__tests__/ambientClients.test.js",
         "src/lib/__tests__/customerWorkspace.test.js",
+        "src/lib/__tests__/localCustomerDirectoryFixture.test.js",
         "src/lib/__tests__/quoteVersionComparison.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
@@ -127,6 +129,14 @@
         {
           "path": "src/components/__tests__/ambientClientsView.test.jsx",
           "locator": "keeps the Ambient Clients data host independent from the legacy directory table"
+        },
+        {
+          "path": "src/lib/__tests__/localCustomerDirectoryFixture.test.js",
+          "locator": "provides at least twenty non-authoritative clients across three months"
+        },
+        {
+          "path": "src/lib/__tests__/localCustomerDirectoryFixture.test.js",
+          "locator": "opens an exact, organization-scoped local client workspace"
         },
         {
           "path": "src/components/__tests__/ambientClientsView.test.jsx",
@@ -184,7 +194,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The legacy directory and Customer 360 routes plus the default-off Ambient Clients directory and relationship top layer were reviewed together. Exact client arrival, one ranked next step, bounded source and freshness language, immutable-version comparison, separately labeled quote and payment totals, safe proposal preview, responsive containment, keyboard access, and recovery controls preserve the same role and evidence boundaries.",
+      "surfaceReviewNote": "Revision 6 gives the default-off Ambient Clients route a compact command header, bounded-page metrics, immediate search and local page filters, dense relationship rows, one truthful row state, and a structured responsive relationship overview. It adds a 24-record August-through-October local_fixture only under the explicit local authentication bypass; selecting an exact fixture identity now opens its matching local relationship context rather than falling through to Firebase. The fixture is labeled browser-local and performs no Firebase or provider write. The legacy directory and Customer 360 routes, exact client arrival, one ranked next step, bounded source and freshness language, immutable-version comparison, separately labeled quote and payment totals, safe proposal preview, keyboard access, and recovery controls preserve the same role and evidence boundaries.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -230,7 +240,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can discover bounded customer context, understand read freshness and limits, inspect recorded milestones, compare stored immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures without treating browser-local payment fields as provider evidence, treating displayed-record operational amounts as accounting revenue, or exposing private evidence."
+      "safeOutcome": "Staff can scan a bounded relationship-operations directory, filter only the current page by linked work, dated upcoming events, or contact gaps, open one exact client, understand read freshness and limits, inspect recorded milestones, compare stored immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Browser-local fixture records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
     },
     {
       "id": "bounded-commercial-search",
@@ -4833,7 +4843,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -4841,7 +4851,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded admin-managed operational profiles, operator-recorded availability, admin-or-sales operator-confirmed assignments, explicit coverage gaps, cross-date schedule fences, and immutable replay-stable profile and plan receipts. An administrator-only Staff workspace adds separately stored private contact, photo, qualification, availability-preference, rate, travel, briefing, attendance-summary, reliability and note fields with paired optimistic receipts. Its briefing sheet joins only an exact operator-confirmed assignment and exact quote revision. An administrator may also preview and manually dispatch one provider-backed invitation to the verified private email for that exact assignment. Provider acceptance, signed-webhook delivery or bounce evidence, and the staff member's bearer-link accept or decline acknowledgement remain separate visible states. Acknowledgement never mutates the staffing plan, attendance, payroll, payment, booking, or readiness evidence. The presentation preserves a local_draft fallback.",
+      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded admin-managed operational profiles, operator-recorded availability, admin-or-sales operator-confirmed assignments, explicit coverage gaps, cross-date schedule fences, and immutable replay-stable profile and plan receipts. An administrator-only Staff workspace adds separately stored private contact, photo, qualification, availability-preference, rate, travel, briefing, attendance-summary, reliability and note fields with paired optimistic receipts. Its briefing sheet joins only an exact operator-confirmed assignment and exact quote revision. An administrator may also preview and manually dispatch one provider-backed invitation to the verified private email for that exact assignment. Provider acceptance, signed-webhook delivery or bounce evidence, and the staff member's bearer-link accept or decline acknowledgement remain separate visible states. Acknowledgement never mutates the staffing plan, attendance, payroll, payment, booking, or readiness evidence. The presentation preserves a local_draft fallback, while local bypass review may use a visibly non-authoritative local_fixture directory without a Firebase or provider write.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -4927,6 +4937,7 @@
         "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
         "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
         "src/lib/__tests__/staffBriefingSheet.test.js",
+        "src/lib/__tests__/staffDirectoryClient.localFixture.test.js",
         "src/lib/__tests__/staffDirectoryAuthority.server.test.js",
         "src/lib/__tests__/staffInvitationAuthority.server.test.js",
         "src/lib/__tests__/staffInvitationIntegration.server.test.js",
@@ -4975,6 +4986,10 @@
           "locator": "opens the exact private staff record with role-safe briefing outcomes"
         },
         {
+          "path": "src/lib/__tests__/staffDirectoryClient.localFixture.test.js",
+          "locator": "loads a photo-rich staff directory only for local bypass review"
+        },
+        {
           "path": "src/lib/__tests__/staffBriefingSheet.test.js",
           "locator": "creates a prefilled default-email handoff without claiming delivery"
         },
@@ -5014,7 +5029,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The independently gated Event Workspace staffing context, administrator-only Staff route, and public exact-token response route were reviewed together with exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundary, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read and mutation states. The nine callable exports and one signed webhook remain source-only and default-off behind separate global, tenant, presentation, provider, sender-approval, and secret boundaries.",
+      "surfaceReviewNote": "Revision 3 replaces the Staff route's profile-demo composition with a compact command header, dense photo roster, assignment-first detail, readiness/evidence rail, collapsed full-record editor, and separate mobile roster/detail states while preserving every existing role and mutation boundary. A photo-rich local_fixture is available only under the explicit local authentication bypass for review and performs no Firebase or provider write. The independently gated Event Workspace staffing context, administrator-only Staff route, and public exact-token response route remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read and mutation states. The nine callable exports and one signed webhook remain source-only and default-off behind separate global, tenant, presentation, provider, sender-approval, and secret boundaries.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -5090,7 +5105,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Same-tenant admins can record bounded operational profiles and separate private staff records, print or hand off a revision-bound role briefing, then preview and manually send one exact-assignment invitation to a verified private email. The workspace distinguishes provider acceptance, signed provider delivery or bounce, and the person's accept or decline acknowledgement. Same-tenant admins or sales staff can still read or apply one exact-revision operational staffing plan with immutable replay-stable receipts. Local fallback remains explicitly local_draft, and an email-app handoff, provider acceptance, operator-recorded availability, operator-confirmed assignment, invitation acknowledgement, stored attendance summaries, or complete coverage never proves attendance, hours, payroll, payment, booking, event completion, or readiness."
+      "safeOutcome": "Same-tenant admins can scan a compact photo roster, prioritize the next assignment and readiness evidence, record bounded operational profiles and separate private staff records, print or hand off a revision-bound role briefing, then preview and manually send one exact-assignment invitation to a verified private email. The workspace distinguishes provider acceptance, signed provider delivery or bounce, and the person's accept or decline acknowledgement. Same-tenant admins or sales staff can still read or apply one exact-revision operational staffing plan with immutable replay-stable receipts. Local fallback remains explicitly local_draft; the local_fixture review directory is development-only and cannot prove Firebase or provider state. An email-app handoff, provider acceptance, operator-recorded availability, operator-confirmed assignment, invitation acknowledgement, stored attendance summaries, or complete coverage never proves attendance, hours, payroll, payment, booking, event completion, or readiness."
     },
     {
       "id": "sms-provider-choice-and-delivery-evidence",
