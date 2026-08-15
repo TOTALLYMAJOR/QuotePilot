@@ -2,6 +2,7 @@ const WORKSPACE_ROOT = "/app";
 
 export const WORKSPACE_ROUTE_IDS = Object.freeze({
   HOME: "home",
+  CLEAR_DECK: "clear-deck",
   CUSTOMER_LIST: "customer-list",
   CUSTOMER_DETAIL: "customer-detail",
   STAFF: "staff",
@@ -9,8 +10,13 @@ export const WORKSPACE_ROUTE_IDS = Object.freeze({
   QUOTE_NEW: "quote-new",
   QUOTE_DETAIL: "quote-detail",
   QUOTE_EDIT: "quote-edit",
+  EVENT_LIST: "event-list",
+  EVENT_DETAIL: "event-detail",
+  EVENT_LIVE: "event-live",
+  EVENT_REPLAY: "event-replay",
   MESSAGING: "messaging",
   WORKFLOW: "workflow",
+  OPERATIONS: "operations",
   SCHEDULE: "schedule",
   REPORTING: "reporting",
   CATALOG: "catalog",
@@ -24,12 +30,15 @@ export const WORKSPACE_ROUTE_IDS = Object.freeze({
 
 export const WORKSPACE_PATHS = Object.freeze({
   home: WORKSPACE_ROOT,
+  clearDeck: `${WORKSPACE_ROOT}/clear-the-deck`,
   customers: `${WORKSPACE_ROOT}/customers`,
   staff: `${WORKSPACE_ROOT}/staff`,
   quotes: `${WORKSPACE_ROOT}/quotes`,
   quoteNew: `${WORKSPACE_ROOT}/quotes/new`,
+  events: `${WORKSPACE_ROOT}/events`,
   messaging: `${WORKSPACE_ROOT}/messages`,
   workflow: `${WORKSPACE_ROOT}/workflow`,
+  operations: `${WORKSPACE_ROOT}/operations`,
   schedule: `${WORKSPACE_ROOT}/schedule`,
   reporting: `${WORKSPACE_ROOT}/reporting`,
   catalog: `${WORKSPACE_ROOT}/catalog`,
@@ -40,6 +49,7 @@ export const WORKSPACE_PATHS = Object.freeze({
 
 const ROUTE_META = Object.freeze({
   [WORKSPACE_ROUTE_IDS.HOME]: Object.freeze({ section: "home", delivery: "first-release" }),
+  [WORKSPACE_ROUTE_IDS.CLEAR_DECK]: Object.freeze({ section: "clear-deck", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.CUSTOMER_LIST]: Object.freeze({ section: "customers", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL]: Object.freeze({ section: "customers", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.STAFF]: Object.freeze({ section: "staff", delivery: "follow-on" }),
@@ -47,8 +57,13 @@ const ROUTE_META = Object.freeze({
   [WORKSPACE_ROUTE_IDS.QUOTE_NEW]: Object.freeze({ section: "quotes", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]: Object.freeze({ section: "quotes", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.QUOTE_EDIT]: Object.freeze({ section: "quotes", delivery: "first-release" }),
+  [WORKSPACE_ROUTE_IDS.EVENT_LIST]: Object.freeze({ section: "events", delivery: "follow-on" }),
+  [WORKSPACE_ROUTE_IDS.EVENT_DETAIL]: Object.freeze({ section: "events", delivery: "follow-on" }),
+  [WORKSPACE_ROUTE_IDS.EVENT_LIVE]: Object.freeze({ section: "events", delivery: "follow-on" }),
+  [WORKSPACE_ROUTE_IDS.EVENT_REPLAY]: Object.freeze({ section: "events", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.MESSAGING]: Object.freeze({ section: "messaging", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.WORKFLOW]: Object.freeze({ section: "workflow", delivery: "first-release" }),
+  [WORKSPACE_ROUTE_IDS.OPERATIONS]: Object.freeze({ section: "operations", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.SCHEDULE]: Object.freeze({ section: "schedule", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.REPORTING]: Object.freeze({ section: "reporting", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.CATALOG]: Object.freeze({ section: "catalog", delivery: "follow-on" }),
@@ -58,12 +73,15 @@ const ROUTE_META = Object.freeze({
 });
 
 export const PRIMARY_WORKSPACE_NAVIGATION = Object.freeze([
-  Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.HOME, label: "Home", path: WORKSPACE_PATHS.home }),
+  Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.HOME, label: "Now", path: WORKSPACE_PATHS.home }),
+  Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.CLEAR_DECK, label: "Clear the Deck", path: WORKSPACE_PATHS.clearDeck }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, label: "Customers", path: WORKSPACE_PATHS.customers }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.STAFF, label: "Staff", path: WORKSPACE_PATHS.staff }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.QUOTE_LIST, label: "Quotes", path: WORKSPACE_PATHS.quotes }),
+  Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.EVENT_LIST, label: "Events", path: WORKSPACE_PATHS.events }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.MESSAGING, label: "Messages", path: WORKSPACE_PATHS.messaging }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.WORKFLOW, label: "Workflow", path: WORKSPACE_PATHS.workflow }),
+  Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.OPERATIONS, label: "Operations", path: WORKSPACE_PATHS.operations }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.SCHEDULE, label: "Schedule", path: WORKSPACE_PATHS.schedule })
 ]);
 
@@ -77,12 +95,15 @@ export const ADMIN_WORKSPACE_NAVIGATION = Object.freeze([
 
 const STATIC_ROUTES = new Map([
   [WORKSPACE_PATHS.home, WORKSPACE_ROUTE_IDS.HOME],
+  [WORKSPACE_PATHS.clearDeck, WORKSPACE_ROUTE_IDS.CLEAR_DECK],
   [WORKSPACE_PATHS.customers, WORKSPACE_ROUTE_IDS.CUSTOMER_LIST],
   [WORKSPACE_PATHS.staff, WORKSPACE_ROUTE_IDS.STAFF],
   [WORKSPACE_PATHS.quotes, WORKSPACE_ROUTE_IDS.QUOTE_LIST],
   [WORKSPACE_PATHS.quoteNew, WORKSPACE_ROUTE_IDS.QUOTE_NEW],
+  [WORKSPACE_PATHS.events, WORKSPACE_ROUTE_IDS.EVENT_LIST],
   [WORKSPACE_PATHS.messaging, WORKSPACE_ROUTE_IDS.MESSAGING],
   [WORKSPACE_PATHS.workflow, WORKSPACE_ROUTE_IDS.WORKFLOW],
+  [WORKSPACE_PATHS.operations, WORKSPACE_ROUTE_IDS.OPERATIONS],
   [WORKSPACE_PATHS.schedule, WORKSPACE_ROUTE_IDS.SCHEDULE],
   [WORKSPACE_PATHS.reporting, WORKSPACE_ROUTE_IDS.REPORTING],
   [WORKSPACE_PATHS.catalog, WORKSPACE_ROUTE_IDS.CATALOG],
@@ -186,6 +207,18 @@ export function buildQuoteEditPath(quoteId) {
   return `${buildQuotePath(quoteId)}/edit`;
 }
 
+export function buildEventPath(quoteId) {
+  return `${WORKSPACE_PATHS.events}/${encodeOpaqueId(quoteId, "quoteId")}`;
+}
+
+export function buildEventLivePath(quoteId) {
+  return `${buildEventPath(quoteId)}/live`;
+}
+
+export function buildEventReplayPath(quoteId) {
+  return `${buildEventPath(quoteId)}/replay`;
+}
+
 export function buildWorkflowPath({ quoteId = "", attentionType = "", requestId = "" } = {}) {
   const search = new URLSearchParams();
   if (quoteId) search.set("quoteId", normalizeOpaqueId(quoteId, "quoteId"));
@@ -210,6 +243,8 @@ export function buildWorkspacePath(routeId, params = {}) {
   switch (routeId) {
     case WORKSPACE_ROUTE_IDS.HOME:
       return WORKSPACE_PATHS.home;
+    case WORKSPACE_ROUTE_IDS.CLEAR_DECK:
+      return WORKSPACE_PATHS.clearDeck;
     case WORKSPACE_ROUTE_IDS.CUSTOMER_LIST:
       return WORKSPACE_PATHS.customers;
     case WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL:
@@ -224,10 +259,20 @@ export function buildWorkspacePath(routeId, params = {}) {
       return buildQuotePath(params.quoteId);
     case WORKSPACE_ROUTE_IDS.QUOTE_EDIT:
       return buildQuoteEditPath(params.quoteId);
+    case WORKSPACE_ROUTE_IDS.EVENT_LIST:
+      return WORKSPACE_PATHS.events;
+    case WORKSPACE_ROUTE_IDS.EVENT_DETAIL:
+      return buildEventPath(params.quoteId);
+    case WORKSPACE_ROUTE_IDS.EVENT_LIVE:
+      return buildEventLivePath(params.quoteId);
+    case WORKSPACE_ROUTE_IDS.EVENT_REPLAY:
+      return buildEventReplayPath(params.quoteId);
     case WORKSPACE_ROUTE_IDS.MESSAGING:
       return buildMessagingPath(params);
     case WORKSPACE_ROUTE_IDS.WORKFLOW:
       return buildWorkflowPath(params);
+    case WORKSPACE_ROUTE_IDS.OPERATIONS:
+      return WORKSPACE_PATHS.operations;
     case WORKSPACE_ROUTE_IDS.SCHEDULE:
       return WORKSPACE_PATHS.schedule;
     case WORKSPACE_ROUTE_IDS.REPORTING:
@@ -288,6 +333,30 @@ export function parseWorkspacePath(pathname) {
         canonicalPath: buildQuoteEditPath(quoteId),
         params: { quoteId }
       });
+    }
+  }
+
+  if (segments.length >= 4 && segments.length <= 5 && segments[1] === "app" && segments[2] === "events") {
+    const quoteId = decodeOpaqueId(segments[3], "quoteId");
+    if (quoteId) {
+      if (segments.length === 4) {
+        return createKnownRoute(WORKSPACE_ROUTE_IDS.EVENT_DETAIL, normalizedPath, {
+          canonicalPath: buildEventPath(quoteId),
+          params: { quoteId }
+        });
+      }
+      if (segments[4] === "live") {
+        return createKnownRoute(WORKSPACE_ROUTE_IDS.EVENT_LIVE, normalizedPath, {
+          canonicalPath: buildEventLivePath(quoteId),
+          params: { quoteId }
+        });
+      }
+      if (segments[4] === "replay") {
+        return createKnownRoute(WORKSPACE_ROUTE_IDS.EVENT_REPLAY, normalizedPath, {
+          canonicalPath: buildEventReplayPath(quoteId),
+          params: { quoteId }
+        });
+      }
     }
   }
 

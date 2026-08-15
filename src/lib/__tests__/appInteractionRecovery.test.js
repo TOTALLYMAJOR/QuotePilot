@@ -11,7 +11,7 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain('onClick={handleRefreshAccess}');
     expect(appSource).toContain("await authSession.refreshAccess()");
     expect(appSource).toContain('onClick={catalog.reload}>Retry Catalog');
-    expect(appSource).toContain("Refresh Catalog Setup");
+    expect(appSource).toContain("Check for catalog updates");
   });
 
   test("availability blocks expose schedule context and a correction path", () => {

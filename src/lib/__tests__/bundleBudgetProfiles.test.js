@@ -6,7 +6,9 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import {
   checkBundleBudget,
-  detectBundleProfile
+  detectBundleProfile,
+  PRODUCTION_FIXTURE_CHUNK_PREFIXES,
+  PRODUCTION_FIXTURE_PAYLOAD_SENTINELS
 } from "../../../scripts/check-bundle-budget.mjs";
 
 const temporaryDirectories = [];
@@ -96,5 +98,37 @@ describe("bundle budget profiles", () => {
       requestedProfile: "compatibility",
       log: { log() {} }
     })).toThrow("totalJsBytes 13 exceeds allowed 12");
+  });
+
+  test("fails closed when a production asset exposes a development fixture chunk or payload", () => {
+    const fixtureChunkRoot = fixture();
+    write(
+      fixtureChunkRoot,
+      "dist/assets/localCustomerDirectoryFixture-test.js",
+      "export const fixture = true;"
+    );
+    expect(() => checkBundleBudget({
+      root: fixtureChunkRoot,
+      requestedProfile: "compatibility",
+      log: { log() {} }
+    })).toThrow("matches development fixture chunk prefix localCustomerDirectoryFixture-");
+
+    const fixturePayloadRoot = fixture();
+    write(
+      fixturePayloadRoot,
+      "dist/assets/LegacyQuoteHistoryModal-test.js",
+      'console.log("avery.staff@example.com");'
+    );
+    expect(() => checkBundleBudget({
+      root: fixturePayloadRoot,
+      requestedProfile: "compatibility",
+      log: { log() {} }
+    })).toThrow('contains development fixture payload sentinel "avery.staff@example.com"');
+  });
+
+  test("keeps shared local-state and client-action contract labels outside the fixture ban", () => {
+    expect(PRODUCTION_FIXTURE_CHUNK_PREFIXES).not.toContain("review-client-");
+    expect(PRODUCTION_FIXTURE_PAYLOAD_SENTINELS).not.toContain("local_fixture");
+    expect(PRODUCTION_FIXTURE_PAYLOAD_SENTINELS).not.toContain("review-client-");
   });
 });

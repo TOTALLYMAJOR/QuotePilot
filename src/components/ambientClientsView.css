@@ -1,244 +1,421 @@
 .ambient-clients,
 .ambient-client-overview {
-  --ambient-client-line: color-mix(in srgb, var(--tone-ink-1, #262421) 14%, transparent);
-  display: grid;
-  gap: clamp(1.15rem, 2.7vw, 2.4rem);
+  --client-bg: #f3f0ea;
+  --client-surface: #fcfbf7;
+  --client-muted: #e9e4db;
+  --client-ink: #15181b;
+  --client-copy: #5e625f;
+  --client-border: #d1c9bc;
+  --client-rail: #151719;
+  --client-gold: #b7842c;
+  --client-gold-soft: #f5e6c5;
+  --client-teal: #2e7d71;
+  --client-teal-soft: #dcebe7;
+  --client-danger: #ad514a;
+  width: 100%;
   min-width: 0;
+  color: var(--client-ink);
+  font-family: Inter, var(--font-ui), system-ui, sans-serif;
 }
 
 .ambient-clients {
-  padding: clamp(0.75rem, 2vw, 1.8rem) 6px clamp(2.5rem, 5vw, 5rem);
-}
-
-.ambient-clients__masthead,
-.ambient-client-overview__identity {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: clamp(1rem, 4vw, 4rem);
-  align-items: start;
-  padding-bottom: clamp(1rem, 2vw, 1.6rem);
-  border-bottom: 1px solid var(--ambient-client-line);
-}
-
-.ambient-clients__masthead h1,
-.ambient-client-overview__identity h1 {
-  max-width: 18ch;
-  margin: 0.15rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(2rem, 4.8vw, 4.25rem);
-  font-weight: 500;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.ambient-clients__masthead p:last-child,
-.ambient-client-overview__identity p:last-child {
-  max-width: 44rem;
-  margin: 0.75rem 0 0;
-  color: var(--tone-ink-2, #514d47);
-  line-height: 1.5;
+  gap: 0;
+  padding: 0 0 2.5rem;
+  background: var(--client-bg);
 }
 
 .ambient-clients__label,
 .ambient-client-overview__label {
   margin: 0;
-  color: var(--tone-ink-3, #706b63);
-  font-size: 0.72rem;
-  font-weight: 760;
+  color: #76500f;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ambient-clients__masthead .ambient-clients__label {
+  color: #d7a64e;
+}
+
+.ambient-clients__command {
+  display: grid;
+  gap: 1rem;
+  padding: 1.35rem clamp(1.1rem, 3vw, 2.6rem) 1.15rem;
+  border-bottom: 1px solid #2b2c2d;
+  background: var(--client-rail);
+  color: #fff;
+}
+
+.ambient-clients__command-topline {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.72fr) minmax(34rem, 1.28fr);
+  gap: clamp(1.25rem, 3vw, 3rem);
+  align-items: stretch;
+}
+
+.ambient-clients__command-topline > div:first-child {
+  display: grid;
+  align-content: center;
+  gap: 0.35rem;
+}
+
+.ambient-clients__command h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2rem, 3.6vw, 3.55rem);
+  font-weight: 820;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.ambient-clients__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ambient-clients__metrics > div {
+  display: grid;
+  align-content: center;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.9rem 1rem;
+  background: #202225;
+}
+
+.ambient-clients__metrics > div + div {
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.ambient-clients__metrics > .is-attention {
+  background: #362522;
+}
+
+.ambient-clients__metrics dt {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.64rem;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.ambient-clients__start,
-.ambient-clients__refresh,
-.ambient-client__primary,
-.ambient-client-overview__primary,
-.ambient-client-overview__secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-height: 44px;
-  padding: 0.68rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--ambient-teal, #237f78) 36%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ambient-teal, #237f78) 8%, transparent);
-  color: color-mix(in srgb, var(--ambient-teal, #237f78) 78%, #111);
-  font: inherit;
-  font-weight: 760;
-  text-decoration: none;
-  cursor: pointer;
+.ambient-clients__metrics .is-attention dt {
+  color: #e7a39d;
 }
 
-.ambient-clients__refresh,
-.ambient-client-overview__secondary {
-  border-color: transparent;
-  background: transparent;
-}
-
-.ambient-clients__start:hover,
-.ambient-clients__start:focus-visible,
-.ambient-clients__refresh:hover,
-.ambient-clients__refresh:focus-visible,
-.ambient-client__primary:hover,
-.ambient-client__primary:focus-visible,
-.ambient-client-overview__primary:hover,
-.ambient-client-overview__primary:focus-visible,
-.ambient-client-overview__secondary:hover,
-.ambient-client-overview__secondary:focus-visible {
-  color: color-mix(in srgb, var(--tone-gold-3, #9b661d) 84%, #111);
-  text-decoration: underline;
-  text-underline-offset: 0.22rem;
-}
-
-.ambient-clients__start:disabled,
-.ambient-clients__refresh:disabled,
-.ambient-client__primary:disabled,
-.ambient-client-overview__primary:disabled,
-.ambient-client-overview__secondary:disabled {
-  color: var(--tone-ink-3, #706b63);
-  cursor: not-allowed;
-  opacity: 0.68;
-  text-decoration: none;
+.ambient-clients__metrics dd {
+  margin: 0;
+  color: #fff;
+  font-size: 1.65rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
 }
 
 .ambient-clients__toolbar {
   display: grid;
-  grid-template-columns: minmax(14rem, 1fr) auto auto auto;
-  gap: 0.65rem;
-  align-items: end;
+  grid-template-columns: minmax(16rem, 1fr) auto auto auto auto;
+  gap: 0.55rem;
+  align-items: center;
 }
 
-.ambient-clients__toolbar label {
-  display: grid;
-  gap: 0.35rem;
-  min-width: 0;
-  color: var(--tone-ink-2, #514d47);
-  font-size: 0.82rem;
-  font-weight: 720;
-}
-
-.ambient-clients__toolbar input {
+.ambient-clients__search input {
   width: 100%;
   min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--client-ink);
+  padding: 0 0.85rem;
+  font: inherit;
 }
 
-.ambient-clients__toolbar button {
+.ambient-clients__search input:focus {
+  border-color: #d7a64e;
+  outline: 3px solid rgba(215, 166, 78, 0.2);
+}
+
+.ambient-clients__toolbar button,
+.ambient-clients__filters button,
+.ambient-client__primary,
+.ambient-client-overview__primary,
+.ambient-client-overview__secondary,
+.ambient-client-overview__back {
   min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 0.58rem 0.85rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.ambient-clients__toolbar .ghost,
+.ambient-clients__refresh {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.ambient-clients__start,
+.ambient-client-overview__primary {
+  border-color: #c79435;
+  background: var(--client-gold);
+  color: #151617;
+}
+
+.ambient-clients__toolbar button:hover,
+.ambient-clients__toolbar button:focus-visible,
+.ambient-clients__filters button:hover,
+.ambient-clients__filters button:focus-visible,
+.ambient-client__primary:hover,
+.ambient-client__primary:focus-visible,
+.ambient-client-overview button:hover,
+.ambient-client-overview button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--client-gold) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.ambient-clients__toolbar button:disabled,
+.ambient-client__primary:disabled,
+.ambient-client-overview button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ambient-clients__filters {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow-x: auto;
+}
+
+.ambient-clients__filters > span {
+  margin-right: 0.25rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ambient-clients__filters button {
+  min-width: 44px;
+  min-height: 44px;
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  padding: 0.32rem 0.72rem;
+  white-space: nowrap;
+}
+
+.ambient-clients__filters button.is-selected {
+  border-color: #fff;
+  background: #fff;
+  color: var(--client-ink);
 }
 
 .ambient-clients__acknowledgement,
 .ambient-client-overview__acknowledgement {
   display: flex;
-  gap: 0.65rem;
+  gap: 0.7rem;
   align-items: baseline;
-  padding: 0.75rem 0.9rem;
-  border-left: 3px solid var(--ambient-teal, #237f78);
-  background: color-mix(in srgb, var(--ambient-teal, #237f78) 8%, transparent);
-  color: var(--tone-ink-2, #514d47);
+  margin: 0;
+  padding: 0.75rem clamp(1.1rem, 3vw, 2.6rem);
+  border-left: 4px solid var(--client-teal);
+  border-bottom: 1px solid var(--client-border);
+  background: var(--client-teal-soft);
+  color: #285f57;
 }
 
 .ambient-clients__acknowledgement[data-result-kind="recovery"],
 .ambient-client-overview__acknowledgement[data-result-kind="recovery"] {
-  border-left-color: var(--tone-danger, #a63535);
-  background: color-mix(in srgb, var(--tone-danger, #a63535) 8%, transparent);
+  border-left-color: var(--client-danger);
+  background: #f8e7e4;
+  color: #7f342f;
 }
 
-.ambient-clients__state {
+.ambient-clients__state,
+.ambient-clients__filter-empty {
   display: grid;
-  gap: 0.65rem;
   justify-items: start;
-  margin: 0;
-  padding: clamp(1.2rem, 3vw, 2rem) 0;
-  border-top: 1px solid var(--ambient-client-line);
-  border-bottom: 1px solid var(--ambient-client-line);
+  gap: 0.65rem;
+  margin: 1.5rem clamp(1.1rem, 3vw, 2.6rem);
+  padding: 1.5rem;
+  border: 1px solid var(--client-border);
+  background: var(--client-surface);
 }
 
 .ambient-clients__state h2,
-.ambient-client-overview__section h2 {
+.ambient-clients__state p,
+.ambient-clients__filter-empty span {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.35rem, 3vw, 2.2rem);
-  font-weight: 500;
 }
 
-.ambient-clients__state p {
-  max-width: 45rem;
-  margin: 0;
-  color: var(--tone-ink-2, #514d47);
+.ambient-clients__state h2 {
+  font-size: 1.35rem;
+}
+
+.ambient-clients__state p,
+.ambient-clients__filter-empty span {
+  max-width: 46rem;
+  color: var(--client-copy);
   line-height: 1.5;
 }
 
-.ambient-clients__list,
-.ambient-client-overview__opportunities,
-.ambient-client-overview__conversations {
+.ambient-clients__directory {
+  margin: 1.4rem clamp(1.1rem, 3vw, 2.6rem) 0;
+  border: 1px solid var(--client-border);
+  background: var(--client-surface);
+}
+
+.ambient-clients__columns,
+.ambient-client {
   display: grid;
-  gap: 0;
+  grid-template-columns: minmax(13rem, 1.1fr) minmax(13rem, 1.2fr) minmax(12rem, 1fr) minmax(7.5rem, 0.55fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.ambient-clients__columns {
+  min-height: 34px;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--client-border);
+  background: var(--client-muted);
+  color: var(--client-copy);
+  font-size: 0.65rem;
+  font-weight: 820;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.ambient-clients__list {
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--ambient-client-line);
   list-style: none;
 }
 
 .ambient-client {
-  display: grid;
-  grid-template-columns: minmax(12rem, 0.8fr) minmax(14rem, 1.1fr) minmax(12rem, 1fr) auto;
-  gap: clamp(0.8rem, 2vw, 1.5rem);
-  align-items: center;
-  min-width: 0;
-  padding: clamp(1rem, 2.4vw, 1.65rem) 0;
-  border-bottom: 1px solid var(--ambient-client-line);
+  min-height: 74px;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--client-border);
 }
 
-.ambient-client > div {
+.ambient-clients__list li:last-child .ambient-client {
+  border-bottom: 0;
+}
+
+.ambient-client:hover {
+  background: #f7f3eb;
+}
+
+.ambient-client > * {
   min-width: 0;
+}
+
+.ambient-client__identity {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.ambient-client__avatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #cbc2b4;
+  border-radius: 50%;
+  background: #e8e2d7;
+  color: #3a3b3b;
+  font-size: 0.72rem;
+  font-weight: 850;
 }
 
 .ambient-client h2,
-.ambient-client h3 {
-  margin: 0.2rem 0 0;
-  overflow-wrap: anywhere;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.25rem, 2.3vw, 1.85rem);
-  font-weight: 500;
+.ambient-client p,
+.ambient-client small,
+.ambient-client strong {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ambient-client h2 {
+  font-size: 0.96rem;
+  font-weight: 820;
+  letter-spacing: -0.015em;
 }
 
 .ambient-client p,
 .ambient-client small {
   display: block;
-  margin: 0.25rem 0 0;
-  color: var(--tone-ink-2, #514d47);
+  color: var(--client-copy);
+  font-size: 0.75rem;
   line-height: 1.45;
-  overflow-wrap: anywhere;
 }
 
-.ambient-client small {
-  color: var(--tone-ink-3, #706b63);
-  font-size: 0.76rem;
+.ambient-client__latest > strong {
+  display: block;
+  font-size: 0.82rem;
+}
+
+.ambient-client__state {
+  justify-self: start;
+  color: var(--client-copy);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.ambient-client__state[data-tone="good"] {
+  color: var(--client-teal);
+}
+
+.ambient-client__state[data-tone="warning"] {
+  color: var(--client-danger);
+}
+
+.ambient-client__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: end;
+  border-color: var(--client-border);
+  background: #fff;
+  color: var(--client-ink);
+  white-space: nowrap;
 }
 
 .ambient-clients__pagination {
   display: flex;
   justify-content: flex-end;
-  gap: 0.65rem;
+  gap: 0.55rem;
+  margin: 0.9rem clamp(1.1rem, 3vw, 2.6rem) 0;
 }
 
 .ambient-clients__boundary,
 .ambient-client-overview__boundary {
   display: grid;
-  grid-template-columns: minmax(9rem, 0.45fr) minmax(0, 1.55fr);
-  gap: clamp(1rem, 4vw, 3rem);
-  padding: clamp(1rem, 2.5vw, 1.6rem);
-  background: color-mix(in srgb, var(--ambient-lavender, #8c79b7) 8%, transparent);
+  grid-template-columns: minmax(10rem, 0.38fr) minmax(0, 1.62fr);
+  gap: 1.5rem;
+  margin: 1.4rem clamp(1.1rem, 3vw, 2.6rem) 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--client-border);
+  background: #ece8e1;
 }
 
 .ambient-clients__boundary h2,
 .ambient-client-overview__boundary h2 {
   margin: 0.2rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.05rem, 2vw, 1.45rem);
-  font-weight: 500;
+  font-size: 0.95rem;
 }
 
 .ambient-clients__boundary p,
@@ -246,104 +423,148 @@
 .ambient-clients__boundary ul,
 .ambient-client-overview__boundary ul {
   margin: 0;
-  color: var(--tone-ink-2, #514d47);
-  font-size: 0.8rem;
-  line-height: 1.55;
-}
-
-.ambient-client-overview {
-  padding: 0 6px clamp(1.4rem, 3vw, 2.6rem);
+  color: var(--client-copy);
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .customer-workspace.ambient-client-host {
-  padding: clamp(0.75rem, 2vw, 1.8rem) 6px clamp(2.5rem, 5vw, 5rem);
+  padding: 0;
   border: 0;
-  background: transparent;
+  background: var(--client-bg, #f3f0ea);
   box-shadow: none;
+}
+
+.ambient-client-overview {
+  display: grid;
+  gap: 1.2rem;
+  padding: 1.2rem clamp(1.1rem, 3vw, 2.6rem) 2.6rem;
+  background: var(--client-bg);
 }
 
 .ambient-client-overview__back {
   justify-self: start;
-  min-height: 44px;
-  margin-bottom: -0.5rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--client-copy);
+  padding-left: 0;
+}
+
+.ambient-client-overview__identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1.5rem;
+  align-items: end;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--client-border);
+  background: var(--client-surface);
+}
+
+.ambient-client-overview__identity h1 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.75rem, 3vw, 2.75rem);
+  font-weight: 830;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .ambient-client-overview__identity-contact {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 0.8rem;
+  gap: 0.3rem 0.9rem;
+  margin: 0.65rem 0 0;
+  color: var(--client-copy);
+  font-size: 0.82rem;
+}
+
+.ambient-client-overview__secondary {
+  border-color: var(--client-border);
+  background: #fff;
+  color: var(--client-ink);
 }
 
 .ambient-client-overview__summary {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
-  gap: clamp(1.25rem, 4vw, 3.5rem);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1.4fr) minmax(19rem, 0.6fr);
+  gap: 1rem;
+}
+
+.ambient-client-overview__summary > div,
+.ambient-client-overview__next,
+.ambient-client-overview__section {
+  border: 1px solid var(--client-border);
+  background: var(--client-surface);
+}
+
+.ambient-client-overview__summary > div {
+  padding: 1rem;
 }
 
 .ambient-client-overview__signals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  border-top: 1px solid var(--ambient-client-line);
-  border-bottom: 1px solid var(--ambient-client-line);
+  margin: 0.75rem 0 0;
+  border-top: 1px solid var(--client-border);
+  border-bottom: 1px solid var(--client-border);
 }
 
 .ambient-client-overview__signals > div {
   min-width: 0;
-  padding: 1rem;
+  padding: 0.85rem 0.8rem;
 }
 
 .ambient-client-overview__signals > div + div {
-  border-left: 1px solid var(--ambient-client-line);
+  border-left: 1px solid var(--client-border);
 }
 
 .ambient-client-overview__signals dt {
-  color: var(--tone-ink-3, #706b63);
-  font-size: 0.7rem;
-  font-weight: 760;
-  letter-spacing: 0.055em;
+  color: var(--client-copy);
+  font-size: 0.64rem;
+  font-weight: 820;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .ambient-client-overview__signals dd {
-  margin: 0.35rem 0 0;
-  color: var(--tone-ink-1, #262421);
-  font-weight: 760;
+  margin: 0.3rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 780;
   line-height: 1.35;
-  overflow-wrap: anywhere;
 }
 
 .ambient-client-overview__next {
   display: grid;
   align-content: space-between;
   gap: 1rem;
-  padding: clamp(1rem, 2.5vw, 1.5rem);
-  border-left: 3px solid var(--ambient-coral, #c86e58);
-  background: color-mix(in srgb, var(--ambient-coral, #c86e58) 7%, transparent);
+  padding: 1rem;
+  border-left: 3px solid var(--client-gold);
 }
 
 .ambient-client-overview__next[data-next-state="caught-up"] {
-  border-left-color: var(--ambient-mint, #65ad82);
-  background: color-mix(in srgb, var(--ambient-mint, #65ad82) 8%, transparent);
+  border-left-color: var(--client-teal);
 }
 
 .ambient-client-overview__next h2 {
-  margin: 0.2rem 0 0;
-  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+  margin: 0.25rem 0 0;
+  font-size: 1.12rem;
 }
 
 .ambient-client-overview__next p:last-child {
-  margin: 0.4rem 0 0;
-  color: var(--tone-ink-2, #514d47);
-  line-height: 1.48;
+  margin: 0.45rem 0 0;
+  color: var(--client-copy);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.ambient-client-overview__primary {
+  justify-self: start;
 }
 
 .ambient-client-overview__section {
   display: grid;
-  gap: 0.9rem;
+  gap: 0;
   min-width: 0;
-  padding-top: clamp(0.4rem, 1vw, 0.8rem);
 }
 
 .ambient-client-overview__section-head {
@@ -351,14 +572,29 @@
   justify-content: space-between;
   gap: 1rem;
   align-items: baseline;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--client-border);
+  background: var(--client-muted);
+}
+
+.ambient-client-overview__section-head h2 {
+  margin: 0;
+  font-size: 0.98rem;
 }
 
 .ambient-client-overview__section-head p {
-  max-width: 36rem;
+  max-width: 38rem;
   margin: 0;
-  color: var(--tone-ink-3, #706b63);
-  font-size: 0.8rem;
+  color: var(--client-copy);
+  font-size: 0.72rem;
   text-align: right;
+}
+
+.ambient-client-overview__opportunities,
+.ambient-client-overview__conversations {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .ambient-client-overview__opportunities li,
@@ -367,60 +603,74 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  min-width: 0;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--ambient-client-line);
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--client-border);
+}
+
+.ambient-client-overview__opportunities li:last-child,
+.ambient-client-overview__conversations li:last-child {
+  border-bottom: 0;
 }
 
 .ambient-client-overview__opportunities h3,
 .ambient-client-overview__conversations h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.88rem;
 }
 
 .ambient-client-overview__opportunities p,
-.ambient-client-overview__conversations p {
+.ambient-client-overview__conversations p,
+.ambient-client-overview .source-note {
   margin: 0.25rem 0 0;
-  color: var(--tone-ink-2, #514d47);
-  font-size: 0.84rem;
-  line-height: 1.45;
+  color: var(--client-copy);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.ambient-client-overview .source-note {
+  padding: 1rem;
 }
 
 .ambient-client-overview .status-chip-pending {
   color: #674b08;
 }
 
+.ambient-client-overview__boundary {
+  margin: 0;
+}
+
 .ambient-client-overview__record {
-  padding-top: 0.4rem;
-  border-top: 1px solid var(--ambient-client-line);
+  border-top: 1px solid var(--client-border);
 }
 
 .ambient-client-overview__record > summary {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--tone-ink-2, #514d47);
-  font-weight: 760;
+  color: var(--client-copy);
+  font-weight: 780;
   cursor: pointer;
-}
-
-.ambient-client-overview__record[open] > summary {
-  color: color-mix(in srgb, var(--ambient-teal, #237f78) 78%, #111);
 }
 
 .ambient-client-overview__record-body {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   margin-top: 0.75rem;
 }
 
-@media (max-width: 920px) {
-  .ambient-client {
-    grid-template-columns: minmax(12rem, 0.8fr) minmax(14rem, 1.2fr) auto;
+@media (max-width: 1080px) {
+  .ambient-clients__command-topline {
+    grid-template-columns: 1fr;
   }
 
-  .ambient-client__latest {
-    grid-column: 1 / -1;
+  .ambient-clients__columns,
+  .ambient-client {
+    grid-template-columns: minmax(12rem, 1fr) minmax(13rem, 1.15fr) minmax(7rem, 0.6fr) auto;
+  }
+
+  .ambient-clients__columns span:nth-child(3),
+  .ambient-client__contact {
+    display: none;
   }
 
   .ambient-client-overview__summary {
@@ -428,41 +678,87 @@
   }
 }
 
-@media (max-width: 700px) {
-  .ambient-clients__masthead,
-  .ambient-client-overview__identity,
-  .ambient-client,
-  .ambient-clients__boundary,
-  .ambient-client-overview__boundary,
-  .ambient-client-overview__opportunities li,
-  .ambient-client-overview__conversations li {
-    grid-template-columns: 1fr;
+@media (max-width: 760px) {
+  .ambient-clients__command {
+    padding-inline: 1rem;
   }
 
-  .ambient-clients__masthead {
-    align-items: center;
+  .ambient-clients__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ambient-clients__masthead > .ambient-clients__start {
-    justify-self: start;
+  .ambient-clients__metrics > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  .ambient-clients__metrics > div:nth-child(4) {
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
   }
 
   .ambient-clients__toolbar {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr auto auto;
   }
 
-  .ambient-clients__toolbar label {
+  .ambient-clients__search,
+  .ambient-clients__toolbar .ambient-clients__start {
     grid-column: 1 / -1;
   }
 
-  .ambient-client__latest {
-    grid-column: auto;
+  .ambient-clients__directory,
+  .ambient-clients__boundary,
+  .ambient-clients__state,
+  .ambient-clients__filter-empty {
+    margin-inline: 1rem;
   }
 
-  .ambient-client__primary,
-  .ambient-client-overview__primary,
-  .ambient-client-overview__secondary {
-    width: 100%;
+  .ambient-clients__columns {
+    display: none;
+  }
+
+  .ambient-client {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.45rem 0.75rem;
+    min-height: 0;
+    padding: 0.85rem;
+  }
+
+  .ambient-client__identity,
+  .ambient-client__latest {
+    grid-column: 1;
+  }
+
+  .ambient-client__state,
+  .ambient-client__primary {
+    grid-column: 2;
+  }
+
+  .ambient-client__state {
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .ambient-client__primary {
+    grid-row: 2;
+    align-self: end;
+  }
+
+  .ambient-clients__boundary,
+  .ambient-client-overview__boundary,
+  .ambient-client-overview__identity {
+    grid-template-columns: 1fr;
+  }
+
+  .ambient-client-overview {
+    padding-inline: 1rem;
+  }
+
+  .ambient-client-overview__identity {
+    align-items: start;
+  }
+
+  .ambient-client-overview__identity .ambient-client-overview__secondary {
+    justify-self: start;
   }
 
   .ambient-client-overview__signals {
@@ -470,7 +766,7 @@
   }
 
   .ambient-client-overview__signals > div + div {
-    border-top: 1px solid var(--ambient-client-line);
+    border-top: 1px solid var(--client-border);
     border-left: 0;
   }
 
@@ -483,32 +779,33 @@
   }
 }
 
-@media (max-width: 430px) {
-  .ambient-clients {
-    padding-top: 0.25rem;
-  }
-
-  .ambient-clients__masthead h1,
-  .ambient-client-overview__identity h1 {
-    font-size: clamp(1.6rem, 9vw, 2.15rem);
-  }
-
-  .ambient-clients__masthead p:last-child,
-  .ambient-client-overview__identity p:last-child {
-    display: none;
-  }
-
+@media (max-width: 460px) {
   .ambient-clients__toolbar {
     grid-template-columns: 1fr 1fr;
   }
 
-  .ambient-clients__toolbar button:last-child {
+  .ambient-clients__toolbar .ambient-clients__refresh {
     grid-column: 1 / -1;
   }
 
-  .ambient-clients__acknowledgement,
-  .ambient-client-overview__acknowledgement {
-    display: grid;
+  .ambient-client__identity {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .ambient-client__avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ambient-client-overview__opportunities li,
+  .ambient-client-overview__conversations li {
+    grid-template-columns: 1fr;
+  }
+
+  .ambient-client-overview__opportunities button,
+  .ambient-client-overview__conversations button,
+  .ambient-client-overview__primary {
+    width: 100%;
   }
 }
 

@@ -127,7 +127,7 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   await page.getByLabel(/^Email$/i).fill(SECOND_STAFF_EMAIL);
   await page.getByLabel(/^Password$/i).fill(SECOND_STAFF_PASSWORD);
   await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
-  await expect(page.getByRole("heading", { name: "Configure Your Catalog" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Bring Your Catalog to Life" })).toBeVisible({
     timeout: 45_000
   });
   expect(await page.evaluate(() => {
@@ -152,6 +152,10 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText(`Editing quote ${CONVERSATION_QUOTE_NUMBER}`)).toHaveCount(0);
   await restoredQuoteButton.click();
+  const restoredGuidedMode = page.getByRole("button", { name: "Guided mode" });
+  if (await restoredGuidedMode.isVisible()) {
+    await restoredGuidedMode.click();
+  }
   await expect(page.getByLabel(/Event type/i)).toHaveValue("");
   await expect(page.getByRole("textbox", { name: /Your name/i })).toHaveValue("");
   await expect(page.getByRole("textbox", { name: /^Email$/i })).toHaveValue("");

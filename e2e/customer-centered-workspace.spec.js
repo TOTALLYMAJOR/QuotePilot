@@ -16,6 +16,17 @@ const PILOT_TRANSFORMATION_ENABLED = [
 ));
 const HOME_HEADING = /What (?:needs|deserves) your attention/;
 
+async function gotoWorkspace(page, path) {
+  await page.goto(path);
+  const setupHeading = page.getByRole("heading", { name: "Bring Your Catalog to Life" });
+  const workspaceHeader = page.locator(".site-header");
+  await expect(setupHeading.or(workspaceHeader)).toBeVisible({ timeout: 30_000 });
+  if (await setupHeading.isVisible()) {
+    await page.getByRole("button", { name: "Explore the workspace" }).click();
+    await expect(workspaceHeader).toBeVisible({ timeout: 30_000 });
+  }
+}
+
 async function fillRequiredQuoteFields(page) {
   const eventType = page.getByLabel(/Event type/i);
   await expect(eventType).toBeVisible();
@@ -97,7 +108,7 @@ test.describe("customer-centered workspace", () => {
   );
 
   test("/app is Home and a dirty quote draft survives routed Home, Back, and Forward navigation", async ({ page }) => {
-    await page.goto("/app");
+    await gotoWorkspace(page, "/app");
 
     const homeHeading = page.getByRole("heading", { name: HOME_HEADING });
     await expect(homeHeading).toBeVisible();
@@ -108,7 +119,7 @@ test.describe("customer-centered workspace", () => {
     await expect(evidenceRail).toContainText("Browser-local workspace");
     await expect(evidenceRail).toContainText("does not prove provider delivery");
     const staffHeader = page.locator(".site-header");
-    await expect(staffHeader.getByRole("button", { name: "Home", exact: true })).toHaveAttribute(
+    await expect(staffHeader.getByRole("button", { name: "Now", exact: true })).toHaveAttribute(
       "aria-current",
       "page"
     );
@@ -124,7 +135,7 @@ test.describe("customer-centered workspace", () => {
     await eventName.fill("Sticky command-center draft");
     await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
 
-    await staffHeader.getByRole("button", { name: "Home", exact: true }).click();
+    await staffHeader.getByRole("button", { name: "Now", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
@@ -143,7 +154,7 @@ test.describe("customer-centered workspace", () => {
   });
 
   test("/app/home replaces to the canonical Home route", async ({ page }) => {
-    await page.goto("/app/home");
+    await gotoWorkspace(page, "/app/home");
 
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
@@ -153,16 +164,16 @@ test.describe("customer-centered workspace", () => {
     test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
     await seedPilotQuote(page);
 
-    await page.goto("/app");
+    await gotoWorkspace(page, "/app");
     await expect(page.getByRole("heading", { name: "What to review today" })).toBeVisible();
     await expect(page.locator(".now-surface")).toBeVisible();
 
-    await page.goto("/app/quotes/pilot-release-quote");
+    await gotoWorkspace(page, "/app/quotes/pilot-release-quote");
     await expect(page.getByRole("heading", { name: "Pilot Release Dinner" })).toBeVisible();
     await expect(page.locator('[data-decide-stack="decide-stack-v1"]')).toBeVisible();
     await expect(page.getByRole("img", { name: /Proposal readiness:/ })).toBeVisible();
 
-    await page.goto("/app/quotes/pilot-release-quote/edit");
+    await gotoWorkspace(page, "/app/quotes/pilot-release-quote/edit");
     const changePanel = page.locator('[data-change-request="change-request-parse-v1"]');
     await expect(changePanel).toContainText("Change to 90 guests and add one server.");
     await changePanel.getByRole("button", { name: "Stage this" }).first().click();
@@ -182,7 +193,7 @@ test.describe("customer-centered workspace", () => {
 
   test("the production CREATE intake applies bounded facts and shows a draft-only pricing band", async ({ page }) => {
     test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
-    await page.goto("/app/quotes/new");
+    await gotoWorkspace(page, "/app/quotes/new");
 
     const intake = page.locator('[data-create-intake="intent-extraction-v1"]');
     await expect(intake.getByRole("heading", { name: "What are you planning?" })).toBeVisible();
@@ -198,7 +209,7 @@ test.describe("customer-centered workspace", () => {
   });
 
   test("explicit New quote discard and browser-exit protection remain attached to a dirty routed draft", async ({ page }) => {
-    await page.goto("/app/quotes/new");
+    await gotoWorkspace(page, "/app/quotes/new");
     const eventName = page.getByLabel("Event name");
     await eventName.fill("Protected routed draft");
 
@@ -218,15 +229,15 @@ test.describe("customer-centered workspace", () => {
     page.once("dialog", async (dialog) => dialog.accept());
     await page.locator(".site-header").getByRole("button", { name: "New quote", exact: true }).click();
     await expect(eventName).toHaveValue("");
-    await expect(page.getByText("Ready to plan an event", { exact: true })).toBeVisible();
+    await expect(page.getByText("Workspace open", { exact: true })).toBeVisible();
   });
 
   test("primary workspace navigation remains visible and overflow-safe at mobile width", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/app");
+    await gotoWorkspace(page, "/app");
 
     const header = page.locator(".site-header");
-    for (const name of ["Home", "Customers", "Quotes", "Messages"]) {
+    for (const name of ["Now", "Customers", "Quotes", "Messages"]) {
       await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
     }
     await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
@@ -243,17 +254,17 @@ test.describe("customer-centered workspace", () => {
   test("desktop workspace navigation keeps Account with the primary actions across nearby widths", async ({ page }) => {
     for (const width of [1440, 1366, 1280, 1024]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto("/app");
+      await gotoWorkspace(page, "/app");
 
       const header = page.locator(".site-header");
-      for (const name of ["Home", "Customers", "Quotes", "Messages", "Operations", "Account"]) {
+      for (const name of ["Now", "Customers", "Quotes", "Messages", "Operations", "Account"]) {
         await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
       }
       await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
       await expect(header.getByRole("button", { name: "More", exact: true })).toBeHidden();
 
       const [homeBox, accountBox] = await Promise.all([
-        header.getByRole("button", { name: "Home", exact: true }).boundingBox(),
+        header.getByRole("button", { name: "Now", exact: true }).boundingBox(),
         header.getByRole("button", { name: "Account", exact: true }).boundingBox()
       ]);
       expect(homeBox).not.toBeNull();
@@ -339,7 +350,7 @@ test.describe("customer-centered workspace", () => {
       ]));
     });
 
-    await page.goto("/app/messages");
+    await gotoWorkspace(page, "/app/messages");
     const station = page.locator(".messaging-station");
     await expect(page.getByRole("heading", { name: "Messages", exact: true })).toBeFocused();
     await expect(station).toHaveAttribute("data-capability-state", "partial");
@@ -378,11 +389,11 @@ test.describe("customer-centered workspace", () => {
   });
 
   test("unknown staff paths render an authenticated in-shell 404", async ({ page }) => {
-    await page.goto("/app/not-a-workspace-route");
+    await gotoWorkspace(page, "/app/not-a-workspace-route");
 
     await expect(page.getByRole("heading", { name: "Workspace page not found" })).toBeVisible();
     await expect(page.getByText("/app/not-a-workspace-route is not a QuotePilot staff workspace route.")).toBeVisible();
-    await expect(page.locator(".site-header").getByRole("button", { name: "Home", exact: true })).toBeVisible();
+    await expect(page.locator(".site-header").getByRole("button", { name: "Now", exact: true })).toBeVisible();
   });
 
   test("primary routed staff surfaces focus their heading and use route return language", async ({ page }) => {
@@ -432,7 +443,7 @@ test.describe("customer-centered workspace", () => {
       await expect(page.getByRole("dialog", { name })).toHaveCount(0);
     }
 
-    await page.goto("/app");
+    await gotoWorkspace(page, "/app");
     const operations = page.locator(".desktop-header-menu").getByRole("button", { name: "Operations" });
     await operations.click();
     await page.getByRole("menuitem", { name: "Reporting Dashboard" }).click();
@@ -452,7 +463,7 @@ test.describe("customer-centered workspace", () => {
     await page.addInitScript(() => {
       window.__quotePilotE2eFunctions = { loadMenuByEvent: async () => [] };
     });
-    await page.goto("/app/quotes/new");
+    await gotoWorkspace(page, "/app/quotes/new");
     await fillRequiredQuoteFields(page);
     await page.getByRole("button", { name: /^Next:/ }).click();
     await expect(page.getByText(/No menu items are configured for/i)).toBeVisible();
@@ -472,7 +483,7 @@ test.describe("customer-centered workspace", () => {
 
   test("an operational route chunk failure recovers in-shell without becoming a modal", async ({ page }) => {
     await page.route("**/src/components/DiagnosticsModal.jsx*", (route) => route.abort("failed"));
-    await page.goto("/app/diagnostics");
+    await gotoWorkspace(page, "/app/diagnostics");
 
     const recovery = page.locator(".ui-recovery-route");
     await expect(recovery.getByRole("heading", { name: "Session Diagnostics did not load" })).toBeVisible();
@@ -489,7 +500,7 @@ test.describe("customer-centered workspace", () => {
   test("sticky Quotes and Workflow failures stay route-scoped without losing the dirty quote draft", async ({ page }) => {
     await page.route("**/src/components/QuoteHistoryModal.jsx*", (route) => route.abort("failed"));
     await page.route("**/src/components/SalesWorkflowModal.jsx*", (route) => route.abort("failed"));
-    await page.goto("/app/quotes/new");
+    await gotoWorkspace(page, "/app/quotes/new");
 
     const eventName = page.getByLabel("Event name");
     await eventName.fill("Recovery-safe routed draft");
@@ -596,7 +607,7 @@ test.describe("customer-centered workspace", () => {
       ]));
     });
 
-    await page.goto("/app");
+    await gotoWorkspace(page, "/app");
     const attentionRow = page.locator(".command-center-row").filter({ hasText: "Please revise the service timing." });
     await expect(attentionRow).toBeVisible();
 
@@ -684,7 +695,7 @@ test.describe("customer-centered workspace", () => {
       }]));
     });
 
-    await page.goto("/app/workflow");
+    await gotoWorkspace(page, "/app/workflow");
     const autopilotTab = page.getByRole("tab", { name: "Revenue autopilot" });
     await expect(autopilotTab).toBeVisible();
     await autopilotTab.click();
@@ -846,7 +857,7 @@ test.describe("customer-centered workspace", () => {
       acceptedAt: acceptedAtISO
     });
 
-    await page.goto("/app/customers");
+    await gotoWorkspace(page, "/app/customers");
 
     await expect(page.getByRole("heading", { name: "Customer directory", exact: true })).toBeVisible();
     await expect(page.getByText("Source: Browser-local workspace", { exact: true })).toBeVisible();
@@ -1028,7 +1039,7 @@ test.describe("customer-centered workspace", () => {
       }]));
     });
 
-    await page.goto("/app/customers/customer-rebook-e2e");
+    await gotoWorkspace(page, "/app/customers/customer-rebook-e2e");
     await expect(page.getByRole("heading", { name: "Henderson Group", level: 1 })).toBeVisible();
 
     const radar = page.locator('[data-capability-id="cwf-11-rebooking-radar"]');
@@ -1050,7 +1061,7 @@ test.describe("customer-centered workspace", () => {
   });
 
   test("a missing direct edit route fails closed without exposing a usable quote builder", async ({ page }) => {
-    await page.goto("/app/quotes/missing-edit-quote/edit");
+    await gotoWorkspace(page, "/app/quotes/missing-edit-quote/edit");
 
     await expect(page.getByRole("heading", { name: "Quote edit unavailable" })).toBeVisible();
     await expect(page.getByRole("alert")).toContainText("Quote not found.");
@@ -1164,7 +1175,7 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
     const changeImpactPreview = page.locator('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
     await expect(changeImpactPreview).toBeVisible();
-    await expect(changeImpactPreview).toContainText("Preview change blast radius");
+    await expect(changeImpactPreview).toContainText("What will this change affect?");
     await expect(changeImpactPreview).toContainText(
       "Authoritative change impact is unavailable in browser-local mode"
     );

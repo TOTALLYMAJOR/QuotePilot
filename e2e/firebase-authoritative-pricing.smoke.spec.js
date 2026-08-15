@@ -16,6 +16,10 @@ async function signInAsStaff(page) {
   }
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
   await quoteButton.click();
+  const guidedMode = page.getByRole("button", { name: "Guided mode" });
+  if (await guidedMode.isVisible()) {
+    await guidedMode.click();
+  }
   await expect(page.getByLabel(/Event type/i)).toBeVisible({ timeout: 45_000 });
 }
 
@@ -339,7 +343,7 @@ test("managed menu removal reopens pricing and rejects a stale catalog revision"
   expect(mutation.staleError.message).toMatch(/catalog revision changed/i);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Configure Your Catalog" }))
+  await expect(page.getByRole("heading", { name: "Bring Your Catalog to Life" }))
     .toBeVisible({ timeout: 45_000 });
   await expect(page.getByRole("button", { name: "New Quote" })).toHaveCount(0);
 });

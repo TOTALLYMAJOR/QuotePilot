@@ -1,22 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarBlank,
-  CookingPot,
-  CurrencyDollar,
-  DownloadSimple,
-  EnvelopeOpen,
-  EnvelopeSimple,
-  MapPin,
-  Martini,
-  NotePencil,
-  Plus,
-  Printer,
-  StarFour,
-  Trash,
-  Tray,
-  UserCircle
-} from "@phosphor-icons/react";
-import {
   STAFF_ROLES,
   createAvailabilityWindow,
   createQualification,
@@ -33,6 +16,68 @@ import {
   exportStaffBriefingSheet
 } from "../lib/staffBriefingSheet";
 import "./staffWorkspace.css";
+
+const STAFF_ICON_DRAWINGS = Object.freeze({
+  calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M7.5 3v4M16.5 3v4M3.5 9.5h17" /></>,
+  chef: <><path d="M7 9.5c-2.8 0-3.5-4.2-.8-5.3A4.8 4.8 0 0 1 15 4a3.2 3.2 0 0 1 2 5.5" /><path d="M7 9.5h10l-1 10H8zM9.5 16h5" /></>,
+  dollar: <><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5c-1-1.3-5.8-1.2-5.8 1.1 0 2.9 6.1 1.4 6.1 4.5 0 2.6-5 3-7 .8M12 5.5v13" /></>,
+  download: <><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 19.5h16" /></>,
+  envelope: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></>,
+  envelopeOpen: <><path d="m3 10 9-7 9 7v10H3zM3.5 10.5 12 16l8.5-5.5" /><path d="m4 19 6.2-5M20 19l-6.2-5" /></>,
+  search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 5 5" /></>,
+  location: <><path d="M20 10c0 5.4-8 11-8 11S4 15.4 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
+  bartender: <><path d="M4 5h16l-8 8zM12 13v7M8 20h8" /><path d="m7 8 10 0" /></>,
+  note: <><path d="M5 3.5h11l3 3V20H5zM16 3.5V7h3M8 11h8M8 15h5" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
+  printer: <><path d="M7 8V3.5h10V8M7 17H4V9h16v8h-3M7 14h10v6.5H7z" /><path d="M17 11h.01" /></>,
+  star: <path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z" />,
+  trash: <><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v6M14 10v6" /></>,
+  tray: <><path d="M4 16h16l-2 4H6zM6 16a6 6 0 0 1 12 0M12 7V5" /></>,
+  user: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" /></>
+});
+
+function StaffIcon({ name, size = 20, weight = "regular", ...props }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={["bold", "fill"].includes(weight) ? 2.2 : 1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      focusable="false"
+      data-icon-weight={weight}
+      {...props}
+    >
+      {STAFF_ICON_DRAWINGS[name]}
+    </svg>
+  );
+}
+
+function staffIcon(name) {
+  return function StaffRouteIcon(props) {
+    return <StaffIcon name={name} {...props} />;
+  };
+}
+
+const CalendarBlank = staffIcon("calendar");
+const CookingPot = staffIcon("chef");
+const CurrencyDollar = staffIcon("dollar");
+const DownloadSimple = staffIcon("download");
+const EnvelopeOpen = staffIcon("envelopeOpen");
+const EnvelopeSimple = staffIcon("envelope");
+const MagnifyingGlass = staffIcon("search");
+const MapPin = staffIcon("location");
+const Martini = staffIcon("bartender");
+const NotePencil = staffIcon("note");
+const Plus = staffIcon("plus");
+const Printer = staffIcon("printer");
+const StarFour = staffIcon("star");
+const Trash = staffIcon("trash");
+const Tray = staffIcon("tray");
+const UserCircle = staffIcon("user");
 
 const ROLE_ICONS = Object.freeze({
   lead: StarFour,
@@ -81,6 +126,70 @@ function assignmentLabel(assignment) {
   const eventName = String(assignment?.event?.name || "Event").trim();
   const date = String(assignment?.event?.date || "Date pending").trim();
   return `${eventName} · ${date}`;
+}
+
+function dateLabel(value, options = {}) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Date not recorded";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: options.year ? "numeric" : undefined,
+    weekday: options.weekday ? "short" : undefined
+  }).format(parsed);
+}
+
+function timeRange(startValue, endValue) {
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Time not recorded";
+  const formatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${formatter.format(start)}–${formatter.format(end)}`;
+}
+
+function activityTime(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Time not recorded";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(parsed);
+}
+
+function calendarDateKey(value = new Date()) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value)) return value;
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function needsAttention(entry) {
+  return Boolean(entry?.profile?.active) && (
+    entry?.record?.contact?.emailStatus !== "verified"
+    || !entry?.record?.contact?.emergencyContactPhone
+    || Number(entry?.record?.compensation?.hourlyRate || 0) <= 0
+    || !entry?.profile?.availabilityWindows?.length
+  );
+}
+
+function qualificationPresentation(qualification) {
+  const status = String(qualification?.status || "").trim().toLowerCase();
+  if (["missing", "pending"].includes(status)) return { label: "Missing", tone: "warning" };
+  const expiryMs = Date.parse(qualification?.expiresOn || "");
+  if (status === "expired" || (Number.isFinite(expiryMs) && expiryMs < Date.now())) {
+    return { label: "Expired", tone: "warning" };
+  }
+  if (Number.isFinite(expiryMs) && expiryMs - Date.now() <= 45 * 24 * 60 * 60 * 1000) {
+    return { label: "Expiring", tone: "warning" };
+  }
+  return status === "current"
+    ? { label: "Verified", tone: "good" }
+    : { label: "Missing", tone: "warning" };
 }
 
 function initials(entry) {
@@ -141,16 +250,19 @@ function Section({ icon: Icon, title, description, children, open = false }) {
 
 export default function StaffWorkspace({ organizationId = "", organizationName = "" }) {
   const [directory, setDirectory] = useState(null);
-  const [state, setState] = useState({ status: "loading", message: "Loading staff records…" });
+  const [state, setState] = useState({ status: "loading", message: "Bringing your team together…" });
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [draft, setDraft] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [invitationPreview, setInvitationPreview] = useState(null);
   const [invitationBusy, setInvitationBusy] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [rosterFilter, setRosterFilter] = useState("all");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const load = async ({ recovery = false } = {}) => {
-    setState({ status: recovery ? "recovery" : "loading", message: recovery ? "Refreshing staff records…" : "Loading staff records…" });
+    setState({ status: recovery ? "recovery" : "loading", message: recovery ? "Freshening up your team…" : "Bringing your team together…" });
     try {
       const result = await getStaffDirectory({ organizationId });
       setDirectory(result);
@@ -160,8 +272,10 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       setDraft(selected ? clone(selected) : null);
       setDirty(false);
       setState(result.storage === "firebase"
-        ? { status: result.records.length ? "success" : "empty", message: result.records.length ? "Staff records are current." : "No staff records yet." }
-        : { status: "unavailable", message: "Connect to the organization workspace to manage authoritative staff records." });
+        ? { status: result.records.length ? "success" : "empty", message: result.records.length ? "Team profiles loaded." : "Ready to welcome your first teammate." }
+        : result.storage === "local_fixture"
+          ? { status: "context", message: "Your review roster is ready. Live Firebase staff data is unchanged." }
+          : { status: "unavailable", message: "Connect your organization to start bringing the team together." });
     } catch (error) {
       setState({ status: "error", message: safeError(error, "Staff records could not be loaded.") });
     }
@@ -174,8 +288,13 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   }, [organizationId]);
 
   const assignments = useMemo(() => (
-    (directory?.assignments || []).filter((item) => item.staffId === selectedStaffId)
-      .sort((left, right) => String(right.eventWindow?.startAtISO || "").localeCompare(String(left.eventWindow?.startAtISO || "")))
+    (() => {
+      const ordered = (directory?.assignments || []).filter((item) => item.staffId === selectedStaffId)
+        .sort((left, right) => String(left.eventWindow?.startAtISO || "").localeCompare(String(right.eventWindow?.startAtISO || "")));
+      const nowMs = Date.now();
+      const upcoming = ordered.filter((item) => Date.parse(item.eventWindow?.endAtISO || item.eventWindow?.startAtISO || item.event?.date || "") >= nowMs);
+      return upcoming.length ? upcoming : ordered.reverse();
+    })()
   ), [directory?.assignments, selectedStaffId]);
   const selectedAssignment = assignments.find((item) => item.assignmentId === selectedAssignmentId)
     || assignments[0]
@@ -195,7 +314,8 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
     setSelectedStaffId(entry.profile.staffId);
     setDraft(clone(entry));
     setDirty(false);
-    setState((current) => ({ ...current, message: "Staff record opened." }));
+    setMobileDetailOpen(true);
+    setState((current) => ({ ...current, message: "Team profile open." }));
   };
 
   const addStaff = () => {
@@ -205,7 +325,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
     setSelectedStaffId(staffId);
     setDraft(entry);
     setDirty(true);
-    setState({ status: "editing", message: "New staff record ready. Add the person’s details, then save." });
+    setState({ status: "editing", message: "Great—add their details and welcome them to the team." });
   };
 
   const patchProfile = (key, value) => {
@@ -229,7 +349,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       setState({ status: "error", message: "Add a display name before saving this staff record." });
       return;
     }
-    setState({ status: "saving", message: "Saving the exact staff record…" });
+    setState({ status: "saving", message: "Saving this teammate…" });
     try {
       const result = await saveStaffRecord(draft, { organizationId });
       const entry = clone(result.entry);
@@ -243,7 +363,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       });
       setDraft(entry);
       setDirty(false);
-      setState({ status: "receipt", message: `Saved ${entry.profile.displayName}. Profile and private-record receipts were recorded.` });
+      setState({ status: "receipt", message: `${entry.profile.displayName} is saved. Their profile and private details were recorded separately.` });
     } catch (error) {
       setState({ status: "error", message: safeError(error, "The staff record could not be saved.") });
     }
@@ -352,97 +472,352 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       : "Awaiting staff response";
 
   const records = directory?.records || [];
+  const allAssignments = directory?.assignments || [];
+  const currentDay = calendarDateKey();
+  const activeCount = records.filter((entry) => entry.profile.active).length;
+  const needsAttentionCount = records.filter(needsAttention).length;
+  const availableCount = records.filter((entry) => (
+    entry.profile.active
+    && !needsAttention(entry)
+    && entry.profile.availabilityWindows?.some((window) => window.state === "available")
+  )).length;
+  const assignedTodayCount = new Set(allAssignments
+    .filter((assignment) => calendarDateKey(assignment.eventWindow?.startAtISO || assignment.event?.date || "") === currentDay)
+    .map((assignment) => assignment.staffId)).size;
+  const assignmentsForStaff = (staffId) => {
+    const ordered = allAssignments
+      .filter((assignment) => assignment.staffId === staffId)
+      .sort((left, right) => String(left.eventWindow?.startAtISO || "").localeCompare(String(right.eventWindow?.startAtISO || "")));
+    const nowMs = Date.now();
+    const upcoming = ordered.filter((assignment) => Date.parse(assignment.eventWindow?.endAtISO || assignment.eventWindow?.startAtISO || assignment.event?.date || "") >= nowMs);
+    return upcoming.length ? upcoming : ordered.reverse();
+  };
+  const operationalState = (entry) => {
+    if (!entry.profile.active) return { key: "inactive", label: "Inactive", tone: "neutral" };
+    if (needsAttention(entry)) return { key: "needs_attention", label: "Needs review", tone: "warning" };
+    if (assignmentsForStaff(entry.profile.staffId).length) return { key: "assigned", label: "Assigned", tone: "assigned" };
+    if (entry.profile.availabilityWindows?.some((window) => window.state === "available")) {
+      return { key: "available", label: "Available", tone: "good" };
+    }
+    return { key: "unavailable", label: "Unavailable", tone: "neutral" };
+  };
+  const normalizedRosterSearch = rosterSearch.trim().toLowerCase();
+  const visibleRecords = records.filter((entry) => {
+    const searchable = [
+      entry.profile.displayName,
+      entry.record.preferredName,
+      entry.record.contact.email,
+      Array.isArray(entry.profile.capabilities) ? entry.profile.capabilities.join(" ") : ""
+    ].join(" ").toLowerCase();
+    const matchesSearch = !normalizedRosterSearch || searchable.includes(normalizedRosterSearch);
+    const entryState = operationalState(entry).key;
+    const matchesFilter = rosterFilter === "all"
+      || rosterFilter === entryState;
+    return matchesSearch && matchesFilter;
+  });
+  const selectedDisplayName = draft
+    ? draft.record.preferredName || draft.profile.displayName || "New staff member"
+    : "";
+  const selectedRoles = draft?.profile?.capabilities || [];
+  const contactVerified = draft?.record?.contact?.emailStatus === "verified";
+  const emergencyReady = Boolean(draft?.record?.contact?.emergencyContactPhone);
+  const hourlyRate = Number(draft?.record?.compensation?.hourlyRate || 0);
+  const assignmentAccepted = currentInvitation?.acknowledgement?.state === "accepted";
+  const availabilityWindows = draft?.profile?.availabilityWindows || [];
+  const availabilityProvided = availabilityWindows.length > 0;
+  const qualificationReady = Boolean(draft?.record?.qualifications?.length)
+    && draft.record.qualifications.every((qualification) => !["expired", "pending"].includes(qualification.status));
+  const readinessItems = draft ? [
+    { label: "Contact information", value: contactVerified ? "Complete" : "Needs review", state: contactVerified ? "complete" : "warning" },
+    { label: "Emergency contact", value: emergencyReady ? "Complete" : "Not provided", state: emergencyReady ? "complete" : "warning" },
+    { label: "Rate configured", value: hourlyRate > 0 ? "Complete" : "Not configured", state: hourlyRate > 0 ? "complete" : "warning" },
+    { label: "Availability provided", value: availabilityProvided ? "Complete" : "Not provided", state: availabilityProvided ? "complete" : "warning" },
+    { label: "Qualifications", value: qualificationReady ? "Complete" : "Needs review", state: qualificationReady ? "complete" : "warning" },
+    { label: "Acknowledgements", value: !selectedAssignment ? "Not applicable" : assignmentAccepted ? "Complete" : "Pending", state: !selectedAssignment ? "neutral" : assignmentAccepted ? "complete" : "warning" }
+  ] : [];
+  const selectedReadinessCompleteCount = readinessItems.filter((item) => item.state === "complete").length;
+  const selectedReadinessTotal = readinessItems.length;
+  const assignmentSteps = [
+    ["Invited", Boolean(currentInvitation)],
+    ["Accepted", assignmentAccepted],
+    ["Briefed", currentInvitation?.state === "provider_accepted" || currentInvitation?.state === "delivered" || assignmentAccepted],
+    ["Completed", selectedAssignment?.state === "completed"]
+  ];
+  const focusStaffDetails = () => {
+    if (typeof document === "undefined") return;
+    const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    const editor = document.getElementById("staff-detail-sections");
+    if (editor) editor.open = true;
+    editor?.scrollIntoView({ block: "start", behavior });
+  };
+  const preferredContactLabel = ({
+    email: "Email",
+    phone: "Phone",
+    either: "Either"
+  }[draft?.record?.contact?.preferredChannel] || "Email");
+  const selectedOperationalState = draft ? operationalState(draft) : null;
+  const selectedActivities = [
+    currentInvitation?.acknowledgement?.respondedAtISO ? {
+      event: currentInvitation.acknowledgement.state === "accepted" ? "Assignment acknowledged" : "Assignment response recorded",
+      value: selectedAssignment?.event?.name || "Assigned event",
+      at: currentInvitation.acknowledgement.respondedAtISO,
+      source: "Staff portal"
+    } : null,
+    currentInvitation?.updatedAtISO ? {
+      event: "Invitation status updated",
+      value: deliveryLabel,
+      at: currentInvitation.updatedAtISO,
+      source: "Email provider"
+    } : null
+  ].filter(Boolean);
   return (
     <main className="container workspace-route-main staff-workspace" data-surface-purpose="clarify advance resolve reveal_context">
-      <header className="staff-workspace__header">
-        <div>
-          <p className="eyebrow">Team</p>
-          <h1>Staff</h1>
-          <p>People, availability, rates, qualifications, operational defaults, history and event briefings in one place.</p>
+      <div className="staff-organization-bar">
+        <strong>{organizationName || "Your catering team"}</strong>
+        <div
+          className={`staff-workspace__status is-${state.status}`}
+          role={state.status === "error" ? "alert" : "status"}
+          aria-live="polite"
+          data-capability-state={state.status}
+        >
+          <span>{state.status === "success" ? "Team profiles are here" : state.message}</span>
+          {["error", "unavailable"].includes(state.status) ? (
+            <button type="button" className="ghost compact" onClick={() => void load({ recovery: true })}>Refresh the team</button>
+          ) : null}
         </div>
-        <button type="button" className="cta" onClick={addStaff} disabled={state.status === "unavailable"}>
-          <Plus size={18} aria-hidden="true" /> Add staff member
-        </button>
-      </header>
-
-      <div
-        className={`staff-workspace__status is-${state.status}`}
-        role={state.status === "error" ? "alert" : "status"}
-        aria-live="polite"
-        data-capability-state={state.status}
-      >
-        <span>{state.message}</span>
-        {["error", "unavailable"].includes(state.status) ? (
-          <button type="button" className="ghost compact" onClick={() => void load({ recovery: true })}>Refresh staff records</button>
-        ) : null}
       </div>
 
-      <div className="staff-workspace__layout">
-        <aside className="staff-roster" aria-label="Staff roster">
-          <div className="staff-roster__summary">
-            <strong>{records.length} {records.length === 1 ? "person" : "people"}</strong>
-            <span>{records.filter((entry) => entry.profile.active).length} active</span>
+      <section className="staff-command-bar" aria-label="Staff operations summary">
+        <div className="staff-command-bar__topline">
+          <div className="staff-command-bar__copy">
+            <p className="staff-kicker">Your event team</p>
+            <h1>People</h1>
           </div>
-          {records.length ? (
+          <dl className="staff-command-metrics" aria-label="Staff operating metrics">
+            <div>
+              <dt>Active</dt>
+              <dd>{activeCount}</dd>
+            </div>
+            <div>
+              <dt>Available</dt>
+              <dd>{availableCount}</dd>
+            </div>
+            <div>
+              <dt>Assigned today</dt>
+              <dd>{assignedTodayCount}</dd>
+            </div>
+            <div className="is-attention">
+              <dt>Next to complete</dt>
+              <dd>{needsAttentionCount}</dd>
+            </div>
+          </dl>
+        </div>
+        <div className="staff-command-tools">
+          <label className="staff-command-search">
+            <MagnifyingGlass size={18} aria-hidden="true" />
+            <span className="sr-only">Search staff</span>
+            <input
+              type="search"
+              value={rosterSearch}
+              placeholder="Find a teammate…"
+              onChange={(event) => setRosterSearch(event.target.value)}
+            />
+          </label>
+          <div className="staff-command-filters" role="group" aria-label="Staff roster filters">
+            <span><span className="staff-ui-glyph" aria-hidden="true">≡</span> Filters</span>
+            <button type="button" className={rosterFilter === "all" ? "is-selected" : ""} onClick={() => setRosterFilter("all")}>All</button>
+            <button type="button" className={rosterFilter === "needs_attention" ? "is-selected" : ""} onClick={() => setRosterFilter("needs_attention")}>Next to complete</button>
+            <button type="button" className={rosterFilter === "available" ? "is-selected" : ""} onClick={() => setRosterFilter("available")}>Available</button>
+            <button type="button" className={rosterFilter === "assigned" ? "is-selected" : ""} onClick={() => setRosterFilter("assigned")}>Assigned</button>
+          </div>
+          <button type="button" className="staff-command-add" onClick={addStaff} disabled={state.status === "unavailable"}>
+            <Plus size={18} aria-hidden="true" /> Welcome a teammate
+          </button>
+        </div>
+      </section>
+
+      <div className={`staff-workspace__layout${mobileDetailOpen ? " is-mobile-detail-open" : ""}`}>
+        <aside className="staff-roster" aria-label="Staff roster">
+          <header className="staff-workspace__header">
+            <div>
+              <p className="eyebrow">Roster</p>
+              <h2>People</h2>
+            </div>
+            <strong>{visibleRecords.length} shown</strong>
+          </header>
+          {visibleRecords.length ? (
             <ul>
-              {records.map((entry) => (
-                <li key={entry.profile.staffId}>
-                  <button
-                    type="button"
-                    className={selectedStaffId === entry.profile.staffId ? "is-selected" : ""}
-                    onClick={() => choose(entry)}
-                    aria-current={selectedStaffId === entry.profile.staffId ? "true" : undefined}
-                  >
-                    <span className="staff-avatar">
-                      {entry.record.photoUrl ? <img src={entry.record.photoUrl} alt="" /> : initials(entry)}
-                    </span>
-                    <span className="staff-roster__identity">
-                      <strong>{entry.record.preferredName || entry.profile.displayName}</strong>
-                      <small>{entry.record.contact.email || "No email on file"}</small>
-                      <RoleIcons roles={entry.profile.capabilities} />
-                    </span>
-                    <span className="staff-roster__rate">
-                      {currency(entry.record.compensation.hourlyRate, entry.record.compensation.currency)}<small>/hr</small>
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {visibleRecords.map((entry) => {
+                const entryAssignments = assignmentsForStaff(entry.profile.staffId);
+                const nextAssignment = entryAssignments[0];
+                const nextAvailability = entry.profile.availabilityWindows?.find((window) => window.state === "available");
+                const entryState = operationalState(entry);
+                const rate = Number(entry.record.compensation.hourlyRate || 0);
+                return (
+                  <li key={entry.profile.staffId}>
+                    <button
+                      type="button"
+                      className={selectedStaffId === entry.profile.staffId ? "is-selected" : ""}
+                      onClick={() => choose(entry)}
+                      aria-current={selectedStaffId === entry.profile.staffId ? "true" : undefined}
+                    >
+                      <span className="staff-avatar">
+                        {entry.record.photoUrl ? <img src={entry.record.photoUrl} alt="" /> : initials(entry)}
+                      </span>
+                      <span className="staff-roster__identity">
+                        <span className="staff-roster__name-line">
+                          <strong>{entry.record.preferredName || entry.profile.displayName}</strong>
+                          <em data-tone={entryState.tone}>{entryState.label}</em>
+                        </span>
+                        <small>{entry.profile.capabilities.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"}</small>
+                        <small className={entryState.key === "needs_attention" ? "staff-roster__warning" : "staff-roster__meta"}>
+                          {entryState.key === "needs_attention"
+                            ? !entry.record.contact.emergencyContactPhone ? "Emergency contact not provided" : Number(entry.record.compensation.hourlyRate || 0) <= 0 ? "Rate not configured" : !entry.profile.availabilityWindows?.length ? "Availability not provided" : "Contact needs review"
+                            : nextAssignment ? `${dateLabel(nextAssignment.eventWindow?.startAtISO || nextAssignment.event?.date)} · ${nextAssignment.event?.name || "Assigned event"}`
+                              : nextAvailability ? `${dateLabel(nextAvailability.startAtISO)} · ${timeRange(nextAvailability.startAtISO, nextAvailability.endAtISO)}`
+                                : "No upcoming availability"}
+                        </small>
+                      </span>
+                      <span className="staff-roster__rate">
+                        {rate > 0 ? <>{currency(rate, entry.record.compensation.currency)}<small>/hr</small></> : <small>Not set</small>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <div className="staff-roster__empty">
               <UserCircle size={30} aria-hidden="true" />
-              <p>No staff records yet.</p>
-              <button type="button" className="ghost" onClick={addStaff}>Add the first person</button>
+              <p>{records.length ? "No teammates match this view yet." : "Your first teammate can start right here."}</p>
+              <button type="button" className="ghost" onClick={addStaff}>Welcome the first person</button>
             </div>
           )}
         </aside>
 
-        <section className="staff-record" aria-label="Selected staff record">
+        <section className="staff-record staff-detail-pane" aria-label="Selected staff record">
           {draft ? (
             <>
+              <button type="button" className="staff-mobile-back" onClick={() => setMobileDetailOpen(false)}>
+                <span className="staff-ui-glyph" aria-hidden="true">←</span> Back to staff
+              </button>
               <header className="staff-record__identity">
                 <span className="staff-avatar is-large">
                   {draft.record.photoUrl ? <img src={draft.record.photoUrl} alt="" /> : initials(draft)}
                 </span>
                 <div>
-                  <p className="eyebrow">{draft.profile.active ? "Active team member" : "Inactive team member"}</p>
-                  <h2>{draft.record.preferredName || draft.profile.displayName || "New staff member"}</h2>
-                  <RoleIcons
-                    roles={draft.profile.capabilities}
-                    interactive
-                    onToggle={(role, enabled) => {
-                      setDraft((current) => withStaffRole(current, role, enabled));
-                      setDirty(true);
-                    }}
-                  />
+                  <p className="eyebrow">Team profile</p>
+                  <h2>{selectedDisplayName}</h2>
+                  <p className="staff-profile-subtitle">
+                    {selectedRoles.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"} · {draft.profile.active ? "Active" : "Inactive"}
+                  </p>
+                  <strong className="staff-primary-state" data-tone={selectedOperationalState?.tone}>{selectedOperationalState?.label}</strong>
                 </div>
-                <div className="staff-record__save">
-                  <button type="button" className="cta" onClick={() => void save()} disabled={!dirty || state.status === "saving"}>
-                    {state.status === "saving" ? "Saving…" : "Save staff record"}
-                  </button>
-                  <small>{dirty ? "Unsaved changes" : `Record revision ${draft.record.revision || 0}`}</small>
+                <div className="staff-record__controls">
+                  <div className="staff-profile-actions">
+                    <button type="button" className="cta" disabled={!selectedAssignment || invitationBusy || dirty} onClick={() => void previewInvitation()}>
+                      {selectedAssignment ? "Review assignment" : "Assign staff"}
+                    </button>
+                    <button type="button" className="ghost staff-more-button" aria-label="More staff actions" onClick={focusStaffDetails}><span className="staff-ui-glyph is-more" aria-hidden="true">•••</span></button>
+                  </div>
+                  <div className="staff-record__save">
+                    <button type="button" className="ghost compact" onClick={() => void save()} disabled={!dirty || state.status === "saving"}>
+                      {state.status === "saving" ? "Saving…" : dirty ? "Save changes" : "Saved"}
+                    </button>
+                    <small>{dirty ? "Unsaved changes" : `Record revision ${draft.record.revision || 0}`}</small>
+                  </div>
                 </div>
               </header>
+
+              <nav className="staff-profile-tabs" aria-label="Staff profile sections">
+                <a href="#staff-overview">Overview</a>
+                <a href="#staff-next-assignment">Assignments</a>
+                <a href="#staff-availability">Availability</a>
+                <a href="#staff-compensation">Rates</a>
+                <a href="#staff-qualifications">Qualifications</a>
+                <a href="#staff-detail-sections">Notes</a>
+              </nav>
+
+              <section id="staff-overview" className="staff-operational-stack" aria-label="Staff overview">
+                <article id="staff-next-assignment" className="staff-ops-panel staff-next-assignment">
+                  <header><div><p className="eyebrow">Next assignment</p><h3>{selectedAssignment?.event?.name || "No event assigned yet"}</h3></div><CalendarBlank size={22} aria-hidden="true" /></header>
+                  {selectedAssignment ? (
+                    <>
+                      <dl className="staff-assignment-facts">
+                        <div><dt>Date</dt><dd>{dateLabel(selectedAssignment.eventWindow?.startAtISO || selectedAssignment.event?.date, { weekday: true, year: true })}</dd></div>
+                        <div><dt>Time</dt><dd>{timeRange(selectedAssignment.eventWindow?.startAtISO, selectedAssignment.eventWindow?.endAtISO)}</dd></div>
+                        <div><dt>Role</dt><dd>{ROLE_LABELS[selectedAssignment.role] || selectedAssignment.role || "Not recorded"}</dd></div>
+                        <div><dt>Venue</dt><dd>{selectedAssignment.event?.venue || "Not recorded"}</dd></div>
+                        <div><dt>Guests</dt><dd>{selectedAssignment.event?.guests || "Not recorded"}</dd></div>
+                        <div><dt>Response</dt><dd>{acknowledgementLabel}</dd></div>
+                      </dl>
+                      <div className="staff-panel-action-row">
+                        <button type="button" className="cta" disabled={invitationBusy || dirty} onClick={() => void previewInvitation()}>View assignment</button>
+                        <span>{deliveryLabel}</span>
+                      </div>
+                    </>
+                  ) : <p className="staff-honest-empty">No event assignment yet. Open an event staffing plan when the right one comes along.</p>}
+                </article>
+
+                <article id="staff-availability" className="staff-ops-panel">
+                  <header><div><p className="eyebrow">Availability</p><h3>When they’re available</h3></div><button type="button" className="ghost compact" onClick={focusStaffDetails}>Edit availability</button></header>
+                  {availabilityWindows.length ? (
+                    <div className="staff-data-rows">
+                      {availabilityWindows.map((window) => (
+                        <div key={window.availabilityId} className="staff-data-row">
+                          <strong>{dateLabel(window.startAtISO, { weekday: true })}</strong>
+                          <span>{timeRange(window.startAtISO, window.endAtISO)}</span>
+                          <em data-tone={window.state === "available" ? "good" : "neutral"}>{window.state === "available" ? "Available" : "Unavailable"}</em>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="staff-honest-empty is-warning">Add availability to make scheduling easier.</p>}
+                </article>
+
+                <div className="staff-ops-split">
+                  <article id="staff-compensation" className="staff-ops-panel">
+                    <header><div><p className="eyebrow">Compensation</p><h3>Rates</h3></div><CurrencyDollar size={21} aria-hidden="true" /></header>
+                    <dl className="staff-key-values">
+                      <div><dt>Standard hourly rate</dt><dd>{hourlyRate > 0 ? `${currency(hourlyRate, draft.record.compensation.currency)}/hr` : "Rate not configured"}</dd></div>
+                      <div><dt>Event rate</dt><dd>{Number(draft.record.compensation.eventRate || 0) > 0 ? currency(draft.record.compensation.eventRate, draft.record.compensation.currency) : "Not configured"}</dd></div>
+                      <div><dt>Payroll status</dt><dd>{draft.record.compensation.payrollStatus === "ready" ? "Ready for review" : draft.record.compensation.payrollStatus === "on_hold" ? "On hold" : "Not ready"}</dd></div>
+                    </dl>
+                    <button type="button" className="staff-text-action" onClick={focusStaffDetails}>Manage rates</button>
+                  </article>
+
+                  <article id="staff-qualifications" className="staff-ops-panel">
+                    <header><div><p className="eyebrow">Qualifications</p><h3>Credentials</h3></div><StarFour size={21} aria-hidden="true" /></header>
+                    {draft.record.qualifications.length ? (
+                      <div className="staff-data-rows is-compact">
+                        {draft.record.qualifications.map((qualification) => {
+                          const presentation = qualificationPresentation(qualification);
+                          return (
+                            <div className="staff-data-row" key={qualification.qualificationId}>
+                              <strong>{qualification.type || "Unnamed qualification"}</strong>
+                              <span>{qualification.expiresOn ? `Expires ${dateLabel(qualification.expiresOn)}` : "No expiry recorded"}</span>
+                              <em data-tone={presentation.tone}>{presentation.label}</em>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="staff-honest-empty is-warning">No qualifications recorded.</p>}
+                  </article>
+                </div>
+
+                <article className="staff-ops-panel staff-personal-details">
+                  <header><div><p className="eyebrow">Personal details</p><h3>Contact record</h3></div><UserCircle size={21} aria-hidden="true" /></header>
+                  <dl className="staff-key-values">
+                    <div><dt>Phone</dt><dd>{draft.record.contact.phone || "Not provided"}</dd></div>
+                    <div><dt>Email</dt><dd>{draft.record.contact.email || "Not provided"}</dd></div>
+                    <div><dt>Emergency contact</dt><dd>{draft.record.contact.emergencyContactName && draft.record.contact.emergencyContactPhone ? `${draft.record.contact.emergencyContactName} · ${draft.record.contact.emergencyContactPhone}` : "Not provided"}</dd></div>
+                    <div><dt>Preferred contact</dt><dd>{preferredContactLabel}</dd></div>
+                  </dl>
+                </article>
+              </section>
+
+              <details id="staff-detail-sections" className="staff-editor-disclosure">
+                <summary><span><NotePencil size={19} aria-hidden="true" /> Edit full staff record</span><small>Contact, roles, scheduling, rates, travel, briefing, reliability, and private notes</small></summary>
+                <div className="staff-editor-disclosure__body">
 
               <Section icon={UserCircle} title="Identity and contact" description="Private contact details and the image used in this workspace." open>
                 <div className="staff-fields-grid">
@@ -464,6 +839,17 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
               </Section>
 
               <Section icon={StarFour} title="Roles and qualifications" description="Icons distinguish roles; proficiency and certifications establish the supporting detail.">
+                <div className="staff-editor-role-picker">
+                  <div><strong>Assignment roles</strong><small>Select every role this person can accept.</small></div>
+                  <RoleIcons
+                    roles={draft.profile.capabilities}
+                    interactive
+                    onToggle={(role, enabled) => {
+                      setDraft((current) => withStaffRole(current, role, enabled));
+                      setDirty(true);
+                    }}
+                  />
+                </div>
                 <div className="staff-role-detail-grid">
                   {draft.record.roleDetails.map((roleDetail, index) => {
                     const Icon = ROLE_ICONS[roleDetail.role];
@@ -622,15 +1008,72 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                 ) : (
                   <div className="staff-briefing-empty">
                     <CalendarBlank size={28} aria-hidden="true" />
-                    <div><strong>No recorded event assignment</strong><p>Assign this person from a Living Opportunity before creating an event-specific briefing.</p></div>
+                    <div><strong>No event assignment yet</strong><p>Assign this teammate from a Living Opportunity when you are ready to create their event briefing.</p></div>
                   </div>
                 )}
               </Section>
+                </div>
+              </details>
             </>
           ) : (
-            <div className="staff-record__empty"><UserCircle size={34} aria-hidden="true" /><h2>Select or add a staff member</h2><p>The relevant record will open here with a clear next action.</p></div>
+            <div className="staff-record__empty"><UserCircle size={34} aria-hidden="true" /><h2>Choose a teammate or welcome someone new</h2><p>Their profile and best next step will appear right here.</p></div>
           )}
         </section>
+
+        {draft ? (
+          <aside className="staff-evidence-rail" aria-label="Staff profile checklist and recent activity">
+            {selectedReadinessCompleteCount < selectedReadinessTotal ? (
+              <section className="staff-attention-callout">
+                <span className="staff-ui-glyph is-warning" aria-hidden="true">!</span>
+                <div>
+                  <strong>{selectedReadinessTotal - selectedReadinessCompleteCount} quick detail{selectedReadinessTotal - selectedReadinessCompleteCount === 1 ? "" : "s"} left to complete</strong>
+                  <p>Finish these details to make assignments easier.</p>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="staff-rail-panel">
+              <header><p className="eyebrow">Profile checklist</p><strong>{selectedReadinessCompleteCount} of {selectedReadinessTotal} complete</strong></header>
+              <ul className="staff-readiness-ledger">
+                {readinessItems.map((item) => (
+                  <li key={item.label} data-state={item.state}>
+                    {item.state === "complete" ? <span className="staff-ui-glyph is-complete" aria-hidden="true">✓</span> : item.state === "warning" ? <span className="staff-ui-glyph is-warning" aria-hidden="true">!</span> : <span className="staff-neutral-dot" />}
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {selectedAssignment ? (
+              <section className="staff-rail-panel">
+                <header><p className="eyebrow">Assignment evidence</p><strong>{selectedAssignment.event?.name || "Event"}</strong></header>
+                <ol className="staff-evidence-steps">
+                  {assignmentSteps.map(([label, complete]) => (
+                    <li key={label} data-complete={complete ? "true" : "false"}><span>{label}</span><strong>{complete ? "Recorded" : "Pending"}</strong></li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
+
+            <section className="staff-rail-panel">
+              <header><p className="eyebrow">Recent activity</p><strong>What changed</strong></header>
+              {selectedActivities.length ? (
+                <ol className="staff-activity-list">
+                  {selectedActivities.map((activity) => (
+                    <li key={`${activity.event}-${activity.at}`}>
+                      <strong>{activity.event}</strong>
+                      <span>{activity.value}</span>
+                      <small>{activityTime(activity.at)} · {activity.source}</small>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="staff-honest-empty">A fresh start—team activity will appear here as work moves forward.</p>
+              )}
+            </section>
+          </aside>
+        ) : null}
       </div>
     </main>
   );

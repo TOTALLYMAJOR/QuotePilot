@@ -99,7 +99,7 @@ describe("Import Studio presentation", () => {
     expect(uncertainHtml).toContain("Import outcome is uncertain.");
     expect(uncertainHtml).toContain("same batch identity");
     expect(uncertainHtml).toContain("new-file actions remain locked");
-    expect(uncertainHtml).toContain(">Reconcile import</button>");
+    expect(uncertainHtml).toContain(">Check this import</button>");
     expect(uncertainHtml).not.toContain("Import completed");
     expect(reconciliationHtml).toContain('data-mutation-state="reconciliation"');
     expect(reconciliationHtml).toContain('data-capability-state="reconciliation"');
@@ -141,7 +141,7 @@ describe("Import Studio presentation", () => {
 
     expect(receiptHtml).toContain('data-mutation-state="receipt"');
     expect(receiptHtml).toContain('data-capability-state="receipt"');
-    expect(receiptHtml).toContain("Import receipt confirmed");
+    expect(receiptHtml).toContain("Import confirmed");
     expect(receiptHtml).toContain("server receipt establishes the recorded batch result");
     expect(receiptHtml).not.toContain("delivered");
     expect(errorHtml).toContain('data-mutation-state="error"');

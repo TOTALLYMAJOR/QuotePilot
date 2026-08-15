@@ -152,7 +152,7 @@ export function buildImportMutationPresentation({
   if (effectivePhase === "uncertain") {
     return {
       state: "uncertain",
-      actionLabel: normalizedOperation === "rollback" ? "Reconcile undo" : "Reconcile import",
+      actionLabel: normalizedOperation === "rollback" ? "Check this undo" : "Check this import",
       title: `${operationLabel} outcome is uncertain.`,
       detail: "No server receipt returned. Retry to reconcile the same batch identity before assuming which records changed. Close, source-change, and new-file actions remain locked.",
       error: normalizedError
@@ -172,7 +172,7 @@ export function buildImportMutationPresentation({
     return {
       state: "receipt",
       actionLabel: rolledBack ? "Undo reconciled" : "Import reconciled",
-      title: rolledBack ? "Undo receipt confirmed" : "Import receipt confirmed",
+      title: rolledBack ? "Undo confirmed" : "Import confirmed",
       detail: "The server receipt establishes the recorded batch result. It does not imply any outbound message activity.",
       error: ""
     };
@@ -202,7 +202,7 @@ export function buildImportMutationPresentation({
   return {
     state: "idle",
     actionLabel: "Choose CSV file",
-    title: "No import has started",
+    title: "Ready when you are",
     detail: "Nothing has been written to the organization.",
     error: ""
   };
@@ -569,7 +569,7 @@ export function ImportStudioView({
         </header>
 
         <div className="import-destination-lock" aria-label="Locked import destination">
-          <span>Destination locked</span>
+          <span>Adding only to</span>
           <strong>{organizationName || "Current organization"}</strong>
           <code>{organizationId || "No organization assigned"}</code>
           <small>Uploaded files cannot change this destination.</small>
@@ -722,7 +722,13 @@ export function ImportStudioView({
         {receipt && (
           <section className="import-receipt" aria-live="polite">
             <p className="import-studio-kicker">Import receipt</p>
-            <h3>{receipt.status === "rolled_back" ? "Import safely undone" : `${organizationName || organizationId} is updated`}</h3>
+            <h3>
+              {receipt.status === "rolled_back"
+                ? "Import safely undone"
+                : Number(receipt.createdCount || 0) > 0
+                  ? `${organizationName || organizationId} has new records`
+                  : "Everything already matched"}
+            </h3>
             <div className="import-review-metrics">
               <div>
                 <span>{receipt.status === "rolled_back" ? "Removed" : "Created"}</span>

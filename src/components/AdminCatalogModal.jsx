@@ -696,7 +696,7 @@ export function AdminCatalogView({
       return false;
     }
     const actionLabel = action === "delete" ? "deleting" : "deactivating";
-    const message = `Save or finish the other Catalog Admin edits, or close and discard them, then reopen Catalog Admin before ${actionLabel} this menu item. No menu change was made.`;
+    const message = `You already have another catalog change in progress. Save or discard it, then try ${actionLabel} this menu item again. This item is unchanged.`;
     setStatus(message);
     pushToast(message, "error");
     return true;
@@ -717,7 +717,7 @@ export function AdminCatalogView({
         dirty === true && !(ownDraft === "item-update" && itemId === targetItemId)
       ));
     if (!blocked) return false;
-    const message = "Finish or discard your other Library edits before making this saved change. Nothing changed.";
+    const message = "One Library edit is already in progress. Save or discard it, then try this change again. Nothing changed.";
     setStatus(message);
     pushToast(message, "info");
     return true;
@@ -1619,7 +1619,7 @@ export function AdminCatalogView({
   const handleSave = async () => {
     if (blockForNewerCatalog()) return;
     if (hasManagedMenuDraft) {
-      setStatus("Finish or discard the separate menu edits first, then save the rest of the Library. Nothing was saved yet.");
+      setStatus("One menu edit is still in progress. Save or discard it, then save the rest of the Library. Nothing else was saved.");
       return;
     }
     try {
@@ -1684,7 +1684,7 @@ export function AdminCatalogView({
           ? "uncertain"
           : status.includes("Catalog changed while the save was in progress")
             ? "reconciliation"
-            : status && status !== "Your changes are not saved yet." && status !== "Settings are up to date."
+            : status && status !== "Your changes are not saved yet." && status !== "All changes saved."
               ? "error"
               : "ready";
 
@@ -1785,7 +1785,7 @@ export function AdminCatalogView({
           <h2 id="catalog-admin-title">{surfaceTitle}</h2>
           <div className="admin-save-actions">
             <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
-              {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "No pending changes"}
+              {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
             </span>
             {!starterChoiceOnly && (
               <button
@@ -1935,7 +1935,7 @@ export function AdminCatalogView({
                       setManualSetupEnabled(true);
                       setActiveTab("packages");
                     }}
-                  >Build my catalog manually</button>
+                  >Create my own catalog</button>
                 </div>
               )}
             </div>
@@ -2411,7 +2411,7 @@ export function AdminCatalogView({
         {resolvedActiveTab === "pricing" && (
           <>
             <section className="admin-section">
-              <div className="admin-section-head"><h3>Pricing Review Required</h3></div>
+              <div className="admin-section-head"><h3>Review Pricing Before Quoting</h3></div>
               <div className="admin-section-body">
                 <p className="source-note">
                   Review every fee, tax, deposit, travel, staffing, tier, and seasonal value below for this organization. These values affect customer totals.
@@ -2438,7 +2438,7 @@ export function AdminCatalogView({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Numeric Settings</h3></div>
+          <div className="admin-section-head"><h3>Pricing &amp; Quote Defaults</h3></div>
           <div className="admin-grid-settings">
             <label>
               Per-mile rate
@@ -2526,7 +2526,7 @@ export function AdminCatalogView({
 
             <section className="admin-section">
           <div className="admin-section-head">
-            <h3>Guided Selling & Staffing Controls</h3>
+            <h3>Suggestions &amp; Staffing</h3>
             <button type="button" className="ghost" onClick={addUpsellRule}>Add Rule</button>
           </div>
           <div className="admin-grid-settings">
@@ -2652,7 +2652,7 @@ export function AdminCatalogView({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Optional Modules</h3></div>
+          <div className="admin-section-head"><h3>Workspace Features</h3></div>
           {enforceOrderFeatureAccess && (
             <p className="source-note">
               Module access is read only because this organization&apos;s order controls entitlements. To change access, update provisioning entitlements for this org and reopen this modal.
@@ -2677,7 +2677,7 @@ export function AdminCatalogView({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Quote Meta</h3></div>
+          <div className="admin-section-head"><h3>Proposal Details</h3></div>
           <div className="admin-grid-settings">
             <label>
               Quote prepared by
@@ -2781,7 +2781,7 @@ export function AdminCatalogView({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Customer-facing business branding</h3></div>
+          <div className="admin-section-head"><h3>Your Customer-facing Brand</h3></div>
           <p className="source-note">
             These details identify your catering business on proposals and the customer portal. They do not replace the QuotePilot by MBMApps product identity.
           </p>
@@ -2936,7 +2936,7 @@ export function AdminCatalogView({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Default Selectors</h3></div>
+          <div className="admin-section-head"><h3>Smart Defaults</h3></div>
           <div className="admin-grid-settings">
             <label>
               Default tax region id
@@ -2958,7 +2958,7 @@ export function AdminCatalogView({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Advanced Config (JSON)</h3></div>
+          <div className="admin-section-head"><h3>Advanced Settings (JSON)</h3></div>
           <div className="admin-section-body">
             {JSON_FIELD_META.map((field) => (
               <label key={field.key} className="json-label">
@@ -2979,7 +2979,7 @@ export function AdminCatalogView({
 
         <div className="modal-foot" data-capability-state={catalogSaveCapabilityState}>
           <span className="source-note" role="status" aria-live="polite">
-            {status || (hasAnyUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
+            {status || (hasAnyUnsavedChanges ? "Your changes are not saved yet." : "All changes saved.")}
           </span>
           {catalogRefreshRequired && (
             <button type="button" className="ghost" onClick={handleReload} disabled={closeBlocked}>

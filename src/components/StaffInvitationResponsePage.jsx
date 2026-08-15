@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle, Clock, MapPin, WarningCircle, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, Clock, MapPin, WarningCircle, XCircle } from "./ProductIcons";
 import {
   getPublicStaffInvitation,
   respondToPublicStaffInvitation

@@ -3,7 +3,7 @@ import {
   ClockCountdown,
   Prohibit,
   WarningCircle
-} from "@phosphor-icons/react";
+} from "./ProductIcons";
 import "./ambientOperationalReceipts.css";
 
 const ICONS = {

@@ -112,14 +112,23 @@ export function WorkspaceToolSurface({
   }
 
   return (
-    <WorkspaceLazyRoute
-      active={open}
-      surfaceName={surfaceName}
-      component={Surface}
-      onClose={onClose}
+    <div
+      className="workspace-tool-route-surface"
+      data-workspace-tool-surface={surfaceName}
+      data-workspace-tool-open={open ? "true" : "false"}
+      hidden={!open}
+      aria-hidden={open ? undefined : "true"}
+      style={open ? { display: "contents" } : undefined}
     >
-      <Surface {...surfaceProps} {...presentationProps} open={open} onClose={onClose} />
-    </WorkspaceLazyRoute>
+      <WorkspaceLazyRoute
+        active={open}
+        surfaceName={surfaceName}
+        component={Surface}
+        onClose={onClose}
+      >
+        <Surface {...surfaceProps} {...presentationProps} open={open} onClose={onClose} />
+      </WorkspaceLazyRoute>
+    </div>
   );
 }
 

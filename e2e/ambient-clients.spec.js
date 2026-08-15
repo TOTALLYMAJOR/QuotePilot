@@ -96,6 +96,17 @@ async function seedClient(page) {
   }, CLIENT_QUOTE);
 }
 
+async function gotoClientsWorkspace(page) {
+  await page.goto("/app/customers");
+  const setupHeading = page.getByRole("heading", { name: "Bring Your Catalog to Life" });
+  const directory = page.locator(".ambient-clients");
+  await expect(setupHeading.or(directory)).toBeVisible({ timeout: 30_000 });
+  if (await setupHeading.isVisible()) {
+    await page.getByRole("button", { name: "Explore the workspace" }).click();
+    await expect(directory).toBeVisible({ timeout: 30_000 });
+  }
+}
+
 async function expectFortyFourPixelTargets(surface) {
   const undersized = await surface.locator(
     "button:visible, input:visible, summary:visible"
@@ -190,16 +201,19 @@ test.describe("Ambient Clients", () => {
   for (const viewport of VIEWPORTS) {
     test(`keeps the client relationship light, exact, and evidence-safe at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
-      await page.goto("/app/customers");
+      await gotoClientsWorkspace(page);
 
       const directory = page.locator(".ambient-clients");
       const directoryHeading = directory.getByRole("heading", {
-        name: "People you’re working with",
+        name: "Clients",
         exact: true
       });
       await expect(directoryHeading).toBeVisible({ timeout: 30_000 });
       await expect(directoryHeading).toBeFocused();
       await expect(directory).toHaveAttribute("data-surface-contract-id", "ambient-clients-list");
+      await directory.getByPlaceholder("Search clients by name or email…")
+        .fill(CLIENT_QUOTE.customer.email);
+      await directory.getByRole("button", { name: "Search", exact: true }).click();
       await expect(directory.locator(".ambient-client")).toHaveCount(1);
       await expect(directory.locator('[data-client-id="ambient-client-maya"]')).toContainText("Maya Bennett");
       await expect(page.locator(".customer-directory-table")).toHaveCount(0);

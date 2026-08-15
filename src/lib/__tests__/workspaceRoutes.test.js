@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
   ADMIN_WORKSPACE_NAVIGATION,
+  buildEventLivePath,
+  buildEventPath,
+  buildEventReplayPath,
   buildCustomerPath,
   buildMessagingPath,
   buildPortalPath,
@@ -18,12 +21,15 @@ import {
 describe("workspace route parsing and construction", () => {
   test.each([
     ["/app", WORKSPACE_ROUTE_IDS.HOME, "first-release"],
+    ["/app/clear-the-deck", WORKSPACE_ROUTE_IDS.CLEAR_DECK, "follow-on"],
     ["/app/customers", WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, "first-release"],
     ["/app/staff", WORKSPACE_ROUTE_IDS.STAFF, "follow-on"],
     ["/app/quotes", WORKSPACE_ROUTE_IDS.QUOTE_LIST, "first-release"],
     ["/app/quotes/new", WORKSPACE_ROUTE_IDS.QUOTE_NEW, "first-release"],
+    ["/app/events", WORKSPACE_ROUTE_IDS.EVENT_LIST, "follow-on"],
     ["/app/messages", WORKSPACE_ROUTE_IDS.MESSAGING, "first-release"],
     ["/app/workflow", WORKSPACE_ROUTE_IDS.WORKFLOW, "first-release"],
+    ["/app/operations", WORKSPACE_ROUTE_IDS.OPERATIONS, "follow-on"],
     ["/app/schedule", WORKSPACE_ROUTE_IDS.SCHEDULE, "follow-on"],
     ["/app/reporting", WORKSPACE_ROUTE_IDS.REPORTING, "follow-on"],
     ["/app/catalog", WORKSPACE_ROUTE_IDS.CATALOG, "follow-on"],
@@ -51,14 +57,32 @@ describe("workspace route parsing and construction", () => {
     const customerPath = buildCustomerPath("customer:01_(west)");
     const quotePath = buildQuotePath("quote:01_(draft)");
     const editPath = buildQuoteEditPath("quote:01_(draft)");
+    const eventPath = buildEventPath("quote:01_(draft)");
+    const livePath = buildEventLivePath("quote:01_(draft)");
+    const replayPath = buildEventReplayPath("quote:01_(draft)");
 
     expect(customerPath).toBe("/app/customers/customer%3A01_%28west%29");
     expect(quotePath).toBe("/app/quotes/quote%3A01_%28draft%29");
     expect(editPath).toBe("/app/quotes/quote%3A01_%28draft%29/edit");
+    expect(eventPath).toBe("/app/events/quote%3A01_%28draft%29");
+    expect(livePath).toBe("/app/events/quote%3A01_%28draft%29/live");
+    expect(replayPath).toBe("/app/events/quote%3A01_%28draft%29/replay");
     expect(parseWorkspacePath(customerPath).params).toEqual({ customerId: "customer:01_(west)" });
     expect(parseWorkspacePath(quotePath).params).toEqual({ quoteId: "quote:01_(draft)" });
     expect(parseWorkspacePath(editPath)).toMatchObject({
       routeId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
+      params: { quoteId: "quote:01_(draft)" }
+    });
+    expect(parseWorkspacePath(eventPath)).toMatchObject({
+      routeId: WORKSPACE_ROUTE_IDS.EVENT_DETAIL,
+      params: { quoteId: "quote:01_(draft)" }
+    });
+    expect(parseWorkspacePath(livePath)).toMatchObject({
+      routeId: WORKSPACE_ROUTE_IDS.EVENT_LIVE,
+      params: { quoteId: "quote:01_(draft)" }
+    });
+    expect(parseWorkspacePath(replayPath)).toMatchObject({
+      routeId: WORKSPACE_ROUTE_IDS.EVENT_REPLAY,
       params: { quoteId: "quote:01_(draft)" }
     });
   });
@@ -99,13 +123,32 @@ describe("workspace route parsing and construction", () => {
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_EDIT, { quoteId: "q-1" }))
       .toBe("/app/quotes/q-1/edit");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_NEW)).toBe(WORKSPACE_PATHS.quoteNew);
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.CLEAR_DECK)).toBe(WORKSPACE_PATHS.clearDeck);
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.EVENT_DETAIL, { quoteId: "q-1" }))
+      .toBe("/app/events/q-1");
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.EVENT_LIVE, { quoteId: "q-1" }))
+      .toBe("/app/events/q-1/live");
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.EVENT_REPLAY, { quoteId: "q-1" }))
+      .toBe("/app/events/q-1/replay");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.MESSAGING, { quoteId: "q-1" }))
       .toBe("/app/messages?quoteId=q-1");
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.OPERATIONS)).toBe(WORKSPACE_PATHS.operations);
   });
 
   test("exposes the persistent primary navigation and separately scoped operational routes", () => {
     expect(PRIMARY_WORKSPACE_NAVIGATION.map((item) => item.label))
-      .toEqual(["Home", "Customers", "Staff", "Quotes", "Messages", "Workflow", "Schedule"]);
+      .toEqual([
+        "Now",
+        "Clear the Deck",
+        "Customers",
+        "Staff",
+        "Quotes",
+        "Events",
+        "Messages",
+        "Workflow",
+        "Operations",
+        "Schedule"
+      ]);
     expect(ADMIN_WORKSPACE_NAVIGATION.map((item) => item.label))
       .toEqual(["Reporting", "Catalog", "Imports", "Integrations", "Diagnostics"]);
   });

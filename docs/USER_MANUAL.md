@@ -177,6 +177,16 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   briefing defaults, attendance summaries, response history, reliability and
   private notes. Sensitive private fields stay in callable-owned `staffRecords`;
   the safe profile used by assignment planning still excludes them.
+- Use the compact command header to search by person or role, filter by
+  availability, assignment, or attention state, and start **Add staff**. Each
+  roster row shows one primary operational state plus the next useful fact;
+  selecting it opens assignment-first detail with readiness and evidence kept
+  separate from editable profile data.
+- On phones, Staff opens roster-first. Select a person to open a separate detail
+  state, then use **Back to staff** to return. On larger screens the roster and
+  selected record remain visible together. Open **Edit full staff record** only
+  when contact, role, availability, compensation, qualification, or briefing
+  data needs to change.
 - Select an exact operator-confirmed event assignment under **Staff briefing
   sheet** to print or download a role-aware PDF. **Open email app** addresses a
   prefilled message to the email on file and includes the current role, call
@@ -212,6 +222,10 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   quoted staffing context may remain visible, but it cannot claim staff
   availability, an operator-confirmed assignment, schedule-conflict clearance,
   coverage, or a server receipt.
+- An explicit local authentication-bypass review may display a photo-rich
+  `local_fixture` directory. Those records are development-only, are never
+  written to Firebase or a provider, and must not be treated as production
+  staff, assignment, delivery, acknowledgement, attendance, or payroll proof.
 
 ## Workspace Search
 
@@ -238,6 +252,12 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   directory. Search uses normalized customer name or email prefixes; page
   controls keep the read bounded. Routes use an opaque customer ID, never an
   email address.
+- In the Ambient Clients view, use the compact command header to inspect only
+  this page's **Clients shown**, **With linked work**, **Upcoming events**, and **Contact details to add**
+  counts. The filters narrow the current bounded page; they do not rank a
+  relationship, search older pages, or infer engagement. Each dense row keeps
+  identity, the latest recorded link, contact data, one relationship state,
+  and one **Review client** action aligned.
 - Select a customer name or `Open 360` to open
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
@@ -274,7 +294,7 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   check there; the central queue never creates a draft by itself.
 - A successfully governed booking also creates one internal `Closeout review
   record` for seven calendar days after the event. If it says `Configuration
-  blocked`, an admin must set `Pricing` -> `Quote Meta` -> `Business time zone`;
+  blocked`, an admin must set `Pricing` -> `Proposal Details` -> `Business time zone`;
   the booking itself remains valid. Return to the record and select `Check
   configuration`; this creates a configuration receipt but reviews no closeout
   item. A `Closeout source review needed` booking also remains valid, but its
@@ -1077,7 +1097,7 @@ unchanged.
 - A blank organization starts on one guided screen with four clearly described
   industry packs. Empty Packages, Addons, Rentals, Menu, and Pricing tabs stay
   hidden until a pack is populated or the admin explicitly chooses
-  `Build my catalog manually`.
+  `Create my own catalog`.
 - Use tabbed sections:
   - Starter Packs
   - Packages
@@ -1122,11 +1142,11 @@ unchanged.
   unselected choices do not appear in the customer scope, while selected
   choices appear at $0 and are not charged a second time.
 - Save overall catalog changes with `Save Catalog`.
-- In `Pricing` → `Quote Meta`, set `Business time zone` to a valid IANA value
+- In `Pricing` → `Proposal Details`, set `Business time zone` to a valid IANA value
   such as `America/Chicago`, then save the catalog. Revenue timing uses this
   tenant-owned calendar context and fails closed when it is blank or invalid;
   the browser's local clock does not become Revenue Autopilot authority.
-- In `Pricing` → `Customer-facing business branding`, choose Midnight Amber,
+- In `Pricing` → `Your Customer-facing Brand`, choose Midnight Amber,
   Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
   select `Save catalog changes` to persist the six existing brand colors for
   future quotes. Editing an individual color afterward is treated as a custom
@@ -1148,7 +1168,7 @@ unchanged.
   generated record or suggested pricing setting is edited, replacement is
   blocked so the owner change cannot be overwritten; continue editing that
   catalog or remove the custom work manually instead.
-- `Optional Modules` behavior depends on entitlement mode:
+- `Workspace Features` behavior depends on entitlement mode:
   - Standard mode: all module toggles are editable by admins.
   - Order-enforced mode: all module toggles are read-only; modules not paid for are locked off.
 - In order-enforced mode each module row is labeled as either `Included in order (read only)` or `Not included in order (read only)`.
@@ -1459,7 +1479,7 @@ Do not rerun the CLI or new-customer mode against an existing organization.
    plan/feature selection.
 3. Confirm the warning before applying the update.
 4. Verify the resulting optional-module state in `Admin Catalog` → `Pricing` →
-   `Optional Modules`.
+   `Workspace Features`.
 
 This mode updates plan entitlements and the associated provisioning order only.
 It does not change owner identity, branding, catalog records, invitations, or
@@ -1688,10 +1708,18 @@ receipts for those actions and evidence.
   remains unavailable and points back to the existing governed surface. The
   displayed next operational resolution adds no role or mutation authority.
 - Open **Clients** to use the lighter default-off view over the existing
-  bounded client directory. Each row shows recorded identity, contact details,
-  its most recent linked quote or event, and one **Review client** action. It
+  bounded client directory. Its command header, page filters, dense rows, and
+  responsive relationship record show only recorded identity, contact details,
+  the most recent linked quote or event, and one **Review client** action. It
   does not infer relationship value, unread activity, engagement, or lifetime
   totals from the bounded page.
+- With the explicit local authentication bypass enabled, Clients may show a
+  24-record `local_fixture` review page spanning August through October. The
+  source rail labels it **This browser**. Selecting one of those exact fixture
+  identities opens its matching browser-local relationship overview, including
+  locally generated opportunity and conversation context where present. The
+  fixture is never written to Firebase or a provider and is not production
+  client, engagement, delivery, booking, or payment evidence.
 - **Review client** opens that exact opaque client and focuses a relationship
   overview with identity, active work shown, items needing review, the next
   dated event, and one supported next step. A mismatched or missing arrival
@@ -1891,7 +1919,7 @@ history yet rather than a suggestion from one or two data points.
 With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog
 Admin gains cost fields beside the existing price fields — cost per person
 on packages, cost on add-ons and rentals — plus server, chef, and bartender
-cost rates and a target margin % policy in Numeric Settings. Blank always
+cost rates and a target margin % policy in Pricing & Quote Defaults. Blank always
 means the cost has not been recorded; it is never treated as $0, since an
 entered $0 and an unrecorded cost are different facts.
 

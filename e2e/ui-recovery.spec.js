@@ -111,14 +111,14 @@ test("authoritative menu deactivate and delete keep unrelated Catalog Admin draf
   await active.press("Tab");
 
   await expect(catalog.getByText(
-    /Save or finish the other Catalog Admin edits.*before deactivating this menu item/i
+    /another catalog change in progress.*deactivating this menu item again/i
   ).first()).toBeVisible();
   await expect(active).toBeChecked();
 
   const rowCount = await managedRows.count();
   await row.getByRole("button", { name: "Delete" }).click();
   await expect(catalog.getByText(
-    /Save or finish the other Catalog Admin edits.*before deleting this menu item/i
+    /another catalog change in progress.*deleting this menu item again/i
   ).first()).toBeVisible();
   await expect(managedRows).toHaveCount(rowCount);
 

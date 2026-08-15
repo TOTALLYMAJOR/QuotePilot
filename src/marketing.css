@@ -316,8 +316,13 @@
 .marketing-feature-detail h2 { max-width: 11ch; margin: 0; font-size: clamp(2.7rem, 5vw, 5.4rem); line-height: .93; letter-spacing: -.055em; font-weight: 300; text-transform: uppercase; }
 .marketing-feature-summary { max-width: 34rem; margin: 1.5rem 0 0; color: #b5b7bd; font-size: 1rem; line-height: 1.7; }
 .marketing-feature-media { margin: 2.5rem 0 0; }
-.marketing-feature-media img { width: 100%; aspect-ratio: 3 / 2; display: block; object-fit: cover; object-position: top center; border: 1px solid rgba(255,255,255,.15); border-radius: .7rem; background: #111114; box-shadow: 0 1.5rem 4rem rgba(0,0,0,.28); }
+.marketing-feature-media img { width: 100%; height: auto; display: block; border: 1px solid rgba(255,255,255,.15); border-radius: .7rem; background: #111114; box-shadow: 0 1.5rem 4rem rgba(0,0,0,.28); }
 .marketing-feature-media figcaption { margin-top: .7rem; color: #747780; font-family: "DM Mono", monospace; font-size: .54rem; letter-spacing: .05em; }
+.marketing-feature-placeholder { display: grid; place-content: center; gap: 1.5rem; padding: 3rem 2rem; border: 1px solid rgba(255,255,255,.15); border-radius: .7rem; background: linear-gradient(145deg, #101012, #09090a); box-shadow: 0 1.5rem 4rem rgba(0,0,0,.28); }
+.marketing-feature-placeholder-visual { display: grid; grid-template-columns: repeat(3,1fr); gap: .75rem; width: min(26rem, 74vw); }
+.marketing-feature-placeholder-visual span { display: grid; place-content: center; padding: 1.7rem .5rem; color: #767982; border: 1px solid rgba(255,255,255,.12); border-radius: .5rem; font-family: "DM Mono", monospace; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }
+.marketing-feature-placeholder-visual span.is-recommended { color: var(--marketing-amber); border-color: rgba(255,157,22,.48); box-shadow: inset 0 -2.5rem 3rem rgba(255,132,0,.08); }
+.marketing-feature-placeholder p { margin: 0; color: #6f7178; font-family: "DM Mono", monospace; font-size: .58rem; letter-spacing: .1em; text-align: center; text-transform: uppercase; }
 .marketing-feature-copy { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; margin-top: clamp(2.5rem, 5vh, 4.5rem); }
 .marketing-feature-copy section { padding-top: 1.1rem; border-top: 1px solid rgba(255,255,255,.15); }
 .marketing-feature-copy span { color: #e0b471; font-family: "DM Mono", monospace; font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; }

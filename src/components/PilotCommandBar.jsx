@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Microphone } from "@phosphor-icons/react";
+import { Microphone } from "./ProductIcons";
 import { currency } from "../lib/quoteCalculator";
 import {
   CHANGE_REQUEST_PARSE_MODEL,

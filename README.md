@@ -31,6 +31,14 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/app`: authenticated staff workspace. Generic builds retain the five-step
   builder landing; builds with `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`
   use the Commercial Command Center as the default landing.
+- `/app/clear-the-deck`: Ambient planning route for sequential decision review.
+  It uses the existing bounded workflow/commercial evidence and labels
+  incomplete live-operations authority as unavailable rather than inferred.
+- `/app/events`, `/app/events/:quoteId`, `/app/events/:quoteId/live`, and
+  `/app/events/:quoteId/replay`: Ambient planning routes for accepted/booked
+  event work. The initial slice distinguishes planned event evidence from
+  live authority; current phase, pulse, issues, actuals, and replay remain
+  “not established” until the server-owned event-operations authority ships.
 - `/app/customers` and `/app/customers/:customerId`: temporary-flagged,
   paginated staff customer directory and opaque-ID Internal Customer 360. A
   default-off Ambient build presents these same bounded reads as **Clients**:
@@ -63,18 +71,22 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   state is not exposed as an active conversation.
 - `/app/workflow`: routed attention, follow-up, and approval surface; optional
   query parameters focus an exact quote, attention type, and request.
-- `/app/staff`: independently flagged administrator-only Staff workspace for
-  private contact/photo, qualifications, availability, rates, travel,
-  briefing defaults, reliability and notes. Exact operator-confirmed event
-  assignments can produce a role-aware print/download sheet or a prefilled
-  default-email-app handoff. An administrator can preview and manually send an
-  exact-assignment invitation to a verified private email, then see provider
-  delivery and staff acknowledgement on separate rails.
+- `/app/staff`: independently flagged administrator-only Staff People workspace
+  for private contact/photo, qualifications, availability, rates, travel,
+  briefing defaults, reliability and notes. The default view is read-first:
+  a fixed object rail, profile summary, readiness, next-best assignment action,
+  and assignment progress card precede the existing edit sections. Exact
+  operator-confirmed event assignments can produce a role-aware print/download
+  sheet or a prefilled default-email-app handoff. An administrator can preview
+  and manually send an exact-assignment invitation to a verified private email,
+  then see provider delivery and staff acknowledgement on separate rails.
 - `/staffing/respond?staffing=<signed-token>`: public bearer response for one
   exact staff assignment invitation. The link records accept or decline only;
   it does not establish attendance, hours, payroll, completion, or readiness.
 - `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
   schedule and proof-safe commercial reporting workspaces.
+- `/app/operations`: Ambient Operations switchboard over existing daily,
+  business, and system routes. It adds no new backend authority.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
   workspaces; the existing admin gate remains authoritative. A default-off
   Ambient build presents `/app/catalog` as **Library**, separating catalog
@@ -653,7 +665,9 @@ production graph from mutually exclusive route chunks. CI builds and checks
 both graphs with an explicit matching `BUNDLE_BUDGET_PROFILE`; a mismatch,
 missing marker, or mixed graph fails closed. Temporary profile ceilings live in
 `docs/performance/bundle-exception.json` and do not change the clean-main
-baseline.
+baseline. The same gate also rejects emitted development-only Staff or Client
+fixture chunks and their unique payload sentinels, so local review records
+cannot silently enter a production asset.
 
 `check:capability-surfaces` is the mechanical no-orphan-capability gate. For a
 backend delivery it requires a revision-bumped contract in

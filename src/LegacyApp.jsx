@@ -1,9 +1,19 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  CalendarBlank,
+  EnvelopeSimple,
+  MagnifyingGlass,
+  NotePencil,
+  Plus,
+  StarFour,
+  UserCircle
+} from "./components/ProductIcons";
 import AttentionBadge from "./components/AttentionBadge";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
+import ProposalComposer from "./components/ProposalComposer";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import {
   createRecoverableLazy,
@@ -16,6 +26,14 @@ import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import PilotCommandBar from "./components/LegacyPilotCommandBar";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
+import {
+  clearDraftSnapshot,
+  describeSnapshotAge,
+  draftRecoveryKey,
+  readDraftSnapshot,
+  snapshotMeaningful,
+  writeDraftSnapshot
+} from "./components/draftRecovery";
 import {
   isDefinitiveRecordError,
   linkChangeRequestResolutionVersion,
@@ -180,6 +198,14 @@ const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
 );
 const CUSTOMER_CENTERED_WORKSPACE_ENABLED = !["0", "false", "no", "off"].includes(
   String(import.meta.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
+);
+// The Proposal Composer is the default presentation of the quote builder
+// (docs/PROPOSAL_COMPOSER_PLAN.md). Explicit 0/false/no/off restores the
+// wizard-first presentation. Either way the wizard remains available as
+// Guided mode, both write the same draft form, and the save path keeps its
+// existing authority (server pricing, versioning) unchanged.
+const PROPOSAL_COMPOSER_ENABLED = !["0", "false", "no", "off"].includes(
+  String(import.meta.env.VITE_PROPOSAL_COMPOSER_ENABLED || "").trim().toLowerCase()
 );
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
@@ -732,6 +758,12 @@ function LegacyAppCore({
   const [dynamicMenuRetryToken, setDynamicMenuRetryToken] = useState(0);
   const [step, setStep] = useState(1);
   const [mobilePricingOpen, setMobilePricingOpen] = useState(false);
+  // Builder presentation mode: the Proposal Composer document (flag default)
+  // or the sequential wizard as Guided mode. Both write the same draft form.
+  const [builderMode, setBuilderMode] = useState(
+    PROPOSAL_COMPOSER_ENABLED ? "composer" : "guided"
+  );
+  const proposalComposerActive = PROPOSAL_COMPOSER_ENABLED && builderMode === "composer";
 
   const closeMobilePricing = () => {
     setMobilePricingOpen(false);
@@ -1167,6 +1199,57 @@ function LegacyAppCore({
 
   const handleAddonSelection = (addonId, selected) => {
     recordProductAnalyticsEvent(selected ? "addon_selected" : "addon_removed", { addonId });
+  };
+
+  // Multi-key draft merge for the Proposal Composer (selection arrays and
+  // quantity maps). Field-level touch/template-release bookkeeping happens in
+  // handleStep1FieldChange / handleSelectionTouched before this is called.
+  const handleComposerPatch = (patch = {}) => {
+    setQuoteDirty(true);
+    setForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  // Loss protection for new drafts (src/components/draftRecovery.js): a
+  // debounced local snapshot of the dirty new-quote form, offered back on
+  // return to a pristine new-quote route. New drafts only — an edit session
+  // always has its saved canonical revision — and cleared on save/discard.
+  const [draftRecoveryOffer, setDraftRecoveryOffer] = useState(null);
+  const draftRecoveryStorageKey = draftRecoveryKey({ organizationId: authSession.organizationId });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (!quoteDirty || editingQuote.id) return undefined;
+    const timer = setTimeout(() => {
+      writeDraftSnapshot(window.localStorage, draftRecoveryStorageKey, { form });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [form, quoteDirty, editingQuote.id, draftRecoveryStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (resolvedWorkspaceRouteId !== WORKSPACE_ROUTE_IDS.QUOTE_NEW) return;
+    if (quoteDirty || editingQuote.id) return;
+    const snapshot = readDraftSnapshot(window.localStorage, draftRecoveryStorageKey);
+    setDraftRecoveryOffer(
+      snapshot && snapshotMeaningful(snapshot.form, INITIAL_FORM) ? snapshot : null
+    );
+    // Evaluated on entry to the new-quote route only; typing hides the offer
+    // via the render guard rather than re-running this read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedWorkspaceRouteId, draftRecoveryStorageKey]);
+
+  const resumeDraftRecovery = () => {
+    if (!draftRecoveryOffer) return;
+    setForm({ ...INITIAL_FORM, ...draftRecoveryOffer.form });
+    setQuoteDirty(true);
+    setDraftRecoveryOffer(null);
+  };
+
+  const discardDraftRecovery = () => {
+    if (typeof window !== "undefined") {
+      clearDraftSnapshot(window.localStorage, draftRecoveryStorageKey);
+    }
+    setDraftRecoveryOffer(null);
   };
 
   const stepperModel = useMemo(
@@ -2485,6 +2568,10 @@ function LegacyAppCore({
 
       const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
       setQuoteDirty(false);
+      if (typeof window !== "undefined") {
+        clearDraftSnapshot(window.localStorage, draftRecoveryStorageKey);
+      }
+      setDraftRecoveryOffer(null);
       recordProductAnalyticsEvent("quote_saved");
       setSubmitState({
         saving: false,
@@ -2987,7 +3074,7 @@ function LegacyAppCore({
     if (!hasConfiguredEventType) {
       return {
         ok: false,
-        error: "Open the Menu tab and add at least one customer-specific event type before saving setup."
+        error: "Almost there—add at least one event type in Menu, then save your catalog."
       };
     }
     const result = await catalog.saveCatalog(nextCatalog);
@@ -3001,8 +3088,8 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Loading Workspace</h1>
-          <p className="muted">Resolving tenant context for this host...</p>
+          <h1>Opening Your Workspace</h1>
+          <p className="muted">Finding the right organization for this address…</p>
         </WorkspaceStatusCard>
       </main>
     );
@@ -3012,7 +3099,7 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Tenant Not Found</h1>
+          <h1>We Couldn’t Open This Workspace</h1>
           <p className="muted">
             Host <strong>{tenantContext.hostname || "unknown"}</strong> is not active or is not mapped to a tenant.
           </p>
@@ -3022,7 +3109,7 @@ function LegacyAppCore({
           {submitState.message && <p className="warning-note">{submitState.message}</p>}
           <div className="auth-actions">
             <button type="button" className="cta" onClick={handleRetryTenantResolution}>
-              Retry Workspace
+              Try Again
             </button>
             <a
               className="ghost button-link"
@@ -3058,8 +3145,8 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Loading</h1>
-          <p className="muted">Checking your session...</p>
+          <h1>Welcome Back</h1>
+          <p className="muted">Getting your QuotePilot workspace ready…</p>
         </WorkspaceStatusCard>
       </main>
     );
@@ -3160,8 +3247,8 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Loading Catalog</h1>
-          <p className="muted">Checking this organization’s configured products and pricing...</p>
+          <h1>Getting Your Catalog Ready</h1>
+          <p className="muted">Bringing in this organization’s products and pricing…</p>
         </WorkspaceStatusCard>
       </main>
     );
@@ -3171,7 +3258,7 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Catalog Unavailable</h1>
+          <h1>Your Catalog Connection Needs Attention</h1>
           <p className="muted">
             Firebase catalog access is required in this environment.
           </p>
@@ -3192,18 +3279,18 @@ function LegacyAppCore({
       <div className="app-shell app-shell-neutral" style={appThemeVars}>
         <main className="auth-shell container">
           <WorkspaceStatusCard>
-            <p className="eyebrow">Owner Setup Required</p>
-            <h1>Configure Your Catalog</h1>
+            <p className="eyebrow">Let’s make QuotePilot yours</p>
+            <h1>Bring Your Catalog to Life</h1>
             <p className="muted">
-              Quote creation stays locked until this organization has customer-specific products and reviewed pricing.
+              Quote creation unlocks as soon as your real offerings and prices have a quick review.
             </p>
             <p className="source-note">
-              New tenants start blank. Open Catalog Admin to stage an industry starter pack or build a catalog manually; every suggested price still requires your review.
+              Start fast with a starter catalog draft, bring in an existing menu, or create your own. You stay in control of every suggested price.
             </p>
             <ul className="source-note">
-              <li>Starter Packs: populate a complete Wedding, Corporate, BBQ, or Church & community draft in one click.</li>
-              <li>Packages and Menu: review a specifically named package above $0 and at least one event type.</li>
-              <li>Pricing: review every fee, tax, deposit, travel, staffing, tier, and seasonal value, then approve the pricing setup.</li>
+              <li>Pick a starting point: Wedding, Corporate, BBQ, or Church & community.</li>
+              <li>Make it yours: name a package, add an event type, and shape the menu your team loves.</li>
+              <li>Review with confidence: confirm fees, tax, deposits, travel, staffing, tiers, and seasonal pricing.</li>
             </ul>
             <div className="auth-actions">
               {authSession.isAdmin && (
@@ -3215,25 +3302,25 @@ function LegacyAppCore({
                       beforeOpen: () => setAdminInitialTab("starter")
                     })}
                   >
-                    Open Admin Catalog
+                    Choose a starter or build my catalog
                   </button>
                   <button type="button" className="ghost" onClick={() => openWorkspaceTool(setImportStudioOpen)}>
-                    Open Import Studio
+                    Import my menu
                   </button>
                   <button type="button" className="ghost" onClick={() => setCatalogBypassState(true)}>
-                    Continue to workspace
+                    Explore the workspace
                   </button>
                 </>
               )}
               {!authSession.isAdmin && (
                 <button type="button" className="cta" onClick={catalog.reload}>
-                  Refresh Catalog Setup
+                  Check for catalog updates
                 </button>
               )}
               <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
             </div>
             {!authSession.isAdmin && (
-              <p className="warning-note">Ask an organization admin to configure and save the catalog, then use Refresh Catalog Setup.</p>
+              <p className="warning-note">Your organization admin can finish the catalog; then check here for the latest update.</p>
             )}
             <p className="source-note">
               You can also import catalog records first, or continue with manual edits from workspace if you need to proceed today.
@@ -3272,6 +3359,236 @@ function LegacyAppCore({
       </div>
     );
   }
+
+  // Shared builder JSX rendered by both presentations (Proposal Composer and
+  // the Guided-mode wizard) so neither mode loses the rebook review banner or
+  // the save/availability messaging.
+  const draftRecoveryBanner = draftRecoveryOffer && !quoteDirty && !editingQuote.id ? (
+    <section className="panel draft-recovery-banner" role="status" data-testid="draft-recovery-banner">
+      <div>
+        <p className="eyebrow">Unsaved draft found</p>
+        <p>You were composing a quote {describeSnapshotAge(draftRecoveryOffer.ageMs)}. Resume where you left off?</p>
+      </div>
+      <div className="right-actions">
+        <button type="button" className="cta compact" onClick={resumeDraftRecovery}>
+          Resume draft
+        </button>
+        <button type="button" className="ghost compact" onClick={discardDraftRecovery}>
+          Discard
+        </button>
+      </div>
+    </section>
+  ) : null;
+
+  const draftReviewSurfaces = (
+    <>
+    {draftRecoveryBanner}
+    <RebookQuoteReviewBanner
+      quoteNumber={editingQuote.quoteNumber}
+      organizationId={editingQuote.organizationId || authSession.organizationId}
+      customerId={editingQuote.customerId}
+      eventDate={form.date}
+      tenantTimeZone={tenantTimeZone}
+      rebooking={editingQuote.rebooking}
+      onFocusEventDate={() => {
+        setBuilderMode("guided");
+        setStep(1);
+        window.requestAnimationFrame(() => {
+          wizardRef.current?.querySelector('input[type="date"]')?.focus({ preventScroll: true });
+        });
+      }}
+    />
+    </>
+  );
+
+  const builderStatusNotes = (
+    <>
+      <p className="source-note">Quote validity: {Math.max(1, Number(catalog.settings?.quoteValidityDays || 30))} days</p>
+      {isEditingQuote && (
+        <p className="source-note">
+          Editing quote {editingQuote.quoteNumber}. Saving updates this quote (with version history) and keeps labor rates locked by snapshot.
+        </p>
+      )}
+      {catalog.error && <p className="error-note">{catalog.error}</p>}
+      {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
+      {availabilityBlock && (
+        <article className="warning-note availability-recovery" role="alert">
+          <h4>Resolve the booking conflict</h4>
+          <p>These booked events overlap the current date and venue:</p>
+          <ul>
+            {availabilityBlock.conflicts.slice(0, 5).map((conflict) => (
+              <li key={conflict.id || conflict.quoteNumber}>
+                <strong>{conflict.quoteNumber || conflict.id || "Booked event"}</strong>
+                {conflict.eventName ? ` · ${conflict.eventName}` : ""}
+                {` · ${conflict.eventDate || form.date}`}
+                {` at ${conflict.eventTime || "time not set"}`}
+                {Number(conflict.eventHours || 0) > 0 ? ` for ${conflict.eventHours} hours` : ""}
+                {conflict.venue ? ` · ${conflict.venue}` : ""}
+              </li>
+            ))}
+          </ul>
+          {availabilityBlock.capacityExceeded && (
+            <p>
+              Projected same-venue load is {availabilityBlock.sameVenueLoad} guests; the configured limit is {availabilityBlock.capacityLimit}.
+            </p>
+          )}
+          <div className="auth-actions">
+            <button type="button" className="cta" onClick={handleCorrectAvailability}>
+              Edit Date, Time, or Venue
+            </button>
+            {eventScheduleEnabled && (
+              <button type="button" className="ghost" onClick={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}>
+                Open Event Schedule
+              </button>
+            )}
+          </div>
+        </article>
+      )}
+      {submitState.message && <p className="source-note">{submitState.message}</p>}
+    </>
+  );
+
+  // "What will this change affect?" — the server-checked impact preview for a
+  // saved quote being edited. Shared so it renders identically in the
+  // Proposal Composer document and the Guided-mode wizard's save step.
+  const changeImpactSurface = isEditingQuote ? (
+    <section
+      className="quote-change-impact-preview"
+      data-capability-id="cwf-15b-commercial-change-impact-preview"
+    >
+      <div className="quote-change-impact-preview-head">
+        <div>
+          <p className="eyebrow">Saved quote</p>
+          <h3>What will this change affect?</h3>
+          <p className="source-note">
+            A server-checked comparison of the saved quote against your current edits. Previewing changes nothing; when a governed item is affected, applying asks for an exact authorization first.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="ghost compact"
+          onClick={() => handlePreviewChangeImpact({
+            recovery: Boolean(changeImpactPresentationError)
+          })}
+          disabled={!changeImpactPreviewAvailable || changeImpactPreview.loading}
+          title={changeImpactPreviewAvailable
+            ? "Create an immutable server simulation receipt for the current form and saved revision."
+            : "Change impact requires a Firebase-backed canonical quote and trusted pricing."}
+        >
+          {changeImpactPreview.recovering
+            ? "Retrying preview…"
+            : changeImpactPreview.loading
+              ? "Building preview…"
+            : changeImpactPreview.model
+              ? "Refresh impact preview"
+              : "Preview change impact"}
+        </button>
+      </div>
+      {!changeImpactPreviewAvailable && (
+        <p className="warning-note">
+          Authoritative change impact is unavailable in browser-local mode. No client-calculated substitute is shown.
+        </p>
+      )}
+      {changeImpactPreview.requested && (
+        <RecoverableErrorBoundary
+          active
+          surfaceName="Commercial change impact"
+          surfaceKind="tool"
+          onRetry={CommercialChangeImpactPanel.retry}
+          onClose={() => resetChangeImpactPreview()}
+          hasUnsavedWorkspaceChanges={quoteDirty}
+        >
+          <Suspense fallback={<p className="source-note" role="status">Loading change-impact presentation…</p>}>
+            <CommercialChangeImpactPanel
+              model={changeImpactPreview.model}
+              loading={changeImpactPreview.loading}
+              recovering={changeImpactPreview.recovering}
+              error={changeImpactPresentationError}
+              partial={false}
+              authorityState={changeImpactPreview.authorityState}
+              authorizationRequired={changeImpactPreview.authorizationRequired}
+              staffRole={authSession.role}
+              approval={changeImpactPreview.approval}
+              authorizationReceiptId={changeImpactPreview.authorizationReceiptId}
+              mutationState={changeImpactPreview.mutationState}
+              mutationKind={changeImpactPreview.mutationKind}
+              mutationMessage={changeImpactPreview.mutationMessage}
+              applyResult={changeImpactPreview.applyResult}
+              applyOutcome={changeImpactPreview.applyOutcome}
+              scopeCurrent={!changeImpactPresentationError}
+              onRetry={() => handlePreviewChangeImpact({ recovery: true })}
+              onRequestAuthorization={handleRequestChangeAuthorization}
+              onRefreshAuthorization={handleRefreshChangeAuthorization}
+              onAuthorize={handleAuthorizeChange}
+              onApply={handleApplyCommercialChange}
+              onReconcileApplyOutcome={handleReconcileCommercialChangeApplyOutcome}
+              onRecoverApply={handleRecoverCommercialChangeApply}
+              onReturnToEdit={() => {
+                if (!proposalComposerActive) setStep(1);
+                window.requestAnimationFrame(() => {
+                  wizardRef.current?.focus({ preventScroll: true });
+                });
+              }}
+            />
+          </Suspense>
+        </RecoverableErrorBoundary>
+      )}
+    </section>
+  ) : null;
+
+  const proposalComposerSurface = proposalComposerActive ? (
+    <ProposalComposer
+      form={form}
+      totals={totals}
+      catalog={catalog}
+      settings={effectiveSettings}
+      menuSections={effectiveMenuSections}
+      menuLoading={dynamicMenuLoading}
+      menuError={dynamicMenuError}
+      packageIncludedMenuItemIds={
+        catalog.packages.find((item) => item.id === form.pkg)?.includedMenuItemIds || []
+      }
+      eventTypes={catalog.eventTypes || []}
+      eventTemplates={effectiveSettings.eventTemplates || []}
+      readiness={proposalReadiness}
+      editingQuote={editingQuote}
+      quoteDirty={quoteDirty}
+      saving={submitState.saving}
+      saveLabel={submitState.saving
+        ? (isEditingQuote ? "Saving Changes..." : "Saving Draft...")
+        : (isEditingQuote ? "Save Changes" : "Save draft")}
+      saveDisabled={submitState.saving || catalog.loading || totals.guests <= 0}
+      saveDisabledReason={totals.guests <= 0
+        ? "Set a guest count above zero before saving."
+        : ""}
+      compareEnabled={quoteCompareEnabled}
+      catalogLoading={catalog.loading}
+      onFieldChange={handleStep1FieldChange}
+      onSelectionTouched={handleSelectionTouched}
+      onPatchForm={handleComposerPatch}
+      onTemplateChange={applyEventTemplate}
+      onEventTypeChange={handleEventTypeChange}
+      onSaveQuote={() => void handleSubmitQuote()}
+      onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
+      onGuidedMode={() => setBuilderMode("guided")}
+      reviewSurfaces={draftReviewSurfaces}
+      statusNotes={builderStatusNotes}
+      changeImpactSurface={changeImpactSurface}
+      impactWatch={isEditingQuote
+        ? {
+            available: changeImpactPreviewAvailable,
+            previewed: Boolean(changeImpactPreview.model)
+          }
+        : null}
+      isAdmin={authSession.isAdmin}
+      onOpenCatalogPricing={() => {
+        setGlobalEventTypeId(form.eventTypeId);
+        openWorkspaceTool(setAdminOpen, {
+          beforeOpen: () => setAdminInitialTab("menu")
+        });
+      }}
+    />
+  ) : null;
 
   return (
     <div className={`app-shell${CUSTOMER_CENTERED_WORKSPACE_ENABLED ? " app-shell-neutral" : ""}`} style={appThemeVars}>
@@ -3322,20 +3639,22 @@ function LegacyAppCore({
             {CUSTOMER_CENTERED_WORKSPACE_ENABLED && (
               <>
                 <button
-                  className={`ghost${activeWorkspaceSection === "home" ? " nav-view-active" : ""}`}
+                  className={`ghost shell-nav-action${activeWorkspaceSection === "home" ? " nav-view-active" : ""}`}
                   type="button"
                   aria-current={activeWorkspaceSection === "home" ? "page" : undefined}
                   onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.home); }}
                 >
-                  Home
+                  <CalendarBlank className="shell-nav-icon" size={20} weight={activeWorkspaceSection === "home" ? "fill" : "regular"} aria-hidden="true" />
+                  <span className="shell-nav-label">Now</span>
                 </button>
                 <button
-                  className={`ghost${activeWorkspaceSection === "customers" ? " nav-view-active" : ""}`}
+                  className={`ghost shell-nav-action${activeWorkspaceSection === "customers" ? " nav-view-active" : ""}`}
                   type="button"
                   aria-current={activeWorkspaceSection === "customers" ? "page" : undefined}
                   onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.customers); }}
                 >
-                  Customers
+                  <UserCircle className="shell-nav-icon" size={20} weight={activeWorkspaceSection === "customers" ? "fill" : "regular"} aria-hidden="true" />
+                  <span className="shell-nav-label">Customers</span>
                 </button>
                 <button
                   className="ghost commercial-search-trigger"
@@ -3346,14 +3665,18 @@ function LegacyAppCore({
                   title="Search customers and quotes (Ctrl or Command K)"
                   onClick={(event) => openCommercialSearch(event.currentTarget)}
                 >
-                  <span>Search</span>
+                  <MagnifyingGlass className="shell-nav-icon" size={20} aria-hidden="true" />
+                  <span className="shell-nav-label">Search</span>
                   <kbd aria-hidden="true">⌘K</kbd>
                 </button>
               </>
             )}
-            <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New quote</button>
+            <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>
+              <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
+              <span className="shell-nav-label">New quote</span>
+            </button>
             <button
-              className={`ghost${activeWorkspaceSection === "quotes" && !quoteBuilderActive ? " nav-view-active" : ""}`}
+              className={`ghost shell-nav-action${activeWorkspaceSection === "quotes" && !quoteBuilderActive ? " nav-view-active" : ""}`}
               type="button"
               ref={historyTriggerRef}
               onClick={() => {
@@ -3362,11 +3685,12 @@ function LegacyAppCore({
                 navigateWorkspace(WORKSPACE_PATHS.quotes);
               }}
             >
-              Quotes
+              <NotePencil className="shell-nav-icon" size={20} weight={activeWorkspaceSection === "quotes" && !quoteBuilderActive ? "fill" : "regular"} aria-hidden="true" />
+              <span className="shell-nav-label">Quotes</span>
             </button>
             {CUSTOMER_CENTERED_WORKSPACE_ENABLED && (
               <button
-                className={`ghost${activeWorkspaceSection === "messaging" ? " nav-view-active" : ""}`}
+                className={`ghost shell-nav-action${activeWorkspaceSection === "messaging" ? " nav-view-active" : ""}`}
                 type="button"
                 data-capability-entry="event-messaging-station"
                 aria-current={activeWorkspaceSection === "messaging" ? "page" : undefined}
@@ -3375,11 +3699,12 @@ function LegacyAppCore({
                   navigateWorkspace(WORKSPACE_PATHS.messaging);
                 }}
               >
-                Messages
+                <EnvelopeSimple className="shell-nav-icon" size={20} weight={activeWorkspaceSection === "messaging" ? "fill" : "regular"} aria-hidden="true" />
+                <span className="shell-nav-label">Messages</span>
               </button>
             )}
             <button
-              className={`ghost workflow-attention-trigger${activeWorkspaceSection === "workflow" ? " nav-view-active" : ""}`}
+              className={`ghost shell-nav-action workflow-attention-trigger${activeWorkspaceSection === "workflow" ? " nav-view-active" : ""}`}
               type="button"
               ref={workflowTriggerRef}
               onClick={() => {
@@ -3390,9 +3715,10 @@ function LegacyAppCore({
                 ? "Workflow"
                 : workflowAttentionCount > 0
                   ? `Workflow, ${workflowAttentionCount} ${workflowAttentionCount === 1 ? "quote needs" : "quotes need"} attention`
-                  : "Workflow, no quotes need attention"}
+                  : "Workflow, no quote follow-ups in this view"}
             >
-              <span>Workflow</span>
+              <NotePencil className="shell-nav-icon" size={20} aria-hidden="true" />
+              <span className="shell-nav-label">Workflow</span>
               <AttentionBadge count={workflowAttentionCount} />
             </button>
             <div className="header-menu desktop-header-menu">
@@ -3404,7 +3730,8 @@ function LegacyAppCore({
                 aria-expanded={openHeaderMenu === "operations"}
                 onClick={() => setOpenHeaderMenu((current) => current === "operations" ? "" : "operations")}
               >
-                Operations
+                <StarFour className="shell-nav-icon" size={20} aria-hidden="true" />
+                <span className="shell-nav-label">Operations</span>
               </button>
               {openHeaderMenu === "operations" && (
                 <div className="header-menu-popover" role="menu" aria-label="Operations">
@@ -3428,7 +3755,8 @@ function LegacyAppCore({
                 aria-expanded={openHeaderMenu === "account"}
                 onClick={() => setOpenHeaderMenu((current) => current === "account" ? "" : "account")}
               >
-                Account
+                <UserCircle className="shell-nav-icon" size={20} aria-hidden="true" />
+                <span className="shell-nav-label">Account</span>
               </button>
               {openHeaderMenu === "account" && (
                 <div className="header-menu-popover account-menu-popover" role="menu" aria-label="Account">
@@ -3454,7 +3782,8 @@ function LegacyAppCore({
                 aria-expanded={openHeaderMenu === "more"}
                 onClick={() => setOpenHeaderMenu((current) => current === "more" ? "" : "more")}
               >
-                More
+                <Plus className="shell-nav-icon" size={20} aria-hidden="true" />
+                <span className="shell-nav-label">More</span>
               </button>
               {openHeaderMenu === "more" && (
                 <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
@@ -3509,7 +3838,7 @@ function LegacyAppCore({
             ? "Unsaved changes"
             : isEditingQuote
               ? `Editing ${editingQuote.quoteNumber || "saved quote"} · no unsaved changes`
-              : "Ready to plan an event"}
+              : "Workspace open"}
         </p>
       </section>
 
@@ -3795,7 +4124,7 @@ function LegacyAppCore({
 
       {quoteBuilderMounted && (
       <main
-        className="container wizard-grid"
+        className={proposalComposerActive ? "container pc-shell" : "container wizard-grid"}
         ref={wizardRef}
         tabIndex={-1}
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
@@ -3859,21 +4188,11 @@ function LegacyAppCore({
             }
           />
         )}
+        {proposalComposerSurface}
+        {!proposalComposerActive && (
+        <>
         <section className="panel wizard-panel">
-          <RebookQuoteReviewBanner
-            quoteNumber={editingQuote.quoteNumber}
-            organizationId={editingQuote.organizationId || authSession.organizationId}
-            customerId={editingQuote.customerId}
-            eventDate={form.date}
-            tenantTimeZone={tenantTimeZone}
-            rebooking={editingQuote.rebooking}
-            onFocusEventDate={() => {
-              setStep(1);
-              window.requestAnimationFrame(() => {
-                wizardRef.current?.querySelector('input[type="date"]')?.focus({ preventScroll: true });
-              });
-            }}
-          />
+          {draftReviewSurfaces}
           <div className="wizard-orientation" aria-live="polite">
             <div>
               <span>Creating this quote</span>
@@ -4051,96 +4370,18 @@ function LegacyAppCore({
                     <p className="muted">Saving will keep a version snapshot for edits and lifecycle changes.</p>
                   </article>
                 </div>
-                {isEditingQuote && (
-                  <section
-                    className="quote-change-impact-preview"
-                    data-capability-id="cwf-15b-commercial-change-impact-preview"
-                  >
-                    <div className="quote-change-impact-preview-head">
-                      <div>
-                        <p className="eyebrow">Commercial dependency graph</p>
-                        <h3>Preview change blast radius</h3>
-                        <p className="source-note">
-                          Server-authoritative comparison of the saved canonical revision and current form. The simulation itself changes nothing; an exact authorization and atomic apply receipt are required when governed dependencies are affected.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="ghost compact"
-                        onClick={() => handlePreviewChangeImpact({
-                          recovery: Boolean(changeImpactPresentationError)
-                        })}
-                        disabled={!changeImpactPreviewAvailable || changeImpactPreview.loading}
-                        title={changeImpactPreviewAvailable
-                          ? "Create an immutable server simulation receipt for the current form and saved revision."
-                          : "Change impact requires a Firebase-backed canonical quote and trusted pricing."}
-                      >
-                        {changeImpactPreview.recovering
-                          ? "Retrying preview…"
-                          : changeImpactPreview.loading
-                            ? "Building preview…"
-                          : changeImpactPreview.model
-                            ? "Refresh impact preview"
-                            : "Preview change impact"}
-                      </button>
-                    </div>
-                    {!changeImpactPreviewAvailable && (
-                      <p className="warning-note">
-                        Authoritative change impact is unavailable in browser-local mode. No client-calculated substitute is shown.
-                      </p>
-                    )}
-                    {changeImpactPreview.requested && (
-                      <RecoverableErrorBoundary
-                        active
-                        surfaceName="Commercial change impact"
-                        surfaceKind="tool"
-                        onRetry={CommercialChangeImpactPanel.retry}
-                        onClose={() => resetChangeImpactPreview()}
-                        hasUnsavedWorkspaceChanges={quoteDirty}
-                      >
-                        <Suspense fallback={<p className="source-note" role="status">Loading change-impact presentation…</p>}>
-                          <CommercialChangeImpactPanel
-                            model={changeImpactPreview.model}
-                            loading={changeImpactPreview.loading}
-                            recovering={changeImpactPreview.recovering}
-                            error={changeImpactPresentationError}
-                            partial={false}
-                            authorityState={changeImpactPreview.authorityState}
-                            authorizationRequired={changeImpactPreview.authorizationRequired}
-                            staffRole={authSession.role}
-                            approval={changeImpactPreview.approval}
-                            authorizationReceiptId={changeImpactPreview.authorizationReceiptId}
-                            mutationState={changeImpactPreview.mutationState}
-                            mutationKind={changeImpactPreview.mutationKind}
-                            mutationMessage={changeImpactPreview.mutationMessage}
-                            applyResult={changeImpactPreview.applyResult}
-                            applyOutcome={changeImpactPreview.applyOutcome}
-                            scopeCurrent={!changeImpactPresentationError}
-                            onRetry={() => handlePreviewChangeImpact({ recovery: true })}
-                            onRequestAuthorization={handleRequestChangeAuthorization}
-                            onRefreshAuthorization={handleRefreshChangeAuthorization}
-                            onAuthorize={handleAuthorizeChange}
-                            onApply={handleApplyCommercialChange}
-                            onReconcileApplyOutcome={handleReconcileCommercialChangeApplyOutcome}
-                            onRecoverApply={handleRecoverCommercialChangeApply}
-                            onReturnToEdit={() => {
-                              setStep(1);
-                              window.requestAnimationFrame(() => {
-                                wizardRef.current?.focus({ preventScroll: true });
-                              });
-                            }}
-                          />
-                        </Suspense>
-                      </RecoverableErrorBoundary>
-                    )}
-                  </section>
-                )}
+                {changeImpactSurface}
               </>
             )}
           </div>
 
           <div className="wizard-actions">
             <div className="right-actions">
+              {PROPOSAL_COMPOSER_ENABLED && (
+                <button className="ghost" onClick={() => setBuilderMode("composer")}>
+                  Composer view
+                </button>
+              )}
               <button className="ghost" onClick={() => setStep((s) => Math.max(1, s - 1))} disabled={step === 1 || catalog.loading}>Back</button>
               {quoteCompareEnabled && (
                 <button className="ghost" onClick={() => openWorkspaceTool(setCompareOpen)} disabled={catalog.loading || step < 2}>
@@ -4173,48 +4414,7 @@ function LegacyAppCore({
             </div>
           </div>
 
-          <p className="source-note">Quote validity: {Math.max(1, Number(catalog.settings?.quoteValidityDays || 30))} days</p>
-          {isEditingQuote && (
-            <p className="warning-note">
-              Editing quote {editingQuote.quoteNumber}. Saving updates this quote (with version history) and keeps labor rates locked by snapshot.
-            </p>
-          )}
-          {catalog.error && <p className="error-note">{catalog.error}</p>}
-          {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
-          {availabilityBlock && (
-            <article className="warning-note availability-recovery" role="alert">
-              <h4>Resolve the booking conflict</h4>
-              <p>These booked events overlap the current date and venue:</p>
-              <ul>
-                {availabilityBlock.conflicts.slice(0, 5).map((conflict) => (
-                  <li key={conflict.id || conflict.quoteNumber}>
-                    <strong>{conflict.quoteNumber || conflict.id || "Booked event"}</strong>
-                    {conflict.eventName ? ` · ${conflict.eventName}` : ""}
-                    {` · ${conflict.eventDate || form.date}`}
-                    {` at ${conflict.eventTime || "time not set"}`}
-                    {Number(conflict.eventHours || 0) > 0 ? ` for ${conflict.eventHours} hours` : ""}
-                    {conflict.venue ? ` · ${conflict.venue}` : ""}
-                  </li>
-                ))}
-              </ul>
-              {availabilityBlock.capacityExceeded && (
-                <p>
-                  Projected same-venue load is {availabilityBlock.sameVenueLoad} guests; the configured limit is {availabilityBlock.capacityLimit}.
-                </p>
-              )}
-              <div className="auth-actions">
-                <button type="button" className="cta" onClick={handleCorrectAvailability}>
-                  Edit Date, Time, or Venue
-                </button>
-                {eventScheduleEnabled && (
-                  <button type="button" className="ghost" onClick={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}>
-                    Open Event Schedule
-                  </button>
-                )}
-              </div>
-            </article>
-          )}
-          {submitState.message && <p className="source-note">{submitState.message}</p>}
+          {builderStatusNotes}
         </section>
 
         <LiveBreakdown
@@ -4226,6 +4426,8 @@ function LegacyAppCore({
           onMobileClose={closeMobilePricing}
           guestBand={guestBand}
         />
+        </>
+        )}
       </main>
       )}
 

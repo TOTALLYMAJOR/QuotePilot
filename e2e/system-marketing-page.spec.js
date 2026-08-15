@@ -12,14 +12,16 @@ test("saved system landing page presents the QuotePilot operating model and rout
   await expect(appLinks.first()).toHaveAttribute("href", "/app");
 
   await page.getByRole("button", { name: "Features" }).click();
-  const drawer = page.getByRole("dialog", { name: "Guided quote builder" });
+  const drawer = page.getByRole("dialog", { name: "Traceable event scope" });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("img", { name: /guided quote builder/i })).toBeVisible();
+  await expect(drawer.getByRole("img", { name: /event scope panel/i })).toBeVisible();
 
   await drawer.getByRole("button", { name: /Good, Better, Best/i }).click();
   const scenarioDrawer = page.getByRole("dialog", { name: "Good, Better, Best" });
   await expect(scenarioDrawer).toBeVisible();
-  await expect(scenarioDrawer.getByRole("img", { name: /scenario comparison/i })).toBeVisible();
+  await expect(scenarioDrawer.getByRole("img", {
+    name: /Good, Better, and Best package comparison/i
+  })).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(scenarioDrawer).toHaveCount(0);
@@ -32,7 +34,7 @@ test("saved system landing page stays contained on mobile and honors reduced mot
 
   await expect(page.getByRole("heading", { name: /Move from first inquiry/i })).toBeVisible();
   await page.getByRole("button", { name: "Features" }).click();
-  await expect(page.getByRole("dialog", { name: "Guided quote builder" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Traceable event scope" })).toBeVisible();
   await page.keyboard.press("Escape");
 
   const overflow = await page.evaluate(

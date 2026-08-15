@@ -15,6 +15,17 @@ export const BUNDLE_PROFILES = Object.freeze({
   })
 });
 
+export const PRODUCTION_FIXTURE_CHUNK_PREFIXES = Object.freeze([
+  "localCustomerDirectoryFixture-"
+]);
+
+export const PRODUCTION_FIXTURE_PAYLOAD_SENTINELS = Object.freeze([
+  "avery.staff@example.com",
+  "assignment-williams-avery-bar",
+  "Avery Williams",
+  "Foundation Dinner"
+]);
+
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
@@ -77,6 +88,34 @@ function collectJsMetrics(root) {
   return { files, metrics: { totalJsBytes, largestJsChunkBytes } };
 }
 
+function assertNoProductionFixtureArtifacts(root, files) {
+  const assetsDirectory = path.join(root, "dist", "assets");
+  const violations = [];
+
+  for (const file of files) {
+    for (const prefix of PRODUCTION_FIXTURE_CHUNK_PREFIXES) {
+      if (file.startsWith(prefix)) {
+        violations.push(`${file} matches development fixture chunk prefix ${prefix}`);
+      }
+    }
+
+    const source = fs.readFileSync(path.join(assetsDirectory, file), "utf8");
+    for (const sentinel of PRODUCTION_FIXTURE_PAYLOAD_SENTINELS) {
+      if (source.includes(sentinel)) {
+        violations.push(`${file} contains development fixture payload sentinel ${JSON.stringify(sentinel)}`);
+      }
+    }
+  }
+
+  if (violations.length) {
+    throw new Error(
+      `Production bundle contains development fixture artifacts:\n${violations
+        .map((violation) => `- ${violation}`)
+        .join("\n")}`
+    );
+  }
+}
+
 export function detectBundleProfile(files = []) {
   const detected = Object.entries(BUNDLE_PROFILES)
     .filter(([, contract]) => contract.markerPrefixes.some((prefix) => (
@@ -114,6 +153,7 @@ export function checkBundleBudget({
   log = console
 } = {}) {
   const { files, metrics: current } = collectJsMetrics(root);
+  assertNoProductionFixtureArtifacts(root, files);
   const detectedProfile = detectBundleProfile(files);
   const normalizedRequestedProfile = String(requestedProfile || "").trim();
   if (normalizedRequestedProfile && normalizedRequestedProfile !== detectedProfile) {

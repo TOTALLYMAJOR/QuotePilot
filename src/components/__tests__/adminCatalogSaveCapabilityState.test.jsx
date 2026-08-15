@@ -188,7 +188,7 @@ describe("AdminCatalogModal save capability state", () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(container.querySelector(".modal-foot").textContent)
-      .toContain("Finish or discard the separate menu edits first");
+      .toContain("One menu edit is still in progress");
   });
 
   test("opens manual setup when a starter pack is blocked by existing catalog content", async () => {
@@ -252,7 +252,7 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector(".modal-foot").textContent)
       .toContain("Menu item added.");
     expect(container.querySelector(".modal-foot").textContent)
-      .not.toContain("Finish or discard your other Library edits before making this saved change. Nothing changed.");
+      .not.toContain("One Library edit is already in progress. Save or discard it, then try this change again. Nothing changed.");
   });
 
   test("preserves a managed rename across newer evidence and discards it only after confirmation", async () => {

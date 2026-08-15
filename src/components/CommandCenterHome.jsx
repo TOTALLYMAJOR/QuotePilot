@@ -142,7 +142,7 @@ export default function CommandCenterHome({
     <section className="panel command-center" aria-labelledby="command-center-heading">
       <div className="command-center-head">
         <div>
-          <p className="eyebrow">Home</p>
+          <p className="eyebrow">Now</p>
           <h2
             ref={headingRef}
             id="command-center-heading"

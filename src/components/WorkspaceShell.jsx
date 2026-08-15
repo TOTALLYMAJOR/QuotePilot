@@ -1,3 +1,13 @@
+import {
+  CalendarBlank,
+  ClipboardText,
+  EnvelopeSimple,
+  MagnifyingGlass,
+  NotePencil,
+  Plus,
+  StarFour,
+  UserCircle
+} from "./ProductIcons";
 import AttentionBadge from "./AttentionBadge";
 import ProductBrandLockup from "./ProductBrandLockup";
 import { PRODUCT_NAME } from "../lib/productIdentity";
@@ -8,6 +18,27 @@ const HEADER_MENUS = [
   ["account", "Account"],
   ["more", "More"]
 ];
+
+const NAV_ICONS = {
+  now: CalendarBlank,
+  home: CalendarBlank,
+  opportunities: NotePencil,
+  quotes: NotePencil,
+  events: CalendarBlank,
+  clients: UserCircle,
+  customers: UserCircle,
+  messaging: EnvelopeSimple,
+  workflow: NotePencil,
+  staff: UserCircle,
+  library: StarFour,
+  catalog: StarFour
+};
+
+const MENU_ICONS = {
+  operations: StarFour,
+  account: UserCircle,
+  more: Plus
+};
 
 function call(action, ...args) {
   if (typeof action === "function") action(...args);
@@ -38,7 +69,7 @@ export default function WorkspaceShell({
   const workspaceName = identity.workspaceName
     || identity.tenantBrandName
     || identity.organizationName
-    || "Organization workspace";
+    || "Your catering team";
   const brandName = identity.tenantBrandName || "";
   const tagline = identity.tenantBrandTagline || "";
   const logo = identity.tenantBrandLogoUrl || "";
@@ -59,30 +90,50 @@ export default function WorkspaceShell({
     current = true,
     active = model.active?.quoteBuilder !== true || routeSection !== "quotes",
     ambientDestination = ""
-  ) => (
-    <button
-      type="button"
-      className={`ghost${ambientDestination ? " ambient-orientation-action" : ""}${
-        active && section === routeSection ? " nav-view-active" : ""
-      }`}
-      ref={ref}
-      data-capability-entry={capability}
-      data-ambient-orientation={ambientDestination || undefined}
-      aria-current={current && section === routeSection ? "page" : undefined}
-      onClick={() => navigate(action)}
-    >
-      {label}
-    </button>
-  );
+  ) => {
+    const Icon = NAV_ICONS[ambientDestination || routeSection] || NotePencil;
+    return (
+      <button
+        type="button"
+        className={`ghost shell-nav-action${ambientDestination ? " ambient-orientation-action" : ""}${
+          active && section === routeSection ? " nav-view-active" : ""
+        }`}
+        ref={ref}
+        data-capability-entry={capability}
+        data-ambient-orientation={ambientDestination || undefined}
+        aria-current={current && section === routeSection ? "page" : undefined}
+        onClick={() => navigate(action)}
+      >
+        <Icon className="shell-nav-icon" size={20} weight={active && section === routeSection ? "fill" : "regular"} aria-hidden="true" />
+        <span className="shell-nav-label">{label}</span>
+      </button>
+    );
+  };
   const workflowLabel = attentionCount === null
     ? "Workflow"
     : attentionCount > 0
       ? `Workflow, ${attentionCount} ${attentionCount === 1 ? "quote needs" : "quotes need"} attention`
-      : "Workflow, no quotes need attention";
+      : "Workflow, no quote follow-ups in this view";
   const menuContent = (id) => {
     const operations = id !== "account";
     const account = id !== "operations";
     const items = [
+      [
+        ambientOrientation && operations,
+        actions.onClearDeck,
+        "Clear the Deck",
+        false,
+        false,
+        { capability: "live-operations-planning" }
+      ],
+      [
+        ambientOrientation && operations,
+        actions.onOperations,
+        "Operations switchboard",
+        false,
+        false,
+        { capability: "live-operations-planning" }
+      ],
       [
         ambientOrientation && operations,
         actions.onMessages,
@@ -165,7 +216,7 @@ export default function WorkspaceShell({
                 </span>
               )}
               <div className="workspace-brand-copy">
-                <small>Workspace</small>
+                <small>Today at</small>
                 <strong>{workspaceName}</strong>
                 {tagline && brandName !== PRODUCT_NAME && <span>{tagline}</span>}
               </div>
@@ -207,6 +258,16 @@ export default function WorkspaceShell({
                     true,
                     true,
                     "opportunities"
+                  )}
+                  {navButton(
+                    "Events",
+                    "events",
+                    actions.onEvents,
+                    undefined,
+                    "live-operations-planning",
+                    true,
+                    true,
+                    "events"
                   )}
                   {navButton(
                     "Clients",
@@ -252,12 +313,13 @@ export default function WorkspaceShell({
                       call(actions.onSearch, event.currentTarget);
                     }}
                   >
-                    <span>Search</span><kbd aria-hidden="true">⌘K</kbd>
+                    <MagnifyingGlass className="shell-nav-icon" size={20} aria-hidden="true" />
+                    <span className="shell-nav-label">Search</span><kbd aria-hidden="true">⌘K</kbd>
                   </button>
                 </>
               ) : (
                 <>
-                  {navButton("Home", "home", actions.onHome)}
+                  {navButton("Now", "home", actions.onHome)}
                   {navButton("Customers", "customers", actions.onCustomers)}
                   <button
                     type="button"
@@ -272,7 +334,8 @@ export default function WorkspaceShell({
                       call(actions.onSearch, event.currentTarget);
                     }}
                   >
-                    <span>Search</span><kbd aria-hidden="true">⌘K</kbd>
+                    <MagnifyingGlass className="shell-nav-icon" size={20} aria-hidden="true" />
+                    <span className="shell-nav-label">Search</span><kbd aria-hidden="true">⌘K</kbd>
                   </button>
                 </>
               )
@@ -283,7 +346,8 @@ export default function WorkspaceShell({
               data-ambient-utility={ambientOrientation ? "new-quote" : undefined}
               onClick={() => call(actions.onNewQuote)}
             >
-              New quote
+              <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
+              <span className="shell-nav-label">New quote</span>
             </button>
             {!ambientOrientation && navButton(
               "Quotes",
@@ -303,17 +367,19 @@ export default function WorkspaceShell({
             )}
             {!ambientOrientation && <button
               type="button"
-              className={`ghost workflow-attention-trigger${section === "workflow" ? " nav-view-active" : ""}`}
+              className={`ghost shell-nav-action workflow-attention-trigger${section === "workflow" ? " nav-view-active" : ""}`}
               ref={triggerRefs.workflow}
               onClick={() => navigate(actions.onWorkflow)}
               aria-label={workflowLabel}
             >
-              <span>Workflow</span><AttentionBadge count={attentionCount} />
+              <ClipboardText className="shell-nav-icon" size={20} aria-hidden="true" />
+              <span className="shell-nav-label">Workflow</span><AttentionBadge count={attentionCount} />
             </button>}
 
             {HEADER_MENUS.map(([id, label]) => {
               const mobile = id === "more";
               const open = openMenu === id;
+              const MenuIcon = MENU_ICONS[id] || Plus;
               return (
                 <div className={`header-menu ${mobile ? "mobile-header-menu" : "desktop-header-menu"}`} key={id}>
                   <button
@@ -324,7 +390,8 @@ export default function WorkspaceShell({
                     aria-expanded={open}
                     onClick={() => setMenu(open ? "" : id)}
                   >
-                    {label}
+                    <MenuIcon className="shell-nav-icon" size={20} aria-hidden="true" />
+                    <span className="shell-nav-label">{label}</span>
                   </button>
                   {open && (
                     <div
@@ -353,8 +420,8 @@ export default function WorkspaceShell({
                   call(actions.onPilot);
                 }}
               >
-                <span className="ambient-global-pilot-mark" aria-hidden="true">✦</span>
-                <span>Pilot</span>
+                <StarFour className="ambient-global-pilot-mark shell-nav-icon" size={20} weight="fill" aria-hidden="true" />
+                <span className="shell-nav-label">Pilot</span>
               </button>
             )}
           </div>
@@ -364,7 +431,7 @@ export default function WorkspaceShell({
       {searchSurface && <div data-commercial-search-surface="true">{searchSurface}</div>}
 
       <aside className="workspace-intro container" aria-label="Workspace status">
-        <p><strong>{identity.organizationName || brandName || "Catering workspace"}</strong></p>
+        <p><strong>{identity.organizationName || brandName || "Your catering team"}</strong></p>
         <p
           className={`workspace-save-state${draftStatus.dirty === true ? " is-dirty" : ""}`}
           aria-live="polite"
@@ -372,8 +439,8 @@ export default function WorkspaceShell({
           {draftStatus.dirty === true
             ? "Unsaved changes"
             : draftStatus.editing === true
-              ? `Editing ${draftStatus.quoteNumber || "saved quote"} · no unsaved changes`
-              : "Ready to plan an event"}
+              ? `Editing ${draftStatus.quoteNumber || "saved quote"} · all changes saved`
+              : "Workspace open"}
         </p>
       </aside>
       {children}

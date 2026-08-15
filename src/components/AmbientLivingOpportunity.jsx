@@ -23,7 +23,7 @@ import {
   UsersThree,
   Wallet,
   WarningCircle
-} from "@phosphor-icons/react";
+} from "./ProductIcons";
 import StatusChip from "./StatusChip";
 import { useAmbientContext } from "../context/AmbientContext";
 import { createAmbientActionResult } from "../lib/ambientContracts";

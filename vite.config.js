@@ -106,6 +106,19 @@ export default defineConfig(({ mode }) => {
     include: ["commercial-dependency-graph-core"]
   },
   build: {
+    minify: "terser",
+    terserOptions: {
+      ecma: 2020,
+      module: true,
+      toplevel: true,
+      compress: {
+        passes: 3
+      },
+      format: {
+        ecma: 2020,
+        comments: false
+      }
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -129,6 +142,8 @@ export default defineConfig(({ mode }) => {
           if (
             normalizedId.endsWith("/src/components/WizardSteps.jsx")
             || normalizedId.endsWith("/src/lib/wizardUi.js")
+            || normalizedId.endsWith("/src/components/ProposalComposer.jsx")
+            || normalizedId.endsWith("/src/components/proposalComposerPresentation.js")
           ) {
             return "quote-builder-ui";
           }

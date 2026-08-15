@@ -7,7 +7,7 @@ import {
   ChatCircleDots,
   MagnifyingGlass,
   User
-} from "@phosphor-icons/react";
+} from "./ProductIcons";
 import { useConversationInbox } from "../hooks/useConversationInbox";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { filterConversationThreads, groupConversationThreads } from "../lib/conversationInbox";

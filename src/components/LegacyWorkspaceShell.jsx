@@ -1,3 +1,12 @@
+import {
+  CalendarBlank,
+  EnvelopeSimple,
+  MagnifyingGlass,
+  NotePencil,
+  Plus,
+  StarFour,
+  UserCircle
+} from "./ProductIcons";
 import AttentionBadge from "./AttentionBadge";
 import ProductBrandLockup from "./ProductBrandLockup";
 import { PRODUCT_NAME } from "../lib/productIdentity";
@@ -8,6 +17,19 @@ const HEADER_MENUS = [
   ["account", "Account"],
   ["more", "More"]
 ];
+
+const NAV_ICONS = {
+  home: CalendarBlank,
+  customers: UserCircle,
+  quotes: NotePencil,
+  messaging: EnvelopeSimple
+};
+
+const MENU_ICONS = {
+  operations: StarFour,
+  account: UserCircle,
+  more: Plus
+};
 
 function call(action, ...args) {
   if (typeof action === "function") action(...args);
@@ -37,7 +59,7 @@ export default function LegacyWorkspaceShell({
   const workspaceName = identity.workspaceName
     || identity.tenantBrandName
     || identity.organizationName
-    || "Organization workspace";
+    || "Your catering team";
   const brandName = identity.tenantBrandName || "";
   const tagline = identity.tenantBrandTagline || "";
   const logo = identity.tenantBrandLogoUrl || "";
@@ -57,23 +79,27 @@ export default function LegacyWorkspaceShell({
     capability,
     current = true,
     active = model.active?.quoteBuilder !== true || routeSection !== "quotes"
-  ) => (
-    <button
-      type="button"
-      className={`ghost${active && section === routeSection ? " nav-view-active" : ""}`}
-      ref={ref}
-      data-capability-entry={capability}
-      aria-current={current && section === routeSection ? "page" : undefined}
-      onClick={() => navigate(action)}
-    >
-      {label}
-    </button>
-  );
+  ) => {
+    const Icon = NAV_ICONS[routeSection] || NotePencil;
+    return (
+      <button
+        type="button"
+        className={`ghost shell-nav-action${active && section === routeSection ? " nav-view-active" : ""}`}
+        ref={ref}
+        data-capability-entry={capability}
+        aria-current={current && section === routeSection ? "page" : undefined}
+        onClick={() => navigate(action)}
+      >
+        <Icon className="shell-nav-icon" size={20} weight={active && section === routeSection ? "fill" : "regular"} aria-hidden="true" />
+        <span className="shell-nav-label">{label}</span>
+      </button>
+    );
+  };
   const workflowLabel = attentionCount === null
     ? "Workflow"
     : attentionCount > 0
       ? `Workflow, ${attentionCount} ${attentionCount === 1 ? "quote needs" : "quotes need"} attention`
-      : "Workflow, no quotes need attention";
+      : "Workflow, no quote follow-ups in this view";
   const menuContent = (id) => {
     const operations = id !== "account";
     const account = id !== "operations";
@@ -126,7 +152,7 @@ export default function LegacyWorkspaceShell({
                 </span>
               )}
               <div className="workspace-brand-copy">
-                <small>Workspace</small>
+                <small>Today at</small>
                 <strong>{workspaceName}</strong>
                 {tagline && brandName !== PRODUCT_NAME && <span>{tagline}</span>}
               </div>
@@ -157,7 +183,7 @@ export default function LegacyWorkspaceShell({
           <div className="right-actions header-actions" ref={triggerRefs.headerMenus}>
             {workspace && (
               <>
-                {navButton("Home", "home", actions.onHome)}
+                {navButton("Now", "home", actions.onHome)}
                 {navButton("Customers", "customers", actions.onCustomers)}
                 <button
                   type="button"
@@ -172,12 +198,14 @@ export default function LegacyWorkspaceShell({
                     call(actions.onSearch, event.currentTarget);
                   }}
                 >
-                  <span>Search</span><kbd aria-hidden="true">⌘K</kbd>
+                  <MagnifyingGlass className="shell-nav-icon" size={20} aria-hidden="true" />
+                  <span className="shell-nav-label">Search</span><kbd aria-hidden="true">⌘K</kbd>
                 </button>
               </>
             )}
             <button className="cta header-quick-cta" type="button" onClick={() => call(actions.onNewQuote)}>
-              New quote
+              <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
+              <span className="shell-nav-label">New quote</span>
             </button>
             {navButton("Quotes", "quotes", actions.onQuotes, triggerRefs.quotes, undefined, false)}
             {workspace && navButton(
@@ -189,17 +217,19 @@ export default function LegacyWorkspaceShell({
             )}
             <button
               type="button"
-              className={`ghost workflow-attention-trigger${section === "workflow" ? " nav-view-active" : ""}`}
+              className={`ghost shell-nav-action workflow-attention-trigger${section === "workflow" ? " nav-view-active" : ""}`}
               ref={triggerRefs.workflow}
               onClick={() => navigate(actions.onWorkflow)}
               aria-label={workflowLabel}
             >
-              <span>Workflow</span><AttentionBadge count={attentionCount} />
+              <ClipboardText className="shell-nav-icon" size={20} aria-hidden="true" />
+              <span className="shell-nav-label">Workflow</span><AttentionBadge count={attentionCount} />
             </button>
 
             {HEADER_MENUS.map(([id, label]) => {
               const mobile = id === "more";
               const open = openMenu === id;
+              const MenuIcon = MENU_ICONS[id] || Plus;
               return (
                 <div className={`header-menu ${mobile ? "mobile-header-menu" : "desktop-header-menu"}`} key={id}>
                   <button
@@ -210,7 +240,8 @@ export default function LegacyWorkspaceShell({
                     aria-expanded={open}
                     onClick={() => setMenu(open ? "" : id)}
                   >
-                    {label}
+                    <MenuIcon className="shell-nav-icon" size={20} aria-hidden="true" />
+                    <span className="shell-nav-label">{label}</span>
                   </button>
                   {open && (
                     <div
@@ -233,7 +264,7 @@ export default function LegacyWorkspaceShell({
       {searchSurface && <div data-commercial-search-surface="true">{searchSurface}</div>}
 
       <aside className="workspace-intro container" aria-label="Workspace status">
-        <p><strong>{identity.organizationName || brandName || "Catering workspace"}</strong></p>
+        <p><strong>{identity.organizationName || brandName || "Your catering team"}</strong></p>
         <p
           className={`workspace-save-state${draftStatus.dirty === true ? " is-dirty" : ""}`}
           aria-live="polite"
@@ -241,8 +272,8 @@ export default function LegacyWorkspaceShell({
           {draftStatus.dirty === true
             ? "Unsaved changes"
             : draftStatus.editing === true
-              ? `Editing ${draftStatus.quoteNumber || "saved quote"} · no unsaved changes`
-              : "Ready to plan an event"}
+              ? `Editing ${draftStatus.quoteNumber || "saved quote"} · all changes saved`
+              : "Workspace open"}
         </p>
       </aside>
       {children}
