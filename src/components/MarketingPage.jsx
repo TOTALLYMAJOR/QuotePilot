@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import cateringEventHero from "../assets/marketing/quotepilot/catering-event-hero.webp";
 import customerDecisionImage from "../assets/marketing/quotepilot/customer-decision.png";
 import eventProductionImage from "../assets/marketing/quotepilot/event-production.png";
 import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
@@ -7,6 +6,7 @@ import salesWorkflowImage from "../assets/marketing/quotepilot/sales-workflow.pn
 import scenarioCompareImage from "../assets/marketing/quotepilot/scenario-compare.png";
 import { isBuyerAccessPublicCtaEnabled } from "../lib/buyerAccessConfig";
 import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
+import DocumentHero from "./DocumentHero";
 import "../landing.css";
 
 const BUYER_ACCESS_PUBLIC_CTA_ENABLED = isBuyerAccessPublicCtaEnabled(import.meta.env);
@@ -137,42 +137,7 @@ export default function MarketingPage() {
       </header>
 
       <main id="landing-main">
-        <section className="qp-landing-hero" aria-labelledby="landing-hero-title">
-          <div className="qp-landing-hero-copy">
-            <p className="qp-landing-eyebrow">Built for catering teams</p>
-            <h1 id="landing-hero-title">
-              Build confident catering quotes
-              <span>without the spreadsheet chase.</span>
-            </h1>
-            <p className="qp-landing-hero-description">
-              Build accurate catering quotes, share polished proposals, and carry confirmed decisions into event operations.
-            </p>
-            <div className="qp-landing-hero-actions">
-              {BUYER_ACCESS_PUBLIC_CTA_ENABLED && (
-                <a className="qp-landing-button qp-landing-button-accent" href="/start">
-                  Try $1 test access
-                </a>
-              )}
-              <a className="qp-landing-button qp-landing-button-dark" href="https://mbmapps.com/contact">
-                Book a demo
-              </a>
-              <a className="qp-landing-button qp-landing-button-light" href="/app">
-                Staff login
-              </a>
-            </div>
-          </div>
-
-          <figure className="qp-landing-hero-media">
-            <img
-              src={cateringEventHero}
-              alt="A catering team serving guests at an outdoor dinner event"
-              width="1440"
-              height="960"
-              decoding="async"
-            />
-            <figcaption>A clear quote is the start of a well-run event.</figcaption>
-          </figure>
-        </section>
+        <DocumentHero showBuyCta={BUYER_ACCESS_PUBLIC_CTA_ENABLED} />
 
         <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes">
           <div className="qp-landing-outcome-grid">
