@@ -417,12 +417,21 @@ export default function MarketingPage() {
             </div>
             <footer>
               <span>Nothing has changed yet.</span>
-              <a
-                href="/start"
-                onClick={() => emitMarketingVideoEvent("cta_click", { element: "commercial_secondary_cta" })}
-              >
-                Review proposed change <span aria-hidden="true">&rarr;</span>
-              </a>
+              {BUYER_ACCESS_PUBLIC_CTA_ENABLED ? (
+                <a
+                  href="/start"
+                  onClick={() => emitMarketingVideoEvent("cta_click", { element: "commercial_secondary_cta" })}
+                >
+                  Review proposed change <span aria-hidden="true">&rarr;</span>
+                </a>
+              ) : (
+                <a
+                  href="https://mbmapps.com/contact"
+                  onClick={() => emitMarketingVideoEvent("cta_click", { element: "commercial_secondary_cta" })}
+                >
+                  See it in a demo <span aria-hidden="true">&rarr;</span>
+                </a>
+              )}
             </footer>
           </article>
         </section>
