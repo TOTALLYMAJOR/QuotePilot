@@ -16,8 +16,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   proposed until human review.
   Accessible play/pause and sound controls preserve the existing analytics
   events; reduced-motion visitors receive the poster frame with playback
-  paused. Product routes, pricing authority, and customer decision boundaries
-  are unchanged.
+  paused. The consequence CTA also preserves the public buyer-access gate,
+  falling back to the demo path instead of exposing `/start` when that gate is
+  disabled. Product routes, pricing authority, and customer decision
+  boundaries are unchanged.
 - Added the Proposal Composer as the default quote-builder presentation behind
   `VITE_PROPOSAL_COMPOSER_ENABLED` (default on; explicit `false/0/no/off`
   restores the wizard-first presentation). The proposal document becomes the
