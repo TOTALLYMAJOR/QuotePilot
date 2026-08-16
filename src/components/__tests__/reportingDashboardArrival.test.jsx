@@ -260,6 +260,53 @@ describe("ReportingDashboardView exact arrival", () => {
     }));
   });
 
+  test("refreshes retained reporting evidence when the window regains focus", async () => {
+    mocks.getQuoteHistory
+      .mockResolvedValueOnce({
+        source: "firebase",
+        truncated: false,
+        quotes: [{
+          id: "quote-focus-refresh",
+          organizationId: ORGANIZATION_ID,
+          status: "viewed",
+          totals: { total: 1800 },
+          payment: { depositStatus: "unpaid" }
+        }]
+      })
+      .mockResolvedValueOnce({
+        source: "firebase",
+        truncated: false,
+        quotes: [{
+          id: "quote-focus-refresh",
+          organizationId: ORGANIZATION_ID,
+          status: "accepted",
+          totals: { total: 1800 },
+          payment: { depositStatus: "unpaid" }
+        }]
+      });
+
+    await act(async () => {
+      root.render(
+        <ReportingDashboardView
+          open
+          onClose={() => {}}
+          organizationId={ORGANIZATION_ID}
+        />
+      );
+    });
+    await settle();
+    expect(container.textContent).toContain("Accepted: 0");
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await settle();
+
+    expect(mocks.getQuoteHistory).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Accepted: 1");
+    expect(container.textContent).toContain("1 accepted/booked of 1 loaded records");
+  });
+
   test.each([
     [
       "pipeline",

@@ -10,6 +10,7 @@ const COMMERCIAL_VIDEO = {
   track: "/videos/quote-pilot-commercial-captions.vtt",
   title: "QuotePilot commercial"
 };
+const COMMERCIAL_PLAYBACK_RATE = 0.72;
 const COMMERCIAL_VIDEO_EVENTS = {
   cta_click: "landing_video_cta",
   play_error: "landing_video_error",
@@ -147,6 +148,9 @@ export default function MarketingPage() {
     const video = marketingCommercialRef.current;
     if (!video) return;
 
+    video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
+
     if (video.paused) {
       emitMarketingVideoEvent("cta_click", { element: "commercial_play_overlay", action: "play" });
       video.play().catch(() => {
@@ -163,6 +167,13 @@ export default function MarketingPage() {
     emitMarketingVideoEvent("ended", {
       watchedSeconds: Number((marketingCommercialRef.current?.currentTime || 0).toFixed(1))
     });
+  };
+
+  const handleCommercialLoadedMetadata = () => {
+    const video = marketingCommercialRef.current;
+    if (!video) return;
+    video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
   };
 
   const handleCommercialMute = () => {
@@ -252,6 +263,7 @@ export default function MarketingPage() {
           preload="metadata"
           poster={COMMERCIAL_VIDEO.poster}
           aria-label="QuotePilot catering operations commercial"
+          onLoadedMetadata={handleCommercialLoadedMetadata}
           onPlay={handleCommercialPlayEvent}
           onPause={handleCommercialPauseEvent}
           onEnded={handleCommercialEnded}
@@ -323,7 +335,7 @@ export default function MarketingPage() {
           </div>
 
           <div className="qp-landing-film-status" aria-label="Commercial playback controls">
-            <span>QuotePilot film · 30 seconds</span>
+            <span>QuotePilot film · slow cinema</span>
             <div>
               <button
                 type="button"

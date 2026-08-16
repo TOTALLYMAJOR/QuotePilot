@@ -1177,6 +1177,8 @@ html.qp-landing-motion {
   inset: 0;
   z-index: 0;
   overflow: hidden;
+  pointer-events: none;
+  filter: grayscale(1);
   background: #0a0c09 url("/videos/quote-pilot-commercial-poster.webp") center / cover no-repeat;
 }
 
@@ -1191,7 +1193,7 @@ html.qp-landing-motion {
 .qp-landing-film-layer video {
   object-fit: cover;
   object-position: center;
-  filter: saturate(0.78) contrast(1.05) brightness(0.82);
+  filter: contrast(1.09) brightness(0.78);
   transform: scale(1.015);
 }
 
@@ -1211,6 +1213,7 @@ html.qp-landing-motion {
 
 .qp-landing-header {
   position: fixed;
+  z-index: 30;
   color: #f7f3e8;
   border-color: rgba(255, 255, 255, 0.14);
   background: rgba(8, 10, 7, 0.7);

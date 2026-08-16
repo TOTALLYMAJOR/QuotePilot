@@ -68,6 +68,24 @@ describe("Quote History contract conversion presentation", () => {
     expect(recoveryHtml).toContain("reloading the authoritative quote");
   });
 
+  test("distinguishes customer acceptance from internal conversion authorization", () => {
+    const awaitingAuthorizationHtml = renderContractConversionState({
+      phase: "ready",
+      approvalReady: false,
+      customerAccepted: true
+    });
+    const authorizedHtml = renderContractConversionState({
+      phase: "ready",
+      approvalReady: true,
+      customerAccepted: true
+    });
+
+    expect(awaitingAuthorizationHtml).toContain("Customer accepted");
+    expect(awaitingAuthorizationHtml).toContain("separate administrator authorization");
+    expect(authorizedHtml).toContain("Internal conversion authorized");
+    expect(authorizedHtml).toContain("separate records");
+  });
+
   test("preserves the exact approval request identity across uncertain reconciliation", () => {
     const submitting = beginContractConversionAttempt({
       currentState: createContractConversionMutationState("quote-42"),

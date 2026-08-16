@@ -35,6 +35,7 @@ import {
   updateQuoteStatus
 } from "../lib/quoteStore";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { useRefreshOnWindowFocus } from "./useRefreshOnWindowFocus";
 import {
   buildQuoteHistoryController,
   getQuoteActionPermissions
@@ -283,6 +284,7 @@ export function beginContractConversionAttempt({
 export function buildContractConversionMutationPresentation({
   phase = "ready",
   approvalReady = true,
+  customerAccepted = false,
   error = "",
   receipt = null
 } = {}) {
@@ -344,10 +346,16 @@ export function buildContractConversionMutationPresentation({
   }
   return {
     state: "ready",
-    title: approvalReady ? "Ready for approved conversion" : "Approval required before conversion",
+    title: approvalReady
+      ? "Internal conversion authorized"
+      : customerAccepted
+        ? "Customer accepted · conversion authorization needed"
+        : "Conversion authorization needed",
     detail: approvalReady
-      ? "No conversion request has been submitted from this row."
-      : "Approve the exact contract-conversion request in Workflow before submitting this action.",
+      ? "Customer acceptance and the exact administrator authorization are separate records. No conversion request has been submitted from this row."
+      : customerAccepted
+        ? "Customer acceptance is recorded. A separate administrator authorization is required before QuotePilot can create the contract."
+        : "Record customer acceptance, then authorize the exact contract-conversion request in Workflow before creating a contract.",
     error: ""
   };
 }
@@ -1052,6 +1060,8 @@ export function QuoteHistoryView({
       return null;
     }
   };
+
+  useRefreshOnWindowFocus({ enabled: open, onRefresh: load });
 
   useEffect(() => {
     if (!open) return;
@@ -2662,7 +2672,8 @@ export function QuoteHistoryView({
                 const contractConversionActive = Boolean(contractConversions[quote.id]);
                 const contractConversionPresentation = buildContractConversionMutationPresentation({
                   ...contractConversionState,
-                  approvalReady: !approvalRequired || Boolean(contractApproval)
+                  approvalReady: !approvalRequired || Boolean(contractApproval),
+                  customerAccepted: ["accepted", "booked"].includes(normalizedQuoteStatus)
                 });
                 const contractConversionBusy = ["submitting", "reconciliation", "recovery"]
                   .includes(contractConversionState.phase);
