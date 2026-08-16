@@ -8,6 +8,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Added an isolated, responsive Quote Workspace at `/app/quote-workspace`
+  with `/app/quote-workspace-concept` retained as a fallback alias. The page
+  reads the signed-in staff member's organization-scoped quote history,
+  selects an explicit `?quoteId=` or the most recent saved quote, and presents
+  recorded event, menu, pricing, margin, status, and activity evidence in the
+  new editorial QuotePilot visual language. Preview, message, pricing, menu,
+  and send-review actions hand off to the existing canonical quote routes;
+  readiness remains a completeness signal and never changes approval. The
+  existing quote workspace remains unchanged and available for rollback.
 - Recast the public QuotePilot landing page as a cinematic, viewport-paced
   story: the existing commercial now runs as a muted full-bleed film layer,
   major sections align as native scroll-snap chapters, all product screen
