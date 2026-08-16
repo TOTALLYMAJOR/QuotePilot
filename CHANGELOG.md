@@ -8,6 +8,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Recast the public QuotePilot landing page as a cinematic, viewport-paced
+  story: the existing commercial now runs as a muted full-bleed film layer,
+  major sections align as native scroll-snap chapters, all product screen
+  captures were removed in favor of an editorial story about complexity and
+  time, and a new consequence preview keeps the customer request explicitly
+  proposed until human review.
+  Accessible play/pause and sound controls preserve the existing analytics
+  events; reduced-motion visitors receive the poster frame with playback
+  paused. Product routes, pricing authority, and customer decision boundaries
+  are unchanged.
 - Added the Proposal Composer as the default quote-builder presentation behind
   `VITE_PROPOSAL_COMPOSER_ENABLED` (default on; explicit `false/0/no/off`
   restores the wizard-first presentation). The proposal document becomes the
@@ -128,6 +138,14 @@ This changelog is backfilled from git history and will be maintained going forwa
   reconciliation; and separate request, delivery, failure, opt-out, and
   recipient evidence. Production remains off until separately deployed and
   provider-tested.
+- Added homepage cinematic analytics for the QuotePilot commercial on `/`: play,
+  pause, completion, CTA, and error interactions now emit structured event
+  payloads in `MarketingPage.jsx` to multiple sinks. Each interaction includes
+  consistent fields (video title, source, playhead, duration, seconds delta) and
+  dispatches both `window.dataLayer` + `window.gtag` events (`landing_video_*`
+  mapping) plus a local `CustomEvent("quotepilot-marketing-video")`. Added
+  caption-track support and poster fallback for the commercial player assets
+  under `public/videos/`.
 - Recalibrated the named, graph-specific temporary bundle exception to the
   measured Pingram candidate: 2,891,116 compatibility bytes and 3,817,075
   Ambient bytes, with the largest chunk unchanged at 391,901. The ceilings add

@@ -3,13 +3,22 @@ import { expect, test } from "@playwright/test";
 test("public landing page presents QuotePilot for catering teams with truthful routes", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", {
-    name: /Every event is a document that won’t hold still/i
-  })).toBeVisible();
   await expect(page.getByText("Catering sales + event operations", { exact: true })).toBeVisible();
-  await expect(page.getByRole("article", {
-    name: /Banquet event order for Morgan Wedding, revision six/i
+  await expect(page.getByRole("heading", {
+    name: /The event changed\. QuotePilot knows what that means\./i
   })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Running a business means carrying all of it."
+  })).toBeVisible();
+  await expect(page.getByText(
+    "Time is the one thing your business can never order more of."
+  )).toBeVisible();
+
+  const cinematicVideo = page.locator("#quote-pilot-commercial-video");
+  await expect(cinematicVideo).toHaveAttribute("poster", "/videos/quote-pilot-commercial-poster.webp");
+  await expect(cinematicVideo.locator("source")).toHaveAttribute("src", "/videos/quote-pilot-commercial.mp4");
+  await expect(page.locator("[data-landing-chapter]")).toHaveCount(9);
+  await expect(page.getByRole("button", { name: /Pause film|Resume film|Play film/ })).toBeVisible();
 
   const demoLinks = page.getByRole("link", { name: "Book a demo" });
   await expect(demoLinks.first()).toHaveAttribute("href", "https://mbmapps.com/contact");
@@ -17,13 +26,17 @@ test("public landing page presents QuotePilot for catering teams with truthful r
   await expect(page.getByRole("link", { name: "Staff login" }).first()).toHaveAttribute("href", "/app");
   await expect(page.getByRole("link", { name: "Explore the platform" })).toHaveAttribute("href", "/system");
 
-  await expect(page.getByRole("heading", { name: "The full quote-to-event toolkit" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Make every customer decision easier to review" })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Your time is the one thing the business cannot replace."
+  })).toBeVisible();
+  await expect(page.getByText("An app should make life easier. On that, we stand.")).toBeVisible();
+  await expect(page.locator("main img")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Make the customer’s next decision feel simple." })).toBeVisible();
   await expect(page.getByText(
     "Acceptance records the customer decision. Payment and booking remain separate facts."
   )).toBeVisible();
   await expect(page.getByRole("heading", {
-    name: "Keep event operations connected to the approved scope"
+    name: "Let the team arrive prepared, not preoccupied."
   })).toBeVisible();
 
   const visibleCopy = await page.locator("body").innerText();
@@ -36,7 +49,7 @@ test("public landing page stays contained on mobile and honors reduced motion", 
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
-    name: /Every event is a document that won’t hold still/i
+    name: /The event changed\. QuotePilot knows what that means\./i
   })).toBeVisible();
 
   const overflow = await page.evaluate(
@@ -44,10 +57,15 @@ test("public landing page stays contained on mobile and honors reduced motion", 
   );
   expect(overflow).toBeLessThanOrEqual(1);
 
-  const animationDuration = await page.locator(".qp-dh-h1").evaluate(
+  const animationDuration = await page.locator(".qp-landing-cinematic-copy").evaluate(
     (node) => getComputedStyle(node).animationDuration
   );
   expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.01);
+
+  const cinematicVideoPaused = await page.locator("#quote-pilot-commercial-video").evaluate(
+    (video) => video.paused
+  );
+  expect(cinematicVideoPaused).toBe(true);
 });
 
 test("customer portal query takes precedence over the public landing page", async ({ page }) => {
@@ -55,7 +73,7 @@ test("customer portal query takes precedence over the public landing page", asyn
 
   await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
   await expect(page.getByRole("heading", {
-    name: /Every event is a document that won’t hold still/i
+    name: /The event changed\. QuotePilot knows what that means\./i
   })).toHaveCount(0);
 });
 
@@ -67,6 +85,6 @@ test("staff route loads the workspace boundary rather than the public landing pa
   );
   await expect(workspaceSurface).toBeVisible();
   await expect(page.getByRole("heading", {
-    name: /Every event is a document that won’t hold still/i
+    name: /The event changed\. QuotePilot knows what that means\./i
   })).toHaveCount(0);
 });

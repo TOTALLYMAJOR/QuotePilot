@@ -1,28 +1,42 @@
-import { useEffect } from "react";
-import eventScheduleImage from "../assets/marketing/quotepilot/event-schedule.png";
-import importStudioImage from "../assets/marketing/quotepilot/import-studio.png";
-import opportunityTrackingImage from "../assets/marketing/quotepilot/opportunity-tracking.png";
-import quoteDetailsImage from "../assets/marketing/quotepilot/quote-details-connections.png";
-import salesFollowupImage from "../assets/marketing/quotepilot/sales-followup.png";
+import { useEffect, useRef, useState } from "react";
 import { isBuyerAccessPublicCtaEnabled } from "../lib/buyerAccessConfig";
 import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
-import DocumentHero from "./DocumentHero";
 import "../landing.css";
 
 const BUYER_ACCESS_PUBLIC_CTA_ENABLED = isBuyerAccessPublicCtaEnabled(import.meta.env);
+const COMMERCIAL_VIDEO = {
+  src: "/videos/quote-pilot-commercial.mp4",
+  poster: "/videos/quote-pilot-commercial-poster.webp",
+  track: "/videos/quote-pilot-commercial-captions.vtt",
+  title: "QuotePilot commercial"
+};
+const COMMERCIAL_VIDEO_EVENTS = {
+  cta_click: "landing_video_cta",
+  play_error: "landing_video_error",
+  play: "landing_video_play",
+  pause: "landing_video_pause",
+  ended: "landing_video_complete"
+};
+
+const changeImpact = [
+  { label: "Guests", before: "165", after: "175" },
+  { label: "Proposal", before: "$18,420", after: "$19,475" },
+  { label: "Margin", before: "38.2%", after: "37.0%" },
+  { label: "Staff required", before: "11", after: "12" }
+];
 
 const outcomeStrip = [
   {
-    title: "Guided quote building",
-    detail: "Keep event scope, menus, staffing, rentals, and terms in one flow."
+    title: "Your attention, protected",
+    detail: "Keep the details together so your mind does not have to hold every loose end."
   },
   {
-    title: "Live pricing",
-    detail: "See each selection and total change while the quote is being built."
+    title: "Complexity, carried",
+    detail: "Let one change move through pricing, staffing, and preparation without another round of manual work."
   },
   {
-    title: "Version history",
-    detail: "Compare options and revisions without losing the original record."
+    title: "Time, returned",
+    detail: "Spend less of the day reconstructing what happened and more of it moving the business forward."
   }
 ];
 
@@ -51,20 +65,20 @@ const workflow = [
 
 const operations = [
   {
-    title: "Sales follow-up",
-    copy: "Keep readiness gaps, due actions, and customer context visible."
+    title: "The next conversation",
+    copy: "Know who needs an answer and what that answer must account for."
   },
   {
-    title: "Event schedule",
-    copy: "Review confirmed work, conflicts, and the dates that need attention."
+    title: "The day ahead",
+    copy: "See what is settled, what is approaching, and what still needs care."
   },
   {
-    title: "Crew coordination",
-    copy: "Keep staffing context connected to the approved event scope."
+    title: "The people",
+    copy: "Give the team the context to arrive prepared instead of chasing updates."
   },
   {
-    title: "Production checklist",
-    copy: "Track kitchen, logistics, service, and closeout work without overstating readiness."
+    title: "The handoff",
+    copy: "Carry the promise made in the quote into the work required on event day."
   }
 ];
 
@@ -81,6 +95,112 @@ function BrandLockup() {
 }
 
 export default function MarketingPage() {
+  const marketingCommercialRef = useRef(null);
+  const [commercialStarted, setCommercialStarted] = useState(false);
+  const [commercialPlaying, setCommercialPlaying] = useState(false);
+  const [commercialMuted, setCommercialMuted] = useState(true);
+
+  const emitMarketingVideoEvent = (type, detail = {}) => {
+    if (typeof window === "undefined") return;
+    const video = marketingCommercialRef.current;
+    const currentSeconds = Number((video?.currentTime || 0).toFixed(1));
+    const durationSeconds = Number((video?.duration || 0).toFixed(1));
+    const percentComplete = durationSeconds > 0
+      ? Number(((currentSeconds / durationSeconds) * 100).toFixed(1))
+      : undefined;
+    const normalized = {
+      event: "quotepilot_landing_video",
+      section: "commercial",
+      videoName: COMMERCIAL_VIDEO.title,
+      videoSrc: COMMERCIAL_VIDEO.src,
+      eventType: type,
+      currentSeconds,
+      durationSeconds,
+      ...detail
+    };
+
+    if (percentComplete !== undefined) {
+      normalized.percentComplete = percentComplete;
+    }
+
+    if (window.dataLayer?.push) {
+      window.dataLayer.push(normalized);
+    }
+    if (typeof window.gtag === "function") {
+      const mappedEvent = COMMERCIAL_VIDEO_EVENTS[type] || "landing_video_interaction";
+      const gtagPayload = {
+        event_category: "marketing",
+        event_label: normalized.videoName,
+        interaction_type: type,
+        ...normalized
+      };
+      window.gtag("event", mappedEvent, gtagPayload);
+    }
+    window.dispatchEvent(
+      new CustomEvent("quotepilot-marketing-video", {
+        detail: normalized
+      })
+    );
+  };
+
+  const handleCommercialPlay = () => {
+    const video = marketingCommercialRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      emitMarketingVideoEvent("cta_click", { element: "commercial_play_overlay", action: "play" });
+      video.play().catch(() => {
+        emitMarketingVideoEvent("play_error", { element: "commercial_play_overlay" });
+      });
+    } else {
+      emitMarketingVideoEvent("cta_click", { element: "commercial_play_overlay", action: "pause" });
+      video.pause();
+    }
+  };
+
+  const handleCommercialEnded = () => {
+    setCommercialPlaying(false);
+    emitMarketingVideoEvent("ended", {
+      watchedSeconds: Number((marketingCommercialRef.current?.currentTime || 0).toFixed(1))
+    });
+  };
+
+  const handleCommercialMute = () => {
+    const video = marketingCommercialRef.current;
+    if (!video) return;
+
+    const nextMuted = !video.muted;
+    video.muted = nextMuted;
+    setCommercialMuted(nextMuted);
+    emitMarketingVideoEvent("cta_click", {
+      element: "cinematic_sound_control",
+      action: nextMuted ? "mute" : "unmute"
+    });
+
+    if (!nextMuted && video.paused) {
+      video.play().catch(() => {
+        emitMarketingVideoEvent("play_error", { element: "cinematic_sound_control" });
+      });
+    }
+  };
+
+  const handleCommercialPlayEvent = () => {
+    setCommercialStarted(true);
+    setCommercialPlaying(true);
+    emitMarketingVideoEvent("play", {
+      currentSeconds: Number((marketingCommercialRef.current?.currentTime || 0).toFixed(1))
+    });
+  };
+
+  const handleCommercialPauseEvent = () => {
+    setCommercialPlaying(false);
+    if (!marketingCommercialRef.current?.ended) {
+      emitMarketingVideoEvent("pause", {
+        currentSeconds: Number((marketingCommercialRef.current?.currentTime || 0).toFixed(1))
+      });
+    }
+  };
+
   useEffect(() => {
     const root = document.documentElement;
     const revealNodes = [...document.querySelectorAll("[data-landing-reveal]")];
@@ -89,6 +209,11 @@ export default function MarketingPage() {
     root.classList.add("qp-landing-motion");
 
     if (reduceMotion || !("IntersectionObserver" in window)) {
+      if (reduceMotion && marketingCommercialRef.current) {
+        marketingCommercialRef.current.pause();
+        marketingCommercialRef.current.currentTime = 0;
+        setCommercialPlaying(false);
+      }
       revealNodes.forEach((node) => node.classList.add("is-visible"));
       return () => root.classList.remove("qp-landing-motion");
     }
@@ -116,17 +241,47 @@ export default function MarketingPage() {
     <div className="qp-landing" id="top">
       <a className="qp-landing-skip" href="#landing-main">Skip to content</a>
 
-      <header className="qp-landing-header">
-        <a className="qp-landing-brand" href="#top" aria-label="QuotePilot home">
-          <BrandLockup />
-        </a>
+      <div className="qp-landing-film-layer">
+        <video
+          ref={marketingCommercialRef}
+          id="quote-pilot-commercial-video"
+          autoPlay
+          muted={commercialMuted}
+          loop
+          playsInline
+          preload="metadata"
+          poster={COMMERCIAL_VIDEO.poster}
+          aria-label="QuotePilot catering operations commercial"
+          onPlay={handleCommercialPlayEvent}
+          onPause={handleCommercialPauseEvent}
+          onEnded={handleCommercialEnded}
+        >
+          <source src={COMMERCIAL_VIDEO.src} type="video/mp4" />
+          <track
+            src={COMMERCIAL_VIDEO.track}
+            kind="captions"
+            srcLang="en"
+            label="English"
+            default
+          />
+          Your browser does not support HTML video.
+        </video>
+        <div className="qp-landing-film-grade" aria-hidden="true" />
+      </div>
 
-        <nav className="qp-landing-nav" aria-label="Marketing navigation">
-          <a href="#features">Features</a>
-          <a href="#how-it-works">How it works</a>
-          <a href="#portal">Portal</a>
-          <a href="#operations">Operations</a>
-        </nav>
+      <header className="qp-landing-header">
+          <a className="qp-landing-brand" href="#top" aria-label="QuotePilot home">
+            <BrandLockup />
+          </a>
+
+          <nav className="qp-landing-nav" aria-label="Marketing navigation">
+            <a href="#story">Story</a>
+            <a href="#commercial">The change</a>
+            <a href="#features">Product</a>
+            <a href="#how-it-works">Workflow</a>
+            <a href="#portal">Portal</a>
+            <a href="#operations">Operations</a>
+          </nav>
 
         <div className="qp-landing-header-actions">
           <a className="qp-landing-header-login" href="/app">Staff login</a>
@@ -137,17 +292,142 @@ export default function MarketingPage() {
       </header>
 
       <main id="landing-main">
-        <DocumentHero
-          buyCta={
-            BUYER_ACCESS_PUBLIC_CTA_ENABLED && (
-              <a className="qp-landing-button qp-landing-button-accent" href="/start">
-                Try $1 test access
+        <section
+          className="qp-landing-cinematic-hero"
+          id="story"
+          data-landing-chapter
+          aria-labelledby="cinematic-title"
+        >
+          <div className="qp-landing-cinematic-copy" data-landing-reveal>
+            <p className="qp-landing-cinematic-kicker">Catering sales + event operations</p>
+            <h1 id="cinematic-title">
+              The event changed.
+              <em>QuotePilot knows what that means.</em>
+            </h1>
+            <p className="qp-landing-cinematic-deck">
+              See pricing, margin, staffing, and production consequences before a customer request becomes the new plan.
+            </p>
+            <div className="qp-landing-hero-actions">
+              <a className="qp-landing-button qp-landing-button-accent" href="https://mbmapps.com/contact">
+                Book a demo
               </a>
-            )
-          }
-        />
+              <a className="qp-landing-button qp-landing-button-film" href="#commercial">
+                See the consequence
+              </a>
+              {BUYER_ACCESS_PUBLIC_CTA_ENABLED && (
+                <a className="qp-landing-button qp-landing-button-film" href="/start">
+                  Try $1 test access
+                </a>
+              )}
+            </div>
+          </div>
 
-        <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes">
+          <div className="qp-landing-film-status" aria-label="Commercial playback controls">
+            <span>QuotePilot film · 30 seconds</span>
+            <div>
+              <button
+                type="button"
+                onClick={handleCommercialPlay}
+                aria-controls="quote-pilot-commercial-video"
+                aria-pressed={!commercialPlaying}
+              >
+                {commercialPlaying ? "Pause film" : commercialStarted ? "Resume film" : "Play film"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCommercialMute}
+                aria-controls="quote-pilot-commercial-video"
+                aria-pressed={!commercialMuted}
+              >
+                {commercialMuted ? "Sound on" : "Mute film"}
+              </button>
+            </div>
+          </div>
+
+          <a className="qp-landing-scroll-cue" href="#document">
+            Scroll to follow the change <span aria-hidden="true">&darr;</span>
+          </a>
+        </section>
+
+        <section
+          className="qp-landing-story-chapter"
+          id="document"
+          data-landing-chapter
+          data-landing-reveal
+          aria-labelledby="burden-title"
+        >
+          <div className="qp-landing-story-inner">
+            <div className="qp-landing-story-title">
+              <p className="qp-landing-eyebrow">01 · The invisible work</p>
+              <h2 id="burden-title">Running a business means carrying all of it.</h2>
+            </div>
+            <div className="qp-landing-story-copy">
+              <p>
+                The customer waiting for an answer. The menu that changed. The team that needs direction.
+                The number that must still work when the room is full.
+              </p>
+              <p>
+                Each detail is reasonable on its own. Together, they follow you into every quiet hour the
+                business was supposed to leave untouched.
+              </p>
+            </div>
+            <blockquote>
+              Time is the one thing your business can never order more of.
+            </blockquote>
+          </div>
+        </section>
+
+        <section
+          className="qp-landing-section qp-landing-commercial qp-landing-chapter-film"
+          id="commercial"
+          data-landing-chapter
+          data-landing-reveal
+        >
+          <div className="qp-landing-commercial-heading">
+            <p className="qp-landing-cinematic-kicker">02 · Consequence before commitment</p>
+            <h2>One request. Every consequence in view.</h2>
+            <p>
+              QuotePilot previews the commercial and operational impact without silently changing the event.
+            </p>
+          </div>
+          <article className="qp-landing-impact-preview" aria-label="Customer change request impact preview">
+            <header>
+              <div>
+                <span>Customer change request</span>
+                <strong>Morgan Wedding</strong>
+              </div>
+              <span className="qp-landing-impact-status">Proposed</span>
+            </header>
+            <blockquote>
+              &ldquo;We&rsquo;re actually expecting closer to 175. Can we add another bartender too?&rdquo;
+            </blockquote>
+            <div className="qp-landing-impact-rows">
+              {changeImpact.map((item) => (
+                <div className="qp-landing-impact-row" key={item.label}>
+                  <span>{item.label}</span>
+                  <del>{item.before}</del>
+                  <span aria-hidden="true">&rarr;</span>
+                  <ins>{item.after}</ins>
+                </div>
+              ))}
+            </div>
+            <div className="qp-landing-impact-artifact">
+              <span>Production artifact</span>
+              <strong>Current <span aria-hidden="true">&rarr;</span> Needs review</strong>
+            </div>
+            <footer>
+              <span>Nothing has changed yet.</span>
+              <a
+                href="/start"
+                onClick={() => emitMarketingVideoEvent("cta_click", { element: "commercial_secondary_cta" })}
+              >
+                Review proposed change <span aria-hidden="true">&rarr;</span>
+              </a>
+            </footer>
+          </article>
+        </section>
+
+        <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes" data-landing-chapter>
           <div className="qp-landing-outcome-grid">
             {outcomeStrip.map((item) => (
               <article key={item.title}>
@@ -161,86 +441,44 @@ export default function MarketingPage() {
           </a>
         </section>
 
-        <section className="qp-landing-section qp-landing-features" id="features" data-landing-reveal>
+        <section className="qp-landing-section qp-landing-features" id="features" data-landing-chapter data-landing-reveal>
           <div className="qp-landing-section-heading">
-            <h2>The full quote-to-event toolkit</h2>
+            <p className="qp-landing-eyebrow">03 · A lighter way to work</p>
+            <h2>Your time is the one thing the business cannot replace.</h2>
             <p>
-              Replace the spreadsheet, scattered email threads, and disconnected status updates with one accountable workflow.
+              QuotePilot is built to hold the complexity quietly, return clarity quickly, and leave the final decision where it belongs: with you.
             </p>
           </div>
 
-          <div className="qp-landing-feature-grid">
-            <article className="qp-landing-feature qp-landing-feature-shot">
-              <img
-                src={quoteDetailsImage}
-                alt="QuotePilot quote detail view showing guest count, package, menu, staffing, pricing, payments, and proposal status all connected to one quote"
-                loading="lazy"
-                decoding="async"
-              />
-              <div className="qp-landing-feature-copy">
-                <span>Guided quote builder</span>
-                <h3>Every detail, connected</h3>
-                <p>
-                  Guest count, package, menu, staffing, pricing, and payments stay linked to one quote &mdash; not five spreadsheets.
-                </p>
-              </div>
+          <div className="qp-landing-feature-essay">
+            <article>
+              <span>Before the quote</span>
+              <h3>Begin with what the customer meant, not a blank form.</h3>
+              <p>Gather the event into one clear brief and start from understanding instead of reconstruction.</p>
             </article>
-
-            <article className="qp-landing-feature qp-landing-feature-shot">
-              <img
-                src={opportunityTrackingImage}
-                alt="QuotePilot opportunities view showing proposal completeness, pricing and margin, customer state, and event planning for one quote"
-                loading="lazy"
-                decoding="async"
-              />
-              <div className="qp-landing-feature-copy">
-                <span>Opportunity tracking</span>
-                <h3>Know where every quote stands</h3>
-                <p>Proposal readiness, pricing, customer state, and event planning, each tracked separately with one useful next step.</p>
-              </div>
+            <article>
+              <span>While it changes</span>
+              <h3>Let one adjustment explain everything it touches.</h3>
+              <p>See the effect on the promise, the price, and the people before deciding what becomes official.</p>
             </article>
-
-            <article className="qp-landing-feature qp-landing-feature-shot">
-              <img
-                src={importStudioImage}
-                alt="QuotePilot Import Studio showing a CSV drop zone for bringing customer and catalog data into the workspace"
-                loading="lazy"
-                decoding="async"
-              />
-              <div className="qp-landing-feature-copy">
-                <span>Bring your business with you</span>
-                <h3>Import Studio turns spreadsheets into a workspace</h3>
-                <p>Turn customer and catalog spreadsheets into a clean, reviewable workspace &mdash; nothing writes until you approve the mapping.</p>
-              </div>
-            </article>
-
-            <article className="qp-landing-feature qp-landing-feature-versioned">
-              <div className="qp-landing-feature-copy">
-                <span>Versioned records</span>
-                <h3>Keep every revision in context</h3>
-                <p>
-                  Reopen, compare, and continue a quote without rebuilding the history of what changed.
-                </p>
-              </div>
-            </article>
-
-            <article className="qp-landing-feature qp-landing-feature-shot">
-              <img
-                src={salesFollowupImage}
-                alt="QuotePilot workflow view showing follow-up stage, due date, and quote lifecycle timeline"
-                loading="lazy"
-                decoding="async"
-              />
-              <div className="qp-landing-feature-copy">
-                <span>Sales follow-up</span>
-                <h3>Know what needs attention next</h3>
-                <p>Keep proposal readiness, due actions, and approval requests in one staff workflow.</p>
-              </div>
+            <article>
+              <span>When work moves</span>
+              <h3>Carry the truth forward without carrying it alone.</h3>
+              <p>Keep the customer, sales team, kitchen, and event crew working from the same understood plan.</p>
             </article>
           </div>
+
+          <p className="qp-landing-standing-line">
+            An app should make life easier. On that, we stand.
+          </p>
         </section>
 
-        <section className="qp-landing-section qp-landing-workflow" id="how-it-works" data-landing-reveal>
+        <section
+          className="qp-landing-section qp-landing-workflow qp-landing-chapter-film"
+          id="how-it-works"
+          data-landing-chapter
+          data-landing-reveal
+        >
           <div className="qp-landing-workflow-heading">
             <h2>From inquiry to a prepared event</h2>
             <p>
@@ -258,11 +496,11 @@ export default function MarketingPage() {
           </ol>
         </section>
 
-        <section className="qp-landing-section qp-landing-portal" id="portal" data-landing-reveal>
+        <section className="qp-landing-section qp-landing-portal" id="portal" data-landing-chapter data-landing-reveal>
           <div className="qp-landing-portal-copy">
-            <h2>Make every customer decision easier to review</h2>
+            <h2>Make the customer&rsquo;s next decision feel simple.</h2>
             <p>
-              Give customers one place to review the event, pricing, and proposal before they choose the next step.
+              Give them one calm place to understand the event, the price, and the choice in front of them.
             </p>
             <ul>
               <li>Review event scope and pricing on any device</li>
@@ -275,21 +513,18 @@ export default function MarketingPage() {
           </div>
         </section>
 
-        <section className="qp-landing-section qp-landing-operations" id="operations" data-landing-reveal>
+        <section className="qp-landing-section qp-landing-operations" id="operations" data-landing-chapter data-landing-reveal>
           <div className="qp-landing-operations-heading">
-            <h2>Keep event operations connected to the approved scope</h2>
+            <h2>Let the team arrive prepared, not preoccupied.</h2>
             <p>
-              QuotePilot carries useful context forward so sales and production teams can coordinate without flattening every milestone into one status.
+              QuotePilot carries the understood plan forward so fewer people have to stop, search, ask, and begin again.
             </p>
           </div>
 
-          <div className="qp-landing-operations-layout">
-            <img
-              src={eventScheduleImage}
-              alt="QuotePilot event schedule calendar showing booked and accepted events with conflict flags and a day's run of show"
-              loading="lazy"
-              decoding="async"
-            />
+          <div className="qp-landing-operations-layout qp-landing-operations-layout-copy">
+            <blockquote>
+              When the doors open, the team should feel the plan &mdash; not the scramble behind it.
+            </blockquote>
             <div className="qp-landing-operations-list">
               {operations.map((item) => (
                 <article key={item.title}>
@@ -301,10 +536,10 @@ export default function MarketingPage() {
           </div>
         </section>
 
-        <section className="qp-landing-final" data-landing-reveal>
+        <section className="qp-landing-final qp-landing-chapter-film" data-landing-chapter data-landing-reveal>
           <div>
-            <h2>Ready to quote with less back-and-forth?</h2>
-            <p>See how QuotePilot fits your catering workflow.</p>
+            <h2>An app should make life easier.</h2>
+            <p>Let QuotePilot lighten the burden. On that, we stand.</p>
           </div>
           <div className="qp-landing-final-actions">
             <a className="qp-landing-button qp-landing-button-accent" href="https://mbmapps.com/contact">
