@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import ActiveApp from "quotepilot-active-app";
 import { EventTypeProvider } from "../context/EventTypeContext";
 import { OrganizationProvider } from "../context/OrganizationContext";
@@ -11,11 +11,22 @@ import { useTenantContext } from "../hooks/useTenantContext";
 import { WORKSPACE_PATHS } from "../lib/workspaceRoutes";
 import { buildWorkspaceRouteScopeKey } from "../lib/workspaceScope";
 
+const QUOTE_WORKSPACE_PATH = "/app/quote-workspace";
+const QUOTE_WORKSPACE_CONCEPT_PATH = "/app/quote-workspace-concept";
+const QuoteWorkspaceConceptPage = lazy(() => import("./QuoteWorkspaceConceptPage"));
+
 export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   const { route, replace } = useWorkspaceNavigation();
   const previousAuthenticatedUidRef = useRef("");
   const authenticatedUid = String(authSession.user?.uid || "").trim();
   const portalToken = String(route.portalToken || "").trim();
+  const normalizedPath = typeof window === "undefined"
+    ? ""
+    : window.location.pathname.replace(/\/+$/, "") || "/";
+  const quoteWorkspaceRequested = !portalToken && (
+    normalizedPath === QUOTE_WORKSPACE_PATH
+    || normalizedPath === QUOTE_WORKSPACE_CONCEPT_PATH
+  );
   const [committedPortalToken, setCommittedPortalToken] = useState(() => (
     route.surface === "portal" ? portalToken : ""
   ));
@@ -46,13 +57,23 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   return (
     <OrganizationProvider key={workspaceScopeKey}>
       <EventTypeProvider>
-        <ActiveApp
-          tenantContext={tenantContext}
-          authSession={authSession}
-          portalRouteAllowed={portalRouteAllowed}
-          committedPortalToken={committedPortalToken}
-          onPortalScopeCommit={commitPortalScope}
-        />
+        {quoteWorkspaceRequested ? (
+          <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote workspace...</div>}>
+            <QuoteWorkspaceConceptPage
+              tenantContext={tenantContext}
+              authSession={authSession}
+              onExit={() => replace(WORKSPACE_PATHS.quotes, { preserveSearch: false, preserveHash: false })}
+            />
+          </Suspense>
+        ) : (
+          <ActiveApp
+            tenantContext={tenantContext}
+            authSession={authSession}
+            portalRouteAllowed={portalRouteAllowed}
+            committedPortalToken={committedPortalToken}
+            onPortalScopeCommit={commitPortalScope}
+          />
+        )}
       </EventTypeProvider>
     </OrganizationProvider>
   );
