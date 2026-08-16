@@ -1177,6 +1177,8 @@ html.qp-landing-motion {
   inset: 0;
   z-index: 0;
   overflow: hidden;
+  pointer-events: none;
+  filter: grayscale(1);
   background: #0a0c09 url("/videos/quote-pilot-commercial-poster.webp") center / cover no-repeat;
 }
 
@@ -1191,7 +1193,7 @@ html.qp-landing-motion {
 .qp-landing-film-layer video {
   object-fit: cover;
   object-position: center;
-  filter: saturate(0.78) contrast(1.05) brightness(0.82);
+  filter: contrast(1.09) brightness(0.78);
   transform: scale(1.015);
 }
 
@@ -1211,6 +1213,7 @@ html.qp-landing-motion {
 
 .qp-landing-header {
   position: fixed;
+  z-index: 30;
   color: #f7f3e8;
   border-color: rgba(255, 255, 255, 0.14);
   background: rgba(8, 10, 7, 0.7);
@@ -1875,4 +1878,114 @@ html.qp-landing-motion {
   .qp-landing-scroll-cue span {
     animation: none;
   }
+}
+
+/* Document hero chapter — full-bleed light ground over the fixed film layer,
+   header clearance, and vertical centering that lets the section grow on
+   small screens instead of clipping. */
+.qp-landing-document-chapter {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  background: rgba(243, 240, 231, 0.965);
+  padding: 6rem 0 2.5rem;
+}
+
+.qp-landing-commercial .qp-landing-film-status {
+  bottom: 1.5rem;
+}
+
+/* Design-partner chapter — the deal stated plainly before any click.
+   Full-bleed light ground like the sibling story chapters; content width
+   comes from the horizontal padding, not the section box. */
+.qp-landing-partner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: grid;
+  align-content: center;
+  gap: 2.25rem;
+  background: rgba(243, 240, 231, 0.965);
+  padding-left: max(1.5rem, calc((100vw - 88rem) / 2));
+  padding-right: max(1.5rem, calc((100vw - 88rem) / 2));
+}
+
+.qp-landing-partner-heading {
+  max-width: 46rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.qp-landing-partner-heading p:last-child {
+  color: var(--landing-muted);
+  max-width: 38rem;
+}
+
+.qp-landing-partner-exchange {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 860px) {
+  .qp-landing-partner-exchange {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+}
+
+.qp-landing-partner-card {
+  background: var(--landing-surface);
+  border: 1px solid var(--landing-line);
+  border-radius: 14px;
+  padding: 1.6rem 1.75rem;
+}
+
+.qp-landing-partner-card-get {
+  border-color: color-mix(in srgb, var(--landing-accent) 45%, var(--landing-line));
+  background: color-mix(in srgb, var(--landing-accent-soft) 22%, var(--landing-surface));
+}
+
+.qp-landing-partner-label {
+  display: block;
+  margin-bottom: 0.9rem;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--landing-accent-strong);
+}
+
+.qp-landing-partner-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.qp-landing-partner-card li {
+  padding-left: 1.1rem;
+  position: relative;
+}
+
+.qp-landing-partner-card li::before {
+  content: "\2014";
+  position: absolute;
+  left: 0;
+  color: var(--landing-accent-strong);
+}
+
+.qp-landing-partner-actions {
+  display: grid;
+  justify-items: start;
+  gap: 0.7rem;
+}
+
+.qp-landing-partner-note {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--landing-muted);
 }

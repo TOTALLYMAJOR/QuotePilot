@@ -468,13 +468,16 @@
 .qp-dh-k-line { font-size: 11.5px; margin: 3px 0; line-height: 1.4; color: var(--dh-paper-ink); }
 .qp-dh-k-line .qp-dh-mono { font-size: 10px; color: var(--dh-paper-muted); }
 
-/* rate card */
-.qp-dh-rate-list { list-style: none; margin: 0 0 4px; padding: 0; columns: 2; column-gap: 18px; }
-.qp-dh-rate-list li { font-size: 11px; font-weight: 500; padding: 3px 0; break-inside: avoid; display: flex; gap: 6px; align-items: baseline; color: var(--dh-paper-ink); }
-.qp-dh-rate-list li::before { content: "\2014"; font-family: var(--dh-mono); color: var(--dh-pen); flex: none; }
-.qp-dh-price-row { display: flex; align-items: baseline; gap: 9px; margin-top: 10px; padding-top: 10px; border-top: 2px solid var(--dh-paper-ink); }
-.qp-dh-price { font-family: var(--font-editorial); font-weight: 700; font-size: 34px; letter-spacing: -0.01em; color: var(--dh-paper-ink); }
-.qp-dh-price-meta { font-family: var(--dh-mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--dh-paper-muted); text-transform: uppercase; line-height: 1.6; }
+/* rate card — three plans + add-on */
+.qp-dh-plans { display: grid; gap: 8px; margin: 0 0 2px; }
+.qp-dh-plan { display: grid; gap: 1px; }
+.qp-dh-plan-name { font-family: var(--dh-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dh-paper-ink); }
+.qp-dh-plan-copy { font-size: 11px; color: var(--dh-paper-muted); line-height: 1.45; }
+.qp-dh-addon { display: grid; gap: 2px; padding: 8px 10px; margin: 2px -10px 0; background: var(--dh-pen-soft); border-radius: 6px; }
+.qp-dh-addon-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.qp-dh-addon-head .qp-dh-plan-name { color: var(--dh-pen); }
+.qp-dh-addon-price { font-family: var(--dh-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.08em; color: var(--dh-pen); white-space: nowrap; }
+.qp-dh-rate-foot { font-family: var(--dh-mono); font-size: 8.5px; letter-spacing: 0.12em; color: var(--dh-paper-muted); text-transform: uppercase; margin-top: 10px; padding-top: 8px; border-top: 2px solid var(--dh-paper-ink); }
 
 @media (min-width: 1000px) {
   .qp-dh-grid { grid-template-columns: minmax(0, 440px) minmax(360px, 1fr); gap: clamp(30px, 4vw, 68px); }
