@@ -4,19 +4,19 @@ Last updated: August 16, 2026
 
 ## Current Production Release
 
-- PR #91 merged the connected quote workspace into `main` at
-  `cd98299f5379968746c314f6950784540a132972`; annotated tag `v0.12.1`
+- PR #92 merged the Activity & Save Health drawer into `main` at
+  `1767e789f6e86f072997a870aadb194583121b08`; annotated tag `v0.12.2`
   resolves to that exact commit.
-- Exact-main CI Quality run `31929711867` passed all eight required jobs,
+- Exact-main CI Quality run `31932465636` passed all eight required jobs,
   including authoritative pricing, Firebase rules/emulators, the full
   Playwright interaction suite, performance, bundle, governance, and Docker
   gates.
-- Governed Vercel run `31930120236` deployed exact `v0.12.1` with `v0.12.0`
-  commit `87e97c113070424c6d522399116f19877a67721a` as its explicit rollback
+- Governed Vercel run `31932924318` deployed exact `v0.12.2` with `v0.12.1`
+  commit `cd98299f5379968746c314f6950784540a132972` as its explicit rollback
   target. The workflow's public-edge probe succeeded at
   `https://quotepilot.mbmapps.com`.
 - Firebase Hosting and Functions were not part of the frontend-only `v0.12.0`
-  and `v0.12.1` Vercel releases.
+  through `v0.12.2` Vercel releases.
   Firebase all-scope run `31701000896` remains the latest successful recorded
   deployment, at `v0.9.0` commit
   `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`. The later `v0.10.0` Firebase
