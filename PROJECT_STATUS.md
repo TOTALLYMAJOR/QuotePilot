@@ -4,27 +4,32 @@ Last updated: August 16, 2026
 
 ## Current Production Release
 
-- PR #92 merged the Activity & Save Health drawer into `main` at
-  `1767e789f6e86f072997a870aadb194583121b08`; annotated tag `v0.12.2`
-  resolves to that exact commit.
-- Exact-main CI Quality run `31932465636` passed all eight required jobs,
+- PR #95 merged the Document hero landing, Plans rate card, and design-partner
+  program into `main` at `7c2f3d30b8b4e9df97898c7273ffa3ef776570f6`; annotated
+  tag `v0.13.0` resolves to that exact commit.
+- Exact-main CI Quality run `31962010326` passed all eight required jobs,
   including authoritative pricing, Firebase rules/emulators, the full
   Playwright interaction suite, performance, bundle, governance, and Docker
-  gates.
-- Governed Vercel run `31932924318` deployed exact `v0.12.2` with `v0.12.1`
-  commit `cd98299f5379968746c314f6950784540a132972` as its explicit rollback
+  gates. The release recalibrated the Ambient bundle exception ceiling to
+  `3,853,000` bytes (measured `3,839,490`), recorded in `TECH_EXCEPTIONS.md`.
+- Governed Vercel run `31963532856` deployed exact `v0.13.0` with `v0.12.2`
+  commit `1767e789f6e86f072997a870aadb194583121b08` as its explicit rollback
   target. The workflow's public-edge probe succeeded at
-  `https://quotepilot.mbmapps.com`.
-- Firebase Hosting and Functions were not part of the frontend-only `v0.12.0`
-  through `v0.12.2` Vercel releases.
-  Firebase all-scope run `31701000896` remains the latest successful recorded
-  deployment, at `v0.9.0` commit
-  `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`. The later `v0.10.0` Firebase
-  attempt failed before mutation because its CI credential was rejected.
-- These receipts prove exact source, CI, Vercel deployment, and public-edge
-  reachability only. They do not prove authenticated staff/portal acceptance,
-  production-data correctness, provider delivery, recipient acknowledgement,
-  or human acceptance.
+  `https://quotepilot.mbmapps.com`, and independent inspection of the served
+  bundle confirmed the Document hero, design-partner, and Plans copy live with
+  no residual "Book a demo" route.
+- Governed Firebase hosting-scope run `31963544037` deployed exact `v0.13.0`
+  to `tonicatering` with `v0.12.0` commit
+  `87e97c113070424c6d522399116f19877a67721a` as its explicit rollback target —
+  the release commit of the latest successful Firebase all-scope run
+  `31918338700` (which superseded the earlier `v0.9.0` record at
+  `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`). Functions, rules, and indexes
+  are unchanged between that commit and `v0.13.0`, so hosting scope was the
+  complete Firebase surface for this release.
+- These receipts prove exact source, CI, per-target deployment, and
+  public-edge reachability only. They do not prove authenticated staff/portal
+  acceptance, production-data correctness, provider delivery, recipient
+  acknowledgement, or human acceptance.
 
 ## Pending Production Completion
 
