@@ -8,6 +8,27 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Remounted "The Document" hero as the public landing hero: the Morgan Wedding
+  banquet event order revises itself on load and six click-through surfaces
+  follow the same event from pasted inquiry to kitchen copy. The film layer
+  remains as the backdrop for the story chapters below, its playback controls
+  moved into the consequence chapter under a plain "Background film" label,
+  and the buyer access gate is unchanged — the `$1` CTA and its
+  one-dollar/one-time disclosure render only when the public CTA flag is on.
+- Rebuilt the hero's final surface as a Plans rate card: Starter, Growth, and
+  Enterprise are presented by business size with no public dollar figures
+  ("plan pricing set with founding partners"), plus the Strategic Agency
+  add-on at $49.99/mo described strictly as draft-for-approval assistance.
+- Replaced every "Book a demo" call to action with a five-seat design-partner
+  program: a `#design-partner` chapter states the exchange plainly (real
+  usage, honest feedback, and sign-off-gated results for a locked founding
+  rate, first-year Strategic Agency, and direct roadmap access) before
+  handing off to the existing contact route. The buyer-access rollout test
+  now names the design-partner path as the public acquisition route.
+- Recorded the five design commitments in `docs/DESIGN_PRINCIPLES.md` and
+  corrected the hero sheet's Rev 05 service-charge arithmetic so the printed
+  22% actually reconciles ($15,100 / $3,322 / $18,422).
+
 - Added an Activity & Save Health drawer to the connected quote workspace.
   Persisted quote activity, snapshot freshness, last-saved evidence, lifecycle
   status, and visible completeness gaps now share one keyboard- and mobile-safe
