@@ -8,6 +8,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Added an Activity & Save Health drawer to the connected quote workspace.
+  Persisted quote activity, snapshot freshness, last-saved evidence, lifecycle
+  status, and visible completeness gaps now share one keyboard- and mobile-safe
+  panel. The drawer remains read-only and hands final validation, availability,
+  pricing authority, permissions, version conflicts, and persistence back to
+  the existing quote editor; it never implies that a quote saved or was approved.
 - Added an isolated, responsive Quote Workspace at `/app/quote-workspace`
   with `/app/quote-workspace-concept` retained as a fallback alias. The page
   reads the signed-in staff member's organization-scoped quote history,

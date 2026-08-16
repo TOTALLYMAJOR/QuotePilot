@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useCommercialWorkspaceSnapshot } from "../hooks/useCommercialWorkspaceSnapshot";
 import {
   buildMessagingPath,
@@ -6,6 +6,7 @@ import {
   buildQuotePath
 } from "../lib/workspaceRoutes";
 import ProductBrandLockup from "./ProductBrandLockup";
+import QuoteWorkspaceActivityDrawer from "./QuoteWorkspaceActivityDrawer";
 import "./quoteWorkspaceConcept.css";
 
 const CURRENT_QUOTES_PATH = "/app/quotes";
@@ -264,6 +265,8 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
     ? "Organization workspace"
     : "My workspace";
   const organizationId = text(authSession?.organizationId || tenantContext?.organizationId);
+  const [activityDrawerOpen, setActivityDrawerOpen] = useState(false);
+  const closeActivityDrawer = useCallback(() => setActivityDrawerOpen(false), []);
   const snapshot = useCommercialWorkspaceSnapshot({
     enabled: Boolean(organizationId),
     includeHistory: true,
@@ -347,6 +350,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
     || "Status unavailable";
   const menuItems = normalizeMenuItems(selectedQuote);
   const activityItems = normalizeActivity(selectedQuote, snapshot);
+  const savedAtValue = firstValue(selectedQuote, ["updatedAt", "updatedAtISO", "savedAt", "modifiedAt"]);
   const totalValue = identity.total
     || firstValue(selectedQuote, ["totals.total", "pricing.total", "grandTotal", "total"]);
   const subtotal = firstNumber(selectedQuote, ["totals.subtotal", "pricing.subtotal", "subtotal"]);
@@ -415,8 +419,8 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
               <h1>{quoteNumber} <span aria-hidden="true">-</span> {eventName}</h1>
               <span className="qwc-status">{text(statusValue)}</span>
             </div>
-            <p><ConceptIcon name="check" size={16} /> {firstValue(selectedQuote, ["updatedAt", "updatedAtISO", "savedAt", "modifiedAt"])
-              ? `Saved ${formatActivityTime(firstValue(selectedQuote, ["updatedAt", "updatedAtISO", "savedAt", "modifiedAt"]))}`
+            <p><ConceptIcon name="check" size={16} /> {savedAtValue
+              ? `Saved ${formatActivityTime(savedAtValue)}`
               : "Loaded from saved quote history"}</p>
           </div>
 
@@ -437,17 +441,33 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
         </header>
 
         <nav className="qwc-tabs" aria-label="Quote sections">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={tab === "Event" ? "qwc-tab-active" : ""}
-              onClick={() => tab !== "Event" && go(tabPath(tab))}
-              title={tab === "Event" ? "Current workspace section" : `Open ${tab} in the authoritative quote workspace`}
-            >
-              {tab}
-            </button>
-          ))}
+          {TABS.map((tab) => {
+            const isActivityTab = tab === "Activity";
+            const isActive = isActivityTab ? activityDrawerOpen : tab === "Event" && !activityDrawerOpen;
+            return (
+              <button
+                key={tab}
+                type="button"
+                className={isActive ? "qwc-tab-active" : ""}
+                onClick={() => {
+                  if (isActivityTab) {
+                    setActivityDrawerOpen(true);
+                    return;
+                  }
+                  if (tab !== "Event") go(tabPath(tab));
+                }}
+                title={tab === "Event"
+                  ? "Current workspace section"
+                  : isActivityTab
+                    ? "Open activity and save health"
+                    : `Open ${tab} in the authoritative quote workspace`}
+                aria-expanded={isActivityTab ? activityDrawerOpen : undefined}
+                aria-controls={isActivityTab ? "qwc-activity-save-drawer" : undefined}
+              >
+                {tab}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="qwc-preview-boundary">
@@ -592,11 +612,37 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
                   <li key={item.id}><span className="qwc-timeline-dot" /><span><strong>{item.label}</strong><small>{item.actor}</small></span><time>{item.time}</time></li>
                 ))}
               </ol>
-              <button type="button" className="qwc-ask" onClick={() => go(detailPath)}><ConceptIcon name="sparkles" /> Ask QuotePilot</button>
+              <button
+                type="button"
+                className="qwc-ask qwc-activity-open"
+                onClick={() => setActivityDrawerOpen(true)}
+                aria-expanded={activityDrawerOpen}
+                aria-controls="qwc-activity-save-drawer"
+              >
+                <ConceptIcon name="activity" />
+                <span>Activity &amp; save health</span>
+                {attentionItems.length ? <span className="qwc-activity-open-count">{attentionItems.length}</span> : null}
+              </button>
             </section>
           </aside>
         </div>
       </main>
+
+      <QuoteWorkspaceActivityDrawer
+        open={activityDrawerOpen}
+        onClose={closeActivityDrawer}
+        quoteNumber={quoteNumber}
+        quoteStatus={text(statusValue)}
+        activityItems={activityItems}
+        checks={completenessChecks}
+        lastSavedLabel={savedAtValue ? formatActivityTime(savedAtValue) : "Timestamp not recorded"}
+        source={snapshot.source}
+        stale={Boolean(snapshot.stale)}
+        readError={Boolean(snapshot.error)}
+        refreshing={Boolean(snapshot.loading)}
+        onRefresh={() => snapshot.refresh({ force: true })}
+        onOpenEditor={() => go(editPath)}
+      />
 
       <div className="qwc-mobile-actions" aria-label="Mobile quote actions">
         <div><span>Total</span><strong>{formatMoney(totalValue)}</strong></div>
