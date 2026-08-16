@@ -6,8 +6,33 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Kept accepted quote evidence fresh and unambiguous across staff surfaces.
+  Reporting and Quote History now re-read the canonical same-tenant quote
+  snapshot when their browser window regains focus, so a customer decision
+  completed in another tab does not leave a retained report showing the prior
+  lifecycle. Contract conversion copy now states when customer acceptance is
+  already recorded and labels the separate administrator authorization
+  explicitly; acceptance, conversion authorization, booking, and payment
+  remain distinct records.
+
 ### Added
 
+- Repaired the cinematic landing header navigation by restoring its stacking
+  authority above the full-viewport story chapters and making the decorative
+  film layer non-interactive. The hero commercial and reduced-motion poster
+  now share a true black-and-white grade, and playback runs at a restrained
+  `0.72x` while retaining the existing play, pause, sound, caption, and
+  analytics contracts.
+- Turned the Proposal Composer's Quote Pulse into the draft explanation layer:
+  recent session activity is expanded by default, while a shared readiness
+  model lists every currently known client-side reason the draft cannot save,
+  including required event details, menu selection, unresolved review gates,
+  quote-load state, and governed Change Impact requirements. Both Ambient and
+  compatibility app graphs use the same presentation model, and the panel also
+  carries the latest draft notice. The existing submit handler remains the
+  authority for availability, server validation, pricing, and persistence.
 - Recast the public QuotePilot landing page as a cinematic, viewport-paced
   story: the existing commercial now runs as a muted full-bleed film layer,
   major sections align as native scroll-snap chapters, all product screen

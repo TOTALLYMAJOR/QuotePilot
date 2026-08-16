@@ -241,6 +241,68 @@ function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) 
   );
 }
 
+export function buildDraftSaveBlockers({
+  form = {},
+  totals = {},
+  catalogLoading = false,
+  selectedMenuItemCount = 0,
+  quoteEditUnavailable = false,
+  pilotScenarioReviewPending = false,
+  draftIntentReviewPending = false,
+  changeImpactReviewRequired = false,
+  changeImpactAuthorizationRequired = false
+} = {}) {
+  const blockers = [];
+  const add = (id, message) => blockers.push({ id, message });
+  const email = String(form.email || "").trim();
+
+  if (catalogLoading) {
+    add("catalog-loading", "Wait for the current catalog to finish loading.");
+  }
+  if (quoteEditUnavailable) {
+    add("quote-edit-loading", "Reload the saved quote before editing or saving it.");
+  }
+  if (pilotScenarioReviewPending) {
+    add("pilot-scenario-review", "Resolve the pending Pilot scenario review.");
+  }
+  if (draftIntentReviewPending) {
+    add("draft-intent-review", "Resolve the pending Package or Menu review.");
+  }
+  if (changeImpactReviewRequired) {
+    add("change-impact-review", "Build and review a current Change Impact simulation.");
+  } else if (changeImpactAuthorizationRequired) {
+    add("change-impact-authorization", "Authorize and apply governed dependencies from Change Impact.");
+  }
+  if (Math.max(0, Number(totals.guests) || 0) <= 0) {
+    add("guest-count", "Set a guest count above zero.");
+  }
+  if (!String(form.name || "").trim()) {
+    add("client-name", "Add the client name.");
+  }
+  if (!email) {
+    add("client-email", "Add the client email.");
+  } else if (!/^\S+@\S+\.\S+$/.test(email)) {
+    add("client-email-format", "Correct the client email format.");
+  }
+  if (!String(form.eventTypeId || "").trim()) {
+    add("event-type", "Choose an event type.");
+  }
+  if (!String(form.date || "").trim()) {
+    add("event-date", "Add the event date.");
+  }
+  if (!String(form.eventName || "").trim()) {
+    add("event-name", "Add the event name.");
+  }
+  if (!String(form.venue || "").trim()) {
+    add("venue", "Add the venue.");
+  }
+  if (Math.max(0, Number(selectedMenuItemCount) || 0) < 1) {
+    add("menu-selection", "Select at least one menu item.");
+  }
+
+  return blockers;
+}
+
 export default function ProposalComposer({
   form,
   totals,
@@ -259,6 +321,8 @@ export default function ProposalComposer({
   saveLabel = "Save draft",
   saveDisabled = false,
   saveDisabledReason = "",
+  saveBlockers = [],
+  saveMessage = "",
   compareEnabled = false,
   catalogLoading = false,
   onFieldChange,
@@ -290,9 +354,28 @@ export default function ProposalComposer({
   const [liveNote, setLiveNote] = useState("");
   // Session-only running log of the changes made to this draft — a working
   // memory for the operator, not a record; saved history stays in versions.
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(true);
   const [activityLog, setActivityLog] = useState([]);
   const activityIdRef = useRef(0);
+
+  const currentSaveBlockers = Array.isArray(saveBlockers)
+    ? saveBlockers.filter((blocker) => blocker && String(blocker.message || "").trim())
+    : [];
+  const saveReadinessState = saving
+    ? "saving"
+    : currentSaveBlockers.length
+      ? "blocked"
+      : "ready";
+  const saveReadinessTitle = saving
+    ? "Save in progress"
+    : currentSaveBlockers.length
+      ? `Draft needs attention · ${currentSaveBlockers.length}`
+      : "Ready for save checks";
+  const saveReadinessDetail = saving
+    ? "QuotePilot is verifying availability and server authority."
+    : currentSaveBlockers.length
+      ? "Resolve these known requirements before this draft can be saved."
+      : "Known draft requirements are complete. Saving still verifies availability and server authority.";
 
   const logActivity = (label) => {
     activityIdRef.current += 1;
@@ -302,6 +385,11 @@ export default function ProposalComposer({
       label
     };
     setActivityLog((current) => [entry, ...current].slice(0, ACTIVITY_LOG_LIMIT));
+  };
+
+  const requestSave = () => {
+    setPulseOpen(true);
+    onSaveQuote?.();
   };
 
   const header = buildHeaderModel({ form, editingQuote, quoteDirty, saving });
@@ -652,8 +740,36 @@ export default function ProposalComposer({
         </ul>
       </div>
 
-      <div className="pc-pulse-block">
-        <p className="pc-eyebrow">This session</p>
+      <div className="pc-pulse-block pc-draft-activity">
+        <p className="pc-eyebrow">Draft activity</p>
+        <div
+          className="pc-save-readiness"
+          data-state={saveReadinessState}
+          data-testid="pc-save-readiness"
+        >
+          <div className="pc-save-readiness-summary">
+            <span className="pc-save-readiness-dot" aria-hidden="true" />
+            <span>
+              <strong>{saveReadinessTitle}</strong>
+              <small>{saveReadinessDetail}</small>
+            </span>
+          </div>
+          {currentSaveBlockers.length ? (
+            <ul className="pc-save-blockers" aria-label="Reasons this draft cannot be saved yet">
+              {currentSaveBlockers.map((blocker) => (
+                <li key={blocker.id || blocker.message} data-testid="pc-save-blocker">
+                  {blocker.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {String(saveMessage || "").trim() ? (
+            <div className="pc-draft-notice" data-testid="pc-draft-notice">
+              <strong>Latest draft notice</strong>
+              <span>{saveMessage}</span>
+            </div>
+          ) : null}
+        </div>
         <button
           type="button"
           className="pc-section-action pc-activity-toggle"
@@ -685,7 +801,7 @@ export default function ProposalComposer({
         <button
           type="button"
           className="pc-cta"
-          onClick={onSaveQuote}
+          onClick={requestSave}
           disabled={saveDisabled}
           title={saveDisabled && saveDisabledReason ? saveDisabledReason : undefined}
           data-testid="pc-save"
@@ -726,7 +842,7 @@ export default function ProposalComposer({
             <button
               type="button"
               className="pc-cta pc-compact"
-              onClick={onSaveQuote}
+              onClick={requestSave}
               disabled={saveDisabled}
               title={saveDisabled && saveDisabledReason ? saveDisabledReason : undefined}
               data-testid="pc-save-header"
