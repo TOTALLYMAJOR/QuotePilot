@@ -1,21 +1,22 @@
 # Project Status
 
-Last updated: August 14, 2026
+Last updated: August 16, 2026
 
 ## Current Production Release
 
-- PR #83 merged the quote-builder decision-flow enhancements into `main` at
-  `618f8e5c7d0322e0349abf3751eb407d5c03d582`; annotated tag `v0.11.0`
+- PR #91 merged the connected quote workspace into `main` at
+  `cd98299f5379968746c314f6950784540a132972`; annotated tag `v0.12.1`
   resolves to that exact commit.
-- Exact-main CI Quality run `31738817551` passed all eight required jobs,
+- Exact-main CI Quality run `31929711867` passed all eight required jobs,
   including authoritative pricing, Firebase rules/emulators, the full
   Playwright interaction suite, performance, bundle, governance, and Docker
   gates.
-- Governed Vercel run `31739681893` deployed exact `v0.11.0` with `v0.10.0`
-  commit `4e60f484edb1fa4110ada01e1aa792fb0ca7f11e` as its explicit rollback
-  target. Independent HTTP probes returned `200` for both `/` and `/app` at
-  `https://quotepilot.mbmapps.com` with entry artifact `index-7oQ3cwMj.js`.
-- Firebase Hosting and Functions have not been promoted to `v0.11.0`.
+- Governed Vercel run `31930120236` deployed exact `v0.12.1` with `v0.12.0`
+  commit `87e97c113070424c6d522399116f19877a67721a` as its explicit rollback
+  target. The workflow's public-edge probe succeeded at
+  `https://quotepilot.mbmapps.com`.
+- Firebase Hosting and Functions were not part of the frontend-only `v0.12.0`
+  and `v0.12.1` Vercel releases.
   Firebase all-scope run `31701000896` remains the latest successful recorded
   deployment, at `v0.9.0` commit
   `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`. The later `v0.10.0` Firebase
@@ -27,9 +28,10 @@ Last updated: August 14, 2026
 
 ## Pending Production Completion
 
-- Rotate the Firebase CI credential, deploy exact `v0.11.0` with Firebase
-  scope `all`, then use that exact successful deployment receipt to set and
-  verify only tenant `250`'s `operationalStaffingAuthorityEnabled` field.
+- Rotate the Firebase CI credential and run a separately approved exact-main
+  Firebase `all` deployment before changing any tenant capability state. The
+  connected workspace and Activity & Save Health drawer are frontend-only and
+  do not alter Firebase authority or tenant activation.
 - Production configuration names Resend as the email provider and keeps owner
   SMS at `none`. Configuration does not prove provider acceptance, delivery,
   staff acknowledgement, attendance, payroll, or human acceptance.
