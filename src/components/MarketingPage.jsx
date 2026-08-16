@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { isBuyerAccessPublicCtaEnabled } from "../lib/buyerAccessConfig";
 import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
+import DocumentHero from "./DocumentHero";
 import "../landing.css";
 
 const BUYER_ACCESS_PUBLIC_CTA_ENABLED = isBuyerAccessPublicCtaEnabled(import.meta.env);
@@ -10,6 +11,7 @@ const COMMERCIAL_VIDEO = {
   track: "/videos/quote-pilot-commercial-captions.vtt",
   title: "QuotePilot commercial"
 };
+const COMMERCIAL_PLAYBACK_RATE = 0.72;
 const COMMERCIAL_VIDEO_EVENTS = {
   cta_click: "landing_video_cta",
   play_error: "landing_video_error",
@@ -20,7 +22,7 @@ const COMMERCIAL_VIDEO_EVENTS = {
 
 const changeImpact = [
   { label: "Guests", before: "165", after: "175" },
-  { label: "Proposal", before: "$18,420", after: "$19,475" },
+  { label: "Proposal", before: "$18,422", after: "$19,475" },
   { label: "Margin", before: "38.2%", after: "37.0%" },
   { label: "Staff required", before: "11", after: "12" }
 ];
@@ -147,6 +149,9 @@ export default function MarketingPage() {
     const video = marketingCommercialRef.current;
     if (!video) return;
 
+    video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
+
     if (video.paused) {
       emitMarketingVideoEvent("cta_click", { element: "commercial_play_overlay", action: "play" });
       video.play().catch(() => {
@@ -163,6 +168,13 @@ export default function MarketingPage() {
     emitMarketingVideoEvent("ended", {
       watchedSeconds: Number((marketingCommercialRef.current?.currentTime || 0).toFixed(1))
     });
+  };
+
+  const handleCommercialLoadedMetadata = () => {
+    const video = marketingCommercialRef.current;
+    if (!video) return;
+    video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
   };
 
   const handleCommercialMute = () => {
@@ -252,6 +264,7 @@ export default function MarketingPage() {
           preload="metadata"
           poster={COMMERCIAL_VIDEO.poster}
           aria-label="QuotePilot catering operations commercial"
+          onLoadedMetadata={handleCommercialLoadedMetadata}
           onPlay={handleCommercialPlayEvent}
           onPause={handleCommercialPauseEvent}
           onEnded={handleCommercialEnded}
@@ -285,73 +298,26 @@ export default function MarketingPage() {
 
         <div className="qp-landing-header-actions">
           <a className="qp-landing-header-login" href="/app">Staff login</a>
-          <a className="qp-landing-button qp-landing-button-dark" href="https://mbmapps.com/contact">
-            Book a demo
+          <a className="qp-landing-button qp-landing-button-dark" href="#design-partner">
+            Become a design partner
           </a>
         </div>
       </header>
 
       <main id="landing-main">
-        <section
-          className="qp-landing-cinematic-hero"
-          id="story"
-          data-landing-chapter
-          aria-labelledby="cinematic-title"
-        >
-          <div className="qp-landing-cinematic-copy" data-landing-reveal>
-            <p className="qp-landing-cinematic-kicker">Catering sales + event operations</p>
-            <h1 id="cinematic-title">
-              The event changed.
-              <em>QuotePilot knows what that means.</em>
-            </h1>
-            <p className="qp-landing-cinematic-deck">
-              See pricing, margin, staffing, and production consequences before a customer request becomes the new plan.
-            </p>
-            <div className="qp-landing-hero-actions">
-              <a className="qp-landing-button qp-landing-button-accent" href="https://mbmapps.com/contact">
-                Book a demo
+        <section className="qp-landing-document-chapter" id="story" data-landing-chapter>
+          <DocumentHero
+            buyCta={BUYER_ACCESS_PUBLIC_CTA_ENABLED ? (
+              <a className="qp-landing-button qp-landing-button-accent" href="/start">
+                Try $1 test access
               </a>
-              <a className="qp-landing-button qp-landing-button-film" href="#commercial">
-                See the consequence
-              </a>
-              {BUYER_ACCESS_PUBLIC_CTA_ENABLED && (
-                <a className="qp-landing-button qp-landing-button-film" href="/start">
-                  Try $1 test access
-                </a>
-              )}
-            </div>
-          </div>
-
-          <div className="qp-landing-film-status" aria-label="Commercial playback controls">
-            <span>QuotePilot film · 30 seconds</span>
-            <div>
-              <button
-                type="button"
-                onClick={handleCommercialPlay}
-                aria-controls="quote-pilot-commercial-video"
-                aria-pressed={!commercialPlaying}
-              >
-                {commercialPlaying ? "Pause film" : commercialStarted ? "Resume film" : "Play film"}
-              </button>
-              <button
-                type="button"
-                onClick={handleCommercialMute}
-                aria-controls="quote-pilot-commercial-video"
-                aria-pressed={!commercialMuted}
-              >
-                {commercialMuted ? "Sound on" : "Mute film"}
-              </button>
-            </div>
-          </div>
-
-          <a className="qp-landing-scroll-cue" href="#document">
-            Scroll to follow the change <span aria-hidden="true">&darr;</span>
-          </a>
+            ) : null}
+          />
         </section>
 
         <section
           className="qp-landing-story-chapter"
-          id="document"
+          id="burden"
           data-landing-chapter
           data-landing-reveal
           aria-labelledby="burden-title"
@@ -422,18 +388,40 @@ export default function MarketingPage() {
                   href="/start"
                   onClick={() => emitMarketingVideoEvent("cta_click", { element: "commercial_secondary_cta" })}
                 >
-                  Review proposed change <span aria-hidden="true">&rarr;</span>
+                  Try this flow with $1 test access <span aria-hidden="true">&rarr;</span>
                 </a>
               ) : (
                 <a
-                  href="https://mbmapps.com/contact"
+                  href="#design-partner"
                   onClick={() => emitMarketingVideoEvent("cta_click", { element: "commercial_secondary_cta" })}
                 >
-                  See it in a demo <span aria-hidden="true">&rarr;</span>
+                  See it as a design partner <span aria-hidden="true">&rarr;</span>
                 </a>
               )}
             </footer>
           </article>
+
+          <div className="qp-landing-film-status" aria-label="Background film playback controls">
+            <span>Background film</span>
+            <div>
+              <button
+                type="button"
+                onClick={handleCommercialPlay}
+                aria-controls="quote-pilot-commercial-video"
+                aria-pressed={!commercialPlaying}
+              >
+                {commercialPlaying ? "Pause film" : commercialStarted ? "Resume film" : "Play film"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCommercialMute}
+                aria-controls="quote-pilot-commercial-video"
+                aria-pressed={!commercialMuted}
+              >
+                {commercialMuted ? "Sound on" : "Mute film"}
+              </button>
+            </div>
+          </div>
         </section>
 
         <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes" data-landing-chapter>
@@ -545,6 +533,47 @@ export default function MarketingPage() {
           </div>
         </section>
 
+        <section
+          className="qp-landing-section qp-landing-partner"
+          id="design-partner"
+          data-landing-chapter
+          data-landing-reveal
+          aria-labelledby="partner-title"
+        >
+          <div className="qp-landing-partner-heading">
+            <p className="qp-landing-eyebrow">The founding five</p>
+            <h2 id="partner-title">Five caterers will shape what this becomes.</h2>
+            <p>
+              QuotePilot is being finished with working caterers, not around them.
+              A design-partner seat is a trade, stated plainly.
+            </p>
+          </div>
+          <div className="qp-landing-partner-exchange">
+            <div className="qp-landing-partner-card">
+              <span className="qp-landing-partner-label">You bring</span>
+              <ul>
+                <li>Real events, run through QuotePilot</li>
+                <li>Honest feedback on whatever fights you</li>
+                <li>Your results, shared only with your sign-off</li>
+              </ul>
+            </div>
+            <div className="qp-landing-partner-card qp-landing-partner-card-get">
+              <span className="qp-landing-partner-label">You get</span>
+              <ul>
+                <li>The founding rate, locked in when public pricing lands</li>
+                <li>Strategic Agency included for your first year</li>
+                <li>A direct line to the builder &mdash; your workflow shapes the roadmap</li>
+              </ul>
+            </div>
+          </div>
+          <div className="qp-landing-partner-actions">
+            <a className="qp-landing-button qp-landing-button-accent" href="https://mbmapps.com/contact">
+              Apply for a partner seat
+            </a>
+            <p className="qp-landing-partner-note">FIVE SEATS &middot; A SHORT CONVERSATION, NOT A SALES CALL</p>
+          </div>
+        </section>
+
         <section className="qp-landing-final qp-landing-chapter-film" data-landing-chapter data-landing-reveal>
           <div>
             <h2>An app should make life easier.</h2>
@@ -552,7 +581,7 @@ export default function MarketingPage() {
           </div>
           <div className="qp-landing-final-actions">
             <a className="qp-landing-button qp-landing-button-accent" href="https://mbmapps.com/contact">
-              Book a demo
+              Apply for a partner seat
             </a>
             <a className="qp-landing-button qp-landing-button-inverse" href="/app">
               Staff login

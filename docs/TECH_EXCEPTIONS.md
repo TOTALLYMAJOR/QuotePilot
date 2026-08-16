@@ -29,9 +29,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   bytes, largest chunk unchanged) recalibrate compatibility to an absolute
   ceiling of 2,964,327 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
-  temporarily capped at 3,827,245 aggregate bytes and the same 391,901-byte
-  largest-chunk ceiling (measured 3,750,363 local Ambient bytes is under that
-  standing ceiling).
+  temporarily capped at 3,853,000 aggregate bytes and the same 391,901-byte
+  largest-chunk ceiling (measured 3,839,490 CI Ambient bytes for the
+  Document-hero landing remount on 2026-08-16 recalibrated the prior
+  3,827,245 cap, which that change exceeded by 12,245 bytes).
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -82,6 +83,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   The catalog onboarding recovery hotfix adds 1,025 Ambient aggregate bytes in
   CI (`3,827,245 / 391,901`) for the hosted setup, manual, import, and bypass
   paths; the largest chunk remains unchanged.
+  The Document-hero landing remount (self-revising BEO hero, Plans rate card,
+  and design-partner chapter) adds 12,245 Ambient aggregate bytes in CI
+  (`3,839,490 / 387,248`); the Ambient ceiling recalibrates to `3,853,000`
+  with the largest chunk unchanged. Compatibility is unaffected (measured
+  2,936,683, under its standing 2,964,327 ceiling).
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,

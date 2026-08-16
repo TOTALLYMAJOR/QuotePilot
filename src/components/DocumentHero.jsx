@@ -7,7 +7,7 @@ const SLIDE_LABELS = [
   { n: "03", label: "Payment" },
   { n: "04", label: "Staffing" },
   { n: "05", label: "Kitchen copy" },
-  { n: "06", label: "Enterprise" }
+  { n: "06", label: "Plans" }
 ];
 
 const COPY = [
@@ -43,8 +43,8 @@ const COPY = [
   },
   {
     eyebrow: "06 · Scale",
-    h1: <>Enterprise features, <em>not the enterprise invoice.</em></>,
-    sub: "The whole toolkit, capture to kitchen, at a flat price a single-location caterer can justify."
+    h1: <>Start where you are. <em>Grow when the calendar does.</em></>,
+    sub: "Three plans sized to the operation — Starter, Growth, Enterprise — and one add-on, Strategic Agency, that drafts the paperwork you approve."
   }
 ];
 
@@ -180,12 +180,12 @@ function TheChangeSlide({ reducedMotion }) {
             </div>
             <div className="qp-dh-mrow">
               <span>Service charge (22%)</span>
-              <MoneySwap on={has("money")} oldVal="$3,320" newVal="$3,512" />
+              <MoneySwap on={has("money")} oldVal="$3,322" newVal="$3,512" />
             </div>
             <div className="qp-dh-mrow qp-dh-mrow-total">
               <span className="qp-dh-mrow-total-lab">Estimated total</span>
               <span>
-                <Strike on={has("money")}>$18,420</Strike>
+                <Strike on={has("money")}>$18,422</Strike>
                 <Amend on={has("money")}>$19,475</Amend>
               </span>
             </div>
@@ -356,47 +356,46 @@ function KitchenSlide({ live }) {
   );
 }
 
-function EnterpriseSlide({ live }) {
+function PlansSlide({ live }) {
   return (
     <div className="qp-dh-slide">
-      <div className="qp-dh-mini" aria-label="Rate card: enterprise features at a flat price">
+      <div className="qp-dh-mini" aria-label="Rate card: three plans sized to the operation, one add-on">
         <div className="qp-dh-m-head">
           <span className="qp-dh-m-kind">Rate card</span>
-          <span className="qp-dh-m-ref">ALL PLANS</span>
+          <span className="qp-dh-m-ref">THREE PLANS</span>
         </div>
-        <p className="qp-dh-m-title">Everything you just clicked through.</p>
-        <p className="qp-dh-m-sub">NO GATED TIERS</p>
+        <p className="qp-dh-m-title">Sized to the operation.</p>
+        <p className="qp-dh-m-sub">EVERY PLAN WORKS THE WAY YOU JUST CLICKED THROUGH</p>
         <hr className="qp-dh-m-rule" />
-        <ul className="qp-dh-rate-list">
-          {[
-            "Unlimited events & quotes",
-            "Proposal room & portal",
-            "Stripe payments",
-            "Staffing & call sheets",
-            "Kitchen BEOs & versions",
-            "Roles & approvals",
-            "Multi-location",
-            "Exports & audit history"
-          ].map((item, i) => (
-            <li key={item} className={cx("qp-dh-p-item", live && "qp-dh-live")} style={{ "--dh-delay": `${0.1 + i * 0.08}s` }}>
-              {item}
-            </li>
-          ))}
-        </ul>
-        <PItem live={live} delay={0.85} className="qp-dh-price-row">
-          <span className="qp-dh-price">$99</span>
-          <span className="qp-dh-price-meta">
-            /MO &middot; FLAT &middot; PER LOCATION
-            <br />
-            PLACEHOLDER PRICE
+        <div className="qp-dh-plans">
+          <PItem live={live} delay={0.1} className="qp-dh-plan">
+            <span className="qp-dh-plan-name">Starter</span>
+            <span className="qp-dh-plan-copy">One location, getting set up. The guided flow from inquiry to kitchen.</span>
+          </PItem>
+          <PItem live={live} delay={0.25} className="qp-dh-plan">
+            <span className="qp-dh-plan-name">Growth</span>
+            <span className="qp-dh-plan-copy">The busy calendar. Proposal room, payments, staffing, and kitchen BEOs in one flow.</span>
+          </PItem>
+          <PItem live={live} delay={0.4} className="qp-dh-plan">
+            <span className="qp-dh-plan-name">Enterprise</span>
+            <span className="qp-dh-plan-copy">Multi-location operations with roles, approvals, and oversight.</span>
+          </PItem>
+        </div>
+        <hr className="qp-dh-m-rule" />
+        <PItem live={live} delay={0.6} className="qp-dh-addon">
+          <span className="qp-dh-addon-head">
+            <span className="qp-dh-plan-name">Strategic Agency</span>
+            <span className="qp-dh-addon-price">+$49.99/MO</span>
           </span>
+          <span className="qp-dh-plan-copy">Add it to any plan: proposals and briefs drafted for you. Nothing sends without your approval.</span>
         </PItem>
+        <PItem live={live} delay={0.8} className="qp-dh-rate-foot">PLAN PRICING SET WITH FOUNDING PARTNERS</PItem>
       </div>
     </div>
   );
 }
 
-const SLIDE_COMPONENTS = [InquirySlide, ProposalSlide, PaymentSlide, StaffingSlide, KitchenSlide, EnterpriseSlide];
+const SLIDE_COMPONENTS = [InquirySlide, ProposalSlide, PaymentSlide, StaffingSlide, KitchenSlide, PlansSlide];
 
 export default function DocumentHero({ buyCta = null }) {
   const reducedMotion = useMemo(
@@ -461,8 +460,8 @@ export default function DocumentHero({ buyCta = null }) {
 
           <div className="qp-dh-cta-row">
             {buyCta}
-            <a className="qp-landing-button qp-landing-button-dark" href="https://mbmapps.com/contact">
-              Book a demo
+            <a className="qp-landing-button qp-landing-button-dark" href="#design-partner">
+              Become a design partner
             </a>
           </div>
           {buyCta && <p className="qp-dh-cta-note">ONE DOLLAR, ONE TIME &middot; NO SUBSCRIPTION STARTS</p>}
