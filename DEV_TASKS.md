@@ -153,6 +153,23 @@ each bullet below carries its decided direction. Owner-decided, not yet
 merged: no PR yet — work continues accumulating on the pilot branch until
 the owner asks for the merge.
 
+As of 2026-08-17, `main` has diverged sharply from this branch's fork point:
+29 commits and five releases (`v0.7.0` through `v0.13.0`) landed a separate
+initiative — an Ambient Intelligence UI (now the primary production surface
+behind `VITE_AMBIENT_UI_ENABLED`, with the classic wizard demoted to a
+`LegacyApp.jsx` fallback), Stripe Connect infrastructure, a Staff workspace
+with invitations and owner/role authority, Operational Staffing Authority,
+Revenue Autopilot, and a new marketing/landing page — none of it visible from
+this branch, and none of this branch's pilot work (including everything in
+this section) visible from `main`. Owner-decided (2026-08-17): treat it as a
+separate track and keep building here; reconciliation is deferred, not
+abandoned. Nearly every core file this program touches (`App.jsx`,
+`CreateIntake.jsx`, the pricing/margin/intent modules, every doc in this
+list, `functions/index.js`) was also independently modified on `main` in
+that window, so the eventual merge will be a heavy manual reconciliation,
+not a fast-forward — budget for that explicitly when the owner calls for it,
+rather than assuming a routine PR.
+
 - Merge and promote the post-`v0.6.0` pilot work above (owner will say
   when; no PR until then), then run an authenticated staff acceptance pass
   across all eight gates' production flag combination, including what
