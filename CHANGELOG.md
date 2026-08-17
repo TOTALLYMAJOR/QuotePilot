@@ -8,6 +8,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Gave the quote workspace a navigation entry. Every row in Quotes now carries
+  a `Workspace` action that opens `/app/quote-workspace?quoteId=<id>` for that
+  quote, so the workspace and its Activity & save health drawer are reachable
+  without typing the address by hand. The route, its organization scoping, and
+  its read-only boundaries are unchanged; only the way staff reach it is new.
+
+### Changed
+
+- Made the client directory legible at a glance instead of uniformly plain:
+  relationship state now renders as a toned chip with a status dot rather than
+  bare colored text, row hover carries a gold edge so the row reads as a
+  target, and client initials use the brand's warm accent. Chip and initial
+  colors were contrast-checked at or above 4.5:1 against their own tints, and
+  the hover transition is dropped under `prefers-reduced-motion`. No directory
+  data, filtering, pagination, or action wiring changed.
+
 - Remounted "The Document" hero as the public landing hero: the Morgan Wedding
   banquet event order revises itself on load and six click-through surfaces
   follow the same event from pasted inquiry to kitchen copy. The film layer
