@@ -278,7 +278,9 @@
 .ambient-clients__columns,
 .ambient-client {
   display: grid;
-  grid-template-columns: minmax(13rem, 1.1fr) minmax(13rem, 1.2fr) minmax(12rem, 1fr) minmax(7.5rem, 0.55fr) auto;
+  /* Status holds a chip now, and its longest label ("Quote or event on file")
+     needs ~9rem on one line; the old 7.5rem let it spill into the action. */
+  grid-template-columns: minmax(13rem, 1.1fr) minmax(13rem, 1.2fr) minmax(12rem, 1fr) minmax(11rem, 0.55fr) auto;
   gap: 1rem;
   align-items: center;
 }
@@ -311,8 +313,22 @@
   border-bottom: 0;
 }
 
+/* The row is a target, so hover says so with a gold edge rather than a tint
+   change alone, which was almost invisible against the surface. */
+.ambient-client {
+  box-shadow: inset 3px 0 0 transparent;
+  transition: background 0.14s ease, box-shadow 0.14s ease;
+}
+
 .ambient-client:hover {
   background: #f7f3eb;
+  box-shadow: inset 3px 0 0 var(--client-gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-client {
+    transition: none;
+  }
 }
 
 .ambient-client > * {
@@ -326,17 +342,20 @@
   align-items: center;
 }
 
+/* Initials carry the brand's warm accent instead of flat grey, which is what
+   made the directory read as unfinished at a glance. */
 .ambient-client__avatar {
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid #cbc2b4;
+  border: 1px solid color-mix(in srgb, var(--client-gold) 34%, var(--client-border));
   border-radius: 50%;
-  background: #e8e2d7;
-  color: #3a3b3b;
+  background: var(--client-gold-soft);
+  color: #6d4c12;
   font-size: 0.72rem;
   font-weight: 850;
+  letter-spacing: 0.02em;
 }
 
 .ambient-client h2,
@@ -368,19 +387,53 @@
   font-size: 0.82rem;
 }
 
+/* Relationship state reads as a chip, not bare colored text, so status is
+   legible by shape as well as hue. Chip colors are contrast-checked against
+   their own tints (>= 4.5:1) because axe runs contrast checks on /app. */
+/* inline-block (not flex) so the long labels this column carries — for example
+   "Quote or event on file" — still truncate with an ellipsis inside the chip
+   instead of overflowing into the action button. */
 .ambient-client__state {
   justify-self: start;
-  color: var(--client-copy);
-  font-size: 0.72rem;
+  display: inline-block;
+  /* Percentage max-width does not constrain a fit-content grid item here, so
+     the cap scales with the viewport the way the status track itself does.
+     Longer labels ellipsize instead of spilling over the action button. */
+  max-width: clamp(6.5rem, 12vw, 11rem);
+  padding: 0.24rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--client-muted);
+  color: #4a4e4b;
+  font-size: 0.7rem;
   font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ambient-client__state::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0.08em;
 }
 
 .ambient-client__state[data-tone="good"] {
-  color: var(--client-teal);
+  border-color: color-mix(in srgb, var(--client-teal) 28%, transparent);
+  background: var(--client-teal-soft);
+  color: #1f5d54;
 }
 
 .ambient-client__state[data-tone="warning"] {
-  color: var(--client-danger);
+  border-color: color-mix(in srgb, var(--client-danger) 30%, transparent);
+  background: #f7e6e3;
+  color: #8f3d36;
 }
 
 .ambient-client__primary {
@@ -658,14 +711,17 @@
   margin-top: 0.75rem;
 }
 
-@media (max-width: 1080px) {
+/* Raised from 1080px: with status carrying a chip, the five-column row is
+   already cramped in the 1080-1140 range, so the roomier four-column layout
+   takes over before the chip and the action can touch. */
+@media (max-width: 1140px) {
   .ambient-clients__command-topline {
     grid-template-columns: 1fr;
   }
 
   .ambient-clients__columns,
   .ambient-client {
-    grid-template-columns: minmax(12rem, 1fr) minmax(13rem, 1.15fr) minmax(7rem, 0.6fr) auto;
+    grid-template-columns: minmax(12rem, 1fr) minmax(13rem, 1.15fr) minmax(9rem, 0.6fr) auto;
   }
 
   .ambient-clients__columns span:nth-child(3),
