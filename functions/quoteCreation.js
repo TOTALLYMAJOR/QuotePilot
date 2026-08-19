@@ -19,6 +19,7 @@ const CUSTOMER_EMAIL_CLAIM_SOURCES = new Set([
   "legacy_repair"
 ]);
 const CRM_PROVIDERS = new Set(["webhook", "webhook_bridge", "hubspot", "salesforce"]);
+const PROPOSAL_DOCUMENT_FONT_SCALE_IDS = new Set(["compact", "standard", "large"]);
 const APPROVED_STRIPE_PAYMENT_HOSTS = new Set([
   "checkout.stripe.com",
   "buy.stripe.com"
@@ -320,6 +321,32 @@ function numberInRange(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEG
 
 function integerInRange(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEGER) {
   return Math.round(numberInRange(value, fallback, min, max));
+}
+
+function normalizeProposalDocumentFontScale(value) {
+  const normalized = text(value, 32).toLowerCase();
+  return PROPOSAL_DOCUMENT_FONT_SCALE_IDS.has(normalized) ? normalized : "standard";
+}
+
+function normalizeBrandLogoUrl(value) {
+  const raw = text(value, 1_000);
+  if (!raw) return "";
+  if (raw.startsWith("/") && !raw.startsWith("//") && !/[\s<>"'`]/u.test(raw)) {
+    return raw;
+  }
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return "";
+    if (["google.com", "www.google.com", "images.google.com"].includes(parsed.hostname.toLowerCase())) {
+      const direct = text(parsed.searchParams.get("imgurl"), 1_000);
+      if (!direct) return "";
+      const directUrl = new URL(direct);
+      return directUrl.protocol === "https:" ? directUrl.toString() : "";
+    }
+    return parsed.toString();
+  } catch {
+    return "";
+  }
 }
 
 function boundedBoolean(value, fallback = false) {
@@ -697,7 +724,8 @@ function buildQuoteMeta(settings, form, pricing) {
     quotePreparedBy: text(settings.quotePreparedBy, 160),
     brandName: text(settings.brandName, 160),
     brandTagline: text(settings.brandTagline, 240),
-    brandLogoUrl: text(settings.brandLogoUrl, 1_000),
+    brandLogoUrl: normalizeBrandLogoUrl(settings.brandLogoUrl),
+    documentFontScale: normalizeProposalDocumentFontScale(settings.documentFontScale),
     brandPrimaryColor: text(settings.brandPrimaryColor, 32),
     brandAccentColor: text(settings.brandAccentColor, 32),
     brandDarkAccentColor: text(settings.brandDarkAccentColor, 32),
@@ -928,7 +956,7 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
     quoteMeta: {
       organizationName: text(quoteMeta.organizationName, 160),
       brandName: text(quoteMeta.brandName, 160),
-      brandLogoUrl: text(quoteMeta.brandLogoUrl, 1_000),
+      brandLogoUrl: normalizeBrandLogoUrl(quoteMeta.brandLogoUrl),
       brandPrimaryColor: text(quoteMeta.brandPrimaryColor, 32),
       brandAccentColor: text(quoteMeta.brandAccentColor, 32),
       brandDarkAccentColor: text(quoteMeta.brandDarkAccentColor, 32),

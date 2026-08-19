@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   appProps: null,
-  conceptProps: null,
   navigation: null
 }));
 
@@ -30,10 +29,7 @@ vi.mock("../../context/WorkspaceNavigationContext", () => ({
 }));
 
 vi.mock("../QuoteWorkspaceConceptPage", () => ({
-  default: (props) => {
-    mocks.conceptProps = props;
-    return <div data-testid="quote-workspace-page" />;
-  }
+  default: () => <div data-testid="quote-workspace-concept-mock" />
 }));
 
 import { ScopedWorkspaceRoute } from "../WorkspaceRoute";
@@ -60,27 +56,19 @@ function workspaceNavigation() {
   };
 }
 
-function renderRoute() {
+function renderRoute(session = authSession) {
   act(() => {
-    root.render(<ScopedWorkspaceRoute tenantContext={tenantContext} authSession={authSession} />);
-  });
-}
-
-async function renderRouteAsync() {
-  await act(async () => {
-    root.render(<ScopedWorkspaceRoute tenantContext={tenantContext} authSession={authSession} />);
-    await Promise.resolve();
+    root.render(<ScopedWorkspaceRoute tenantContext={tenantContext} authSession={session} />);
   });
 }
 
 beforeEach(() => {
+  window.history.replaceState({}, "", "/app/catalog");
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   mocks.appProps = null;
-  mocks.conceptProps = null;
   mocks.navigation = workspaceNavigation();
-  window.history.replaceState({}, "", "/app/catalog");
 });
 
 afterEach(() => {
@@ -150,38 +138,30 @@ describe("workspace customer-portal transition guard", () => {
   });
 });
 
-describe("connected quote workspace route", () => {
-  test.each([
-    "/app/quote-workspace",
-    "/app/quote-workspace-concept"
-  ])("mounts the isolated page before the legacy route parser for %s", async (pathname) => {
-    window.history.replaceState({}, "", pathname);
+describe("quote workspace concept authority", () => {
+  test("keeps the normal authenticated app boundary while auth is unresolved", () => {
+    window.history.replaceState({}, "", "/app/quote-workspace");
+    renderRoute({ ...authSession, user: null, role: "" });
 
-    await renderRouteAsync();
-
-    expect(container.querySelector('[data-testid="quote-workspace-page"]')).not.toBeNull();
-    expect(mocks.appProps).toBeNull();
-    expect(mocks.conceptProps).toMatchObject({ tenantContext, authSession });
-
-    act(() => mocks.conceptProps.onExit());
-
-    expect(mocks.navigation.replace).toHaveBeenCalledWith(
-      "/app/quotes",
-      { preserveSearch: false, preserveHash: false }
-    );
+    expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).toBeNull();
   });
 
-  test("preserves portal-token precedence over the workspace alias", () => {
+  test("denies non-staff principals without mounting the quote workspace", () => {
     window.history.replaceState({}, "", "/app/quote-workspace");
-    mocks.navigation.route = {
-      surface: "portal",
-      routeId: "portal",
-      portalToken: "customer-token"
-    };
+    renderRoute({ ...authSession, role: "customer" });
 
+    expect(container.querySelector('[data-testid="quote-workspace-role-boundary"]')).not.toBeNull();
+    expect(container.textContent).toContain("Staff access required");
+    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).toBeNull();
+  });
+
+  test("loads the concept only for an authenticated staff role", async () => {
+    window.history.replaceState({}, "", "/app/quote-workspace-concept");
     renderRoute();
+    await act(async () => Promise.resolve());
 
-    expect(mocks.conceptProps).toBeNull();
-    expect(mocks.appProps.committedPortalToken).toBe("customer-token");
+    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
   });
 });

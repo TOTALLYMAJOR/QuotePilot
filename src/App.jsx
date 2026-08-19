@@ -4,7 +4,7 @@ import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
-import ProposalComposer from "./components/ProposalComposer";
+import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
@@ -4513,6 +4513,37 @@ export default function App({
     </section>
   ) : null;
 
+  const proposalComposerChangeImpactScopeCurrent = !(
+    isEditingQuote && changeImpactPreviewAvailable
+  ) || changeImpactScopeIsCurrent();
+  const proposalComposerSaveBlockers = proposalComposerActive
+    ? buildDraftSaveBlockers({
+        form,
+        totals,
+        catalogLoading: catalog.loading,
+        selectedMenuItemCount,
+        quoteEditUnavailable: Boolean(quoteEditRouteId && !quoteEditReady),
+        pilotScenarioReviewPending: Boolean(
+          pilotScenarioDraftReview && pilotScenarioReviewResolution === "pending_review"
+        ),
+        draftIntentReviewPending: Boolean(
+          ambientDraftIntentReview && ambientDraftReviewResolution === "pending_review"
+        ),
+        changeImpactReviewRequired: Boolean(
+          isEditingQuote
+          && changeImpactPreviewAvailable
+          && !proposalComposerChangeImpactScopeCurrent
+        ),
+        changeImpactAuthorizationRequired: Boolean(
+          isEditingQuote
+          && changeImpactPreviewAvailable
+          && proposalComposerChangeImpactScopeCurrent
+          && changeImpactPreview.authorityState === "enforced"
+          && changeImpactPreview.authorizationRequired
+        )
+      })
+    : [];
+
   const proposalComposerSurface = proposalComposerActive ? (
     <ProposalComposer
       form={form}
@@ -4538,6 +4569,8 @@ export default function App({
       saveDisabledReason={totals.guests <= 0
         ? "Set a guest count above zero before saving."
         : ""}
+      saveBlockers={proposalComposerSaveBlockers}
+      saveMessage={submitState.message}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}

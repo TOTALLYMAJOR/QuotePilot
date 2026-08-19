@@ -29,6 +29,8 @@ import {
 } from "./pricingContracts";
 import { resolveCrmProvider } from "./crmAdapters";
 import { buildQuoteEmailPayload } from "./proposalPayload";
+import { normalizeBrandLogoUrl } from "./brandLogoUrl";
+import { normalizeProposalDocumentFontScale } from "./proposalDocumentPreferences";
 import {
   APPROVAL_ACTION_IDS,
   APPROVAL_STATES,
@@ -3103,7 +3105,8 @@ export async function submitQuote({
       quotePreparedBy: settings?.quotePreparedBy || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
-      brandLogoUrl: settings?.brandLogoUrl || "",
+      brandLogoUrl: normalizeBrandLogoUrl(settings?.brandLogoUrl),
+      documentFontScale: normalizeProposalDocumentFontScale(settings?.documentFontScale).id,
       brandPrimaryColor: settings?.brandPrimaryColor || "",
       brandAccentColor: settings?.brandAccentColor || "",
       brandDarkAccentColor: settings?.brandDarkAccentColor || "",
@@ -3514,7 +3517,8 @@ export async function updateQuote({
       quotePreparedBy: settings?.quotePreparedBy || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
-      brandLogoUrl: settings?.brandLogoUrl || "",
+      brandLogoUrl: normalizeBrandLogoUrl(settings?.brandLogoUrl),
+      documentFontScale: normalizeProposalDocumentFontScale(settings?.documentFontScale).id,
       brandPrimaryColor: settings?.brandPrimaryColor || "",
       brandAccentColor: settings?.brandAccentColor || "",
       brandDarkAccentColor: settings?.brandDarkAccentColor || "",
