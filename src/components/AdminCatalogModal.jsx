@@ -2930,6 +2930,32 @@ export function AdminCatalogView({
               </select>
             </label>
             <label>
+              Proposal intro title
+              <input
+                type="text"
+                value={draft.settings.proposalIntroTitle || ""}
+                onChange={(e) => patchTextSetting("proposalIntroTitle", e.target.value)}
+              />
+            </label>
+            <label className="admin-field-span-2">
+              Proposal intro message
+              <textarea
+                rows="4"
+                maxLength={1200}
+                value={draft.settings.proposalIntroMessage || ""}
+                onChange={(e) => patchTextSetting("proposalIntroMessage", e.target.value)}
+              />
+            </label>
+            <label className="admin-field-span-2">
+              Proposal closing message
+              <textarea
+                rows="4"
+                maxLength={1200}
+                value={draft.settings.proposalClosingMessage || ""}
+                onChange={(e) => patchTextSetting("proposalClosingMessage", e.target.value)}
+              />
+            </label>
+            <label>
               Disposables note
               <input
                 type="text"

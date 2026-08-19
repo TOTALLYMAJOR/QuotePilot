@@ -1171,6 +1171,12 @@ unchanged.
   Standard, or Large. This bounded setting is stored on future trusted quote
   create/edit snapshots and controls the Proposal Composer client preview and
   PDF export text scale. It does not change quote pricing or rewrite old PDFs.
+- In `Pricing` → `Proposal Details`, set `Proposal intro title`, `Proposal
+  intro message`, and `Proposal closing message` to tune how future proposals
+  sound for your brand. These fields are snapped onto future trusted quote
+  create/edit records, then appear in the Proposal Composer client preview,
+  customer quote email, and PDF export. Updating the catalog later does not
+  rewrite already-saved quote snapshots.
 - In `Pricing` → `Your Customer-facing Brand`, choose Midnight Amber,
   Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
   select `Save catalog changes` to persist the six existing brand colors for
@@ -1971,8 +1977,11 @@ customer-facing projection.
 
 The Proposal Composer uses the same fail-closed margin model in Quote Pulse:
 recorded cost, computed margin, target-margin status, and missing-cost examples
-are visible to staff only. The client preview and exported proposal receive
-brand/logo/font presentation, never internal cost or margin data.
+are visible to staff only. For saved quotes, Quote Pulse prefers the saved
+commercial snapshot captured at trusted quote create/edit time, so later
+catalog cost edits do not silently rewrite prior staff evidence. The client
+preview and exported proposal receive brand/logo/font/copy presentation, never
+internal cost or margin data.
 
 Catalog Admin's save flow — ready, saving, a confirmed conflict
 (reconciliation), a saved-but-unconfirmed revision (uncertain), a clean

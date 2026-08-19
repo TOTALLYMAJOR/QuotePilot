@@ -7,6 +7,7 @@ import {
   hydrateSavedQuoteDraft,
   resolveQuoteDraftRevisionId
 } from "./quoteDraftRuntime";
+import { buildMarginPresentationFromCommercialSnapshot } from "./commercialSnapshot";
 
 export const AMBIENT_PRICING_PREVIEW_SCHEMA_VERSION = "ambient-pricing-preview-host-v1";
 export const AMBIENT_PRICING_MARGIN_CONTEXT_SCHEMA_VERSION =
@@ -14,6 +15,8 @@ export const AMBIENT_PRICING_MARGIN_CONTEXT_SCHEMA_VERSION =
 export const AMBIENT_SAVED_PRICING_MARGIN_MODEL = "margin-presentation-v1";
 export const AMBIENT_SAVED_PRICING_MARGIN_SOURCE_LABEL =
   "Current tenant catalog staff-only cost context";
+export const AMBIENT_SAVED_PRICING_MARGIN_SNAPSHOT_SOURCE_LABEL =
+  "Saved quote staff-only cost snapshot";
 export const AMBIENT_PRICING_MARGIN_BOUNDARY =
   "Margin context is staff-only advisory evidence from the loaded client catalog. It is never customer output, accounting revenue, authoritative repricing, authorization, or permission to save, send, accept, book, or charge.";
 
@@ -462,7 +465,11 @@ function unavailableSavedMargin(
   reason,
   missing = [],
   code = "margin_evidence_unavailable",
-  missingCount = null
+  missingCount = null,
+  {
+    evidenceAuthority = "advisory_current_catalog_cost_context",
+    sourceLabel = AMBIENT_SAVED_PRICING_MARGIN_SOURCE_LABEL
+  } = {}
 ) {
   const namedMissing = uniqueText(missing);
   const normalizedMissingCount = Number.isSafeInteger(Number(missingCount))
@@ -475,17 +482,18 @@ function unavailableSavedMargin(
     missingCount: normalizedMissingCount,
     missing: namedMissing,
     note: text(reason) || "Margins unavailable because complete current-catalog cost evidence is missing.",
-    evidenceAuthority: "advisory_current_catalog_cost_context",
-    sourceLabel: AMBIENT_SAVED_PRICING_MARGIN_SOURCE_LABEL,
+    evidenceAuthority,
+    sourceLabel,
     evidenceCode: code,
     boundary: AMBIENT_PRICING_MARGIN_BOUNDARY
   });
 }
 
 /**
- * Hydrates the exact selected saved form, then evaluates its margin against
- * the currently loaded tenant catalog. This is deliberately not the saved
- * pricing snapshot and not server-authoritative repricing.
+ * Prefer the saved quote's private commercial snapshot when it exists.
+ * Legacy quotes without that snapshot still hydrate the exact saved form and
+ * evaluate against the currently loaded tenant catalog. Neither path is
+ * customer output or server-authoritative repricing.
  */
 export function buildSavedAmbientPricingMargin({
   organizationId,
@@ -502,6 +510,64 @@ export function buildSavedAmbientPricingMargin({
       "organization_scope_missing"
     );
   }
+  const quoteOrganizationId = opaqueId(quote?.organizationId);
+  if (quoteOrganizationId && quoteOrganizationId !== normalizedOrganizationId) {
+    return unavailableSavedMargin(
+      "Margins unavailable because the selected quote does not belong to the active organization scope.",
+      ["Active organization scope"],
+      "organization_scope_mismatch"
+    );
+  }
+
+  const savedCommercialSnapshot = record(quote?.pricing?.commercialSnapshot)
+    ? quote.pricing.commercialSnapshot
+    : null;
+  if (savedCommercialSnapshot) {
+    const evaluated = buildMarginPresentationFromCommercialSnapshot({
+      commercialSnapshot: savedCommercialSnapshot,
+      totals: quote?.totals || {}
+    });
+    if (!record(evaluated) || evaluated.available !== true) {
+      return unavailableSavedMargin(
+        evaluated?.note
+          || "Margins unavailable until every selected saved cost counterpart is recorded.",
+        Array.isArray(evaluated?.missing) ? evaluated.missing : [],
+        "cost_evidence_incomplete",
+        evaluated?.missingCount,
+        {
+          evidenceAuthority: "advisory_saved_cost_snapshot",
+          sourceLabel: AMBIENT_SAVED_PRICING_MARGIN_SNAPSHOT_SOURCE_LABEL
+        }
+      );
+    }
+    const normalized = normalizeMargin(evaluated);
+    if (!normalized) {
+      return unavailableSavedMargin(
+        "Margins are unavailable because the saved commercial snapshot is inconsistent.",
+        ["Consistent revenue, cost, and margin evidence"],
+        "margin_evidence_inconsistent",
+        null,
+        {
+          evidenceAuthority: "advisory_saved_cost_snapshot",
+          sourceLabel: AMBIENT_SAVED_PRICING_MARGIN_SNAPSHOT_SOURCE_LABEL
+        }
+      );
+    }
+    return deepFreeze({
+      ...evaluated,
+      modelId: text(evaluated.modelId) || AMBIENT_SAVED_PRICING_MARGIN_MODEL,
+      available: true,
+      revenue: normalized.revenue,
+      cost: normalized.cost,
+      marginPct: normalized.marginPct,
+      target: normalized.target,
+      evidenceAuthority: "advisory_saved_cost_snapshot",
+      sourceLabel: AMBIENT_SAVED_PRICING_MARGIN_SNAPSHOT_SOURCE_LABEL,
+      sourceRevisionId: resolveQuoteDraftRevisionId(quote),
+      boundary: AMBIENT_PRICING_MARGIN_BOUNDARY
+    });
+  }
+
   if (typeof evaluateMargin !== "function") {
     return unavailableSavedMargin(
       "Margins are unavailable because the margin calculation could not run.",

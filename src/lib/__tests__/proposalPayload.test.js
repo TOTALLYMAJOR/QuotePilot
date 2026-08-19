@@ -38,6 +38,9 @@ describe("proposal payload snapshots", () => {
         documentFontScale: payload.meta.documentFontScale,
         documentFontScaleLabel: payload.meta.documentFontScaleLabel,
         documentFontScaleValue: payload.meta.documentFontScaleValue,
+        proposalIntroTitle: payload.meta.proposalIntroTitle,
+        proposalIntroMessage: payload.meta.proposalIntroMessage,
+        proposalClosingMessage: payload.meta.proposalClosingMessage,
         quotePreparedBy: payload.meta.quotePreparedBy,
         includeDisposables: payload.meta.includeDisposables,
         quoteValidityDays: payload.meta.quoteValidityDays
@@ -84,6 +87,9 @@ describe("proposal payload snapshots", () => {
           "documentFontScaleLabel": "Large",
           "documentFontScaleValue": 1.12,
           "includeDisposables": true,
+          "proposalClosingMessage": "If you'd like to refine the menu, timing, or service flow, reply and we will adjust the proposal together.",
+          "proposalIntroMessage": "We built this proposal around a polished plated service, warm hospitality, and a menu that matches the Spring Gala setting.",
+          "proposalIntroTitle": "Tailored for your celebration",
           "quotePreparedBy": "Alex Rivera",
           "quoteValidityDays": 30,
         },
@@ -126,11 +132,14 @@ describe("proposal payload snapshots", () => {
     }).toMatchInlineSnapshot(`
       {
         "body": "Hi Jordan Lee,
+      Tailored for your celebration
+      We built this proposal around a polished plated service, warm hospitality, and a menu that matches the Spring Gala setting.
       Thank you for considering Acme Events Catering for Spring Gala on 2026-04-20 at Pine Hall.
       Your quote (Q-2026-0042) total is $8379.21.
       To reserve your date, the deposit due is $2513.76.
       Deposit payment link: https://checkout.stripe.com/c/pay/cs_test_q_2026_0042
       This quote is valid through 2026-04-09.
+      If you'd like to refine the menu, timing, or service flow, reply and we will adjust the proposal together.
       Please reply with any questions or requested adjustments.
       Alex Rivera",
         "subject": "Acme Events Catering Quote Q-2026-0042 - 2026-04-20",

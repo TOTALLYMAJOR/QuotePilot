@@ -49,14 +49,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Added catalog-owned proposal presentation controls and staff-only margin/cost
   context across the quote workspace. Pricing admins can choose a bounded
   proposal font scale, define/clear logo evidence, see brand readiness, review
-  guided-rule coverage, and see cost/margin data coverage before save. Trusted
-  quote creation/edit snapshots now persist the selected document font scale;
-  the Proposal Composer applies the saved brand/logo/monogram and font scale
-  to the client preview, adds a proposal-polish checklist, and shows recorded
+  guided-rule coverage, set operator-authored proposal intro/closing copy, and
+  see cost/margin data coverage before save. Trusted quote creation/edit
+  snapshots now persist the selected document font scale, proposal intro title,
+  proposal intro message, proposal closing message, and a private commercial
+  cost snapshot for saved staff-only margin evidence. The Proposal Composer
+  applies the saved brand/logo/monogram, font scale, and operator copy to the
+  client preview, quote email payload, and PDF export, while showing recorded
   cost, computed margin, and target-margin status only inside the staff Quote
-  Pulse when the existing margin gate has complete selected-line cost evidence.
-  PDF export uses the same saved font scale and letterhead fallback, while
-  customer-facing proposal artifacts still exclude cost and margin details.
+  Pulse when the existing margin gate has complete saved cost evidence.
+  Customer-facing proposal artifacts still exclude internal cost and margin
+  details.
 - Added an Activity & Save Health drawer to the connected quote workspace.
   Persisted quote activity, snapshot freshness, last-saved evidence, lifecycle
   status, and visible completeness gaps now share one keyboard- and mobile-safe

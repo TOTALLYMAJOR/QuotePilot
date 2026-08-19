@@ -272,6 +272,24 @@
   padding: clamp(1.4rem, 3vw, 2.6rem);
 }
 
+.pc-proposal-note {
+  background: linear-gradient(180deg, rgba(240, 226, 195, 0.34), rgba(251, 250, 246, 0.92));
+  border: 1px solid color-mix(in srgb, var(--pc-brass) 24%, var(--pc-rule));
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+}
+
+.pc-proposal-note-copy {
+  margin: 0.45rem 0 0;
+  max-width: 58ch;
+  color: var(--pc-muted-deep);
+  line-height: 1.58;
+}
+
+.pc-proposal-note-closing {
+  border-top-color: color-mix(in srgb, var(--pc-brass) 34%, var(--pc-rule));
+}
+
 .pc-section + .pc-section {
   margin-top: 2.3rem;
   padding-top: 2.1rem;
