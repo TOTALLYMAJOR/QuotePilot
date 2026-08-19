@@ -488,6 +488,15 @@ validated configuration is not a cloud plan, applied resource, App Check
 registration, Stripe binding, deployment, or hosted acceptance; each remains a
 separately authorized evidence gate.
 
+A read-only live staging preflight is also available through
+`npm run check:stripe-connect:staging`. It queries Firebase for the exact
+isolated staging project, project number, hosting site, single reviewed WEB
+app, and the required `connect-control` named database contract. Passing that
+check proves only the current Firebase inventory and selector match; it does
+not create infrastructure, produce or apply a Terraform plan, bind App Check,
+export Connect functions, enable provider access, or establish Stripe/provider
+acceptance.
+
 Dormant Connect status/onboarding contracts can be checked with
 `npm run check:stripe-connect:onboarding`. They bind repository source only to
 the explicit `connect-control` database selector, reserve one immutable

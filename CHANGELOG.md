@@ -7,6 +7,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Added
+- Added `npm run check:stripe-connect:staging`, a read-only live Firebase
+  preflight for the isolated Stripe Connect staging foundation. The command
+  verifies the exact staging project, project number, hosting site, reviewed
+  single WEB app, and required `connect-control` named database contract
+  before any Connect export or provider binding is attempted. It reports
+  blockers deterministically but does not create infrastructure, plan/apply
+  Terraform, bind App Check, enable provider access, or establish Stripe or
+  hosted acceptance.
 - Added the source/local QuotePilot Package Workspace MVP to `Library ->
   Packages`. Catalog Admin now uses a stable-ID package navigator, a selected
   package overview with price/cost/contribution/margin evidence, deterministic
