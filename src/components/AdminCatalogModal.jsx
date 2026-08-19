@@ -9,6 +9,11 @@ import {
   PORTAL_THEME_PRESETS
 } from "../data/portalThemePresets";
 import {
+  normalizeProposalDocumentFontScale,
+  PROPOSAL_DOCUMENT_FONT_SCALE_OPTIONS
+} from "../lib/proposalDocumentPreferences";
+import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
+import {
   createCategory,
   createEventType,
   createMenuItem,
@@ -243,6 +248,24 @@ function defaultRuleName(kind) {
   if (kind === "rental") return "Rental recommendation";
   if (kind === "package") return "Package recommendation";
   return "Add-on recommendation";
+}
+
+function brandInitials(value) {
+  const initials = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return initials || "QP";
+}
+
+function hasRecordedNonNegativeNumber(value) {
+  if (value === null || value === undefined || value === "") return false;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0;
 }
 
 function buildJsonDrafts(catalog) {
@@ -573,6 +596,7 @@ export function AdminCatalogView({
     if (!acceptedRevision) {
       setActiveTab(resolveCatalogAdminTab(catalog, initialTab));
     }
+    setSelectedPackageId(String(nextDraft?.packages?.[0]?.id || "").trim());
     setSelectedEventType(String(selectedEventTypeProp || "").trim());
     setSelectedCategory("");
     setMenuEventTypes([]);
@@ -1742,6 +1766,8 @@ export function AdminCatalogView({
         settings: {
           ...draft.settings,
           featureFlags: normalizedFeatureFlags,
+          brandLogoUrl: normalizeBrandLogoUrl(draft.settings?.brandLogoUrl),
+          documentFontScale: normalizeProposalDocumentFontScale(draft.settings?.documentFontScale).id,
           serviceFeeTiers,
           taxRegions,
           eventTemplates,
@@ -1809,6 +1835,71 @@ export function AdminCatalogView({
   };
   const selectedPortalTheme = findPortalThemePreset(draft?.settings);
   const portalThemePreviewStyle = buildPortalThemeStyle(draft?.settings);
+  const documentFontPreference = normalizeProposalDocumentFontScale(draft?.settings?.documentFontScale);
+  const brandNamePreview = String(
+    draft?.settings?.brandName || draft?.settings?.organizationName || "your business"
+  ).trim() || "your business";
+  const brandTaglinePreview = String(draft?.settings?.brandTagline || "").trim();
+  const brandLogoDraftValue = String(draft?.settings?.brandLogoUrl || "").trim();
+  const brandLogoPreview = normalizeBrandLogoUrl(brandLogoDraftValue);
+  const brandLogoNeedsDirectUrl = Boolean(brandLogoDraftValue && !brandLogoPreview);
+  const brandReadinessItems = [
+    {
+      label: "Logo",
+      detail: brandLogoPreview
+        ? "Defined"
+        : brandLogoNeedsDirectUrl
+          ? "Use a direct HTTPS image URL"
+          : "Monogram fallback",
+      state: brandLogoPreview ? "ready" : "watch"
+    },
+    {
+      label: "Name",
+      detail: brandNamePreview,
+      state: brandNamePreview === "your business" ? "watch" : "ready"
+    },
+    {
+      label: "Font",
+      detail: documentFontPreference.label,
+      state: "ready"
+    },
+    {
+      label: "Contact",
+      detail: draft?.settings?.businessEmail || draft?.settings?.businessPhone ? "Included" : "Missing",
+      state: draft?.settings?.businessEmail || draft?.settings?.businessPhone ? "ready" : "watch"
+    }
+  ];
+  const enabledUpsellRules = (Array.isArray(draft.settings?.upsellRules) ? draft.settings.upsellRules : [])
+    .filter((rule) => rule?.enabled !== false);
+  const targetedUpsellRules = enabledUpsellRules.filter((rule) => (
+    String(rule?.kind || "") === "package" || String(rule?.targetId || "").trim()
+  ));
+  const activeCostRecords = [
+    ...(Array.isArray(draft.packages) ? draft.packages : [])
+      .filter((item) => item?.active !== false)
+      .map((item) => ({ id: item.id, kind: "Package", name: item.name, recorded: hasRecordedNonNegativeNumber(item.costPpp) })),
+    ...(Array.isArray(draft.addons) ? draft.addons : [])
+      .filter((item) => item?.active !== false)
+      .map((item) => ({ id: item.id, kind: "Add-on", name: item.name, recorded: hasRecordedNonNegativeNumber(item.cost) })),
+    ...(Array.isArray(draft.rentals) ? draft.rentals : [])
+      .filter((item) => item?.active !== false)
+      .map((item) => ({ id: item.id, kind: "Rental", name: item.name, recorded: hasRecordedNonNegativeNumber(item.cost) }))
+  ];
+  const recordedCostCount = activeCostRecords.filter((item) => item.recorded).length;
+  const missingCostExamples = activeCostRecords
+    .filter((item) => !item.recorded)
+    .slice(0, 4)
+    .map((item) => `${item.kind}: ${item.name || item.id || "Untitled"}`);
+  const staffCostRates = [
+    { id: "server", recorded: hasRecordedNonNegativeNumber(draft.settings?.serverCostRate) },
+    { id: "chef", recorded: hasRecordedNonNegativeNumber(draft.settings?.chefCostRate) },
+    { id: "bartender", recorded: hasRecordedNonNegativeNumber(draft.settings?.bartenderCostRate) }
+  ];
+  const recordedStaffCostCount = staffCostRates.filter((item) => item.recorded).length;
+  const targetMarginCandidate = Number(draft.settings?.targetMarginPct);
+  const targetMarginPct = Number.isFinite(targetMarginCandidate) && targetMarginCandidate >= 0 && targetMarginCandidate <= 1
+    ? targetMarginCandidate
+    : null;
   const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
   const visibleAdminTabs = starterChoiceOnly
     ? ADMIN_TABS.filter((tab) => tab.id === "starter")
@@ -2484,6 +2575,27 @@ export function AdminCatalogView({
 
             <section className="admin-section">
           <div className="admin-section-head"><h3>Pricing &amp; Quote Defaults</h3></div>
+          {PILOT_MARGINS_ENABLED && (
+            <div className="cost-margin-summary" data-testid="catalog-cost-margin-summary">
+              <div>
+                <span>{recordedCostCount}/{activeCostRecords.length}</span>
+                <small>active catalog costs</small>
+              </div>
+              <div>
+                <span>{recordedStaffCostCount}/3</span>
+                <small>staff cost rates</small>
+              </div>
+              <div>
+                <span>{targetMarginPct === null ? "—" : `${Math.round(targetMarginPct * 100)}%`}</span>
+                <small>target margin</small>
+              </div>
+              <p>
+                {missingCostExamples.length
+                  ? `Margin remains unavailable for quotes using missing cost fields, including ${missingCostExamples.join(", ")}.`
+                  : "Active catalog cost fields are recorded. A quote still needs complete selected-line cost coverage before margin is shown."}
+              </p>
+            </div>
+          )}
           <div className="admin-grid-settings">
             <label>
               Per-mile rate
@@ -2573,6 +2685,21 @@ export function AdminCatalogView({
           <div className="admin-section-head">
             <h3>Suggestions &amp; Staffing</h3>
             <button type="button" className="ghost" onClick={addUpsellRule}>Add Rule</button>
+          </div>
+          <div className="rule-system-summary" data-testid="catalog-rules-summary">
+            <div>
+              <span>{enabledUpsellRules.length}</span>
+              <small>enabled rules</small>
+            </div>
+            <div>
+              <span>{targetedUpsellRules.length}</span>
+              <small>targeted offers</small>
+            </div>
+            <p>
+              {draft.settings?.guidedSellingEnabled !== false
+                ? "Guided selling is active; matching rules appear inside the quote workspace with their next step."
+                : "Guided selling is off; rules stay saved but will not be shown to quote builders."}
+            </p>
           </div>
           <div className="admin-grid-settings">
             <label>
@@ -2788,6 +2915,20 @@ export function AdminCatalogView({
                 onChange={(e) => patchTextSetting("acceptanceEmail", e.target.value)}
               />
             </label>
+            <label data-testid="proposal-font-size-setting">
+              Proposal font size
+              <small className="admin-field-hint">Controls client preview and PDF text size for future saved quotes.</small>
+              <select
+                value={documentFontPreference.id}
+                onChange={(e) => patchTextSetting("documentFontScale", normalizeProposalDocumentFontScale(e.target.value).id)}
+              >
+                {PROPOSAL_DOCUMENT_FONT_SCALE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label} - {option.description}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               Disposables note
               <input
@@ -2864,13 +3005,44 @@ export function AdminCatalogView({
               aria-label={`Customer portal preview: ${selectedPortalTheme?.name || "Custom colors"}`}
             >
               <div className="portal-theme-preview-card">
+                <div className="portal-theme-preview-mark" aria-hidden="true">
+                  {brandLogoPreview ? (
+                    <img src={brandLogoPreview} alt="" />
+                  ) : (
+                    <span>{brandInitials(brandNamePreview)}</span>
+                  )}
+                </div>
                 <span>Customer portal preview</span>
                 <strong>
-                  Your proposal from {String(draft.settings.brandName || "your business").trim() || "your business"}
+                  Your proposal from {brandNamePreview}
                 </strong>
-                <small>{selectedPortalTheme?.name || "Custom colors"}</small>
+                <small>
+                  {selectedPortalTheme?.name || "Custom colors"} · {documentFontPreference.label} proposal text
+                </small>
               </div>
             </div>
+          </div>
+          <div className="brand-readiness-panel" data-testid="brand-readiness-panel">
+            <div className="brand-readiness-mark">
+              {brandLogoPreview ? (
+                <img src={brandLogoPreview} alt={`${brandNamePreview} logo`} />
+              ) : (
+                <span>{brandInitials(brandNamePreview)}</span>
+              )}
+            </div>
+            <div className="brand-readiness-copy">
+              <p className="portal-theme-label">Proposal letterhead</p>
+              <strong>{brandNamePreview}</strong>
+              <small>{brandTaglinePreview || "No tagline set"}</small>
+            </div>
+            <ul className="brand-readiness-list" aria-label="Brand readiness">
+              {brandReadinessItems.map((item) => (
+                <li key={item.label} data-state={item.state}>
+                  <span>{item.label}</span>
+                  <strong>{item.detail}</strong>
+                </li>
+              ))}
+            </ul>
           </div>
           <div className="admin-grid-settings">
             <label>
@@ -2906,6 +3078,24 @@ export function AdminCatalogView({
                 disabled={uploadingLogo}
               />
             </label>
+            <div className="admin-brand-actions">
+              <span>{brandLogoPreview
+                ? "Logo preview is active."
+                : brandLogoNeedsDirectUrl
+                  ? "This URL cannot be used as an image. Use a direct HTTPS image URL or upload a logo."
+                  : "No image logo yet; proposal uses the monogram fallback."}</span>
+              <button
+                type="button"
+                className="ghost compact"
+                onClick={() => {
+                  patchTextSetting("brandLogoUrl", "");
+                  setStatus("Logo removed from draft. Click Save Catalog to persist.");
+                }}
+                disabled={!brandLogoDraftValue || uploadingLogo}
+              >
+                Clear logo
+              </button>
+            </div>
             <label>
               Primary color
               <input

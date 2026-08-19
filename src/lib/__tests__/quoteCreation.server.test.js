@@ -631,6 +631,7 @@ describe("trusted server quote creation documents", () => {
         organizationName: "Trusted Organization",
         brandName: "Trusted Caterer",
         brandLogoUrl: "https://cdn.example.test/trusted-logo.png",
+        documentFontScale: "large",
         brandPrimaryColor: "#436b55",
         brandAccentColor: "#a7c4a0",
         brandDarkAccentColor: "#294536",
@@ -691,6 +692,7 @@ describe("trusted server quote creation documents", () => {
     expect(documents.quote.quoteMeta.organizationName).toBe("Trusted Organization");
     expect(documents.quote.quoteMeta).toMatchObject({
       brandLogoUrl: "https://cdn.example.test/trusted-logo.png",
+      documentFontScale: "large",
       brandPrimaryColor: "#436b55",
       brandAccentColor: "#a7c4a0",
       brandDarkAccentColor: "#294536",
@@ -1483,6 +1485,7 @@ describe("trusted server quote creation documents", () => {
       settings: {
         quoteValidityDays: 60,
         brandName: "Current Server Brand",
+        documentFontScale: "oversized",
         crmBridgeAuthToken: "must-not-persist"
       },
       nowISO: "2026-07-29T12:00:00.000Z"
@@ -1521,6 +1524,7 @@ describe("trusted server quote creation documents", () => {
     });
     expect(edited.quotePatch.quoteMeta).toMatchObject({
       brandName: "Current Server Brand",
+      documentFontScale: "standard",
       portalRotatedByEmail: "admin@example.com",
       lastEditedByEmail: "sales@example.com"
     });

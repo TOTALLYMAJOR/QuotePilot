@@ -35,6 +35,9 @@ describe("proposal payload snapshots", () => {
       },
       meta: {
         acceptanceEmail: payload.meta.acceptanceEmail,
+        documentFontScale: payload.meta.documentFontScale,
+        documentFontScaleLabel: payload.meta.documentFontScaleLabel,
+        documentFontScaleValue: payload.meta.documentFontScaleValue,
         quotePreparedBy: payload.meta.quotePreparedBy,
         includeDisposables: payload.meta.includeDisposables,
         quoteValidityDays: payload.meta.quoteValidityDays
@@ -77,6 +80,9 @@ describe("proposal payload snapshots", () => {
         "expiresOn": "2026-04-09",
         "meta": {
           "acceptanceEmail": "events@acme.test",
+          "documentFontScale": "large",
+          "documentFontScaleLabel": "Large",
+          "documentFontScaleValue": 1.12,
           "includeDisposables": true,
           "quotePreparedBy": "Alex Rivera",
           "quoteValidityDays": 30,

@@ -1,5 +1,7 @@
 import { currency } from "./quoteCalculator";
 import { sanitizeStripePaymentLink } from "./paymentLink";
+import { normalizeBrandLogoUrl } from "./brandLogoUrl";
+import { normalizeProposalDocumentFontScale } from "./proposalDocumentPreferences";
 
 const DEFAULT_BRANDING = {
   name: "",
@@ -70,7 +72,7 @@ export function resolveBranding(meta = {}) {
     brandName,
     brandTagline,
     title: brandName ? `${brandName} Proposal` : "Catering Proposal",
-    logoPath: cleanText(meta.brandLogoUrl, DEFAULT_BRANDING.logoPath),
+    logoPath: normalizeBrandLogoUrl(meta.brandLogoUrl) || DEFAULT_BRANDING.logoPath,
     crewMembers: normalizeCrewMembers(meta.brandCrew)
   };
 }
@@ -83,6 +85,7 @@ export function buildProposalPayload(quote) {
   const meta = quote.quoteMeta || {};
   const branding = resolveBranding(meta);
   const validityDays = Math.max(1, Math.round(toNumber(meta.quoteValidityDays, 30)));
+  const documentFont = normalizeProposalDocumentFontScale(meta.documentFontScale);
 
   return {
     quoteId: cleanText(quote.id),
@@ -196,6 +199,9 @@ export function buildProposalPayload(quote) {
       disposablesNote: cleanText(meta.disposablesNote),
       depositNotice: cleanText(meta.depositNotice),
       quoteValidityDays: validityDays,
+      documentFontScale: documentFont.id,
+      documentFontScaleLabel: documentFont.label,
+      documentFontScaleValue: documentFont.scale,
       brandPrimaryColor: cleanText(meta.brandPrimaryColor),
       brandAccentColor: cleanText(meta.brandAccentColor),
       brandDarkAccentColor: cleanText(meta.brandDarkAccentColor)

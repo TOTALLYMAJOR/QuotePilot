@@ -1,3 +1,6 @@
+import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
+import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
+
 export const DEFAULT_PACKAGES = [
   { id: "classic", name: "Classic", ppp: 18, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
   { id: "premium", name: "Premium", ppp: 24, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
@@ -371,6 +374,7 @@ export const DEFAULT_SETTINGS = {
   brandName: "QuotePilot",
   brandTagline: "Quote-to-event operations by MBMApps",
   brandLogoUrl: "",
+  documentFontScale: "standard",
   brandPrimaryColor: "#c99334",
   brandAccentColor: "#f0d29a",
   brandDarkAccentColor: "#8d611a",
@@ -1144,7 +1148,10 @@ export function normalizeCatalog(raw) {
       quotePreparedBy: toTenantText(inputSettings, "quotePreparedBy", DEFAULT_SETTINGS.quotePreparedBy),
       brandName: toTenantText(inputSettings, "brandName", DEFAULT_SETTINGS.brandName),
       brandTagline: toTenantText(inputSettings, "brandTagline", DEFAULT_SETTINGS.brandTagline),
-      brandLogoUrl: toTenantText(inputSettings, "brandLogoUrl", DEFAULT_SETTINGS.brandLogoUrl),
+      brandLogoUrl: normalizeBrandLogoUrl(
+        toTenantText(inputSettings, "brandLogoUrl", DEFAULT_SETTINGS.brandLogoUrl)
+      ),
+      documentFontScale: normalizeProposalDocumentFontScale(rawSettings.documentFontScale).id,
       brandPrimaryColor: normalizeHexColor(inputSettings.brandPrimaryColor, tenantBrandFallbacks.brandPrimaryColor),
       brandAccentColor: normalizeHexColor(inputSettings.brandAccentColor, tenantBrandFallbacks.brandAccentColor),
       brandDarkAccentColor: normalizeHexColor(inputSettings.brandDarkAccentColor, tenantBrandFallbacks.brandDarkAccentColor),

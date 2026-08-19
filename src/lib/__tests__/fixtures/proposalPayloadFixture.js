@@ -100,6 +100,7 @@ export const proposalPayloadFixtureQuote = {
     brandName: "Acme Events Catering",
     brandTagline: "Bold Southern Flavor",
     brandLogoUrl: "/brand/custom-logo.png",
+    documentFontScale: "large",
     brandPrimaryColor: "#c99334",
     brandAccentColor: "#f0d29a",
     brandDarkAccentColor: "#8d611a",

@@ -1,10 +1,17 @@
 .ambient-library {
   --library-line: color-mix(in srgb, var(--tone-ink-1, #262421) 14%, transparent);
   --library-muted: var(--tone-ink-2, #514d47);
+  --library-paper: color-mix(in srgb, var(--tone-paper, #f7f1e6) 88%, #fff);
+  --library-brass: var(--tone-gold-3, #9b661d);
   display: grid;
   gap: clamp(1.25rem, 3vw, 2.7rem);
   min-width: 0;
-  padding: clamp(0.85rem, 2.4vw, 2rem) 6px clamp(2.5rem, 5vw, 5rem);
+  border: 1px solid var(--library-line);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 12% -10%, color-mix(in srgb, var(--library-brass) 13%, transparent), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(247, 241, 230, 0.36));
+  padding: clamp(0.95rem, 2.4vw, 2rem) clamp(0.85rem, 2vw, 1.4rem) clamp(2.5rem, 5vw, 5rem);
 }
 
 .ambient-library__masthead {
@@ -12,8 +19,11 @@
   grid-template-columns: minmax(0, 1.35fr) minmax(19rem, 0.65fr);
   gap: clamp(1.4rem, 5vw, 5rem);
   align-items: end;
-  padding-bottom: clamp(1rem, 2vw, 1.7rem);
-  border-bottom: 1px solid var(--library-line);
+  border: 1px solid var(--library-line);
+  border-top: 2px solid var(--library-brass);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--library-paper) 84%, transparent);
+  padding: clamp(1rem, 2.8vw, 1.8rem);
 }
 
 .ambient-library__masthead > div,
@@ -27,11 +37,12 @@
 .ambient-library__masthead h1 {
   max-width: 12ch;
   margin: 0.15rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-editorial, Georgia, "Times New Roman", serif);
   font-size: clamp(2.4rem, 6vw, 5.2rem);
   font-weight: 500;
   letter-spacing: -0.05em;
   line-height: 0.95;
+  text-wrap: balance;
 }
 
 .ambient-library__masthead > div > p:last-child {
@@ -220,6 +231,11 @@
 .ambient-library__section {
   display: grid;
   gap: 1rem;
+  border: 1px solid var(--library-line);
+  border-top: 2px solid color-mix(in srgb, var(--library-brass) 62%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--library-paper) 76%, transparent);
+  padding: clamp(1rem, 2vw, 1.35rem);
 }
 
 .ambient-library__section-head {
@@ -232,7 +248,7 @@
 
 .ambient-library__section-head h2 {
   margin: 0.22rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-editorial, Georgia, "Times New Roman", serif);
   font-size: clamp(1.45rem, 3vw, 2.25rem);
   font-weight: 500;
   letter-spacing: -0.025em;
@@ -290,7 +306,7 @@
 .ambient-library__template h3,
 .ambient-library__template-empty h3 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-editorial, Georgia, "Times New Roman", serif);
   font-size: clamp(1.05rem, 1.8vw, 1.3rem);
   font-weight: 500;
 }
@@ -314,6 +330,17 @@
 .ambient-library__record[data-library-health="attention"] {
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ambient-coral, #c86e58) 72%, transparent);
   padding-left: 0.7rem;
+}
+
+.ambient-library__record,
+.ambient-library__template {
+  transition: background 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.ambient-library__record:hover,
+.ambient-library__template:hover {
+  background: color-mix(in srgb, var(--library-brass) 5%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--library-brass) 44%, transparent);
 }
 
 .ambient-library__template {
@@ -357,7 +384,7 @@
 
 .ambient-library__state h2 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-editorial, Georgia, "Times New Roman", serif);
   font-size: clamp(1.35rem, 3vw, 2.1rem);
   font-weight: 500;
 }
@@ -379,7 +406,7 @@
 
 .ambient-library__boundary h2 {
   margin: 0.2rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-editorial, Georgia, "Times New Roman", serif);
   font-size: clamp(1.05rem, 2vw, 1.4rem);
   font-weight: 500;
 }

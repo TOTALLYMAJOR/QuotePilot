@@ -28,6 +28,10 @@ vi.mock("../../context/WorkspaceNavigationContext", () => ({
   WorkspaceNavigationProvider: ({ children }) => children
 }));
 
+vi.mock("../QuoteWorkspaceConceptPage", () => ({
+  default: () => <div data-testid="quote-workspace-concept-mock" />
+}));
+
 import { ScopedWorkspaceRoute } from "../WorkspaceRoute";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -52,13 +56,14 @@ function workspaceNavigation() {
   };
 }
 
-function renderRoute() {
+function renderRoute(session = authSession) {
   act(() => {
-    root.render(<ScopedWorkspaceRoute tenantContext={tenantContext} authSession={authSession} />);
+    root.render(<ScopedWorkspaceRoute tenantContext={tenantContext} authSession={session} />);
   });
 }
 
 beforeEach(() => {
+  window.history.replaceState({}, "", "/app/catalog");
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -130,5 +135,33 @@ describe("workspace customer-portal transition guard", () => {
 
     expect(mocks.appProps.portalRouteAllowed).toBe(false);
     expect(mocks.appProps.committedPortalToken).toBe("portal-a");
+  });
+});
+
+describe("quote workspace concept authority", () => {
+  test("keeps the normal authenticated app boundary while auth is unresolved", () => {
+    window.history.replaceState({}, "", "/app/quote-workspace");
+    renderRoute({ ...authSession, user: null, role: "" });
+
+    expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).toBeNull();
+  });
+
+  test("denies non-staff principals without mounting the quote workspace", () => {
+    window.history.replaceState({}, "", "/app/quote-workspace");
+    renderRoute({ ...authSession, role: "customer" });
+
+    expect(container.querySelector('[data-testid="quote-workspace-role-boundary"]')).not.toBeNull();
+    expect(container.textContent).toContain("Staff access required");
+    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).toBeNull();
+  });
+
+  test("loads the concept only for an authenticated staff role", async () => {
+    window.history.replaceState({}, "", "/app/quote-workspace-concept");
+    renderRoute();
+    await act(async () => Promise.resolve());
+
+    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
   });
 });

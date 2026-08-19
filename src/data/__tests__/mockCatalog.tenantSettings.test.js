@@ -68,6 +68,12 @@ describe("tenant catalog identity normalization", () => {
     expect(catalog.settings.brandName).toBe(DEFAULT_SETTINGS.brandName);
     expect(catalog.settings.businessAddress).toBe(DEFAULT_SETTINGS.businessAddress);
     expect(catalog.settings.brandCrew).toEqual(DEFAULT_SETTINGS.brandCrew);
+    expect(catalog.settings.documentFontScale).toBe("standard");
+  });
+
+  test("normalizes tenant proposal document font scale to bounded choices", () => {
+    expect(tenantCatalog({ documentFontScale: "large" }).settings.documentFontScale).toBe("large");
+    expect(tenantCatalog({ documentFontScale: "oversized" }).settings.documentFontScale).toBe("standard");
   });
 
   test("does not synthesize quote templates when the tenant has no matching packages", () => {
