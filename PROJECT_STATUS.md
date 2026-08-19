@@ -694,6 +694,12 @@ route evidence are complete.
     billing, storage, callable, or user-facing authority until the owner answers
     the three threat-context questions and accepts or revises the PRD, ADR, and
     threat model. Planning documents are not implementation or launch evidence.
+16. Production-only dependency audits are clean for the root app, default
+    Functions, and Connect Functions. The full root audit retains six high-
+    severity development-tool findings through Lighthouse CI's current
+    Puppeteer/`extract-zip` chain; npm's available remediation is a breaking
+    Lighthouse CI downgrade and must not be forced without a reviewed tooling
+    migration.
 
 ## Current Focus
 

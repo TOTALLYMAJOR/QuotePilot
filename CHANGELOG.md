@@ -248,6 +248,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Updated the transitive development-only `nanoid` dependency from `3.3.17`
+  to `3.3.18`. Production-only audits now report zero vulnerabilities for the
+  root app, default Functions, and Connect Functions. The full root audit still
+  reports six high-severity development-tool findings through the current
+  Lighthouse CI/Puppeteer/`extract-zip` chain; npm offers only a breaking
+  Lighthouse CI downgrade, so no forced remediation was applied.
 - Restored both production bundle gates without raising their ceilings:
   production builds now use the supported pinned Terser minifier, Staff and
   Clients review fixtures are eliminated behind literal development-only
