@@ -1136,11 +1136,32 @@ unchanged.
   - Price
   - `pricingType`
   - `active` toggle
-- In `Packages`, mark menu items, add-ons, and rentals that the package price
-  can cover. This does not add them to a quote automatically. In the quote
-  builder, covered choices say `Included at no added charge — select to add`;
-  unselected choices do not appear in the customer scope, while selected
-  choices appear at $0 and are not charged a second time.
+- In `Packages`, QuotePilot now opens one package workspace instead of a stack
+  of permanently expanded forms. Use the package list to switch records
+  without saving or discarding the current draft. The selected package leads
+  with its customer-facing name, ID, price, recorded cost, contribution,
+  margin state, readiness, and one next action.
+- Current inclusions appear before any candidate list. `Add menu items`,
+  `Add add-ons`, and `Add rentals` reveal the searchable selector for that
+  group only. Search or filter by category, select multiple records, then use
+  `Apply` to stage that exact group or `Cancel` to leave the package unchanged.
+  The menu event-type control narrows menu candidates for these add actions; it
+  does not decide package eligibility or quote behavior.
+- Turning `Available in Quote Builder` on is blocked while deterministic
+  package health is not Ready. QuotePilot names the first blocking reason and
+  focuses Health; turning availability off remains a staged catalog change.
+- `Revert this package` restores the selected package to the last saved catalog
+  snapshot only. `Package actions` -> `Delete package...` first reports the
+  event-template defaults and recommendation rules that reference the package;
+  `Delete from draft` removes the package and those references only after that
+  review. Existing saved quotes are unchanged.
+- Package inclusions still do not add themselves to a quote automatically. In
+  the quote builder, covered choices remain `Included at no added charge —
+  select to add`; unselected choices do not appear in the customer scope, and
+  selected choices price at $0 instead of charging twice.
+- The in-flow package workspace save bar still saves the whole catalog draft, not just
+  the selected package. Managed-menu edits remain a separate mutation path and
+  must be finished or discarded before the ordinary catalog save runs.
 - Save overall catalog changes with `Save Catalog`.
 - In `Pricing` → `Proposal Details`, set `Business time zone` to a valid IANA value
   such as `America/Chicago`, then save the catalog. Revenue timing uses this

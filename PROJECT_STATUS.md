@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 14, 2026
+Last updated: August 19, 2026
 
 ## Current Production Release
 
@@ -71,6 +71,21 @@ Last updated: August 14, 2026
   transactionally revalidates Firestore evidence before binding the organization,
   provisioning order, and immutable receipt. No production dry-run or apply has
   been performed.
+- A ninth source-only checkpoint materially implements the QuotePilot Package
+  Workspace on the existing `Library -> Packages` route without changing the
+  package persistence contract or quote-pricing authority. Catalog Admin now
+  presents a stable-ID package navigator, selected-package overview, recorded
+  cost/contribution/margin evidence, deterministic health with one next action,
+  current-inclusion-first composition groups, reviewed Apply/Cancel searchable
+  inclusion selectors, readiness-gated activation, selected-package revert,
+  dependency-aware confirmed delete, and one in-flow staged save bar on that
+  tab. Mobile uses a compact package switcher, collapsible Health, and a full-
+  viewport selector. Package pricing remains per person, inclusions remain optional
+  and selected-at-$0 only when a staff user explicitly chooses them in Quote
+  Builder, managed-menu mutations remain separate from the ordinary catalog
+  save, and all changes still persist only through the existing catalog save
+  path. This is source/local evidence only: no hosted admin-role acceptance,
+  production deployment, or human acceptance is claimed.
 - A fourth source-only checkpoint adds canonical owner/admin Team access
   authority. The same administrator operations surface now exposes an in-flow,
   exact-email role review with current role, consequence, do-nothing outcome,
@@ -496,6 +511,18 @@ route evidence are complete.
   payout readiness, and deterministic security review. This is source/local
   evidence only and made no provider or cloud request.
 
+- The QuotePilot Package Workspace source slice passes 45 of 45 focused package
+  model, pricing parity, catalog save-state, static presentation, staged
+  selector, activation, dependency-review, switch, and revert suites. A fresh
+  local real-route browser audit passes at 390, 768, and 1440 pixels with zero
+  Axe violations, zero document/workspace overflow, no visible target below 44
+  pixels, correct mobile/desktop navigation modes, full-viewport mobile selector
+  focus, Escape cancellation/focus restoration, Apply staging, dirty package
+  switching, activation blocking, and non-mutating dependency review. The local
+  production build and environment check also pass. This is source/local
+  evidence only; authenticated hosted admin/sales behavior, production-data
+  correctness, deployment, and human acceptance remain open.
+
 - The Ambient zero-dead-click release contract now runs as a dedicated step in
   the protected Playwright CI lane with the production presentation flags and
   operational staffing explicitly disabled. A fail-closed `lane:quick` policy
@@ -505,13 +532,12 @@ route evidence are complete.
   3,518-test unit lane, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. After the operational Staff/invitation and Pingram source slices,
-  the current quote-builder candidate measures 2,899,957 / 391,901 bytes for
-  compatibility and 3,825,917 / 391,901 for Ambient. The exact temporary ceilings
-  are 2,906,982 and 3,826,220 aggregate bytes respectively, retaining only the
-  previously observed per-profile CI offsets; both use the 391,901-byte
-  largest-chunk ceiling. App Check provider code is excluded while its browser
-  flag is off. This remains an explicit temporary exception
+  build steps. The exact staged Package Workspace candidate measures 2,940,874 /
+  387,248 bytes for compatibility and 3,840,948 / 387,248 bytes for Ambient. The
+  compatibility ceiling remains 2,964,327 bytes; the Ambient temporary ceiling
+  is 3,841,251 bytes, retaining only the existing 303-byte CI offset. Both keep
+  the 391,901-byte largest-chunk ceiling. App Check provider code is excluded
+  while its browser flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
   human acceptance, and rollback evidence remain open.
@@ -624,10 +650,9 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The workspace, owner-SMS, and quote-builder candidate uses named per-graph
-   temporary ceilings: 2,906,982 bytes for compatibility and 3,826,220 bytes
-   for Ambient, each
-   retaining only its previously observed runner offset above the measured
+9. The exact staged Package Workspace candidate uses a 2,964,327-byte
+   compatibility ceiling and a 3,841,251-byte Ambient ceiling. The Ambient
+   ceiling retains only the existing 303-byte runner offset above the measured
    candidate. Exact-SHA CI confirmation is still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.

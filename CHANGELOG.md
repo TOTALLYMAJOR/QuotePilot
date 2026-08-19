@@ -8,6 +8,33 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Added the source/local QuotePilot Package Workspace MVP to `Library ->
+  Packages`. Catalog Admin now uses a stable-ID package navigator, a selected
+  package overview with price/cost/contribution/margin evidence, deterministic
+  package health and one next action, progressive inclusion selectors that
+  stage searchable/category-filtered multi-selection behind explicit Apply or
+  Cancel instead of permanent checkbox matrices, readiness-gated activation,
+  a selected-package revert action, dependency-aware confirmed delete, and one
+  in-flow staged save bar instead of duplicate or content-covering save buttons
+  on that tab. Mobile uses a compact package switcher, collapsible Health, and
+  a full-viewport selection sheet. The existing
+  package contract, per-person pricing, selected-at-$0 inclusion behavior,
+  catalog revision fencing, and managed-menu separation are unchanged. The
+  supporting pure `packageWorkspaceModel` and parity fixtures remain in place,
+  and focused tests cover package switching, staged selectors, activation,
+  dependency review, native navigation semantics, and last-saved package
+  reverts. Fresh local real-route browser checks at 390, 768, and 1440 pixels
+  pass with zero Axe violations, zero document/workspace overflow, and no
+  visible target below 44 pixels; hosted roles, deployment, production data,
+  and human acceptance remain separate.
+- Recalibrated only the Ambient temporary bundle ceiling for the exact
+  staged Package Workspace candidate. Isolated local production builds measure
+  2,940,874 / 387,248 bytes for compatibility and 3,840,948 / 387,248 bytes for
+  Ambient. The 2,964,327-byte compatibility ceiling remains unchanged; the
+  Ambient ceiling moves to 3,841,251 bytes, retaining only the existing 303-byte
+  CI offset. The 391,901-byte largest-chunk limit is unchanged, and the active
+  exception still requires optimization or an explicitly reviewed clean-main
+  baseline before it can close.
 - Recast the public QuotePilot landing page as a cinematic, viewport-paced
   story: the existing commercial now runs as a muted full-bleed film layer,
   major sections align as native scroll-snap chapters, all product screen

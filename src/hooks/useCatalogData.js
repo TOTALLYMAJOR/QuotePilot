@@ -14,6 +14,13 @@ import {
   isCatalogPricingConfirmationCurrent
 } from "../lib/catalogPricingConfirmation";
 import {
+  addonWriteShape,
+  normalizeAddonStaffRole,
+  normalizePricingType,
+  packageWriteShape,
+  rentalWriteShape
+} from "../lib/catalogWriteShapes";
+import {
   getOrganizationCollectionRef,
   getOrganizationSubDocRef,
   resolveOrganizationId
@@ -107,20 +114,6 @@ function blockedCatalog() {
   });
 }
 
-function normalizePricingType(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (raw === "per_person" || raw === "per_item" || raw === "per_event") {
-    return raw;
-  }
-  return "per_event";
-}
-
-function normalizeAddonStaffRole(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (raw === "server" || raw === "chef" || raw === "bartender") return raw;
-  return "";
-}
-
 function normalizeMenuSectionsFromEvent(categories = [], items = []) {
   const itemLookup = new Map();
   items.forEach((item) => {
@@ -207,60 +200,6 @@ async function loadFromFirebaseByOrganization(organizationId = "") {
       rentals: Object.fromEntries(rentSnap.docs.map((item) => [item.id, fingerprint(item.data())])),
       settings: fingerprint(settingsSnap.data())
     }
-  };
-}
-
-// Cost fields are optional, staff-only, and must preserve "not recorded" as
-// null rather than coercing it to 0 the way the always-present revenue
-// pppMinor/priceMinor fields do; a recorded $0 cost is a distinct, valid
-// input from silence, and margin must stay unavailable until costs exist.
-function toNullableMinor(value) {
-  if (value === "" || value === null || value === undefined) return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.round(n * 100) : null;
-}
-
-function packageWriteShape(item = {}) {
-  const stableIds = (value) => (Array.isArray(value) ? value : [])
-    .map((id) => String(id || "").trim())
-    .filter(Boolean)
-    .slice(0, 100);
-  return {
-    name: String(item.name || ""),
-    pppMinor: Math.round(Number(item.ppp || 0) * 100),
-    costPppMinor: toNullableMinor(item.costPpp),
-    includedMenuItemIds: stableIds(item.includedMenuItemIds),
-    includedAddonIds: stableIds(item.includedAddonIds),
-    includedRentalIds: stableIds(item.includedRentalIds),
-    active: item.active !== false
-  };
-}
-
-function addonWriteShape(item = {}) {
-  const pricingType = normalizePricingType(item.pricingType || item.type || "per_person");
-  return {
-    name: String(item.name || ""),
-    pricingType,
-    type: pricingType,
-    priceMinor: Math.round(Number(item.price || 0) * 100),
-    costMinor: toNullableMinor(item.cost),
-    staffRole: normalizeAddonStaffRole(item.staffRole),
-    active: item.active !== false,
-    portalDecidable: item.portalDecidable === true
-  };
-}
-
-function rentalWriteShape(item = {}) {
-  const pricingType = normalizePricingType(item.pricingType || item.type || "per_item");
-  return {
-    name: String(item.name || ""),
-    priceMinor: Math.round(Number(item.price || 0) * 100),
-    costMinor: toNullableMinor(item.cost),
-    qtyPerGuests: Number(item.qtyPerGuests || 1),
-    pricingType,
-    type: pricingType,
-    active: item.active !== false,
-    portalDecidable: item.portalDecidable === true
   };
 }
 
