@@ -70,7 +70,8 @@ server gate may be enabled.
 |---|---|---|---|
 | `VITE_PILOT_CREATE_ENABLED` | browser build flag | off | Renders the intake canvas on the new-quote surface; purely presentational |
 | `INTENT_PARSER_ENABLED` | server env (future) | `false` | Allows the trusted parse callable to run at all |
-| `INTENT_PARSER_PROVIDER` | server env (future) | `none` | Provider selection; `none` keeps the callable deterministic-echo only |
+| `INTENT_PARSER_PROVIDER` | server env (future) | `none` | Provider selection; `none` keeps the callable deterministic-echo only, while `auto` uses the configured candidate order |
+| `INTENT_PARSER_MODEL` | server env (future) | per-provider default | Pinned model for explicit provider mode, or a comma-separated `provider:model` candidate order in `auto` mode |
 
 Enabling the browser flag is not a deployment or acceptance decision.
 Enabling the server gate additionally requires Secret Manager binding,

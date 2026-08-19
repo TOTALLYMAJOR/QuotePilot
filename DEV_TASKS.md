@@ -93,6 +93,28 @@ Only open work belongs here. Current operational truth lives in
   gate; live-mode account creation, charges, payouts, refunds, disputes,
   tax/accounting promotion, and production enablement require separate evidence
   and approval.
+- Sequence the next Connect and commercial-access rollout as four governed
+  slices, in order. Slice 1: ship one owner-first Sandbox onboarding path from
+  the landing page and staff workspace with the existing recent-auth, same-tab
+  handoff, recovery-first return, and capability-status contracts. Keep the
+  recommendation fixed to direct charges, full Stripe Dashboard access, Stripe
+  fee collection, and Stripe negative-balance liability until a later reviewed
+  commercial change says otherwise.
+- Slice 2: separate `connected account health` from `payment routing active`.
+  A connected Sandbox account may exist, refresh, and recover without changing
+  buyer-access, deposit, or final-balance behavior. Add explicit manual
+  activation, readiness, rollback, and audit-receipt states before any payment
+  rail may route to a connected account.
+- Slice 3: build one canonical commercial control plane for buyer-access
+  receipts, discounts, referrals, post-purchase access, and recovery. Signed
+  provider events and server-owned receipts remain the only authority for
+  payment, entitlement, and email/reset outcomes; browser returns, URLs, and
+  polling may not activate access or imply delivery.
+- Slice 4: only after the control plane exists, expose tenant-authored tier,
+  circumstance-discount, and referral configuration. Resolve the launch policy
+  for one-time versus subscription access, upgrade/downgrade, refund/dispute
+  handling, tax treatment, anti-abuse limits, and receipt template ownership
+  before enabling any public commercial variation.
 
 ## P0 - Runtime-Gate Promotion
 
@@ -177,6 +199,31 @@ Only open work belongs here. Current operational truth lives in
   reversible one-tenant activation workflow. Dispatch it only after the exact
   Firebase all-scope deployment succeeds, retain its readback evidence, and do
   not interpret activation as provider delivery or staff acceptance.
+
+## P1 - QuotePilot Steward
+
+- Review and accept the proposed governed-copilot program in
+  `docs/STEWARD_PRD.md`, `docs/STEWARD_ADR.md`, `docs/STEWARD_UI_SPEC.md`,
+  `docs/STEWARD_DESIGN.md`, `docs/STEWARD_THREAT_MODEL.md`, and
+  `docs/STEWARD_WORK_PLAN.md`. Resolve the three threat-context questions before
+  final risk ranking or implementation approval.
+- Begin only with the read-only Difficult Question Desk shadow slice after the
+  pure packet, source, policy, semantic-validation, private-rule, redaction,
+  kill-switch, and adversarial-eval contracts pass. The model gets no tools and
+  no write, messaging, payment, browsing, or resource-discovery authority.
+- Keep every authoritative price, margin, staffing, production, catalog,
+  revision, and entitlement value outside model authority. Steward may prepare,
+  compare, explain, and stage an unsaved review; existing trusted paths alone
+  may import, save, approve, publish, send, book, charge, or reconcile.
+- Design the paid add-on on a separate Stripe Billing rail. Do not reuse quote
+  deposits, final balances, buyer access, Connect, their customer identities,
+  products, keys, webhooks, collections, or state machines. MVP has a hard
+  included allowance and no automatic overage.
+- Treat provider/project/model/data controls, retention, DPA/privacy terms,
+  Stripe test evidence, hosted role/tenant denial, production-data acceptance,
+  human review, and promotion approval as separate gates. Do not add Steward to
+  the Feature Matrix or User Manual until a discoverable role-safe capability
+  and its executable state evidence ship together.
 
 ## P1 - Workspace Design Follow-ups
 
