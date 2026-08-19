@@ -21,7 +21,9 @@ import {
   updateEventType,
   updateMenuItem
 } from "../lib/menuService";
+import { buildPackageWorkspaceCollectionModel } from "../lib/packageWorkspaceModel";
 import { useModalDialog } from "../hooks/useModalDialog";
+import PackageWorkspace from "./PackageWorkspace";
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -31,9 +33,9 @@ const EventTemplatesEditor = AMBIENT_UI_ENABLED
   ? lazy(() => import("./EventTemplatesEditor"))
   : null;
 
-// Same default-off gate as the staff-only margin strip in LiveBreakdown.jsx;
-// cost entry is only shown once a tenant has opted into the margin pilot,
-// since the fields do nothing on their own until that surface reads them.
+// The package workspace now reads package cost directly for readiness and margin
+// evidence. The remaining add-on and rental cost inputs stay under the margin
+// pilot gate until those surfaces use the values deterministically.
 const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
 );
@@ -169,6 +171,30 @@ export function removeCatalogRowWithInclusions(catalog = {}, key, index) {
   };
 }
 
+export function packageCatalogDependencySummary(catalog = {}, packageId = "", eventTemplates = null) {
+  const id = String(packageId || "").trim();
+  const settings = catalog?.settings || {};
+  const templates = Array.isArray(eventTemplates)
+    ? eventTemplates
+    : (Array.isArray(settings.eventTemplates) ? settings.eventTemplates : []);
+  const rules = Array.isArray(settings.upsellRules) ? settings.upsellRules : [];
+  if (!id) {
+    return { available: false, eventTemplateCount: 0, ruleCount: 0, total: 0 };
+  }
+  const eventTemplateCount = templates.filter((template) => (
+    String(template?.pkg || "").trim() === id
+  )).length;
+  const ruleCount = rules.filter((rule) => (
+    rule?.kind === "package" && String(rule?.targetId || "").trim() === id
+  )).length;
+  return {
+    available: true,
+    eventTemplateCount,
+    ruleCount,
+    total: eventTemplateCount + ruleCount
+  };
+}
+
 export function packageMenuItemReferences(packages = [], menuItemId = "") {
   const id = String(menuItemId || "").trim();
   if (!id) return [];
@@ -228,6 +254,10 @@ function buildJsonDrafts(catalog) {
     seasonalProfiles: JSON.stringify(settings.seasonalProfiles || [], null, 2),
     brandCrew: JSON.stringify(settings.brandCrew || [], null, 2)
   };
+}
+
+function cloneCatalogSnapshot(catalog = {}) {
+  return JSON.parse(JSON.stringify(catalog || {}));
 }
 
 function initialCatalogAdminTab(catalog) {
@@ -333,6 +363,7 @@ export function AdminCatalogView({
 }) {
   const embedded = presentation === "embedded";
   const [draft, setDraft] = useState(catalog);
+  const [savedCatalogSnapshot, setSavedCatalogSnapshot] = useState(() => cloneCatalogSnapshot(catalog));
   const [activeTab, setActiveTab] = useState(() => resolveCatalogAdminTab(catalog, initialTab));
   const [status, setStatus] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -340,6 +371,7 @@ export function AdminCatalogView({
   const [savedFingerprint, setSavedFingerprint] = useState(() =>
     catalogDraftFingerprint(catalog, buildJsonDrafts(catalog))
   );
+  const [selectedPackageId, setSelectedPackageId] = useState(() => String(catalog?.packages?.[0]?.id || "").trim());
   const [selectedEventType, setSelectedEventType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [menuEventTypes, setMenuEventTypes] = useState([]);
@@ -444,6 +476,22 @@ export function AdminCatalogView({
   const hasManagedMenuDraft = hasPendingMenuEditorDraft
     || Object.values(menuItemDirty).some((dirty) => dirty === true);
   const hasAnyUnsavedChanges = hasUnsavedChanges || hasManagedMenuDraft;
+  const packageWorkspace = buildPackageWorkspaceCollectionModel({
+    catalog: draft,
+    menuItems,
+    selectedPackageId
+  });
+  const packageDeletionSummary = (() => {
+    try {
+      return packageCatalogDependencySummary(
+        draft,
+        packageWorkspace.selectedPackageId,
+        parseEventTemplateDrafts(jsonDrafts.eventTemplates)
+      );
+    } catch {
+      return { available: false, eventTemplateCount: 0, ruleCount: 0, total: 0 };
+    }
+  })();
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") {
@@ -515,6 +563,7 @@ export function AdminCatalogView({
     };
     const nextJsonDrafts = buildJsonDrafts(catalog);
     setDraft(nextDraft);
+    setSavedCatalogSnapshot(cloneCatalogSnapshot(nextDraft));
     setJsonDrafts(nextJsonDrafts);
     setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
     if (!acceptedRevision || catalog?.error) {
@@ -736,6 +785,12 @@ export function AdminCatalogView({
     });
   }, [closeBlocked, hasAnyUnsavedChanges, onInteractionStateChange]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (selectedPackageId === packageWorkspace.selectedPackageId) return;
+    setSelectedPackageId(packageWorkspace.selectedPackageId);
+  }, [open, packageWorkspace.selectedPackageId, selectedPackageId]);
+
   const handleClose = () => {
     if (closeBlocked) {
       setStatus("Wait for the current catalog action to finish before closing.");
@@ -927,6 +982,9 @@ export function AdminCatalogView({
           : { id, name: "New Rental", pricingType: "per_item", type: "per_item", price: 0, cost: null, qtyPerGuests: 10, active: true };
 
     setDraft((prev) => ({ ...prev, [key]: [...prev[key], template] }));
+    if (key === "packages") {
+      setSelectedPackageId(id);
+    }
   };
 
   const removeRow = (key, index) => {
@@ -952,19 +1010,62 @@ export function AdminCatalogView({
     setStatus(`${label} removed. Dependent package inclusions, recommendation rules, and event-template defaults were removed too. Save catalog changes to persist.`);
   };
 
-  const togglePackageInclusion = (packageIndex, field, itemId, checked) => {
-    const id = String(itemId || "").trim();
+  const patchPackageField = (packageId, field, value) => {
+    const id = String(packageId || "").trim();
     if (!id) return;
-    setDraft((prev) => {
-      const packages = [...(prev.packages || [])];
-      const current = { ...(packages[packageIndex] || {}) };
-      const ids = new Set(Array.isArray(current[field]) ? current[field] : []);
-      if (checked) ids.add(id);
-      else ids.delete(id);
-      current[field] = [...ids];
-      packages[packageIndex] = current;
-      return { ...prev, packages };
-    });
+    setDraft((prev) => ({
+      ...prev,
+      packages: (Array.isArray(prev.packages) ? prev.packages : []).map((pkg) => (
+        String(pkg?.id || "").trim() === id
+          ? { ...pkg, [field]: value }
+          : pkg
+      ))
+    }));
+  };
+
+  const replacePackageInclusionIds = (packageId, field, nextIds) => {
+    const id = String(packageId || "").trim();
+    if (!id) return;
+    setDraft((prev) => ({
+      ...prev,
+      packages: (Array.isArray(prev.packages) ? prev.packages : []).map((pkg) => (
+        String(pkg?.id || "").trim() === id
+          ? { ...pkg, [field]: [...(Array.isArray(nextIds) ? nextIds : [])] }
+          : pkg
+      ))
+    }));
+  };
+
+  const deletePackageById = (packageId) => {
+    const id = String(packageId || "").trim();
+    const packageIndex = (Array.isArray(draft?.packages) ? draft.packages : [])
+      .findIndex((pkg) => String(pkg?.id || "").trim() === id);
+    if (packageIndex < 0) return;
+    removeRow("packages", packageIndex);
+  };
+
+  const revertPackageDraft = (packageId) => {
+    const id = String(packageId || "").trim();
+    if (!id) return;
+    const savedPackage = (Array.isArray(savedCatalogSnapshot?.packages) ? savedCatalogSnapshot.packages : [])
+      .find((pkg) => String(pkg?.id || "").trim() === id);
+    if (!savedPackage) {
+      setDraft((prev) => ({
+        ...prev,
+        packages: (Array.isArray(prev.packages) ? prev.packages : []).filter((pkg) => (
+          String(pkg?.id || "").trim() !== id
+        ))
+      }));
+      setStatus("Unsaved package removed from this draft.");
+      return;
+    }
+    setDraft((prev) => ({
+      ...prev,
+      packages: (Array.isArray(prev.packages) ? prev.packages : []).map((pkg) => (
+        String(pkg?.id || "").trim() === id ? { ...savedPackage } : pkg
+      ))
+    }));
+    setStatus(`${savedPackage.name || savedPackage.id || "Package"} reverted to the last saved catalog state.`);
   };
 
   const patchNumericSetting = (field, value) => {
@@ -1653,6 +1754,7 @@ export function AdminCatalogView({
       if (result.ok) {
         setCatalogRefreshRequired(false);
         setDraft(nextDraft);
+        setSavedCatalogSnapshot(cloneCatalogSnapshot(nextDraft));
         setSavedFingerprint(catalogDraftFingerprint(nextDraft, jsonDrafts));
         setStatus("Catalog saved.");
         pushToast("Catalog saved.", "success");
@@ -1716,6 +1818,7 @@ export function AdminCatalogView({
     );
   const hasActiveVisibleTab = visibleAdminTabs.some((tab) => tab.id === activeTab);
   const resolvedActiveTab = hasActiveVisibleTab ? activeTab : (visibleAdminTabs[0]?.id || "");
+  const packageWorkspaceActive = resolvedActiveTab === "packages" && !starterChoiceOnly;
   useEffect(() => {
     if (open && !hasActiveVisibleTab && resolvedActiveTab && activeTab !== resolvedActiveTab) {
       setActiveTab(resolvedActiveTab);
@@ -1736,9 +1839,11 @@ export function AdminCatalogView({
       confirmedInventoryLoadScopeRef.current = "";
       eventMenuLoadScopeRef.current = "";
       setDraft(pending.catalog);
+      setSavedCatalogSnapshot(cloneCatalogSnapshot(pending.catalog));
       const latestJsonDrafts = buildJsonDrafts(pending.catalog);
       setJsonDrafts(latestJsonDrafts);
       setSavedFingerprint(catalogDraftFingerprint(pending.catalog, latestJsonDrafts));
+      setSelectedPackageId(String(pending?.catalog?.packages?.[0]?.id || "").trim());
       setSelectedEventType(String(selectedEventTypeProp || "").trim());
       setSelectedCategory("");
       setMenuEventTypes([]);
@@ -1787,7 +1892,7 @@ export function AdminCatalogView({
             <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
               {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
             </span>
-            {!starterChoiceOnly && (
+            {!starterChoiceOnly && !packageWorkspaceActive && (
               <button
                 type="button"
                 className="cta"
@@ -1943,106 +2048,46 @@ export function AdminCatalogView({
         )}
 
         {resolvedActiveTab === "packages" && (
-          <Section title="Packages" onAdd={() => addRow("packages")}>
-          <p className="source-note">
-            Choose which catalog items the package price can cover. These items are not added to a quote automatically: the quote builder must select each one, and selected inclusions are charged $0.
-          </p>
-          <label className="admin-package-menu-filter">
-            Menu event type for package inclusions
-            <select
-              value={selectedEventType}
-              onChange={(event) => setManagedEventType(event.target.value)}
-              disabled={menuLoading}
-            >
-              <option value="">Choose event type</option>
-              {menuEventTypes.map((eventType) => (
-                <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-              ))}
-            </select>
-          </label>
-          <div className="admin-row admin-row-headings" aria-hidden="true">
-            <span>Package ID</span>
-            <span>Display Name</span>
-            <span>Price Per Person</span>
-            {PILOT_MARGINS_ENABLED && <span>Cost Per Person</span>}
-            <span>Active</span>
-            <span>Actions</span>
-          </div>
-          {draft.packages.map((item, i) => (
-            <div className="admin-package-editor" key={item.id}>
-              <div className="admin-row">
-                <input aria-label={`Package ${i + 1} ID`} value={item.id} disabled />
-                <input
-                  aria-label={`Package ${i + 1} name`}
-                  placeholder="Customer package name"
-                  value={item.name}
-                  onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)}
-                />
-                <input
-                  aria-label={`Package ${i + 1} price per person`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={item.ppp}
-                  onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))}
-                />
-                {PILOT_MARGINS_ENABLED && (
-                  <input
-                    aria-label={`Package ${i + 1} cost per person`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Not recorded"
-                    value={item.costPpp ?? ""}
-                    onChange={(e) => patchArrayItem("packages", i, "costPpp", e.target.value === "" ? null : Number(e.target.value))}
-                  />
-                )}
-                <label className="admin-inline-toggle">
-                  <span>Active</span>
-                  <input
-                    type="checkbox"
-                    aria-label={`Package ${i + 1} active`}
-                    checked={item.active !== false}
-                    onChange={(e) => patchArrayItem("packages", i, "active", e.target.checked)}
-                  />
-                </label>
-                <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
+          <>
+            <PackageWorkspace
+              workspace={packageWorkspace}
+              draftCatalog={draft}
+              savedCatalog={savedCatalogSnapshot}
+              selectedPackageId={packageWorkspace.selectedPackageId}
+              onSelectPackage={setSelectedPackageId}
+              onAddPackage={() => addRow("packages")}
+              onDeletePackage={deletePackageById}
+              onRevertPackage={revertPackageDraft}
+              onPatchPackageField={patchPackageField}
+              onReplacePackageInclusionIds={replacePackageInclusionIds}
+              menuItems={menuItems}
+              menuEventTypes={menuEventTypes}
+              menuCategories={menuCategories}
+              selectedEventType={selectedEventType}
+              onSelectEventType={setManagedEventType}
+              menuLoading={menuLoading}
+              marginsEnabled
+              packageDeletionSummary={packageDeletionSummary}
+            />
+            <div className="package-workspace-savebar">
+              <div>
+                <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
+                  {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
+                </span>
+                <small>Saving persists the whole catalog draft. Package edits stay staged until this save runs.</small>
               </div>
-              <div className="package-inclusion-editor" aria-label={`${item.name || `Package ${i + 1}`} inclusions`}>
-                {[
-                  ["includedMenuItemIds", "Menu items", menuItems],
-                  ["includedAddonIds", "Add-ons", draft.addons || []],
-                  ["includedRentalIds", "Rentals", draft.rentals || []]
-                ].map(([field, label, options]) => {
-                  const includedIds = new Set(item[field] || []);
-                  const availableOptions = options.filter((option) => (
-                    option.active !== false || includedIds.has(option.id)
-                  ));
-                  return (
-                    <fieldset key={field}>
-                      <legend>{label} available at no added charge</legend>
-                      {availableOptions.length === 0 ? (
-                        <small>{field === "includedMenuItemIds" ? "Choose an event type with menu items." : `No active ${label.toLowerCase()} available.`}</small>
-                      ) : availableOptions.map((option) => (
-                        <label key={option.id} className="admin-inline-toggle">
-                          <input
-                            type="checkbox"
-                            checked={includedIds.has(option.id)}
-                            onChange={(event) => togglePackageInclusion(i, field, option.id, event.target.checked)}
-                          />
-                          <span>
-                            {option.name}
-                            {option.active === false ? " (inactive — remove from this package before saving)" : ""}
-                          </span>
-                        </label>
-                      ))}
-                    </fieldset>
-                  );
-                })}
-              </div>
+              {(saving || hasUnsavedChanges) && (
+                <button
+                  type="button"
+                  className="cta"
+                  onClick={handleSave}
+                  disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
+                >
+                  {saving ? "Saving..." : "Save catalog changes"}
+                </button>
+              )}
             </div>
-          ))}
-          </Section>
+          </>
         )}
 
         {resolvedActiveTab === "addons" && (
@@ -2986,7 +3031,7 @@ export function AdminCatalogView({
               Refresh latest catalog
             </button>
           )}
-          {!starterChoiceOnly && (
+          {!starterChoiceOnly && !packageWorkspaceActive && (
             <button
               type="button"
               className="cta"

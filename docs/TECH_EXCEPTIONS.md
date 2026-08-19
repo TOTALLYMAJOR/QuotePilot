@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 14, 2026
+Last updated: August 19, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -88,6 +88,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   (`3,839,490 / 387,248`); the Ambient ceiling recalibrates to `3,853,000`
   with the largest chunk unchanged. Compatibility is unaffected (measured
   2,936,683, under its standing 2,964,327 ceiling).
+  The exact staged Package Workspace candidate measures 2,940,874 / 387,248
+  bytes for compatibility and 3,840,948 / 387,248 bytes for Ambient. The
+  compatibility ceiling remains 2,964,327 bytes; the newer main Ambient
+  ceiling remains 3,853,000 bytes. The largest-chunk ceiling remains 391,901
+  bytes, and no general growth headroom is added.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,

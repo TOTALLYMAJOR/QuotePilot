@@ -171,7 +171,7 @@ describe("Admin Catalog starter choice", () => {
     expect(html).not.toContain("Starter packs are available only during initial unconfirmed catalog setup.");
   });
 
-  test("package inclusions hide unavailable choices while keeping stale selections removable", () => {
+  test("package workspace defaults to current selections while keeping stale inclusions visible", () => {
     const html = renderCatalog({
       packages: [{
         id: "celebration",
@@ -188,10 +188,12 @@ describe("Admin Catalog starter choice", () => {
       settings: { pricingSetupConfirmed: true }
     });
 
-    expect(html).toContain("Active dessert");
+    expect(html).toContain("Add add-ons");
+    expect(html).not.toContain("Active dessert");
     expect(html).not.toContain("Unused retired dessert");
-    expect(html).toContain("Retired dessert (inactive — remove from this package before saving)");
-    expect(html).toContain("No active rentals available.");
+    expect(html).toContain("Retired dessert");
+    expect(html).toContain("Inactive");
+    expect(html).toContain("Nothing selected yet.");
   });
 
   test("removing add-ons or rentals also removes hidden package references", () => {

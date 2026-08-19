@@ -13,6 +13,25 @@ This changelog is backfilled from git history and will be maintained going forwa
   quote, so the workspace and its Activity & save health drawer are reachable
   without typing the address by hand. The route, its organization scoping, and
   its read-only boundaries are unchanged; only the way staff reach it is new.
+- Added the source/local QuotePilot Package Workspace MVP to `Library ->
+  Packages`. Catalog Admin now uses a stable-ID package navigator, a selected
+  package overview with price/cost/contribution/margin evidence, deterministic
+  package health and one next action, progressive inclusion selectors that
+  stage searchable/category-filtered multi-selection behind explicit Apply or
+  Cancel instead of permanent checkbox matrices, readiness-gated activation,
+  a selected-package revert action, dependency-aware confirmed delete, and one
+  in-flow staged save bar instead of duplicate or content-covering save buttons
+  on that tab. Mobile uses a compact package switcher, collapsible Health, and
+  a full-viewport selection sheet. The existing package contract, per-person
+  pricing, selected-at-$0 inclusion behavior, catalog revision fencing, and
+  managed-menu separation are unchanged. Focused tests cover package switching,
+  staged selectors, activation, dependency review, native navigation semantics,
+  and last-saved package reverts; hosted roles, deployment, production data, and
+  human acceptance remain separate.
+- Recorded the Package Workspace bundle measurements without lowering the newer
+  `main` Ambient ceiling: 2,940,874 / 387,248 bytes for compatibility and
+  3,840,948 / 387,248 bytes for Ambient remain below the existing 2,964,327 /
+  3,853,000 aggregate ceilings and 391,901-byte largest-chunk ceiling.
 
 ### Changed
 

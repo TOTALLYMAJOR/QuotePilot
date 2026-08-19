@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 13, 2026
+Last updated: August 19, 2026
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -182,6 +182,19 @@ Only open work belongs here. Current operational truth lives in
 
 Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
 
+- Run the next acceptance and governance pass for the materially implemented
+  QuotePilot Package Workspace in `Library -> Packages`: authenticated hosted
+  admin verification, sales-role denial/availability verification, production-
+  data review, rollback evidence, and moderated operator acceptance. Local
+  390/768/1440 responsive, Axe, overflow, target-size, staged-selection,
+  activation, dependency-review, dirty-switch, and revert proof is complete.
+  Preserve per-person pricing, selected-at-$0 inclusion behavior, catalog
+  revision fencing, managed-menu mutation separation, and missing-cost fail-
+  closed behavior.
+- Keep lifecycle persistence, event-type eligibility, minimums, staffing rules,
+  allowances/substitutions, customer preview, and package comparison behind
+  their separate Phase 5/6 approval gates. Do not let a menu-availability filter
+  imply package eligibility or Quote Builder authority.
 - Validate the materially implemented Ambient Library and first-class Event
   Templates surfaces on the immutable candidate with authenticated admin and
   sales roles, revision-conflict recovery, responsive layout, and rollback
