@@ -11,6 +11,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   Firebase staging or Vercel preview only; see the launch runbook)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Design system: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
+- Design principles: [docs/DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md)
 - Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Post-competitive destination design: [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md)
@@ -57,6 +59,12 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   selected quote's Staffing object. That authority has separate presentation,
   server, and exact-tenant gates and does not change quoted labor, pricing,
   booking, BEO, portal, payment, attendance, payroll, or readiness evidence.
+- `/app/quote-workspace` and `/app/quote-workspace-concept`: authenticated
+  admin/sales-only, read-only visual evaluation routes for the generated desktop/mobile
+  quote-workspace direction. They read the tenant's saved quote history,
+  perform no quote/provider mutation, and hand every edit or communication
+  action to the unchanged authoritative quote routes. `/app/quotes` remains
+  the immediate fallback during review.
 - `/app/messages`: temporary-flagged staff Event Messaging Station. Each
   conversation remains segregated by its canonical quote/event, the inbox
   watches up to 50 same-tenant quote documents ordered by their body-free
@@ -363,8 +371,10 @@ Optional:
   `costPpp` on the selected package, `cost` on each selected add-on,
   rental, and menu item (same pricing mode as its price), and
   `serverCostRate`/`chefCostRate`/`bartenderCostRate` in settings when
-  staff are quoted, with an optional `targetMarginPct` policy. Costs can be
-  recorded today through the Catalog Admin advanced JSON configuration.
+  staff are quoted, with an optional `targetMarginPct` policy. Costs are
+  recorded through Catalog Admin's pricing fields and summarized there for
+  coverage before save; the Proposal Composer mirrors the complete selected-line
+  result as staff-only Quote Pulse context.
   Anything missing makes margin explicitly unavailable with the missing
   pieces named — nothing is estimated; travel and tax are excluded from
   both sides, and costs never appear in any customer-facing projection.
@@ -387,7 +397,11 @@ Optional:
 - `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
   (server env, all dormant by default: `false` / `none` / per-provider
   default. The owner-approved model-assisted intake lane; providers
-  `openai` and `anthropic`. Enabling later requires creating the
+  `openai`, `anthropic`, or `auto`. `auto` uses a cheap-first
+  `provider:model` candidate order from `INTENT_PARSER_MODEL` or the
+  built-in defaults, trims the completion-token budget by request
+  complexity, and may escalate once to the next configured candidate.
+  Enabling later requires creating the
   `INTENT_PARSER_OPENAI_KEY` and/or `INTENT_PARSER_ANTHROPIC_KEY` secrets
   in Firebase Secret Manager and binding them to the parse callable when
   it ships with the CREATE integration; until every piece exists, parsing
@@ -1101,6 +1115,11 @@ that exact actor-attributed receipt to match the current revision; a boolean
 flag alone is not activation evidence. The validator checks every package,
 guided-selling, and event-template reference, including active availability,
 and rejects malformed pricing collections as a controlled precondition.
+Catalog Admin also owns proposal presentation defaults: a bounded document
+font scale, logo/monogram letterhead state, brand readiness, guided-rule
+coverage, and cost/margin coverage summaries. Trusted quote create/edit
+snapshots persist the chosen document font scale so proposal preview and PDF
+exports match the saved quote while cost and margin remain staff-only.
 Monetary amounts are persisted in integer minor units, with
 lossless legacy values migrated during server confirmation. Firebase quote creation and duplication use trusted
 callables that re-price from current tenant data and create the draft quote,

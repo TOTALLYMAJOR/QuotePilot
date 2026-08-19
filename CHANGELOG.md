@@ -7,7 +7,6 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Added
-
 - Added the source/local QuotePilot Package Workspace MVP to `Library ->
   Packages`. Catalog Admin now uses a stable-ID package navigator, a selected
   package overview with price/cost/contribution/margin evidence, deterministic
@@ -27,14 +26,59 @@ This changelog is backfilled from git history and will be maintained going forwa
   pass with zero Axe violations, zero document/workspace overflow, and no
   visible target below 44 pixels; hosted roles, deployment, production data,
   and human acceptance remain separate.
-- Recalibrated only the Ambient temporary bundle ceiling for the exact
-  staged Package Workspace candidate. Isolated local production builds measure
-  2,940,874 / 387,248 bytes for compatibility and 3,840,948 / 387,248 bytes for
-  Ambient. The 2,964,327-byte compatibility ceiling remains unchanged; the
-  Ambient ceiling moves to 3,841,251 bytes, retaining only the existing 303-byte
-  CI offset. The 391,901-byte largest-chunk limit is unchanged, and the active
-  exception still requires optimization or an explicitly reviewed clean-main
-  baseline before it can close.
+- Recalibrated the active graph-specific temporary bundle exception for the
+  complete combined source candidate, not the Package Workspace alone. Exact
+  local production builds measure 3,206,553 / 387,248 bytes for compatibility
+  and 3,887,673 / 387,248 bytes for Ambient; ceilings retain only the existing
+  7,025-byte and 303-byte CI offsets, and the 391,901-byte largest-chunk limit
+  is unchanged. Optimization or an explicitly reviewed clean-main baseline is
+  still required before the exception can close.
+- Added cheap-first auto routing to the dormant model-assisted CREATE intake
+  lane. `INTENT_PARSER_PROVIDER=auto` now lets `parseIntentDraft` choose from
+  a configured provider:model candidate order, estimate request complexity,
+  trim the completion-token budget per request, and perform at most one bounded
+  retry on provider failure or unreadable/empty output before returning the
+  same low-confidence review-only fact contract. The client boundary now
+  preserves provider/model/routing metadata for future audit or UI use, while
+  the existing six visible Model assist states remain unchanged.
+- Added catalog-owned proposal presentation controls and staff-only margin/cost
+  context across the quote workspace. Pricing admins can choose a bounded
+  proposal font scale, define/clear logo evidence, see brand readiness, review
+  guided-rule coverage, and see cost/margin data coverage before save. Trusted
+  quote creation/edit snapshots now persist the selected document font scale;
+  the Proposal Composer applies the saved brand/logo/monogram and font scale
+  to the client preview, adds a proposal-polish checklist, and shows recorded
+  cost, computed margin, and target-margin status only inside the staff Quote
+  Pulse when the existing margin gate has complete selected-line cost evidence.
+  PDF export uses the same saved font scale and letterhead fallback, while
+  customer-facing proposal artifacts still exclude cost and margin details.
+- Added an Activity & Save Health drawer to the connected quote workspace.
+  Persisted quote activity, snapshot freshness, last-saved evidence, lifecycle
+  status, and visible completeness gaps now share one keyboard- and mobile-safe
+  panel. The drawer remains read-only and hands final validation, availability,
+  pricing authority, permissions, version conflicts, and persistence back to
+  the existing quote editor; it never implies that a quote saved or was approved.
+- Added an authenticated admin/sales-only `/app/quote-workspace-concept` evaluation page that
+  translates the generated QuotePilot desktop and mobile references into a
+  responsive, read-only React workspace over the tenant's saved quote history.
+  The `/app/quote-workspace` alias exposes the same evaluation surface. The
+  existing quote list/detail/edit/message routes remain unchanged as the
+  immediate fallback and authoritative action destinations; the evaluation
+  surface performs no quote or provider mutation.
+- Repaired the cinematic landing header navigation by restoring its stacking
+  authority above the full-viewport story chapters and making the decorative
+  film layer non-interactive. The hero commercial and reduced-motion poster
+  now share a true black-and-white grade, and playback runs at a restrained
+  `0.72x` while retaining the existing play, pause, sound, caption, and
+  analytics contracts.
+- Turned the Proposal Composer's Quote Pulse into the draft explanation layer:
+  recent session activity is expanded by default, while a shared readiness
+  model lists every currently known client-side reason the draft cannot save,
+  including required event details, menu selection, unresolved review gates,
+  quote-load state, and governed Change Impact requirements. Both Ambient and
+  compatibility app graphs use the same presentation model, and the panel also
+  carries the latest draft notice. The existing submit handler remains the
+  authority for availability, server validation, pricing, and persistence.
 - Recast the public QuotePilot landing page as a cinematic, viewport-paced
   story: the existing commercial now runs as a muted full-bleed film layer,
   major sections align as native scroll-snap chapters, all product screen

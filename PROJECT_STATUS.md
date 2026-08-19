@@ -71,6 +71,22 @@ Last updated: August 19, 2026
   transactionally revalidates Firestore evidence before binding the organization,
   provisioning order, and immutable receipt. No production dry-run or apply has
   been performed.
+- A current source-only catalog/proposal checkpoint extends the Quote Composer
+  direction without adding customer commercial exposure: Catalog Admin owns a
+  bounded proposal document font scale, logo/monogram readiness, guided-rule
+  coverage, and cost/margin coverage summaries; trusted quote creation/edit
+  snapshots persist the selected font scale; Proposal Composer applies the
+  saved brand/font presentation, adds proposal-polish checks, and mirrors the
+  fail-closed selected-line margin calculation as staff-only Quote Pulse
+  context. PDF export uses the saved font scale and letterhead fallback.
+  Costs and margin remain absent from customer preview/export/portal artifacts.
+- A current source-only connected quote-workspace evaluation is available at
+  authenticated admin/sales-only `/app/quote-workspace` and
+  `/app/quote-workspace-concept`.
+  It reads the tenant's saved quote history, presents bounded completeness and
+  save-health evidence, and hands edits or communication back to the existing
+  authoritative quote routes. It performs no quote/provider mutation and has
+  no hosted-role, production-data, deployment, or human-acceptance evidence.
 - A ninth source-only checkpoint materially implements the QuotePilot Package
   Workspace on the existing `Library -> Packages` route without changing the
   package persistence contract or quote-pricing authority. Catalog Admin now
@@ -528,16 +544,16 @@ route evidence are complete.
   operational staffing explicitly disabled. A fail-closed `lane:quick` policy
   check protects the command, flags, workflow bindings, enabled-control mapping,
   and zero-rate assertion. Local proof passes 24 focused monitor/runtime/policy
-  tests, the 1-of-1 Chromium-admin release-gate case, the current 301-file /
-  3,518-test unit lane, capability-surfacing check,
+  tests, the 1-of-1 Chromium-admin release-gate case, the current 340-file /
+  3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. The exact staged Package Workspace candidate measures 2,940,874 /
-  387,248 bytes for compatibility and 3,840,948 / 387,248 bytes for Ambient. The
-  compatibility ceiling remains 2,964,327 bytes; the Ambient temporary ceiling
-  is 3,841,251 bytes, retaining only the existing 303-byte CI offset. Both keep
-  the 391,901-byte largest-chunk ceiling. App Check provider code is excluded
-  while its browser flag is off. This remains an explicit temporary exception
+  build steps. The current combined source candidate measures 3,206,553 /
+  387,248 bytes for compatibility and 3,887,673 / 387,248 for Ambient. The
+  temporary ceilings are 3,213,578 and 3,887,976 aggregate bytes respectively,
+  retaining only the previously observed per-profile CI offsets; both keep the
+  391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
+  flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
   human acceptance, and rollback evidence remain open.
@@ -650,9 +666,9 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The exact staged Package Workspace candidate uses a 2,964,327-byte
-   compatibility ceiling and a 3,841,251-byte Ambient ceiling. The Ambient
-   ceiling retains only the existing 303-byte runner offset above the measured
+9. The combined workspace candidate uses named per-graph temporary ceilings:
+   3,213,578 bytes for compatibility and 3,887,976 bytes for Ambient, each
+   retaining only its previously observed runner offset above the measured
    candidate. Exact-SHA CI confirmation is still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.
@@ -674,6 +690,10 @@ route evidence are complete.
     deployment until the isolated staging resources, trusted authority
     publisher, App Check enforcement/consumption, exact runtime identities, and
     hosted negative/replay evidence are separately reviewed.
+15. Steward remains a proposed, unimplemented program. Do not add provider,
+    billing, storage, callable, or user-facing authority until the owner answers
+    the three threat-context questions and accepts or revises the PRD, ADR, and
+    threat model. Planning documents are not implementation or launch evidence.
 
 ## Current Focus
 
@@ -695,15 +715,17 @@ route evidence are complete.
    denial matrix.
 7. Complete the bundle-exception closure path and continue `functions.config()`
    migration planning.
-7. Define and review an exact-SHA non-production acceptance profile for the
+8. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any
    all-positive attestation or production-intent merge.
-8. For Stripe Connect, review and apply the isolated staging foundation before
+9. For Stripe Connect, review and apply the isolated staging foundation before
    activating any runtime: reconcile exact database/IAM/egress/service-account
    identities, establish the trusted authority publisher, register and observe
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
+10. Review the Steward threat-context questions and proposed governance pack;
+    keep runtime implementation blocked until those owner decisions are recorded.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

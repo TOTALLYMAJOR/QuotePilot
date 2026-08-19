@@ -25,11 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has an exact temporary 2,964,327-byte
-  aggregate and 391,901-byte largest-chunk ceiling (recalibrated for the
-  Proposal Composer quote-builder candidate plus the first Live planning and
-  Staff People presentation slice). The production-equivalent
-  Ambient graph has a separate temporary 3,841,251-byte aggregate ceiling and
+- The current compatibility graph has a temporary 3,213,578-byte aggregate
+  and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
+  graph has a separate temporary 3,887,976-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -56,11 +54,10 @@ Threshold policy:
   2,963,542 / 391,901 bytes for compatibility and 3,749,888 / 391,901 for
   Ambient. The shared shell and Now visual-system pass measures 2,964,327 /
   391,901 bytes for compatibility and 3,750,363 / 391,901 for Ambient.
-  The exact staged Package Workspace candidate measures 2,940,874 / 387,248
-  bytes for compatibility and 3,840,948 / 387,248 bytes for Ambient.
-  Compatibility remains below its existing 2,964,327-byte ceiling; the Ambient
-  ceiling is 3,841,251 bytes, retaining only the previously observed 303-byte
-  CI offset. The 391,901-byte largest-chunk ceiling is unchanged.
+  The current combined source candidate measures 3,206,553 / 387,248 bytes for
+  compatibility and 3,887,673 / 387,248 bytes for Ambient. Its profile ceilings
+  retain only the previously observed 7,025-byte and 303-byte CI offsets; the
+  recalibration is not general product-growth headroom.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

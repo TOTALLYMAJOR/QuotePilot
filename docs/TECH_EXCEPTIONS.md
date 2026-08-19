@@ -29,7 +29,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   bytes, largest chunk unchanged) recalibrate compatibility to an absolute
   ceiling of 2,964,327 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
-  temporarily capped at 3,841,251 aggregate bytes and the same 391,901-byte
+  temporarily capped at 3,827,245 aggregate bytes and the same 391,901-byte
   largest-chunk ceiling (measured 3,750,363 local Ambient bytes is under that
   standing ceiling).
 - Exception type: `perf-threshold-temp`
@@ -82,12 +82,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   The catalog onboarding recovery hotfix adds 1,025 Ambient aggregate bytes in
   CI (`3,827,245 / 391,901`) for the hosted setup, manual, import, and bypass
   paths; the largest chunk remains unchanged.
-  The exact staged Package Workspace candidate measures 2,940,874 / 387,248
-  bytes for compatibility and 3,840,948 / 387,248 bytes for Ambient. The
-  compatibility ceiling remains 2,964,327 bytes; the Ambient ceiling is
-  3,841,251 bytes, preserving only the existing 303-byte CI offset. The
-  largest-chunk ceiling remains 391,901 bytes, and no general growth headroom
-  is added.
+  The current combined source candidate, including the Package Workspace,
+  proposal presentation, read-only quote-workspace concept, and adjacent
+  workspace changes, measures 3,206,553 / 387,248 bytes for compatibility and
+  3,887,673 / 387,248 bytes for Ambient. The temporary ceilings are therefore
+  3,213,578 and 3,887,976 aggregate bytes respectively, retaining only the
+  already observed 7,025-byte compatibility and 303-byte Ambient CI offsets.
+  The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
+  recalibration, not a claim that the Package Workspace alone caused the
+  increase and not general growth headroom.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,

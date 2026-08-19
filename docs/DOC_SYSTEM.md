@@ -76,6 +76,8 @@ as separate claims.
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
+| Workspace visual system and interaction contracts | `docs/DESIGN_SYSTEM.md` | The canonical staff-workspace visual grammar, motion, hierarchy, and scoped Ambient/customer extensions. |
+| Product design principles and review lens | `docs/DESIGN_PRINCIPLES.md` | The review rubric for copy, hierarchy, story, incentive, and CTA decisions; surface-specific design docs may extend it but should not contradict it. |
 | Package Workspace product and implementation program | `docs/PACKAGE_WORKSPACE.md` | Entry point for the QuotePilot Package Workspace audit, PRD, UI specification, ADR, technical design, and phased plan. Current implementation truth remains in the Feature Matrix; operational proof remains in `PROJECT_STATUS.md`. |
 | Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | The clean-main baseline lives in `docs/performance/bundle-budget.json`; any active temporary absolute ceilings live separately in `docs/performance/bundle-exception.json` and must match that baseline exactly. |
 | Backend-to-interface capability contracts | `docs/capability-surfacing-contracts.json` | Machine-checked structural traceability; current release evidence remains in `PROJECT_STATUS.md`. |

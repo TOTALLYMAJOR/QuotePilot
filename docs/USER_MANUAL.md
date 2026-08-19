@@ -1167,6 +1167,10 @@ unchanged.
   such as `America/Chicago`, then save the catalog. Revenue timing uses this
   tenant-owned calendar context and fails closed when it is blank or invalid;
   the browser's local clock does not become Revenue Autopilot authority.
+- In `Pricing` → `Proposal Details`, choose `Proposal font size`: Compact,
+  Standard, or Large. This bounded setting is stored on future trusted quote
+  create/edit snapshots and controls the Proposal Composer client preview and
+  PDF export text scale. It does not change quote pricing or rewrite old PDFs.
 - In `Pricing` → `Your Customer-facing Brand`, choose Midnight Amber,
   Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
   select `Save catalog changes` to persist the six existing brand colors for
@@ -1174,6 +1178,11 @@ unchanged.
   palette. A theme save uses the same catalog revision check as every other
   settings save and does not replace package, fee, tax, deposit, travel, or
   staffing values.
+- Upload or clear the customer-facing logo in the same brand section. When no
+  logo is defined, QuotePilot uses a monogram fallback in the admin preview,
+  Proposal Composer, and PDF letterhead rather than inventing another image.
+  Brand readiness calls out logo, business name, document font, and contact
+  evidence before save.
 - For a new blank tenant, open `Starter Packs` and apply Wedding & events,
   Corporate drop-off, BBQ / Southern, or Church & community. This stages a
   complete draft immediately and opens the populated menu; there is no second
@@ -1920,7 +1929,11 @@ structuring keeps working exactly the same. When it is on, model
 suggestions appear in their own list and every one requires your explicit
 Confirm before it touches the draft — the model never fills the form,
 never prices, and never saves. Anything the model could not read is
-quoted back for you to read yourself.
+quoted back for you to read yourself. Administrators may pin one provider
+or use an internal `auto` route that tries the configured cheaper-first
+provider:model order and may retry once when the first attempt is
+unreadable or unavailable; this routing detail never changes the review-
+only boundary.
 
 ## Memory assist in CREATE
 
@@ -1944,6 +1957,9 @@ cost rates and a target margin % policy in Pricing & Quote Defaults. Blank alway
 means the cost has not been recorded; it is never treated as $0, since an
 entered $0 and an unrecorded cost are different facts.
 
+The Pricing tab summarizes active catalog cost coverage, staff-cost coverage,
+target-margin policy, and representative missing records before save.
+
 The live pricing rail's margin strip computes margin only once every
 selected revenue line has a matching recorded cost. Any gap names the exact
 missing pieces instead of estimating. Once a target margin is recorded, a
@@ -1952,6 +1968,11 @@ point-and-dollar gap; meeting or beating the target stays a calm inline
 note, not a card — advisor cards appear only where there is something to
 decide. Costs are staff-only catalog data and never reach any
 customer-facing projection.
+
+The Proposal Composer uses the same fail-closed margin model in Quote Pulse:
+recorded cost, computed margin, target-margin status, and missing-cost examples
+are visible to staff only. The client preview and exported proposal receive
+brand/logo/font presentation, never internal cost or margin data.
 
 Catalog Admin's save flow — ready, saving, a confirmed conflict
 (reconciliation), a saved-but-unconfirmed revision (uncertain), a clean
