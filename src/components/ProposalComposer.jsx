@@ -199,6 +199,9 @@ function ClientPreviewDialog({
     || "Your catering team";
   const brandTagline = String(settings.brandTagline || "").trim();
   const brandLogoUrl = normalizeBrandLogoUrl(settings.brandLogoUrl);
+  const proposalIntroTitle = String(settings.proposalIntroTitle || "").trim();
+  const proposalIntroMessage = String(settings.proposalIntroMessage || "").trim();
+  const proposalClosingMessage = String(settings.proposalClosingMessage || "").trim();
   const fontPreference = documentFontPreference || normalizeProposalDocumentFontScale(settings.documentFontScale);
   const included = [
     "Menu",
@@ -244,6 +247,8 @@ function ClientPreviewDialog({
               .filter(Boolean)
               .join(" · ") || "Date and venue to be confirmed"}
           </p>
+          {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
+          {proposalIntroMessage ? <p className="pc-preview-copy">{proposalIntroMessage}</p> : null}
           <hr className="pc-rule" />
           <p className="pc-eyebrow">Your experience</p>
           <h3 className="pc-preview-sub">{experience.title}</h3>
@@ -270,6 +275,13 @@ function ClientPreviewDialog({
           <ul className="pc-preview-included">
             {included.map((item) => <li key={item}>{item}</li>)}
           </ul>
+          {proposalClosingMessage ? (
+            <>
+              <hr className="pc-rule" />
+              <p className="pc-eyebrow">Closing note</p>
+              <p className="pc-preview-copy">{proposalClosingMessage}</p>
+            </>
+          ) : null}
         </div>
         <p className="pc-preview-note">
           Draft preview. The final proposal is generated when this quote is saved and sent.
@@ -700,6 +712,9 @@ export default function ProposalComposer({
   const brandName = String(settings?.brandName || settings?.organizationName || "Your catering team").trim()
     || "Your catering team";
   const brandLogoUrl = normalizeBrandLogoUrl(settings?.brandLogoUrl);
+  const proposalIntroTitle = String(settings?.proposalIntroTitle || "").trim();
+  const proposalIntroMessage = String(settings?.proposalIntroMessage || "").trim();
+  const proposalClosingMessage = String(settings?.proposalClosingMessage || "").trim();
   const selectedTemplate = (eventTemplates || []).find(
     (template) => String(template?.id || "") === String(form.eventTemplateId || "")
   );
@@ -1116,6 +1131,12 @@ export default function ProposalComposer({
           ) : null}
 
           <article className="pc-sheet">
+            {proposalIntroTitle || proposalIntroMessage ? (
+              <section className="pc-proposal-note" aria-label="Proposal introduction">
+                {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
+                {proposalIntroMessage ? <p className="pc-proposal-note-copy">{proposalIntroMessage}</p> : null}
+              </section>
+            ) : null}
             <section className="pc-section" aria-labelledby="pc-sec-event">
               <SectionHeading id="pc-sec-event" eyebrow="Event" complete={completeness.event} />
               <div className="pc-inline-grid">
@@ -1775,6 +1796,12 @@ export default function ProposalComposer({
                 </p>
               </details>
             </section>
+            {proposalClosingMessage ? (
+              <section className="pc-proposal-note pc-proposal-note-closing" aria-label="Proposal closing message">
+                <p className="pc-eyebrow">Closing note</p>
+                <p className="pc-proposal-note-copy">{proposalClosingMessage}</p>
+              </section>
+            ) : null}
           </article>
 
           {changeImpactSurface}

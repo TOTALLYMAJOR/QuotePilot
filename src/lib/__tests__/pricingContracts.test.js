@@ -129,8 +129,25 @@ describe("pricingContracts", () => {
         serviceFeePct: 0.18,
         taxRate: 0.1,
         depositPct: 0.3,
+        serverCostRate: 14,
+        chefCostRate: 22,
+        bartenderCostRate: 18,
+        targetMarginPct: 0.42,
         pricingSettingsVersion: 7,
         pricingSettingsUpdatedAtISO: "2026-03-20T00:00:00.000Z"
+      },
+      catalog: {
+        packages: [{ id: "premium", name: "Premium", costPpp: 13 }],
+        addons: [{ id: "dessert", name: "Dessert", pricingType: "per_person", cost: 1.5 }],
+        rentals: [{ id: "linens", name: "Linens", pricingType: "per_item", cost: 18 }],
+        settings: {
+          menuSections: [
+            {
+              id: "mains",
+              items: [{ id: "ribs", name: "Ribs", pricingType: "per_event", cost: 90 }]
+            }
+          ]
+        }
       },
       organizationId: "org-alpha",
       quoteId: "q-200",
@@ -150,6 +167,30 @@ describe("pricingContracts", () => {
     expect(snapshot.grandTotal).toBeCloseTo(5349.24, 6);
     expect(snapshot.deposit.amount).toBeCloseTo(1604.772, 6);
     expect(snapshot.lineItems.length).toBeGreaterThanOrEqual(9);
+    expect(snapshot.commercialSnapshot).toMatchObject({
+      package: {
+        id: "premium",
+        unitCostPpp: 13,
+        extendedCost: 1170
+      },
+      addons: [
+        expect.objectContaining({ id: "dessert", extendedCost: 135 })
+      ],
+      rentals: [
+        expect.objectContaining({ id: "linens", extendedCost: 90 })
+      ],
+      menuItems: [
+        expect.objectContaining({ id: "ribs", extendedCost: 90 })
+      ],
+      staffing: {
+        roles: [
+          expect.objectContaining({ id: "servers", extendedCost: 0 }),
+          expect.objectContaining({ id: "chefs", extendedCost: 0 }),
+          expect.objectContaining({ id: "bartenders", extendedCost: 72 })
+        ]
+      },
+      targetMarginPct: 0.42
+    });
     expect(snapshot.rulesSnapshot.reason).toBe("phase2-contract-test");
     expect(snapshot.rulesSnapshot.pricingSettingsVersion).toBe(7);
     expect(snapshot.rulesSnapshot.pricingSettingsUpdatedAtISO).toBe("2026-03-20T00:00:00.000Z");

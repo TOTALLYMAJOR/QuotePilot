@@ -478,6 +478,31 @@ export async function exportQuoteProposal(quote, {
     fontSize
   });
 
+  if (meta.proposalIntroTitle || meta.proposalIntroMessage) {
+    const introLines = meta.proposalIntroMessage
+      ? doc.splitTextToSize(meta.proposalIntroMessage, maxWidth - 20)
+      : [];
+    const introHeight = Math.max(28, (introLines.length * 14) + (meta.proposalIntroTitle ? 24 : 16));
+    ensureSpace(introHeight + 12);
+    doc.setFillColor(...palette.cream);
+    doc.roundedRect(left, y - 8, maxWidth, introHeight, 8, 8, "F");
+    doc.setDrawColor(...palette.line);
+    doc.roundedRect(left, y - 8, maxWidth, introHeight, 8, 8);
+    doc.setTextColor(...palette.gold);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize(9));
+    if (meta.proposalIntroTitle) {
+      doc.text(meta.proposalIntroTitle.toUpperCase(), left + 10, y + 4);
+    }
+    if (introLines.length) {
+      doc.setTextColor(...palette.text);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(fontSize(10));
+      doc.text(introLines, left + 10, y + (meta.proposalIntroTitle ? 18 : 6));
+    }
+    y += introHeight + 8;
+  }
+
   section("Client and Event");
   row("Responsible Party / Client", proposal.customer.name);
   row("Organization", proposal.customer.organization || "-");
@@ -633,6 +658,23 @@ export async function exportQuoteProposal(quote, {
     doc.setTextColor(37, 25, 0);
     doc.text(meta.depositNotice, left + 4, y);
     y += 18;
+  }
+  if (meta.proposalClosingMessage) {
+    const closingLines = doc.splitTextToSize(meta.proposalClosingMessage, maxWidth - 12);
+    ensureSpace((closingLines.length * 14) + 28);
+    doc.setFillColor(...palette.cream);
+    doc.roundedRect(left, y - 8, maxWidth, (closingLines.length * 14) + 16, 8, 8, "F");
+    doc.setDrawColor(...palette.line);
+    doc.roundedRect(left, y - 8, maxWidth, (closingLines.length * 14) + 16, 8, 8);
+    doc.setTextColor(...palette.gold);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize(9));
+    doc.text("CLOSING NOTE", left + 10, y + 4);
+    doc.setTextColor(...palette.text);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontSize(10));
+    doc.text(closingLines, left + 10, y + 18);
+    y += (closingLines.length * 14) + 22;
   }
 
   y += 8;

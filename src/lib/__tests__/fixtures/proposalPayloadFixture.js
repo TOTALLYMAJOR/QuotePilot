@@ -97,6 +97,9 @@ export const proposalPayloadFixtureQuote = {
   },
   quoteMeta: {
     quotePreparedBy: "Alex Rivera",
+    proposalIntroTitle: "Tailored for your celebration",
+    proposalIntroMessage: "We built this proposal around a polished plated service, warm hospitality, and a menu that matches the Spring Gala setting.",
+    proposalClosingMessage: "If you'd like to refine the menu, timing, or service flow, reply and we will adjust the proposal together.",
     brandName: "Acme Events Catering",
     brandTagline: "Bold Southern Flavor",
     brandLogoUrl: "/brand/custom-logo.png",

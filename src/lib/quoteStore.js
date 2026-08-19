@@ -952,6 +952,9 @@ function buildPortalSnapshot(quoteId, quote) {
     },
     quoteMeta: {
       organizationName: quote.quoteMeta?.organizationName || "",
+      proposalIntroTitle: quote.quoteMeta?.proposalIntroTitle || "",
+      proposalIntroMessage: quote.quoteMeta?.proposalIntroMessage || "",
+      proposalClosingMessage: quote.quoteMeta?.proposalClosingMessage || "",
       brandName: quote.quoteMeta?.brandName || "",
       brandLogoUrl: quote.quoteMeta?.brandLogoUrl || "",
       brandPrimaryColor: quote.quoteMeta?.brandPrimaryColor || "",
@@ -1031,6 +1034,7 @@ function resolvePersistedPricingSnapshot({
   form = {},
   totals = {},
   settings = {},
+  catalog = null,
   selection = {},
   catalogSource = "",
   organizationId = "",
@@ -1040,13 +1044,32 @@ function resolvePersistedPricingSnapshot({
   ownerEmail = "",
   reason = ""
 } = {}) {
-  if (pricingSnapshot && typeof pricingSnapshot === "object") {
-    return normalizePricingOutput(pricingSnapshot);
-  }
+  const normalized = pricingSnapshot && typeof pricingSnapshot === "object"
+    ? normalizePricingOutput(pricingSnapshot)
+    : buildPricingSnapshotFromClientTotals({
+      form,
+      totals,
+      settings,
+      catalog,
+      selection,
+      organizationId,
+      quoteId,
+      quoteNumber,
+      actor: {
+        uid: ownerUid,
+        email: ownerEmail,
+        role: "sales"
+      },
+      reason: reason || `fallback_${catalogSource || "unknown"}`
+    });
+
+  if (normalized?.commercialSnapshot) return normalized;
+
   return buildPricingSnapshotFromClientTotals({
     form,
     totals,
     settings,
+    catalog,
     selection,
     organizationId,
     quoteId,
@@ -2902,6 +2925,7 @@ export async function submitQuote({
     form,
     totals,
     settings,
+    catalog,
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
@@ -3103,6 +3127,9 @@ export async function submitQuote({
     quoteMeta: {
       organizationName: settings?.organizationName || "",
       quotePreparedBy: settings?.quotePreparedBy || "",
+      proposalIntroTitle: settings?.proposalIntroTitle || "",
+      proposalIntroMessage: settings?.proposalIntroMessage || "",
+      proposalClosingMessage: settings?.proposalClosingMessage || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
       brandLogoUrl: normalizeBrandLogoUrl(settings?.brandLogoUrl),
@@ -3345,6 +3372,7 @@ export async function updateQuote({
     form,
     totals,
     settings,
+    catalog,
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
@@ -3515,6 +3543,9 @@ export async function updateQuote({
     quoteMeta: {
       organizationName: settings?.organizationName || "",
       quotePreparedBy: settings?.quotePreparedBy || "",
+      proposalIntroTitle: settings?.proposalIntroTitle || "",
+      proposalIntroMessage: settings?.proposalIntroMessage || "",
+      proposalClosingMessage: settings?.proposalClosingMessage || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
       brandLogoUrl: normalizeBrandLogoUrl(settings?.brandLogoUrl),
