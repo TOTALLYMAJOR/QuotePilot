@@ -1,5 +1,7 @@
 # Intent Intake ADR
 
+Last updated: 2026-08-20 14:47:39 CDT
+
 Status: Accepted architecture for phase-2 source implementation; every runtime
 lane is default-off
 Date: August 10, 2026

@@ -1,5 +1,7 @@
 # Architecture Decision: QuotePilot Steward as a Bounded Decision Compiler
 
+Last updated: 2026-08-20 14:47:39 CDT
+
 Status: Proposed
 Date: August 15, 2026
 Decision owner: QuotePilot owner

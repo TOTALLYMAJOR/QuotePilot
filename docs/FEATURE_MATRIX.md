@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: August 19, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or

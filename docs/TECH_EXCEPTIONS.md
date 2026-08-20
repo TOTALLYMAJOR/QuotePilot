@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 19, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 

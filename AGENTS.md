@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: 2026-08-20 14:10:10 CDT
+Last updated: 2026-08-20 14:47:39 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.

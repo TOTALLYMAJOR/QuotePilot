@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 19, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in

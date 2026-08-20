@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: August 19, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.

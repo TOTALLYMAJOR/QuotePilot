@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-20 14:10:10 CDT
+Last updated: 2026-08-20 14:47:39 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Preserved a supplied server-authoritative pricing snapshot when augmenting a
+  locally stored quote version with the new private commercial cost snapshot.
+  The augmentation now copies only `commercialSnapshot` from the client-side
+  catalog view and cannot downgrade pricing authority, totals, or line items to
+  `client_preview`.
 - Kept Proposal Composer inline fields usable when a mobile keyboard compresses
   the viewport. While the client email or another inline field is being edited,
   the sticky mobile Review quote bar now yields so it cannot cover the field's

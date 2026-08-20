@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-08-20 14:10:10 CDT
+Last updated: 2026-08-20 14:47:39 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
