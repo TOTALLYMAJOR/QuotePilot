@@ -1,5 +1,5 @@
-import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
-import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
+import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl.js";
+import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences.js";
 
 export const DEFAULT_PACKAGES = [
   { id: "classic", name: "Classic", ppp: 18, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
