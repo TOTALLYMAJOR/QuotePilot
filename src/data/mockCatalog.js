@@ -1,3 +1,6 @@
+import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl.js";
+import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences.js";
+
 export const DEFAULT_PACKAGES = [
   { id: "classic", name: "Classic", ppp: 18, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
   { id: "premium", name: "Premium", ppp: 24, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
@@ -368,9 +371,13 @@ export const DEFAULT_SETTINGS = {
   staffingRateTypes: DEFAULT_STAFFING_RATE_TYPES,
   defaultStaffingRateType: "standard",
   quotePreparedBy: "Sales Team",
+  proposalIntroTitle: "",
+  proposalIntroMessage: "",
+  proposalClosingMessage: "",
   brandName: "QuotePilot",
   brandTagline: "Quote-to-event operations by MBMApps",
   brandLogoUrl: "",
+  documentFontScale: "standard",
   brandPrimaryColor: "#c99334",
   brandAccentColor: "#f0d29a",
   brandDarkAccentColor: "#8d611a",
@@ -1142,9 +1149,15 @@ export function normalizeCatalog(raw) {
       staffingRateTypes,
       defaultStaffingRateType,
       quotePreparedBy: toTenantText(inputSettings, "quotePreparedBy", DEFAULT_SETTINGS.quotePreparedBy),
+      proposalIntroTitle: toTenantText(inputSettings, "proposalIntroTitle", "").slice(0, 160),
+      proposalIntroMessage: toTenantText(inputSettings, "proposalIntroMessage", "").slice(0, 1_200),
+      proposalClosingMessage: toTenantText(inputSettings, "proposalClosingMessage", "").slice(0, 1_200),
       brandName: toTenantText(inputSettings, "brandName", DEFAULT_SETTINGS.brandName),
       brandTagline: toTenantText(inputSettings, "brandTagline", DEFAULT_SETTINGS.brandTagline),
-      brandLogoUrl: toTenantText(inputSettings, "brandLogoUrl", DEFAULT_SETTINGS.brandLogoUrl),
+      brandLogoUrl: normalizeBrandLogoUrl(
+        toTenantText(inputSettings, "brandLogoUrl", DEFAULT_SETTINGS.brandLogoUrl)
+      ),
+      documentFontScale: normalizeProposalDocumentFontScale(rawSettings.documentFontScale).id,
       brandPrimaryColor: normalizeHexColor(inputSettings.brandPrimaryColor, tenantBrandFallbacks.brandPrimaryColor),
       brandAccentColor: normalizeHexColor(inputSettings.brandAccentColor, tenantBrandFallbacks.brandAccentColor),
       brandDarkAccentColor: normalizeHexColor(inputSettings.brandDarkAccentColor, tenantBrandFallbacks.brandDarkAccentColor),

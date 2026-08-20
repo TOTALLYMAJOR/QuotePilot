@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 16, 2026
+Last updated: 2026-08-20 15:58:46 CDT
 
 ## Current Production Release
 
@@ -78,6 +78,37 @@ Last updated: August 16, 2026
   transactionally revalidates Firestore evidence before binding the organization,
   provisioning order, and immutable receipt. No production dry-run or apply has
   been performed.
+- A current source-only catalog/proposal checkpoint extends the Quote Composer
+  direction without adding customer commercial exposure: Catalog Admin owns a
+  bounded proposal document font scale, logo/monogram readiness, guided-rule
+  coverage, and cost/margin coverage summaries; trusted quote creation/edit
+  snapshots persist the selected font scale; Proposal Composer applies the
+  saved brand/font presentation, adds proposal-polish checks, and mirrors the
+  fail-closed selected-line margin calculation as staff-only Quote Pulse
+  context. PDF export uses the saved font scale and letterhead fallback.
+  Costs and margin remain absent from customer preview/export/portal artifacts.
+- A current source-only connected quote-workspace evaluation is available at
+  authenticated admin/sales-only `/app/quote-workspace` and
+  `/app/quote-workspace-concept`.
+  It reads the tenant's saved quote history, presents bounded completeness and
+  save-health evidence, and hands edits or communication back to the existing
+  authoritative quote routes. It performs no quote/provider mutation and has
+  no hosted-role, production-data, deployment, or human-acceptance evidence.
+- A ninth source-only checkpoint materially implements the QuotePilot Package
+  Workspace on the existing `Library -> Packages` route without changing the
+  package persistence contract or quote-pricing authority. Catalog Admin now
+  presents a stable-ID package navigator, selected-package overview, recorded
+  cost/contribution/margin evidence, deterministic health with one next action,
+  current-inclusion-first composition groups, reviewed Apply/Cancel searchable
+  inclusion selectors, readiness-gated activation, selected-package revert,
+  dependency-aware confirmed delete, and one in-flow staged save bar on that
+  tab. Mobile uses a compact package switcher, collapsible Health, and a full-
+  viewport selector. Package pricing remains per person, inclusions remain optional
+  and selected-at-$0 only when a staff user explicitly chooses them in Quote
+  Builder, managed-menu mutations remain separate from the ordinary catalog
+  save, and all changes still persist only through the existing catalog save
+  path. This is source/local evidence only: no hosted admin-role acceptance,
+  production deployment, or human acceptance is claimed.
 - A fourth source-only checkpoint adds canonical owner/admin Team access
   authority. The same administrator operations surface now exposes an in-flow,
   exact-email role review with current role, consequence, do-nothing outcome,
@@ -503,21 +534,32 @@ route evidence are complete.
   payout readiness, and deterministic security review. This is source/local
   evidence only and made no provider or cloud request.
 
+- The QuotePilot Package Workspace source slice passes 45 of 45 focused package
+  model, pricing parity, catalog save-state, static presentation, staged
+  selector, activation, dependency-review, switch, and revert suites. A fresh
+  local real-route browser audit passes at 390, 768, and 1440 pixels with zero
+  Axe violations, zero document/workspace overflow, no visible target below 44
+  pixels, correct mobile/desktop navigation modes, full-viewport mobile selector
+  focus, Escape cancellation/focus restoration, Apply staging, dirty package
+  switching, activation blocking, and non-mutating dependency review. The local
+  production build and environment check also pass. This is source/local
+  evidence only; authenticated hosted admin/sales behavior, production-data
+  correctness, deployment, and human acceptance remain open.
+
 - The Ambient zero-dead-click release contract now runs as a dedicated step in
   the protected Playwright CI lane with the production presentation flags and
   operational staffing explicitly disabled. A fail-closed `lane:quick` policy
   check protects the command, flags, workflow bindings, enabled-control mapping,
   and zero-rate assertion. Local proof passes 24 focused monitor/runtime/policy
-  tests, the 1-of-1 Chromium-admin release-gate case, the current 301-file /
-  3,518-test unit lane, capability-surfacing check,
+  tests, the 1-of-1 Chromium-admin release-gate case, the current 340-file /
+  3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. After the operational Staff/invitation and Pingram source slices,
-  the current quote-builder candidate measures 2,899,957 / 391,901 bytes for
-  compatibility and 3,825,917 / 391,901 for Ambient. The exact temporary ceilings
-  are 2,906,982 and 3,826,220 aggregate bytes respectively, retaining only the
-  previously observed per-profile CI offsets; both use the 391,901-byte
-  largest-chunk ceiling. App Check provider code is excluded while its browser
+  build steps. The current combined source candidate measures 3,206,553 /
+  387,248 bytes for compatibility and 3,887,673 / 387,248 for a prior local
+  Ambient build. The temporary ceilings are 3,215,097 and 3,899,524 aggregate
+  bytes respectively, pinned to the exact protected-Playwright graphs. Both keep the
+  391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
@@ -631,11 +673,10 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The workspace, owner-SMS, and quote-builder candidate uses named per-graph
-   temporary ceilings: 2,906,982 bytes for compatibility and 3,826,220 bytes
-   for Ambient, each
-   retaining only its previously observed runner offset above the measured
-   candidate. Exact-SHA CI confirmation is still required before merge, and
+9. The combined workspace candidate uses named per-graph temporary ceilings:
+   3,215,097 bytes for compatibility and 3,899,524 bytes for Ambient. Both
+   ceilings are the exact protected-Playwright production-flag graphs. Exact-SHA
+   CI confirmation is still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.
 10. `functions.config()` compatibility remains in source and must migrate before
@@ -656,6 +697,16 @@ route evidence are complete.
     deployment until the isolated staging resources, trusted authority
     publisher, App Check enforcement/consumption, exact runtime identities, and
     hosted negative/replay evidence are separately reviewed.
+15. Steward remains a proposed, unimplemented program. Do not add provider,
+    billing, storage, callable, or user-facing authority until the owner answers
+    the three threat-context questions and accepts or revises the PRD, ADR, and
+    threat model. Planning documents are not implementation or launch evidence.
+16. Production-only dependency audits are clean for the root app, default
+    Functions, and Connect Functions. The full root audit retains six high-
+    severity development-tool findings through Lighthouse CI's current
+    Puppeteer/`extract-zip` chain; npm's available remediation is a breaking
+    Lighthouse CI downgrade and must not be forced without a reviewed tooling
+    migration.
 
 ## Current Focus
 
@@ -677,15 +728,17 @@ route evidence are complete.
    denial matrix.
 7. Complete the bundle-exception closure path and continue `functions.config()`
    migration planning.
-7. Define and review an exact-SHA non-production acceptance profile for the
+8. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any
    all-positive attestation or production-intent merge.
-8. For Stripe Connect, review and apply the isolated staging foundation before
+9. For Stripe Connect, review and apply the isolated staging foundation before
    activating any runtime: reconcile exact database/IAM/egress/service-account
    identities, establish the trusted authority publisher, register and observe
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
+10. Review the Steward threat-context questions and proposed governance pack;
+    keep runtime implementation blocked until those owner decisions are recorded.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

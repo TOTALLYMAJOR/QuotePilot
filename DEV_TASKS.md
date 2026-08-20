@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 13, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -93,6 +93,28 @@ Only open work belongs here. Current operational truth lives in
   gate; live-mode account creation, charges, payouts, refunds, disputes,
   tax/accounting promotion, and production enablement require separate evidence
   and approval.
+- Sequence the next Connect and commercial-access rollout as four governed
+  slices, in order. Slice 1: ship one owner-first Sandbox onboarding path from
+  the landing page and staff workspace with the existing recent-auth, same-tab
+  handoff, recovery-first return, and capability-status contracts. Keep the
+  recommendation fixed to direct charges, full Stripe Dashboard access, Stripe
+  fee collection, and Stripe negative-balance liability until a later reviewed
+  commercial change says otherwise.
+- Slice 2: separate `connected account health` from `payment routing active`.
+  A connected Sandbox account may exist, refresh, and recover without changing
+  buyer-access, deposit, or final-balance behavior. Add explicit manual
+  activation, readiness, rollback, and audit-receipt states before any payment
+  rail may route to a connected account.
+- Slice 3: build one canonical commercial control plane for buyer-access
+  receipts, discounts, referrals, post-purchase access, and recovery. Signed
+  provider events and server-owned receipts remain the only authority for
+  payment, entitlement, and email/reset outcomes; browser returns, URLs, and
+  polling may not activate access or imply delivery.
+- Slice 4: only after the control plane exists, expose tenant-authored tier,
+  circumstance-discount, and referral configuration. Resolve the launch policy
+  for one-time versus subscription access, upgrade/downgrade, refund/dispute
+  handling, tax treatment, anti-abuse limits, and receipt template ownership
+  before enabling any public commercial variation.
 
 ## P0 - Runtime-Gate Promotion
 
@@ -139,6 +161,11 @@ Only open work belongs here. Current operational truth lives in
 
 ## P0 - Release and Security Controls
 
+- Resolve the six remaining high-severity development-tool audit findings in
+  the current Lighthouse CI/Puppeteer/`extract-zip` chain through a reviewed
+  upstream upgrade or replacement. Root-app, default-Functions, and Connect-
+  Functions production-only audits are clean. Do not use `npm audit fix
+  --force`: its current proposal is a breaking Lighthouse CI downgrade.
 - Migrate the Firebase production workflow from deprecated `FIREBASE_TOKEN`
   authentication to Application Default Credentials or GitHub workload identity
   federation without committing a service-account key.
@@ -178,19 +205,58 @@ Only open work belongs here. Current operational truth lives in
   Firebase all-scope deployment succeeds, retain its readback evidence, and do
   not interpret activation as provider delivery or staff acceptance.
 
+## P1 - QuotePilot Steward
+
+- Review and accept the proposed governed-copilot program in
+  `docs/STEWARD_PRD.md`, `docs/STEWARD_ADR.md`, `docs/STEWARD_UI_SPEC.md`,
+  `docs/STEWARD_DESIGN.md`, `docs/STEWARD_THREAT_MODEL.md`, and
+  `docs/STEWARD_WORK_PLAN.md`. Resolve the three threat-context questions before
+  final risk ranking or implementation approval.
+- Begin only with the read-only Difficult Question Desk shadow slice after the
+  pure packet, source, policy, semantic-validation, private-rule, redaction,
+  kill-switch, and adversarial-eval contracts pass. The model gets no tools and
+  no write, messaging, payment, browsing, or resource-discovery authority.
+- Keep every authoritative price, margin, staffing, production, catalog,
+  revision, and entitlement value outside model authority. Steward may prepare,
+  compare, explain, and stage an unsaved review; existing trusted paths alone
+  may import, save, approve, publish, send, book, charge, or reconcile.
+- Design the paid add-on on a separate Stripe Billing rail. Do not reuse quote
+  deposits, final balances, buyer access, Connect, their customer identities,
+  products, keys, webhooks, collections, or state machines. MVP has a hard
+  included allowance and no automatic overage.
+- Treat provider/project/model/data controls, retention, DPA/privacy terms,
+  Stripe test evidence, hosted role/tenant denial, production-data acceptance,
+  human review, and promotion approval as separate gates. Do not add Steward to
+  the Feature Matrix or User Manual until a discoverable role-safe capability
+  and its executable state evidence ship together.
+
 ## P1 - Workspace Design Follow-ups
 
 Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
 
+- Run the next acceptance and governance pass for the materially implemented
+  QuotePilot Package Workspace in `Library -> Packages`: authenticated hosted
+  admin verification, sales-role denial/availability verification, production-
+  data review, rollback evidence, and moderated operator acceptance. Local
+  390/768/1440 responsive, Axe, overflow, target-size, staged-selection,
+  activation, dependency-review, dirty-switch, and revert proof is complete.
+  Preserve per-person pricing, selected-at-$0 inclusion behavior, catalog
+  revision fencing, managed-menu mutation separation, and missing-cost fail-
+  closed behavior.
+- Keep lifecycle persistence, event-type eligibility, minimums, staffing rules,
+  allowances/substitutions, customer preview, and package comparison behind
+  their separate Phase 5/6 approval gates. Do not let a menu-availability filter
+  imply package eligibility or Quote Builder authority.
 - Validate the materially implemented Ambient Library and first-class Event
   Templates surfaces on the immutable candidate with authenticated admin and
   sales roles, revision-conflict recovery, responsive layout, and rollback
   evidence before describing AIUI-20 as complete.
 - Continue reducing the production-equivalent Ambient aggregate from the
-  measured 3,715,051 JavaScript bytes toward the standard clean-main budget.
-  The largest chunk is now 391,901 bytes, and
-  CI independently enforces detected compatibility and Ambient graph profiles;
-  the temporary 3,715,354 Ambient aggregate ceiling has no growth headroom.
+  measured 3,887,673 JavaScript bytes toward the standard clean-main budget.
+  The measured largest chunk is 387,248 bytes under the retained 391,901-byte
+  ceiling, and CI independently enforces detected compatibility and Ambient
+  graph profiles; the temporary 3,887,976 Ambient aggregate ceiling retains
+  only the existing 303-byte runner offset and has no general growth headroom.
   Close the exception through optimization or an explicit reviewed clean-main
   recalibration before AIUI-48 retirement or Ambient production promotion.
 - Add inline editing on the event workspace quote page: editable fields with

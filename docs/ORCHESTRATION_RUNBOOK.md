@@ -1,11 +1,41 @@
 # Orchestration Runbook
 
-Last updated: July 27, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
 
 ## Local Command Profiles
+Generate a task plan before reading or editing broadly:
+```bash
+npm run plan:task -- --task "Fix Proposal Composer mobile overflow" \
+  --files src/components/ProposalComposer.jsx,src/components/proposalComposer.css
+```
+
+Machine-readable runner handoff:
+```bash
+npm run plan:task -- --task "Review Firestore role authority" \
+  --files firestore.rules,src/lib/authClient.js --json
+```
+
+The output recommends a model and reasoning effort, but the external runner
+must apply that selection before task execution. In a dirty worktree, always
+pass `--files`; omitting it intentionally classifies every staged, unstaged,
+and untracked path. Runner-specific model aliases may be supplied through
+`TASK_MODEL_ECONOMY`, `TASK_MODEL_BALANCED`, and `TASK_MODEL_FRONTIER`.
+
+At a material update or completion, rerun the same bounded plan with the
+matching lifecycle phase:
+```bash
+npm run plan:task -- --task "Fix Proposal Composer mobile overflow" \
+  --files src/components/ProposalComposer.jsx,src/components/proposalComposer.css \
+  --phase complete --json
+```
+
+Copy `lifecycle.recordedAt` into the completion report. Governed documentation
+uses the local `Last updated: YYYY-MM-DD HH:MM:SS TZ` header instead; the docs
+gate requires that value to advance whenever the document changes.
+
 Preflight:
 ```bash
 npm run lane:quick

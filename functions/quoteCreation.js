@@ -19,6 +19,7 @@ const CUSTOMER_EMAIL_CLAIM_SOURCES = new Set([
   "legacy_repair"
 ]);
 const CRM_PROVIDERS = new Set(["webhook", "webhook_bridge", "hubspot", "salesforce"]);
+const PROPOSAL_DOCUMENT_FONT_SCALE_IDS = new Set(["compact", "standard", "large"]);
 const APPROVED_STRIPE_PAYMENT_HOSTS = new Set([
   "checkout.stripe.com",
   "buy.stripe.com"
@@ -320,6 +321,32 @@ function numberInRange(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEG
 
 function integerInRange(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEGER) {
   return Math.round(numberInRange(value, fallback, min, max));
+}
+
+function normalizeProposalDocumentFontScale(value) {
+  const normalized = text(value, 32).toLowerCase();
+  return PROPOSAL_DOCUMENT_FONT_SCALE_IDS.has(normalized) ? normalized : "standard";
+}
+
+function normalizeBrandLogoUrl(value) {
+  const raw = text(value, 1_000);
+  if (!raw) return "";
+  if (raw.startsWith("/") && !raw.startsWith("//") && !/[\s<>"'`]/u.test(raw)) {
+    return raw;
+  }
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return "";
+    if (["google.com", "www.google.com", "images.google.com"].includes(parsed.hostname.toLowerCase())) {
+      const direct = text(parsed.searchParams.get("imgurl"), 1_000);
+      if (!direct) return "";
+      const directUrl = new URL(direct);
+      return directUrl.protocol === "https:" ? directUrl.toString() : "";
+    }
+    return parsed.toString();
+  } catch {
+    return "";
+  }
 }
 
 function boundedBoolean(value, fallback = false) {
@@ -689,15 +716,191 @@ function buildTotals(pricing) {
   };
 }
 
+function commercialNullableNumber(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function commercialRoundedMoney(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function commercialPricingMode(value, fallback = "per_event") {
+  const normalized = text(value, 32).toLowerCase() || fallback;
+  return new Set(["per_person", "per_item", "per_event"]).has(normalized)
+    ? normalized
+    : fallback;
+}
+
+function commercialMenuCatalogItems(catalog) {
+  return (catalog?.settings?.menuSections || []).flatMap((section) => section?.items || []);
+}
+
+function commercialResolveQuantity(item, guests) {
+  const explicit = Number(item?.quantity);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.max(1, Math.round(explicit));
+  const qtyPerGuests = Number(item?.qtyPerGuests);
+  if (Number.isFinite(qtyPerGuests) && qtyPerGuests > 0) {
+    return Math.max(1, Math.ceil(guests / qtyPerGuests));
+  }
+  return 1;
+}
+
+function commercialBuildLineSnapshot(snapshot, catalogItems, guests, defaultMode) {
+  const id = sanitizeIdentifier(snapshot?.id);
+  if (!id) return null;
+  const catalogItem = (Array.isArray(catalogItems) ? catalogItems : []).find(
+    (item) => sanitizeIdentifier(item?.id) === id
+  );
+  const name = text(snapshot?.name || catalogItem?.name, 200) || id;
+  const quantity = commercialResolveQuantity(snapshot, guests);
+  if (!catalogItem) {
+    return {
+      id,
+      name,
+      pricingMode: commercialPricingMode(snapshot?.pricingMode || snapshot?.pricingType || snapshot?.type, defaultMode),
+      quantity,
+      unitCost: null,
+      extendedCost: null,
+      missingReason: "catalog_item_unavailable"
+    };
+  }
+  const pricingMode = commercialPricingMode(
+    catalogItem?.pricingType || catalogItem?.type || snapshot?.pricingMode || snapshot?.pricingType || snapshot?.type,
+    defaultMode
+  );
+  const unitCost = commercialNullableNumber(catalogItem?.cost);
+  const extendedCost = unitCost === null
+    ? null
+    : pricingMode === "per_person"
+      ? commercialRoundedMoney(unitCost * guests)
+      : pricingMode === "per_item"
+        ? commercialRoundedMoney(unitCost * quantity)
+        : commercialRoundedMoney(unitCost);
+  return {
+    id,
+    name,
+    pricingMode,
+    quantity,
+    unitCost,
+    extendedCost,
+    missingReason: unitCost === null ? "cost_missing" : ""
+  };
+}
+
+function commercialBuildStaffRoleSnapshot({ id, label, count, rate, units }) {
+  const safeCount = Math.max(0, Math.round(Number(count) || 0));
+  const safeUnits = Math.max(0, Number(units) || 0);
+  const unitCostRate = commercialNullableNumber(rate);
+  return {
+    id,
+    label,
+    count: safeCount,
+    units: safeUnits,
+    unitCostRate,
+    extendedCost: safeCount > 0 && unitCostRate !== null
+      ? commercialRoundedMoney(unitCostRate * safeCount * safeUnits)
+      : safeCount > 0
+        ? null
+        : 0,
+    missingReason: safeCount > 0 && unitCostRate === null ? "cost_rate_missing" : ""
+  };
+}
+
+function buildCommercialSnapshotForQuote({
+  form = {},
+  pricingEvent = {},
+  catalog = null,
+  settings = {},
+  packageSelection = {},
+  addonSnapshots = [],
+  rentalSnapshots = [],
+  menuItemsSnapshot = []
+} = {}) {
+  if (!isRecord(catalog) || !isRecord(settings)) return null;
+  const guests = Math.min(400, Math.max(0, integerInRange(pricingEvent.guests, 0, 0, 100_000)));
+  const catalogPackage = (catalog?.packages || []).find(
+    (item) => sanitizeIdentifier(item?.id) === sanitizeIdentifier(packageSelection?.id)
+  );
+  const packageCostPpp = commercialNullableNumber(catalogPackage?.costPpp);
+  const staffingChargeMode = text(settings?.staffingChargeMode, 32).toLowerCase() === "per_event_per_staff"
+    ? "per_event_per_staff"
+    : "per_hour";
+  const hourFactor = staffingChargeMode === "per_event_per_staff"
+    ? 1
+    : Math.max(1, numberInRange(pricingEvent.hours || form.hours, 0, 0, 72) || 1);
+
+  return {
+    version: "commercial-snapshot-v1",
+    capturedAtISO: new Date().toISOString(),
+    boundary: "Saved commercial snapshots are staff-only recorded cost evidence. They are never customer output, accounting truth, authoritative repricing, or permission to charge, accept, book, or settle.",
+    guestCount: guests,
+    targetMarginPct: commercialNullableNumber(settings?.targetMarginPct),
+    package: {
+      id: sanitizeIdentifier(packageSelection?.id),
+      name: text(packageSelection?.name || catalogPackage?.name, 200) || "Package",
+      unitCostPpp: packageCostPpp,
+      extendedCost: packageSelection?.id && packageCostPpp !== null
+        ? commercialRoundedMoney(packageCostPpp * guests)
+        : null,
+      missingReason: packageSelection?.id && packageCostPpp === null
+        ? (catalogPackage ? "cost_missing" : "catalog_item_unavailable")
+        : ""
+    },
+    addons: addonSnapshots
+      .map((item) => commercialBuildLineSnapshot(item, catalog?.addons || [], guests, "per_event"))
+      .filter(Boolean),
+    rentals: rentalSnapshots
+      .map((item) => commercialBuildLineSnapshot(item, catalog?.rentals || [], guests, "per_item"))
+      .filter(Boolean),
+    menuItems: menuItemsSnapshot
+      .map((item) => commercialBuildLineSnapshot(item, commercialMenuCatalogItems(catalog), guests, "per_event"))
+      .filter(Boolean),
+    staffing: {
+      enabled: settings?.staffingLaborEnabled !== false,
+      chargeMode: staffingChargeMode,
+      hours: Math.max(1, numberInRange(pricingEvent.hours || form.hours, 0, 0, 72) || 1),
+      roles: [
+        commercialBuildStaffRoleSnapshot({
+          id: "servers",
+          label: "serverCostRate",
+          count: pricingEvent.servers,
+          rate: settings?.serverCostRate,
+          units: hourFactor
+        }),
+        commercialBuildStaffRoleSnapshot({
+          id: "chefs",
+          label: "chefCostRate",
+          count: pricingEvent.chefs,
+          rate: settings?.chefCostRate,
+          units: hourFactor
+        }),
+        commercialBuildStaffRoleSnapshot({
+          id: "bartenders",
+          label: "bartenderCostRate",
+          count: pricingEvent.bartenders,
+          rate: settings?.bartenderCostRate,
+          units: hourFactor
+        })
+      ]
+    }
+  };
+}
+
 function buildQuoteMeta(settings, form, pricing) {
   const rules = isRecord(pricing.rulesSnapshot) ? pricing.rulesSnapshot : {};
   const provider = text(settings.crmProvider, 40).toLowerCase();
   return {
     organizationName: text(settings.organizationName, 160),
     quotePreparedBy: text(settings.quotePreparedBy, 160),
+    proposalIntroTitle: text(settings.proposalIntroTitle, 160),
+    proposalIntroMessage: text(settings.proposalIntroMessage, 1_200),
+    proposalClosingMessage: text(settings.proposalClosingMessage, 1_200),
     brandName: text(settings.brandName, 160),
     brandTagline: text(settings.brandTagline, 240),
-    brandLogoUrl: text(settings.brandLogoUrl, 1_000),
+    brandLogoUrl: normalizeBrandLogoUrl(settings.brandLogoUrl),
+    documentFontScale: normalizeProposalDocumentFontScale(settings.documentFontScale),
     brandPrimaryColor: text(settings.brandPrimaryColor, 32),
     brandAccentColor: text(settings.brandAccentColor, 32),
     brandDarkAccentColor: text(settings.brandDarkAccentColor, 32),
@@ -927,8 +1130,11 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
     },
     quoteMeta: {
       organizationName: text(quoteMeta.organizationName, 160),
+      proposalIntroTitle: text(quoteMeta.proposalIntroTitle, 160),
+      proposalIntroMessage: text(quoteMeta.proposalIntroMessage, 1_200),
+      proposalClosingMessage: text(quoteMeta.proposalClosingMessage, 1_200),
       brandName: text(quoteMeta.brandName, 160),
-      brandLogoUrl: text(quoteMeta.brandLogoUrl, 1_000),
+      brandLogoUrl: normalizeBrandLogoUrl(quoteMeta.brandLogoUrl),
       brandPrimaryColor: text(quoteMeta.brandPrimaryColor, 32),
       brandAccentColor: text(quoteMeta.brandAccentColor, 32),
       brandDarkAccentColor: text(quoteMeta.brandDarkAccentColor, 32),
@@ -1485,8 +1691,23 @@ function buildTrustedQuoteCreationDocuments({
   const laborRateSnapshot = isRecord(rules.laborRateSnapshot)
     ? rules.laborRateSnapshot
     : {};
+  const pricingWithCommercialSnapshot = pricing.commercialSnapshot && isRecord(pricing.commercialSnapshot)
+    ? pricing
+    : {
+      ...pricing,
+      commercialSnapshot: buildCommercialSnapshotForQuote({
+        form,
+        pricingEvent,
+        catalog,
+        settings,
+        packageSelection,
+        addonSnapshots,
+        rentalSnapshots,
+        menuItemsSnapshot
+      })
+    };
   const totals = buildTotals(pricing);
-  const quoteMeta = buildQuoteMeta(isRecord(settings) ? settings : {}, form, pricing);
+  const quoteMeta = buildQuoteMeta(isRecord(settings) ? settings : {}, form, pricingWithCommercialSnapshot);
   const validityDays = quoteMeta.quoteValidityDays;
   const portalValidityDays = Math.min(validityDays, PORTAL_VALIDITY_DAYS_MAX);
   const expiresAtISO = addDaysISO(createdAtISO, validityDays);
@@ -1631,7 +1852,7 @@ function buildTrustedQuoteCreationDocuments({
       logs: []
     },
     totals,
-    pricing,
+    pricing: pricingWithCommercialSnapshot,
     quoteMeta,
     status: "draft",
     source: text(catalogSource, 120),
@@ -1657,7 +1878,7 @@ function buildTrustedQuoteCreationDocuments({
     reason: versionMeta.reason,
     createdBy: versionMeta.createdBy,
     status: "draft",
-    pricing,
+    pricing: pricingWithCommercialSnapshot,
     snapshot: {
       id,
       ...quote

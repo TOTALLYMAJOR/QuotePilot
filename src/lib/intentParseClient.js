@@ -16,6 +16,8 @@ export async function parseIntentDraftWithModel({ organizationId, text }) {
     return {
       ok: true,
       provider: String(payload.provider || ""),
+      model: String(payload.model || ""),
+      routing: payload?.routing && typeof payload.routing === "object" ? payload.routing : null,
       facts: Array.isArray(payload.facts) ? payload.facts : [],
       notes: Array.isArray(payload.notes) ? payload.notes : []
     };

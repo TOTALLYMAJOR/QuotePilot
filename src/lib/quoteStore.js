@@ -29,6 +29,8 @@ import {
 } from "./pricingContracts";
 import { resolveCrmProvider } from "./crmAdapters";
 import { buildQuoteEmailPayload } from "./proposalPayload";
+import { normalizeBrandLogoUrl } from "./brandLogoUrl";
+import { normalizeProposalDocumentFontScale } from "./proposalDocumentPreferences";
 import {
   APPROVAL_ACTION_IDS,
   APPROVAL_STATES,
@@ -950,6 +952,9 @@ function buildPortalSnapshot(quoteId, quote) {
     },
     quoteMeta: {
       organizationName: quote.quoteMeta?.organizationName || "",
+      proposalIntroTitle: quote.quoteMeta?.proposalIntroTitle || "",
+      proposalIntroMessage: quote.quoteMeta?.proposalIntroMessage || "",
+      proposalClosingMessage: quote.quoteMeta?.proposalClosingMessage || "",
       brandName: quote.quoteMeta?.brandName || "",
       brandLogoUrl: quote.quoteMeta?.brandLogoUrl || "",
       brandPrimaryColor: quote.quoteMeta?.brandPrimaryColor || "",
@@ -1029,6 +1034,7 @@ function resolvePersistedPricingSnapshot({
   form = {},
   totals = {},
   settings = {},
+  catalog = null,
   selection = {},
   catalogSource = "",
   organizationId = "",
@@ -1038,13 +1044,11 @@ function resolvePersistedPricingSnapshot({
   ownerEmail = "",
   reason = ""
 } = {}) {
-  if (pricingSnapshot && typeof pricingSnapshot === "object") {
-    return normalizePricingOutput(pricingSnapshot);
-  }
-  return buildPricingSnapshotFromClientTotals({
+  const buildClientPreview = () => buildPricingSnapshotFromClientTotals({
     form,
     totals,
     settings,
+    catalog,
     selection,
     organizationId,
     quoteId,
@@ -1056,6 +1060,19 @@ function resolvePersistedPricingSnapshot({
     },
     reason: reason || `fallback_${catalogSource || "unknown"}`
   });
+
+  if (!pricingSnapshot || typeof pricingSnapshot !== "object") {
+    return buildClientPreview();
+  }
+
+  const normalized = normalizePricingOutput(pricingSnapshot);
+  if (normalized.commercialSnapshot) return normalized;
+
+  const clientPreview = buildClientPreview();
+  return {
+    ...normalized,
+    commercialSnapshot: clientPreview.commercialSnapshot
+  };
 }
 
 async function syncPortalSnapshotFromQuoteDoc(quoteId, organizationId = "") {
@@ -2900,6 +2917,7 @@ export async function submitQuote({
     form,
     totals,
     settings,
+    catalog,
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
@@ -3101,9 +3119,13 @@ export async function submitQuote({
     quoteMeta: {
       organizationName: settings?.organizationName || "",
       quotePreparedBy: settings?.quotePreparedBy || "",
+      proposalIntroTitle: settings?.proposalIntroTitle || "",
+      proposalIntroMessage: settings?.proposalIntroMessage || "",
+      proposalClosingMessage: settings?.proposalClosingMessage || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
-      brandLogoUrl: settings?.brandLogoUrl || "",
+      brandLogoUrl: normalizeBrandLogoUrl(settings?.brandLogoUrl),
+      documentFontScale: normalizeProposalDocumentFontScale(settings?.documentFontScale).id,
       brandPrimaryColor: settings?.brandPrimaryColor || "",
       brandAccentColor: settings?.brandAccentColor || "",
       brandDarkAccentColor: settings?.brandDarkAccentColor || "",
@@ -3342,6 +3364,7 @@ export async function updateQuote({
     form,
     totals,
     settings,
+    catalog,
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
@@ -3512,9 +3535,13 @@ export async function updateQuote({
     quoteMeta: {
       organizationName: settings?.organizationName || "",
       quotePreparedBy: settings?.quotePreparedBy || "",
+      proposalIntroTitle: settings?.proposalIntroTitle || "",
+      proposalIntroMessage: settings?.proposalIntroMessage || "",
+      proposalClosingMessage: settings?.proposalClosingMessage || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
-      brandLogoUrl: settings?.brandLogoUrl || "",
+      brandLogoUrl: normalizeBrandLogoUrl(settings?.brandLogoUrl),
+      documentFontScale: normalizeProposalDocumentFontScale(settings?.documentFontScale).id,
       brandPrimaryColor: settings?.brandPrimaryColor || "",
       brandAccentColor: settings?.brandAccentColor || "",
       brandDarkAccentColor: settings?.brandDarkAccentColor || "",

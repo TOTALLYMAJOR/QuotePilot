@@ -6,6 +6,7 @@ import {
   AMBIENT_PRICING_PREVIEW_SCHEMA_VERSION,
   AMBIENT_SAVED_PRICING_MARGIN_MODEL,
   AMBIENT_SAVED_PRICING_MARGIN_SOURCE_LABEL,
+  AMBIENT_SAVED_PRICING_MARGIN_SNAPSHOT_SOURCE_LABEL,
   AmbientPricingPreviewError,
   buildAmbientPricingMarginContext,
   buildSavedAmbientPricingMargin,
@@ -680,6 +681,63 @@ describe("Ambient pricing margin context", () => {
 });
 
 describe("saved Pricing inspector margin", () => {
+  test("prefers the saved commercial snapshot when it exists on the quote", () => {
+    const result = buildSavedAmbientPricingMargin({
+      organizationId: ORGANIZATION_ID,
+      quote: quote({
+        totals: {
+          base: 1_200,
+          addons: 200,
+          rentals: 100,
+          menu: 150,
+          labor: 300,
+          serviceFee: 120,
+          total: 2_090,
+          deposit: 500
+        },
+        pricing: {
+          authority: "server_authoritative",
+          commercialSnapshot: {
+            version: "commercial-snapshot-v1",
+            guestCount: 100,
+            targetMarginPct: 0.45,
+            package: {
+              id: "basic",
+              name: "Basic",
+              unitCostPpp: 9,
+              extendedCost: 900,
+              missingReason: ""
+            },
+            addons: [],
+            rentals: [],
+            menuItems: [],
+            staffing: {
+              enabled: true,
+              roles: [
+                { id: "servers", label: "serverCostRate", count: 5, extendedCost: 250, missingReason: "" },
+                { id: "chefs", label: "chefCostRate", count: 2, extendedCost: 180, missingReason: "" },
+                { id: "bartenders", label: "bartenderCostRate", count: 1, extendedCost: 45, missingReason: "" }
+              ]
+            }
+          }
+        }
+      })
+    });
+
+    expect(result).toMatchObject({
+      modelId: AMBIENT_SAVED_PRICING_MARGIN_MODEL,
+      available: true,
+      revenue: 2_070,
+      cost: 1_375,
+      target: 0.45,
+      evidenceAuthority: "advisory_saved_cost_snapshot",
+      sourceLabel: AMBIENT_SAVED_PRICING_MARGIN_SNAPSHOT_SOURCE_LABEL,
+      sourceRevisionId: BASE_REVISION_ID,
+      boundary: AMBIENT_PRICING_MARGIN_BOUNDARY
+    });
+    expect(result.marginPct).toBeCloseTo((2070 - 1375) / 2070, 9);
+  });
+
   test("hydrates the exact saved form and preserves the canonical margin-presentation shape", () => {
     const evaluateMargin = vi.fn(({ totals }) => {
       const evaluated = canonicalMargin({ totals });

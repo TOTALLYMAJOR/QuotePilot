@@ -7,13 +7,16 @@ description: Maintain and evolve the React + Firebase catering quote wizard. Use
 
 ## Core Workflow
 1. Read `docs/DOC_SYSTEM.md`, `README.md`, `AGENTS.md`, and `PROJECT_STATUS.md`.
-2. Load references before edits:
+2. Run `npm run plan:task -- --task "<work>" --files <explicit,path,...>` and
+   use its read, documentation, validation, and runner-model recommendation.
+3. Load references before edits:
    - `references/code-map.md`
    - `references/safe-change-checklist.md`
-3. Implement the smallest safe change set.
-4. Validate with `scripts/run-maintainer-checks.sh`.
-5. Update canonical docs using `docs/DOC_SYSTEM.md` triggers.
-6. Report changed files, checks run, and residual risks.
+4. Implement the smallest safe change set.
+5. Validate with `scripts/run-maintainer-checks.sh`.
+6. Update canonical docs using `docs/DOC_SYSTEM.md` triggers.
+7. Rerun the planner with `--phase complete` and report its exact UTC
+   `recordedAt` with changed files, checks run, and residual risks.
 
 ## Technical Standards
 - Preserve compatibility with existing quote and customer portal records.

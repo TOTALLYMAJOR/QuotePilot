@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: August 9, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -17,6 +17,18 @@ Each major topic has one source of truth. Other docs should link to that source 
 - Current-state/risk/near-term execution changes: update `PROJECT_STATUS.md`.
 - Roadmap priority changes: update `DEV_TASKS.md`.
 - Setup/process/deploy entrypoint changes: update `README.md`.
+
+## Update Timestamps
+Every changed canonical Markdown document, every Markdown file under `docs/`,
+and `AGENTS.md` must include and advance this exact header format:
+
+`Last updated: YYYY-MM-DD HH:MM:SS TZ`
+
+Use the repository's local wall-clock timezone for document readability. Task
+planning, status checkpoints, and completion handoffs separately use the
+planner's exact ISO-8601 UTC `lifecycle.recordedAt`. Documentation governance
+fails when a governed document lacks the header or changes without advancing
+it.
 
 ## CI Change-Type Enforcement
 `scripts/check-doc-governance.mjs` enforces these non-negotiable mappings:
@@ -74,8 +86,12 @@ as separate claims.
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
+| Task classification, model tier, dependency reads, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. The external runner owns actual model switching. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
+| Workspace visual system and interaction contracts | `docs/DESIGN_SYSTEM.md` | The canonical staff-workspace visual grammar, motion, hierarchy, and scoped Ambient/customer extensions. |
+| Product design principles and review lens | `docs/DESIGN_PRINCIPLES.md` | The review rubric for copy, hierarchy, story, incentive, and CTA decisions; surface-specific design docs may extend it but should not contradict it. |
+| Package Workspace product and implementation program | `docs/PACKAGE_WORKSPACE.md` | Entry point for the QuotePilot Package Workspace audit, PRD, UI specification, ADR, technical design, and phased plan. Current implementation truth remains in the Feature Matrix; operational proof remains in `PROJECT_STATUS.md`. |
 | Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | The clean-main baseline lives in `docs/performance/bundle-budget.json`; any active temporary absolute ceilings live separately in `docs/performance/bundle-exception.json` and must match that baseline exactly. |
 | Backend-to-interface capability contracts | `docs/capability-surfacing-contracts.json` | Machine-checked structural traceability; current release evidence remains in `PROJECT_STATUS.md`. |
 | Stripe Connect architecture and staged program | `docs/STRIPE_CONNECT_PROGRAM.md` | Fixed commercial model, isolation boundaries, delivery sequence, and Sandbox stopping gate; operational truth remains in `PROJECT_STATUS.md`. |

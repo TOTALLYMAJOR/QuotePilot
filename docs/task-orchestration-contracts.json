@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "switchAuthority": "external_runner",
+  "timestampFormat": "iso8601_utc",
+  "lifecyclePhases": [
+    "plan",
+    "update",
+    "complete"
+  ],
+  "modelTiers": {
+    "economy": {
+      "defaultModel": "gpt-5.6-luna",
+      "reasoningEffort": "low",
+      "purpose": "Documentation, inventory, and other low-risk deterministic work"
+    },
+    "balanced": {
+      "defaultModel": "gpt-5.6-terra",
+      "reasoningEffort": "medium",
+      "purpose": "Bounded UI, test, and repository process changes"
+    },
+    "frontier": {
+      "defaultModel": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "purpose": "Authority, payment, security, migration, and production-sensitive work"
+    }
+  },
+  "profiles": {
+    "docs": {
+      "riskLevel": "low",
+      "modelTier": "economy",
+      "readFirst": [
+        "AGENTS.md",
+        "docs/DOC_SYSTEM.md"
+      ],
+      "docRequirements": [],
+      "validations": [
+        "npm run check:docs:governance",
+        "npm run check:env",
+        "npm run build"
+      ]
+    },
+    "process": {
+      "riskLevel": "medium",
+      "modelTier": "balanced",
+      "readFirst": [
+        "AGENTS.md",
+        "docs/DOC_SYSTEM.md",
+        "docs/AGENT_GOVERNANCE.md",
+        "docs/ORCHESTRATION_BLUEPRINT.md"
+      ],
+      "docRequirements": [
+        {
+          "mode": "any",
+          "paths": [
+            "README.md",
+            "CONTRIBUTING.md",
+            "docs/VERSION_CONTROL.md",
+            "docs/DOC_SYSTEM.md"
+          ]
+        }
+      ],
+      "validations": [
+        "npm run check:docs:governance",
+        "npm run check:env",
+        "npm run build"
+      ]
+    },
+    "ui": {
+      "riskLevel": "medium",
+      "modelTier": "balanced",
+      "readFirst": [
+        "AGENTS.md",
+        "docs/DOC_SYSTEM.md"
+      ],
+      "docRequirements": [
+        {
+          "mode": "all",
+          "paths": [
+            "CHANGELOG.md"
+          ]
+        }
+      ],
+      "validations": [
+        "npm run test:unit",
+        "npm run check:env",
+        "npm run build",
+        "npm run check:docs:governance"
+      ]
+    },
+    "core": {
+      "riskLevel": "medium",
+      "modelTier": "balanced",
+      "readFirst": [
+        "AGENTS.md",
+        "docs/DOC_SYSTEM.md"
+      ],
+      "docRequirements": [
+        {
+          "mode": "all",
+          "paths": [
+            "CHANGELOG.md"
+          ]
+        }
+      ],
+      "validations": [
+        "npm run test:unit",
+        "npm run check:env",
+        "npm run build",
+        "npm run check:docs:governance"
+      ]
+    },
+    "auth_rules": {
+      "riskLevel": "high",
+      "modelTier": "frontier",
+      "readFirst": [
+        "AGENTS.md",
+        "docs/DOC_SYSTEM.md",
+        "firestore.rules",
+        "src/lib/authClient.js",
+        "src/hooks/useAuthSession.js"
+      ],
+      "docRequirements": [
+        {
+          "mode": "all",
+          "paths": [
+            "CHANGELOG.md",
+            "docs/capability-surfacing-contracts.json",
+            "docs/FEATURE_MATRIX.md",
+            "docs/USER_MANUAL.md"
+          ]
+        }
+      ],
+      "validations": [
+        "npm run test:rules:firestore",
+        "npm run check:capability-surfaces",
+        "npm run test:unit",
+        "npm run check:env",
+        "npm run build",
+        "npm run check:docs:governance"
+      ]
+    },
+    "deploy": {
+      "riskLevel": "high",
+      "modelTier": "frontier",
+      "readFirst": [
+        "AGENTS.md",
+        "docs/DOC_SYSTEM.md",
+        "PROJECT_STATUS.md",
+        "docs/VERSION_CONTROL.md",
+        "docs/LAUNCH_RUNBOOK.md"
+      ],
+      "docRequirements": [
+        {
+          "mode": "any",
+          "paths": [
+            "README.md",
+            "docs/LAUNCH_RUNBOOK.md",
+            "docs/VERSION_CONTROL.md",
+            "docs/DOC_SYSTEM.md"
+          ]
+        }
+      ],
+      "validations": [
+        "npm run lane:release",
+        "npm run check:docs:governance"
+      ]
+    }
+  },
+  "highRiskEscalation": {
+    "taskKeywords": [
+      "auth",
+      "authorization",
+      "credential",
+      "deploy",
+      "firestore rules",
+      "migration",
+      "multi-tenant",
+      "payment",
+      "production",
+      "provider",
+      "release",
+      "security",
+      "settlement",
+      "stripe"
+    ],
+    "exactPaths": [
+      "firestore.rules",
+      "firestore.indexes.json",
+      "src/lib/authClient.js",
+      "src/lib/firebase.js",
+      "src/lib/quoteStore.js"
+    ],
+    "pathPrefixes": [
+      ".github/workflows/deploy-",
+      "config/stripe-connect/",
+      "functions/",
+      "functions-connect/",
+      "infra/stripe-connect/"
+    ]
+  }
+}

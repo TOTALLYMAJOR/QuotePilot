@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useCommercialWorkspaceSnapshot } from "../hooks/useCommercialWorkspaceSnapshot";
 import {
   buildMessagingPath,
   buildQuoteEditPath,
   buildQuotePath
 } from "../lib/workspaceRoutes";
+import { buildAmbientLivingOpportunityPresentation } from "./ambientLivingOpportunityPresentation";
 import ProductBrandLockup from "./ProductBrandLockup";
 import QuoteWorkspaceActivityDrawer from "./QuoteWorkspaceActivityDrawer";
 import "./quoteWorkspaceConcept.css";
@@ -266,7 +267,6 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
     : "My workspace";
   const organizationId = text(authSession?.organizationId || tenantContext?.organizationId);
   const [activityDrawerOpen, setActivityDrawerOpen] = useState(false);
-  const closeActivityDrawer = useCallback(() => setActivityDrawerOpen(false), []);
   const snapshot = useCommercialWorkspaceSnapshot({
     enabled: Boolean(organizationId),
     includeHistory: true,
@@ -284,10 +284,24 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
   );
   const selectedQuote = useMemo(() => {
     const quotes = Array.isArray(snapshot.quotes) ? snapshot.quotes : [];
-    return quotes.find((quote) => text(quote?.id || quote?.quoteId) === requestedQuoteId)
-      || quotes[0]
-      || null;
+    if (requestedQuoteId) {
+      return quotes.find((quote) => text(quote?.id || quote?.quoteId) === requestedQuoteId) || null;
+    }
+    return quotes[0] || null;
   }, [requestedQuoteId, snapshot.quotes]);
+  const presentation = useMemo(() => {
+    if (!selectedQuote) return null;
+    try {
+      return buildAmbientLivingOpportunityPresentation(selectedQuote, {
+        source: snapshot.source,
+        sourceFreshness: snapshot.stale ? "stale" : "fresh",
+        role: authSession?.role || tenantContext?.role || "non_staff"
+      });
+    } catch {
+      return null;
+    }
+  }, [authSession?.role, selectedQuote, snapshot.source, snapshot.stale, tenantContext?.role]);
+
   const returnToQuotes = () => {
     if (typeof onExit === "function") {
       onExit();
@@ -297,16 +311,23 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
   };
 
   if (!selectedQuote) {
+    const exactQuoteUnavailable = Boolean(requestedQuoteId && !snapshot.loading && !snapshot.error);
     return (
       <div className="qwc-shell" data-testid="quote-workspace-concept">
         <main className="qwc-workspace" style={{ gridColumn: "1 / -1", maxWidth: 760, margin: "0 auto", paddingTop: 72 }}>
           <ProductBrandLockup className="qwc-brand" />
           <div className="qwc-preview-boundary">
-            <span>{snapshot.loading ? "Loading quote" : snapshot.error ? "Quote unavailable" : "No saved quote"}</span>
+            <span>{snapshot.loading
+              ? "Loading quote"
+              : snapshot.error || exactQuoteUnavailable
+                ? "Quote unavailable"
+                : "No saved quote"}</span>
             <p>{snapshot.loading
               ? "Reading the latest tenant-scoped quote without changing it."
               : snapshot.error
                 ? "QuotePilot could not read this tenant's quote history. No data was changed."
+                : exactQuoteUnavailable
+                  ? "The requested quote is not present in the bounded saved history. No different quote was opened."
                 : "Create or save a quote first, then return here to use the new workspace."}</p>
             <button type="button" onClick={snapshot.error ? () => snapshot.refresh({ force: true }) : returnToQuotes}>
               {snapshot.error ? "Retry" : "Open current Quotes"}
@@ -317,7 +338,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
     );
   }
 
-  const identity = selectedQuote || {};
+  const identity = presentation?.identity || {};
   const quoteId = text(identity.quoteId || selectedQuote.id || selectedQuote.quoteId);
   const eventName = text(identity.eventName)
     || text(firstValue(selectedQuote, ["eventName", "event.name", "eventDetails.eventName"]))
@@ -336,13 +357,8 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
   const eventTime = text(identity.time)
     || text(firstValue(selectedQuote, ["eventTime", "time", "event.time", "eventDetails.time"]))
     || "Time not recorded";
-  const guestCount = firstNumber(selectedQuote, [
-    "guestCount",
-    "guests",
-    "event.guestCount",
-    "event.guests",
-    "eventDetails.guestCount"
-  ]);
+  const guestCount = presentation?.guestObject?.currentGuestCount
+    ?? firstNumber(selectedQuote, ["guestCount", "guests", "event.guestCount", "eventDetails.guestCount"]);
   const eventType = text(firstValue(selectedQuote, ["eventType", "event.type", "eventDetails.eventType", "serviceType"])) || "Event";
   const statusValue = identity?.status?.label
     || identity?.status
@@ -489,7 +505,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
             <section className="qwc-event-overview" aria-labelledby="qwc-event-title">
               <img
                 className="qwc-event-image"
-                src="/images/quote-workspace-wedding-table-v1.png"
+                src="/images/quote-workspace-wedding-table-v1.webp"
                 alt="Editorial view of a catered event table"
               />
               <div className="qwc-event-facts">
@@ -630,7 +646,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
 
       <QuoteWorkspaceActivityDrawer
         open={activityDrawerOpen}
-        onClose={closeActivityDrawer}
+        onClose={() => setActivityDrawerOpen(false)}
         quoteNumber={quoteNumber}
         quoteStatus={text(statusValue)}
         activityItems={activityItems}
