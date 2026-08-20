@@ -17,14 +17,18 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/`: hospitality-first public QuotePilot marketing page.
 - `/system`: saved dark product and operating-system overview.
 - `/app`: authenticated staff quote workspace.
+- `/start`: public invoice-first $1 Stripe test buyer flow when the reviewed
+  browser flags and Turnstile site key are present; the independently disabled
+  server gate still prevents initiation until backend release approval.
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
 
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing
 configuration, proposal export, customer portal updates, tenant-locked
 customer/catalog CSV imports, server-authoritative deposit and final-balance
-collection in the current source candidate, and operations workflows (history,
-scheduling, reporting, diagnostics).
+collection in the current source candidate, public invoice-first buyer
+onboarding on the existing `tonicatering` Firebase project, and operations workflows
+(history, scheduling, reporting, diagnostics).
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -93,8 +97,21 @@ Create `.env` from `.env.example` and set required Firebase keys:
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`
 - `VITE_APP_HOST`
-- `VITE_APP_URL` (canonical HTTPS `/app` return URL for Firebase email actions;
-  its domain must be authorized in Firebase Authentication)
+- `VITE_APP_URL` (exact canonical
+  `https://quotepilot.mbmapps.com/app` return URL for Firebase email actions;
+  its domain must be authorized in Firebase Authentication; loopback HTTP is
+  accepted only for local development)
+- `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
+  preparation workflows source-bind it to `true` only alongside syntactically
+  valid non-placeholder public flow configuration; provider setup and human
+  review remain separate evidence)
+- `VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED` (defaults off; production preparation
+  source-binds it to `true`, but `check:env` rejects it unless the route is also
+  enabled and Turnstile is configured)
+- `VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY` (browser-visible public site key;
+  required with valid non-placeholder syntax when buyer access is compiled,
+  never use the Turnstile secret here, and do not treat syntax as provider or
+  human-review evidence)
 
 To create `.env.local` from the authenticated Firebase project config without
 touching `.env`, run:
@@ -109,17 +126,36 @@ The root `.env.example` is for browser-safe `VITE_*` values only. Server-side
 Firebase Functions placeholders live in
 [`functions/.env.example`](functions/.env.example). Copy that template to an
 ignored `functions/.env.<firebase-project-id>` file only for local/emulator
-validation; never put production provider credentials in that file or commit
-real provider credentials. Confirm the target is ignored with
-`git check-ignore -v functions/.env.<firebase-project-id>` before adding any
-non-production value.
+validation; that file is non-secret configuration only. Bound-secret emulator
+fixtures belong in the separately ignored `functions/.secret.local`; never put
+production provider credentials in either file or commit real provider
+credentials. Confirm the target is ignored with
+`git check-ignore -v functions/.env.<firebase-project-id>` and
+`git check-ignore -v functions/.secret.local` before adding any non-production
+value.
 
 Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a
 webhook secret. Event and Checkout Session `livemode` must also match. The
-tracked Functions template is inventory only; use the credential-isolated
-runtime channel described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and
-never place real Stripe values in a browser environment or committed file.
+tracked Functions template and materializer contain only `STRIPE_MODE`;
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `RESEND_API_KEY` are Firebase
+Secret Manager values bound only to Functions that consume them. The
+materializer rejects all three. Use the credential-isolated runtime channel
+described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and never place real
+provider values in a browser environment, Functions dotenv, or committed file.
+
+Buyer onboarding uses a separate server-only Stripe test rail. Its non-secret
+runtime inventory is `BUYER_ACCESS_ENABLED`, `BUYER_ACCESS_STRIPE_MODE=test`,
+`BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app`, and
+`BUYER_ACCESS_TURNSTILE_HOSTNAMES=quotepilot.mbmapps.com,tonicatering.web.app`.
+Store `BUYER_ACCESS_STRIPE_SECRET_KEY`,
+`BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, `BUYER_ACCESS_TURNSTILE_SECRET`, and an
+independently generated `BUYER_ACCESS_RATE_LIMIT_SECRET` of at least 32
+characters only in Firebase Secret Manager; none belongs in a Functions dotenv
+file, GitHub preparation job, browser variable, log, or release receipt. Do not
+reuse a Stripe or Turnstile secret as the rate-limit key. The server gate
+defaults off. The existing quote-payment `STRIPE_MODE`, credentials, and
+`stripeWebhook` remain independent and unchanged.
 
 The policy-enforcing repository preparation workflow packages Functions source without loading or
 materializing runtime secrets. Every `.env` file is excluded from the artifact.
@@ -345,6 +381,98 @@ See the
 [launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
 for configuration and proof requirements.
 
+## Public $1 Invoice-First Buyer Access (`tonicatering`)
+
+The `feature/paid-buyer-onboarding` source candidate adds a public acquisition
+path at `/start` without creating a second Firebase environment. The buyer
+enters organization, owner, and invoice-email details and completes a fresh
+Turnstile challenge. QuotePilot does not collect a password or card details at
+this step. Server-side Turnstile hostname/action checks, durable rate limits,
+and deterministic idempotency guard initiation; Turnstile is an abuse signal,
+not identity, payment, or authorization evidence.
+
+Rate-document identities are HMAC-keyed with the dedicated rate-limit secret;
+raw network addresses and normalized emails are not stored in those document
+ids. Once per public status request, the callable atomically consumes a
+60-request-per-five-minute network lease before its first buyer-order read,
+including well-formed unknown-order and wrong-token attempts, and fails closed
+when its secret or Firestore limiter is unavailable. Any subsequent fulfillment
+reads remain inside that bounded request. Each rate record includes an
+`expiresAt` Firestore Timestamp; the tracked `firestore.indexes.json` declares
+the matching TTL policy on `buyerAccessRateLimits.expiresAt`. The trusted
+deployer must promote that Firestore configuration and verify the provider
+reports TTL enabled before opening the server gate.
+Invoice creation first reserves the request-scoped order identity in the same
+durable limiter before any Auth, invitation, or order lookup. An exact retry
+continues to consume the per-network budget but does not charge the normalized
+email twice during the 24-hour reservation. A different request may replace an
+older order only after the email window has elapsed and every prior same-email
+order has a provider-verified `void` state. Open and payment-failed
+orders may return the same invoice only to the exact original creation request.
+Uncollectible/expired, paid, and activation orders cannot be replaced
+automatically. A platform administrator may recover only an exact terminal
+unpaid test Invoice through Integrations Ops: the server retrieves the stored
+Invoice identity from Stripe, permanently voids an uncollectible Invoice,
+rechecks that no workspace, settings, invitation, or provisioning record exists,
+and records an operator audit. Paid, open, partially paid, fulfilled,
+superseded, or mismatched targets fail closed, and the 24-hour email window still
+applies before a fresh request. The old void order is marked superseded so a
+stale event cannot provision a second workspace.
+
+The Firebase Hosting and Vercel preparation workflows compile `/start` and its
+public marketing CTA only with a syntactically valid, non-placeholder,
+browser-visible Turnstile site key. `check:env` does not verify Cloudflare
+provider setup or human approval. Runtime remains fail closed until the
+dedicated Functions are promoted and the separate
+`BUYER_ACCESS_ENABLED=true` server gate is explicitly approved; browser flags
+never authorize invoice creation.
+
+The `createBuyerAccessInvoice` callable fixes the offer to Starter access, $1
+USD, and Stripe test mode. It creates and finalizes a true Stripe invoice before
+payment and returns only the Stripe Hosted Invoice Page. The dedicated buyer
+Stripe client and `buyerAccessStripeWebhook` endpoint are pinned to API version
+`2024-06-20`; the generic quote Stripe client and version remain unchanged.
+Dedicated buyer Secret Manager credentials and the endpoint remain isolated
+from the existing live quote payment mode, key, `stripeWebhook`, deposit, and
+final-balance rails. The buyer endpoint accepts only `invoice.paid`,
+`invoice.payment_failed`, `invoice.voided`, and
+`invoice.marked_uncollectible`. A retry must recover the same still-open invoice
+instead of creating uncontrolled duplicates.
+
+The browser return and `getBuyerAccessInvoiceStatus` are not fulfillment
+evidence. Only a matching signed and deduplicated invoice lifecycle event may
+establish paid state. `invoice.paid` prepares the organization, neutral
+settings, Starter workspace plan entitlements, provisioning record, and pending
+activation invitation. It creates no user membership, admin role, custom
+claims, or `/app` access. `activation_sent` may be observed only after the
+onboarding email provider has accepted the exact activation-instructions
+message and that acceptance is durably recorded; provider acceptance is not
+delivery. Separately, token-bound `provisioning` with `workspaceReady=true`
+stops automatic status polling and may offer `/app` as a manual exact-invoice-
+email registration/sign-in and Firebase verification path. That handoff does
+not claim that Resend accepted or delivered anything, and the optional
+onboarding message is not required to initiate activation. The buyer must use
+the exact invoice email, separately receive and complete Firebase email
+verification through an authorized continue URL, and consume the unexpired
+invitation before the server creates user access; only `active` is access-ready.
+Pending, mismatched, unverified, expired, failed, replayed, and cross-account
+paths expose no `/app` access.
+
+Buyer records remain marked as controlled Stripe test-mode data and must be
+excluded from live revenue and live paid-customer classification. This branch
+is source-only until review, merge, semantic tag, exact-target UAT, trusted
+promotion, true Hosted Invoice Page evidence, signed invoice lifecycle
+evidence, any claimed activation-instructions provider acceptance, Firebase verification-
+email delivery and continue-URL evidence, and hosted negative-path acceptance
+are complete. No provider configuration or live sale is claimed. Refunds,
+disputes, cancellations, access revocation, support, tax/accounting, and
+separately approved live-mode launch remain open operating gates.
+
+See the
+[launch runbook](docs/LAUNCH_RUNBOOK.md#public-1-invoice-first-buyer-access-on-tonicatering)
+for Secret Manager, Turnstile, invoice webhook, release, acceptance, and stop
+requirements.
+
 ## Customer Provisioning (No Stripe)
 Provision a customer organization, enforce order-based feature entitlements
 (unpaid modules locked off), and generate a copy-ready onboarding message.
@@ -483,6 +611,18 @@ the exact coordinated hosted candidate as their target applicability requires.
 Local tests and emulator events are source evidence only, while a successful
 UAT attestation records the observed application contract; neither alone is
 Stripe test-mode or live-mode provider acceptance.
+
+For a release containing public buyer onboarding, every applicable `buyer.*`
+item is likewise mandatory. Hosting/Vercel items cover the public Turnstile
+entry and the locked pending/activation instructions; they do not prove email
+provider or backend fulfillment. Backend items cover Turnstile hostname/action
+verification, durable rate limits, idempotent true Hosted Invoice Page creation,
+buyer API and webhook version `2024-06-20`, signed invoice lifecycle, paid
+workspace preparation, pending-invite enforcement, activation-instructions provider acceptance, Firebase
+verification-email delivery and authorized continue URL, exact-email claim,
+negative paths, and isolation from the quote Stripe rail. No single target
+receipt proves an unbound frontend, backend, or provider dependency, so retain
+a coordinated provider record for the exact deployed surfaces.
 
 The `backend` and `all` scopes package Firestore rules plus Functions without
 runtime `.env` files. The manifest binds the Firebase project, Hosting target,

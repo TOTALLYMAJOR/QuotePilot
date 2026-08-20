@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { deleteApp, initializeApp } from "firebase/app";
 import {
   connectAuthEmulator,
@@ -141,6 +141,39 @@ async function createPrincipal({ email, role, organizationId, platformAdmin = fa
   };
 }
 
+async function signInEmulatorUser(email) {
+  const response = await fetch(
+    `http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password: acceptanceCredential,
+        returnSecureToken: true
+      })
+    }
+  );
+  assert.equal(response.ok, true, `Auth emulator sign-in failed for ${email}`);
+  const payload = await response.json();
+  assert.ok(payload.idToken, `Auth emulator did not return an ID token for ${email}`);
+  return payload.idToken;
+}
+
+async function createBuyerWithoutRole(email, { emailVerified = false } = {}) {
+  const user = await auth.createUser({
+    email,
+    password: acceptanceCredential,
+    emailVerified
+  });
+  assert.equal((await db.collection("userRoles").doc(user.uid).get()).exists, false);
+  return {
+    email,
+    idToken: await signInEmulatorUser(email),
+    uid: user.uid
+  };
+}
+
 async function callFunction(name, idToken, data = {}) {
   const response = await fetch(
     `http://${functionsHost}/${projectId}/${region}/${name}`,
@@ -192,6 +225,45 @@ async function callStripeWebhook(event, { signingSecret = "" } = {}) {
     .digest("hex");
   const response = await fetch(
     `http://${functionsHost}/${projectId}/${region}/stripeWebhook`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "stripe-signature": `t=${timestamp},v1=${signature}`
+      },
+      body
+    }
+  );
+  const responseText = await response.text();
+  let payload = null;
+  try {
+    payload = JSON.parse(responseText);
+  } catch {
+    payload = null;
+  }
+  return {
+    status: response.status,
+    ok: response.ok,
+    payload,
+    responseText
+  };
+}
+
+async function callBuyerAccessStripeWebhook(event, { signingSecret = "" } = {}) {
+  const webhookSecret = String(
+    process.env.BUYER_ACCESS_STRIPE_WEBHOOK_SECRET || ""
+  ).trim();
+  assert.ok(
+    webhookSecret,
+    "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET is required for buyer webhook acceptance."
+  );
+  const body = JSON.stringify(event);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = createHmac("sha256", signingSecret || webhookSecret)
+    .update(`${timestamp}.${body}`)
+    .digest("hex");
+  const response = await fetch(
+    `http://${functionsHost}/${projectId}/${region}/buyerAccessStripeWebhook`,
     {
       method: "POST",
       headers: {
@@ -1918,6 +1990,684 @@ assert.equal(latePaidFinalBalanceAudit.data()?.status, "processed");
 assert.equal(latePaidFinalBalanceAudit.data()?.providerState, "paid");
 assert.equal(latePaidFinalBalanceAudit.data()?.paymentKind, "final_balance");
 
+assert.equal(
+  String(process.env.BUYER_ACCESS_STRIPE_MODE || "").trim().toLowerCase(),
+  "test",
+  "BUYER_ACCESS_STRIPE_MODE=test is required for buyer invoice webhook acceptance."
+);
+
+function buyerAccessOrderIdForFixtureRequest(email = "") {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  return `ba-${createHash("sha256")
+    .update(
+      `quotepilot:buyer-access-order:v2:${normalizedEmail}:123e4567-e89b-42d3-a456-426614174000`,
+      "utf8"
+    )
+    .digest("hex")
+    .slice(0, 40)}`;
+}
+
+async function seedBuyerAccessInvoiceFixture({
+  email,
+  organizationName,
+  ownerName,
+  suffix
+} = {}) {
+  const normalizedSuffix = String(suffix || "").replace(/[^a-zA-Z0-9]/g, "");
+  assert.ok(normalizedSuffix, "Buyer access fixture suffix is required.");
+  const orderId = buyerAccessOrderIdForFixtureRequest(email);
+  const organizationId = `buyer-access-${String(suffix || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")}-${createHash("sha256")
+    .update(`buyer-access-org:${suffix}`, "utf8")
+    .digest("hex")
+    .slice(0, 32)}`;
+  const customerId = `cus_BuyerAccess${normalizedSuffix}`;
+  const invoiceId = `in_BuyerAccess${normalizedSuffix}`;
+  const invoiceItemId = `ii_BuyerAccess${normalizedSuffix}`;
+  const paymentIntentId = `pi_BuyerAccess${normalizedSuffix}`;
+  const hostedInvoiceUrl =
+    `https://invoice.stripe.com/i/acct_test_${normalizedSuffix}/test_${normalizedSuffix}`;
+  const orderRef = db.collection("buyerAccessOrders").doc(orderId);
+  const organizationRef = db.collection("organizations").doc(organizationId);
+  const settingsRef = organizationRef.collection("settings").doc("config");
+  const provisioningOrderRef = db.collection("provisioningOrders").doc(orderId);
+  const inviteRef = db
+    .collection("organizationInvites")
+    .doc(inviteIdFromEmail(email));
+  const nowISO = new Date().toISOString();
+  await orderRef.create({
+    orderId,
+    flow: "buyer_access",
+    buyerAccessMode: "controlled_test",
+    status: "invoice_open",
+    providerStep: "sent",
+    invoiceGeneration: 1,
+    stripeCustomerId: customerId,
+    stripeInvoiceId: invoiceId,
+    stripeInvoiceItemId: invoiceItemId,
+    hostedInvoiceUrl,
+    organizationId,
+    organizationName,
+    ownerEmail: email,
+    ownerName,
+    plan: "starter",
+    amountCents: 100,
+    currency: "usd",
+    statusTokenHash: createHash("sha256")
+      .update(`buyer-access-status:${suffix}`, "utf8")
+      .digest("hex"),
+    accessGranted: false,
+    workspaceReady: false,
+    activationEmailSent: false,
+    createdAtISO: nowISO,
+    updatedAtISO: nowISO,
+    createdAt: admin.FieldValue.serverTimestamp(),
+    updatedAt: admin.FieldValue.serverTimestamp()
+  });
+  return {
+    customerId,
+    email,
+    hostedInvoiceUrl,
+    invoiceId,
+    invoiceItemId,
+    inviteRef,
+    orderId,
+    orderRef,
+    organizationId,
+    organizationName,
+    organizationRef,
+    ownerName,
+    paymentIntentId,
+    provisioningOrderRef,
+    settingsRef
+  };
+}
+
+function buildBuyerAccessInvoiceEvent(fixture, {
+  amountDue = 100,
+  customerId = fixture.customerId,
+  eventId,
+  eventType = "invoice.paid",
+  invoiceId = fixture.invoiceId
+} = {}) {
+  const invoiceStatus = {
+    "invoice.paid": "paid",
+    "invoice.payment_failed": "open",
+    "invoice.voided": "void",
+    "invoice.marked_uncollectible": "uncollectible"
+  }[eventType];
+  assert.ok(invoiceStatus, `Unsupported buyer invoice fixture event type: ${eventType}`);
+  const paid = eventType === "invoice.paid";
+  const voided = eventType === "invoice.voided";
+  const invoiceAmountDue = voided ? 0 : amountDue;
+  return {
+    id: eventId,
+    object: "event",
+    type: eventType,
+    api_version: "2024-06-20",
+    livemode: false,
+    data: {
+      object: {
+        id: invoiceId,
+        object: "invoice",
+        livemode: false,
+        status: invoiceStatus,
+        collection_method: "send_invoice",
+        customer: customerId,
+        customer_email: fixture.email,
+        currency: "usd",
+        amount_due: invoiceAmountDue,
+        total: amountDue,
+        amount_paid: paid ? invoiceAmountDue : 0,
+        amount_remaining: paid || voided ? 0 : invoiceAmountDue,
+        paid_out_of_band: false,
+        payment_intent: fixture.paymentIntentId,
+        subscription: null,
+        hosted_invoice_url: fixture.hostedInvoiceUrl,
+        metadata: {
+          flow: "buyer_access",
+          buyerAccessOrderId: fixture.orderId,
+          invoiceGeneration: "1",
+          plan: "starter"
+        }
+      }
+    }
+  };
+}
+
+const buyerAccessFixture = await seedBuyerAccessInvoiceFixture({
+  email: "buyer.access.webhook@example.test",
+  organizationName: "Buyer Access Invoice Acceptance",
+  ownerName: "Invoice Buyer",
+  suffix: "Paid101"
+});
+const buyerAccessAmountMismatchEvent = buildBuyerAccessInvoiceEvent(
+  buyerAccessFixture,
+  {
+    amountDue: 99,
+    eventId: "evt_buyer_access_amount_mismatch"
+  }
+);
+const genericBuyerAccessAttempt = await callStripeWebhook(
+  buyerAccessAmountMismatchEvent
+);
+assert.equal(
+  genericBuyerAccessAttempt.status,
+  200,
+  genericBuyerAccessAttempt.responseText
+);
+assert.equal(
+  genericBuyerAccessAttempt.payload?.ignored,
+  "buyer_access_uses_dedicated_webhook"
+);
+assert.equal(
+  (await db.collection("webhookEvents")
+    .doc(`stripe-${buyerAccessAmountMismatchEvent.id}`)
+    .get()).exists,
+  false
+);
+
+const nonBuyerDedicatedAttempt = await callBuyerAccessStripeWebhook({
+  ...paymentEvent,
+  api_version: "2024-06-20"
+});
+assert.equal(
+  nonBuyerDedicatedAttempt.status,
+  200,
+  nonBuyerDedicatedAttempt.responseText
+);
+assert.equal(
+  nonBuyerDedicatedAttempt.payload?.ignored,
+  "non_buyer_access_invoice"
+);
+assert.equal(
+  (await db.collection("webhookEvents")
+    .doc(`stripe-buyer-${paymentEvent.id}`)
+    .get()).exists,
+  false
+);
+
+const buyerAccessAmountMismatchAttempt = await callBuyerAccessStripeWebhook(
+  buyerAccessAmountMismatchEvent
+);
+assert.equal(
+  buyerAccessAmountMismatchAttempt.status,
+  200,
+  buyerAccessAmountMismatchAttempt.responseText
+);
+assert.equal(
+  buyerAccessAmountMismatchAttempt.payload?.ignored,
+  "invalid_buyer_access_scope"
+);
+const buyerAccessInvoiceMismatchEvent = buildBuyerAccessInvoiceEvent(
+  buyerAccessFixture,
+  {
+    eventId: "evt_buyer_access_invoice_mismatch",
+    invoiceId: "in_DifferentBuyerInvoice101"
+  }
+);
+const buyerAccessInvoiceMismatchAttempt = await callBuyerAccessStripeWebhook(
+  buyerAccessInvoiceMismatchEvent
+);
+assert.equal(
+  buyerAccessInvoiceMismatchAttempt.status,
+  200,
+  buyerAccessInvoiceMismatchAttempt.responseText
+);
+assert.equal(
+  buyerAccessInvoiceMismatchAttempt.payload?.ignored,
+  "invalid_buyer_access_scope"
+);
+const [
+  buyerAccessOrderAfterMismatch,
+  buyerAccessOrgAfterMismatch,
+  buyerAccessSettingsAfterMismatch,
+  buyerAccessProvisioningAfterMismatch,
+  buyerAccessInviteAfterMismatch,
+  buyerAccessAmountMismatchAudit,
+  buyerAccessInvoiceMismatchAudit
+] = await Promise.all([
+  buyerAccessFixture.orderRef.get(),
+  buyerAccessFixture.organizationRef.get(),
+  buyerAccessFixture.settingsRef.get(),
+  buyerAccessFixture.provisioningOrderRef.get(),
+  buyerAccessFixture.inviteRef.get(),
+  db.collection("webhookEvents")
+    .doc(`stripe-buyer-${buyerAccessAmountMismatchEvent.id}`)
+    .get(),
+  db.collection("webhookEvents")
+    .doc(`stripe-buyer-${buyerAccessInvoiceMismatchEvent.id}`)
+    .get()
+]);
+assert.equal(buyerAccessOrderAfterMismatch.data()?.status, "invoice_open");
+assert.equal(buyerAccessOrderAfterMismatch.data()?.accessGranted, false);
+assert.equal(buyerAccessOrderAfterMismatch.data()?.workspaceReady, false);
+assert.equal(buyerAccessOrderAfterMismatch.data()?.ownerUid, undefined);
+assert.equal(buyerAccessOrgAfterMismatch.exists, false);
+assert.equal(buyerAccessSettingsAfterMismatch.exists, false);
+assert.equal(buyerAccessProvisioningAfterMismatch.exists, false);
+assert.equal(buyerAccessInviteAfterMismatch.exists, false);
+assert.equal(buyerAccessAmountMismatchAudit.data()?.status, "ignored");
+assert.equal(
+  buyerAccessAmountMismatchAudit.data()?.result,
+  "invalid_buyer_access_scope"
+);
+assert.equal(buyerAccessInvoiceMismatchAudit.data()?.status, "ignored");
+assert.equal(
+  buyerAccessInvoiceMismatchAudit.data()?.result,
+  "invalid_buyer_access_scope"
+);
+
+const buyerAccessPaidEvent = buildBuyerAccessInvoiceEvent(
+  buyerAccessFixture,
+  { eventId: "evt_buyer_access_paid" }
+);
+const buyerAccessPaidAttempt = await callBuyerAccessStripeWebhook(
+  buyerAccessPaidEvent
+);
+assert.equal(
+  buyerAccessPaidAttempt.status,
+  200,
+  buyerAccessPaidAttempt.responseText
+);
+assert.equal(buyerAccessPaidAttempt.payload?.received, true);
+assert.equal(
+  buyerAccessPaidAttempt.payload?.buyerAccessStatus,
+  "activation_pending"
+);
+const [
+  buyerAccessOrderAfterPaid,
+  buyerAccessOrganizationAfterPaid,
+  buyerAccessSettingsAfterPaid,
+  buyerAccessProvisioningAfterPaid,
+  buyerAccessInviteAfterPaid,
+  buyerAccessPaidAudit
+] = await Promise.all([
+  buyerAccessFixture.orderRef.get(),
+  buyerAccessFixture.organizationRef.get(),
+  buyerAccessFixture.settingsRef.get(),
+  buyerAccessFixture.provisioningOrderRef.get(),
+  buyerAccessFixture.inviteRef.get(),
+  db.collection("webhookEvents")
+    .doc(`stripe-buyer-${buyerAccessPaidEvent.id}`)
+    .get()
+]);
+const buyerAccessOrderAfterPaidData = buyerAccessOrderAfterPaid.data() || {};
+const buyerAccessOrganizationAfterPaidData =
+  buyerAccessOrganizationAfterPaid.data() || {};
+const buyerAccessSettingsAfterPaidData = buyerAccessSettingsAfterPaid.data() || {};
+const buyerAccessProvisioningAfterPaidData =
+  buyerAccessProvisioningAfterPaid.data() || {};
+const buyerAccessInviteAfterPaidData = buyerAccessInviteAfterPaid.data() || {};
+assert.equal(buyerAccessOrderAfterPaidData.status, "activation_pending");
+assert.equal(buyerAccessOrderAfterPaidData.workspaceReady, true);
+assert.equal(buyerAccessOrderAfterPaidData.accessGranted, false);
+assert.equal(buyerAccessOrderAfterPaidData.ownerUid, undefined);
+assert.equal(
+  buyerAccessOrderAfterPaidData.stripeInvoiceId,
+  buyerAccessFixture.invoiceId
+);
+assert.equal(
+  buyerAccessOrderAfterPaidData.stripeCustomerId,
+  buyerAccessFixture.customerId
+);
+assert.equal(buyerAccessOrderAfterPaidData.buyerAccessMode, "controlled_test");
+assert.equal(buyerAccessOrganizationAfterPaidData.status, "active");
+assert.equal(buyerAccessOrganizationAfterPaidData.plan, "starter");
+assert.equal(
+  buyerAccessOrganizationAfterPaidData.buyerAccessOrderId,
+  buyerAccessFixture.orderId
+);
+assert.equal(
+  buyerAccessOrganizationAfterPaidData.buyerAccessMode,
+  "controlled_test"
+);
+assert.equal(buyerAccessOrganizationAfterPaidData.ownerUid, "");
+assert.equal(buyerAccessSettingsAfterPaidData.plan, "starter");
+assert.equal(buyerAccessSettingsAfterPaidData.featureFlagsLocked, true);
+assert.equal(
+  buyerAccessSettingsAfterPaidData.featureFlags?.customerPortal,
+  true
+);
+assert.equal(
+  buyerAccessSettingsAfterPaidData.featureFlags?.eventSchedule,
+  true
+);
+assert.equal(
+  buyerAccessSettingsAfterPaidData.featureFlags?.guidedSelling,
+  true
+);
+assert.equal(buyerAccessSettingsAfterPaidData.featureFlags?.aiAssist, true);
+assert.equal(
+  buyerAccessSettingsAfterPaidData.featureFlags?.reportingDashboard,
+  false
+);
+assert.equal(buyerAccessSettingsAfterPaidData.taxRate, 0);
+assert.equal(buyerAccessSettingsAfterPaidData.serviceFeePct, 0);
+assert.deepEqual(buyerAccessSettingsAfterPaidData.menuSections, []);
+assert.equal(
+  buyerAccessSettingsAfterPaidData.buyerAccessOrderId,
+  buyerAccessFixture.orderId
+);
+assert.equal(
+  buyerAccessSettingsAfterPaidData.buyerAccessMode,
+  "controlled_test"
+);
+assert.equal(buyerAccessSettingsAfterPaidData.ownerUid, "");
+assert.equal(
+  buyerAccessProvisioningAfterPaidData.status,
+  "provisioned_email_failed"
+);
+assert.equal(
+  buyerAccessProvisioningAfterPaidData.operation,
+  "buyer_access_purchase"
+);
+assert.equal(buyerAccessProvisioningAfterPaidData.ownerUid, "");
+assert.equal(
+  buyerAccessProvisioningAfterPaidData.buyerAccessOrderId,
+  buyerAccessFixture.orderId
+);
+assert.equal(
+  buyerAccessProvisioningAfterPaidData.buyerAccessMode,
+  "controlled_test"
+);
+assert.equal(buyerAccessProvisioningAfterPaidData.amountCents, 100);
+assert.equal(buyerAccessProvisioningAfterPaidData.currency, "usd");
+assert.equal(buyerAccessInviteAfterPaidData.status, "pending");
+assert.equal(buyerAccessInviteAfterPaidData.role, "admin");
+assert.equal(buyerAccessInviteAfterPaidData.email, buyerAccessFixture.email);
+assert.equal(
+  buyerAccessInviteAfterPaidData.organizationId,
+  buyerAccessFixture.organizationId
+);
+assert.equal(
+  buyerAccessInviteAfterPaidData.buyerAccessOrderId,
+  buyerAccessFixture.orderId
+);
+assert.equal(
+  buyerAccessInviteAfterPaidData.buyerAccessMode,
+  "controlled_test"
+);
+const buyerInviteLifetimeMs =
+  Date.parse(buyerAccessInviteAfterPaidData.expiresAtISO)
+  - Date.parse(buyerAccessInviteAfterPaidData.createdAtISO);
+assert.ok(
+  buyerInviteLifetimeMs >= (7 * 24 * 60 * 60 * 1000) - 1_000
+    && buyerInviteLifetimeMs <= (7 * 24 * 60 * 60 * 1000) + 1_000,
+  "Buyer activation invite must expire after exactly seven days."
+);
+assert.equal(buyerAccessPaidAudit.data()?.flow, "buyer_access");
+assert.equal(buyerAccessPaidAudit.data()?.buyerAccessMode, "controlled_test");
+assert.equal(buyerAccessPaidAudit.data()?.status, "processed");
+assert.equal(buyerAccessPaidAudit.data()?.providerState, "paid");
+assert.equal(
+  buyerAccessPaidAudit.data()?.stripeInvoiceId,
+  buyerAccessFixture.invoiceId
+);
+
+const buyerAccessPrincipal = await createBuyerWithoutRole(
+  buyerAccessFixture.email
+);
+const buyerAccessRoleRef = db
+  .collection("userRoles")
+  .doc(buyerAccessPrincipal.uid);
+await expectCallableError(
+  () => callFunction(
+    "ensureOrganizationBootstrap",
+    buyerAccessPrincipal.idToken,
+    {}
+  ),
+  "FAILED_PRECONDITION"
+);
+assert.equal((await buyerAccessRoleRef.get()).exists, false);
+assert.equal((await buyerAccessFixture.inviteRef.get()).data()?.status, "pending");
+assert.equal((await buyerAccessFixture.orderRef.get()).data()?.accessGranted, false);
+
+await auth.updateUser(buyerAccessPrincipal.uid, { emailVerified: true });
+const verifiedBuyerToken = await signInEmulatorUser(buyerAccessFixture.email);
+const buyerAccessBootstrap = await callFunction(
+  "ensureOrganizationBootstrap",
+  verifiedBuyerToken,
+  {}
+);
+assert.equal(buyerAccessBootstrap.ok, true);
+assert.equal(buyerAccessBootstrap.role, "admin");
+assert.equal(
+  buyerAccessBootstrap.organizationId,
+  buyerAccessFixture.organizationId
+);
+const [
+  buyerAccessOrderAfterActivation,
+  buyerAccessInviteAfterActivation,
+  buyerAccessRoleAfterActivation,
+  buyerAccessAuthAfterActivation,
+  buyerAccessOrganizationAfterActivation,
+  buyerAccessSettingsAfterActivation,
+  buyerAccessProvisioningAfterActivation
+] = await Promise.all([
+  buyerAccessFixture.orderRef.get(),
+  buyerAccessFixture.inviteRef.get(),
+  buyerAccessRoleRef.get(),
+  auth.getUser(buyerAccessPrincipal.uid),
+  buyerAccessFixture.organizationRef.get(),
+  buyerAccessFixture.settingsRef.get(),
+  buyerAccessFixture.provisioningOrderRef.get()
+]);
+assert.equal(buyerAccessOrderAfterActivation.data()?.status, "active");
+assert.equal(buyerAccessOrderAfterActivation.data()?.accessGranted, true);
+assert.equal(
+  buyerAccessOrderAfterActivation.data()?.ownerUid,
+  buyerAccessPrincipal.uid
+);
+assert.equal(
+  buyerAccessOrderAfterActivation.data()?.claimsSyncStatus,
+  "succeeded"
+);
+assert.equal(buyerAccessInviteAfterActivation.data()?.status, "consumed");
+assert.equal(
+  buyerAccessInviteAfterActivation.data()?.consumedByUid,
+  buyerAccessPrincipal.uid
+);
+assert.equal(buyerAccessRoleAfterActivation.data()?.role, "admin");
+assert.equal(
+  buyerAccessRoleAfterActivation.data()?.organizationId,
+  buyerAccessFixture.organizationId
+);
+assert.equal(
+  buyerAccessRoleAfterActivation.data()?.buyerAccessOrderId,
+  buyerAccessFixture.orderId
+);
+assert.equal(
+  buyerAccessRoleAfterActivation.data()?.buyerAccessMode,
+  "controlled_test"
+);
+assert.equal(
+  buyerAccessAuthAfterActivation.customClaims?.organizationId,
+  buyerAccessFixture.organizationId
+);
+assert.equal(buyerAccessAuthAfterActivation.customClaims?.role, "admin");
+
+const buyerAccessActiveUpdateTimes = {
+  order: buyerAccessOrderAfterActivation.updateTime.toMillis(),
+  organization: buyerAccessOrganizationAfterActivation.updateTime.toMillis(),
+  provisioning: buyerAccessProvisioningAfterActivation.updateTime.toMillis(),
+  settings: buyerAccessSettingsAfterActivation.updateTime.toMillis()
+};
+await Promise.all([
+  buyerAccessRoleRef.delete(),
+  auth.setCustomUserClaims(buyerAccessPrincipal.uid, {})
+]);
+assert.equal((await buyerAccessRoleRef.get()).exists, false);
+assert.equal(
+  (await auth.getUser(buyerAccessPrincipal.uid)).customClaims?.organizationId,
+  undefined
+);
+
+const duplicateBuyerAccessPaidAttempt = await callBuyerAccessStripeWebhook(
+  buyerAccessPaidEvent
+);
+assert.equal(
+  duplicateBuyerAccessPaidAttempt.status,
+  200,
+  duplicateBuyerAccessPaidAttempt.responseText
+);
+assert.equal(duplicateBuyerAccessPaidAttempt.payload?.duplicate, true);
+const buyerAccessPaidReplayEvent = buildBuyerAccessInvoiceEvent(
+  buyerAccessFixture,
+  { eventId: "evt_buyer_access_paid_after_revocation" }
+);
+const buyerAccessPaidReplayAttempt = await callBuyerAccessStripeWebhook(
+  buyerAccessPaidReplayEvent
+);
+assert.equal(
+  buyerAccessPaidReplayAttempt.status,
+  200,
+  buyerAccessPaidReplayAttempt.responseText
+);
+assert.equal(buyerAccessPaidReplayAttempt.payload?.ignored, "already_active");
+const [
+  buyerAccessOrderAfterReplay,
+  buyerAccessOrganizationAfterReplay,
+  buyerAccessSettingsAfterReplay,
+  buyerAccessRoleAfterReplay,
+  buyerAccessProvisioningAfterReplay,
+  buyerAccessReplayAudit,
+  buyerAccessAuthAfterReplay
+] = await Promise.all([
+  buyerAccessFixture.orderRef.get(),
+  buyerAccessFixture.organizationRef.get(),
+  buyerAccessFixture.settingsRef.get(),
+  buyerAccessRoleRef.get(),
+  buyerAccessFixture.provisioningOrderRef.get(),
+  db.collection("webhookEvents")
+    .doc(`stripe-buyer-${buyerAccessPaidReplayEvent.id}`)
+    .get(),
+  auth.getUser(buyerAccessPrincipal.uid)
+]);
+assert.equal(
+  buyerAccessOrderAfterReplay.updateTime.toMillis(),
+  buyerAccessActiveUpdateTimes.order
+);
+assert.equal(
+  buyerAccessOrganizationAfterReplay.updateTime.toMillis(),
+  buyerAccessActiveUpdateTimes.organization
+);
+assert.equal(
+  buyerAccessSettingsAfterReplay.updateTime.toMillis(),
+  buyerAccessActiveUpdateTimes.settings
+);
+assert.equal(
+  buyerAccessProvisioningAfterReplay.updateTime.toMillis(),
+  buyerAccessActiveUpdateTimes.provisioning
+);
+assert.equal(buyerAccessRoleAfterReplay.exists, false);
+assert.equal(
+  buyerAccessAuthAfterReplay.customClaims?.organizationId,
+  undefined
+);
+assert.equal(buyerAccessAuthAfterReplay.customClaims?.role, undefined);
+assert.equal(buyerAccessReplayAudit.data()?.status, "ignored");
+assert.equal(buyerAccessReplayAudit.data()?.result, "already_active");
+assert.equal(
+  buyerAccessReplayAudit.data()?.stripeInvoiceId,
+  buyerAccessFixture.invoiceId
+);
+
+async function assertBuyerAccessUnfulfilledLifecycle({
+  eventType,
+  expectedStatus,
+  suffix
+} = {}) {
+  const fixture = await seedBuyerAccessInvoiceFixture({
+    email: `buyer.access.${suffix}@example.test`,
+    organizationName: `Buyer Access ${suffix} Acceptance`,
+    ownerName: `${suffix} Buyer`,
+    suffix
+  });
+  const event = buildBuyerAccessInvoiceEvent(fixture, {
+    eventId: `evt_buyer_access_${String(suffix).toLowerCase()}`,
+    eventType
+  });
+  const expectedAmounts = {
+    "invoice.payment_failed": {
+      amountDue: 100,
+      amountPaid: 0,
+      amountRemaining: 100,
+      total: 100
+    },
+    "invoice.voided": {
+      amountDue: 0,
+      amountPaid: 0,
+      amountRemaining: 0,
+      total: 100
+    },
+    "invoice.marked_uncollectible": {
+      amountDue: 100,
+      amountPaid: 0,
+      amountRemaining: 100,
+      total: 100
+    }
+  }[eventType];
+  assert.deepEqual({
+    amountDue: event.data.object.amount_due,
+    amountPaid: event.data.object.amount_paid,
+    amountRemaining: event.data.object.amount_remaining,
+    total: event.data.object.total
+  }, expectedAmounts);
+  const attempt = await callBuyerAccessStripeWebhook(event);
+  assert.equal(attempt.status, 200, attempt.responseText);
+  assert.equal(attempt.payload?.received, true);
+  assert.equal(attempt.payload?.buyerAccessStatus, expectedStatus);
+  const [
+    order,
+    organization,
+    settings,
+    provisioningOrder,
+    invite,
+    audit
+  ] = await Promise.all([
+    fixture.orderRef.get(),
+    fixture.organizationRef.get(),
+    fixture.settingsRef.get(),
+    fixture.provisioningOrderRef.get(),
+    fixture.inviteRef.get(),
+    db.collection("webhookEvents")
+      .doc(`stripe-buyer-${event.id}`)
+      .get()
+  ]);
+  assert.equal(order.data()?.status, expectedStatus);
+  assert.equal(order.data()?.accessGranted, false);
+  assert.equal(order.data()?.workspaceReady, false);
+  assert.equal(order.data()?.ownerUid, undefined);
+  assert.equal(organization.exists, false);
+  assert.equal(settings.exists, false);
+  assert.equal(provisioningOrder.exists, false);
+  assert.equal(invite.exists, false);
+  assert.equal(audit.data()?.status, "processed");
+  assert.equal(audit.data()?.providerState, {
+    "invoice.payment_failed": "failed",
+    "invoice.voided": "void",
+    "invoice.marked_uncollectible": "expired"
+  }[eventType]);
+}
+
+await assertBuyerAccessUnfulfilledLifecycle({
+  eventType: "invoice.payment_failed",
+  expectedStatus: "payment_failed",
+  suffix: "Failed102"
+});
+await assertBuyerAccessUnfulfilledLifecycle({
+  eventType: "invoice.voided",
+  expectedStatus: "void",
+  suffix: "Void103"
+});
+await assertBuyerAccessUnfulfilledLifecycle({
+  eventType: "invoice.marked_uncollectible",
+  expectedStatus: "expired",
+  suffix: "Expired104"
+});
+
 const retiredBulkPurgeQuoteId = "retired-bulk-purge-quote";
 const retiredBulkPurgePortalKey = "retired-bulk-purge-portal-key";
 await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).create({
@@ -2229,4 +2979,5 @@ console.log("- provider/payment operations denied sales and rejected caller-supp
 console.log("- Stripe webhook rejected corrupt portals and underpayment, atomically accepted the exact paid session, and acknowledged a signed stale paid session with durable review evidence");
 console.log("- stale final-balance approval scope closed before provider preparation and permitted a fresh exact-scope request");
 console.log("- final-balance Stripe webhook atomically settled the quote ledger and customer-safe portal, deduped replay, and accepted late settlement after provider failure");
+console.log("- buyer-access invoice webhook rejected amount and identity mismatches, created only a pending seven-day activation invite after paid settlement, required exact-email verification before access, and did not restore revoked access on replay");
 console.log("- hard delete retired roles/invites/portal snapshots and tombstone blocked tenant resurrection");

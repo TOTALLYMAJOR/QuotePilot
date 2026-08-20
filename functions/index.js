@@ -2,7 +2,7 @@ const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { createHash, randomInt, randomUUID } = require("node:crypto");
-const { FieldValue, getFirestore } = require("firebase-admin/firestore");
+const { FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestore");
 const Stripe = require("stripe");
 const twilio = require("twilio");
 const {
@@ -72,6 +72,10 @@ const {
   planStripeCheckoutTransition
 } = require("./stripeProviderState");
 const {
+  constructStripeWebhookEvent,
+  normalizeStripeWebhookSecrets
+} = require("./stripeWebhookSecrets");
+const {
   PaymentDispatchStateError,
   beginPaymentDispatchAttempt,
   normalizePaymentDispatch,
@@ -109,6 +113,42 @@ const {
   planQuoteDeliveryOutcomeResolution,
   resolveQuoteDeliveryRevisionId
 } = require("./quoteDelivery");
+const {
+  BUYER_ACCESS_AMOUNT_CENTS,
+  BUYER_ACCESS_CURRENCY,
+  BUYER_ACCESS_FLOW,
+  BUYER_ACCESS_MODE,
+  BUYER_ACCESS_PLAN,
+  BUYER_ACCESS_STATUS_RATE_LIMIT,
+  BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
+  BUYER_ACCESS_STRIPE_API_VERSION,
+  CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET,
+  BuyerAccessError,
+  assertBuyerAccessInvoiceBinding,
+  assertBuyerAccessRuntime,
+  assertBuyerAccessTurnstileResult,
+  authorizeBuyerAccessStatusRequest,
+  buildBuyerAccessIdentifiers,
+  buildBuyerAccessStripePlan,
+  buyerAccessStripeIdempotencyKey,
+  buyerAccessOrderIdForRequest,
+  buyerAccessProviderStateForEvent,
+  buyerAccessProviderStateForInvoice,
+  buyerAccessRateLimitDocumentId,
+  buyerAccessStatusResponse,
+  buyerAccessStatusTokenMatches,
+  hashBuyerAccessSecret,
+  hasBuyerAccessReissuableVoidEvidence,
+  isBuyerAccessInvoice,
+  normalizeBuyerAccessRequest,
+  normalizeBuyerAccessRepairRequest,
+  normalizeBuyerAccessStatusRequest,
+  normalizeBuyerAccessTurnstileHostnames,
+  planBuyerAccessCreationReservation,
+  planBuyerAccessRateLimit,
+  planBuyerAccessTransition,
+  resolveBuyerAccessBootstrapRecovery
+} = require("./buyerAccess");
 
 initializeApp();
 
@@ -132,6 +172,15 @@ const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
+const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
+const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
+const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
+const STRIPE_WEBHOOK_SECRET_NAME = "STRIPE_WEBHOOK_SECRET";
+const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
+const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
+const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
+const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
+const BUYER_ACCESS_RATE_LIMIT_SECRET_NAME = "BUYER_ACCESS_RATE_LIMIT_SECRET";
 const PAYMENT_REQUEST_FLOWS = Object.freeze({
   deposit: Object.freeze({
     paymentKind: "deposit",
@@ -209,6 +258,15 @@ function readConfig(path, fallback = "") {
     return String(value).trim();
   }
   return fallback;
+}
+
+function readBoundSecret(name) {
+  const normalizedName = normalizeText(name).toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]{2,127}$/.test(normalizedName)) {
+    throw new Error("Secret Manager binding name is invalid.");
+  }
+  const envValue = readEnvConfig(normalizedName);
+  return envValue.present ? normalizeText(envValue.value) : "";
 }
 
 function readEmailSet(path) {
@@ -534,7 +592,9 @@ async function readPendingOrganizationInvite(tx, email) {
     inviteRef,
     role,
     organizationId,
-    organizationName: normalizeText(invite.organizationName)
+    organizationName: normalizeText(invite.organizationName),
+    buyerAccessOrderId: normalizeText(invite.buyerAccessOrderId),
+    buyerAccessMode: normalizeText(invite.buyerAccessMode)
   };
 }
 
@@ -735,25 +795,39 @@ function buildProvisioningEmailPayload({
   unpaidFeatureIds = [],
   supportEmail = "",
   orderId = "",
-  ownerUid = ""
+  ownerUid = "",
+  requiresVerifiedSignIn = false
 } = {}) {
   const greetingName = normalizeText(ownerName, "there");
   const roleLine = ownerUid
     ? "Your admin access is already linked to your account."
-    : "Your admin access is pre-authorized for this email and will activate on first sign-in.";
+    : requiresVerifiedSignIn
+      ? "Your admin access is pre-authorized for this exact email and activates only after email verification and a verified sign-in."
+      : "Your admin access is pre-authorized for this email and will activate on first sign-in.";
   const supportLine = supportEmail
     ? `If you need help, reply to this message or contact ${supportEmail}.`
     : "If you need help, reply to this message and we will assist right away.";
 
+  const gettingStartedLines = requiresVerifiedSignIn
+    ? [
+      `1. Open ${appUrl}`,
+      `2. Create an account or sign in using exactly ${ownerEmail}`,
+      "3. Complete the email verification message sent by Firebase",
+      "4. Return to QuotePilot and sign in again with the verified email",
+      `5. Confirm you are in organization "${organizationName}" (${organizationId})`
+    ]
+    : [
+      `1. Open ${appUrl}`,
+      `2. Sign in (or create an account) using ${ownerEmail}`,
+      `3. Confirm you are in organization "${organizationName}" (${organizationId})`
+    ];
   const lines = [
     `Hi ${greetingName},`,
     "",
     `Your ${organizationName} workspace is ready.`,
     "",
     "Getting started:",
-    `1. Open ${appUrl}`,
-    `2. Sign in (or create an account) using ${ownerEmail}`,
-    `3. Confirm you are in organization "${organizationName}" (${organizationId})`,
+    ...gettingStartedLines,
     "",
     roleLine,
     orderId ? `Order reference: ${orderId}` : "",
@@ -778,13 +852,20 @@ function buildProvisioningEmailPayload({
   const escapedUnpaidFeatures = formatFeatureListForEmail(unpaidFeatureIds)
     .map((feature) => escapeHtml(feature))
     .join("<br/>");
+  const gettingStartedHtml = requiresVerifiedSignIn
+    ? `1. Open <a href="${escapeHtml(appUrl)}">${escapeHtml(appUrl)}</a><br/>
+    2. Create an account or sign in using exactly <strong>${escapeHtml(ownerEmail)}</strong><br/>
+    3. Complete the email verification message sent by Firebase<br/>
+    4. Return to QuotePilot and sign in again with the verified email<br/>
+    5. Confirm your organization is <strong>${escapeHtml(organizationName)}</strong> (${escapeHtml(organizationId)})`
+    : `1. Open <a href="${escapeHtml(appUrl)}">${escapeHtml(appUrl)}</a><br/>
+    2. Sign in (or create an account) using <strong>${escapeHtml(ownerEmail)}</strong><br/>
+    3. Confirm your organization is <strong>${escapeHtml(organizationName)}</strong> (${escapeHtml(organizationId)})`;
   const html = `
     <p>Hi ${escapeHtml(greetingName)},</p>
     <p>Your <strong>${escapeHtml(organizationName)}</strong> workspace is ready.</p>
     <p><strong>Getting started</strong><br/>
-    1. Open <a href="${escapeHtml(appUrl)}">${escapeHtml(appUrl)}</a><br/>
-    2. Sign in (or create an account) using <strong>${escapeHtml(ownerEmail)}</strong><br/>
-    3. Confirm your organization is <strong>${escapeHtml(organizationName)}</strong> (${escapeHtml(organizationId)})</p>
+    ${gettingStartedHtml}</p>
     <p>${escapeHtml(roleLine)}</p>
     ${orderId ? `<p>Order reference: <strong>${escapeHtml(orderId)}</strong></p>` : ""}
     <p><strong>Enabled modules</strong><br/>${escapedPaidFeatures}</p>
@@ -832,8 +913,15 @@ function getTwilioConfig() {
 function getStripeConfig() {
   return {
     mode: readConfig("stripe.mode"),
-    secretKey: readConfig("stripe.secret_key"),
-    webhookSecret: readConfig("stripe.webhook_secret")
+    secretKey: readBoundSecret(STRIPE_SECRET_NAME),
+    webhookSecret: readBoundSecret(STRIPE_WEBHOOK_SECRET_NAME)
+  };
+}
+
+function getBuyerAccessStripeConfig() {
+  return {
+    mode: readConfig("buyer_access_stripe_mode"),
+    secretKey: readBoundSecret(BUYER_ACCESS_STRIPE_SECRET_NAME)
   };
 }
 
@@ -852,7 +940,7 @@ function getEmailConfig() {
     provider: getEmailProvider(),
     fromEmail,
     fromName,
-    resendApiKey: normalizeText(readConfig("resend.api_key")),
+    resendApiKey: readBoundSecret(RESEND_API_KEY_SECRET_NAME),
     senderApproved:
       fromName === APPROVED_EMAIL_FROM_NAME
       && fromEmail === APPROVED_EMAIL_FROM_EMAIL
@@ -893,6 +981,7 @@ function buildIntegrationSetupStatus() {
   if (stripeMissingFields.length === 0) {
     try {
       assertStripeSecretKeyMode(stripeConfig.secretKey, stripeConfig.mode);
+      normalizeStripeWebhookSecrets(stripeConfig.webhookSecret);
     } catch (err) {
       stripeConfigurationError = normalizeText(err?.message);
     }
@@ -1200,7 +1289,7 @@ async function retireOrganizationRoleAssignments(organizationId) {
 }
 
 function getStripeClient() {
-  const secretKey = readConfig("stripe.secret_key");
+  const secretKey = readBoundSecret(STRIPE_SECRET_NAME);
   if (!secretKey) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -1229,9 +1318,44 @@ function getStripeMode() {
   }
 }
 
+function getBuyerAccessStripeClient() {
+  const { mode, secretKey } = getBuyerAccessStripeConfig();
+  if (!secretKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access Stripe invoicing is not configured."
+    );
+  }
+  try {
+    assertStripeSecretKeyMode(secretKey, mode);
+    assertBuyerAccessRuntime({ enabled: "true", stripeMode: mode });
+  } catch (err) {
+    if (err instanceof StripeProviderStateError || err instanceof BuyerAccessError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+  return new Stripe(secretKey, { apiVersion: BUYER_ACCESS_STRIPE_API_VERSION });
+}
+
+function assertBuyerAccessRuntimeEnabled() {
+  try {
+    return assertBuyerAccessRuntime({
+      enabled: readConfig("buyer_access.enabled"),
+      stripeMode: readConfig("buyer_access_stripe_mode")
+    });
+  } catch (err) {
+    if (err instanceof BuyerAccessError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+}
+
 async function ensureOrganizationBootstrapInternal({
   uid,
-  email
+  email,
+  authenticatedClaims = {}
 }) {
   const normalizedUid = normalizeText(uid);
   const normalizedEmail = normalizeEmail(email);
@@ -1243,11 +1367,119 @@ async function ensureOrganizationBootstrapInternal({
     const roleRef = db.collection(ROLES_COLLECTION).doc(normalizedUid);
     const roleSnap = await tx.get(roleRef);
     const pendingInvite = await readPendingOrganizationInvite(tx, normalizedEmail);
+    const roleData = roleSnap.data() || {};
 
     const platformAdmin = isPlatformAdminEmail(normalizedEmail);
-    const existingRole = normalizeRole(roleSnap.data()?.role);
+    const existingRole = normalizeRole(roleData.role);
     const role = pendingInvite?.role || (platformAdmin ? "admin" : existingRole);
-    let organizationId = normalizeOrganizationId(pendingInvite?.organizationId || roleSnap.data()?.organizationId);
+    let organizationId = normalizeOrganizationId(
+      pendingInvite?.organizationId || roleData.organizationId
+    );
+    let buyerAccessOrderRef = null;
+    let buyerAccessOrder = null;
+    let resolvedBuyerAccessOrderId = "";
+    const roleBuyerAccessOrderId = normalizeText(roleData.buyerAccessOrderId);
+    const roleBuyerAccessMode = normalizeText(roleData.buyerAccessMode);
+    const roleSource = normalizeText(roleData.source);
+    const hasBuyerAccessRoleTag = Boolean(
+      roleBuyerAccessOrderId
+      || roleBuyerAccessMode
+      || roleSource === BUYER_ACCESS_FLOW
+    );
+
+    if (pendingInvite?.buyerAccessOrderId) {
+      const buyerAccessOrderId = normalizeText(pendingInvite.buyerAccessOrderId);
+      if (
+        !/^ba-[a-f0-9]{40}$/.test(buyerAccessOrderId)
+        || pendingInvite.buyerAccessMode !== BUYER_ACCESS_MODE
+        || hasBuyerAccessRoleTag
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The paid buyer invitation identity is invalid."
+        );
+      }
+      resolvedBuyerAccessOrderId = buyerAccessOrderId;
+      buyerAccessOrderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(buyerAccessOrderId);
+      const buyerAccessOrderSnap = await tx.get(buyerAccessOrderRef);
+      if (!buyerAccessOrderSnap.exists) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The paid buyer order for this invitation is missing."
+        );
+      }
+      buyerAccessOrder = buyerAccessOrderSnap.data() || {};
+      if (
+        normalizeText(buyerAccessOrder.orderId) !== buyerAccessOrderId
+        || normalizeText(buyerAccessOrder.flow) !== BUYER_ACCESS_FLOW
+        || normalizeText(buyerAccessOrder.buyerAccessMode) !== BUYER_ACCESS_MODE
+        || normalizeEmail(buyerAccessOrder.ownerEmail) !== normalizedEmail
+        || normalizeOrganizationId(buyerAccessOrder.organizationId) !== organizationId
+        || buyerAccessOrder.workspaceReady !== true
+        || !["activation_pending", "activation_sent"].includes(
+          normalizeText(buyerAccessOrder.status).toLowerCase()
+        )
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The paid buyer invitation no longer matches its fulfillment record."
+        );
+      }
+      const existingRoleOrganizationId = normalizeOrganizationId(
+        roleData.organizationId
+      );
+      const existingRoleName = normalizeText(roleData.role).toLowerCase();
+      const authenticatedOrganizationId = normalizeOrganizationId(
+        authenticatedClaims.organizationId
+      );
+      const authenticatedRole = normalizeText(authenticatedClaims.role).toLowerCase();
+      if (
+        platformAdmin
+        || existingRoleOrganizationId
+        || (existingRoleName && existingRoleName !== "customer")
+        || authenticatedOrganizationId
+        || (authenticatedRole && authenticatedRole !== "customer")
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The paid buyer invitation cannot replace existing organization access."
+        );
+      }
+    } else if (hasBuyerAccessRoleTag) {
+      if (
+        !/^ba-[a-f0-9]{40}$/.test(roleBuyerAccessOrderId)
+        || roleBuyerAccessMode !== BUYER_ACCESS_MODE
+        || roleSource !== BUYER_ACCESS_FLOW
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The paid buyer role recovery identity is invalid."
+        );
+      }
+      buyerAccessOrderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
+        .doc(roleBuyerAccessOrderId);
+      const buyerAccessOrderSnap = await tx.get(buyerAccessOrderRef);
+      if (!buyerAccessOrderSnap.exists) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The paid buyer order for this role is missing."
+        );
+      }
+      buyerAccessOrder = buyerAccessOrderSnap.data() || {};
+      try {
+        const recovered = resolveBuyerAccessBootstrapRecovery({
+          authenticatedClaims,
+          buyerAccessOrder,
+          email: normalizedEmail,
+          roleRecord: roleData,
+          uid: normalizedUid
+        });
+        resolvedBuyerAccessOrderId = recovered.buyerAccessOrderId;
+        organizationId = recovered.organizationId;
+      } catch (err) {
+        throwBuyerAccessHttpsError(err);
+      }
+    }
 
     if ((role === "admin" || role === "sales") && !organizationId && !platformAdmin) {
       throw new functions.https.HttpsError(
@@ -1294,6 +1526,17 @@ async function ensureOrganizationBootstrapInternal({
         updatedAt: FieldValue.serverTimestamp(),
         updatedAtISO: nowISO
       }, { merge: true });
+      if (buyerAccessOrderRef && buyerAccessOrder) {
+        tx.set(buyerAccessOrderRef, {
+          status: "active",
+          accessGranted: true,
+          ownerUid: normalizedUid,
+          activatedAtISO: nowISO,
+          claimsSyncStatus: "pending",
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
     }
 
     const rolePayload = {
@@ -1302,6 +1545,11 @@ async function ensureOrganizationBootstrapInternal({
       organizationId: organizationId || "",
       updatedAt: FieldValue.serverTimestamp()
     };
+    if (resolvedBuyerAccessOrderId) {
+      rolePayload.buyerAccessOrderId = resolvedBuyerAccessOrderId;
+      rolePayload.buyerAccessMode = BUYER_ACCESS_MODE;
+      rolePayload.source = BUYER_ACCESS_FLOW;
+    }
     if (!roleSnap.exists) {
       rolePayload.createdAt = FieldValue.serverTimestamp();
     }
@@ -1311,7 +1559,8 @@ async function ensureOrganizationBootstrapInternal({
     return {
       role,
       organizationId: organizationId || "",
-      createdOrganization: false
+      createdOrganization: false,
+      buyerAccessOrderId: resolvedBuyerAccessOrderId
     };
   });
 }
@@ -2567,9 +2816,10 @@ async function sendCustomerEmail({
     }
     functions.logger.error("Customer email send failed", {
       provider: emailConfig.provider,
-      to,
-      subject: normalizeText(subject),
-      error: normalizeText(error?.message)
+      operation: "transactional_email",
+      errorCode: normalizeText(
+        error?.code || error?.name || "email_send_failed"
+      ).slice(0, 80)
     });
     const classification = classifyQuoteDeliveryAttemptError(error);
     const publicError = new functions.https.HttpsError(
@@ -2686,7 +2936,8 @@ async function finalizeProvisioningOrder({
   supportEmail,
   entitlements,
   sendEmail,
-  existingEmail = null
+  existingEmail = null,
+  requiresVerifiedSignIn = false
 }) {
   let claimsSync = {
     required: Boolean(ownerUid),
@@ -2731,7 +2982,8 @@ async function finalizeProvisioningOrder({
     unpaidFeatureIds: entitlements.unpaidFeatureIds,
     supportEmail,
     orderId,
-    ownerUid
+    ownerUid,
+    requiresVerifiedSignIn
   });
 
   let dispatchLease = null;
@@ -2792,6 +3044,9 @@ async function finalizeProvisioningOrder({
   const existingSentAtISO = normalizeText(existingEmail?.sentAtISO);
   const existingFailedAtISO = normalizeText(existingEmail?.failedAtISO);
   const existingCompletedAtISO = normalizeText(existingEmail?.completedAtISO);
+  const failedAtISO = dispatchLease?.state === "acquired"
+    ? completedAtISO
+    : existingFailedAtISO || completedAtISO;
   const persistedEmail = {
     ...(dispatchLease?.email || {}),
     ...emailResult,
@@ -2801,7 +3056,7 @@ async function finalizeProvisioningOrder({
     ...(emailResult.sent
       ? { sentAtISO: existingSentAtISO || completedAtISO }
       : sendEmail
-        ? { failedAtISO: existingFailedAtISO || completedAtISO }
+        ? { failedAtISO }
         : { completedAtISO: existingCompletedAtISO || completedAtISO })
   };
 
@@ -4018,6 +4273,69 @@ exports.syncUserClaimsFromRole = functions.region(REGION).https.onCall(async (da
   };
 });
 
+async function markBuyerAccessClaimsSyncSucceeded({
+  buyerAccessOrderId,
+  email,
+  organizationId,
+  uid
+} = {}) {
+  const normalizedOrderId = normalizeText(buyerAccessOrderId);
+  const normalizedUid = normalizeText(uid);
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  const claimsUser = await auth.getUser(normalizedUid);
+  if (
+    claimsUser.disabled === true
+    || claimsUser.emailVerified !== true
+    || normalizeEmail(claimsUser.email) !== normalizedEmail
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The paid buyer identity changed before claims completion."
+    );
+  }
+  const roleRef = db.collection(ROLES_COLLECTION).doc(normalizedUid);
+  const orderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(normalizedOrderId);
+  await db.runTransaction(async (tx) => {
+    const [roleSnap, orderSnap] = await Promise.all([
+      tx.get(roleRef),
+      tx.get(orderRef)
+    ]);
+    if (!roleSnap.exists || !orderSnap.exists) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "The paid buyer role or order is missing during claims completion."
+      );
+    }
+    let recovered;
+    try {
+      recovered = resolveBuyerAccessBootstrapRecovery({
+        authenticatedClaims: claimsUser.customClaims || {},
+        buyerAccessOrder: orderSnap.data() || {},
+        email: normalizedEmail,
+        roleRecord: roleSnap.data() || {},
+        uid: normalizedUid
+      });
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+    if (
+      recovered.buyerAccessOrderId !== normalizedOrderId
+      || recovered.organizationId !== normalizedOrganizationId
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "The paid buyer claims completion scope changed."
+      );
+    }
+    tx.set(orderRef, {
+      claimsSyncStatus: "succeeded",
+      claimsSyncedAtISO: new Date().toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
 exports.ensureOrganizationBootstrap = functions.region(REGION).https.onCall(async (data, context) => {
   const uid = normalizeText(context?.auth?.uid);
   if (!uid) {
@@ -4034,18 +4352,40 @@ exports.ensureOrganizationBootstrap = functions.region(REGION).https.onCall(asyn
       "Verify your email address before organization access can be activated."
     );
   }
+  const authenticatedUser = await auth.getUser(uid);
+  if (
+    authenticatedUser.disabled === true
+    || authenticatedUser.emailVerified !== true
+    || normalizeEmail(authenticatedUser.email) !== email
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The authenticated account is not eligible for organization activation."
+    );
+  }
 
   const bootstrap = await ensureOrganizationBootstrapInternal({
     uid,
-    email
+    email,
+    authenticatedClaims: authenticatedUser.customClaims || {}
   });
 
   await syncPrincipalClaims({
     uid,
     role: bootstrap.role,
     organizationId: bootstrap.organizationId,
+    rejectOrganizationReassignment: Boolean(bootstrap.buyerAccessOrderId),
     platformAdmin: isPlatformAdminEmail(email)
   });
+
+  if (bootstrap.buyerAccessOrderId) {
+    await markBuyerAccessClaimsSyncSucceeded({
+      buyerAccessOrderId: bootstrap.buyerAccessOrderId,
+      email,
+      organizationId: bootstrap.organizationId,
+      uid
+    });
+  }
 
   return {
     ok: true,
@@ -4571,7 +4911,10 @@ exports.preflightCustomerOrder = functions.region(REGION).https.onCall(async (da
   };
 });
 
-exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (data, context) => {
+exports.provisionCustomerOrder = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const {
     staff,
     actorEmail,
@@ -5004,9 +5347,12 @@ exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (da
       emailText: emailPayload.text
     }
   };
-});
+  });
 
-exports.repairCustomerProvisioningOrder = functions.region(REGION).https.onCall(async (data, context) => {
+exports.repairCustomerProvisioningOrder = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const staff = await assertStaff(context);
   if (staff.role !== "admin" || !staff.platformAdmin) {
     throw new functions.https.HttpsError(
@@ -5111,7 +5457,7 @@ exports.repairCustomerProvisioningOrder = functions.region(REGION).https.onCall(
       emailText: finalized.emailPayload.text
     }
   };
-});
+  });
 
 exports.archiveOrganizationWorkspace = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
@@ -6683,7 +7029,10 @@ exports.notifyOwnerNewQuote = functions.region(REGION).https.onCall(async (data,
   };
 });
 
-exports.sendQuoteToCustomer = functions.region(REGION).https.onCall(async (data, context) => {
+exports.sendQuoteToCustomer = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));
   if (normalizeText(data?.portalLink)) {
     throw new functions.https.HttpsError(
@@ -7061,7 +7410,7 @@ exports.sendQuoteToCustomer = functions.region(REGION).https.onCall(async (data,
     }
     throw err;
   }
-});
+  });
 
 exports.resolveQuoteDeliveryOutcome = functions.region(REGION).https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));
@@ -8203,37 +8552,61 @@ async function sendApprovedPaymentRequestEmail(data, context, paymentKind = "dep
   }
 }
 
-exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall((data, context) => (
-  sendApprovedPaymentRequestEmail(data, context, "deposit")
-));
+exports.sendPaymentRequestEmail = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME, RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    sendApprovedPaymentRequestEmail(data, context, "deposit")
+  ));
 
-exports.sendFinalBalanceRequestEmail = functions.region(REGION).https.onCall((data, context) => (
-  sendApprovedPaymentRequestEmail(data, context, "final_balance")
-));
+exports.sendFinalBalanceRequestEmail = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME, RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    sendApprovedPaymentRequestEmail(data, context, "final_balance")
+  ));
 
-exports.getIntegrationSetupStatus = functions.region(REGION).https.onCall(async (_data, context) => {
-  assertAdminStaff(await assertStaff(context));
-  return {
-    ok: true,
-    status: buildIntegrationSetupStatus()
-  };
-});
+exports.getIntegrationSetupStatus = functions
+  .runWith({
+    secrets: [
+      STRIPE_SECRET_NAME,
+      STRIPE_WEBHOOK_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onCall(async (_data, context) => {
+    assertAdminStaff(await assertStaff(context));
+    return {
+      ok: true,
+      status: buildIntegrationSetupStatus()
+    };
+  });
 
-exports.sendIntegrationTestSms = functions.region(REGION).https.onCall(async (data, context) => {
-  const staff = assertAdminStaff(await assertStaff(context));
-  const actorEmail = normalizeEmail(context?.auth?.token?.email || staff.uid);
-  const customMessage = normalizeText(data?.message);
-  const message =
-    customMessage ||
-    `Integration SMS test from QuotePilot (${new Date().toISOString()}) sent by ${actorEmail}.`;
-  const sms = await sendOwnerSms(message);
+exports.sendIntegrationTestSms = functions
+  .runWith({
+    secrets: [
+      STRIPE_SECRET_NAME,
+      STRIPE_WEBHOOK_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const staff = assertAdminStaff(await assertStaff(context));
+    const actorEmail = normalizeEmail(context?.auth?.token?.email || staff.uid);
+    const customMessage = normalizeText(data?.message);
+    const message =
+      customMessage ||
+      `Integration SMS test from QuotePilot (${new Date().toISOString()}) sent by ${actorEmail}.`;
+    const sms = await sendOwnerSms(message);
 
-  return {
-    ok: true,
-    sms,
-    status: buildIntegrationSetupStatus()
-  };
-});
+    return {
+      ok: true,
+      sms,
+      status: buildIntegrationSetupStatus()
+    };
+  });
 
 function normalizeApprovedCheckoutPreparation(input = {}) {
   const source = input && typeof input === "object" ? input : {};
@@ -9067,13 +9440,1008 @@ async function reconcileCheckout(data, context, paymentKind = "deposit") {
   }
 }
 
-exports.reconcileDepositCheckout = functions.region(REGION).https.onCall((data, context) => (
-  reconcileCheckout(data, context, "deposit")
-));
+exports.reconcileDepositCheckout = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    reconcileCheckout(data, context, "deposit")
+  ));
 
-exports.reconcileFinalBalanceCheckout = functions.region(REGION).https.onCall((data, context) => (
-  reconcileCheckout(data, context, "final_balance")
-));
+exports.reconcileFinalBalanceCheckout = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    reconcileCheckout(data, context, "final_balance")
+  ));
+
+function throwBuyerAccessHttpsError(err) {
+  if (err instanceof functions.https.HttpsError) throw err;
+  if (err instanceof BuyerAccessError) {
+    throw new functions.https.HttpsError(err.code, err.message);
+  }
+  throw err;
+}
+
+function getTrustedBuyerAccessRequestIp(context) {
+  const trustedRequestIp = normalizeText(
+    context?.rawRequest?.ip
+      || context?.rawRequest?.socket?.remoteAddress
+      || ""
+  ).slice(0, 128);
+  if (trustedRequestIp) return trustedRequestIp;
+  // The callable emulator does not consistently expose its loopback socket on
+  // context.rawRequest. Keep local rate limiting deterministic without adding
+  // a forwarded-header trust path or weakening deployed fail-closed behavior.
+  return process.env.FUNCTIONS_EMULATOR === "true" ? "127.0.0.1" : "";
+}
+
+function getBuyerAccessRateLimitSecret() {
+  const secretEnv = readEnvConfig("buyer_access_rate_limit_secret");
+  const rateLimitSecret = secretEnv.present ? normalizeText(secretEnv.value) : "";
+  try {
+    buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "config_probe",
+      value: "configured"
+    });
+  } catch (err) {
+    throwBuyerAccessHttpsError(err);
+  }
+  return rateLimitSecret;
+}
+
+function buyerAccessRateLimitDocumentIds({
+  orderId,
+  ownerEmail,
+  requestIp,
+  rateLimitSecret
+} = {}) {
+  const ids = {
+    ip: buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "invoice_ip",
+      value: normalizeText(requestIp)
+    }),
+    statusIp: buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "status_ip",
+      value: normalizeText(requestIp)
+    })
+  };
+  if (normalizeEmail(ownerEmail)) {
+    ids.email = buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "invoice_email",
+      value: normalizeEmail(ownerEmail)
+    });
+  }
+  if (normalizeText(orderId)) {
+    ids.reservation = buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "invoice_reservation",
+      value: normalizeText(orderId)
+    });
+  }
+  return ids;
+}
+
+async function reservePublicBuyerAccessCreation({
+  input,
+  rateLimitSecret,
+  requestIp
+} = {}) {
+  const identifiers = buildBuyerAccessIdentifiers({
+    ownerEmail: input.ownerEmail,
+    organizationName: input.organizationName,
+    randomUUID,
+    requestId: input.requestId
+  });
+  const rateIds = buyerAccessRateLimitDocumentIds({
+    orderId: identifiers.orderId,
+    ownerEmail: input.ownerEmail,
+    requestIp,
+    rateLimitSecret
+  });
+  const rates = db.collection(BUYER_ACCESS_RATE_LIMITS_COLLECTION);
+  const reservationRef = rates.doc(rateIds.reservation);
+  const ipRateRef = rates.doc(rateIds.ip);
+  const emailRateRef = rates.doc(rateIds.email);
+  const nowMs = Date.now();
+  try {
+    return await db.runTransaction(async (tx) => {
+      const reservationSnap = await tx.get(reservationRef);
+      const [ipRateSnap, emailRateSnap] = await Promise.all([
+        tx.get(ipRateRef),
+        tx.get(emailRateRef)
+      ]);
+      const reservation = planBuyerAccessCreationReservation({
+        currentEmailRate: emailRateSnap.exists ? emailRateSnap.data() : null,
+        currentIpRate: ipRateSnap.exists ? ipRateSnap.data() : null,
+        currentReservation: reservationSnap.exists ? reservationSnap.data() : null,
+        nowMs,
+        orderId: identifiers.orderId
+      });
+      if (reservation.blocked) {
+        throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "Buyer access invoice creation is temporarily limited."
+        );
+      }
+      tx.set(ipRateRef, {
+        scope: "ip_hour",
+        ...reservation.ipRate.patch,
+        expiresAt: Timestamp.fromMillis(reservation.ipRate.expiresAtMs),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      if (reservation.reused) {
+        return { identifiers, reused: true };
+      }
+      tx.set(emailRateRef, {
+        scope: "email_day",
+        ...reservation.emailRate.patch,
+        expiresAt: Timestamp.fromMillis(reservation.emailRate.expiresAtMs),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(reservationRef, {
+        ...reservation.reservationPatch,
+        expiresAt: Timestamp.fromDate(
+          new Date(reservation.reservationPatch.expiresAtISO)
+        ),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { identifiers, reused: false };
+    });
+  } catch (err) {
+    if (
+      err instanceof functions.https.HttpsError
+      && err.code === "resource-exhausted"
+    ) {
+      throw err;
+    }
+    functions.logger.warn("Buyer access creation reservation was unavailable", {
+      errorCode: normalizeText(err?.code || "rate_limit_unavailable").slice(0, 80)
+    });
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "Buyer access request is temporarily unavailable."
+    );
+  }
+}
+
+async function consumeBuyerAccessStatusRateLimit(context) {
+  const requestIp = getTrustedBuyerAccessRequestIp(context);
+  if (!requestIp) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Buyer access status is unavailable."
+    );
+  }
+  const rateLimitSecret = getBuyerAccessRateLimitSecret();
+  let rateRef;
+  try {
+    const rateIds = buyerAccessRateLimitDocumentIds({ requestIp, rateLimitSecret });
+    rateRef = db.collection(BUYER_ACCESS_RATE_LIMITS_COLLECTION).doc(rateIds.statusIp);
+  } catch (err) {
+    throwBuyerAccessHttpsError(err);
+  }
+
+  const nowMs = Date.now();
+  try {
+    await db.runTransaction(async (tx) => {
+      const rateSnap = await tx.get(rateRef);
+      const rate = planBuyerAccessRateLimit({
+        current: rateSnap.exists ? rateSnap.data() : null,
+        limit: BUYER_ACCESS_STATUS_RATE_LIMIT,
+        nowMs,
+        windowMs: BUYER_ACCESS_STATUS_RATE_WINDOW_MS
+      });
+      if (rate.blocked) {
+        throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "Buyer access status checks are temporarily limited."
+        );
+      }
+      tx.set(rateRef, {
+        scope: "status_ip_5m",
+        ...rate.patch,
+        expiresAt: Timestamp.fromMillis(rate.expiresAtMs),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    functions.logger.warn("Buyer access status rate limiting was unavailable", {
+      errorCode: normalizeText(err?.code || "rate_limit_unavailable").slice(0, 80)
+    });
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "Buyer access status is temporarily unavailable."
+    );
+  }
+}
+
+async function verifyBuyerAccessTurnstile({ requestIp, token } = {}) {
+  const secret = readBoundSecret(BUYER_ACCESS_TURNSTILE_SECRET_NAME);
+  if (!secret) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access verification is not configured."
+    );
+  }
+  let response;
+  try {
+    const body = new URLSearchParams({
+      secret,
+      response: token,
+      ...(requestIp ? { remoteip: requestIp } : {})
+    });
+    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      signal: AbortSignal.timeout(5_000)
+    });
+  } catch (err) {
+    functions.logger.warn("Buyer access verification provider was unavailable", {
+      errorCode: normalizeText(err?.name || err?.code || "verification_unavailable").slice(0, 80)
+    });
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "Buyer access verification is temporarily unavailable."
+    );
+  }
+  let result = null;
+  try {
+    result = await response.json();
+  } catch {
+    result = null;
+  }
+  if (!response.ok || !result) {
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "Buyer access verification is temporarily unavailable."
+    );
+  }
+  try {
+    return assertBuyerAccessTurnstileResult({
+      allowedHostnames: normalizeBuyerAccessTurnstileHostnames(
+        readConfig("buyer_access_turnstile_hostnames")
+      ),
+      allowOfficialLocalTestResult:
+        secret === CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET,
+      result
+    });
+  } catch (err) {
+    throwBuyerAccessHttpsError(err);
+  }
+}
+
+function assertBuyerAccessOrderRequest(order = {}, input = {}) {
+  if (
+    normalizeText(order.orderId) !== buyerAccessOrderIdForRequest({
+      ownerEmail: input.ownerEmail,
+      requestId: input.requestId
+    })
+    || normalizeEmail(order.ownerEmail) !== normalizeEmail(input.ownerEmail)
+    || normalizeText(order.organizationName) !== normalizeText(input.organizationName)
+    || normalizeText(order.ownerName) !== normalizeText(input.ownerName)
+    || normalizeText(order.flow) !== BUYER_ACCESS_FLOW
+    || normalizeText(order.buyerAccessMode) !== BUYER_ACCESS_MODE
+    || !buyerAccessStatusTokenMatches({
+      expectedHash: order.statusTokenHash,
+      statusToken: input.requestId
+    })
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Buyer access request cannot be completed."
+    );
+  }
+}
+
+async function assertPublicBuyerIdentityAvailable(ownerEmail) {
+  const email = normalizeEmail(ownerEmail);
+  if (isPlatformAdminEmail(email)) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Buyer access request cannot be completed."
+    );
+  }
+  const existingUser = await findAuthUserByEmail(email);
+  const inviteRef = db.collection(INVITES_COLLECTION).doc(inviteDocIdFromEmail(email));
+  const [inviteSnap, roleSnap] = await Promise.all([
+    inviteRef.get(),
+    existingUser
+      ? db.collection(ROLES_COLLECTION).doc(existingUser.uid).get()
+      : Promise.resolve(null)
+  ]);
+  const role = roleSnap?.data() || {};
+  const claimsRole = normalizeText(existingUser?.customClaims?.role).toLowerCase();
+  const roleName = normalizeText(role.role).toLowerCase();
+  if (
+    existingUser?.disabled === true
+    || normalizeOrganizationId(existingUser?.customClaims?.organizationId)
+    || (claimsRole && claimsRole !== "customer")
+    || normalizeOrganizationId(role.organizationId)
+    || (roleSnap?.exists && roleName && roleName !== "customer")
+    || inviteSnap.exists
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Buyer access request cannot be completed."
+    );
+  }
+  return { existingUser, inviteRef };
+}
+
+async function preparePublicBuyerAccessOrder({
+  identifiers,
+  input,
+  turnstileAudit
+} = {}) {
+  if (
+    !identifiers
+    || normalizeText(identifiers.orderId) !== buyerAccessOrderIdForRequest({
+      ownerEmail: input.ownerEmail,
+      requestId: input.requestId
+    })
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Buyer access request cannot be completed."
+    );
+  }
+  const orderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(identifiers.orderId);
+  const statusTokenHash = hashBuyerAccessSecret(input.requestId);
+  const nowMs = Date.now();
+  const nowISO = new Date(nowMs).toISOString();
+  return db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (orderSnap.exists) {
+      const existing = orderSnap.data() || {};
+      assertBuyerAccessOrderRequest(existing, input);
+      return { ...existing, orderRef };
+    }
+    const priorOrdersSnap = await tx.get(
+      db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
+        .where("ownerEmail", "==", normalizeEmail(input.ownerEmail))
+    );
+    const priorOrders = priorOrdersSnap.docs.filter(
+      (docSnap) => docSnap.id !== identifiers.orderId
+    );
+    if (priorOrders.some(
+      (docSnap) => !hasBuyerAccessReissuableVoidEvidence(docSnap.data() || {})
+    )) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Buyer access request cannot be completed."
+      );
+    }
+    for (const priorOrderSnap of priorOrders) {
+      tx.set(priorOrderSnap.ref, {
+        supersededByOrderId: identifiers.orderId,
+        supersededAtISO: nowISO,
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    const order = {
+      orderId: identifiers.orderId,
+      flow: BUYER_ACCESS_FLOW,
+      buyerAccessMode: BUYER_ACCESS_MODE,
+      status: "invoice_preparing",
+      providerStep: "reserved",
+      invoiceGeneration: 1,
+      stripeCustomerId: "",
+      stripeInvoiceId: "",
+      stripeInvoiceItemId: "",
+      hostedInvoiceUrl: "",
+      organizationId: identifiers.organizationId,
+      organizationName: input.organizationName,
+      ownerUid: "",
+      ownerEmail: input.ownerEmail,
+      ownerName: input.ownerName,
+      plan: BUYER_ACCESS_PLAN,
+      amountCents: BUYER_ACCESS_AMOUNT_CENTS,
+      currency: BUYER_ACCESS_CURRENCY,
+      statusTokenHash,
+      accessGranted: false,
+      workspaceReady: false,
+      activationEmailSent: false,
+      signedVoidObserved: false,
+      turnstile: {
+        success: true,
+        action: turnstileAudit.action,
+        hostname: turnstileAudit.hostname,
+        challengeTimestamp: turnstileAudit.challengeTimestamp,
+        verifiedAtISO: nowISO
+      },
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    tx.create(orderRef, order);
+    return { ...order, orderRef };
+  });
+}
+
+async function persistBuyerAccessProviderStep({ input, order, patch } = {}) {
+  return db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(order.orderRef);
+    if (!orderSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Buyer access order not found.");
+    }
+    const current = orderSnap.data() || {};
+    assertBuyerAccessOrderRequest(current, input);
+    const idFields = ["stripeCustomerId", "stripeInvoiceId", "stripeInvoiceItemId"];
+    for (const field of idFields) {
+      if (
+        normalizeText(current[field])
+        && normalizeText(patch?.[field])
+        && normalizeText(current[field]) !== normalizeText(patch[field])
+      ) {
+        throw new functions.https.HttpsError(
+          "aborted",
+          "Buyer access provider identity changed during creation."
+        );
+      }
+    }
+    const nowISO = new Date().toISOString();
+    tx.set(order.orderRef, {
+      ...patch,
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { ...current, ...patch, orderRef: order.orderRef };
+  });
+}
+
+function assertBuyerAccessStripeCustomer(customer, order) {
+  const id = normalizeText(customer?.id);
+  if (
+    !/^cus_[A-Za-z0-9]+$/.test(id)
+    || customer?.livemode !== false
+    || normalizeEmail(customer?.email) !== normalizeEmail(order.ownerEmail)
+    || normalizeText(customer?.metadata?.flow) !== BUYER_ACCESS_FLOW
+    || normalizeText(customer?.metadata?.buyerAccessOrderId) !== normalizeText(order.orderId)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Stripe returned an invalid buyer access customer."
+    );
+  }
+  return id;
+}
+
+async function createOrResumeBuyerAccessInvoice({ input, order } = {}) {
+  const stripe = getBuyerAccessStripeClient();
+  const plan = buildBuyerAccessStripePlan({
+    generation: order.invoiceGeneration,
+    orderId: order.orderId,
+    organizationName: order.organizationName,
+    ownerEmail: order.ownerEmail,
+    ownerName: order.ownerName
+  });
+
+  if (!normalizeText(order.stripeCustomerId)) {
+    let customer;
+    try {
+      customer = await stripe.customers.create(plan.customer.params, {
+        idempotencyKey: plan.customer.idempotencyKey
+      });
+    } catch (err) {
+      functions.logger.error("Buyer access Stripe Customer creation failed", {
+        orderId: order.orderId,
+        providerStep: "customer",
+        errorCode: normalizeText(err?.code || err?.type || "creation_failed").slice(0, 80)
+      });
+      throw new functions.https.HttpsError("unavailable", "Stripe could not prepare the invoice.");
+    }
+    const stripeCustomerId = assertBuyerAccessStripeCustomer(customer, order);
+    order = await persistBuyerAccessProviderStep({
+      input,
+      order,
+      patch: { stripeCustomerId, providerStep: "customer_created" }
+    });
+  }
+
+  if (!normalizeText(order.stripeInvoiceId)) {
+    let invoice;
+    try {
+      invoice = await stripe.invoices.create({
+        ...plan.invoice.params,
+        customer: order.stripeCustomerId
+      }, { idempotencyKey: plan.invoice.idempotencyKey });
+    } catch (err) {
+      functions.logger.error("Buyer access Stripe Invoice creation failed", {
+        orderId: order.orderId,
+        providerStep: "invoice",
+        errorCode: normalizeText(err?.code || err?.type || "creation_failed").slice(0, 80)
+      });
+      throw new functions.https.HttpsError("unavailable", "Stripe could not prepare the invoice.");
+    }
+    if (
+      !/^in_[A-Za-z0-9]+$/.test(normalizeText(invoice?.id))
+      || invoice?.livemode !== false
+      || normalizeText(invoice?.status).toLowerCase() !== "draft"
+      || normalizeText(invoice?.customer) !== order.stripeCustomerId
+      || normalizeText(invoice?.metadata?.buyerAccessOrderId) !== order.orderId
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Stripe returned an invalid buyer access Invoice."
+      );
+    }
+    order = await persistBuyerAccessProviderStep({
+      input,
+      order,
+      patch: { stripeInvoiceId: invoice.id, providerStep: "invoice_created" }
+    });
+  }
+
+  if (!normalizeText(order.stripeInvoiceItemId)) {
+    let invoiceItem;
+    try {
+      invoiceItem = await stripe.invoiceItems.create({
+        ...plan.invoiceItem.params,
+        customer: order.stripeCustomerId,
+        invoice: order.stripeInvoiceId
+      }, { idempotencyKey: plan.invoiceItem.idempotencyKey });
+    } catch (err) {
+      functions.logger.error("Buyer access Stripe Invoice Item creation failed", {
+        orderId: order.orderId,
+        providerStep: "invoice_item",
+        errorCode: normalizeText(err?.code || err?.type || "creation_failed").slice(0, 80)
+      });
+      throw new functions.https.HttpsError("unavailable", "Stripe could not prepare the invoice.");
+    }
+    if (
+      !/^ii_[A-Za-z0-9]+$/.test(normalizeText(invoiceItem?.id))
+      || invoiceItem?.livemode !== false
+      || normalizeText(invoiceItem?.invoice) !== order.stripeInvoiceId
+      || normalizeText(invoiceItem?.customer) !== order.stripeCustomerId
+      || Number(invoiceItem?.amount) !== BUYER_ACCESS_AMOUNT_CENTS
+      || normalizeText(invoiceItem?.currency).toLowerCase() !== BUYER_ACCESS_CURRENCY
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Stripe returned an invalid buyer access Invoice Item."
+      );
+    }
+    order = await persistBuyerAccessProviderStep({
+      input,
+      order,
+      patch: { stripeInvoiceItemId: invoiceItem.id, providerStep: "invoice_item_created" }
+    });
+  }
+
+  let invoice;
+  try {
+    invoice = await stripe.invoices.finalizeInvoice(
+      order.stripeInvoiceId,
+      plan.finalize.params,
+      { idempotencyKey: plan.finalize.idempotencyKey }
+    );
+    const finalizedBinding = assertBuyerAccessInvoiceBinding({
+      order,
+      invoice,
+      providerState: "open",
+      stripeMode: "test"
+    });
+    order = await persistBuyerAccessProviderStep({
+      input,
+      order,
+      patch: {
+        hostedInvoiceUrl: finalizedBinding.hostedInvoiceUrl,
+        providerStep: "invoice_finalized"
+      }
+    });
+    invoice = await stripe.invoices.sendInvoice(
+      order.stripeInvoiceId,
+      plan.send.params,
+      { idempotencyKey: plan.send.idempotencyKey }
+    );
+  } catch (err) {
+    if (err instanceof BuyerAccessError || err instanceof functions.https.HttpsError) {
+      throwBuyerAccessHttpsError(err);
+    }
+    functions.logger.error("Buyer access Stripe Invoice finalization or send failed", {
+      orderId: order.orderId,
+      providerStep: "finalize_or_send",
+      errorCode: normalizeText(err?.code || err?.type || "provider_failed").slice(0, 80)
+    });
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "Stripe could not finalize the invoice. Retry safely."
+    );
+  }
+  const sentBinding = assertBuyerAccessInvoiceBinding({
+    order,
+    invoice,
+    providerState: "open",
+    stripeMode: "test"
+  });
+  return persistBuyerAccessProviderStep({
+    input,
+    order,
+    patch: {
+      status: "invoice_open",
+      providerStep: "invoice_sent",
+      hostedInvoiceUrl: sentBinding.hostedInvoiceUrl,
+      invoiceSentAtISO: new Date().toISOString(),
+      lastProviderState: "open"
+    }
+  });
+}
+
+function assertBuyerAccessRepairOrder(order = {}, orderId = "") {
+  const normalizedOrderId = normalizeText(orderId).toLowerCase();
+  const status = normalizeText(order.status).toLowerCase();
+  if (
+    normalizeText(order.orderId).toLowerCase() !== normalizedOrderId
+    || !["invoice_open", "payment_processing", "payment_failed", "expired", "void"]
+      .includes(status)
+    || normalizeText(order.supersededByOrderId)
+    || order.accessGranted === true
+    || order.workspaceReady === true
+    || order.activationEmailSent === true
+    || normalizeText(order.ownerUid)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access repair requires one unfulfilled order with a server-recorded Invoice."
+    );
+  }
+  return order;
+}
+
+function buyerAccessRepairArtifactRefs(order = {}) {
+  const organizationId = normalizeOrganizationId(order.organizationId);
+  const ownerEmail = normalizeEmail(order.ownerEmail);
+  if (!organizationId || !isValidEmail(ownerEmail)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access repair target identity is invalid."
+    );
+  }
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    inviteRef: db.collection(INVITES_COLLECTION).doc(inviteDocIdFromEmail(ownerEmail)),
+    organizationRef,
+    provisioningOrderRef: db.collection(PROVISIONING_ORDERS_COLLECTION).doc(order.orderId),
+    settingsRef: organizationRef.collection("settings").doc("config")
+  };
+}
+
+async function assertBuyerAccessRepairArtifactsAbsent(order = {}) {
+  const refs = buyerAccessRepairArtifactRefs(order);
+  const snapshots = await Promise.all(Object.values(refs).map((ref) => ref.get()));
+  if (snapshots.some((snapshot) => snapshot.exists)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access repair is blocked because fulfillment artifacts already exist."
+    );
+  }
+  return refs;
+}
+
+exports.repairBuyerAccessInvoice = functions
+  .runWith({ secrets: [BUYER_ACCESS_STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const staff = await assertStaff(context);
+    if (staff.role !== "admin" || !staff.platformAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Platform administrator authority is required for buyer invoice repair."
+      );
+    }
+
+    let input;
+    try {
+      input = normalizeBuyerAccessRepairRequest(data);
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+    const orderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(input.orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Buyer access order not found.");
+    }
+    let order = assertBuyerAccessRepairOrder(orderSnap.data() || {}, input.orderId);
+    await assertPublicBuyerIdentityAvailable(order.ownerEmail);
+    let artifactRefs = await assertBuyerAccessRepairArtifactsAbsent(order);
+
+    const stripe = getBuyerAccessStripeClient();
+    let invoice;
+    try {
+      invoice = await stripe.invoices.retrieve(normalizeText(order.stripeInvoiceId));
+    } catch (err) {
+      functions.logger.error("Buyer access repair Invoice retrieval failed", {
+        orderId: input.orderId,
+        errorCode: normalizeText(err?.code || err?.type || "provider_unavailable").slice(0, 80)
+      });
+      throw new functions.https.HttpsError(
+        "unavailable",
+        "Stripe could not verify the buyer access Invoice."
+      );
+    }
+
+    let providerState = buyerAccessProviderStateForInvoice(invoice);
+    if (!["expired", "void"].includes(providerState)) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        providerState === "paid"
+          ? "Stripe reports this buyer access Invoice as paid; void repair is forbidden."
+          : "Stripe does not report a terminal unpaid Invoice that can be repaired."
+      );
+    }
+    try {
+      assertBuyerAccessInvoiceBinding({
+        invoice,
+        order,
+        providerState,
+        stripeMode: "test"
+      });
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+
+    const providerMutation = providerState === "expired";
+    if (providerMutation) {
+      try {
+        invoice = await stripe.invoices.voidInvoice(
+          normalizeText(order.stripeInvoiceId),
+          {},
+          {
+            idempotencyKey: buyerAccessStripeIdempotencyKey({
+              generation: order.invoiceGeneration,
+              orderId: input.orderId,
+              step: "operator_void"
+            })
+          }
+        );
+        providerState = buyerAccessProviderStateForInvoice(invoice);
+        assertBuyerAccessInvoiceBinding({
+          invoice,
+          order,
+          providerState,
+          stripeMode: "test"
+        });
+      } catch (err) {
+        if (err instanceof BuyerAccessError || err instanceof functions.https.HttpsError) {
+          throwBuyerAccessHttpsError(err);
+        }
+        functions.logger.error("Buyer access repair Invoice void failed", {
+          orderId: input.orderId,
+          errorCode: normalizeText(err?.code || err?.type || "provider_unavailable").slice(0, 80)
+        });
+        throw new functions.https.HttpsError(
+          "unavailable",
+          "Stripe could not void the terminal buyer access Invoice."
+        );
+      }
+      if (providerState !== "void") {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Stripe did not return a void buyer access Invoice."
+        );
+      }
+    }
+
+    const auditEventId = `stripe-buyer-repair-${randomUUID()}`;
+    const auditRef = db.collection(WEBHOOK_EVENTS_COLLECTION).doc(auditEventId);
+    const nowISO = new Date().toISOString();
+    await db.runTransaction(async (tx) => {
+      const latestOrderSnap = await tx.get(orderRef);
+      if (!latestOrderSnap.exists) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Buyer access order disappeared during repair."
+        );
+      }
+      const latestOrder = assertBuyerAccessRepairOrder(
+        latestOrderSnap.data() || {},
+        input.orderId
+      );
+      if (
+        normalizeText(latestOrder.stripeInvoiceId) !== normalizeText(order.stripeInvoiceId)
+        || normalizeText(latestOrder.stripeCustomerId) !== normalizeText(order.stripeCustomerId)
+        || Number(latestOrder.invoiceGeneration) !== Number(order.invoiceGeneration)
+      ) {
+        throw new functions.https.HttpsError(
+          "aborted",
+          "Buyer access provider identity changed during repair."
+        );
+      }
+      artifactRefs = buyerAccessRepairArtifactRefs(latestOrder);
+      const artifactSnapshots = await Promise.all(
+        Object.values(artifactRefs).map((ref) => tx.get(ref))
+      );
+      if (artifactSnapshots.some((snapshot) => snapshot.exists)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Buyer access repair is blocked because fulfillment artifacts now exist."
+        );
+      }
+      assertBuyerAccessInvoiceBinding({
+        invoice,
+        order: latestOrder,
+        providerState: "void",
+        stripeMode: "test"
+      });
+      tx.create(auditRef, {
+        provider: "stripe",
+        flow: BUYER_ACCESS_FLOW,
+        buyerAccessMode: BUYER_ACCESS_MODE,
+        source: "admin_reconciliation",
+        eventId: auditEventId,
+        eventType: "invoice.voided.operator_repair",
+        status: "processed",
+        result: providerMutation ? "uncollectible_invoice_voided" : "void_invoice_reconciled",
+        livemode: false,
+        buyerAccessOrderId: input.orderId,
+        stripeInvoiceId: normalizeText(invoice.id),
+        stripeCustomerId: normalizeText(invoice.customer),
+        invoiceGeneration: Number(latestOrder.invoiceGeneration),
+        providerState: "void",
+        actorUid: staff.uid,
+        actorEmail: staff.email,
+        requestHost: staff.host,
+        processedAtISO: nowISO,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      tx.set(orderRef, {
+        status: "void",
+        accessGranted: false,
+        workspaceReady: false,
+        activationEmailSent: false,
+        signedVoidObserved: latestOrder.signedVoidObserved === true,
+        operatorVoidObserved: true,
+        operatorVoidAuditEventId: auditEventId,
+        lastProviderState: "void",
+        lastProviderObservationSource: "admin_reconciliation",
+        hostedInvoiceUrl: "",
+        repairedAtISO: nowISO,
+        repairedBy: {
+          uid: staff.uid,
+          email: staff.email
+        },
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+
+    return {
+      ok: true,
+      orderId: input.orderId,
+      status: "void",
+      providerState: "void",
+      providerVoidVerified: true,
+      emailWindowStillApplies: true,
+      providerMutation: providerMutation ? "voided" : "already_void",
+      auditEventId
+    };
+  });
+
+exports.createBuyerAccessInvoice = functions
+  .runWith({
+    secrets: [
+      BUYER_ACCESS_STRIPE_SECRET_NAME,
+      BUYER_ACCESS_TURNSTILE_SECRET_NAME,
+      BUYER_ACCESS_RATE_LIMIT_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    assertBuyerAccessRuntimeEnabled();
+    let input;
+    try {
+      input = normalizeBuyerAccessRequest(data);
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+    const requestIp = getTrustedBuyerAccessRequestIp(context);
+    if (!requestIp) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Buyer access request cannot be completed."
+      );
+    }
+    const rateLimitSecret = getBuyerAccessRateLimitSecret();
+    const turnstileAudit = await verifyBuyerAccessTurnstile({
+      requestIp,
+      token: input.turnstileToken
+    });
+    const reservation = await reservePublicBuyerAccessCreation({
+      input,
+      rateLimitSecret,
+      requestIp
+    });
+    await assertPublicBuyerIdentityAvailable(input.ownerEmail);
+    let order = await preparePublicBuyerAccessOrder({
+      identifiers: reservation.identifiers,
+      input,
+      turnstileAudit
+    });
+
+    const currentStatus = normalizeText(order.status).toLowerCase();
+    if (["invoice_open", "payment_failed"].includes(currentStatus)) {
+      return {
+        orderId: order.orderId,
+        statusToken: input.requestId,
+        hostedInvoiceUrl: buyerAccessStatusResponse(order).hostedInvoiceUrl,
+        status: currentStatus
+      };
+    }
+    if (currentStatus !== "invoice_preparing") {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Buyer access request cannot be completed."
+      );
+    }
+    order = await createOrResumeBuyerAccessInvoice({ input, order });
+    return {
+      orderId: order.orderId,
+      statusToken: input.requestId,
+      hostedInvoiceUrl: buyerAccessStatusResponse(order).hostedInvoiceUrl,
+      status: "invoice_open"
+    };
+  });
+
+exports.getBuyerAccessInvoiceStatus = functions
+  .runWith({
+    secrets: [
+      BUYER_ACCESS_RATE_LIMIT_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    assertBuyerAccessRuntimeEnabled();
+    let input;
+    try {
+      input = normalizeBuyerAccessStatusRequest(data);
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+    let order;
+    try {
+      order = await authorizeBuyerAccessStatusRequest({
+        input,
+        consumeRateLimit: () => consumeBuyerAccessStatusRateLimit(context),
+        readOrder: async (orderId) => {
+          const orderSnap = await db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
+            .doc(orderId)
+            .get();
+          return orderSnap.exists ? (orderSnap.data() || {}) : null;
+        }
+      });
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+    if (
+      normalizeText(order.status).toLowerCase() === "activation_pending"
+      && order.workspaceReady === true
+    ) {
+      try {
+        await finalizeBuyerAccessActivation({ orderId: input.orderId });
+        const refreshedOrderSnap = await db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
+          .doc(input.orderId)
+          .get();
+        if (refreshedOrderSnap.exists) {
+          order = refreshedOrderSnap.data() || order;
+        }
+      } catch (err) {
+        functions.logger.warn("Buyer access activation retry remains pending", {
+          orderId: input.orderId,
+          errorCode: normalizeText(err?.code || "activation_pending").slice(0, 80)
+        });
+      }
+    }
+    return buyerAccessStatusResponse(order);
+  });
 
 exports.createDepositCheckout = functions.region(REGION).https.onCall(async (data, context) => {
   assertAdminStaff(await assertStaff(context));
@@ -9089,7 +10457,805 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
   );
 });
 
-exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res) => {
+function isBuyerAccessStripeObject(value = {}) {
+  return normalizeText(value?.metadata?.flow).toLowerCase() === BUYER_ACCESS_FLOW;
+}
+
+function buyerAccessWebhookAudit({
+  binding = {},
+  event,
+  eventId,
+  invoice = {},
+  order = {},
+  providerState = "",
+  requestHost = "",
+  result = "processed",
+  status = "processed"
+} = {}) {
+  return {
+    provider: "stripe",
+    source: "stripe_webhook",
+    flow: BUYER_ACCESS_FLOW,
+    buyerAccessMode: BUYER_ACCESS_MODE,
+    eventId,
+    eventType: normalizeText(event?.type),
+    requestHost,
+    buyerAccessOrderId: normalizeText(
+      order.orderId || invoice?.metadata?.buyerAccessOrderId
+    ),
+    organizationId: normalizeOrganizationId(order.organizationId),
+    stripeCustomerId: normalizeText(
+      typeof invoice?.customer === "string" ? invoice.customer : invoice?.customer?.id
+    ),
+    stripeInvoiceId: normalizeText(invoice?.id),
+    stripePaymentIntentId: normalizeText(binding.paymentIntentId),
+    livemode: invoice?.livemode === true,
+    providerState: normalizeText(providerState),
+    status,
+    result,
+    providerEventCreatedAtISO: Number.isFinite(Number(event?.created))
+      ? new Date(Number(event.created) * 1000).toISOString()
+      : "",
+    processedAtISO: new Date().toISOString(),
+    createdAt: FieldValue.serverTimestamp()
+  };
+}
+
+async function recordIgnoredBuyerAccessWebhook({
+  binding,
+  dedupeRef,
+  event,
+  eventId,
+  invoice,
+  order,
+  providerState,
+  requestHost,
+  result
+} = {}) {
+  return db.runTransaction(async (tx) => {
+    const dedupeSnap = await tx.get(dedupeRef);
+    if (dedupeSnap.exists) {
+      return { duplicate: true, orderId: normalizeText(order?.orderId) };
+    }
+    tx.create(dedupeRef, buyerAccessWebhookAudit({
+      binding,
+      event,
+      eventId,
+      invoice,
+      order,
+      providerState,
+      requestHost,
+      result,
+      status: "ignored"
+    }));
+    return {
+      duplicate: false,
+      ignored: result,
+      orderId: normalizeText(order?.orderId)
+    };
+  });
+}
+
+function assertBuyerAccessProvisioningRecord(data = {}, {
+  kind,
+  orderId,
+  organizationId,
+  ownerEmail
+} = {}) {
+  const recordOrderId = normalizeText(data.orderId || data.buyerAccessOrderId);
+  const recordOrganizationId = normalizeOrganizationId(
+    data.organizationId || data.onboarding?.organizationId
+  );
+  const recordOwnerEmail = normalizeEmail(
+    data.ownerEmail || data.onboarding?.ownerEmail
+  );
+  if (
+    recordOrderId !== orderId
+    || recordOrganizationId !== organizationId
+    || recordOwnerEmail !== ownerEmail
+    || normalizeText(data.buyerAccessMode) !== BUYER_ACCESS_MODE
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Existing " + kind + " record conflicts with the paid buyer access order."
+    );
+  }
+}
+
+function getBuyerAccessApplicationUrl() {
+  const appUrl = parseUrlOrThrow(
+    readConfig("buyer_access_app_base_url"),
+    "buyer_access_app_base_url"
+  );
+  const parsed = new URL(appUrl);
+  const isLoopbackEmulatorUrl = (
+    process.env.FUNCTIONS_EMULATOR === "true"
+    && parsed.protocol === "http:"
+    && ["localhost", "127.0.0.1"].includes(parsed.hostname)
+    && (parsed.pathname.replace(/\/+$/, "") || "/") === "/app"
+    && !parsed.search
+  );
+  if (
+    (parsed.protocol !== "https:" && !isLoopbackEmulatorUrl)
+    || parsed.username
+    || parsed.password
+    || parsed.hash
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access application URL is invalid."
+    );
+  }
+  return parsed.toString();
+}
+
+async function finalizeBuyerAccessActivation({ orderId } = {}) {
+  const orderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(orderId);
+  const provisioningOrderRef = db.collection(PROVISIONING_ORDERS_COLLECTION).doc(orderId);
+  const [orderSnap, provisioningOrderSnap] = await Promise.all([
+    orderRef.get(),
+    provisioningOrderRef.get()
+  ]);
+  if (!orderSnap.exists || !provisioningOrderSnap.exists) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access fulfillment record is incomplete."
+    );
+  }
+  const order = orderSnap.data() || {};
+  const provisioningOrder = provisioningOrderSnap.data() || {};
+  const currentStatus = normalizeText(order.status).toLowerCase();
+  if (currentStatus === "active" || currentStatus === "activation_sent") {
+    return {
+      activationEmailSent: order.activationEmailSent === true,
+      orderId,
+      status: currentStatus
+    };
+  }
+  if (currentStatus !== "activation_pending" || order.workspaceReady !== true) {
+    return {
+      activationEmailSent: false,
+      orderId,
+      status: currentStatus
+    };
+  }
+  if (
+    normalizeText(order.flow) !== BUYER_ACCESS_FLOW
+    || normalizeText(order.buyerAccessMode) !== BUYER_ACCESS_MODE
+    || normalizeText(order.plan).toLowerCase() !== BUYER_ACCESS_PLAN
+    || Number(order.amountCents) !== BUYER_ACCESS_AMOUNT_CENTS
+    || normalizeText(order.currency).toLowerCase() !== BUYER_ACCESS_CURRENCY
+    || normalizeText(order.ownerUid)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access activation scope is invalid."
+    );
+  }
+
+  const organizationId = normalizeOrganizationId(order.organizationId);
+  const ownerEmail = normalizeEmail(order.ownerEmail);
+  assertBuyerAccessProvisioningRecord(provisioningOrder, {
+    kind: "provisioning order",
+    orderId,
+    organizationId,
+    ownerEmail
+  });
+  if (
+    normalizeText(provisioningOrder.stripeInvoiceId) !== normalizeText(order.stripeInvoiceId)
+    || normalizeText(provisioningOrder.stripePaymentIntentId)
+      !== normalizeText(order.stripePaymentIntentId)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access activation payment evidence is inconsistent."
+    );
+  }
+  const priorEmail = provisioningOrder.email || {};
+  const priorFailedAtMs = Date.parse(normalizeText(priorEmail.failedAtISO));
+  if (
+    normalizeText(priorEmail.dispatchState).toLowerCase() === "failed"
+    && Number.isFinite(priorFailedAtMs)
+    && Date.now() - priorFailedAtMs < 5 * 60 * 1000
+  ) {
+    return {
+      activationEmailSent: false,
+      orderId,
+      status: "activation_pending"
+    };
+  }
+  const entitlements = resolveFeatureEntitlements({ plan: BUYER_ACCESS_PLAN });
+  const finalized = await finalizeProvisioningOrder({
+    orderRef: provisioningOrderRef,
+    orderId,
+    organizationId,
+    organizationName: normalizeText(order.organizationName),
+    ownerEmail,
+    ownerName: normalizeText(order.ownerName),
+    ownerUid: "",
+    appUrl: parseUrlOrThrow(provisioningOrder.appUrl, "buyer access appUrl"),
+    supportEmail: normalizeEmail(provisioningOrder.supportEmail),
+    entitlements,
+    sendEmail: true,
+    existingEmail: priorEmail,
+    requiresVerifiedSignIn: true
+  });
+  const activationEmailSent = finalized.emailResult?.sent === true
+    && finalized.emailResult?.auditPersisted === true;
+  const nextStatus = activationEmailSent ? "activation_sent" : "activation_pending";
+  const failedAtMs = Date.parse(normalizeText(finalized.emailResult?.failedAtISO));
+  const activationEmailRetryAfterISO = Number.isFinite(failedAtMs)
+    ? new Date(failedAtMs + 5 * 60 * 1000).toISOString()
+    : "";
+  const nowISO = new Date().toISOString();
+  await db.runTransaction(async (tx) => {
+    const latestOrderSnap = await tx.get(orderRef);
+    if (!latestOrderSnap.exists) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Buyer access order disappeared during activation finalization."
+      );
+    }
+    const latest = latestOrderSnap.data() || {};
+    if (normalizeText(latest.status).toLowerCase() === "active") return;
+    if (!["activation_pending", "activation_sent"].includes(
+      normalizeText(latest.status).toLowerCase()
+    )) {
+      throw new functions.https.HttpsError(
+        "aborted",
+        "Buyer access fulfillment state changed during activation finalization."
+      );
+    }
+    tx.set(orderRef, {
+      status: nextStatus,
+      workspaceReady: true,
+      accessGranted: false,
+      activationEmailSent,
+      activationEmailDispatchState: normalizeText(
+        finalized.emailResult?.dispatchState
+      ).slice(0, 40),
+      activationEmailReason: normalizeText(
+        finalized.emailResult?.reason
+      ).slice(0, 80),
+      ...(!activationEmailSent && activationEmailRetryAfterISO
+        ? { activationEmailRetryAfterISO }
+        : {}),
+      ...(activationEmailSent ? { activationEmailSentAtISO: nowISO } : {}),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  return { activationEmailSent, orderId, status: nextStatus };
+}
+
+async function processBuyerAccessInvoiceWebhook({
+  dedupeRef,
+  event,
+  eventId,
+  invoice,
+  providerState,
+  requestHost
+} = {}) {
+  assertBuyerAccessRuntimeEnabled();
+  const orderId = normalizeText(invoice?.metadata?.buyerAccessOrderId);
+  if (!/^ba-[a-f0-9]{40}$/.test(orderId)) {
+    return recordIgnoredBuyerAccessWebhook({
+      dedupeRef,
+      event,
+      eventId,
+      invoice,
+      providerState,
+      requestHost,
+      result: "invalid_order_identity"
+    });
+  }
+  const orderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(orderId);
+  const initialOrderSnap = await orderRef.get();
+  if (!initialOrderSnap.exists) {
+    return recordIgnoredBuyerAccessWebhook({
+      dedupeRef,
+      event,
+      eventId,
+      invoice,
+      providerState,
+      requestHost,
+      result: "order_not_found"
+    });
+  }
+  const initialOrder = initialOrderSnap.data() || {};
+  try {
+    assertBuyerAccessInvoiceBinding({
+      eventLivemode: event?.livemode,
+      invoice,
+      order: initialOrder,
+      providerState,
+      stripeMode: "test"
+    });
+  } catch (err) {
+    functions.logger.warn("Stripe buyer access Invoice binding was rejected", {
+      eventId,
+      orderId,
+      errorCode: normalizeText(err?.code || "binding_failed").slice(0, 80)
+    });
+    return recordIgnoredBuyerAccessWebhook({
+      dedupeRef,
+      event,
+      eventId,
+      invoice,
+      order: initialOrder,
+      providerState,
+      requestHost,
+      result: "invalid_buyer_access_scope"
+    });
+  }
+
+  if (normalizeText(initialOrder.supersededByOrderId)) {
+    return recordIgnoredBuyerAccessWebhook({
+      dedupeRef,
+      event,
+      eventId,
+      invoice,
+      order: initialOrder,
+      providerState,
+      requestHost,
+      result: "superseded_order"
+    });
+  }
+
+  const currentStatus = normalizeText(initialOrder.status).toLowerCase();
+  const alreadyProvisioned = ["activation_pending", "activation_sent", "active"]
+    .includes(currentStatus);
+  const buyerIdentity = providerState === "paid" && !alreadyProvisioned
+    ? await assertPublicBuyerIdentityAvailable(initialOrder.ownerEmail)
+    : null;
+
+  const organizationId = normalizeOrganizationId(initialOrder.organizationId);
+  const ownerEmail = normalizeEmail(initialOrder.ownerEmail);
+  const ownerName = normalizeText(initialOrder.ownerName);
+  const organizationName = normalizeText(initialOrder.organizationName);
+  if (
+    !/^[a-z0-9][a-z0-9_-]*-[a-f0-9]{32}$/.test(organizationId)
+    || !organizationName
+    || !ownerName
+    || !isValidEmail(ownerEmail)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access order has invalid server-owned provisioning identity."
+    );
+  }
+
+  const entitlements = resolveFeatureEntitlements({ plan: BUYER_ACCESS_PLAN });
+  const orgRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const settingsRef = orgRef.collection("settings").doc("config");
+  const inviteRef = db.collection(INVITES_COLLECTION).doc(inviteDocIdFromEmail(ownerEmail));
+  const provisioningOrderRef = db.collection(PROVISIONING_ORDERS_COLLECTION).doc(orderId);
+  const roleRef = buyerIdentity?.existingUser
+    ? db.collection(ROLES_COLLECTION).doc(buyerIdentity.existingUser.uid)
+    : null;
+  const appUrl = providerState === "paid" && !alreadyProvisioned
+    ? getBuyerAccessApplicationUrl()
+    : "";
+  const supportEmail = APPROVED_EMAIL_FROM_EMAIL;
+  const neutralSettings = providerState === "paid" && !alreadyProvisioned
+    ? buildNeutralSettingsPatch({
+      organizationName,
+      ownerName,
+      ownerEmail,
+      supportEmail
+    })
+    : {};
+
+  return db.runTransaction(async (tx) => {
+    const [dedupeSnap, orderSnap] = await Promise.all([
+      tx.get(dedupeRef),
+      tx.get(orderRef)
+    ]);
+    if (dedupeSnap.exists) {
+      return {
+        duplicate: true,
+        orderId,
+        shouldFinalizeActivation: providerState === "paid",
+        status: normalizeText(orderSnap.data()?.status).toLowerCase()
+      };
+    }
+    if (!orderSnap.exists) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Buyer access order disappeared during webhook processing."
+      );
+    }
+    const order = orderSnap.data() || {};
+    const binding = assertBuyerAccessInvoiceBinding({
+      eventLivemode: event?.livemode,
+      invoice,
+      order,
+      providerState,
+      stripeMode: "test"
+    });
+    if (normalizeText(order.supersededByOrderId)) {
+      const supersededAudit = buyerAccessWebhookAudit({
+        binding,
+        event,
+        eventId,
+        invoice,
+        order,
+        providerState,
+        requestHost,
+        result: "superseded_order",
+        status: "ignored"
+      });
+      tx.create(dedupeRef, supersededAudit);
+      return {
+        duplicate: false,
+        ignored: "superseded_order",
+        orderId,
+        shouldFinalizeActivation: false,
+        status: normalizeText(order.status).toLowerCase()
+      };
+    }
+    const transition = planBuyerAccessTransition({
+      currentStatus: order.status,
+      providerState
+    });
+    const nowISO = new Date().toISOString();
+    const audit = buyerAccessWebhookAudit({
+      binding,
+      event,
+      eventId,
+      invoice,
+      order,
+      providerState,
+      requestHost,
+      result: transition.reason,
+      status: transition.apply ? "processed" : "ignored"
+    });
+
+    if (!transition.apply) {
+      tx.create(dedupeRef, audit);
+      return {
+        duplicate: false,
+        ignored: transition.reason,
+        orderId,
+        shouldFinalizeActivation: providerState === "paid"
+          && normalizeText(order.status).toLowerCase() === "activation_pending",
+        status: transition.status
+      };
+    }
+
+    if (providerState !== "paid") {
+      tx.set(orderRef, {
+        status: transition.status,
+        accessGranted: false,
+        workspaceReady: false,
+        activationEmailSent: false,
+        signedVoidObserved: providerState === "void",
+        hostedInvoiceUrl: providerState === "failed"
+          ? binding.hostedInvoiceUrl
+          : "",
+        lastProviderState: providerState,
+        lastStripeEventId: eventId,
+        lastStripeEventType: normalizeText(event?.type),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.create(dedupeRef, audit);
+      return {
+        duplicate: false,
+        orderId,
+        shouldFinalizeActivation: false,
+        status: transition.status
+      };
+    }
+
+    if (!buyerIdentity || normalizeText(order.ownerUid)) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Paid buyer access owner identity is not available for invitation fulfillment."
+      );
+    }
+    if (
+      normalizeText(order.plan).toLowerCase() !== BUYER_ACCESS_PLAN
+      || normalizeText(order.buyerAccessMode) !== BUYER_ACCESS_MODE
+      || Number(order.amountCents) !== BUYER_ACCESS_AMOUNT_CENTS
+      || normalizeText(order.currency).toLowerCase() !== BUYER_ACCESS_CURRENCY
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Paid buyer access order scope is invalid."
+      );
+    }
+
+    const [
+      orgSnap,
+      settingsSnap,
+      inviteSnap,
+      provisioningOrderSnap,
+      roleSnap
+    ] = await Promise.all([
+      tx.get(orgRef),
+      tx.get(settingsRef),
+      tx.get(inviteRef),
+      tx.get(provisioningOrderRef),
+      roleRef ? tx.get(roleRef) : Promise.resolve(null)
+    ]);
+    if (orgSnap.exists || settingsSnap.exists || inviteSnap.exists || provisioningOrderSnap.exists) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Paid buyer access fulfillment target already exists."
+      );
+    }
+    if (roleSnap?.exists) {
+      const existingRole = roleSnap.data() || {};
+      const rawRole = normalizeText(existingRole.role).toLowerCase();
+      const roleEmail = normalizeEmail(existingRole.email);
+      if (
+        normalizeOrganizationId(existingRole.organizationId)
+        || (rawRole && rawRole !== "customer")
+        || (roleEmail && roleEmail !== ownerEmail)
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Paid buyer access owner role is no longer available."
+        );
+      }
+    }
+
+    const commonBuyerScope = {
+      orderId,
+      buyerAccessOrderId: orderId,
+      buyerAccessMode: BUYER_ACCESS_MODE
+    };
+    tx.create(orgRef, {
+      ...commonBuyerScope,
+      name: organizationName,
+      slug: slugify(organizationName, organizationId),
+      organizationId,
+      ownerEmail,
+      ownerUid: "",
+      active: true,
+      archived: false,
+      status: "active",
+      plan: entitlements.plan,
+      featureFlagsLocked: true,
+      featureFlagsPaid: entitlements.paidFeatureIds,
+      stripeInvoiceId: binding.invoiceId,
+      stripePaymentIntentId: binding.paymentIntentId,
+      provisionedBy: BUYER_ACCESS_FLOW,
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    tx.create(settingsRef, {
+      ...commonBuyerScope,
+      plan: entitlements.plan,
+      featureFlags: entitlements.featureFlags,
+      featureFlagsLocked: true,
+      featureFlagsPaid: entitlements.paidFeatureIds,
+      featureFlagsLockReason: "Unpaid modules are locked by ordered package.",
+      featureFlagsLockUpdatedAtISO: nowISO,
+      ...neutralSettings,
+      organizationId,
+      ownerUid: "",
+      onboarding: {
+        status: "provisioned",
+        source: BUYER_ACCESS_FLOW,
+        organizationId,
+        plan: entitlements.plan,
+        ownerEmail,
+        ownerName,
+        appUrl,
+        provisionedAtISO: nowISO
+      },
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    const inviteExpiresAtISO = new Date(
+      Date.parse(nowISO) + PROVISIONING_INVITE_VALIDITY_MS
+    ).toISOString();
+    tx.create(inviteRef, {
+      ...commonBuyerScope,
+      email: ownerEmail,
+      ownerName,
+      role: "admin",
+      organizationId,
+      organizationName,
+      featureFlags: entitlements.featureFlags,
+      featureFlagsLocked: true,
+      featureFlagsPaid: entitlements.paidFeatureIds,
+      plan: entitlements.plan,
+      appUrl,
+      supportEmail,
+      status: "pending",
+      expiresAtISO: inviteExpiresAtISO,
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    tx.create(provisioningOrderRef, {
+      ...commonBuyerScope,
+      status: "provisioned",
+      operation: "buyer_access_purchase",
+      source: BUYER_ACCESS_FLOW,
+      organizationId,
+      organizationName,
+      ownerEmail,
+      ownerName,
+      ownerUid: "",
+      plan: entitlements.plan,
+      featureFlags: entitlements.featureFlags,
+      featureFlagsPaid: entitlements.paidFeatureIds,
+      featureFlagsUnpaid: entitlements.unpaidFeatureIds,
+      amountCents: BUYER_ACCESS_AMOUNT_CENTS,
+      currency: BUYER_ACCESS_CURRENCY,
+      stripeCustomerId: binding.customerId,
+      stripeInvoiceId: binding.invoiceId,
+      stripePaymentIntentId: binding.paymentIntentId,
+      appUrl,
+      supportEmail,
+      sendEmail: true,
+      requestedBy: { source: "signed_stripe_invoice" },
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    tx.set(orderRef, {
+      status: "activation_pending",
+      accessGranted: false,
+      workspaceReady: true,
+      activationEmailSent: false,
+      hostedInvoiceUrl: "",
+      stripePaymentIntentId: binding.paymentIntentId,
+      lastProviderState: "paid",
+      lastStripeEventId: eventId,
+      lastStripeEventType: normalizeText(event?.type),
+      paidAtISO: nowISO,
+      provisionedAtISO: nowISO,
+      claimsSyncStatus: "not_started",
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    tx.create(dedupeRef, audit);
+    return {
+      duplicate: false,
+      durablyProvisioned: true,
+      orderId,
+      shouldFinalizeActivation: true,
+      status: "activation_pending"
+    };
+  });
+}
+
+exports.buyerAccessStripeWebhook = functions
+  .runWith({
+    secrets: [
+      BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+    const requestHost = getRequestHostnameFromHttp(req);
+    const webhookSecret = readBoundSecret(BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME);
+    if (!webhookSecret) {
+      res.status(500).send("Buyer access Stripe webhook secret not configured.");
+      return;
+    }
+    const signature = req.headers["stripe-signature"];
+    if (!signature) {
+      res.status(400).send("Missing stripe-signature header.");
+      return;
+    }
+
+    let event;
+    try {
+      event = constructStripeWebhookEvent({
+        rawBody: req.rawBody,
+        signature,
+        webhookSecret,
+        webhooks: Stripe.webhooks
+      });
+    } catch (err) {
+      functions.logger.warn("Buyer access Stripe webhook signature verification failed", {
+        errorCode: normalizeText(
+          err?.code || err?.type || "signature_verification_failed"
+        ).slice(0, 80)
+      });
+      res.status(400).send("Webhook verification failed.");
+      return;
+    }
+    // The event payload shape is payment evidence. Local tooling must adapt to
+    // this pinned contract before signing instead of relaxing it here.
+    if (normalizeText(event?.api_version) !== BUYER_ACCESS_STRIPE_API_VERSION) {
+      functions.logger.warn("Buyer access Stripe webhook API version was rejected", {
+        eventId: normalizeText(event?.id),
+        errorCode: "api_version_mismatch"
+      });
+      res.status(400).send("Webhook API version mismatch.");
+      return;
+    }
+
+    const invoice = event.data?.object || {};
+    if (!isBuyerAccessInvoice(invoice)) {
+      res.json({ received: true, ignored: "non_buyer_access_invoice" });
+      return;
+    }
+    const providerState = buyerAccessProviderStateForEvent(event.type);
+    if (!providerState) {
+      res.json({ received: true, ignored: "unsupported_event_type" });
+      return;
+    }
+    const eventId = normalizeText(event?.id);
+    if (!/^[a-zA-Z0-9_:-]+$/.test(eventId)) {
+      res.status(400).send("Stripe event ID is missing or invalid.");
+      return;
+    }
+    const dedupeRef = db.collection(WEBHOOK_EVENTS_COLLECTION)
+      .doc("stripe-buyer-" + eventId);
+
+    try {
+      const result = await processBuyerAccessInvoiceWebhook({
+        dedupeRef,
+        event,
+        eventId,
+        invoice,
+        providerState,
+        requestHost
+      });
+      let activation = null;
+      if (
+        providerState === "paid"
+        && result.orderId
+        && result.shouldFinalizeActivation
+      ) {
+        try {
+          activation = await finalizeBuyerAccessActivation({
+            orderId: result.orderId
+          });
+        } catch (err) {
+          functions.logger.error("Buyer access activation email remains pending", {
+            eventId,
+            orderId: result.orderId,
+            errorCode: normalizeText(err?.code || "activation_pending").slice(0, 80)
+          });
+        }
+      }
+      if (result.duplicate) {
+        res.json({ received: true, duplicate: true });
+        return;
+      }
+      if (result.ignored) {
+        res.json({ received: true, ignored: result.ignored });
+        return;
+      }
+      res.json({
+        received: true,
+        buyerAccessStatus: activation?.status || result.status
+      });
+    } catch (err) {
+      functions.logger.error("Failed processing buyer access Stripe Invoice event", {
+        eventId,
+        eventType: normalizeText(event.type),
+        requestHost,
+        errorCode: normalizeText(err?.code || "processing_failed").slice(0, 80)
+      });
+      res.status(500).send("Failed to process buyer access Invoice.");
+    }
+  });
+
+exports.stripeWebhook = functions
+  .runWith({ secrets: [STRIPE_WEBHOOK_SECRET_NAME] })
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");
     return;
@@ -9097,7 +11263,7 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
   const requestHost = getRequestHostnameFromHttp(req);
   const requestIp = getRequestIpFromHttp(req);
 
-  const webhookSecret = readConfig("stripe.webhook_secret");
+  const webhookSecret = readBoundSecret(STRIPE_WEBHOOK_SECRET_NAME);
   if (!webhookSecret) {
     res.status(500).send("Stripe webhook secret not configured.");
     return;
@@ -9109,18 +11275,27 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
-  let stripe;
-  try {
-    stripe = getStripeClient();
-  } catch (err) {
-    res.status(500).send(`Stripe configuration failed: ${err.message}`);
-    return;
-  }
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
+    event = constructStripeWebhookEvent({
+      rawBody: req.rawBody,
+      signature,
+      webhookSecret,
+      webhooks: Stripe.webhooks
+    });
   } catch (err) {
-    res.status(400).send(`Webhook verification failed: ${err.message}`);
+    functions.logger.warn("Stripe webhook signature verification failed", {
+      errorCode: normalizeText(
+        err?.code || err?.type || "signature_verification_failed"
+      ).slice(0, 80)
+    });
+    res.status(400).send("Webhook verification failed.");
+    return;
+  }
+
+  const session = event.data?.object || {};
+  if (isBuyerAccessStripeObject(session)) {
+    res.json({ received: true, ignored: "buyer_access_uses_dedicated_webhook" });
     return;
   }
 
@@ -9145,7 +11320,6 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
-  const session = event.data?.object || {};
   let providerObservation;
   try {
     providerObservation = mapStripeCheckoutObservation({

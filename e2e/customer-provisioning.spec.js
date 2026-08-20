@@ -39,6 +39,7 @@ test("unscoped platform operators see only the customer-provisioning surface", a
   await expect(page.getByRole("heading", { name: "Catalog Unavailable" })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: "Provider Config" })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: /Buyer Setup Assistant/i })).toHaveCount(0);
+  await expect(dialog.getByRole("heading", { name: /Buyer Invoice Recovery/i })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: /Organization Cleanup/i })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: /Record Integration Event/i })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: "Integration Activity" })).toHaveCount(0);
@@ -56,6 +57,7 @@ test("sales can view CRM activity without provider setup or test controls", asyn
   await expect(dialog.getByRole("heading", { name: "Integration Activity" })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Provider Config" })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: /Buyer Setup Assistant/i })).toHaveCount(0);
+  await expect(dialog.getByRole("heading", { name: /Buyer Invoice Recovery/i })).toHaveCount(0);
   await expect(dialog.getByRole("heading", { name: /Record Integration Event/i })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Check Setup" })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Send Test SMS" })).toHaveCount(0);

@@ -58,6 +58,21 @@ describe("production mutation retirement", () => {
     expect(source).toMatch(/persist-credentials:\s*false/);
   });
 
+  test.each([
+    ["Firebase", FIREBASE_WORKFLOW],
+    ["Vercel", VERCEL_WORKFLOW]
+  ])("binds the %s artifact to explicit public buyer configuration", (_provider, workflow) => {
+    const source = fs.readFileSync(workflow, "utf8");
+
+    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"true"\s*$/m);
+    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"true"\s*$/m);
+    expect(source).toMatch(
+      /^\s+VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:\s*\$\{\{ vars\.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY \}\}\s*$/m
+    );
+    expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
+    expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
+  });
+
   test("does not persist checkout credentials in the UAT attestation job", () => {
     expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
   });

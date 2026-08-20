@@ -6,11 +6,102 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Local buyer-invoice testing can now consume Cloudflare's published always-pass
+  Turnstile result. The exception requires the exact published test credential
+  and a loopback-only hostname allowlist; production hostname and action checks
+  remain strict.
+- Firebase's callable emulator now supplies a deterministic loopback identity
+  when it omits the trusted request socket. Deployed buyer-invoice Functions
+  still fail closed when neither trusted request-IP source is present.
+- Buyer activation may use the exact loopback `/app` route over HTTP only inside
+  the Functions emulator. Every deployed or non-loopback application URL still
+  requires HTTPS.
+- Local Stripe coding sandboxes can now authenticate the test-only invoice rail
+  with Stripe's `rkcs_test_` restricted-key prefix. Live mode continues to
+  accept only live secret or restricted keys, so the local compatibility path
+  cannot authorize a production payment rail.
+
 ### Added
 
+- Generic Resend and quote-payment Stripe credentials now use strict Firebase
+  Secret Manager reads with least-privilege bindings across their complete
+  Function call graph. The generic Stripe webhook verifies signatures without
+  receiving the Stripe API key, both Stripe webhook rails accept a bounded
+  `new,old` signing-secret overlap for safe rotation, and the Functions dotenv
+  materializer rejects and omits `RESEND_API_KEY`, `STRIPE_SECRET_KEY`, and
+  `STRIPE_WEBHOOK_SECRET`. Operator guidance separates non-secret dotenv values,
+  ignored emulator-only `.secret.local` fixtures, and production Secret Manager
+  ownership. No credential rotation, provider mutation, deployment, or hosted
+  acceptance is claimed by this source change.
+- Public invoice-first buyer onboarding source for `/start` on the existing
+  `tonicatering` Firebase project. The public organization/owner/email form and
+  marketing CTA require a syntactically valid non-placeholder public Turnstile
+  site key; provider setup and human review remain separate evidence. The
+  independently disabled Functions gate, exact hostname/action verification,
+  durable rate limits, and deterministic idempotency remain server-owned. A
+  dedicated Secret Manager key now HMACs network/email rate-document identities,
+  all rate records carry Firestore Timestamp expiry, the deployable Firestore
+  configuration declares TTL for `buyerAccessRateLimits.expiresAt` with a
+  regression check that prevents its silent removal, and creation atomically
+  reserves a request-scoped order before any identity/order lookup. Exact retry
+  still consumes network capacity while avoiding duplicate email charge during
+  the 24-hour reservation; a fresh post-window request can replace only a
+  provider-verified void prior order, which is marked superseded against stale
+  events. Void authority may come from the exact signed webhook or the new
+  platform-admin recovery path after it verifies and, when necessary, voids the
+  exact terminal unpaid test Invoice at Stripe.
+  Open and payment-failed exact retries return the same Hosted Invoice Page;
+  a server-reported void can start a fresh same-tab test request while the
+  24-hour window remains server-enforced. The admin-only Buyer Invoice Recovery
+  surface now requires an exact order-bound confirmation, server-derived
+  provider identity, Stripe test-mode retrieval, absence of fulfillment
+  artifacts, and an audited irreversible void before replacement eligibility.
+  Paid, open, fulfilled, superseded, mismatched, or partially paid targets fail
+  closed, and a provider void cannot bypass the existing email window. Public
+  status polling atomically consumes one 60-request-per-five-minute network
+  lease per request before its first buyer-order read. Well-formed unknown-order
+  and wrong-token checks consume the same budget, while missing rate
+  configuration or an unavailable rate store fails closed. The
+  dedicated `createBuyerAccessInvoice` callable fixes Starter to $1 USD in
+  Stripe test mode, creates and finalizes a true invoice before payment, and
+  returns only its Stripe Hosted Invoice Page. The dedicated buyer API client
+  and webhook endpoint are pinned to Stripe API version `2024-06-20` without
+  changing the generic quote client. `buyerAccessStripeWebhook` accepts only
+  signed, replay-deduplicated `invoice.paid`, `invoice.payment_failed`,
+  `invoice.voided`, and `invoice.marked_uncollectible` events on this isolated
+  rail. A paid invoice prepares the organization, neutral settings, Starter
+  workspace plan entitlements, provisioning record, and pending invitation, but
+  creates no user membership, admin role, custom claims, or application access.
+  Once the token-bound status reports `provisioning` with `workspaceReady=true`,
+  `/start` stops automatic polling and offers `/app` as a manual registration or
+  sign-in path for the exact invoice email; this neither claims onboarding-email
+  acceptance nor grants access. `activation_sent` still requires durable
+  provider acceptance of the exact onboarding message, but that optional
+  message is not required to initiate the Firebase verification path. Only a
+  matching Firebase account with separately verified invoice email may consume
+  the invitation, and only `active` is access-ready. Controlled
+  test-mode markers remain mandatory for exclusion from live revenue and
+  paid-customer reporting. Generic builds
+  and the server gate default off, and no hosted/provider or live-sale result is
+  claimed by this source change.
+- Target-scoped release UAT coverage for public buyer onboarding, including
+  Turnstile host/action verification, rate limiting, retry idempotency, a true
+  Hosted Invoice Page, signed invoice lifecycle, paid workspace preparation,
+  pending invitation, proof-safe manual account setup at `workspaceReady=true`,
+  optional onboarding-email provider acceptance, separate Firebase verification-
+  email delivery and continue URL, no user role or access before verified claim,
+  cross-account/replay/failure denial, and proof that the
+  existing quote Stripe rail remains unchanged. Browser targets prove only
+  locked UI and instructions; backend targets own provider and fulfillment
+  evidence. The checklist records observations against an exact target only; it
+  does not prove an unbound dependency, provider setup, or live launch.
 - Firebase email/password account recovery on the staff sign-in screen, with
   normalized reset requests, the same on-screen confirmation for unknown or
   disabled account errors, a validated HTTPS `/app` return URL, action-specific
+  settings shared by registration and verification resends so buyer activation
+  emails carry the same build-owned, fail-closed `/app` continue URL,
   loading state, accessible live status, focused helper coverage, and an
   Auth-emulator browser assertion that completes the password change and signs
   in with the replacement password. Full account-enumeration resistance still

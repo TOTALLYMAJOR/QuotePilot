@@ -40,6 +40,71 @@ Last updated: August 4, 2026
   email/password self-registration with an invitation-bound flow or add
   equivalent App Check/reCAPTCHA abuse controls; generic reset copy does not
   prevent the registration endpoint from returning an existing-email result.
+- Before any production sale or buyer-gate enablement, rotate the known exposed
+  or locally cached generic `RESEND_API_KEY`, `STRIPE_SECRET_KEY`, and
+  `STRIPE_WEBHOOK_SECRET` into fresh Firebase Secret Manager versions. Follow
+  the runbook's ordered webhook `new,old` overlap then new-only backend cutover,
+  coordinate any Turnstile site-key/secret change across the exact frontend and
+  backend, accept the HMAC rotation fresh-window/TTL consequence, complete exact
+  hosted/provider UAT, and only then revoke old credentials. Merely copying old
+  values into Secret Manager does not clear this blocker.
+- Qualify public invoice-first `$1` buyer onboarding on the existing
+  `tonicatering` Firebase project only after the exact candidate is reviewed and
+  the guarded main/tag/UAT/trusted-deployer path is operational. Compile the
+  public `/start` route and marketing CTA only with a syntactically valid,
+  non-placeholder public Turnstile site key. Provider configuration and human
+  review remain separate release evidence. Keep the independent server gate off
+  until exact Turnstile host/action verification, durable rate limits,
+  deterministic idempotency, approved hostnames, and all four buyer server
+  secrets are configured through the trusted runtime and Firebase Secret
+  Manager channels.
+- Before enabling that public server gate, bind an independently generated
+  `BUYER_ACCESS_RATE_LIMIT_SECRET`, enable the Firestore TTL policy on
+  `buyerAccessRateLimits.expiresAt`, and prove each public status request
+  consumes the source-enforced atomic 60-request-per-five-minute network lease
+  before its first buyer-order read. Any later fulfillment reads must stay
+  inside that bounded request. Hosted acceptance must cover
+  well-formed unknown-order, wrong-token, stolen-token, valid polling,
+  rate-store failure, and TTL cleanup behavior; edge or Firebase App Check
+  throttling remains an optional additional layer.
+- Prove buyer invoice creation reserves its HMAC-keyed request identity and
+  consumes the per-network plus one-per-email lease before every Auth, invite,
+  or order read. Exact retries must continue charging the network budget while
+  avoiding duplicate email charge during the 24-hour Timestamp-backed
+  reservation. A fresh post-window request may replace only a prior provider-
+  verified void order; verify supersession dedupe and stale-event denial. Open and
+  payment-failed orders must return the same invoice only to the exact original
+  request; uncollectible/expired, paid, and activation orders must reject
+  automatic replacement. Qualify the implemented platform-admin repair path in
+  hosted Stripe test mode: prove exact provider retrieval, permanent void of an
+  uncollectible Invoice, partial/paid/fulfilled/mismatched denial, private audit
+  creation, unchanged fulfillment state, and post-window replacement.
+- Configure `buyerAccessStripeWebhook` in Stripe test mode for only
+  `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, and
+  `invoice.marked_uncollectible`, with both the dedicated buyer API client and
+  endpoint pinned to Stripe API version `2024-06-20` while the quote client and
+  version remain unchanged. Capture provider-bound evidence that
+  `createBuyerAccessInvoice` produces one true fixed $1 USD Hosted Invoice Page
+  before payment, retries recover the same open invoice, and signed invoice
+  state prepares the organization, neutral settings, Starter workspace plan
+  entitlements, provisioning record, and pending invitation. Prove it creates
+  no user membership, admin role, custom claims, or application access; require
+  a proof-safe manual `/app` handoff once `workspaceReady=true`. If the optional
+  onboarding message is enabled, require durably recorded provider acceptance
+  before `activation_sent`; regardless, separately prove Firebase verification-
+  email delivery, the authorized continue URL, and exact-email invitation
+  consumption before user access. Exercise replay, failed/void/expired,
+  rate-limit, provider-error,
+  cross-account, and mismatched-email denial.
+- Prove public buyer onboarding leaves the existing live quote-payment
+  `STRIPE_MODE`, credentials, `stripeWebhook`, deposit, and final-balance rails
+  unchanged. Retain controlled test-mode markers and reporting exclusion from
+  live revenue and paid-customer counts, then disable the server gate after the
+  bounded acceptance window. Hosted Turnstile, Stripe invoice/webhook,
+  any claimed onboarding-email provider acceptance, Firebase verification-email delivery,
+  authorized continue URL, refund, dispute, cancellation,
+  access-revocation, support, tax/accounting, and separately approved live-mode
+  launch remain explicit commercial blockers.
 - Release the Stripe deposit and final-balance lifecycles only as one
   exact-revision frontend, Functions, and Firestore-rules rollout. In isolated
   hosted acceptance set explicit `STRIPE_MODE=test` with a matching test key and

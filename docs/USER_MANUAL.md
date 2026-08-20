@@ -301,6 +301,76 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - `Undo this import` removes only unchanged documents whose `importBatchId` matches that receipt. Records edited after import are protected from rollback, and pre-existing records are never deleted by the batch.
 - Active quotes, payments, contracts, bookings, and staff accounts are outside the first Import Studio release and must not be represented as imported operational history.
 
+## Public $1 Invoice-First Buyer Access
+
+This source candidate is a public Stripe test-invoice path on the existing
+`tonicatering` Firebase project. It remains unavailable until reviewed code,
+Turnstile, Stripe test credentials and webhook, Firebase verification delivery,
+and guarded hosted release acceptance are complete. It is not an approved live
+sales channel.
+
+During an explicitly approved hosted test window:
+
+1. Open `/start`. Enter the organization name, owner name, and the email that
+   will receive and later claim the invoice. Complete the Turnstile challenge.
+   QuotePilot does not collect a password or card details on this form.
+2. Review the fixed Starter, $1 USD, Stripe test-mode disclosure. You cannot
+   change the plan, price, currency, mode, or return URL. Continue to the true
+   Stripe Hosted Invoice Page and pay there.
+3. Return to QuotePilot. The return URL and invoice page are not access proof.
+   `invoice_open` and `payment_processing` mean Stripe has not established paid
+   state. `provisioning` may mean invoice preparation or that a signed
+   `invoice.paid` event has prepared the organization, neutral settings, Starter
+   workspace plan entitlements, provisioning record, and pending invite. It
+   still means there is no user membership, admin role, custom claims, or
+   `/app` access. When this status also says the workspace is ready, automatic
+   polling stops and the page offers `/app` only for manual account setup. Use
+   the exact invoice email to register or sign in, complete Firebase email
+   verification through the authorized continue URL, and claim the invitation.
+   Use `Check again` for a manual status refresh.
+4. If the page reports `activation_sent`, the optional onboarding email provider
+   accepted the exact activation-instructions message and QuotePilot durably
+   recorded that acceptance. Acceptance does not prove delivery and is not
+   required to start the manual verified-email path above. A different or
+   unverified email receives no user role or access.
+5. Open `/app` only after the order reports `active` and the server-confirmed
+   Starter organization and admin role exist.
+
+A safe retry with the same browser request should return the same Hosted Invoice
+Page only while the invoice is open or payment-failed, and consumes another
+network-rate attempt without charging the email window again. Do not start a
+replacement while an invoice is open, payment-failed,
+uncollectible/expired, paid, or activating. After 24 hours, only a provider-
+verified `void` state permits a fresh request to supersede the old order. A
+signed `invoice.voided` webhook establishes that state automatically. For an
+uncollectible test Invoice, a platform administrator may open Customer
+Provisioning or Integrations Ops and use Buyer Invoice Recovery with the exact
+`ba-...` order id and generated
+`VOID BUYER INVOICE <orderId>` confirmation. The server derives the Invoice
+identity, verifies it with Stripe, permanently voids it, confirms no fulfillment
+artifacts exist, and records the operator audit. Paid, open, partially paid,
+fulfilled, superseded, or mismatched orders cannot use this recovery. When the
+page reports `void`, use `Start a new test request`; the server still rejects it
+until the 24-hour email window has elapsed. Do not bypass a rate limit with
+additional emails or accounts.
+Report only the approximate time and redacted order/invoice
+references. Never send a payment method, hosted invoice URL, token, provider
+secret, webhook signature, Turnstile response, or customer personal data.
+
+This flow prepares real organization, neutral settings, Starter workspace plan
+entitlements, provisioning, invitation, and audit records in `tonicatering`
+after signed paid-invoice processing even though Stripe remains test mode. It
+creates user membership, the admin role, custom claims, and application access
+only after the exact-email verified invitation is consumed. Server-owned
+controlled test-mode markers must be excluded from live revenue and live paid-
+customer reporting. Deleting or refunding a Stripe test invoice does not prove
+Firebase access was revoked or data was cleaned up.
+
+Refunds, disputes, cancellations, account/access revocation, support,
+tax/accounting, and live-mode selling remain separate operating gates. See the
+[launch runbook](LAUNCH_RUNBOOK.md#public-1-invoice-first-buyer-access-on-tonicatering)
+for the operator release and acceptance contract.
+
 ## Customer Onboarding (No Stripe Flow)
 Use the admin provisioning workflow to create a customer organization, apply
 paid module entitlements, and prepare owner access. Provisioning success is not

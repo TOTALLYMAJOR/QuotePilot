@@ -52,6 +52,32 @@ const assertEmailList = (name, value) => {
   }
   return [...new Set(emails)].join(",");
 };
+const BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES = [
+  "quotepilot.mbmapps.com",
+  "tonicatering.web.app"
+];
+const assertBuyerAccessTurnstileHostnames = (value) => {
+  const hostnames = value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  const approved = new Set(BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES);
+
+  if (
+    !hostnames.length
+    || hostnames.some((hostname) => !/^[a-z0-9.-]+$/.test(hostname))
+    || hostnames.some((hostname) => !approved.has(hostname))
+    || BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES.some(
+      (hostname) => !hostnames.includes(hostname)
+    )
+  ) {
+    throw new Error(
+      "BUYER_ACCESS_TURNSTILE_HOSTNAMES must contain only the exact approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
+    );
+  }
+
+  return [...new Set(hostnames)].join(",");
+};
 
 const appBaseUrl = required("APP_BASE_URL");
 if (appBaseUrl !== "https://quotepilot.mbmapps.com/app") {
@@ -77,16 +103,6 @@ const emailFromEmail = required("EMAIL_FROM_EMAIL").toLowerCase();
 if (emailFromEmail !== "onboarding@quotepilot.mbmapps.com") {
   throw new Error(
     "EMAIL_FROM_EMAIL must use the approved QuotePilot sender identity; enable Resend only after provider and DNS verification."
-  );
-}
-
-const resendApiKey = optional("RESEND_API_KEY");
-if (emailProvider === "resend" && !resendApiKey) {
-  throw new Error("RESEND_API_KEY is required when Resend email is enabled.");
-}
-if (emailProvider === "none" && resendApiKey) {
-  throw new Error(
-    "RESEND_API_KEY must be unset while NOTIFICATIONS_EMAIL_PROVIDER is none."
   );
 }
 
@@ -120,13 +136,50 @@ const stripeMode = required("STRIPE_MODE").toLowerCase();
 if (stripeMode !== "live") {
   throw new Error("Production Firebase Functions deployment requires STRIPE_MODE=live.");
 }
-const stripeSecretKey = required("STRIPE_SECRET_KEY");
-if (!stripeSecretKey.startsWith("sk_live_") && !stripeSecretKey.startsWith("rk_live_")) {
-  throw new Error("STRIPE_SECRET_KEY must be a live-mode secret or restricted key.");
+
+const buyerAccessEnabled = optional("BUYER_ACCESS_ENABLED", "false").toLowerCase();
+if (!["true", "false"].includes(buyerAccessEnabled)) {
+  throw new Error("BUYER_ACCESS_ENABLED must be true or false.");
 }
-const stripeWebhookSecret = required("STRIPE_WEBHOOK_SECRET");
-if (!stripeWebhookSecret.startsWith("whsec_")) {
-  throw new Error("STRIPE_WEBHOOK_SECRET must be a Stripe endpoint signing secret.");
+const buyerAccessStripeMode = optional("BUYER_ACCESS_STRIPE_MODE", "test").toLowerCase();
+if (buyerAccessStripeMode !== "test") {
+  throw new Error("BUYER_ACCESS_STRIPE_MODE must remain test for the buyer invoice rail.");
+}
+const buyerAccessAppBaseUrl = optional(
+  "BUYER_ACCESS_APP_BASE_URL",
+  "https://quotepilot.mbmapps.com/app"
+);
+if (buyerAccessAppBaseUrl !== "https://quotepilot.mbmapps.com/app") {
+  throw new Error("BUYER_ACCESS_APP_BASE_URL must be the canonical QuotePilot application URL.");
+}
+if (optional("BUYER_ACCESS_ALLOWED_EMAILS")) {
+  throw new Error(
+    "BUYER_ACCESS_ALLOWED_EMAILS is obsolete; public buyer access must be protected by Turnstile, rate limits, Stripe invoice state, and verified activation."
+  );
+}
+const buyerAccessTurnstileHostnames = optional("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
+if (buyerAccessEnabled === "true" && !buyerAccessTurnstileHostnames) {
+  throw new Error(
+    "BUYER_ACCESS_TURNSTILE_HOSTNAMES is required while public buyer access is enabled."
+  );
+}
+const normalizedBuyerAccessTurnstileHostnames = buyerAccessTurnstileHostnames
+  ? assertBuyerAccessTurnstileHostnames(buyerAccessTurnstileHostnames)
+  : "";
+for (const secretName of [
+  "RESEND_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "BUYER_ACCESS_STRIPE_SECRET_KEY",
+  "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
+  "BUYER_ACCESS_TURNSTILE_SECRET",
+  "BUYER_ACCESS_RATE_LIMIT_SECRET"
+]) {
+  if (optional(secretName)) {
+    throw new Error(
+      `${secretName} must be stored in Firebase Secret Manager, not the Functions dotenv file.`
+    );
+  }
 }
 
 const values = {
@@ -139,7 +192,6 @@ const values = {
   NOTIFICATIONS_EMAIL_PROVIDER: emailProvider,
   EMAIL_FROM_NAME: emailFromName,
   EMAIL_FROM_EMAIL: emailFromEmail,
-  ...(emailProvider === "resend" ? { RESEND_API_KEY: resendApiKey } : {}),
   NOTIFICATIONS_SMS_PROVIDER: smsProvider,
   ...(smsProvider === "twilio" ? {
     TWILIO_ACCOUNT_SID: twilioAccountSid,
@@ -148,8 +200,12 @@ const values = {
     NOTIFICATIONS_OWNER_PHONE: ownerPhone
   } : {}),
   STRIPE_MODE: stripeMode,
-  STRIPE_SECRET_KEY: stripeSecretKey,
-  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret
+  BUYER_ACCESS_ENABLED: buyerAccessEnabled,
+  BUYER_ACCESS_STRIPE_MODE: buyerAccessStripeMode,
+  BUYER_ACCESS_APP_BASE_URL: buyerAccessAppBaseUrl,
+  ...(normalizedBuyerAccessTurnstileHostnames
+    ? { BUYER_ACCESS_TURNSTILE_HOSTNAMES: normalizedBuyerAccessTurnstileHostnames }
+    : {})
 };
 
 const lines = [
