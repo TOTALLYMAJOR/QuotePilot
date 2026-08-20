@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "plan:task": "node ./scripts/task-orchestration-plan.mjs",
     "classify:ci:lanes": "node ./scripts/ci-lane-classifier.mjs",
     "lane:quick": "bash ./scripts/orchestration-lanes.sh lane:quick",
     "lane:core": "bash ./scripts/orchestration-lanes.sh lane:core",

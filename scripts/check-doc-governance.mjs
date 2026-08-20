@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 
 const ROOT = process.cwd();
 
@@ -25,6 +25,20 @@ const DEPLOY_DOCS = [
   "docs/VERSION_CONTROL.md",
   "docs/DOC_SYSTEM.md"
 ];
+
+const TASK_ORCHESTRATION_IMPLEMENTATION = [
+  "scripts/task-orchestration-plan.mjs",
+  "docs/task-orchestration-contracts.json"
+];
+
+const TASK_ORCHESTRATION_GOVERNANCE_DOCS = [
+  "docs/AGENT_GOVERNANCE.md",
+  "docs/ORCHESTRATION_BLUEPRINT.md",
+  "docs/ORCHESTRATION_RUNBOOK.md",
+  "docs/DOC_SYSTEM.md"
+];
+
+const DOCUMENT_TIMESTAMP_PATTERN = /^Last updated: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [A-Z]{2,5}$/m;
 
 function run(command, options = {}) {
   return execSync(command, {
@@ -235,6 +249,93 @@ function checkSecretPatterns(errors) {
   }
 }
 
+function checkTaskOrchestrationContract(errors) {
+  const contractPath = path.join(ROOT, "docs", "task-orchestration-contracts.json");
+  let contract;
+  try {
+    contract = readJson(contractPath);
+  } catch (error) {
+    errors.push(`Task orchestration contract is unreadable: ${error.message}`);
+    return;
+  }
+
+  if (contract.schemaVersion !== 1) {
+    errors.push("Task orchestration contract schemaVersion must be 1.");
+  }
+  if (contract.switchAuthority !== "external_runner") {
+    errors.push("Task orchestration model switching must remain external-runner authoritative.");
+  }
+  if (contract.timestampFormat !== "iso8601_utc"
+    || JSON.stringify(contract.lifecyclePhases) !== JSON.stringify(["plan", "update", "complete"])) {
+    errors.push("Task orchestration lifecycle timestamps must retain plan/update/complete ISO-8601 UTC authority.");
+  }
+
+  for (const tierName of ["economy", "balanced", "frontier"]) {
+    const tier = contract.modelTiers?.[tierName];
+    if (!tier?.defaultModel || !["low", "medium", "high"].includes(tier?.reasoningEffort)) {
+      errors.push(`Task orchestration model tier ${tierName} is incomplete.`);
+    }
+  }
+
+  for (const profileName of ["docs", "process", "ui", "core", "auth_rules", "deploy"]) {
+    const profile = contract.profiles?.[profileName];
+    if (!profile?.modelTier || !profile?.riskLevel || !Array.isArray(profile?.validations)) {
+      errors.push(`Task orchestration profile ${profileName} is incomplete.`);
+    }
+  }
+
+  const governedText = TASK_ORCHESTRATION_GOVERNANCE_DOCS
+    .map((file) => fs.readFileSync(path.join(ROOT, file), "utf8"))
+    .join("\n");
+  for (const marker of ["npm run plan:task", "external runner", "task-orchestration-contracts.json"]) {
+    if (!governedText.toLowerCase().includes(marker.toLowerCase())) {
+      errors.push(`Task orchestration governance docs are missing required marker: ${marker}`);
+    }
+  }
+}
+
+function baselineRef() {
+  if (!(process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true")) return "HEAD";
+  const range = resolveDiffRange();
+  return String(range).split(/\.\.\.?/)[0] || "HEAD";
+}
+
+function readBaselineFile(ref, file) {
+  try {
+    return execFileSync("git", ["show", `${ref}:${file}`], {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+  } catch {
+    return "";
+  }
+}
+
+function checkDocumentationTimestamps(changedFiles, errors) {
+  const ref = baselineRef();
+  for (const file of changedFiles) {
+    const requiresTimestamp = file === "AGENTS.md"
+      || CANONICAL_DOCS.includes(file)
+      || (file.startsWith("docs/") && file.toLowerCase().endsWith(".md"));
+    const filePath = path.join(ROOT, file);
+    if (!requiresTimestamp || !fs.existsSync(filePath)) continue;
+
+    const current = fs.readFileSync(filePath, "utf8");
+    const currentTimestamp = current.match(DOCUMENT_TIMESTAMP_PATTERN)?.[0] || "";
+    if (!currentTimestamp) {
+      errors.push(`${file} must include Last updated: YYYY-MM-DD HH:MM:SS TZ.`);
+      continue;
+    }
+
+    const baseline = readBaselineFile(ref, file);
+    const baselineTimestamp = baseline.match(/^Last updated:.*$/m)?.[0] || "";
+    if (baseline && currentTimestamp === baselineTimestamp) {
+      errors.push(`${file} changed without advancing its Last updated date and time.`);
+    }
+  }
+}
+
 function checkChangeDrivenDocs(changedFiles, errors) {
   if (!changedFiles.length) return;
 
@@ -270,6 +371,14 @@ function checkChangeDrivenDocs(changedFiles, errors) {
     errors.push("Backlog/roadmap artifacts changed without DEV_TASKS.md update.");
   }
 
+  if (TASK_ORCHESTRATION_IMPLEMENTATION.some((file) => changed.has(file))) {
+    for (const requiredDoc of TASK_ORCHESTRATION_GOVERNANCE_DOCS) {
+      if (!changed.has(requiredDoc)) {
+        errors.push(`Task orchestration implementation changed without updating ${requiredDoc}.`);
+      }
+    }
+  }
+
   const canonicalTouched = CANONICAL_DOCS.some((doc) => changed.has(doc));
   if (
     changedFiles.some((f) => isMarkdown(f) && !f.startsWith("docs/") && !CANONICAL_DOCS.includes(f)) &&
@@ -285,6 +394,8 @@ const changedFiles = getChangedFiles();
 checkChangeDrivenDocs(changedFiles, errors);
 checkVersionClaims(errors);
 checkSecretPatterns(errors);
+checkTaskOrchestrationContract(errors);
+checkDocumentationTimestamps(changedFiles, errors);
 
 console.log("Doc governance check input changed files:");
 for (const file of changedFiles) {

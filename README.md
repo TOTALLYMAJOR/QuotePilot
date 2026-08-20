@@ -1,5 +1,7 @@
 # QuotePilot by MBMApps
 
+Last updated: 2026-08-20 14:10:10 CDT
+
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
@@ -653,11 +655,23 @@ npm run build
 npm run check:secrets
 npm run check:workflows
 npm run check:ambient-release-gate
+npm run plan:task -- --task "<bounded work>" --files <path,...>
 npm run check:docs:governance
 npm run check:capability-surfaces
 npm run check:perf:bundle
 npm run check:perf:cwv
 ```
+
+`plan:task` classifies a bounded task before broad repository reading. It emits
+the recommended runner model/reasoning effort, relevant dependency reads,
+canonical documentation obligations, ordered checks, and a small task graph.
+Pass explicit `--files` in a dirty worktree; add `--json` for an external runner
+handoff. Repository code recommends the selection, while the external runner
+performs the actual model switch. The policy is owned by
+`docs/task-orchestration-contracts.json` and governed by
+`docs/AGENT_GOVERNANCE.md`. Use `--phase update` for a material checkpoint and
+`--phase complete` for final reporting; each result includes the exact UTC
+`lifecycle.recordedAt` timestamp.
 
 `test:rebook-quote:emulator` is a disposable `demo-*` Auth, Firestore, and
 Functions lane for the exact-version rebook callable. It verifies same-tenant
