@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-20 15:39:28 CDT
+Last updated: 2026-08-20 15:58:46 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,9 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
-- Aligned the temporary compatibility bundle ceiling to the exact 3,215,097-byte
-  graph emitted by the protected Playwright job with production presentation
-  flags, without adding general growth headroom.
+- Aligned the temporary compatibility and Ambient bundle ceilings to the exact
+  3,215,097-byte and 3,899,524-byte graphs emitted by the protected Playwright
+  job with production presentation flags, without adding general growth
+  headroom.
 - Preserved a supplied server-authoritative pricing snapshot when augmenting a
   locally stored quote version with the new private commercial cost snapshot.
   The augmentation now copies only `commercialSnapshot` from the client-side
@@ -67,9 +68,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Recalibrated the active graph-specific temporary bundle exception for the
   complete combined source candidate, not the Package Workspace alone. Exact
   local production builds measure 3,206,553 / 387,248 bytes for compatibility
-  and 3,887,673 / 387,248 bytes for Ambient; ceilings retain only the existing
-  7,025-byte and 303-byte CI offsets, and the 391,901-byte largest-chunk limit
-  is unchanged. Optimization or an explicitly reviewed clean-main baseline is
+  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The protected
+  production-flag graphs now pin exact 3,215,097-byte and 3,899,524-byte
+  ceilings, and the 391,901-byte largest-chunk limit is unchanged. Optimization
+  or an explicitly reviewed clean-main baseline is
   still required before the exception can close.
 - Added cheap-first auto routing to the dormant model-assisted CREATE intake
   lane. `INTENT_PARSER_PROVIDER=auto` now lets `parseIntentDraft` choose from

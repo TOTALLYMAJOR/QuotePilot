@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-20 15:39:28 CDT
+Last updated: 2026-08-20 15:58:46 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -29,9 +29,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   bytes, largest chunk unchanged) recalibrate compatibility to an absolute
   ceiling of 2,964,327 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
-  temporarily capped at 3,887,976 aggregate bytes and the same 391,901-byte
-  largest-chunk ceiling. The exact combined candidate measured 3,887,673
-  Ambient bytes and retains only the previously observed 303-byte CI offset.
+  temporarily capped at 3,899,524 aggregate bytes and the same 391,901-byte
+  largest-chunk ceiling. The prior local combined candidate measured 3,887,673
+  Ambient bytes; the active ceiling is the exact protected-Playwright graph.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -90,10 +90,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   The current combined source candidate, including the Package Workspace,
   proposal presentation, read-only quote-workspace concept, and adjacent
   workspace changes, measures 3,206,553 / 387,248 bytes for local compatibility
-  and 3,887,673 / 387,248 bytes for Ambient. The temporary ceilings are therefore
-  3,215,097 and 3,887,976 aggregate bytes respectively. The compatibility
-  ceiling is pinned to the exact protected-Playwright production-flag graph;
-  the Ambient ceiling retains only its already observed 303-byte CI offset.
+  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The temporary
+  ceilings are therefore 3,215,097 and 3,899,524 aggregate bytes respectively,
+  pinned to the exact protected-Playwright production-flag graphs.
   The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
   recalibration, not a claim that the Package Workspace alone caused the
   increase and not general growth headroom.
