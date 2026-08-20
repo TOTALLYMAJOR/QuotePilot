@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: August 9, 2026
+Last updated: 2026-08-20 14:10:10 CDT
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -33,6 +33,24 @@ Each PR declares:
 - `tenant_impact`: `none` / `read` / `write` / `rules`
 - `required_lanes`: `auto` or manual override
 - `doc_impact`: canonical docs touched and rationale
+
+Before implementation, `npm run plan:task` may derive the same decision inputs
+from a bounded task description and explicit path set. Its canonical policy is
+`docs/task-orchestration-contracts.json`; the result adds a model tier,
+reasoning effort, read/update dependencies, ordered validations, and a task
+graph. The external runner—not repository code—owns the actual model switch.
+Every plan also carries an exact UTC lifecycle timestamp. The `complete` phase
+is the authoritative time included in the final task report.
+
+## Token-Efficient Task Planning
+- Pass explicit paths in a dirty worktree so unrelated changes do not raise the
+  risk/model tier or widen dependency reads.
+- Read the emitted `dependencies.readFirst` set before task-owned source.
+- Implement in `taskGraph` order: discover, implement, governance, verify.
+- Run focused checks before full build/release lanes; do not omit required
+  global gates from the emitted validation list.
+- Treat `frontier` selection as a safety escalation for authorization,
+  payments, providers, migrations, security, and production work.
 
 ## Lane Taxonomy
 - `lane:quick`

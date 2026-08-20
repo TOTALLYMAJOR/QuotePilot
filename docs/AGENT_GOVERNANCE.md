@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: March 27, 2026
+Last updated: 2026-08-20 14:10:10 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -27,6 +27,7 @@ This document defines governance for repository-managed agent and skill assets u
   - `npm run lane:authoritative-pricing`
   - `npm run lane:release`
 - Governance controls:
+  - `npm run plan:task -- --task "<work>" --files <path,...>`
   - `npm run check:docs:governance`
   - `npm run check:perf:bundle`
   - `npm run check:perf:cwv`
@@ -49,3 +50,30 @@ Major-version upgrades require an exception record in `docs/TECH_EXCEPTIONS.md` 
 - validation evidence.
 
 No exception record means no major upgrade merge.
+
+## Task Model Routing and Token Discipline
+`docs/task-orchestration-contracts.json` is the machine-readable task-routing
+contract. `npm run plan:task` classifies a bounded task and explicit file set,
+then emits the recommended model, reasoning effort, read-first dependencies,
+canonical documentation obligations, ordered validation commands, and task
+dependency graph. Use explicit `--files` for dirty worktrees so unrelated work
+does not inflate the task or model tier.
+
+The planner recommends `economy`, `balanced`, or `frontier` work and resolves
+those tiers to runner model defaults. `TASK_MODEL_ECONOMY`,
+`TASK_MODEL_BALANCED`, and `TASK_MODEL_FRONTIER` may override those defaults at
+the runner boundary. The repository does not claim that a running agent can
+replace its own model: the external runner owns the actual switch and must
+consume `modelRouting.selectedModel` and `modelRouting.reasoningEffort` before
+starting the task.
+
+Every planner result includes `lifecycle.phase` and an exact ISO-8601 UTC
+`lifecycle.recordedAt`. Use `plan` before work, `update` for a material status
+checkpoint, and `complete` for the final report. Completion reports must carry
+the emitted `recordedAt`; do not substitute an approximate conversational time.
+
+To minimize tokens, read only `dependencies.readFirst` plus task-owned files,
+execute `taskGraph` in dependency order, and run the narrowest relevant check
+before global checks. Changes to the planner or its contract fail documentation
+governance unless this policy, the orchestration blueprint and runbook, and the
+documentation ownership map move together.
