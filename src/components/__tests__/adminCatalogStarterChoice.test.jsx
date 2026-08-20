@@ -171,7 +171,29 @@ describe("Admin Catalog starter choice", () => {
     expect(html).not.toContain("Starter packs are available only during initial unconfirmed catalog setup.");
   });
 
-  test("package inclusions hide unavailable choices while keeping stale selections removable", () => {
+  test("pricing admin exposes proposal font size and live brand readiness controls", () => {
+    const html = renderCatalog({
+      packages: [{ id: "celebration", name: "Celebration", ppp: 28 }],
+      addons: [],
+      rentals: [],
+      settings: {
+        pricingSetupConfirmed: true,
+        brandName: "Acme Events",
+        brandTagline: "Polished service",
+        brandLogoUrl: "https://cdn.example.test/acme-logo.png",
+        documentFontScale: "large"
+      }
+    }, { initialTab: "pricing" });
+
+    expect(html).toContain("Proposal font size");
+    expect(html).toContain("Controls client preview and PDF text size");
+    expect(html).toContain("Large - Increases client-facing readability.");
+    expect(html).toContain("Proposal letterhead");
+    expect(html).toContain("Logo preview is active.");
+    expect(html).toContain("Large proposal text");
+  });
+
+  test("package workspace defaults to current selections while keeping stale inclusions visible", () => {
     const html = renderCatalog({
       packages: [{
         id: "celebration",
@@ -188,10 +210,12 @@ describe("Admin Catalog starter choice", () => {
       settings: { pricingSetupConfirmed: true }
     });
 
-    expect(html).toContain("Active dessert");
+    expect(html).toContain("Add add-ons");
+    expect(html).not.toContain("Active dessert");
     expect(html).not.toContain("Unused retired dessert");
-    expect(html).toContain("Retired dessert (inactive — remove from this package before saving)");
-    expect(html).toContain("No active rentals available.");
+    expect(html).toContain("Retired dessert");
+    expect(html).toContain("Inactive");
+    expect(html).toContain("Nothing selected yet.");
   });
 
   test("removing add-ons or rentals also removes hidden package references", () => {

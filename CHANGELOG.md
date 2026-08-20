@@ -1,65 +1,127 @@
 # Changelog
 
+Last updated: 2026-08-20 15:58:46 CDT
+
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
 ## [Unreleased]
 
-### Added
+### Fixed
+- Aligned the temporary compatibility and Ambient bundle ceilings to the exact
+  3,215,097-byte and 3,899,524-byte graphs emitted by the protected Playwright
+  job with production presentation flags, without adding general growth
+  headroom.
+- Preserved a supplied server-authoritative pricing snapshot when augmenting a
+  locally stored quote version with the new private commercial cost snapshot.
+  The augmentation now copies only `commercialSnapshot` from the client-side
+  catalog view and cannot downgrade pricing authority, totals, or line items to
+  `client_preview`.
+- Kept Proposal Composer inline fields usable when a mobile keyboard compresses
+  the viewport. While the client email or another inline field is being edited,
+  the sticky mobile Review quote bar now yields so it cannot cover the field's
+  Apply and Cancel controls; the review bar returns immediately after the edit
+  closes. A compact-viewport browser regression pins the email input and both
+  actions fully inside the visible viewport.
 
+### Added
 - Gave the quote workspace a navigation entry. Every row in Quotes now carries
   a `Workspace` action that opens `/app/quote-workspace?quoteId=<id>` for that
-  quote, so the workspace and its Activity & save health drawer are reachable
-  without typing the address by hand. The route, its organization scoping, and
-  its read-only boundaries are unchanged; only the way staff reach it is new.
-
-### Changed
-
-- Made the client directory legible at a glance instead of uniformly plain:
-  relationship state now renders as a toned chip with a status dot rather than
-  bare colored text, row hover carries a gold edge so the row reads as a
-  target, and client initials use the brand's warm accent. Chip and initial
-  colors were contrast-checked at or above 4.5:1 against their own tints, and
-  the hover transition is dropped under `prefers-reduced-motion`. No directory
-  data, filtering, pagination, or action wiring changed.
-
-- Remounted "The Document" hero as the public landing hero: the Morgan Wedding
-  banquet event order revises itself on load and six click-through surfaces
-  follow the same event from pasted inquiry to kitchen copy. The film layer
-  remains as the backdrop for the story chapters below, its playback controls
-  moved into the consequence chapter under a plain "Background film" label,
-  and the buyer access gate is unchanged — the `$1` CTA and its
-  one-dollar/one-time disclosure render only when the public CTA flag is on.
-- Rebuilt the hero's final surface as a Plans rate card: Starter, Growth, and
-  Enterprise are presented by business size with no public dollar figures
-  ("plan pricing set with founding partners"), plus the Strategic Agency
-  add-on at $49.99/mo described strictly as draft-for-approval assistance.
-- Replaced every "Book a demo" call to action with a five-seat design-partner
-  program: a `#design-partner` chapter states the exchange plainly (real
-  usage, honest feedback, and sign-off-gated results for a locked founding
-  rate, first-year Strategic Agency, and direct roadmap access) before
-  handing off to the existing contact route. The buyer-access rollout test
-  now names the design-partner path as the public acquisition route.
-- Recorded the five design commitments in `docs/DESIGN_PRINCIPLES.md` and
-  corrected the hero sheet's Rev 05 service-charge arithmetic so the printed
-  22% actually reconciles ($15,100 / $3,322 / $18,422).
-
+  quote, so staff can reach the read-only workspace and its Activity & Save
+  Health drawer without typing an address. Organization scope and quote
+  mutation authority remain unchanged.
+- Added a deterministic task orchestration planner that maps bounded work and
+  explicit paths to a runner model tier, reasoning effort, dependency reads,
+  canonical documentation obligations, ordered validations, and a task graph.
+  Documentation governance now validates the machine contract and fails when
+  planner changes omit any of its governing policy documents. Planner updates
+  and completion reports now carry exact UTC lifecycle timestamps, while
+  changed governed documents must advance a local date-time-and-timezone header.
+- Added `npm run check:stripe-connect:staging`, a read-only live Firebase
+  preflight for the isolated Stripe Connect staging foundation. The command
+  verifies the exact staging project, project number, hosting site, reviewed
+  single WEB app, and required `connect-control` named database contract
+  before any Connect export or provider binding is attempted. It reports
+  blockers deterministically but does not create infrastructure, plan/apply
+  Terraform, bind App Check, enable provider access, or establish Stripe or
+  hosted acceptance.
+- Added the source/local QuotePilot Package Workspace MVP to `Library ->
+  Packages`. Catalog Admin now uses a stable-ID package navigator, a selected
+  package overview with price/cost/contribution/margin evidence, deterministic
+  package health and one next action, progressive inclusion selectors that
+  stage searchable/category-filtered multi-selection behind explicit Apply or
+  Cancel instead of permanent checkbox matrices, readiness-gated activation,
+  a selected-package revert action, dependency-aware confirmed delete, and one
+  in-flow staged save bar instead of duplicate or content-covering save buttons
+  on that tab. Mobile uses a compact package switcher, collapsible Health, and
+  a full-viewport selection sheet. The existing
+  package contract, per-person pricing, selected-at-$0 inclusion behavior,
+  catalog revision fencing, and managed-menu separation are unchanged. The
+  supporting pure `packageWorkspaceModel` and parity fixtures remain in place,
+  and focused tests cover package switching, staged selectors, activation,
+  dependency review, native navigation semantics, and last-saved package
+  reverts. Fresh local real-route browser checks at 390, 768, and 1440 pixels
+  pass with zero Axe violations, zero document/workspace overflow, and no
+  visible target below 44 pixels; hosted roles, deployment, production data,
+  and human acceptance remain separate.
+- Recalibrated the active graph-specific temporary bundle exception for the
+  complete combined source candidate, not the Package Workspace alone. Exact
+  local production builds measure 3,206,553 / 387,248 bytes for compatibility
+  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The protected
+  production-flag graphs now pin exact 3,215,097-byte and 3,899,524-byte
+  ceilings, and the 391,901-byte largest-chunk limit is unchanged. Optimization
+  or an explicitly reviewed clean-main baseline is
+  still required before the exception can close.
+- Added cheap-first auto routing to the dormant model-assisted CREATE intake
+  lane. `INTENT_PARSER_PROVIDER=auto` now lets `parseIntentDraft` choose from
+  a configured provider:model candidate order, estimate request complexity,
+  trim the completion-token budget per request, and perform at most one bounded
+  retry on provider failure or unreadable/empty output before returning the
+  same low-confidence review-only fact contract. The client boundary now
+  preserves provider/model/routing metadata for future audit or UI use, while
+  the existing six visible Model assist states remain unchanged.
+- Added catalog-owned proposal presentation controls and staff-only margin/cost
+  context across the quote workspace. Pricing admins can choose a bounded
+  proposal font scale, define/clear logo evidence, see brand readiness, review
+  guided-rule coverage, set operator-authored proposal intro/closing copy, and
+  see cost/margin data coverage before save. Trusted quote creation/edit
+  snapshots now persist the selected document font scale, proposal intro title,
+  proposal intro message, proposal closing message, and a private commercial
+  cost snapshot for saved staff-only margin evidence. The Proposal Composer
+  applies the saved brand/logo/monogram, font scale, and operator copy to the
+  client preview, quote email payload, and PDF export, while showing recorded
+  cost, computed margin, and target-margin status only inside the staff Quote
+  Pulse when the existing margin gate has complete saved cost evidence.
+  Customer-facing proposal artifacts still exclude internal cost and margin
+  details.
 - Added an Activity & Save Health drawer to the connected quote workspace.
   Persisted quote activity, snapshot freshness, last-saved evidence, lifecycle
   status, and visible completeness gaps now share one keyboard- and mobile-safe
   panel. The drawer remains read-only and hands final validation, availability,
   pricing authority, permissions, version conflicts, and persistence back to
   the existing quote editor; it never implies that a quote saved or was approved.
-- Added an isolated, responsive Quote Workspace at `/app/quote-workspace`
-  with `/app/quote-workspace-concept` retained as a fallback alias. The page
-  reads the signed-in staff member's organization-scoped quote history,
-  selects an explicit `?quoteId=` or the most recent saved quote, and presents
-  recorded event, menu, pricing, margin, status, and activity evidence in the
-  new editorial QuotePilot visual language. Preview, message, pricing, menu,
-  and send-review actions hand off to the existing canonical quote routes;
-  readiness remains a completeness signal and never changes approval. The
-  existing quote workspace remains unchanged and available for rollback.
+- Added an authenticated admin/sales-only `/app/quote-workspace-concept` evaluation page that
+  translates the generated QuotePilot desktop and mobile references into a
+  responsive, read-only React workspace over the tenant's saved quote history.
+  The `/app/quote-workspace` alias exposes the same evaluation surface. The
+  existing quote list/detail/edit/message routes remain unchanged as the
+  immediate fallback and authoritative action destinations; the evaluation
+  surface performs no quote or provider mutation.
+- Repaired the cinematic landing header navigation by restoring its stacking
+  authority above the full-viewport story chapters and making the decorative
+  film layer non-interactive. The hero commercial and reduced-motion poster
+  now share a true black-and-white grade, and playback runs at a restrained
+  `0.72x` while retaining the existing play, pause, sound, caption, and
+  analytics contracts.
+- Turned the Proposal Composer's Quote Pulse into the draft explanation layer:
+  recent session activity is expanded by default, while a shared readiness
+  model lists every currently known client-side reason the draft cannot save,
+  including required event details, menu selection, unresolved review gates,
+  quote-load state, and governed Change Impact requirements. Both Ambient and
+  compatibility app graphs use the same presentation model, and the panel also
+  carries the latest draft notice. The existing submit handler remains the
+  authority for availability, server validation, pricing, and persistence.
 - Recast the public QuotePilot landing page as a cinematic, viewport-paced
   story: the existing commercial now runs as a muted full-bleed film layer,
   major sections align as native scroll-snap chapters, all product screen
@@ -229,6 +291,20 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Made the client directory legible at a glance: relationship state now renders
+  as a contrast-checked toned chip, row hover carries the warm active edge, and
+  client initials use the brand accent. Directory data, filtering, pagination,
+  and action wiring are unchanged.
+- Remounted "The Document" as the production landing hero, retained the real
+  buyer-access gate, added the Plans rate card and five-seat design-partner
+  path, and reconciled the printed service-charge arithmetic. Public pricing,
+  contact handoff, and buyer-access authority remain unchanged.
+- Updated the transitive development-only `nanoid` dependency from `3.3.17`
+  to `3.3.18`. Production-only audits now report zero vulnerabilities for the
+  root app, default Functions, and Connect Functions. The full root audit still
+  reports six high-severity development-tool findings through the current
+  Lighthouse CI/Puppeteer/`extract-zip` chain; npm offers only a breaking
+  Lighthouse CI downgrade, so no forced remediation was applied.
 - Restored both production bundle gates without raising their ceilings:
   production builds now use the supported pinned Terser minifier, Staff and
   Clients review fixtures are eliminated behind literal development-only

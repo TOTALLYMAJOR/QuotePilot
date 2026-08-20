@@ -1,3 +1,5 @@
+import { buildCommercialSnapshot } from "./commercialSnapshot";
+
 const PRICING_MODES = new Set(["per_person", "per_item", "per_event"]);
 const STAFFING_CHARGE_MODES = new Set(["per_hour", "per_event_per_staff"]);
 const MAX_RATE_MIX_CSV_LENGTH = 300;
@@ -298,6 +300,9 @@ export function normalizePricingOutput(payload = {}) {
       pct: toNumber(rawDeposit.pct, 0),
       amount: toNumber(rawDeposit.amount, toNumber(source.depositAmount, 0))
     },
+    commercialSnapshot: source.commercialSnapshot && typeof source.commercialSnapshot === "object"
+      ? { ...source.commercialSnapshot }
+      : null,
     subtotal: toNumber(source.subtotal, 0),
     grandTotal: toNumber(source.grandTotal, 0),
     rulesSnapshot: source.rulesSnapshot && typeof source.rulesSnapshot === "object"
@@ -311,6 +316,7 @@ export function buildPricingSnapshotFromClientTotals({
   totals = {},
   settings = {},
   selection = {},
+  catalog = null,
   organizationId = "",
   quoteId = "",
   quoteNumber = "",
@@ -415,6 +421,16 @@ export function buildPricingSnapshotFromClientTotals({
       pct: toNumber(settings.depositPct, 0),
       amount: normalizedTotals.deposit
     },
+    commercialSnapshot: buildCommercialSnapshot({
+      form,
+      catalog: catalog && typeof catalog === "object" ? catalog : null,
+      settings,
+      selection: {
+        ...selection,
+        packageId: selection.packageId || form.pkg,
+        packageName: selection.packageName || ""
+      }
+    }),
     subtotal,
     grandTotal: normalizedTotals.total,
     rulesSnapshot: {

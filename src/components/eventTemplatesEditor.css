@@ -6,6 +6,12 @@
   --template-gold: var(--ambient-gold, #b9852e);
   --template-coral: var(--ambient-coral, #b65f4e);
   color: var(--template-ink);
+  border: 1px solid var(--template-line);
+  border-top: 2px solid color-mix(in srgb, var(--template-gold) 72%, transparent);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--template-paper) 82%, #fff), color-mix(in srgb, var(--template-paper) 58%, transparent));
+  padding: clamp(1rem, 2.2vw, 1.45rem);
 }
 
 .event-templates-editor__head {

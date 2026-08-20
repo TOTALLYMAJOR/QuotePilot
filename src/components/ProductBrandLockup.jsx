@@ -13,7 +13,7 @@ export default function ProductBrandLockup({ className = "", compact = false }) 
   ].filter(Boolean).join(" ");
 
   return (
-    <span className={classes} aria-label={PRODUCT_FULL_NAME}>
+    <span className={classes} role="img" aria-label={PRODUCT_FULL_NAME}>
       <img src={PRODUCT_MARK_URL} alt="" width={compact ? 40 : 48} height={compact ? 40 : 48} />
       <span className="product-brand-copy">
         <strong>{PRODUCT_NAME}</strong>

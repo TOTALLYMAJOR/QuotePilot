@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: August 8, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -16,14 +16,21 @@ Ship safe changes with validation evidence and canonical documentation sync.
 
 ## Required Workflow
 1. Read canonical ownership policy in `docs/DOC_SYSTEM.md`.
-2. Use the smallest safe implementation scope.
-3. Run required checks:
+2. Before broad reading or edits, run `npm run plan:task` with an explicit
+   `--task` and `--files` set, then follow its dependency/read map. An external
+   runner may apply the emitted model and reasoning recommendation before work;
+   an already-running agent records the recommendation and continues without
+   claiming an in-process model switch.
+3. Use the smallest safe implementation scope.
+4. Run required checks:
    - `npm run check:env`
    - `npm run build`
    - `npm run check:capability-surfaces` when backend/data authority changes
    - plus scope-specific tests (`test:unit`, `test:e2e`, governance/perf checks) as needed.
-4. Update canonical docs per trigger rules in `docs/DOC_SYSTEM.md`.
-5. Report changed files, validations, and residual risks.
+5. Update canonical docs per trigger rules in `docs/DOC_SYSTEM.md`.
+6. At completion, rerun `npm run plan:task` with the same `--task` and
+   `--files` plus `--phase complete`, then report its exact UTC `recordedAt`
+   timestamp with changed files, validations, and residual risks.
 
 ## Guardrails
 - Never commit secrets (`.env`, private keys, token values).

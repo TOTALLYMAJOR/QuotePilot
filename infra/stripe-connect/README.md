@@ -23,6 +23,7 @@ database, legacy payment functions, and production project.
 
 ```bash
 npm run check:stripe-connect:infra
+npm run check:stripe-connect:staging
 terraform fmt -check -recursive infra/stripe-connect
 terraform -chdir=infra/stripe-connect/bootstrap/staging init -backend=false
 terraform -chdir=infra/stripe-connect/bootstrap/staging validate
@@ -31,7 +32,10 @@ terraform -chdir=infra/stripe-connect/environments/staging validate
 ```
 
 These commands parse and validate source. They do not authenticate, refresh
-cloud state, produce a trusted plan, or create infrastructure.
+cloud state, produce a trusted plan, or create infrastructure. The live staging
+preflight is read-only: it confirms the exact staging project/app inventory and
+the required `connect-control` named database contract, but it does not create
+that database or bind runtime/provider access.
 
 ## Future authorized sequence
 

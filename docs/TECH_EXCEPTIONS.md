@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 14, 2026
+Last updated: 2026-08-20 15:58:46 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -29,10 +29,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   bytes, largest chunk unchanged) recalibrate compatibility to an absolute
   ceiling of 2,964,327 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
-  temporarily capped at 3,853,000 aggregate bytes and the same 391,901-byte
-  largest-chunk ceiling (measured 3,839,490 CI Ambient bytes for the
-  Document-hero landing remount on 2026-08-16 recalibrated the prior
-  3,827,245 cap, which that change exceeded by 12,245 bytes).
+  temporarily capped at 3,899,524 aggregate bytes and the same 391,901-byte
+  largest-chunk ceiling. The prior local combined candidate measured 3,887,673
+  Ambient bytes; the active ceiling is the exact protected-Playwright graph.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -88,6 +87,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   (`3,839,490 / 387,248`); the Ambient ceiling recalibrates to `3,853,000`
   with the largest chunk unchanged. Compatibility is unaffected (measured
   2,936,683, under its standing 2,964,327 ceiling).
+  The current combined source candidate, including the Package Workspace,
+  proposal presentation, read-only quote-workspace concept, and adjacent
+  workspace changes, measures 3,206,553 / 387,248 bytes for local compatibility
+  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The temporary
+  ceilings are therefore 3,215,097 and 3,899,524 aggregate bytes respectively,
+  pinned to the exact protected-Playwright production-flag graphs.
+  The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
+  recalibration, not a claim that the Package Workspace alone caused the
+  increase and not general growth headroom.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,

@@ -1,5 +1,7 @@
 import { currency } from "./quoteCalculator";
 import { sanitizeStripePaymentLink } from "./paymentLink";
+import { normalizeBrandLogoUrl } from "./brandLogoUrl";
+import { normalizeProposalDocumentFontScale } from "./proposalDocumentPreferences";
 
 const DEFAULT_BRANDING = {
   name: "",
@@ -70,7 +72,7 @@ export function resolveBranding(meta = {}) {
     brandName,
     brandTagline,
     title: brandName ? `${brandName} Proposal` : "Catering Proposal",
-    logoPath: cleanText(meta.brandLogoUrl, DEFAULT_BRANDING.logoPath),
+    logoPath: normalizeBrandLogoUrl(meta.brandLogoUrl) || DEFAULT_BRANDING.logoPath,
     crewMembers: normalizeCrewMembers(meta.brandCrew)
   };
 }
@@ -83,6 +85,7 @@ export function buildProposalPayload(quote) {
   const meta = quote.quoteMeta || {};
   const branding = resolveBranding(meta);
   const validityDays = Math.max(1, Math.round(toNumber(meta.quoteValidityDays, 30)));
+  const documentFont = normalizeProposalDocumentFontScale(meta.documentFontScale);
 
   return {
     quoteId: cleanText(quote.id),
@@ -188,6 +191,9 @@ export function buildProposalPayload(quote) {
     meta: {
       organizationName: cleanText(meta.organizationName),
       quotePreparedBy: cleanText(meta.quotePreparedBy),
+      proposalIntroTitle: cleanText(meta.proposalIntroTitle),
+      proposalIntroMessage: cleanText(meta.proposalIntroMessage),
+      proposalClosingMessage: cleanText(meta.proposalClosingMessage),
       acceptanceEmail: cleanText(meta.acceptanceEmail, cleanText(meta.businessEmail)),
       businessEmail: cleanText(meta.businessEmail),
       businessPhone: cleanText(meta.businessPhone),
@@ -196,6 +202,9 @@ export function buildProposalPayload(quote) {
       disposablesNote: cleanText(meta.disposablesNote),
       depositNotice: cleanText(meta.depositNotice),
       quoteValidityDays: validityDays,
+      documentFontScale: documentFont.id,
+      documentFontScaleLabel: documentFont.label,
+      documentFontScaleValue: documentFont.scale,
       brandPrimaryColor: cleanText(meta.brandPrimaryColor),
       brandAccentColor: cleanText(meta.brandAccentColor),
       brandDarkAccentColor: cleanText(meta.brandDarkAccentColor)
@@ -219,6 +228,8 @@ export function buildQuoteEmailPayload(quote, { basePortalUrl = "", includePorta
   const lines = [
     `Hi ${customerName},`,
     "",
+    proposal.meta.proposalIntroTitle ? proposal.meta.proposalIntroTitle : "",
+    proposal.meta.proposalIntroMessage ? proposal.meta.proposalIntroMessage : "",
     `Thank you for considering ${brandName || "us"} for ${eventName} on ${eventDate} at ${venue}.`,
     `Your quote (${proposal.quoteNumber}) total is ${total}.`,
     `To reserve your date, the deposit due is ${deposit}.`,
@@ -228,6 +239,7 @@ export function buildQuoteEmailPayload(quote, { basePortalUrl = "", includePorta
     proposal.expiresOn !== "-" ? `This quote is valid through ${proposal.expiresOn}.` : "",
     portalLink ? `Review and accept your quote: ${portalLink}` : "",
     "",
+    proposal.meta.proposalClosingMessage ? proposal.meta.proposalClosingMessage : "",
     "Please reply with any questions or requested adjustments.",
     "",
     signature

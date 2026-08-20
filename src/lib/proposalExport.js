@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import { currency, serviceChargeLabel } from "./quoteCalculator";
 import { sanitizeStripePaymentLink } from "./paymentLink";
 import { buildProposalPayload } from "./proposalPayload";
+import { proposalDocumentFontSize } from "./proposalDocumentPreferences";
 import { PRODUCT_FULL_NAME } from "./productIdentity";
 
 const BRAND_ASSET_CACHE = new Map();
@@ -9,6 +10,18 @@ const IMAGE_LOG_PREFIX = "[proposalExport:image]";
 
 function text(v) {
   return String(v ?? "-");
+}
+
+function brandInitials(value) {
+  const initials = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return initials || "QP";
 }
 
 function stablePdfFileId(seed) {
@@ -249,7 +262,8 @@ function appendFooterToAllPages({
   proposal,
   left,
   right,
-  pageHeight
+  pageHeight,
+  fontSize = (size) => size
 }) {
   const pageCount = doc.getNumberOfPages();
   for (let page = 1; page <= pageCount; page += 1) {
@@ -258,14 +272,14 @@ function appendFooterToAllPages({
     doc.line(left, pageHeight - 34, right, pageHeight - 34);
     doc.setTextColor(...palette.muted);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFontSize(fontSize(8));
     doc.text(
       `${proposal.branding.brandName ? `${proposal.branding.brandName} • ` : ""}Quote ${text(proposal.quoteNumber)}`,
       left,
       pageHeight - 22
     );
     doc.text(`Page ${page} of ${pageCount}`, right, pageHeight - 22, { align: "right" });
-    doc.setFontSize(7);
+    doc.setFontSize(fontSize(7));
     doc.text(`Created with ${PRODUCT_FULL_NAME}`, right, pageHeight - 10, { align: "right" });
   }
 }
@@ -281,7 +295,8 @@ function renderHeader({
   maxWidth,
   pageWidth,
   headerHeight,
-  y
+  y,
+  fontSize = (size) => size
 }) {
   doc.setFillColor(...palette.ink);
   doc.rect(0, 0, pageWidth, headerHeight, "F");
@@ -290,6 +305,15 @@ function renderHeader({
 
   if (brandAssets.logo) {
     safeAddImage(doc, brandAssets.logo, left, 18, 52, 52, "logo image");
+  } else if (branding.brandName) {
+    doc.setFillColor(...palette.gold);
+    doc.roundedRect(left, 18, 52, 52, 10, 10, "F");
+    doc.setDrawColor(...palette.goldSoft);
+    doc.roundedRect(left + 2, 20, 48, 48, 8, 8);
+    doc.setTextColor(...palette.ink);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize(15));
+    doc.text(brandInitials(branding.brandName), left + 26, 50, { align: "center" });
   }
 
   const crewChipSize = 42;
@@ -308,16 +332,16 @@ function renderHeader({
     }
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFontSize(fontSize(8));
     doc.text(text(member.label), chipX + (crewChipSize / 2), crewTopY + crewChipSize + 13, { align: "center" });
   });
 
-  const titleX = brandAssets.logo ? left + 64 : left;
+  const titleX = brandAssets.logo || branding.brandName ? left + 64 : left;
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
+  doc.setFontSize(fontSize(20));
   doc.text(text(branding.title), titleX, 42);
-  doc.setFontSize(10);
+  doc.setFontSize(fontSize(10));
   doc.setFont("helvetica", "normal");
   if (branding.brandTagline) {
     doc.text(branding.brandTagline, titleX, 58);
@@ -358,7 +382,8 @@ export async function exportQuoteProposal(quote, {
   const left = 44;
   const right = pageWidth - 44;
   const maxWidth = right - left;
-  const lineGap = 17;
+  const fontSize = (size) => proposalDocumentFontSize(size, meta.documentFontScale);
+  const lineGap = Math.round(17 * Number(meta.documentFontScaleValue || 1));
   const contentBottomPadding = 74;
   const palette = resolvePalette(meta);
   const quoteIsDraft = String(quote?.status || "draft").trim().toLowerCase() === "draft";
@@ -392,7 +417,7 @@ export async function exportQuoteProposal(quote, {
     doc.roundedRect(left, y - 14, maxWidth, 20, 6, 6, "F");
     doc.setTextColor(...palette.text);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(fontSize(11));
     doc.text(label.toUpperCase(), left + 10, y);
     y += 20;
   };
@@ -403,7 +428,7 @@ export async function exportQuoteProposal(quote, {
     ensureSpace(lineGap * Math.max(1, wrapped.length) + 4);
     doc.setTextColor(...palette.muted);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
+    doc.setFontSize(fontSize(10));
     doc.text(`${label}:`, left + 2, y);
     doc.setTextColor(...palette.text);
     doc.setFont("helvetica", "normal");
@@ -415,7 +440,7 @@ export async function exportQuoteProposal(quote, {
     ensureSpace(24);
     doc.setTextColor(...palette.text);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
+    doc.setFontSize(fontSize(10));
     doc.text(`${label}:`, left + 2, y);
     doc.setTextColor(...palette.gold);
     doc.text(currency(amount || 0), left + 128, y);
@@ -432,7 +457,7 @@ export async function exportQuoteProposal(quote, {
     ensureSpace((8 * Math.max(1, wrapped.length)) + 2);
     doc.setTextColor(...palette.muted);
     doc.setFont("helvetica", "italic");
-    doc.setFontSize(8);
+    doc.setFontSize(fontSize(8));
     doc.text(wrapped, left + 130, y);
     y += (8 * Math.max(1, wrapped.length)) + 2;
   };
@@ -449,8 +474,34 @@ export async function exportQuoteProposal(quote, {
     maxWidth,
     pageWidth,
     headerHeight,
-    y
+    y,
+    fontSize
   });
+
+  if (meta.proposalIntroTitle || meta.proposalIntroMessage) {
+    const introLines = meta.proposalIntroMessage
+      ? doc.splitTextToSize(meta.proposalIntroMessage, maxWidth - 20)
+      : [];
+    const introHeight = Math.max(28, (introLines.length * 14) + (meta.proposalIntroTitle ? 24 : 16));
+    ensureSpace(introHeight + 12);
+    doc.setFillColor(...palette.cream);
+    doc.roundedRect(left, y - 8, maxWidth, introHeight, 8, 8, "F");
+    doc.setDrawColor(...palette.line);
+    doc.roundedRect(left, y - 8, maxWidth, introHeight, 8, 8);
+    doc.setTextColor(...palette.gold);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize(9));
+    if (meta.proposalIntroTitle) {
+      doc.text(meta.proposalIntroTitle.toUpperCase(), left + 10, y + 4);
+    }
+    if (introLines.length) {
+      doc.setTextColor(...palette.text);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(fontSize(10));
+      doc.text(introLines, left + 10, y + (meta.proposalIntroTitle ? 18 : 6));
+    }
+    y += introHeight + 8;
+  }
 
   section("Client and Event");
   row("Responsible Party / Client", proposal.customer.name);
@@ -540,7 +591,7 @@ export async function exportQuoteProposal(quote, {
   doc.roundedRect(left, y - 10, maxWidth, 22, 4, 4);
   doc.setTextColor(...palette.text);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(fontSize(11));
   doc.text("Pre-fee Subtotal:", left + 12, y + 2);
   doc.setTextColor(...palette.gold);
   doc.text(currency(prefeeSubtotal), left + 128, y + 2);
@@ -561,7 +612,7 @@ export async function exportQuoteProposal(quote, {
   ensureSpace(24);
   doc.setTextColor(...palette.muted);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(fontSize(9));
   doc.text("Total Before Tax/Service Fee:", left + 2, y);
   doc.text(currency(totalBeforeTaxServiceFee), left + 128, y);
   y += lineGap + 2;
@@ -574,7 +625,7 @@ export async function exportQuoteProposal(quote, {
   y += 16;
   doc.setTextColor(...palette.text);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(fontSize(13));
   doc.text(`Estimated Total: ${currency(proposal.totals.total || 0)}`, left + 12, y);
   y += 18;
   doc.text(`Deposit Due: ${currency(proposal.totals.deposit || 0)}`, left + 12, y);
@@ -584,7 +635,7 @@ export async function exportQuoteProposal(quote, {
   if (showDisposablesNote) {
     doc.setTextColor(...palette.text);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
+    doc.setFontSize(fontSize(10));
     doc.text(meta.disposablesNote || "All disposables are included in this quote.", left, y);
     y += 14;
   }
@@ -608,12 +659,29 @@ export async function exportQuoteProposal(quote, {
     doc.text(meta.depositNotice, left + 4, y);
     y += 18;
   }
+  if (meta.proposalClosingMessage) {
+    const closingLines = doc.splitTextToSize(meta.proposalClosingMessage, maxWidth - 12);
+    ensureSpace((closingLines.length * 14) + 28);
+    doc.setFillColor(...palette.cream);
+    doc.roundedRect(left, y - 8, maxWidth, (closingLines.length * 14) + 16, 8, 8, "F");
+    doc.setDrawColor(...palette.line);
+    doc.roundedRect(left, y - 8, maxWidth, (closingLines.length * 14) + 16, 8, 8);
+    doc.setTextColor(...palette.gold);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize(9));
+    doc.text("CLOSING NOTE", left + 10, y + 4);
+    doc.setTextColor(...palette.text);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontSize(10));
+    doc.text(closingLines, left + 10, y + 18);
+    y += (closingLines.length * 14) + 22;
+  }
 
   y += 8;
   ensureSpace(20);
   doc.setTextColor(...palette.muted);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(fontSize(9));
   doc.text(
     `${text(meta.businessAddress || "")} ${meta.businessPhone ? `  |  ${meta.businessPhone}` : ""} ${meta.businessEmail ? `  |  ${meta.businessEmail}` : ""}`.trim(),
     left,
@@ -625,7 +693,8 @@ export async function exportQuoteProposal(quote, {
     proposal,
     left,
     right,
-    pageHeight
+    pageHeight,
+    fontSize
   });
 
   const filename = [

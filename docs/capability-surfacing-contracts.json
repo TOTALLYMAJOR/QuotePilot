@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 46,
+  "catalogVersion": 48,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -887,7 +887,7 @@
     },
     {
       "id": "stable-customer-identity-projection",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -1861,7 +1861,7 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -1994,7 +1994,7 @@
     },
     {
       "id": "commercial-dependency-graph-beo-provenance",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -3391,24 +3391,45 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 11,
+      "reviewRevision": 14,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable. Catalog-setting and managed-menu draft domains cannot advance together. Each of the seven managed-menu operations requires the exact loaded expectedCatalogRevision, which is compared inside the Firebase transaction or local commit before any record write; the development fallback compares the active organization's catalog revision and never reads the retired unscoped cache into another organization.",
+      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable. Catalog-setting and managed-menu draft domains cannot advance together. Each of the seven managed-menu operations requires the exact loaded expectedCatalogRevision, which is compared inside the Firebase transaction or local commit before any record write; the development fallback compares the active organization's catalog revision and never reads the retired unscoped cache into another organization. Catalog Admin also owns proposal document font scale, brand readiness, guided-rule coverage, operator-authored proposal intro/closing copy, and cost/margin coverage summaries, while trusted quote create/edit snapshots retain the selected presentation plus a private saved commercial snapshot so Proposal Composer and related staff rails can prefer saved cost evidence without exposing it to customers. The Package Workspace is the bounded editor for the current package schema: it stages package identity, per-person price and cost, optional selected-at-zero inclusions, availability, revert, and dependency-reviewed delete through that same catalog save authority without changing quote-pricing behavior.",
       "backendPaths": [
+        "functions/index.js",
+        "functions/quoteCreation.js",
         "src/data/mockCatalog.js",
+        "src/lib/commercialSnapshot.js",
         "src/data/starterCatalogPacks.js",
         "src/hooks/useCatalogData.js",
+        "src/lib/brandLogoUrl.js",
+        "src/lib/catalogWriteShapes.js",
+        "src/lib/packageWorkspaceModel.js",
+        "src/lib/pricingContracts.js",
+        "src/lib/proposalDocumentPreferences.js",
+        "src/lib/proposalExport.js",
+        "src/lib/proposalPayload.js",
+        "src/lib/quoteStore.js",
         "src/lib/menuService.js"
       ],
       "backendExports": [],
+      "affectedBackendExports": [
+        "functions/index.js#createQuoteDraft",
+        "functions/index.js#duplicateQuoteDraft",
+        "functions/index.js#createRebookQuoteDraft",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#provisionCustomerOrder",
+        "functions/index.js#buyerAccessStripeWebhook"
+      ],
       "frontendPaths": [
         "src/components/AdminCatalogModal.jsx",
         "src/components/LiveBreakdown.jsx",
+        "src/components/PackageWorkspace.jsx",
+        "src/components/ProposalComposer.jsx",
         "src/components/marginPresentation.js"
       ],
       "entryPointLocators": [
@@ -3423,6 +3444,50 @@
         {
           "path": "src/components/marginPresentation.js",
           "locator": "Below your margin target"
+        },
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "data-testid=\"catalog-cost-margin-summary\""
+        },
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "data-testid=\"catalog-rules-summary\""
+        },
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "data-testid=\"proposal-font-size-setting\""
+        },
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "Proposal intro title"
+        },
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "Proposal closing message"
+        },
+        {
+          "path": "src/components/ProposalComposer.jsx",
+          "locator": "data-testid=\"pc-proposal-polish\""
+        },
+        {
+          "path": "src/components/ProposalComposer.jsx",
+          "locator": "data-testid=\"pc-margin-cost\""
+        },
+        {
+          "path": "src/components/ProposalComposer.jsx",
+          "locator": "aria-label=\"Proposal introduction\""
+        },
+        {
+          "path": "src/components/ProposalComposer.jsx",
+          "locator": "aria-label=\"Proposal closing message\""
+        },
+        {
+          "path": "src/components/PackageWorkspace.jsx",
+          "locator": "data-package-workspace=\"true\""
+        },
+        {
+          "path": "src/components/PackageWorkspace.jsx",
+          "locator": "Package actions"
         }
       ],
       "testPaths": [
@@ -3431,8 +3496,20 @@
         "src/hooks/__tests__/useCatalogData.observation.test.jsx",
         "src/hooks/__tests__/useCatalogData.savePlan.test.js",
         "src/components/__tests__/adminCatalogStarterChoice.test.jsx",
+        "src/components/__tests__/packageWorkspace.test.jsx",
+        "src/components/__tests__/proposalComposerMarginCost.test.jsx",
+        "src/components/__tests__/proposalComposerSaveReadiness.test.js",
         "src/lib/__tests__/menuService.test.js",
         "src/lib/__tests__/menuService.writeFallback.test.js",
+        "src/lib/__tests__/packageWorkspaceModel.test.js",
+        "src/lib/__tests__/packageWorkspacePricingParity.test.js",
+        "src/lib/__tests__/pricingContracts.test.js",
+        "src/lib/__tests__/brandLogoUrl.test.js",
+        "src/lib/__tests__/ambientPricingPreview.test.js",
+        "src/lib/__tests__/proposalDocumentPreferences.test.js",
+        "src/lib/__tests__/proposalPayload.test.js",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/data/__tests__/mockCatalog.tenantSettings.test.js",
         "src/components/__tests__/marginPresentation.test.js",
         "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx"
       ],
@@ -3474,6 +3551,62 @@
           "locator": "empty confirmed pricing still shows starter packs to recover catalog data"
         },
         {
+          "path": "src/components/__tests__/adminCatalogStarterChoice.test.jsx",
+          "locator": "pricing admin exposes proposal font size and live brand readiness controls"
+        },
+        {
+          "path": "src/lib/__tests__/pricingContracts.test.js",
+          "locator": "builds normalized client-preview pricing snapshot from totals"
+        },
+        {
+          "path": "src/components/__tests__/packageWorkspace.test.jsx",
+          "locator": "applies staged add-on selections and keeps inactive options hidden"
+        },
+        {
+          "path": "src/components/__tests__/packageWorkspace.test.jsx",
+          "locator": "blocks activation until a package is ready and clears stale notice on revert"
+        },
+        {
+          "path": "src/components/__tests__/packageWorkspace.test.jsx",
+          "locator": "reviews exact package dependencies before deletion"
+        },
+        {
+          "path": "src/lib/__tests__/packageWorkspacePricingParity.test.js",
+          "locator": "keeps local and authoritative package inclusion pricing aligned on the same shared fixture"
+        },
+        {
+          "path": "src/components/__tests__/proposalComposerMarginCost.test.jsx",
+          "locator": "renders recorded cost and margin in Quote Pulse as staff-only context"
+        },
+        {
+          "path": "src/components/__tests__/proposalComposerSaveReadiness.test.js",
+          "locator": "requires a current impact review before later authorization"
+        },
+        {
+          "path": "src/lib/__tests__/brandLogoUrl.test.js",
+          "locator": "rejects unsafe schemes and malformed relative paths"
+        },
+        {
+          "path": "src/lib/__tests__/proposalDocumentPreferences.test.js",
+          "locator": "normalizes the bounded proposal font scale choices"
+        },
+        {
+          "path": "src/lib/__tests__/proposalPayload.test.js",
+          "locator": "buildProposalPayload returns normalized branded payload"
+        },
+        {
+          "path": "src/lib/__tests__/ambientPricingPreview.test.js",
+          "locator": "prefers the saved commercial snapshot when it exists on the quote"
+        },
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "builds one canonical draft, public snapshot, and v0001 from server proof"
+        },
+        {
+          "path": "src/data/__tests__/mockCatalog.tenantSettings.test.js",
+          "locator": "normalizes tenant proposal document font scale to bounded choices"
+        },
+        {
           "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
           "locator": "starts ready with no unsaved changes and no message"
         },
@@ -3503,21 +3636,34 @@
         }
       ],
       "documentationPaths": [
+        "docs/PACKAGE_WORKSPACE.md",
         "docs/FEATURE_MATRIX.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Catalog cost entry and margin advisory"
+          "locator": "Catalog-owned proposal presentation and Quote Pulse margin/cost context"
         },
         {
           "path": "docs/USER_MANUAL.md",
           "locator": "## Catalog cost entry and margin advisory"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QuotePilot Package Workspace in Catalog Admin"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "In `Packages`, QuotePilot now opens one package workspace"
+        },
+        {
+          "path": "docs/PACKAGE_WORKSPACE.md",
+          "locator": "## Evidence Boundary"
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. Revision 11 treats catalog read failures as recoverable for hosted admin flows while preserving the existing Firebase required-env gate outside local dev.",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. Revision 11 treats catalog read failures as recoverable for hosted admin flows while preserving the existing Firebase required-env gate outside local dev. Revision 12 adds catalog-owned proposal font scale, brand/logo readiness, guided-rule and cost/margin coverage summaries, trusted quoteMeta documentFontScale snapshots, Proposal Composer proposal-polish and staff-only margin/cost context, and PDF/client-preview font/letterhead projection. It uses the existing catalog save and margin gate, adds no pricing authority, and keeps costs/margin out of customer-facing proposal artifacts. Revision 13 adds the current-schema Package Workspace as the package editor on the existing Catalog Admin route. Stable-ID switching preserves the whole catalog draft; inclusion selectors stage only on Apply; activation fails closed on deterministic readiness; revert is package-scoped; delete requires an exact dependency review; and all persistence remains behind the existing catalog save states and revision fence. Revision 14 extends the same catalog-owned proposal seam with operator-authored intro/closing copy plus a saved commercial snapshot on trusted quote create/edit so later staff Quote Pulse reads can prefer exact saved cost evidence while customer preview, email, export, and portal artifacts still receive only brand/font/copy presentation. No callable, package schema, or quote-pricing authority changed.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -3563,18 +3709,18 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff see recorded costs and a below-target margin advisory only when real tenant-recorded evidence supports them; costs never appear to customers. Catalog-setting and managed-menu drafts cannot overwrite each other, stale Firebase or organization-scoped local revisions fail before any managed-menu record write, and every save outcome remains visibly distinct instead of collapsing into one generic status line."
+      "safeOutcome": "Staff see recorded costs and a below-target margin advisory only when real tenant-recorded evidence supports them; costs never appear to customers. Catalog-setting and managed-menu drafts cannot overwrite each other, stale Firebase or organization-scoped local revisions fail before any managed-menu record write, and every save outcome remains visibly distinct instead of collapsing into one generic status line. Proposal presentation settings produce only saved brand/font/letterhead projections, while internal cost and margin remain staff-only. Package edits remain one staged catalog draft until the existing save path succeeds; readiness cannot manufacture quote availability, dependency review precedes destructive draft changes, and existing saved quotes are not rewritten."
     },
     {
       "id": "model-assisted-intent-parse",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it — INTENT_PARSER_ENABLED, a provider, and that provider's Secret Manager key must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
+      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it — INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
       "backendPaths": [
         "functions/index.js",
         "functions/intentParserCore.cjs",
@@ -3635,8 +3781,8 @@
       "affectedBackendExports": [
         "functions/index.js#parseIntentDraft"
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 1 shipped the pure core module only. Revision 2 ships the whole reachable surface together, as the gate requires: the functions/ runtime twin of the core module, the parseIntentDraft callable (staff-only, same-org, env-keyed until the Secret Manager secrets exist and are bound), the client boundary that distinguishes the designed dormant precondition from retryable unavailability, and the CREATE canvas Model assist section with literal data-capability-state markers for every required read state. stale is excepted: the parse is stateless and freshly computed per request, so no cached/stale variant can exist.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "Revision 1 shipped the pure core module only. Revision 2 shipped the whole reachable surface together, as the gate requires: the functions/ runtime twin of the core module, the parseIntentDraft callable (staff-only, same-org, env-keyed until the Secret Manager secrets exist and are bound), the client boundary that distinguishes the designed dormant precondition from retryable unavailability, and the CREATE canvas Model assist section with literal data-capability-state markers for every required read state. Revision 3 is a backend-and-client-boundary refinement with no new user-visible state: it keeps the existing six-state Model assist surface, but upgrades the callable/core contract to support explicit provider pinning or cheap-first auto routing across a configured provider:model candidate order, per-request completion-token budgets, returned routing metadata, and at most one bounded retry/escalation on provider failure or unreadable/empty output. stale is still excepted: the parse is stateless and freshly computed per request, so no cached/stale variant can exist.",
       "stateEvidence": [
         {
           "state": "loading",

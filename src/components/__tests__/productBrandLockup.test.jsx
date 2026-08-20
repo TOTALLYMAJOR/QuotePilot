@@ -18,6 +18,7 @@ describe("QuotePilot product identity", () => {
   test("renders an accessible product lockup independent of tenant branding", () => {
     const html = renderToStaticMarkup(<ProductBrandLockup />);
 
+    expect(html).toContain('role="img"');
     expect(html).toContain('aria-label="QuotePilot by MBMApps"');
     expect(html).toContain("<strong>QuotePilot</strong>");
     expect(html).toContain("<small>by MBMApps</small>");

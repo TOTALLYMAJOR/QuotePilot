@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: August 13, 2026
+Last updated: 2026-08-20 14:47:39 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1136,16 +1136,47 @@ unchanged.
   - Price
   - `pricingType`
   - `active` toggle
-- In `Packages`, mark menu items, add-ons, and rentals that the package price
-  can cover. This does not add them to a quote automatically. In the quote
-  builder, covered choices say `Included at no added charge — select to add`;
-  unselected choices do not appear in the customer scope, while selected
-  choices appear at $0 and are not charged a second time.
+- In `Packages`, QuotePilot now opens one package workspace instead of a stack
+  of permanently expanded forms. Use the package list to switch records
+  without saving or discarding the current draft. The selected package leads
+  with its customer-facing name, ID, price, recorded cost, contribution,
+  margin state, readiness, and one next action.
+- Current inclusions appear before any candidate list. `Add menu items`,
+  `Add add-ons`, and `Add rentals` reveal the searchable selector for that
+  group only. Search or filter by category, select multiple records, then use
+  `Apply` to stage that exact group or `Cancel` to leave the package unchanged.
+  The menu event-type control narrows menu candidates for these add actions; it
+  does not decide package eligibility or quote behavior.
+- Turning `Available in Quote Builder` on is blocked while deterministic
+  package health is not Ready. QuotePilot names the first blocking reason and
+  focuses Health; turning availability off remains a staged catalog change.
+- `Revert this package` restores the selected package to the last saved catalog
+  snapshot only. `Package actions` -> `Delete package...` first reports the
+  event-template defaults and recommendation rules that reference the package;
+  `Delete from draft` removes the package and those references only after that
+  review. Existing saved quotes are unchanged.
+- Package inclusions still do not add themselves to a quote automatically. In
+  the quote builder, covered choices remain `Included at no added charge —
+  select to add`; unselected choices do not appear in the customer scope, and
+  selected choices price at $0 instead of charging twice.
+- The in-flow package workspace save bar still saves the whole catalog draft, not just
+  the selected package. Managed-menu edits remain a separate mutation path and
+  must be finished or discarded before the ordinary catalog save runs.
 - Save overall catalog changes with `Save Catalog`.
 - In `Pricing` → `Proposal Details`, set `Business time zone` to a valid IANA value
   such as `America/Chicago`, then save the catalog. Revenue timing uses this
   tenant-owned calendar context and fails closed when it is blank or invalid;
   the browser's local clock does not become Revenue Autopilot authority.
+- In `Pricing` → `Proposal Details`, choose `Proposal font size`: Compact,
+  Standard, or Large. This bounded setting is stored on future trusted quote
+  create/edit snapshots and controls the Proposal Composer client preview and
+  PDF export text scale. It does not change quote pricing or rewrite old PDFs.
+- In `Pricing` → `Proposal Details`, set `Proposal intro title`, `Proposal
+  intro message`, and `Proposal closing message` to tune how future proposals
+  sound for your brand. These fields are snapped onto future trusted quote
+  create/edit records, then appear in the Proposal Composer client preview,
+  customer quote email, and PDF export. Updating the catalog later does not
+  rewrite already-saved quote snapshots.
 - In `Pricing` → `Your Customer-facing Brand`, choose Midnight Amber,
   Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
   select `Save catalog changes` to persist the six existing brand colors for
@@ -1153,6 +1184,11 @@ unchanged.
   palette. A theme save uses the same catalog revision check as every other
   settings save and does not replace package, fee, tax, deposit, travel, or
   staffing values.
+- Upload or clear the customer-facing logo in the same brand section. When no
+  logo is defined, QuotePilot uses a monogram fallback in the admin preview,
+  Proposal Composer, and PDF letterhead rather than inventing another image.
+  Brand readiness calls out logo, business name, document font, and contact
+  evidence before save.
 - For a new blank tenant, open `Starter Packs` and apply Wedding & events,
   Corporate drop-off, BBQ / Southern, or Church & community. This stages a
   complete draft immediately and opens the populated menu; there is no second
@@ -1899,7 +1935,11 @@ structuring keeps working exactly the same. When it is on, model
 suggestions appear in their own list and every one requires your explicit
 Confirm before it touches the draft — the model never fills the form,
 never prices, and never saves. Anything the model could not read is
-quoted back for you to read yourself.
+quoted back for you to read yourself. Administrators may pin one provider
+or use an internal `auto` route that tries the configured cheaper-first
+provider:model order and may retry once when the first attempt is
+unreadable or unavailable; this routing detail never changes the review-
+only boundary.
 
 ## Memory assist in CREATE
 
@@ -1923,6 +1963,9 @@ cost rates and a target margin % policy in Pricing & Quote Defaults. Blank alway
 means the cost has not been recorded; it is never treated as $0, since an
 entered $0 and an unrecorded cost are different facts.
 
+The Pricing tab summarizes active catalog cost coverage, staff-cost coverage,
+target-margin policy, and representative missing records before save.
+
 The live pricing rail's margin strip computes margin only once every
 selected revenue line has a matching recorded cost. Any gap names the exact
 missing pieces instead of estimating. Once a target margin is recorded, a
@@ -1931,6 +1974,14 @@ point-and-dollar gap; meeting or beating the target stays a calm inline
 note, not a card — advisor cards appear only where there is something to
 decide. Costs are staff-only catalog data and never reach any
 customer-facing projection.
+
+The Proposal Composer uses the same fail-closed margin model in Quote Pulse:
+recorded cost, computed margin, target-margin status, and missing-cost examples
+are visible to staff only. For saved quotes, Quote Pulse prefers the saved
+commercial snapshot captured at trusted quote create/edit time, so later
+catalog cost edits do not silently rewrite prior staff evidence. The client
+preview and exported proposal receive brand/logo/font/copy presentation, never
+internal cost or margin data.
 
 Catalog Admin's save flow — ready, saving, a confirmed conflict
 (reconciliation), a saved-but-unconfirmed revision (uncertain), a clean

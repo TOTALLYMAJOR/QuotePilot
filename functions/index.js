@@ -1023,6 +1023,7 @@ function buildNeutralSettingsPatch({
     brandName: resolvedOrganizationName,
     brandTagline: "",
     brandLogoUrl: "",
+    documentFontScale: "standard",
     brandPrimaryColor: "#1f2937",
     brandAccentColor: "#4b5563",
     brandDarkAccentColor: "#111827",
@@ -25379,9 +25380,12 @@ exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, co
     normalizeIntentParserConfig,
     sanitizeIntentParseRequest,
     buildIntentParserPrompt,
+    buildIntentParserExecutionPlan,
     buildProviderRequest,
     extractProviderText,
-    validateParsedFacts
+    validateParsedFacts,
+    summarizeIntentParserValidation,
+    shouldRetryIntentParserAttempt
   } = require("./intentParserCore.cjs");
 
   const organizationId = normalizeOrganizationId(data?.organizationId);
@@ -25403,17 +25407,10 @@ exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, co
       "The model-assisted intake lane is disabled. The deterministic extractor remains available."
     );
   }
-  const apiKey = String(
-    config.provider === "openai"
-      ? process.env[INTENT_PARSER_OPENAI_KEY_NAME] || ""
-      : process.env[INTENT_PARSER_ANTHROPIC_KEY_NAME] || ""
-  ).trim();
-  if (!apiKey) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "The intent parser provider key is not configured."
-    );
-  }
+  const apiKeys = Object.freeze({
+    openai: String(process.env[INTENT_PARSER_OPENAI_KEY_NAME] || "").trim(),
+    anthropic: String(process.env[INTENT_PARSER_ANTHROPIC_KEY_NAME] || "").trim()
+  });
 
   let request;
   try {
@@ -25422,40 +25419,106 @@ exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, co
     throw new functions.https.HttpsError(err.code || "invalid-argument", err.message);
   }
 
-  const provider = buildProviderRequest({
-    provider: config.provider,
-    model: config.model,
-    prompt: buildIntentParserPrompt(request.text),
-    apiKey
-  });
-  let responseJson;
-  try {
-    const response = await fetch(provider.url, {
-      method: "POST",
-      headers: provider.headers,
-      body: JSON.stringify(provider.body)
-    });
-    if (!response.ok) {
-      throw new functions.https.HttpsError(
-        "unavailable",
-        `The intent parser provider declined the request (${response.status}). The deterministic extractor remains available.`
-      );
+  const routingPlan = buildIntentParserExecutionPlan({
+    config,
+    intakeText: request.text,
+    availableProviders: {
+      openai: Boolean(apiKeys.openai),
+      anthropic: Boolean(apiKeys.anthropic)
     }
-    responseJson = await response.json();
-  } catch (err) {
-    if (err instanceof functions.https.HttpsError) throw err;
+  });
+  if (!routingPlan.attempts.length) {
     throw new functions.https.HttpsError(
-      "unavailable",
-      "The intent parser provider is unreachable. The deterministic extractor remains available."
+      "failed-precondition",
+      "The intent parser provider key is not configured."
     );
   }
 
-  const validated = validateParsedFacts(extractProviderText(config.provider, responseJson));
+  const prompt = buildIntentParserPrompt(request.text);
+  const attemptReceipts = [];
+  let lastValidated = { facts: [], notes: [] };
+  let selectedAttempt = routingPlan.attempts[0];
+
+  for (let index = 0; index < routingPlan.attempts.length; index += 1) {
+    const attempt = routingPlan.attempts[index];
+    selectedAttempt = attempt;
+    const provider = buildProviderRequest({
+      provider: attempt.provider,
+      model: attempt.model,
+      prompt,
+      apiKey: apiKeys[attempt.provider],
+      completionTokenBudget: attempt.completionTokenBudget
+    });
+    let responseJson;
+    try {
+      const response = await fetch(provider.url, {
+        method: "POST",
+        headers: provider.headers,
+        body: JSON.stringify(provider.body)
+      });
+      if (!response.ok) {
+        throw new functions.https.HttpsError(
+          "unavailable",
+          `The intent parser provider declined the request (${response.status}). The deterministic extractor remains available.`
+        );
+      }
+      responseJson = await response.json();
+    } catch (err) {
+      const unavailable = err instanceof functions.https.HttpsError
+        ? err
+        : new functions.https.HttpsError(
+          "unavailable",
+          "The intent parser provider is unreachable. The deterministic extractor remains available."
+        );
+      attemptReceipts.push({
+        provider: attempt.provider,
+        model: attempt.model,
+        outcome: "provider_unavailable",
+        completionTokenBudget: attempt.completionTokenBudget
+      });
+      if (shouldRetryIntentParserAttempt({
+        demand: routingPlan.demand,
+        attemptIndex: index,
+        totalAttempts: routingPlan.attempts.length,
+        providerFailed: true
+      })) {
+        continue;
+      }
+      throw unavailable;
+    }
+
+    lastValidated = validateParsedFacts(extractProviderText(attempt.provider, responseJson));
+    const summary = summarizeIntentParserValidation(lastValidated);
+    attemptReceipts.push({
+      provider: attempt.provider,
+      model: attempt.model,
+      outcome: summary.kind,
+      completionTokenBudget: attempt.completionTokenBudget,
+      factCount: summary.factCount,
+      noteCount: summary.noteCount
+    });
+    if (!shouldRetryIntentParserAttempt({
+      demand: routingPlan.demand,
+      summary,
+      attemptIndex: index,
+      totalAttempts: routingPlan.attempts.length
+    })) {
+      break;
+    }
+  }
+
   return {
-    provider: config.provider,
-    model: config.model,
-    facts: validated.facts,
-    notes: validated.notes,
+    provider: selectedAttempt.provider,
+    model: selectedAttempt.model,
+    facts: lastValidated.facts,
+    notes: lastValidated.notes,
+    routing: {
+      mode: routingPlan.mode,
+      complexity: routingPlan.demand.complexity,
+      estimatedInputTokens: routingPlan.demand.estimatedInputTokens,
+      attemptedModels: attemptReceipts,
+      escalated: attemptReceipts.length > 1
+    },
     parsedAtISO: new Date().toISOString()
   };
 });

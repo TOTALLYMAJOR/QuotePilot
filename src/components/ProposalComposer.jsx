@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
 import { currency } from "../lib/quoteCalculator";
+import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
+import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
 import { detectBreakdownValueChanges, MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
 import { buildMarginPresentation } from "./marginPresentation";
 import { playCue } from "./soundKit";
@@ -70,6 +72,18 @@ function activityValue(value) {
   const text = String(value ?? "").trim();
   if (!text) return "cleared";
   return text.length > 40 ? `${text.slice(0, 39)}…` : text;
+}
+
+function brandInitials(value) {
+  const initials = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return initials || "QP";
 }
 
 function clampInt(draft, min, max) {
@@ -146,7 +160,16 @@ function ImpactTag({ delta }) {
   return <em className="pc-impact" data-tone={tone}>{phrase}</em>;
 }
 
-function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) {
+function ClientPreviewDialog({
+  open,
+  onClose,
+  form,
+  totals,
+  experience,
+  menu,
+  settings = {},
+  documentFontPreference
+}) {
   const closeRef = useRef(null);
   const restoreRef = useRef(null);
 
@@ -172,6 +195,14 @@ function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) 
   if (!open) return null;
 
   const guests = Math.max(0, Math.round(Number(form.guests) || 0));
+  const brandName = String(settings.brandName || settings.organizationName || "Your catering team").trim()
+    || "Your catering team";
+  const brandTagline = String(settings.brandTagline || "").trim();
+  const brandLogoUrl = normalizeBrandLogoUrl(settings.brandLogoUrl);
+  const proposalIntroTitle = String(settings.proposalIntroTitle || "").trim();
+  const proposalIntroMessage = String(settings.proposalIntroMessage || "").trim();
+  const proposalClosingMessage = String(settings.proposalClosingMessage || "").trim();
+  const fontPreference = documentFontPreference || normalizeProposalDocumentFontScale(settings.documentFontScale);
   const included = [
     "Menu",
     (Number(form.servers) || 0) + (Number(form.chefs) || 0) > 0 ? "Staffing" : null,
@@ -186,6 +217,7 @@ function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) 
     }}>
       <article
         className="pc-preview-dialog"
+        style={{ "--pc-preview-font-scale": String(fontPreference.scale) }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="pc-preview-title"
@@ -198,6 +230,15 @@ function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) 
           </button>
         </header>
         <div className="pc-preview-sheet">
+          <div className="pc-preview-brandline">
+            <span className="pc-brand-mark" data-logo-state={brandLogoUrl ? "image" : "monogram"}>
+              {brandLogoUrl ? <img src={brandLogoUrl} alt={`${brandName} logo`} /> : brandInitials(brandName)}
+            </span>
+            <span>
+              <strong>{brandName}</strong>
+              <small>{brandTagline || `${fontPreference.label} proposal text`}</small>
+            </span>
+          </div>
           <h2 className="pc-preview-title" id="pc-preview-title">
             {String(form.eventName || "Your event").trim() || "Your event"}
           </h2>
@@ -206,6 +247,8 @@ function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) 
               .filter(Boolean)
               .join(" · ") || "Date and venue to be confirmed"}
           </p>
+          {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
+          {proposalIntroMessage ? <p className="pc-preview-copy">{proposalIntroMessage}</p> : null}
           <hr className="pc-rule" />
           <p className="pc-eyebrow">Your experience</p>
           <h3 className="pc-preview-sub">{experience.title}</h3>
@@ -232,6 +275,13 @@ function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) 
           <ul className="pc-preview-included">
             {included.map((item) => <li key={item}>{item}</li>)}
           </ul>
+          {proposalClosingMessage ? (
+            <>
+              <hr className="pc-rule" />
+              <p className="pc-eyebrow">Closing note</p>
+              <p className="pc-preview-copy">{proposalClosingMessage}</p>
+            </>
+          ) : null}
         </div>
         <p className="pc-preview-note">
           Draft preview. The final proposal is generated when this quote is saved and sent.
@@ -239,6 +289,68 @@ function ClientPreviewDialog({ open, onClose, form, totals, experience, menu }) 
       </article>
     </div>
   );
+}
+
+export function buildDraftSaveBlockers({
+  form = {},
+  totals = {},
+  catalogLoading = false,
+  selectedMenuItemCount = 0,
+  quoteEditUnavailable = false,
+  pilotScenarioReviewPending = false,
+  draftIntentReviewPending = false,
+  changeImpactReviewRequired = false,
+  changeImpactAuthorizationRequired = false
+} = {}) {
+  const blockers = [];
+  const add = (id, message) => blockers.push({ id, message });
+  const email = String(form.email || "").trim();
+
+  if (catalogLoading) {
+    add("catalog-loading", "Wait for the current catalog to finish loading.");
+  }
+  if (quoteEditUnavailable) {
+    add("quote-edit-loading", "Reload the saved quote before editing or saving it.");
+  }
+  if (pilotScenarioReviewPending) {
+    add("pilot-scenario-review", "Resolve the pending Pilot scenario review.");
+  }
+  if (draftIntentReviewPending) {
+    add("draft-intent-review", "Resolve the pending Package or Menu review.");
+  }
+  if (changeImpactReviewRequired) {
+    add("change-impact-review", "Build and review a current Change Impact simulation.");
+  } else if (changeImpactAuthorizationRequired) {
+    add("change-impact-authorization", "Authorize and apply governed dependencies from Change Impact.");
+  }
+  if (Math.max(0, Number(totals.guests) || 0) <= 0) {
+    add("guest-count", "Set a guest count above zero.");
+  }
+  if (!String(form.name || "").trim()) {
+    add("client-name", "Add the client name.");
+  }
+  if (!email) {
+    add("client-email", "Add the client email.");
+  } else if (!/^\S+@\S+\.\S+$/.test(email)) {
+    add("client-email-format", "Correct the client email format.");
+  }
+  if (!String(form.eventTypeId || "").trim()) {
+    add("event-type", "Choose an event type.");
+  }
+  if (!String(form.date || "").trim()) {
+    add("event-date", "Add the event date.");
+  }
+  if (!String(form.eventName || "").trim()) {
+    add("event-name", "Add the event name.");
+  }
+  if (!String(form.venue || "").trim()) {
+    add("venue", "Add the venue.");
+  }
+  if (Math.max(0, Number(selectedMenuItemCount) || 0) < 1) {
+    add("menu-selection", "Select at least one menu item.");
+  }
+
+  return blockers;
 }
 
 export default function ProposalComposer({
@@ -259,6 +371,8 @@ export default function ProposalComposer({
   saveLabel = "Save draft",
   saveDisabled = false,
   saveDisabledReason = "",
+  saveBlockers = [],
+  saveMessage = "",
   compareEnabled = false,
   catalogLoading = false,
   onFieldChange,
@@ -290,9 +404,28 @@ export default function ProposalComposer({
   const [liveNote, setLiveNote] = useState("");
   // Session-only running log of the changes made to this draft — a working
   // memory for the operator, not a record; saved history stays in versions.
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(true);
   const [activityLog, setActivityLog] = useState([]);
   const activityIdRef = useRef(0);
+
+  const currentSaveBlockers = Array.isArray(saveBlockers)
+    ? saveBlockers.filter((blocker) => blocker && String(blocker.message || "").trim())
+    : [];
+  const saveReadinessState = saving
+    ? "saving"
+    : currentSaveBlockers.length
+      ? "blocked"
+      : "ready";
+  const saveReadinessTitle = saving
+    ? "Save in progress"
+    : currentSaveBlockers.length
+      ? `Draft needs attention · ${currentSaveBlockers.length}`
+      : "Ready for save checks";
+  const saveReadinessDetail = saving
+    ? "QuotePilot is verifying availability and server authority."
+    : currentSaveBlockers.length
+      ? "Resolve these known requirements before this draft can be saved."
+      : "Known draft requirements are complete. Saving still verifies availability and server authority.";
 
   const logActivity = (label) => {
     activityIdRef.current += 1;
@@ -302,6 +435,11 @@ export default function ProposalComposer({
       label
     };
     setActivityLog((current) => [entry, ...current].slice(0, ACTIVITY_LOG_LIMIT));
+  };
+
+  const requestSave = () => {
+    setPulseOpen(true);
+    onSaveQuote?.();
   };
 
   const header = buildHeaderModel({ form, editingQuote, quoteDirty, saving });
@@ -570,6 +708,99 @@ export default function ProposalComposer({
   const eventTypeName = (eventTypes || []).find(
     (item) => String(item?.id) === String(form.eventTypeId)
   )?.name || "";
+  const documentFontPreference = normalizeProposalDocumentFontScale(settings?.documentFontScale);
+  const brandName = String(settings?.brandName || settings?.organizationName || "Your catering team").trim()
+    || "Your catering team";
+  const brandLogoUrl = normalizeBrandLogoUrl(settings?.brandLogoUrl);
+  const proposalIntroTitle = String(settings?.proposalIntroTitle || "").trim();
+  const proposalIntroMessage = String(settings?.proposalIntroMessage || "").trim();
+  const proposalClosingMessage = String(settings?.proposalClosingMessage || "").trim();
+  const selectedTemplate = (eventTemplates || []).find(
+    (template) => String(template?.id || "") === String(form.eventTemplateId || "")
+  );
+  const templateLabel = selectedTemplate?.name
+    || (String(form.eventTemplateId || "").trim() && String(form.eventTemplateId || "").trim() !== "custom"
+      ? String(form.eventTemplateId || "").trim()
+      : "Custom");
+  const proposalPolishItems = [
+    {
+      id: "brand-logo",
+      label: "Logo",
+      detail: brandLogoUrl ? "Defined" : "Monogram fallback",
+      state: brandLogoUrl ? "ready" : "watch"
+    },
+    {
+      id: "brand-name",
+      label: "Brand",
+      detail: brandName,
+      state: brandName === "Your catering team" ? "watch" : "ready"
+    },
+    {
+      id: "font-scale",
+      label: "Font",
+      detail: documentFontPreference.label,
+      state: "ready"
+    },
+    {
+      id: "template",
+      label: "Template",
+      detail: templateLabel,
+      state: templateLabel === "Custom" ? "watch" : "ready"
+    },
+    {
+      id: "client-contact",
+      label: "Client",
+      detail: String(form.email || "").trim() ? "Email ready" : "Needs email",
+      state: String(form.email || "").trim() ? "ready" : "risk"
+    },
+    {
+      id: "event-details",
+      label: "Event",
+      detail: String(form.date || "").trim() && String(form.venue || "").trim() ? "Date and venue set" : "Needs date or venue",
+      state: String(form.date || "").trim() && String(form.venue || "").trim() ? "ready" : "watch"
+    },
+    {
+      id: "menu",
+      label: "Menu",
+      detail: menu.empty ? "No dishes selected" : `${menu.groups.reduce((sum, group) => sum + group.items.length, 0)} dishes`,
+      state: menu.empty ? "risk" : "ready"
+    },
+    {
+      id: "staffing",
+      label: "Staffing",
+      detail: (Number(form.servers) || 0) + (Number(form.chefs) || 0) + (Number(form.bartenders) || 0) > 0
+        ? "Team shown"
+        : "No staff listed",
+      state: (Number(form.servers) || 0) + (Number(form.chefs) || 0) + (Number(form.bartenders) || 0) > 0
+        ? "ready"
+        : "watch"
+    },
+    {
+      id: "enhancements",
+      label: "Enhancements",
+      detail: selectedAddonEntries.length ? `${selectedAddonEntries.length} add-ons` : "None selected",
+      state: "ready"
+    },
+    {
+      id: "rentals",
+      label: "Rentals",
+      detail: rentalRows.length ? `${rentalRows.length} rentals` : "None selected",
+      state: "ready"
+    },
+    {
+      id: "terms",
+      label: "Terms",
+      detail: settings?.depositNotice ? "Deposit note set" : `${Math.max(1, Number(settings?.quoteValidityDays || 30))} day validity`,
+      state: "ready"
+    },
+    {
+      id: "save-health",
+      label: "Save",
+      detail: saveReadinessTitle,
+      state: saveReadinessState === "blocked" ? "risk" : "ready"
+    }
+  ];
+  const proposalPolishReadyCount = proposalPolishItems.filter((item) => item.state === "ready").length;
 
   const pulseBody = (
     <>
@@ -652,8 +883,96 @@ export default function ProposalComposer({
         </ul>
       </div>
 
-      <div className="pc-pulse-block">
-        <p className="pc-eyebrow">This session</p>
+      <div className="pc-pulse-block pc-proposal-polish" data-testid="pc-proposal-polish">
+        <div className="pc-pulse-block-head">
+          <p className="pc-eyebrow">Proposal polish</p>
+          <small>{proposalPolishReadyCount}/{proposalPolishItems.length} ready</small>
+        </div>
+        <ul>
+          {proposalPolishItems.map((item) => (
+            <li key={item.id} data-state={item.state}>
+              <span>{item.label}</span>
+              <strong>{item.detail}</strong>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {margin ? (
+        <div
+          className="pc-pulse-block pc-margin-cost"
+          data-testid="pc-margin-cost"
+          data-state={margin.available ? "ready" : "unavailable"}
+        >
+          <div className="pc-pulse-block-head">
+            <p className="pc-eyebrow">Cost &amp; margin</p>
+            <small>Staff-only</small>
+          </div>
+          {margin.available ? (
+            <>
+              <dl>
+                <div>
+                  <dt>Revenue scope</dt>
+                  <dd>{currency(margin.revenue)}</dd>
+                </div>
+                <div>
+                  <dt>Recorded cost</dt>
+                  <dd>{currency(margin.cost)}</dd>
+                </div>
+                <div>
+                  <dt>Margin</dt>
+                  <dd>{(margin.marginPct * 100).toFixed(1)}%</dd>
+                </div>
+                <div>
+                  <dt>Target</dt>
+                  <dd>{margin.target === null || margin.target === undefined ? "Not set" : `${Math.round(margin.target * 100)}%`}</dd>
+                </div>
+              </dl>
+              <p>{margin.targetNote || margin.note}</p>
+            </>
+          ) : (
+            <>
+              <p>{margin.note}</p>
+              {margin.missing?.length ? (
+                <ul className="pc-margin-missing">
+                  {margin.missing.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
+
+      <div className="pc-pulse-block pc-draft-activity">
+        <p className="pc-eyebrow">Draft activity</p>
+        <div
+          className="pc-save-readiness"
+          data-state={saveReadinessState}
+          data-testid="pc-save-readiness"
+        >
+          <div className="pc-save-readiness-summary">
+            <span className="pc-save-readiness-dot" aria-hidden="true" />
+            <span>
+              <strong>{saveReadinessTitle}</strong>
+              <small>{saveReadinessDetail}</small>
+            </span>
+          </div>
+          {currentSaveBlockers.length ? (
+            <ul className="pc-save-blockers" aria-label="Reasons this draft cannot be saved yet">
+              {currentSaveBlockers.map((blocker) => (
+                <li key={blocker.id || blocker.message} data-testid="pc-save-blocker">
+                  {blocker.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {String(saveMessage || "").trim() ? (
+            <div className="pc-draft-notice" data-testid="pc-draft-notice">
+              <strong>Latest draft notice</strong>
+              <span>{saveMessage}</span>
+            </div>
+          ) : null}
+        </div>
         <button
           type="button"
           className="pc-section-action pc-activity-toggle"
@@ -685,7 +1004,7 @@ export default function ProposalComposer({
         <button
           type="button"
           className="pc-cta"
-          onClick={onSaveQuote}
+          onClick={requestSave}
           disabled={saveDisabled}
           title={saveDisabled && saveDisabledReason ? saveDisabledReason : undefined}
           data-testid="pc-save"
@@ -719,6 +1038,15 @@ export default function ProposalComposer({
           ) : null}
         </div>
         <div className="pc-header-side">
+          <div className="pc-brand-strip" data-logo-state={brandLogoUrl ? "image" : "monogram"}>
+            <span className="pc-brand-mark">
+              {brandLogoUrl ? <img src={brandLogoUrl} alt={`${brandName} logo`} /> : brandInitials(brandName)}
+            </span>
+            <span>
+              <strong>{brandName}</strong>
+              <small>{documentFontPreference.label} proposal text</small>
+            </span>
+          </div>
           <p className="pc-save-state" data-state={header.saveState.id} role="status">
             {header.saveState.label}
           </p>
@@ -726,7 +1054,7 @@ export default function ProposalComposer({
             <button
               type="button"
               className="pc-cta pc-compact"
-              onClick={onSaveQuote}
+              onClick={requestSave}
               disabled={saveDisabled}
               title={saveDisabled && saveDisabledReason ? saveDisabledReason : undefined}
               data-testid="pc-save-header"
@@ -803,6 +1131,12 @@ export default function ProposalComposer({
           ) : null}
 
           <article className="pc-sheet">
+            {proposalIntroTitle || proposalIntroMessage ? (
+              <section className="pc-proposal-note" aria-label="Proposal introduction">
+                {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
+                {proposalIntroMessage ? <p className="pc-proposal-note-copy">{proposalIntroMessage}</p> : null}
+              </section>
+            ) : null}
             <section className="pc-section" aria-labelledby="pc-sec-event">
               <SectionHeading id="pc-sec-event" eyebrow="Event" complete={completeness.event} />
               <div className="pc-inline-grid">
@@ -1462,6 +1796,12 @@ export default function ProposalComposer({
                 </p>
               </details>
             </section>
+            {proposalClosingMessage ? (
+              <section className="pc-proposal-note pc-proposal-note-closing" aria-label="Proposal closing message">
+                <p className="pc-eyebrow">Closing note</p>
+                <p className="pc-proposal-note-copy">{proposalClosingMessage}</p>
+              </section>
+            ) : null}
           </article>
 
           {changeImpactSurface}
@@ -1508,6 +1848,8 @@ export default function ProposalComposer({
         totals={totals}
         experience={experience}
         menu={menu}
+        settings={settings}
+        documentFontPreference={documentFontPreference}
       />
     </div>
   );
