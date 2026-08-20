@@ -1487,6 +1487,14 @@
   .pc-investment-lede { flex-direction: column; align-items: flex-start; gap: 0.8rem; }
   .pc-proposal-polish ul { grid-template-columns: 1fr; }
   .pc-margin-cost dl { grid-template-columns: 1fr; }
+
+  /* A mobile keyboard can reduce the visual viewport enough for the sticky
+     review bar to cover an inline editor's Apply and Cancel controls. Keep the
+     quote review available as soon as the edit closes, but remove it while an
+     inline field is active so the whole editor remains reachable. */
+  .proposal-composer:has(.ambient-inline-value--editing) .pc-mobile-bar {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------------ motion */
