@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-20 15:39:28 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Aligned the temporary compatibility bundle ceiling to the exact 3,215,097-byte
+  graph emitted by the protected Playwright job with production presentation
+  flags, without adding general growth headroom.
 - Preserved a supplied server-authoritative pricing snapshot when augmenting a
   locally stored quote version with the new private commercial cost snapshot.
   The augmentation now copies only `commercialSnapshot` from the client-side

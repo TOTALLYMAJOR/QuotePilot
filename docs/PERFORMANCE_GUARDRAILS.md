@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-20 15:39:28 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,7 +25,7 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,213,578-byte aggregate
+- The current compatibility graph has a temporary 3,215,097-byte aggregate
   and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
   graph has a separate temporary 3,887,976-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
@@ -55,8 +55,10 @@ Threshold policy:
   Ambient. The shared shell and Now visual-system pass measures 2,964,327 /
   391,901 bytes for compatibility and 3,750,363 / 391,901 for Ambient.
   The current combined source candidate measures 3,206,553 / 387,248 bytes for
-  compatibility and 3,887,673 / 387,248 bytes for Ambient. Its profile ceilings
-  retain only the previously observed 7,025-byte and 303-byte CI offsets; the
+  local compatibility and 3,887,673 / 387,248 bytes for Ambient. Its
+  compatibility ceiling is the exact 3,215,097-byte graph emitted by the
+  protected Playwright job with production presentation flags; the Ambient
+  ceiling retains only its previously observed 303-byte CI offset. This
   recalibration is not general product-growth headroom.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current

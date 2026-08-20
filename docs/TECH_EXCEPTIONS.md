@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-20 15:39:28 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -89,10 +89,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   2,936,683, under its standing 2,964,327 ceiling).
   The current combined source candidate, including the Package Workspace,
   proposal presentation, read-only quote-workspace concept, and adjacent
-  workspace changes, measures 3,206,553 / 387,248 bytes for compatibility and
-  3,887,673 / 387,248 bytes for Ambient. The temporary ceilings are therefore
-  3,213,578 and 3,887,976 aggregate bytes respectively, retaining only the
-  already observed 7,025-byte compatibility and 303-byte Ambient CI offsets.
+  workspace changes, measures 3,206,553 / 387,248 bytes for local compatibility
+  and 3,887,673 / 387,248 bytes for Ambient. The temporary ceilings are therefore
+  3,215,097 and 3,887,976 aggregate bytes respectively. The compatibility
+  ceiling is pinned to the exact protected-Playwright production-flag graph;
+  the Ambient ceiling retains only its already observed 303-byte CI offset.
   The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
   recalibration, not a claim that the Package Workspace alone caused the
   increase and not general growth headroom.

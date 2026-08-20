@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-20 15:39:28 CDT
 
 ## Current Production Release
 
@@ -557,8 +557,9 @@ route evidence are complete.
   CI now has independent, graph-detected compatibility and Ambient production
   build steps. The current combined source candidate measures 3,206,553 /
   387,248 bytes for compatibility and 3,887,673 / 387,248 for Ambient. The
-  temporary ceilings are 3,213,578 and 3,887,976 aggregate bytes respectively,
-  retaining only the previously observed per-profile CI offsets; both keep the
+  temporary ceilings are 3,215,097 and 3,887,976 aggregate bytes respectively.
+  The compatibility ceiling is pinned to the exact protected-Playwright graph;
+  the Ambient ceiling retains only its previously observed CI offset. Both keep the
   391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
@@ -674,9 +675,10 @@ route evidence are complete.
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
 9. The combined workspace candidate uses named per-graph temporary ceilings:
-   3,213,578 bytes for compatibility and 3,887,976 bytes for Ambient, each
-   retaining only its previously observed runner offset above the measured
-   candidate. Exact-SHA CI confirmation is still required before merge, and
+   3,215,097 bytes for compatibility and 3,887,976 bytes for Ambient. The
+   compatibility ceiling is the exact protected-Playwright production-flag
+   graph; Ambient retains only its previously observed runner offset. Exact-SHA
+   CI confirmation is still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.
 10. `functions.config()` compatibility remains in source and must migrate before
