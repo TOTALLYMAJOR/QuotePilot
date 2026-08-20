@@ -103,6 +103,25 @@ test("collapses to the mobile pulse flow at phone width", async ({ page }) => {
   await expect(page.getByTestId("pc-pulse")).toBeHidden();
 });
 
+test("keeps the client email editor clear of the mobile review bar", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 300 });
+  await page.getByRole("button", { name: "Change Email", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: /Review quote/ })).toBeHidden();
+
+  const editorControls = [
+    page.getByLabel("Email", { exact: true }),
+    page.getByRole("button", { name: "Apply change", exact: true }),
+    page.getByRole("button", { name: "Cancel", exact: true })
+  ];
+  for (const control of editorControls) {
+    const box = await control.boundingBox();
+    expect(box, "email editor control should have a rendered box").not.toBeNull();
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(300);
+  }
+});
+
 async function commitInline(page, label, value) {
   await page.getByRole("button", { name: `Change ${label}`, exact: true }).click();
   await page.getByLabel(label, { exact: true }).fill(value);

@@ -1,10 +1,20 @@
 # Changelog
 
+Last updated: 2026-08-20 14:10:10 CDT
+
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
 ## [Unreleased]
+
+### Fixed
+- Kept Proposal Composer inline fields usable when a mobile keyboard compresses
+  the viewport. While the client email or another inline field is being edited,
+  the sticky mobile Review quote bar now yields so it cannot cover the field's
+  Apply and Cancel controls; the review bar returns immediately after the edit
+  closes. A compact-viewport browser regression pins the email input and both
+  actions fully inside the visible viewport.
 
 ### Added
 - Added `npm run check:stripe-connect:staging`, a read-only live Firebase
