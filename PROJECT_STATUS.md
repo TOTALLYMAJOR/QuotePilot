@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-21 00:06:22 CDT
+Last updated: 2026-08-21 00:16:18 CDT
 
 ## Current Production Release
 
@@ -745,10 +745,12 @@ route evidence are complete.
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
-10. Close the branch-wide `quoteStore.versioning` pricing-authority assertion
-    and extensionless `brandLogoUrl` Node-import blockers. Focused Steward,
-    Firestore rules, environment, build, capability, documentation, and secret
-    gates pass. Then separately scope the read-only Difficult
+10. Close the branch-wide `quoteStore.versioning` pricing-authority assertion.
+    The native-Node catalog import blocker is fixed with explicit local
+    extensions and regression coverage, and both Firebase orchestration lanes
+    pass. Focused Steward, Firestore rules, environment, build, capability,
+    documentation, and secret gates pass. Then
+    separately scope the read-only Difficult
     Question Desk shadow slice as the first vertical proof. Sequence expanded
     setup/workflow, provider-readiness, margin, and client-memory tasks only
     after their pure privacy, memory, no-secret, and adversarial contracts pass;

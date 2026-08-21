@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 00:06:22 CDT
+Last updated: 2026-08-21 00:16:18 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -213,10 +213,11 @@ Only open work belongs here. Current operational truth lives in
   adversarial corpus, pseudonymous audit, retention/deletion, kill/rollback,
   incident-runbook, and private-record browser-denial controls now have focused
   source/local coverage. Focused tests, rules, environment, build, capability,
-  docs, and secret checks pass. Close the pre-existing full-unit
-  `quoteStore.versioning` pricing-authority assertion and the extensionless
-  `brandLogoUrl` Node import that stops both auth/rules and authoritative-
-  pricing orchestration before browser proof. The later model gets no
+  docs, and secret checks pass. The native-Node catalog import blocker is fixed
+  with explicit local extensions and regression coverage; both Firebase
+  orchestration lanes now pass. Close the remaining
+  pre-existing full-unit `quoteStore.versioning` pricing-authority assertion.
+  The later model gets no
   tools and no write, messaging, payment, browsing, or resource-discovery
   authority.
 - Keep every authoritative price, margin, staffing, production, catalog,
