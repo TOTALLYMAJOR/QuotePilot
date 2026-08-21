@@ -750,7 +750,11 @@ route evidence are complete.
     pseudonymous audit metadata, bounded retention/deletion, incident recovery,
     and kill/rollback gates pass 32 focused tests. Nine planned private
     collection paths deny browser access across all 76 Firestore emulator
-    tests. Nothing imports or exports these modules, and provider/runtime
+    tests. The branch-wide validation blockers are now closed: local pricing-
+    snapshot enrichment preserves exact supplied pricing while adding private
+    commercial evidence, all 3,883 unit tests pass, and both Firebase
+    orchestration lanes complete. Nothing imports or exports the Steward
+    modules, and provider/runtime
     integration, billing, hosted rules proof, deployment,
     production, background-model, customer contact, and autonomous authority
     remain absent.
@@ -790,13 +794,11 @@ route evidence are complete.
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
-10. Close the branch-wide `quoteStore.versioning` pricing-authority assertion.
-    The native-Node catalog import blocker is fixed with explicit local
-    extensions and regression coverage, and both Firebase orchestration lanes
-    pass. Focused Steward, Firestore rules, environment, build, capability,
-    documentation, and secret gates pass. Then
-    separately scope the read-only Difficult
-    Question Desk shadow slice as the first vertical proof. Sequence expanded
+10. Separately scope the read-only Difficult Question Desk shadow slice as the
+    first vertical proof. The branch-wide validation blockers are closed: the
+    native-Node catalog import and local pricing-snapshot enrichment regressions
+    are fixed, all 3,883 unit tests pass, and both Firebase orchestration lanes
+    complete. Sequence expanded
     setup/workflow, provider-readiness, margin, and client-memory tasks only
     after their pure privacy, memory, no-secret, and adversarial contracts pass;
     keep provider, billing, deployment, production, and autonomous authority

@@ -296,6 +296,12 @@ describe("quoteStore versioning and delete behavior", () => {
     expect(history[0].versionId).toBe("v0001");
     expect(history[0].pricing.authority).toBe("server_authoritative");
     expect(history[0].pricing.grandTotal).toBe(4321);
+    expect(history[0].pricing.commercialSnapshot).toMatchObject({
+      package: {
+        id: "classic",
+        missingReason: "cost_missing"
+      }
+    });
 
     const quotes = await getQuoteHistory();
     const created = quotes.quotes.find((quote) => quote.id === result.id);
@@ -304,6 +310,12 @@ describe("quoteStore versioning and delete behavior", () => {
     expect(created.latestVersionNumber).toBe(1);
     expect(created.pricing.authority).toBe("server_authoritative");
     expect(created.pricing.grandTotal).toBe(4321);
+    expect(created.pricing.commercialSnapshot).toMatchObject({
+      package: {
+        id: "classic",
+        missingReason: "cost_missing"
+      }
+    });
     expect(created.selection.serverRateMixCsv).toBe("24,26");
     expect(created.selection.chefRateMixCsv).toBe("50,55");
   });
