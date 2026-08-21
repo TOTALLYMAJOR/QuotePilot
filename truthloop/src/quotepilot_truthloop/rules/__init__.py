@@ -43,6 +43,7 @@ def rule_catalog() -> list[dict[str, str]]:
             "ruleId": rule.rule_id,
             "chainLink": rule.chain_link.value,
             "detects": rule.detects,
+            "requires": list(rule.requires),
         }
         for rule in RULES
     ]

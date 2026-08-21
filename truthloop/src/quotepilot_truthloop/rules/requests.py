@@ -35,8 +35,9 @@ class AcceptedRecordFreshnessRule(Rule):
         "A customer change request that postdates, or contradicts, the "
         "accepted quote snapshot."
     )
+    requires = ("customerRequest", "acceptedSnapshot",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         request = record.customer_request
         snapshot = record.accepted_snapshot
 

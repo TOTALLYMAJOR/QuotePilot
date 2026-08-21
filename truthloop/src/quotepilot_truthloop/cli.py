@@ -51,8 +51,16 @@ def _render_text(report) -> str:
             f"{metrics['unverifiableFindings']} unverifiable, "
             f"{format_usd(metrics['unexplainedAmountCents'])} unexplained"
         ),
-        "",
+        (
+            f"{metrics['recordsWithoutCommercialChain']} record(s) have no accepted "
+            "promise to reconcile"
+        ),
     ]
+    if metrics["blockedReasonCodes"]:
+        lines.append("Blocked by:")
+        for code, count in metrics["blockedReasonCodes"].items():
+            lines.append(f"  {code}: {count}")
+    lines.append("")
     for record in report.records:
         state = "reconciled" if record.fully_reconciled else "OPEN"
         lines.append(
@@ -62,9 +70,17 @@ def _render_text(report) -> str:
         for finding in record.findings:
             if finding.status.value == "explained":
                 continue
+            reason = f" [{finding.reason_code.value}]" if finding.reason_code.value else ""
+            blocked = (
+                f" (blocked section: {finding.blocked_section}"
+                + (f"; blocked by: {finding.blocked_by}" if finding.blocked_by else "")
+                + ")"
+                if finding.blocked_section
+                else ""
+            )
             lines.append(
                 f"  - {finding.status.value}/{finding.severity.value} "
-                f"{finding.rule_id}: {finding.narrative}"
+                f"{finding.rule_id}{reason}: {finding.narrative}{blocked}"
             )
         lines.append("")
     for rejection in report.rejected:

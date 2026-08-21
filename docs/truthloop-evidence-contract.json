@@ -1,0 +1,177 @@
+{
+  "contractVersion": "truthloop-evidence-contract-v1",
+  "schemaVersion": 1,
+  "bundleVersion": "truthloop-evidence-bundle-v2",
+  "exporterVersion": "commercial-evidence-exporter-v1",
+  "purpose": "Single shared definition of the evidence supply chain. The JavaScript exporter reads it to classify availability and compute coverage; the Python reconciler reads it to prove its rule registry has not drifted from it. Changing a rule on one side without the other fails a test.",
+  "authority": "observation_only",
+  "availabilityStates": {
+    "available": {
+      "reconcilerEffect": "run_rule",
+      "description": "The evidence exists and was exported with provenance."
+    },
+    "missing": {
+      "reconcilerEffect": "unverifiable",
+      "reasonCode": "evidence_missing",
+      "description": "The evidence should exist for this record's lifecycle stage and does not. A data gap."
+    },
+    "not_applicable": {
+      "reconcilerEffect": "explained",
+      "reasonCode": "",
+      "description": "The evidence cannot apply to this record. There is nothing to check, so the rule is satisfied rather than blocked."
+    },
+    "not_yet_available": {
+      "reconcilerEffect": "unverifiable",
+      "reasonCode": "evidence_not_yet_available",
+      "description": "The record has not reached the lifecycle stage that produces this evidence. Expected to resolve with time, not with work."
+    },
+    "blocked_by_integration": {
+      "reconcilerEffect": "unverifiable",
+      "reasonCode": "evidence_blocked_by_integration",
+      "description": "A named external or staged integration dependency prevents production. Never satisfied by fabricating provider evidence."
+    },
+    "contradictory": {
+      "reconcilerEffect": "unverifiable",
+      "reasonCode": "evidence_contradictory",
+      "description": "Two authoritative sources disagree. Exported with both values so the disagreement is reviewable rather than silently resolved."
+    },
+    "schema_drift": {
+      "reconcilerEffect": "unverifiable",
+      "reasonCode": "evidence_schema_drift",
+      "description": "The source carries a schema or revision this exporter does not know. Never coerced into the current representation."
+    }
+  },
+  "constraintClasses": {
+    "none": "Producible today.",
+    "engineering": "No capture surface or schema exists yet; building one is in our control.",
+    "integration": "Blocked on an external provider or a staged program gate.",
+    "business_policy": "Blocked because nobody has declared the policy value the rule needs."
+  },
+  "evidenceSections": {
+    "customerRequest": {
+      "nodeId": "fact.customer.change_request",
+      "sourceObject": "quotes/{quoteId}",
+      "sourceField": "portalDecision",
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "Portal decision record written by the customer portal."
+    },
+    "authorizedQuote": {
+      "nodeId": "fact.pricing.catalog_snapshot",
+      "sourceObject": "quotes/{quoteId}",
+      "sourceField": "pricingCatalogAuthority",
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "Catalog identity stamped at pricing time by functions/pricingEngine.js."
+    },
+    "acceptedSnapshot": {
+      "nodeId": "fact.quote.accepted_revision",
+      "sourceObject": "acceptanceReceipts/{receiptId}",
+      "sourceField": "proposalSnapshot",
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "The signed snapshot lives on the acceptance receipt; the quote carries only totals and a digest. The exporter verifies the digest and reports disagreement as contradictory."
+    },
+    "payments": {
+      "nodeId": "fact.payment.verified_deposit_state",
+      "sourceObject": "quotes/{quoteId}",
+      "sourceField": "payment.ledger",
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "Legacy quotes without a ledger carry a derived deposit entry; provenance records the legacy path rather than claiming ledger evidence."
+    },
+    "payouts": {
+      "nodeId": "fact.payment.processor_payout",
+      "sourceObject": "",
+      "sourceField": "",
+      "producible": false,
+      "constraintClass": "integration",
+      "blockedBy": "stripe_connect_stopping_point",
+      "notes": "No settlement store exists. The Connect program stops after Sandbox UAT, so no production payout evidence may be produced or simulated. See docs/STRIPE_CONNECT_PROGRAM.md."
+    },
+    "processorFeeSchedule": {
+      "nodeId": "fact.payment.processor_fee_schedule",
+      "sourceObject": "organizations/{organizationId}",
+      "sourceField": "settings.processorFeeSchedule",
+      "producible": false,
+      "constraintClass": "business_policy",
+      "notes": "The settings field does not exist and no organization has declared a schedule. The exporter reads it if present and never infers one."
+    },
+    "operationalPlan": {
+      "nodeId": "artifact.production_plan",
+      "sourceObject": "quotes/{quoteId}",
+      "sourceField": "selection|event|booking",
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "Projected the same way src/lib/beoPayload.js projects the BEO."
+    },
+    "costBasis": {
+      "nodeId": "fact.pricing.cost_basis",
+      "sourceObject": "quotes/{quoteId}/versions/{versionId}",
+      "sourceField": "commercialSnapshot",
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "Staff-recorded cost evidence captured with the quote version."
+    },
+    "actualConsumption": {
+      "nodeId": "fact.operations.actual_consumption",
+      "sourceObject": "",
+      "sourceField": "",
+      "producible": false,
+      "constraintClass": "engineering",
+      "notes": "No post-event labor or purchasing capture surface or schema exists yet."
+    }
+  },
+  "rules": {
+    "accepted_record_stale_vs_request": {
+      "chainLink": "customer_request",
+      "requires": ["customerRequest", "acceptedSnapshot"]
+    },
+    "stale_catalog_revision": {
+      "chainLink": "authorized_quote",
+      "requires": ["authorizedQuote"]
+    },
+    "payment_amount_mismatch": {
+      "chainLink": "payment_receipt",
+      "requires": ["acceptedSnapshot", "payments"]
+    },
+    "missing_or_duplicate_charge": {
+      "chainLink": "payment_receipt",
+      "requires": ["acceptedSnapshot", "payments"]
+    },
+    "processor_fee_discrepancy": {
+      "chainLink": "processor_payout",
+      "requires": ["payments", "payouts", "processorFeeSchedule"]
+    },
+    "expected_revenue_not_received": {
+      "chainLink": "processor_payout",
+      "requires": ["acceptedSnapshot", "payments"]
+    },
+    "promise_absent_from_plan": {
+      "chainLink": "operational_consumption",
+      "requires": ["acceptedSnapshot", "operationalPlan"]
+    },
+    "operational_overrun": {
+      "chainLink": "operational_consumption",
+      "requires": ["costBasis", "actualConsumption"]
+    },
+    "provisional_cost_basis": {
+      "chainLink": "actual_contribution",
+      "requires": ["costBasis"]
+    },
+    "margin_category_omission": {
+      "chainLink": "actual_contribution",
+      "requires": ["acceptedSnapshot"]
+    },
+    "estimated_versus_realized_contribution": {
+      "chainLink": "actual_contribution",
+      "requires": ["acceptedSnapshot", "costBasis", "actualConsumption"]
+    }
+  },
+  "knownSourceSchemaVersions": {
+    "proposalSnapshot": [2],
+    "paymentLedger": [1],
+    "pricingCatalogAuthority": [1],
+    "commercialSnapshot": ["commercial-snapshot-v1"]
+  }
+}

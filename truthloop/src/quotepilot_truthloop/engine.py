@@ -28,6 +28,7 @@ def reconcile_record(
         quote_number=record.quote_number,
         evaluated_at_iso=evaluated_at_iso,
         findings=tuple(rule.evaluate(record) for rule in rules),
+        has_commercial_chain=record.chain_started,
     )
 
 

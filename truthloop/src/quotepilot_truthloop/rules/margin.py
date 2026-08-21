@@ -29,8 +29,9 @@ class MarginCategoryOmissionRule(Rule):
         "Accepted revenue categories that carry money but sit outside the "
         "margin model, so reported contribution is incomplete."
     )
+    requires = ("acceptedSnapshot",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         snapshot = record.accepted_snapshot
         if not snapshot.present:
             return self.unverifiable(
@@ -111,8 +112,9 @@ class RealizedContributionRule(Rule):
         "A delivered event whose realized contribution differs from the "
         "contribution the accepted quote projected."
     )
+    requires = ("acceptedSnapshot", "costBasis", "actualConsumption",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         snapshot = record.accepted_snapshot
         if not snapshot.present:
             return self.unverifiable(

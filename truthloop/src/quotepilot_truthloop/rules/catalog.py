@@ -20,8 +20,9 @@ class StaleCatalogRevisionRule(Rule):
         "A quote priced against a catalog revision older than the "
         "organization's current confirmed revision."
     )
+    requires = ("authorizedQuote",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         authority = record.authorized_quote.catalog_authority
         if not authority.present:
             return self.unverifiable(
@@ -114,8 +115,9 @@ class ProvisionalCostBasisRule(Rule):
         "A quote whose contribution rests on provisional or missing cost "
         "evidence rather than recorded costs."
     )
+    requires = ("costBasis",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         basis = record.cost_basis
         if not basis.present:
             return self.unverifiable(

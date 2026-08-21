@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-21 12:20:00 CDT
+Last updated: 2026-08-21 13:10:00 CDT
 
 ## Current Production Release
 
@@ -31,29 +31,37 @@ Last updated: 2026-08-21 12:20:00 CDT
   acceptance, production-data correctness, provider delivery, recipient
   acknowledgement, or human acceptance.
 
-## Commercial Truth Loop (Python Tier)
+## Commercial Truth Loop (Python Tier + Evidence Exporter)
 
-- A read-only Python reconciliation tier landed at `truthloop/` with eleven
-  rules covering the commercial chain from customer request to realized
-  contribution. It is standard-library-only and runs in `lane:core` through
-  `npm run test:truthloop` (97 tests) without adding a required CI context.
-- **It has no data source.** The tier reconciles fixtures only. The TypeScript
-  evidence exporter that would project Firestore into
-  `truthloop-evidence-bundle-v1` is not built, so no production commercial
-  record is reconciled today and no operator sees a finding.
-- Three chain inputs have no producer anywhere in the system yet and will
-  report `unverifiable` against real data until one exists: processor payout
-  settlement, the organization-declared processor fee schedule, and post-event
-  actual labor/purchasing consumption. Stripe payout and fee reconciliation is
-  additionally gated behind the Connect program's stopping point in
-  `docs/STRIPE_CONNECT_PROGRAM.md`.
+- The reconciler (`truthloop/`, 127 tests) and the evidence exporter
+  (`evidence/`, `scripts/reconciliation-evidence-export.mjs`, 51 tests) are both
+  in source. Together they form the supply chain
+  `authoritative source → producer/exporter → canonical bundle → reconciler →
+  verdict + reason`. Both run in `lane:core` and add no required CI context.
+- **No production record is reconciled.** The exporter projects already-read
+  documents; there is no Firestore reader. Its contract tests drive it from
+  documents built by the real `functions/proposalAcceptance.js` and
+  `functions/paymentLedger.js` planners, which proves it reads the shapes
+  QuotePilot writes — not that it has ever read one from a database.
+- **No record can reach `fullyReconciled` today**, and the coverage report says
+  so explicitly: 8 of 11 rules can reach a verdict. Three sections have no
+  producer — processor payout settlement (`integration`, blocked behind the
+  Connect stopping point), declared processor fee schedules
+  (`business_policy`, the settings field does not exist), and post-event
+  consumption (`engineering`, no capture surface). Run
+  `npm run truthloop:coverage` for the current split.
 - Active risk: the loop's narratives read as authoritative. Findings carry
   `authority: "observation_only"` and must not be presented to a customer or
   used as a repricing, approval, or accounting authority. The kill criteria in
   `docs/COMMERCIAL_TRUTH_LOOP_ADR.md` are the disable trigger.
-- Passing the Python gate is local reconciliation-logic evidence. It is not an
-  exporter, a staff surface, hosted verification, provider evidence, a
-  production deployment, or human acceptance.
+- Active risk: the payout producer is one authorized settlement source away
+  from emitting provider evidence. It refuses any source not explicitly marked
+  authorized, and production code passes none, but that gate is a code
+  guarantee rather than an infrastructure one until the Connect program
+  proceeds.
+- Passing these gates is local export and reconciliation-logic evidence. It is
+  not a Firestore reader, an operator surface, hosted verification, provider
+  evidence, a production deployment, or human acceptance.
 
 ## Pending Production Completion
 

@@ -38,8 +38,9 @@ class PromiseCoverageRule(Rule):
         "Menu items, add-ons, rentals, staffing, or guest counts the customer "
         "accepted that the operational plan does not carry."
     )
+    requires = ("acceptedSnapshot", "operationalPlan",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         snapshot = record.accepted_snapshot
         if not snapshot.present:
             return self.unverifiable(
@@ -147,8 +148,9 @@ class OperationalOverrunRule(Rule):
         "Labor or purchasing consumption beyond the planned cost basis by more "
         "than the declared tolerance."
     )
+    requires = ("costBasis", "actualConsumption",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         actual = record.actual_consumption
         if not actual.present:
             if record.event_completed:

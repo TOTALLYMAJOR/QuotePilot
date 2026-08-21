@@ -17,6 +17,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from .contracts import Availability
 from .model import (
     PAYMENT_KINDS,
     AcceptedSnapshot,
@@ -26,6 +27,7 @@ from .model import (
     CommercialRecord,
     CostBasis,
     CustomerRequest,
+    EvidenceSection,
     OperationalPlan,
     OverrunThresholds,
     PaymentEntry,
@@ -34,7 +36,28 @@ from .model import (
 )
 from .money import MoneyError, cents
 
-EVIDENCE_BUNDLE_VERSION = "truthloop-evidence-bundle-v1"
+EVIDENCE_BUNDLE_VERSION = "truthloop-evidence-bundle-v2"
+
+#: Versions this loader once accepted and deliberately no longer does. A known
+#: superseded version gets a named drift error instead of a generic one, so an
+#: operator sees "this bundle is old" rather than "this bundle is wrong".
+SUPERSEDED_BUNDLE_VERSIONS = frozenset({"truthloop-evidence-bundle-v1"})
+
+#: Evidence sections the reconciler understands. A bundle carrying a section
+#: outside this set is drift, not extra credit.
+KNOWN_SECTIONS = frozenset(
+    {
+        "customerRequest",
+        "authorizedQuote",
+        "acceptedSnapshot",
+        "payments",
+        "payouts",
+        "processorFeeSchedule",
+        "operationalPlan",
+        "costBasis",
+        "actualConsumption",
+    }
+)
 
 ISO_PATTERN = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$"
@@ -442,28 +465,105 @@ def _overrun_thresholds(value: object) -> OverrunThresholds:
     )
 
 
+def _envelope(section: str, value: object) -> tuple[EvidenceSection, object]:
+    """Split one evidence envelope into its availability and its value.
+
+    An envelope with no availability is rejected rather than assumed available.
+    A bundle that forgot to classify a section is drift, and guessing on its
+    behalf is exactly the collapse this contract exists to prevent.
+    """
+    data = _mapping(value, f"evidence.{section}")
+    if not data:
+        raise BundleError(f"evidence.{section} is required.")
+
+    raw_availability = _text(
+        data.get("availability"), f"evidence.{section}.availability", required=True
+    )
+    try:
+        availability = Availability(raw_availability)
+    except ValueError as error:
+        raise BundleError(
+            f"evidence.{section}.availability is not a known state: {raw_availability}."
+        ) from error
+
+    payload = data.get("value")
+    if availability is Availability.AVAILABLE and payload is None:
+        raise BundleError(f"evidence.{section} is available but carries no value.")
+    if availability is not Availability.AVAILABLE and payload is not None:
+        raise BundleError(
+            f"evidence.{section} is {availability.value} but carries a value."
+        )
+    if availability is Availability.BLOCKED_BY_INTEGRATION and not _text(
+        data.get("blockedBy"), f"evidence.{section}.blockedBy"
+    ):
+        raise BundleError(
+            f"evidence.{section} is blocked by integration but does not name what blocks it."
+        )
+
+    envelope = EvidenceSection(
+        section=section,
+        availability=availability,
+        constraint_class=_text(
+            data.get("constraintClass"), f"evidence.{section}.constraintClass"
+        )
+        or "none",
+        detail=_text(data.get("detail"), f"evidence.{section}.detail"),
+        blocked_by=_text(data.get("blockedBy"), f"evidence.{section}.blockedBy"),
+        provenance=dict(_mapping(data.get("provenance"), f"evidence.{section}.provenance")),
+        conflict=dict(_mapping(data.get("conflict"), f"evidence.{section}.conflict")),
+    )
+    return envelope, payload
+
+
+def _evidence(value: object) -> tuple[dict[str, EvidenceSection], dict[str, object]]:
+    data = _mapping(value, "evidence")
+    if not data:
+        raise BundleError("A record must carry an evidence block.")
+    unknown = sorted(set(data) - KNOWN_SECTIONS)
+    if unknown:
+        raise BundleError(
+            "evidence carries sections this reconciler does not know: "
+            f"{', '.join(unknown)}."
+        )
+    missing_sections = sorted(KNOWN_SECTIONS - set(data))
+    if missing_sections:
+        raise BundleError(
+            f"evidence is missing required sections: {', '.join(missing_sections)}."
+        )
+
+    envelopes: dict[str, EvidenceSection] = {}
+    values: dict[str, object] = {}
+    for section in sorted(KNOWN_SECTIONS):
+        envelope, payload = _envelope(section, data.get(section))
+        envelopes[section] = envelope
+        values[section] = payload
+    return envelopes, values
+
+
 def load_record(value: object) -> CommercialRecord:
     """Build one ``CommercialRecord``, or raise ``BundleError``."""
     data = _mapping(value, "record")
+    envelopes, values = _evidence(data.get("evidence"))
     return CommercialRecord(
         organization_id=_text(data.get("organizationId"), "organizationId", required=True),
         quote_id=_text(data.get("quoteId"), "quoteId", required=True),
         quote_number=_text(data.get("quoteNumber"), "quoteNumber"),
         event_date=_text(data.get("eventDate"), "eventDate"),
-        customer_request=_customer_request(data.get("customerRequest")),
-        authorized_quote=_authorized_quote(data.get("authorizedQuote")),
-        accepted_snapshot=_accepted_snapshot(data.get("acceptedSnapshot")),
-        payments=_payments(data.get("payments")),
-        payouts=_payouts(data.get("payouts")),
-        fee_schedule=_fee_schedule(data.get("processorFeeSchedule")),
-        operational_plan=_operational_plan(data.get("operationalPlan")),
-        cost_basis=_cost_basis(data.get("costBasis")),
-        actual_consumption=_actual_consumption(data.get("actualConsumption")),
+        customer_request=_customer_request(values["customerRequest"]),
+        authorized_quote=_authorized_quote(values["authorizedQuote"]),
+        accepted_snapshot=_accepted_snapshot(values["acceptedSnapshot"]),
+        payments=_payments(values["payments"]),
+        payouts=_payouts(values["payouts"]),
+        fee_schedule=_fee_schedule(values["processorFeeSchedule"]),
+        operational_plan=_operational_plan(values["operationalPlan"]),
+        cost_basis=_cost_basis(values["costBasis"]),
+        actual_consumption=_actual_consumption(values["actualConsumption"]),
         overrun_thresholds=_overrun_thresholds(data.get("overrunThresholds")),
         current_catalog_revision=_sentinel_integer(
             data, "currentCatalogRevision", "currentCatalogRevision", -1
         ),
         event_completed=_bool(data.get("eventCompleted"), "eventCompleted"),
+        evidence=envelopes,
     )
 
 
@@ -478,6 +578,15 @@ def load_bundle(
     """
     data = _mapping(payload, "bundle")
     version = _text(data.get("bundleVersion"), "bundleVersion", required=True)
+    if version in SUPERSEDED_BUNDLE_VERSIONS:
+        # Named explicitly so the failure reads as drift rather than corruption.
+        # The old shape is never coerced into the current one: a v1 bundle
+        # cannot distinguish "absent" from "blocked", and reading it as if it
+        # could would manufacture reconciliation.
+        raise BundleError(
+            f"bundleVersion {version} is superseded by {EVIDENCE_BUNDLE_VERSION} and "
+            "is not read: it cannot express evidence availability. Re-export."
+        )
     if version != EVIDENCE_BUNDLE_VERSION:
         raise BundleError(
             f"bundleVersion must be {EVIDENCE_BUNDLE_VERSION}; received {version}."

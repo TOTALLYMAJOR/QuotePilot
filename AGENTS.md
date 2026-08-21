@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: 2026-08-21 12:20:00 CDT
+Last updated: 2026-08-21 13:10:00 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -29,6 +29,7 @@ Ship safe changes with validation evidence and canonical documentation sync.
    - `npm run build`
    - `npm run check:capability-surfaces` when backend/data authority changes
    - `npm run test:truthloop` when `truthloop/` changes
+   - `npm run test:unit` and `npm run truthloop:coverage` when `evidence/` changes
    - plus scope-specific tests (`test:unit`, `test:e2e`, governance/perf checks) as needed.
 5. Update canonical docs per trigger rules in `docs/DOC_SYSTEM.md`.
 6. At completion, rerun `npm run plan:task` with the same `--task` and
@@ -41,11 +42,20 @@ Ship safe changes with validation evidence and canonical documentation sync.
 - Preserve local fallback behavior when Firebase config is missing.
 - Keep customer-facing quote/proposal outputs accurate.
 - Keep role-gated controls restricted to authorized users.
-- Keep the Python reconciliation tier read-only. It must never gain a write
-  path, a credential, or network access, and its findings are observations
+- Keep the reconciliation tier read-only. The Python reconciler
+  (`truthloop/`) and the evidence exporter (`evidence/`) must never gain a
+  write path, a credential, or network access, and findings are observations
   rather than pricing, approval, or customer-facing authority.
-- Never let the reconciler infer a rate or threshold from history and then
-  apply it as policy; such values are operator-declared evidence.
+- Never let the reconciler or a producer infer a rate or threshold from
+  history and then apply it as policy; such values are operator-declared
+  evidence carried with a declaring actor and timestamp.
+- Never collapse evidence availability into null. `missing`,
+  `not_applicable`, `not_yet_available`, `blocked_by_integration`,
+  `contradictory`, and `schema_drift` are distinct operator instructions.
+  Only `available` and `not_applicable` may let a rule reach a verdict.
+- Keep the payout producer inert behind the Stripe Connect stopping point in
+  `docs/STRIPE_CONNECT_PROGRAM.md`. Never fabricate or simulate provider
+  settlement evidence to make a record reconcile.
 - Do not ship an orphan user-relevant backend capability: bind it to a
   discoverable role-safe frontend surface, UI-state tests, Feature Matrix, and
   User Manual through `docs/capability-surfacing-contracts.json`. Keep private
@@ -60,6 +70,8 @@ Ship safe changes with validation evidence and canonical documentation sync.
 - `src/lib/authClient.js`
 - `src/lib/proposalExport.js`
 - `truthloop/src/quotepilot_truthloop/money.py`
+- `evidence/src/producers/payoutProducer.mjs`
+- `docs/truthloop-evidence-contract.json`
 - `firestore.rules`
 - `firestore.indexes.json`
 

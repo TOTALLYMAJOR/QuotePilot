@@ -32,7 +32,7 @@
         "section": "actualConsumption"
       }
     ],
-    "recordsDigestSha256": "2d9dca5394e822334e0747224918d6161e4ebdd1846bbe79db6bd17bcd6b391d"
+    "recordsDigestSha256": "c27e4693a62e00169b8f86791b0078eebe4172efe4a03ceeb2934bb2a84e321f"
   },
   "records": [
     {
@@ -264,46 +264,30 @@
           ]
         },
         "payouts": {
-          "availability": "available",
-          "constraintClass": "none",
-          "detail": "1 settlement record(s).",
+          "availability": "blocked_by_integration",
+          "blockedBy": "stripe_connect_stopping_point",
+          "constraintClass": "integration",
+          "detail": "No production processor settlement store exists. The Stripe Connect program stops after hosted Sandbox UAT, so payout evidence cannot be produced or simulated. See docs/STRIPE_CONNECT_PROGRAM.md.",
           "provenance": {
             "exporterVersion": "commercial-evidence-exporter-v1",
             "observedAtISO": "",
             "revision": "",
             "sourceField": "",
-            "sourceObject": "fixture://authorized-settlement-source",
+            "sourceObject": "",
             "sourceSchemaVersion": ""
-          },
-          "value": [
-            {
-              "grossCents": 480000,
-              "netCents": 464280,
-              "payoutReference": "po_1042",
-              "providerReference": "cs_test_deposit_1042",
-              "settledAtISO": "2026-08-07T09:00:00.000Z"
-            }
-          ]
+          }
         },
         "processorFeeSchedule": {
-          "availability": "available",
-          "constraintClass": "none",
-          "detail": "Declared by organization settings.",
+          "availability": "missing",
+          "constraintClass": "business_policy",
+          "detail": "No organization has declared a processor fee schedule. A payout difference cannot be explained without one, and this producer will not infer a rate from history.",
           "provenance": {
             "exporterVersion": "commercial-evidence-exporter-v1",
-            "observedAtISO": "2026-07-01T00:00:00.000Z",
+            "observedAtISO": "",
             "revision": "",
             "sourceField": "settings.processorFeeSchedule",
             "sourceObject": "",
             "sourceSchemaVersion": ""
-          },
-          "value": {
-            "declaredAtISO": "2026-07-01T00:00:00.000Z",
-            "declaredBy": "organization settings",
-            "fixedCents": 120,
-            "label": "Card present/online blended",
-            "percentBasisPoints": 325,
-            "toleranceCents": 0
           }
         }
       },

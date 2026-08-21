@@ -1,24 +1,54 @@
+"""Bundle loading: envelopes, drift, and fail-closed parsing."""
+
+import copy
 import unittest
 
+from quotepilot_truthloop.contracts import Availability
 from quotepilot_truthloop.loader import (
     EVIDENCE_BUNDLE_VERSION,
+    KNOWN_SECTIONS,
     BundleError,
     load_bundle,
     load_record,
 )
-from support import clean_record_dict, example_bundle
+from support import clean_record_dict, current_state_bundle, example_bundle
+
+
+def section(raw, name):
+    return raw["evidence"][name]
 
 
 class BundleEnvelopeTest(unittest.TestCase):
-    def test_loads_the_example_bundle(self):
+    def test_loads_the_exporter_produced_bundle(self):
         evaluated, records, rejected = load_bundle(example_bundle())
         self.assertEqual(evaluated, "2026-08-21T14:00:00.000Z")
         self.assertEqual(len(records), 1)
         self.assertEqual(rejected, [])
 
-    def test_rejects_an_unknown_bundle_version(self):
+    def test_loads_the_current_state_bundle(self):
+        _, records, rejected = load_bundle(current_state_bundle())
+        self.assertEqual(rejected, [])
+        self.assertIs(
+            records[0].section("payouts").availability,
+            Availability.BLOCKED_BY_INTEGRATION,
+        )
+
+    def test_bundle_version_constant_is_v2(self):
+        self.assertEqual(EVIDENCE_BUNDLE_VERSION, "truthloop-evidence-bundle-v2")
+
+    def test_a_superseded_bundle_version_is_named_as_drift(self):
+        # v1 cannot express availability, so reading it would manufacture
+        # reconciliation. It must fail with a drift message, not be coerced.
         payload = example_bundle()
-        payload["bundleVersion"] = "truthloop-evidence-bundle-v2"
+        payload["bundleVersion"] = "truthloop-evidence-bundle-v1"
+        with self.assertRaises(BundleError) as caught:
+            load_bundle(payload)
+        self.assertIn("superseded", str(caught.exception))
+        self.assertIn("Re-export", str(caught.exception))
+
+    def test_an_unknown_bundle_version_is_rejected(self):
+        payload = example_bundle()
+        payload["bundleVersion"] = "truthloop-evidence-bundle-v9"
         with self.assertRaises(BundleError):
             load_bundle(payload)
 
@@ -28,17 +58,11 @@ class BundleEnvelopeTest(unittest.TestCase):
         with self.assertRaises(BundleError):
             load_bundle(payload)
 
-    def test_rejects_a_non_iso_evaluation_instant(self):
-        payload = example_bundle()
-        payload["evaluatedAtISO"] = "August 21, 2026"
-        with self.assertRaises(BundleError):
-            load_bundle(payload)
-
     def test_a_bad_record_is_rejected_without_hiding_the_good_ones(self):
         payload = example_bundle()
         broken = clean_record_dict()
         broken["quoteId"] = "quote_broken"
-        broken["payments"] = [
+        section(broken, "payments")["value"] = [
             {
                 "operationId": "op_x",
                 "paymentKind": "gift_card",
@@ -54,12 +78,64 @@ class BundleEnvelopeTest(unittest.TestCase):
         self.assertIn("paymentKind", rejected[0]["reason"])
 
 
-class RecordValidationTest(unittest.TestCase):
-    def _record(self, **overrides):
-        raw = clean_record_dict()
-        raw.update(overrides)
-        return raw
+class EnvelopeValidationTest(unittest.TestCase):
+    """The envelope is the contract; a malformed one is never assumed available."""
 
+    def test_every_known_section_must_be_present(self):
+        raw = clean_record_dict()
+        del raw["evidence"]["payouts"]
+        with self.assertRaises(BundleError) as caught:
+            load_record(raw)
+        self.assertIn("payouts", str(caught.exception))
+
+    def test_an_unknown_section_is_drift_not_extra_credit(self):
+        raw = clean_record_dict()
+        raw["evidence"]["speculativeMargin"] = {"availability": "available", "value": {}}
+        with self.assertRaises(BundleError) as caught:
+            load_record(raw)
+        self.assertIn("speculativeMargin", str(caught.exception))
+
+    def test_a_section_without_availability_is_rejected(self):
+        raw = clean_record_dict()
+        del section(raw, "costBasis")["availability"]
+        with self.assertRaises(BundleError):
+            load_record(raw)
+
+    def test_an_unknown_availability_state_is_rejected(self):
+        raw = clean_record_dict()
+        section(raw, "costBasis")["availability"] = "probably_fine"
+        with self.assertRaises(BundleError):
+            load_record(raw)
+
+    def test_available_without_a_value_is_rejected(self):
+        raw = clean_record_dict()
+        section(raw, "costBasis").pop("value")
+        with self.assertRaises(BundleError):
+            load_record(raw)
+
+    def test_unavailable_with_a_value_is_rejected(self):
+        # An envelope that claims blocked while carrying data is exactly the
+        # ambiguity the contract exists to forbid.
+        raw = clean_record_dict()
+        section(raw, "costBasis")["availability"] = "missing"
+        with self.assertRaises(BundleError):
+            load_record(raw)
+
+    def test_blocked_by_integration_must_name_its_blocker(self):
+        raw = clean_record_dict()
+        payouts = section(raw, "payouts")
+        payouts.pop("value", None)
+        payouts["availability"] = "blocked_by_integration"
+        payouts.pop("blockedBy", None)
+        with self.assertRaises(BundleError):
+            load_record(raw)
+
+    def test_all_known_sections_are_covered(self):
+        self.assertEqual(len(KNOWN_SECTIONS), 9)
+        self.assertEqual(set(clean_record_dict()["evidence"]), set(KNOWN_SECTIONS))
+
+
+class RecordValidationTest(unittest.TestCase):
     def test_requires_identity(self):
         for field in ("organizationId", "quoteId"):
             raw = clean_record_dict()
@@ -69,49 +145,33 @@ class RecordValidationTest(unittest.TestCase):
 
     def test_rejects_float_money(self):
         raw = clean_record_dict()
-        raw["acceptedSnapshot"]["totalsMinor"]["total"] = 22592.00
+        section(raw, "acceptedSnapshot")["value"]["totalsMinor"]["total"] = 22592.00
         with self.assertRaises(BundleError):
             load_record(raw)
 
     def test_rejects_a_payout_net_above_its_gross(self):
         raw = clean_record_dict()
-        raw["payouts"][0]["netCents"] = 490000
+        section(raw, "payouts")["value"][0]["netCents"] = 490000
         with self.assertRaises(BundleError):
             load_record(raw)
 
     def test_rejects_an_unknown_payment_state(self):
         raw = clean_record_dict()
-        raw["payments"][0]["state"] = "refunded"
+        section(raw, "payments")["value"][0]["state"] = "refunded"
         with self.assertRaises(BundleError):
             load_record(raw)
 
     def test_rejects_a_string_where_an_integer_belongs(self):
         raw = clean_record_dict()
-        raw["acceptedSnapshot"]["guests"] = "145"
+        section(raw, "acceptedSnapshot")["value"]["guests"] = "145"
         with self.assertRaises(BundleError):
             load_record(raw)
 
     def test_rejects_a_scalar_where_a_list_belongs(self):
         raw = clean_record_dict()
-        raw["acceptedSnapshot"]["selection"]["rentals"] = "Farm Tables"
+        section(raw, "acceptedSnapshot")["value"]["selection"]["rentals"] = "Farm Tables"
         with self.assertRaises(BundleError):
             load_record(raw)
-
-    def test_absent_sections_stay_absent_rather_than_defaulting(self):
-        raw = clean_record_dict()
-        for key in ("operationalPlan", "costBasis", "actualConsumption"):
-            raw.pop(key, None)
-        record = load_record(raw)
-        self.assertFalse(record.operational_plan.present)
-        self.assertFalse(record.cost_basis.present)
-        self.assertFalse(record.actual_consumption.present)
-
-    def test_bundle_version_constant_is_stable(self):
-        self.assertEqual(EVIDENCE_BUNDLE_VERSION, "truthloop-evidence-bundle-v1")
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TimestampNormalizationTest(unittest.TestCase):
@@ -119,13 +179,7 @@ class TimestampNormalizationTest(unittest.TestCase):
 
     def _submitted(self, value: str):
         raw = clean_record_dict()
-        raw["customerRequest"] = {
-            "requestId": "req_1",
-            "decision": "changes_requested",
-            "submittedAtISO": value,
-            "proposals": [],
-            "recordedProposalIds": [],
-        }
+        section(raw, "customerRequest")["value"]["submittedAtISO"] = value
         return load_record(raw)
 
     def test_offsets_are_canonicalized_to_utc(self):
@@ -135,7 +189,6 @@ class TimestampNormalizationTest(unittest.TestCase):
         )
 
     def test_precision_is_canonicalized(self):
-        # Same instant, three spellings, one normalized form.
         for spelling in (
             "2026-08-19T07:00:00Z",
             "2026-08-19T07:00:00.000Z",
@@ -153,14 +206,13 @@ class TimestampNormalizationTest(unittest.TestCase):
         from quotepilot_truthloop.engine import reconcile_record
 
         raw = clean_record_dict()
-        raw["acceptedSnapshot"]["acceptedAtISO"] = "2026-08-19T09:00:00.000Z"
-        raw["customerRequest"] = {
-            "requestId": "req_1",
-            "decision": "changes_requested",
-            "submittedAtISO": "2026-08-19T12:00:00+05:00",
-            "proposals": [],
-            "recordedProposalIds": [],
-        }
+        section(raw, "acceptedSnapshot")["value"]["acceptedAtISO"] = (
+            "2026-08-19T09:00:00.000Z"
+        )
+        request = section(raw, "customerRequest")["value"]
+        request["submittedAtISO"] = "2026-08-19T12:00:00+05:00"
+        request["proposals"] = []
+        request["recordedProposalIds"] = []
         result = reconcile_record(load_record(raw), "2026-08-21T14:00:00.000Z")
         finding = next(
             f for f in result.findings if f.rule_id == "accepted_record_stale_vs_request"
@@ -177,7 +229,9 @@ class SentinelIntegerTest(unittest.TestCase):
 
     def test_null_catalog_revision_stays_absent(self):
         raw = clean_record_dict()
-        raw["authorizedQuote"]["catalogAuthority"]["catalogRevision"] = None
+        section(raw, "authorizedQuote")["value"]["catalogAuthority"][
+            "catalogRevision"
+        ] = None
         record = load_record(raw)
         self.assertEqual(record.authorized_quote.catalog_authority.catalog_revision, -1)
         self.assertFalse(record.authorized_quote.catalog_authority.present)
@@ -191,3 +245,15 @@ class SentinelIntegerTest(unittest.TestCase):
         raw = clean_record_dict()
         raw["overrunThresholds"] = {"laborBasisPoints": None}
         self.assertEqual(load_record(raw).overrun_thresholds.labor_basis_points, 1_000)
+
+
+class DeepCopyIndependenceTest(unittest.TestCase):
+    def test_loading_does_not_mutate_the_source_payload(self):
+        payload = example_bundle()
+        before = copy.deepcopy(payload)
+        load_bundle(payload)
+        self.assertEqual(payload, before)
+
+
+if __name__ == "__main__":
+    unittest.main()

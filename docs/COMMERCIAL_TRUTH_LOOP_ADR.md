@@ -1,6 +1,6 @@
 # Architecture Decision: Python as a Read-Only Reconciliation Tier
 
-Last updated: 2026-08-21 12:20:00 CDT
+Last updated: 2026-08-21 13:10:00 CDT
 
 Status: Proposed
 Date: August 21, 2026
@@ -98,9 +98,21 @@ adding one is out of scope for this decision.
 9. **No new CI status context.** The gate runs inside the existing `lane:core`
    job. Protected `main` keeps exactly the same eight named `CI Quality`
    contexts, so this change cannot silently alter branch protection.
-10. **The exporter is TypeScript's job.** Producing the evidence bundle from
-    Firestore is a separate, separately reviewed capability that keeps tenant
-    isolation and role checks in the tier that already owns them.
+10. **The exporter is TypeScript's job.** Producing the evidence bundle is a
+    separate, separately reviewed capability that keeps tenant isolation and
+    role checks in the tier that already owns them. It lives in `evidence/`
+    rather than `functions/` because it owns no callable export; promoting it
+    into `functions/` is a later step for whenever a callable does.
+11. **Availability is never collapsed.** Evidence the exporter cannot supply is
+    classified — `missing`, `not_applicable`, `not_yet_available`,
+    `blocked_by_integration`, `contradictory`, `schema_drift` — because those
+    are different operator instructions. Only `available` and `not_applicable`
+    let a rule reach a verdict.
+12. **Unknown schemas are refused, not read.** A source declaring a schema
+    version the exporter was not written against is exported as `schema_drift`.
+    Reading an unknown shape optimistically is how a reconciler starts
+    reporting confident numbers about fields that no longer mean what it
+    thinks.
 
 ## Options considered
 
@@ -144,8 +156,13 @@ Remove or disable the tier if any of these are observed:
 
 - a finding is presented to a customer, or is used as a repricing authority;
 - the package acquires a write path, a credential, or network access;
-- a rule back-solves a rate or threshold from history and then applies it as
-  policy;
+- a rule or producer back-solves a rate or threshold from history and then
+  applies it as policy;
+- the payout producer emits settlement evidence before the Connect program
+  authorizes it, or any producer fabricates evidence to make a record
+  reconcile;
+- an availability state is collapsed into null, or a blocking state is treated
+  as resolving;
 - `unverifiable` is folded into `explained` to improve the reconciliation rate;
 - the reconciler and the TypeScript authorities disagree about a number and the
   reconciler is treated as correct.

@@ -19,6 +19,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
+
+from .contracts import RESOLVING_AVAILABILITY, Availability
 
 #: Revenue categories carried by an accepted proposal snapshot, in the exact
 #: order and naming of ``totalsMinor``.
@@ -241,6 +244,44 @@ class OverrunThresholds:
 
 
 @dataclass(frozen=True)
+class EvidenceSection:
+    """One exported evidence section, with its availability and provenance.
+
+    The reconciler keeps the envelope rather than only the parsed value, so a
+    blocked rule can say exactly which section blocked it, why, and which
+    source the exporter looked at and came up empty.
+    """
+
+    section: str
+    availability: Availability
+    constraint_class: str = "none"
+    detail: str = ""
+    blocked_by: str = ""
+    provenance: Mapping[str, Any] = field(default_factory=dict)
+    conflict: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def resolves(self) -> bool:
+        """True when this section lets a rule reach a verdict."""
+        return self.availability in RESOLVING_AVAILABILITY
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "section": self.section,
+            "availability": self.availability.value,
+            "constraintClass": self.constraint_class,
+            "detail": self.detail,
+            "blockedBy": self.blocked_by,
+            "provenance": dict(self.provenance),
+            "conflict": dict(self.conflict),
+        }
+
+
+#: The section that decides whether a record has a commercial chain at all.
+CHAIN_ANCHOR_SECTION = "acceptedSnapshot"
+
+
+@dataclass(frozen=True)
 class CommercialRecord:
     """One event's whole commercial chain."""
 
@@ -263,6 +304,8 @@ class CommercialRecord:
     #: Whether the event date has passed at evaluation time. Supplied by the
     #: caller so a run is reproducible from its inputs alone.
     event_completed: bool = False
+    #: Availability envelope per evidence section, keyed by section name.
+    evidence: Mapping[str, EvidenceSection] = field(default_factory=dict)
 
     def payments_of_kind(self, kind: str) -> list[PaymentEntry]:
         return [p for p in self.payments if p.payment_kind == kind]
@@ -272,3 +315,25 @@ class CommercialRecord:
             if payout.provider_reference == provider_reference:
                 return payout
         return None
+
+    def section(self, name: str) -> EvidenceSection:
+        """The evidence envelope for one section.
+
+        An unexported section is treated as missing rather than as available
+        and empty. Fail-closed: a bundle that forgot a section must not read as
+        a clean record.
+        """
+        return self.evidence.get(
+            name,
+            EvidenceSection(section=name, availability=Availability.MISSING,
+                            detail="The bundle did not carry this section."),
+        )
+
+    @property
+    def chain_started(self) -> bool:
+        """False when there is no accepted promise, so nothing to reconcile.
+
+        Reported separately in the run metrics: a draft quote reconciling
+        trivially is true but would otherwise flatter the reconciliation rate.
+        """
+        return self.section(CHAIN_ANCHOR_SECTION).availability is Availability.AVAILABLE

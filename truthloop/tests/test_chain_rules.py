@@ -142,6 +142,7 @@ class OverrunTest(unittest.TestCase):
                 "actualConsumption": {
                     "laborCostCents": labor,
                     "purchasingCostCents": purchasing,
+                    "otherCostCents": 0,
                     "recordedAtISO": "2026-10-18T04:00:00.000Z",
                 },
             }
@@ -166,17 +167,26 @@ class OverrunTest(unittest.TestCase):
         self.assertIs(finding_for(record_from(), self.RULE).status, Status.EXPLAINED)
 
     def test_delivered_event_without_consumption_is_unverifiable(self):
-        record = record_from({"eventCompleted": True})
-        self.assertIs(finding_for(record, self.RULE).status, Status.UNVERIFIABLE)
+        # The exporter marks consumption `missing` once the event is delivered:
+        # it should exist and does not. That is a blocked record, not a pass.
+        record = record_from(
+            {"eventCompleted": True}, unavailable={"actualConsumption": "missing"}
+        )
+        finding = finding_for(record, self.RULE)
+        self.assertIs(finding.status, Status.UNVERIFIABLE)
+        self.assertEqual(finding.reason_code.value, "evidence_missing")
+        self.assertEqual(finding.blocked_section, "actualConsumption")
 
 
 class RealizedContributionTest(unittest.TestCase):
     RULE = "estimated_versus_realized_contribution"
 
     def test_undelivered_event_reports_no_realized_figure(self):
+        # Consumption is not applicable before delivery, so the rule passes
+        # with nothing to check rather than reporting a blocked record.
         finding = finding_for(record_from(), self.RULE)
         self.assertIs(finding.status, Status.EXPLAINED)
-        self.assertIn("not yet measurable", finding.summary)
+        self.assertEqual(finding.details["notApplicableSection"], "actualConsumption")
 
     def test_variance_is_measured_not_flagged(self):
         record = record_from(

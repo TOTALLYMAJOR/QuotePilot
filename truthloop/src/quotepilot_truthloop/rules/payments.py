@@ -28,8 +28,9 @@ class PaymentAmountMismatchRule(Rule):
     rule_id = "payment_amount_mismatch"
     chain_link = ChainLink.PAYMENT_RECEIPT
     detects = "A recorded payment whose amount is not the accepted obligation."
+    requires = ("acceptedSnapshot", "payments",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         if not record.accepted_snapshot.present:
             return self.unverifiable(
                 "No accepted quote snapshot to price payments against.",
@@ -107,8 +108,9 @@ class ChargeIntegrityRule(Rule):
         "An obligation with no settled charge, more than one settled charge, "
         "or a provider reference reused across operations."
     )
+    requires = ("acceptedSnapshot", "payments",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         if not record.accepted_snapshot.present:
             return self.unverifiable(
                 "No accepted quote snapshot to require charges against.",
@@ -199,8 +201,9 @@ class ProcessorFeeRule(Rule):
         "A gap between a settled charge and the processor payout that the "
         "declared fee schedule does not account for."
     )
+    requires = ("payments", "payouts", "processorFeeSchedule",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         settled = [p for p in record.payments if p.settled and p.provider_reference]
         if not settled:
             return self.explained(
@@ -378,8 +381,9 @@ class ExpectedRevenueRule(Rule):
     rule_id = "expected_revenue_not_received"
     chain_link = ChainLink.PROCESSOR_PAYOUT
     detects = "Accepted revenue with no corresponding settled receipt."
+    requires = ("acceptedSnapshot", "payments",)
 
-    def evaluate(self, record: CommercialRecord) -> Finding:
+    def assess(self, record: CommercialRecord) -> Finding:
         snapshot = record.accepted_snapshot
         if not snapshot.present:
             return self.unverifiable(

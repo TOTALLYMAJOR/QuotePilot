@@ -10,7 +10,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from quotepilot_truthloop import cli
 from quotepilot_truthloop.contracts import AUTHORITY, Status
 from quotepilot_truthloop.engine import reconcile, reconcile_record
-from quotepilot_truthloop.loader import load_bundle
+from quotepilot_truthloop.loader import KNOWN_SECTIONS, load_bundle
 from quotepilot_truthloop.rules import RULES, rule_catalog
 from support import EXAMPLE_BUNDLE_PATH, clean_record_dict, example_bundle, record_from
 
@@ -42,15 +42,20 @@ class RuleSetTest(unittest.TestCase):
         }
         self.assertEqual({entry["ruleId"] for entry in rule_catalog()}, required)
 
-    def test_every_rule_runs_against_a_bare_record(self):
-        # A record with almost no evidence must still produce one finding per
-        # rule, never an exception and never a silent omission.
-        bare = {"organizationId": "org", "quoteId": "q"}
-        from quotepilot_truthloop.loader import load_record
-
-        result = reconcile_record(load_record(bare), INSTANT)
+    def test_every_rule_runs_against_a_record_with_no_evidence(self):
+        # Every section unavailable must still produce one finding per rule,
+        # never an exception and never a silent omission, and every one of them
+        # must carry a machine-readable reason.
+        record = record_from(
+            unavailable={section: "missing" for section in KNOWN_SECTIONS}
+        )
+        result = reconcile_record(record, INSTANT)
         self.assertEqual(len(result.findings), len(RULES))
         self.assertFalse(result.fully_reconciled)
+        self.assertEqual(len(result.unverifiable), len(RULES))
+        for finding in result.findings:
+            self.assertEqual(finding.reason_code.value, "evidence_missing", finding.rule_id)
+            self.assertTrue(finding.blocked_section, finding.rule_id)
 
 
 class ReconciliationStatusTest(unittest.TestCase):

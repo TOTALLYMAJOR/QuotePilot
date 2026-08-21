@@ -1,38 +1,50 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 12:20:00 CDT
+Last updated: 2026-08-21 13:10:00 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
 
-## P1 - Commercial Truth Loop Follow-Through
+## P1 - Commercial Truth Loop Evidence Supply Chain
 
-The read-only Python reconciler exists but has no data source. These items are
-what turn it from tested logic into operator value. Design and boundaries:
-`docs/COMMERCIAL_TRUTH_LOOP_ADR.md`, `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`.
+The evidence supply chain now exists end to end as
+`authoritative source → producer/exporter → canonical bundle → reconciler →
+verdict + reason` (`docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`). What remains is
+what stands between it and a real record reaching `fullyReconciled`.
 
-- Build the TypeScript evidence exporter that projects Firestore into
-  `truthloop-evidence-bundle-v1`. Tenant isolation and role checks stay in the
-  tier that already owns them; the exporter reads only, and a bundle must never
-  carry a secret, token, raw provider record, or customer-facing field.
-- Record processor payout settlement (gross, net, and payout reference) against
-  the existing payment ledger's provider references so payout reconciliation has
-  an input. Sequence this against the Stripe Connect stopping gate in
-  `docs/STRIPE_CONNECT_PROGRAM.md`.
-- Add an organization-declared processor fee schedule to settings, captured as
-  operator-declared evidence with actor and timestamp. The reconciler must never
-  infer this rate from history.
-- Capture post-event actual labor and purchasing consumption so overrun and
-  realized-contribution rules can run on real events.
+### Blocking a real record today
+
+- **Firestore reader.** The exporter projects already-read documents; nothing
+  reads them from Firestore yet. Build a tenant-scoped, role-checked read that
+  assembles quote, acceptance receipt, active version, change-request record,
+  and organization settings per record. Reads only; a bundle must never carry a
+  secret, token, raw provider record, or customer-facing field.
+- **Processor payout settlement (`integration`).** No settlement store exists
+  and the payout producer is inert behind the Connect stopping point in
+  `docs/STRIPE_CONNECT_PROGRAM.md`. Sequence a settlement store against that
+  gate; do not unblock the producer before it.
+- **Declared processor fee schedules (`business_policy`).** Add
+  `settings.processorFeeSchedule` (whole basis points, whole cents, declaring
+  actor, timestamp) to organization settings and a way for an owner to declare
+  it. The reconciler must never infer this rate.
+- **Post-event consumption capture (`engineering`).** No surface or schema
+  exists for actual labor and purchasing. Until one does, every delivered event
+  blocks the overrun and realized-contribution rules.
+
+### Then
+
 - Decide whether delivery/travel revenue enters the margin model, or record why
-  it stays outside it. Today `margin_category_omission` reports every record
+  it stays outside it. Today `margin_category_omission` fires on every record
   carrying travel revenue, which is correct but will be noisy at scale.
-- Bind the reconciliation report to a role-safe staff surface through
-  `docs/capability-surfacing-contracts.json` before any finding is shown in the
-  product. Until then the tier stays headless developer infrastructure.
 - Decide per-organization overrun tolerances rather than shipping the package
   defaults (10% and a $25.00 floor) as if they were policy.
+- Bind the reconciliation report and its reason codes to a role-safe staff
+  surface through `docs/capability-surfacing-contracts.json` before any finding
+  is shown in the product. Until then the tier stays headless developer
+  infrastructure.
+- Schedule and retain bundles so a finding stays reproducible, and decide the
+  retention boundary for provenance that names customer-facing fields.
 
 ## P0 - Production Acceptance
 

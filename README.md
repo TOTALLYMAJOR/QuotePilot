@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-21 12:20:00 CDT
+Last updated: 2026-08-21 13:10:00 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
 with a read-only Python reconciliation tier for commercial evidence.
@@ -738,6 +738,49 @@ classified headless security/operational/infrastructure work still requires
 tests and a safe outcome. A headless contract cannot own a callable export. The
 gate proves structural traceability, not semantic completeness, hosted/provider
 behavior, production promotion, visual acceptance, or human acceptance.
+
+## Commercial Evidence Export
+
+The Commercial Truth Loop reconciler consumes an evidence bundle rather than
+reading Firestore itself. `scripts/reconciliation-evidence-export.mjs` produces
+that bundle from already-read authoritative documents and reports what it could
+not produce.
+
+```bash
+npm run truthloop:export -- --source <sources.json> \
+  --evaluated-at 2026-08-21T14:00:00.000Z --out bundle.json
+npm run truthloop:coverage -- --source <sources.json> \
+  --evaluated-at 2026-08-21T14:00:00.000Z
+npm run truthloop:reconcile bundle.json
+```
+
+The exporter is read-only: it opens no write path, holds no credential, and
+reads no clock (`--evaluated-at` is required so the same source state always
+produces the same bytes, verified by a recorded `recordsDigestSha256`).
+
+Every evidence section carries provenance — source object, source field,
+revision, source schema version, observed timestamp, and exporter version —
+including sections carrying no value, because which source was consulted and
+came up empty is itself evidence. Absence is never collapsed into null: a
+section is classified `available`, `missing`, `not_applicable`,
+`not_yet_available`, `blocked_by_integration`, `contradictory`, or
+`schema_drift`, and only `available` and `not_applicable` let a rule reach a
+verdict. A source declaring an unknown schema version is refused rather than
+read with current-shape assumptions.
+
+`truthloop:coverage` reports, per rule, how much required evidence is producible
+today and classifies each blocker as `engineering`, `integration`, or
+`business_policy`. Three sections have no producer: processor payout settlement
+is blocked behind the Stripe Connect stopping point in
+`docs/STRIPE_CONNECT_PROGRAM.md`, no organization has declared a processor fee
+schedule, and no post-event consumption capture surface exists. Until those
+land, 8 of 11 rules can reach a verdict and no record can reach
+`fullyReconciled`.
+
+Passing these commands is local export and reconciliation-logic evidence only.
+The exporter has no Firestore reader, so it is not a production data path, an
+operator surface, hosted verification, provider evidence, a deployment, or human
+acceptance.
 
 ## Orchestration Lanes
 ```bash

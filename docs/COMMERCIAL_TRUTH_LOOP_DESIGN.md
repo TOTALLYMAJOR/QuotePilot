@@ -1,6 +1,6 @@
 # Commercial Truth Loop: Design
 
-Last updated: 2026-08-21 12:20:00 CDT
+Last updated: 2026-08-21 13:10:00 CDT
 
 Architecture decision and authority boundary: `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`.
 Implementation: `truthloop/`.
@@ -22,6 +22,75 @@ customer request
 
 Each link is a `ChainLink` value on every finding, so a report can be read in
 the order value actually moves rather than in rule-definition order.
+
+## Evidence supply chain
+
+```
+authoritative source → producer/exporter → canonical evidence bundle → reconciler → verdict + reason
+```
+
+| Stage | Owner | Guarantee |
+|---|---|---|
+| Authoritative source | existing TypeScript services | Firestore documents written by `proposalAcceptance.js`, `paymentLedger.js`, `pricingEngine.js`, and the quote/version writers |
+| Producer / exporter | `evidence/`, `scripts/reconciliation-evidence-export.mjs` | Read-only projection; provenance on every section; availability classified, never collapsed to null; unknown schemas refused |
+| Canonical bundle | `truthloop-evidence-bundle-v2` | Deterministic: sorted keys, sorted records, caller-supplied instant, `recordsDigestSha256` over the canonical records |
+| Reconciler | `truthloop/` | Gates on availability before assessing; unverifiable verdicts carry a machine-readable reason code |
+| Verdict + reason | `truthloop-reconciliation-v1` | `explained` / `discrepancy` / `unverifiable`, with `reasonCode`, `blockedSection`, and `blockedBy` |
+
+`docs/truthloop-evidence-contract.json` is the single shared definition. The
+exporter classifies availability and computes coverage from it; the reconciler
+proves its rule registry matches it. A rule changed on one side without the
+other fails `test_evidence_contract.py`.
+
+### Availability states
+
+| State | Meaning | Lets a rule reach a verdict |
+|---|---|---|
+| `available` | Exported with provenance | Yes |
+| `not_applicable` | Cannot apply at this lifecycle stage — nothing to check | Yes (a pass) |
+| `missing` | Should exist for this stage and does not | No |
+| `not_yet_available` | The record has not reached the stage that produces it | No |
+| `blocked_by_integration` | A named integration gate prevents production | No |
+| `contradictory` | Two authoritative sources disagree; both values carried | No |
+| `schema_drift` | The source declares a schema this exporter does not know | No |
+
+`not_applicable` and `missing` are the load-bearing pair. Consumption before an
+event has not happened is a pass; consumption after a delivered event is a
+blocked record. Collapsing both to null would make the two indistinguishable.
+
+### Reason codes
+
+Every unverifiable finding carries `reasonCode`, `blockedSection`, and, for
+integration blocks, `blockedBy`, so a future operator surface can group and
+route blocked records without parsing prose: `evidence_missing`,
+`evidence_not_yet_available`, `evidence_blocked_by_integration`,
+`evidence_contradictory`, `evidence_schema_drift`, `evidence_incomplete`.
+
+### Provenance
+
+Each section stamps `exporterVersion`, `sourceObject`, `sourceField`,
+`revision`, `sourceSchemaVersion`, and `observedAtISO`, plus per-field
+overrides where a value came from a different document than the section
+default. Two examples that matter:
+
+* The signed snapshot lives on the acceptance receipt while the quote holds
+  only a digest, so the exporter verifies the digest and reports disagreement
+  as `contradictory` rather than picking a winner.
+* Staffing counts are not carried on the signed snapshot, so they are read from
+  the quote and stamped with that derivation rather than claiming to be part of
+  the signed promise.
+
+### Producers
+
+| Section | Producer | Today |
+|---|---|---|
+| `payouts` | `payoutProducer.mjs` | `blocked_by_integration` (`stripe_connect_stopping_point`). It refuses any settlement source that does not declare itself authorized, so it cannot emit provider evidence by accident. |
+| `processorFeeSchedule` | `feeScheduleProducer.mjs` | `missing`, constraint `business_policy`. Reads an operator declaration with actor and timestamp; never derives a rate from observed payouts. |
+| `actualConsumption` | `consumptionProducer.mjs` | `not_applicable` before delivery, `missing` (constraint `engineering`) after. |
+
+A producer that throws becomes a `missing` envelope naming the failed producer.
+A producer failure is a data-supply fact, not a crash, and the record stays
+unverifiable.
 
 ## Rule catalog
 
@@ -187,13 +256,22 @@ Exit codes: `0` fully reconciled, `1` findings present, `2` bundle unreadable.
 
 ## Not yet built
 
-The reconciler has no data source. A TypeScript exporter that projects Firestore
-into `truthloop-evidence-bundle-v1` — owning tenant isolation and role checks in
-the tier that already owns them — is the next capability, tracked in
-`DEV_TASKS.md`. Until it ships, the loop runs on fixtures and its evidence is
-local test evidence only.
+The exporter has **no Firestore reader**. It projects already-read documents, so
+a caller must assemble them. Building that tenant-scoped, role-checked read is
+the next capability, tracked in `DEV_TASKS.md`. Until it ships, the loop runs on
+exporter-generated fixtures and its evidence is local test evidence only.
 
-The following inputs have no producer yet and will report `unverifiable` on real
-data until one exists: `payouts` (processor settlement), `processorFeeSchedule`
-(organization-declared), and `actualConsumption` (post-event labor and
-purchasing).
+Three evidence sections have no producer, and the coverage report names each
+blocker by class:
+
+| Section | Constraint | Why |
+|---|---|---|
+| `payouts` | `integration` | No settlement store exists; the Connect program stops after hosted Sandbox UAT |
+| `processorFeeSchedule` | `business_policy` | The settings field does not exist and no organization has declared a schedule |
+| `actualConsumption` | `engineering` | No post-event labor or purchasing capture surface or schema exists |
+
+Because every rule must reach a verdict for a record to be `fullyReconciled`,
+and `processor_fee_discrepancy` requires both blocked payout evidence and an
+undeclared fee schedule, **no record can reach `fullyReconciled` today**. The
+coverage report states this rather than leaving it to be inferred from a low
+percentage.
