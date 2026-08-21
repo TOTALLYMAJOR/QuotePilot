@@ -735,10 +735,22 @@ route evidence are complete.
     deployment until the isolated staging resources, trusted authority
     publisher, App Check enforcement/consumption, exact runtime identities, and
     hosted negative/replay evidence are separately reviewed.
-15. Steward remains a proposed, unimplemented program. Do not add provider,
-    billing, storage, callable, or user-facing authority until the owner answers
-    the three threat-context questions and accepts or revises the PRD, ADR, and
-    threat model. Planning documents are not implementation or launch evidence.
+15. The owner reviewed and accepted the Steward PRD, ADR, UI specification,
+    technical design, threat model, and work plan for implementation planning.
+    The approved context excludes sensitive personal information from provider
+    packets, limits the pilot to the US, requires admin checkpoints for
+    discounts/custom menu items/policy text, and permits sales staff to stage
+    response drafts without send authority. The owner then expanded the
+    planning scope to menu/workflow configuration, credential-blind provider
+    readiness, deterministic margin monitoring, and tenant-owned client advice
+    from source-labeled reviewed memory. Steward now has a deploy-dormant pure
+    validation foundation only: fixed task/request/source contracts,
+    tenant/revision fences, US/role/content policy, deterministic commercial
+    provenance, safe-text validation, and expiring tamper-evident packets pass
+    20 focused adversarial tests. Nothing imports or exports these modules, and
+    private rules, provider/runtime integration, billing, deployment,
+    production, background-model, customer contact, and autonomous authority
+    remain absent.
 16. Production-only dependency audits are clean for the root app, default
     Functions, and Connect Functions. The full root audit retains six high-
     severity development-tool findings through Lighthouse CI's current
@@ -775,8 +787,14 @@ route evidence are complete.
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
-10. Review the Steward threat-context questions and proposed governance pack;
-    keep runtime implementation blocked until those owner decisions are recorded.
+10. Finish Steward Phase 0 with private-record browser denial, retention and
+    redaction fixtures, kill/rollback contracts, incident runbooks, and the
+    remaining security lanes. Then separately scope the read-only Difficult
+    Question Desk shadow slice as the first vertical proof. Sequence expanded
+    setup/workflow, provider-readiness, margin, and client-memory tasks only
+    after their pure privacy, memory, no-secret, and adversarial contracts pass;
+    keep provider, billing, deployment, production, and autonomous authority
+    outside that authorization.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

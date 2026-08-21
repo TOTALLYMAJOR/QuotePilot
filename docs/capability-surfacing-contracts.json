@@ -1,7 +1,57 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 50,
+  "catalogVersion": 51,
   "contracts": [
+    {
+      "id": "steward-private-validation-foundation",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "security_private",
+      "audiences": [
+        "internal_security",
+        "steward_implementers"
+      ],
+      "summary": "Deploy-dormant pure Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content, deterministic commercial provenance, and expiring tamper-evident Decision Packets before any provider or runtime integration exists.",
+      "backendPaths": [
+        "src/lib/steward/contracts.cjs",
+        "src/lib/steward/policy.cjs",
+        "src/lib/steward/validate.cjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/stewardContracts.server.test.js",
+        "src/lib/__tests__/stewardPolicy.server.test.js",
+        "src/lib/__tests__/stewardDecisionPacket.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/stewardContracts.server.test.js",
+          "locator": "accepts only same-tenant, current, revision-fenced source handles"
+        },
+        {
+          "path": "src/lib/__tests__/stewardPolicy.server.test.js",
+          "locator": "blocks secret-shaped input before inference"
+        },
+        {
+          "path": "src/lib/__tests__/stewardDecisionPacket.server.test.js",
+          "locator": "detects packet tampering, authority drift, and expiry"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Private Steward validation foundation"
+        }
+      ],
+      "headlessReason": "These pure server-side modules must remain unexported and undiscoverable because they are security validators, not a user capability. No runtime imports them, and they expose no callable, frontend path, provider request, Firestore access, persistence, pricing calculation, payment operation, configuration action, or customer contact.",
+      "safeOutcome": "Future Steward slices have a tested fail-closed base for exact task and source contracts, US-only and role policy, secret and sensitive-data rejection, deterministic commercial evidence, safe plain text, and revision-bound expiring packet integrity, while current users and production behavior remain unchanged."
+    },
     {
       "id": "firebase-email-action-return-policy",
       "reviewRevision": 1,

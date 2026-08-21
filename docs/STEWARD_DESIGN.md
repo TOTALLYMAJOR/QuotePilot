@@ -1,8 +1,8 @@
 # Technical Design: QuotePilot Steward
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-25 00:38:30 CDT
 
-Status: Proposed; no runtime capability is claimed
+Status: Phase 0 private validation foundation implemented in source; no runtime capability is claimed
 Date: August 15, 2026
 PRD: `docs/STEWARD_PRD.md`
 ADR: `docs/STEWARD_ADR.md`
@@ -26,7 +26,25 @@ largest_risks:
   - stale packet replay
   - billing entitlement spoof
   - sensitive data retention or logging
+  - stale or prohibited client memory
+  - secret exposure or provider-authority confusion
+  - model-originated margin or workflow truth
 ```
+
+## Source checkpoint: private validation foundation
+
+The first Phase 0 code slice now exists in `src/lib/steward/contracts.cjs`,
+`src/lib/steward/policy.cjs`, and `src/lib/steward/validate.cjs`. These
+server-oriented CommonJS modules are pure, unimported by runtime code, and
+unexported. They fix task/request/source shapes, same-tenant and
+revision fences, US-only/role/content policy, secret and sensitive-data blocks,
+deterministic commercial-number provenance, safe plain-text output, canonical
+serialization, and 15-minute authority-bound packet integrity. The three
+focused suites contain 20 passing adversarial tests.
+
+This checkpoint does not add context reads, private storage/rules, provider or
+billing adapters, a callable, a frontend, a runtime gate, pricing authority,
+configuration authority, customer contact, deployment, or production evidence.
 
 ## Existing codebase analysis
 
@@ -41,6 +59,10 @@ largest_risks:
 | `CreateIntake.jsx` | Reviewable intent intake | Preserve as the non-provider availability floor and possible Quote Partner entry |
 | Catalog import callables in `functions/index.js` and `functions/catalogImportBatches.js` | Admin-gated import, conflict, receipt, and rollback authority | Setup Studio outputs candidate import rows only; existing callable performs the write |
 | Commercial Change Authority modules/callables | Exact-revision simulate, authorize, apply, invalidate, and reconcile | Reuse simulation and stale receipt patterns for committed quotes; Steward never authorizes or applies |
+| `src/components/marginPresentation.js` and bounded Pilot scenario helpers | Deterministic recorded-cost coverage, target comparison, and draft-only scenario review | Only source for Steward margin state and numerics; incomplete coverage stays unavailable |
+| `src/components/CreateIntake.jsx`, event-shape memory, and `src/lib/customerRebookingRadar.js` | Tenant-scoped booked-event patterns and exact accepted-version rebooking evidence | Reuse source/freshness patterns; do not treat aggregate history as a personal preference or hidden client profile |
+| Revenue Autopilot policy/client modules and Workflow surfaces | Versioned reminder policy, attention, customer controls, and explicit mutation paths | Steward may prepare a policy diff; existing admin callables and receipts remain the only write authority |
+| `src/components/IntegrationOpsModal.jsx` and `functions-connect/interfaceContracts.js` | Non-secret provider readiness, explicit missing fields, connection/routing separation, and owner/admin gates | Steward may explain bounded status and safe handoffs; no secret input, provider object, routing, or gate mutation |
 | `docs/capability-surfacing-contracts.json` | Backend-to-role-safe-surface traceability | Every new callable and state must be registered before delivery |
 | Firestore rules suite | Browser isolation and tenant safety | New private collections must be explicitly denied and tested |
 
@@ -59,6 +81,12 @@ The design was grounded in these repository sources on August 15, 2026:
   Commercial Change exports
 - `src/lib/intentParseClient.js`
 - `src/lib/quoteStore.js` write/version entry points
+- `src/components/marginPresentation.js`
+- `src/components/CreateIntake.jsx`
+- `src/lib/customerRebookingRadar.js`
+- `src/lib/revenueAutopilotClient.js`
+- `src/components/IntegrationOpsModal.jsx`
+- `functions-connect/interfaceContracts.js`
 - `docs/capability-surfacing-contracts.json`
 
 This is design evidence, not proof that a future implementation satisfies the
@@ -83,7 +111,7 @@ flowchart TB
     Audit[Usage and audit receipts]
   end
   subgraph Stores[Server-owned data]
-    Canon[Canonical quote, catalog, policy]
+    Canon[Canonical quote, catalog, workflow, provider readiness, client activity, policy]
     Private[Private run, packet, usage, entitlement records]
   end
   subgraph External[External services]
@@ -114,16 +142,18 @@ The exact paths are implementation targets, not current files.
 
 | Module | Responsibility |
 |---|---|
-| `functions/steward/contracts.js` | Task, packet, refusal, source, and audit schemas; canonical serialization |
-| `functions/steward/policy.js` | Role/task policy, sensitive-claim taxonomy, deny/confirm/admin outcomes |
+| `src/lib/steward/contracts.cjs` | Deploy-dormant pure task, packet, and source schemas plus canonical serialization; a later runtime slice must deliberately integrate or twin it |
+| `src/lib/steward/policy.cjs` | Deploy-dormant pure role/task policy, sensitive-claim taxonomy, and deny/admin-review outcomes |
 | `functions/steward/context.js` | Exact same-tenant canonical reads and data minimization |
 | `functions/steward/provider.js` | Pinned provider/model adapter, timeout, token cap, `store: false`, no tools |
-| `functions/steward/validate.js` | Strict schema plus semantic, source, content, and safety validation |
+| `src/lib/steward/validate.cjs` | Deploy-dormant strict schema plus semantic, source, content, and safety validation |
 | `functions/steward/consequences.js` | Existing pricing, Commercial Change, staffing, and artifact adapters |
 | `functions/steward/packets.js` | Immutable packet digest, revision/expiry fence, bounded DTO |
 | `functions/steward/usage.js` | Reservation, completion, failure release, allowance, concurrency, hard caps |
 | `functions/steward/entitlements.js` | Signed billing lifecycle to tenant entitlement projection |
 | `functions/steward/audit.js` | Redacted metadata receipts and retention enforcement |
+| `functions/steward/configuration.js` | Typed workflow/provider-readiness plans and existing-authority handoffs; no secret or apply path |
+| `functions/steward/clientMemory.js` | Exact tenant/client memory sources, freshness, review, correction/expiry, and prohibited-trait filtering |
 | `src/lib/stewardClient.js` | Exact request identity, unresolved request continuity, typed errors |
 | `src/components/steward/*` | Workbench, packet, source, consequence, gate, usage, and setup UI |
 
@@ -137,13 +167,16 @@ The exact paths are implementation targets, not current files.
 | `prepareStewardDecisionPacket` | Same-tenant entitled staff | Private reservation + packet/audit write | Run one fixed task and return bounded packet DTO |
 | `getStewardDecisionPacket` | Original actor or permitted same-tenant role | Read | Reload a non-expired bounded packet |
 | `recordStewardPacketDisposition` | Same-tenant staff | Append-only metadata | Record discard, revise, stage, correction, and reason without quote mutation |
+| `getStewardClientMemory` | Same-tenant staff already authorized for the exact client | Read | Return a bounded source/freshness projection with prohibited and disputed facts removed |
+| `reviewStewardClientMemory` | Same-tenant admin with recent authority confirmation | Versioned private mutation | Confirm, correct, dispute, expire, or delete an operator-authored memory fact; never create model-inferred truth |
 | `configureStewardPolicy` | Same-tenant admin with recent authority confirmation | Versioned private mutation | Set allowed tasks, sources, caps, retention, and kill switch |
 | `createStewardSubscriptionCheckout` | Same-tenant owner/admin | External session creation + private request receipt | Create a Stripe Billing Checkout Session for the fixed Steward Price |
 | `reconcileStewardSubscription` | Same-tenant owner/admin | Private reconciliation | Resolve ambiguous checkout/subscription state without trusting browser return |
 | `stewardStripeWebhook` | Signed Stripe event only | Private entitlement transition | Materialize subscription authority from allowlisted events |
 
 There is intentionally no `applyStewardPacket`, `sendStewardResponse`,
-`approveStewardQuote`, or generic `runStewardTool` export.
+`approveStewardQuote`, `configureStripe`, `applyWorkflowConfiguration`,
+`autoRepriceForMargin`, or generic `runStewardTool` export.
 
 ## Decision Packet v1
 
@@ -172,7 +205,10 @@ There is intentionally no `applyStewardPacket`, `sendStewardResponse`,
     "staffing": {},
     "production": {},
     "menuSafety": {},
-    "customerCommitment": {}
+    "customerCommitment": {},
+    "workflowConfiguration": {},
+    "providerReadiness": {},
+    "clientContext": {}
   },
   "responseDraft": null,
   "risks": [],
@@ -194,6 +230,11 @@ There is intentionally no `applyStewardPacket`, `sendStewardResponse`,
 | `customer_or_operator_excerpt` | Server context builder | Bounded excerpt and digest from supplied input |
 | `pricing_authority` | Consequence adapter | Exact request/result digest and settings/catalog revision |
 | `commercial_change_receipt` | Existing CCA adapter | Existing receipt validation |
+| `margin_authority` | Existing margin/pricing adapters | Exact cost coverage, request/result digest, catalog/settings revision |
+| `workflow_policy` | Existing role-safe policy projection | Exact tenant, policy version, gate and field allowlist |
+| `integration_readiness` | Existing Integration Ops/Connect status projection | Non-secret fields only, observation time, evidence class, role-safe route |
+| `recorded_client_activity` | Server context builder | Exact tenant/client/event identity, canonical receipt/state, observation time |
+| `client_memory_fact` | Authorized memory callable | Exact tenant/client binding, source, actor, review state, freshness, expiry; prohibited traits rejected |
 | `deterministic_rule` | Versioned code adapter | Rule ID and implementation version |
 | `model_suggestion_unverified` | Provider output | Never upgraded without a deterministic adapter or human-entered draft status |
 
@@ -235,6 +276,44 @@ The model returns discovery questions, option framing, negotiation boundaries,
 and risks. It cannot return executable proposed changes. Any later quote work
 starts a separate `prepare_quote` packet with its own context and authority.
 
+### `configure_workflow`
+
+The server loads an allowlisted same-tenant workflow policy projection and the
+operator's approved goal. The model may organize a typed proposed diff, but code
+rejects unknown fields, gate promotion, role mutation, scheduling side effects,
+customer-control changes outside the actor's authority, and stale policy
+versions. The packet exits only to the existing administrator editor, where
+the user reviews and applies through its normal confirmation and receipt path.
+
+### `guide_provider_setup`
+
+The server loads only bounded non-secret readiness from Integration Ops or a
+reviewed provider-status adapter. The model may explain missing prerequisites,
+evidence boundaries, test-mode sequence, rollback, and the next role-safe
+handoff. Secret-shaped input is rejected before inference. No provider API,
+cloud tool, deployment command, Account Link, charge, refund, payout, webhook,
+secret binding, runtime gate, or routing mutation is available.
+
+### `review_margin`
+
+Deterministic code selects the exact quote or bounded portfolio slice, verifies
+recorded-cost coverage, and computes current margin/target state before the
+model receives any result. The model may explain verified gaps and tradeoffs.
+Scenario numerics come only from existing pricing or Commercial Change
+simulation and exit through the existing draft-review contract; incomplete or
+stale cost evidence yields no estimate.
+
+### `advise_client`
+
+The server builds one exact-client brief from same-tenant canonical records,
+accepted/booked history, separately evidenced interaction states, explicit
+preferences, and reviewed memory facts. It excludes raw messages unless the
+bounded response task needs an exact excerpt, and always excludes prohibited
+sensitive/protected traits, disputed/stale facts, sentiment, personality,
+vulnerability, perceived wealth, and willingness-to-pay inference. Advice is a
+new expiring packet and cannot contact the client, change price, or persist a
+new memory fact.
+
 ## Authority matrix
 
 | Capability | Model | Sales/staff | Admin/owner | Existing QuotePilot authority |
@@ -247,6 +326,11 @@ starts a separate `prepare_quote` packet with its own context and authority.
 | Approve Commercial Change | No | Request only where already allowed | Existing admin permission | CCA receipt protocol |
 | Send customer message/proposal | No | Existing permission and explicit action | Existing permission and explicit action | Existing delivery/messaging path |
 | Purchase/configure Steward | No | No | Owner/admin as defined | Billing and policy callables |
+| Explain workflow/provider readiness | Propose from bounded DTO | Review when authorized | Request/review | Existing settings, Integration Ops, Connect, provider-hosted, and release paths |
+| Apply workflow or provider configuration | No | No | Existing permission only | Existing versioned settings/provider/release authority |
+| Monitor or calculate margin | Explain verified result only | Review | Review | Existing deterministic margin/pricing/CCA adapters |
+| Read governed client memory | No direct read | Exact-client bounded projection when role permits | Exact-client bounded projection | Server context and memory callables |
+| Confirm/correct/delete client memory | No | No | Existing/new admin callable only | Versioned memory review receipt |
 
 ## Data flow
 
@@ -345,6 +429,11 @@ Always block unsupported claims about:
   fields with labels or opaque handles.
 - Default to no audio, images, files, web search, background mode, conversation
   state, vector store, or provider tools.
+- Never send provider credentials, raw integration configuration, bank/payment
+  data, protected traits, prohibited sensitive categories, disputed memory, or
+  raw relationship history to the model.
+- Build client context per request from canonical sources; provider
+  conversation state is not client memory and cannot persist across tasks.
 - Set provider storage off for each request. For OpenAI Responses, use
   `store: false`; this does not remove default abuse-monitoring retention unless
   the exact project has separately approved and verified data controls.
@@ -406,6 +495,7 @@ Conceptual private records:
 | Audit receipt | Metadata, hashes, model/prompt/policy/schema versions, outcome | Callable-only; bounded admin projection | Proposed 13 months |
 | Usage bucket | Reserved/completed/released counts by organization/period | Callable-only; bounded admin projection | Billing/audit policy |
 | Entitlement receipt | Provider event identity, transition, organization binding, evidence digest | Callable-only; bounded admin projection | Billing/audit policy |
+| Client memory fact | Exact tenant/client, allowlisted fact type/value, canonical source handle, actor, review state, freshness, expiry, correction chain | Callable-only; bounded exact-client staff DTO; admin review mutation | Shortest approved business need; explicit expiry/deletion and tenant cleanup |
 
 Exact Firestore collection paths must follow current tenant and capability
 governance during implementation. Browser reads and writes are denied even when
@@ -435,6 +525,10 @@ a user guesses an opaque ID.
 | Drift after packet ready | Staging preflight fails | Exact stale notice and regeneration |
 | Ambiguous billing return | No entitlement change | Reconcile signed provider state |
 | Webhook replay/out-of-order event | Idempotent ordered transition | No duplicate entitlement or usage |
+| Secret or prohibited client input | Reject before provider use; no retained packet | Remove the blocked content and continue through the safe setup/manual path |
+| Stale/disputed memory | Exclude from context and packet | Show source review or correction path; do not substitute another fact/client |
+| Incomplete margin coverage | No model-originated estimate | Name exact missing costs and route to the existing admin data-entry path |
+| Provider readiness unavailable/stale | No completion claim or provider action | Refresh existing status or follow the role-safe operator checklist |
 
 ## Logging, analytics, and monitoring
 
@@ -451,6 +545,8 @@ Allowed structured events include:
 - `steward_packet_corrected`
 - `steward_policy_refusal`
 - `steward_entitlement_transition`
+- `steward_memory_reviewed`
+- `steward_configuration_plan_prepared`
 
 Never include brief text, customer message bodies, menu descriptions, response
 drafts, emails, phone numbers, addresses, payment details, secrets, or full
@@ -461,6 +557,10 @@ Alert on cross-scope denial spikes, validation failure rate, repeated request
 IDs, quota anomalies, provider cost, latency, unsafe-claim blocks, webhook
 signature failures, entitlement drift, packet staging after drift, and any raw
 content detector hit in logs.
+
+Client-memory analytics may record only fact type, review outcome, freshness
+bucket, and opaque digest. They exclude the fact value, client identity, raw
+activity, protected/sensitive category, and advice text.
 
 ## Evaluation strategy
 
@@ -482,6 +582,14 @@ includes:
   and manipulative tactics; and
 - billing replay, out-of-order events, canceled/past-due state, and browser
   success spoofing.
+- secret-shaped Stripe/provider input and requests to create, rotate, enable,
+  charge, refund, pay out, or deploy;
+- stale, disputed, cross-client, approximate-identity, protected-trait,
+  sentiment, vulnerability, wealth, or willingness-to-pay memory;
+- incomplete cost coverage, fabricated margin, discriminatory pricing, and
+  automatic reprice requests; and
+- scheduled/background model invocation without a current bounded operator
+  request.
 
 Promotion thresholds:
 
@@ -509,6 +617,9 @@ Indirect Impact:
   - quote-builder local draft staging
   - catalog import candidate preparation
   - Commercial Change simulation use
+  - workflow policy and Integration Ops readiness reads
+  - deterministic margin presentation and scenario review
+  - exact-client history, rebooking evidence, and governed memory review
   - support, billing, analytics, and evaluation operations
 No Ripple Effect:
   - customer portal authority
@@ -530,6 +641,10 @@ No Ripple Effect:
 | Commercial Change simulation | Steward consequence adapter | No | Existing receipt/DTO validation and no authorization/apply |
 | Catalog import preview | Setup candidate adapter | Yes | Convert validated packet rows to existing preview input only |
 | Existing Stripe payment rails | New Steward subscription rail | No | Strictly separate products, keys, customer binding, webhooks, and state |
+| Revenue Autopilot/Workflow policy editors | Steward workflow configuration packet | No | Read current version, prepare typed diff, hand off to existing editor; no apply callable |
+| Integration Ops/Connect status | Steward provider setup packet | No | Consume bounded non-secret DTO and preserve exact role/provider handoff |
+| Margin presentation and Pilot scenarios | Steward margin packet | No | Reuse complete recorded-cost state and deterministic scenario adapters only |
+| Clients/rebooking/event-shape history | Steward client context and reviewed memory | Yes | Exact client/tenant/source/freshness contract; no hidden profile or cross-tenant aggregation |
 
 ## Field propagation map
 
@@ -542,6 +657,9 @@ No Ripple Effect:
 | Verified pricing | Pricing authority | Internal server | Packet builder | Model cannot override or supply fallback |
 | Packet digest/revisions/expiry | Packet builder | Callable DTO | UI staging preflight | Exact match required |
 | Subscription state | Signed Stripe event | Webhook | Entitlement projection | Browser return is non-authoritative |
+| Workflow/provider readiness | Existing bounded server projection | Context builder | Configuration packet | Non-secret allowlist; observation time and evidence class required |
+| Margin evidence | Existing deterministic adapters | Internal server | Packet builder | Complete current cost coverage or unavailable; no model fallback |
+| Client memory fact | Canonical source plus reviewed memory receipt | Context builder | Client-advice packet | Exact tenant/client/source/freshness; disputed, stale, sensitive, and protected facts excluded |
 
 ## Required implementation order
 
@@ -552,11 +670,16 @@ No Ripple Effect:
    redacted audit.
 4. Add deterministic consequence adapters and `prepare_quote` shadow mode.
 5. Add packet review UI and current-revision staging for new quote drafts.
-6. Add Setup Studio through existing catalog import preview.
-7. Add separate subscription/entitlement rail and admin controls.
-8. Run one-tenant internal acceptance, then three-tenant consenting pilot with
+6. Add Setup Studio and typed workflow configuration through existing guarded
+   previews/editors.
+7. Add deterministic Margin Advisor, then exact-client advisory context and
+   governed memory review/delete controls.
+8. Add credential-blind provider-readiness guidance through existing
+   Integration Ops/Connect status and role-safe handoffs.
+9. Add separate subscription/entitlement rail and admin controls.
+10. Run one-tenant internal acceptance, then three-tenant consenting pilot with
    kill switches and no autonomous actions.
-9. Update canonical capability/docs and consider production promotion only
+11. Update canonical capability/docs and consider production promotion only
    after every evidence gate passes.
 
 ## Verification strategy
@@ -586,9 +709,13 @@ and revise the architecture rather than adding exceptions.
   and ambiguity tests.
 - Firestore emulator denial for every private collection and foreign tenant.
 - Pricing and Commercial Change adapter parity tests.
+- Deterministic margin completeness/target/scenario tests; workflow/provider
+  readiness allowlist and no-secret tests; exact-client memory source,
+  freshness, correction/deletion, and prohibited-inference tests.
 - React component tests for every required state and capability marker.
-- Browser E2E for setup, quote, response, strategy, stale, refusal, outage,
-  subscription, cancellation, keyboard, and narrow viewport paths.
+- Browser E2E for setup, workflow, provider guidance, margin, client memory,
+  quote, response, strategy, stale, refusal, outage, subscription,
+  cancellation, keyboard, and narrow viewport paths.
 - Provider sandbox/real API contract verification without production data.
 - Stripe test-mode signed webhook and reconciliation matrix.
 - Secret scan, dependency audit, environment check, capability-surface gate,

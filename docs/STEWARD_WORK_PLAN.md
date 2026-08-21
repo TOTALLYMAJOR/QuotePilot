@@ -1,8 +1,8 @@
 # Work Plan: QuotePilot Steward
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-25 00:38:30 CDT
 
-Status: Proposed; execution requires PRD/ADR/threat-context approval
+Status: Phase 0 private validation foundation implemented; remaining execution stays separately scoped
 Created: August 15, 2026
 Type: High-risk full-stack feature
 Approach: Security foundation followed by vertical slices
@@ -18,9 +18,10 @@ Approach: Security foundation followed by vertical slices
 
 ## Objective
 
-Deliver a paid, useful second hand for menu setup, quote preparation, difficult
-questions, and strategy without creating a second pricing, catalog, quote,
-messaging, payment, or customer authority.
+Deliver a paid, useful second hand for menu/workflow setup, provider readiness,
+quote preparation, margin protection, client advice, difficult questions, and
+strategy without creating a second pricing, catalog, configuration, quote,
+messaging, payment, provider, or customer authority.
 
 ## Planned test skeletons
 
@@ -30,20 +31,28 @@ messaging, payment, or customer authority.
 - `src/lib/__tests__/stewardDecisionPacket.server.test.js`
 - `src/lib/__tests__/stewardUsage.server.test.js`
 - `src/lib/__tests__/stewardEntitlement.server.test.js`
+- `src/lib/__tests__/stewardConfiguration.server.test.js`
+- `src/lib/__tests__/stewardMargin.server.test.js`
+- `src/lib/__tests__/stewardClientMemory.server.test.js`
 - `src/lib/__tests__/stewardClient.test.js`
 - `src/components/__tests__/stewardWorkspace.test.jsx`
 - `src/components/__tests__/stewardDecisionPacket.test.jsx`
 - `src/components/__tests__/stewardSetupStudio.test.jsx`
+- `src/components/__tests__/stewardConfigurationReadiness.test.jsx`
+- `src/components/__tests__/stewardClientAdvisor.test.jsx`
+- `src/components/__tests__/stewardMarginAdvisor.test.jsx`
 - `src/rules/__tests__/firestore.rules.test.js`
 - `e2e/steward-governance.smoke.spec.js`
 
 ## Phase 0: Agreement and security foundation
 
-- [ ] Confirm the three threat-model context questions.
-- [ ] Accept or revise PRD and ADR.
-- [ ] Define sensitive-claim, prohibited-tactic, role, retention, and provider
-  policies as versioned contracts.
-- [ ] Build packet/source canonicalization and validators with no provider.
+- [x] Confirm the three threat-model context questions.
+- [x] Accept the PRD, ADR, UI specification, technical design, threat model,
+  and work plan for implementation planning.
+- [ ] Finish the versioned policy set. Sensitive-claim, prohibited-tactic,
+  role, US-pilot, no-secret, and provider-action policies now exist; retention,
+  redaction, deletion, and kill/rollback policy remain open.
+- [x] Build packet/source canonicalization and validators with no provider.
 - [ ] Build the adversarial eval corpus and redacted fixture policy.
 - [ ] Add private record rules and browser-denial tests before exports exist.
 - [ ] Define incident, provider kill, organization kill, model rollback, and
@@ -69,7 +78,7 @@ and packet tampering with 100% expected negative-test coverage.
 Completion gate: No unauthorized source or sensitive unsupported claim passes;
 manual communication remains fully available during provider outage.
 
-## Phase 2: Quote Partner and Decision Packet
+## Phase 2: Quote Partner, Margin Advisor, and Decision Packet
 
 - [ ] Add `prepare_quote` candidates restricted to approved catalog IDs and
   bounded quantities.
@@ -80,11 +89,16 @@ manual communication remains fully available during provider outage.
 - [ ] Enable exact-current-revision local staging behind an independent tenant
   gate after shadow acceptance.
 - [ ] Add stage diff, discard, correction, expiry, and stale regeneration.
+- [ ] Reuse the deterministic recorded-cost margin presentation and bounded
+  Pilot scenario contracts; do not introduce model calculations or estimates.
+- [ ] Add read-only exact-quote and bounded portfolio margin attention with
+  complete, below-target, missing-coverage, stale, and unavailable states.
 
 Completion gate: 100% of displayed commercial numerics originate from trusted
-adapters; packet staging performs no persistence and fails on any drift.
+adapters; missing cost coverage produces no estimate; packet staging performs
+no persistence and fails on any drift.
 
-## Phase 3: Setup Studio
+## Phase 3: Setup and Configuration Studio
 
 - [ ] Accept text and CSV only with bounded parsing and formula neutralization.
 - [ ] Propose menu normalization and duplicate candidates.
@@ -92,13 +106,32 @@ adapters; packet staging performs no persistence and fails on any drift.
 - [ ] Convert reviewed candidates into the existing catalog import preview.
 - [ ] Preserve existing admin, conflict, receipt, confirmation, and rollback
   behavior.
+- [ ] Add `configure_workflow` against allowlisted current Revenue Autopilot,
+  Workflow, and other reviewed policy projections; prepare a typed diff only.
+- [ ] Add `guide_provider_setup` against bounded non-secret Integration Ops and
+  Stripe Connect readiness; reject secret-shaped input before provider use.
+- [ ] Route each proposed configuration to one existing role-safe editor or
+  provider-hosted surface with current state, missing evidence, consequence,
+  do-nothing outcome, required role, and no completion claim.
 
 Completion gate: Steward cannot directly create, overwrite, confirm, or roll
-back catalog records; every import remains attributable to the existing admin
-path.
+back catalog records, change a workflow/gate, receive a credential, create a
+provider object, or alter routing; every mutation remains attributable to its
+existing authority and receipt path.
 
-## Phase 4: Strategy Table
+## Phase 4: Client Advisor, governed memory, and Strategy Table
 
+- [ ] Build one exact-client context from same-tenant canonical records,
+  accepted/booked history, separately evidenced interaction states, explicit
+  preferences, and operator-reviewed memory facts.
+- [ ] Add memory source, freshness, review, dispute, correction, expiry,
+  deletion, and tenant-cleanup contracts before any provider-backed client
+  advice.
+- [ ] Reject sensitive/protected traits, raw relationship history, sentiment,
+  personality, vulnerability, wealth, willingness-to-pay, approximate client
+  identity, and cross-tenant patterns.
+- [ ] Keep client advice inside an expiring packet with no contact, pricing,
+  send, or implicit memory write.
 - [ ] Add discovery, option framing, objection planning, and negotiation
   boundary output with no executable proposed changes.
 - [ ] Add explicit transition to a new Quote Partner packet when an operator
@@ -106,8 +139,10 @@ path.
 - [ ] Test discrimination, deception, fabricated scarcity, and unsupported
   competitor claims.
 
-Completion gate: Strategy output remains advisory and cannot inherit stale
-context or bypass a new quote packet's verification.
+Completion gate: Every client-memory fact is exact-client, source-labeled,
+fresh, reviewable, and deletable; sensitive/protected and disputed facts are
+absent; strategy output remains advisory and cannot inherit stale context or
+bypass a new quote packet's verification.
 
 ## Phase 5: Paid entitlement and controls
 
@@ -172,6 +207,10 @@ critical/high unresolved findings and a tested rollback/kill receipt.
 | Missing ordering/event replay | Yes | 5 |
 | Duplicate/ambiguous request | Yes | 0, 1, 2, 5 |
 | Cross-tenant resource | Yes | Every backend phase |
+| Secret-shaped provider input | Yes | 0, 3, 6 |
+| Stale/disputed client memory | Yes | 0, 4, 6 |
+| Incomplete margin evidence | Yes | 0, 2, 6 |
+| Background model invocation | Yes | 0, 2, 3, 4, 6 |
 
 ## Stop conditions
 

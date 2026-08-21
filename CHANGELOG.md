@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-23 20:57:00 CDT
+Last updated: 2026-08-25 00:38:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -140,6 +140,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   quote, so staff can reach the read-only workspace and its Activity & Save
   Health drawer without typing an address. Organization scope and quote
   mutation authority remain unchanged.
+- Added the deploy-dormant private validation foundation for QuotePilot
+  Steward. Pure server-side modules now enforce fixed tasks, exact request and
+  source shapes, same-tenant and revision fences, US-only and role policy,
+  secret/sensitive/prohibited-content blocks, deterministic evidence for
+  commercial numerics, safe plain text, canonical packet digests, and
+  15-minute authority-bound expiry. Twenty focused adversarial tests pass.
+  Nothing imports or exports the modules yet; there is no callable, provider
+  request, Firestore access, persistence, pricing calculation, payment,
+  configuration, customer contact, deployment, or production capability.
 - Added a deterministic task orchestration planner that maps bounded work and
   explicit paths to a runner model tier, reasoning effort, dependency reads,
   canonical documentation obligations, ordered validations, and a task graph.
