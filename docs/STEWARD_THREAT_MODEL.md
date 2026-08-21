@@ -156,6 +156,24 @@ would have a larger blast radius than application controls can eliminate.
   reconciliation.
 - Provider failure never removes the manual/deterministic quoting path.
 
+## Phase 0 source-control evidence
+
+The deploy-dormant source foundation now rejects prompt override, resource
+discovery/exfiltration, secret-shaped input, sensitive personal data,
+protected-trait sales tactics, willingness-to-pay manipulation, and direct
+provider or customer actions using a synthetic redacted adversarial corpus.
+It produces only allowlisted HMAC-pseudonymous audit metadata, defines bounded
+retention without any raw-prompt/raw-response category, requires reviewed
+expiry for client-memory facts, and creates non-executing deletion plans that
+accept a precomputed actor digest rather than a raw user identifier.
+
+Global, provider, organization, task, incident, and pinned-model gates fail
+closed. Releasing a hold requires admin/owner authority and a recovery-evidence
+digest. Nine future Steward private collections explicitly deny every browser
+operation; the Firestore emulator proves signed-out, same-tenant customer,
+sales, admin, and cross-tenant denial. These controls are not imported or
+exported and therefore are source evidence, not deployed enforcement.
+
 ## Residual risks
 
 Even with these controls, a model may produce subtly poor strategy, awkward or

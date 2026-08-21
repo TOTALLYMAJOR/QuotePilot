@@ -278,12 +278,16 @@ lane. Remaining follow-on for this slice:
 
 ## P1 - QuotePilot Steward
 
-- Complete Steward Phase 0 before the read-only Difficult Question Desk shadow
-  slice. The deploy-dormant packet, source, request-policy, semantic-validation,
-  commercial-provenance, and initial adversarial contracts now have focused
-  source/local coverage. Private-record rules and browser-denial tests,
-  retention/redaction fixtures, kill/rollback contracts, incident runbooks,
-  and the remaining security lanes are still open. The later model gets no
+- Finish the remaining Steward Phase 0 validation lanes before the read-only
+  Difficult Question Desk shadow slice. The deploy-dormant packet, source,
+  request-policy, semantic-validation, commercial-provenance, synthetic
+  adversarial corpus, pseudonymous audit, retention/deletion, kill/rollback,
+  incident-runbook, and private-record browser-denial controls now have focused
+  source/local coverage. Focused tests, rules, environment, build, capability,
+  docs, and secret checks pass. Close the pre-existing full-unit
+  `quoteStore.versioning` pricing-authority assertion and the extensionless
+  `brandLogoUrl` Node import that stops both auth/rules and authoritative-
+  pricing orchestration before browser proof. The later model gets no
   tools and no write, messaging, payment, browsing, or resource-discovery
   authority.
 - Keep every authoritative price, margin, staffing, production, catalog,

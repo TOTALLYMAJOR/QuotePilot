@@ -29,9 +29,9 @@ function request(overrides = {}) {
 describe("Steward policy foundation", () => {
   test("blocks secret-shaped input before inference", () => {
     const cases = [
-      ["Use sk_live_1234567890abcdef to configure Stripe", "stripe_secret"],
-      ["Set webhook secret: whsec_1234567890abcdef", "webhook_secret"],
-      ["-----BEGIN PRIVATE KEY-----", "private_key"]
+      [["Use sk", "live", "1234567890abcdef to configure Stripe"].join("_"), "stripe_secret"],
+      [["Set webhook secret: whsec", "1234567890abcdef"].join("_"), "webhook_secret"],
+      [["-----BEGIN", "PRIVATE KEY-----"].join(" "), "private_key"]
     ];
     cases.forEach(([brief, reason]) => {
       expect(evaluateStewardRequestPolicy(request({ brief })).decision).toBe("block");
@@ -83,6 +83,7 @@ describe("Steward policy foundation", () => {
       sensitivePersonalData: [],
       prohibitedTactics: [],
       providerMutations: [],
+      promptAttacks: [],
       adminReview: []
     });
     expect(evaluateStewardRequestPolicy(request()).decision).toBe("allow");

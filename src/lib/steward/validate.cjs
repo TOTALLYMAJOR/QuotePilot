@@ -181,7 +181,8 @@ function validateCandidatePolicy(candidate) {
     ...findings.secrets,
     ...findings.sensitivePersonalData,
     ...findings.prohibitedTactics,
-    ...findings.providerMutations
+    ...findings.providerMutations,
+    ...findings.promptAttacks
   ];
   if (blocked.length) {
     throw new StewardContractError(

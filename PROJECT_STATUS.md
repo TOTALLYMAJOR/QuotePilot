@@ -744,11 +744,14 @@ route evidence are complete.
     planning scope to menu/workflow configuration, credential-blind provider
     readiness, deterministic margin monitoring, and tenant-owned client advice
     from source-labeled reviewed memory. Steward now has a deploy-dormant pure
-    validation foundation only: fixed task/request/source contracts,
+    validation and control foundation only: fixed task/request/source contracts,
     tenant/revision fences, US/role/content policy, deterministic commercial
-    provenance, safe-text validation, and expiring tamper-evident packets pass
-    20 focused adversarial tests. Nothing imports or exports these modules, and
-    private rules, provider/runtime integration, billing, deployment,
+    provenance, safe-text validation, expiring tamper-evident packets,
+    pseudonymous audit metadata, bounded retention/deletion, incident recovery,
+    and kill/rollback gates pass 32 focused tests. Nine planned private
+    collection paths deny browser access across all 76 Firestore emulator
+    tests. Nothing imports or exports these modules, and provider/runtime
+    integration, billing, hosted rules proof, deployment,
     production, background-model, customer contact, and autonomous authority
     remain absent.
 16. Production-only dependency audits are clean for the root app, default
@@ -787,9 +790,10 @@ route evidence are complete.
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
-10. Finish Steward Phase 0 with private-record browser denial, retention and
-    redaction fixtures, kill/rollback contracts, incident runbooks, and the
-    remaining security lanes. Then separately scope the read-only Difficult
+10. Close the branch-wide `quoteStore.versioning` pricing-authority assertion
+    and extensionless `brandLogoUrl` Node-import blockers. Focused Steward,
+    Firestore rules, environment, build, capability, documentation, and secret
+    gates pass. Then separately scope the read-only Difficult
     Question Desk shadow slice as the first vertical proof. Sequence expanded
     setup/workflow, provider-readiness, margin, and client-memory tasks only
     after their pure privacy, memory, no-secret, and adversarial contracts pass;
