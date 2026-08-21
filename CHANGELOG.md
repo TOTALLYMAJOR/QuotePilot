@@ -18,6 +18,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   The augmentation now copies only `commercialSnapshot` from the client-side
   catalog view and cannot downgrade pricing authority, totals, or line items to
   `client_preview`.
+- Made `src/data/mockCatalog.js` loadable through native Node ESM by adding
+  explicit `.js` extensions to its local imports. Firebase seed and emulator
+  scripts no longer stop before browser tests on `brandLogoUrl` resolution; a
+  focused subprocess regression proves the production catalog module loads
+  without Vite's extension resolver, and both Firebase auth/rules and
+  authoritative-pricing orchestration lanes complete successfully.
 - Kept Proposal Composer inline fields usable when a mobile keyboard compresses
   the viewport. While the client email or another inline field is being edited,
   the sticky mobile Review quote bar now yields so it cannot cover the field's
