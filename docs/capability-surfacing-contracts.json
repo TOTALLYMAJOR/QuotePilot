@@ -4,7 +4,7 @@
   "contracts": [
     {
       "id": "steward-private-validation-foundation",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
@@ -12,12 +12,13 @@
         "internal_security",
         "steward_implementers"
       ],
-      "summary": "Deploy-dormant pure Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content and prompt attacks, deterministic commercial provenance, expiring tamper-evident Decision Packets, pseudonymous audit metadata, bounded retention/deletion, incident recovery, kill/rollback gates, and explicit private-record browser denial. The first Difficult Question Desk shadow compiler adds fixed minimized context, zero-tool/storage/background provider-request parameters, an exact claim inventory, whole-output rejection, hidden evaluation packets, and manual-path provider failure without adding runtime integration.",
+      "summary": "Deploy-dormant pure Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content and prompt attacks, deterministic commercial provenance, expiring tamper-evident Decision Packets, pseudonymous audit metadata, bounded retention/deletion, incident recovery, kill/rollback gates, and explicit private-record browser denial. The Difficult Question Desk adds fixed minimized context, zero-tool/storage/background provider-request parameters, exact claim inventory and whole-output rejection, hidden packets, manual-path provider failure, current organization and participant consent, a pinned 100-case corpus, digest-only human-comparison receipts, and non-authoritative promotion evidence without adding runtime integration.",
       "backendPaths": [
         "firestore.rules",
         "src/lib/steward/contracts.cjs",
         "src/lib/steward/controls.cjs",
         "src/lib/steward/difficultQuestionDesk.cjs",
+        "src/lib/steward/difficultQuestionEvaluation.cjs",
         "src/lib/steward/policy.cjs",
         "src/lib/steward/validate.cjs"
       ],
@@ -30,6 +31,7 @@
         "src/lib/__tests__/stewardPolicy.server.test.js",
         "src/lib/__tests__/stewardDecisionPacket.server.test.js",
         "src/lib/__tests__/stewardDifficultQuestionDesk.server.test.js",
+        "src/lib/__tests__/stewardDifficultQuestionEvaluation.server.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
@@ -58,6 +60,10 @@
           "locator": "prepares one hidden read-only packet with no tools, storage, handoff, or send"
         },
         {
+          "path": "src/lib/__tests__/stewardDifficultQuestionEvaluation.server.test.js",
+          "locator": "runs only with current organization approval and participant opt-in"
+        },
+        {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "Steward private records deny every browser operation"
         }
@@ -71,8 +77,8 @@
           "locator": "Private Steward validation, control, and Difficult Question Desk shadow foundation"
         }
       ],
-      "headlessReason": "These pure server-side modules and private-rule declarations must remain unexported and undiscoverable because they are security controls and a hidden shadow-evaluation seam, not a user capability. No runtime imports them, and they expose no callable, frontend path, configured provider transport or credential, persisted Steward record, pricing calculation, payment operation, configuration action, composer handoff, or customer contact.",
-      "safeOutcome": "Future Steward slices have a tested fail-closed base for exact task and source contracts, US-only and role policy, prompt/secret/sensitive-data rejection, deterministic commercial evidence, safe text, packet integrity, pseudonymous audits, bounded retention/deletion, kill/rollback controls, browser-denied private records, and a fixed hidden response-draft compiler that inventories every claim and preserves the manual path on provider failure, while current users and production behavior remain unchanged."
+      "headlessReason": "These pure server-side modules and private-rule declarations must remain unexported and undiscoverable because they are security controls and a hidden shadow-evaluation seam, not a user capability. No runtime imports them, and they expose no callable, frontend path, configured provider transport or credential, persisted Steward record, pricing calculation, payment operation, configuration action, composer handoff, or customer contact. The 100-case corpus is test data, not completed pilot evidence.",
+      "safeOutcome": "Future Steward slices have a tested fail-closed base for exact task and source contracts, US-only and role policy, prompt/secret/sensitive-data rejection, deterministic commercial evidence, safe text, packet integrity, pseudonymous audits, bounded retention/deletion, kill/rollback controls, browser-denied private records, a fixed hidden response-draft compiler, current organization and participant consent, and digest-only human-comparison evidence that cannot promote itself, while current users and production behavior remain unchanged."
     },
     {
       "id": "firebase-email-action-return-policy",

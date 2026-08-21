@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-25 00:38:30 CDT
 
-Status: Phase 0 validated and first Difficult Question Desk shadow compiler implemented in source; no runtime capability is claimed
+Status: Phase 0 validated and Difficult Question Desk compiler plus consent-only evaluation contract implemented in source; no runtime capability is claimed
 Date: August 15, 2026
 PRD: `docs/STEWARD_PRD.md`
 ADR: `docs/STEWARD_ADR.md`
@@ -55,7 +55,18 @@ requires an exact claim inventory, validates every claim/source and the whole
 response through the Phase 0 packet controls, and returns only hidden
 evaluation packets plus pseudonymous audit metadata. Provider failure,
 refusal, malformed output, and kill gates retain the ordinary manual path. Five
-focused suites now contain 48 passing tests, including 16 Desk-specific cases.
+focused suites contain 48 passing tests, including 16 Desk-specific cases.
+
+The next deploy-dormant source slice adds
+`src/lib/steward/difficultQuestionEvaluation.cjs`. It requires current
+organization owner/admin approval and exact participant opt-in before the
+shadow compiler can call an injected provider adapter. It keeps every result
+hidden, pins a versioned 100-case representative/adversarial corpus, converts
+human comparisons into pseudonymous digest-only review receipts, rejects
+duplicate receipts, and calculates Phase 1 and later general-availability
+evidence thresholds without granting promotion authority. Six focused suites
+now contain 62 passing tests. The corpus is implemented; no claim is made that
+100 human reviews, a consenting pilot, or a provider-backed run has occurred.
 
 Nine planned private collection paths are explicitly browser-denied in
 `firestore.rules`; the emulator suite passes 76 tests including every read,
@@ -66,8 +77,9 @@ containment, evidence, rollback, deletion, and release policy.
 This checkpoint does not add canonical context reads, private storage, a
 configured provider transport or credential, billing, a callable, a frontend,
 a runtime import/export, pricing authority, configuration authority, customer
-contact, deployment, or production evidence. The injected adapter exists only
-as the deploy-dormant compiler boundary and test seam.
+contact, deployment, pilot evidence, or production evidence. The injected
+adapter and consent/evaluation layer exist only as deploy-dormant server-side
+contracts and test seams.
 
 ## Existing codebase analysis
 

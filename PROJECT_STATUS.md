@@ -765,6 +765,13 @@ route evidence are complete.
     It remains deploy-dormant with no configured provider transport or
     credential, runtime import/export, callable, UI, persistence, composer
     handoff, customer send, deployment, or production evidence.
+    The next source slice adds current organization owner/admin approval plus
+    exact participant opt-in before adapter use, a pinned 100-case corpus,
+    hidden-only results, digest-only human-comparison receipts, duplicate
+    rejection, and source-local evidence thresholds that cannot promote
+    themselves. Fourteen added tests pass. The corpus is not 100 completed human
+    reviews; private runtime, provider-backed pilot, UI, persistence,
+    deployment, production behavior, and human acceptance remain absent.
 16. Production-only dependency audits are clean for the root app, default
     Functions, and Connect Functions. The full root audit retains six high-
     severity development-tool findings through Lighthouse CI's current
@@ -801,11 +808,12 @@ route evidence are complete.
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
-10. Finish the read-only Difficult Question Desk shadow proof with disabled
-    workbench states, consent-only silent execution, a human-response comparison
-    workflow, and 100 representative/adversarial packet reviews. Its
-    deploy-dormant fixed compiler and 16-case focused suite are complete; no
-    model output is user-visible and no staging is enabled. Sequence expanded
+10. Finish the read-only Difficult Question Desk shadow proof with a reviewed
+    private runtime, disabled workbench states, actual consenting silent
+    execution, and 100 human packet reviews. Its deploy-dormant fixed compiler,
+    consent/evaluation contract, pinned 100-case corpus, digest-only comparison
+    receipts, and 30-case focused suite are complete; no model output is user-
+    visible and no staging is enabled. Sequence expanded
     setup/workflow, provider-readiness, margin, and client-memory tasks only
     after their pure privacy, memory, no-secret, and adversarial contracts pass;
     keep provider, billing, deployment, production, and autonomous authority
