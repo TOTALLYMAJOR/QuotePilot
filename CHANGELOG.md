@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 00:40:15 CDT
+Last updated: 2026-08-21 00:53:58 CDT
 
 All notable project changes are documented in this file.
 
@@ -28,6 +28,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
+- Added the deploy-dormant Difficult Question Desk silent-evaluation contract.
+  Current owner/admin pilot approval and exact participant opt-in are required
+  before any injected provider adapter can run. Results remain hidden; a pinned
+  100-case representative/adversarial corpus, digest-only human-comparison
+  receipts, duplicate rejection, and source-local promotion evidence summaries
+  support review without storing model or human prose or granting promotion
+  authority. Fourteen focused cases pass. The corpus is not 100 completed human
+  reviews, and no runtime, provider-backed pilot, UI, persistence, deployment,
+  or production evidence exists.
 - Added the deploy-dormant first Difficult Question Desk shadow compiler. One
   fixed `draft_response` task now minimizes authorized quote/policy excerpts,
   sends an injected provider adapter a storage-off, background-off, zero-tool

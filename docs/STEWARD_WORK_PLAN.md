@@ -1,8 +1,8 @@
 # Work Plan: QuotePilot Steward
 
-Last updated: 2026-08-21 00:40:15 CDT
+Last updated: 2026-08-21 00:53:58 CDT
 
-Status: Phase 0 validated; first Phase 1 shadow compiler implemented; runtime work stays separately scoped
+Status: Phase 0 validated; Phase 1 shadow compiler and consent/evaluation contracts implemented; runtime work stays separately scoped
 Created: August 15, 2026
 Type: High-risk full-stack feature
 Approach: Security foundation followed by vertical slices
@@ -74,9 +74,14 @@ and packet tampering with 100% expected negative-test coverage.
   customer send. No configured provider transport or runtime export exists.
 - [x] Implement strict schema, exact claim inventory, policy/source validation,
   redacted audit metadata, kill gates, and provider failure/refusal behavior.
+- [x] Implement the deploy-dormant silent-evaluation contract: current owner/
+  admin pilot approval plus participant opt-in, hidden-only results, a pinned
+  100-case representative/adversarial corpus, digest-only human-comparison
+  receipts, duplicate rejection, and non-authoritative promotion thresholds.
 - [ ] Add read-only workbench states and ordinary-composer handoff disabled.
-- [ ] Run packets silently for consenting internal/pilot users; compare with
-  human responses without showing model output in production work.
+- [ ] Bind the consent contract to a reviewed private runtime, then run packets
+  silently for consenting internal/pilot users and compare with human responses
+  without showing model output in production work.
 - [ ] Review at least 100 representative and adversarial packets.
 
 Completion gate: No unauthorized source or sensitive unsupported claim passes;

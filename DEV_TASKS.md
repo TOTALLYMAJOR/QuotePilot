@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 00:40:15 CDT
+Last updated: 2026-08-21 00:53:58 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -210,11 +210,14 @@ Only open work belongs here. Current operational truth lives in
 - Finish the read-only Difficult Question Desk shadow slice. The deploy-dormant
   fixed compiler, minimized typed context, zero-tool/storage/background provider
   contract, exact claim inventory, whole-output validation, hidden evaluation
-  packet, pseudonymous audit, and manual provider-outage path now pass 16
-  focused cases. Next add the disabled workbench states, consent-only silent
-  runner, comparison workflow, and 100 representative/adversarial packet
-  review before any model output is visible or staging is enabled. The model
-  gets no write, messaging, payment, browsing, or resource-discovery authority.
+  packet, pseudonymous audit, manual provider-outage path, current owner/admin
+  and participant consent, 100-case pinned corpus, digest-only human-comparison
+  receipts, and non-authoritative evidence thresholds now pass 30 focused cases.
+  Next bind these deploy-dormant contracts to a reviewed private runtime, add
+  the disabled workbench states, run the consenting silent pilot, and complete
+  100 actual human packet reviews before any model output is visible or staging
+  is enabled. The model gets no write, messaging, payment, browsing, or
+  resource-discovery authority.
 - Keep every authoritative price, margin, staffing, production, catalog,
   revision, and entitlement value outside model authority. Steward may prepare,
   compare, explain, and stage an unsaved review; existing trusted paths alone
