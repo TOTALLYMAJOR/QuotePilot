@@ -278,17 +278,14 @@ lane. Remaining follow-on for this slice:
 
 ## P1 - QuotePilot Steward
 
-- Begin the separately scoped read-only Difficult Question Desk shadow slice.
-  Steward Phase 0 validation is complete: the deploy-dormant packet, source,
-  request-policy, semantic-validation, commercial-provenance, synthetic
-  adversarial corpus, pseudonymous audit, retention/deletion, kill/rollback,
-  incident-runbook, and private-record browser-denial controls now have focused
-  source/local coverage. The native-Node catalog import and local pricing-
-  snapshot enrichment regressions are fixed; the full 3,883-test unit gate,
-  Firestore rules, environment, build, capability, documentation, and both
-  Firebase orchestration lanes pass. The later model gets no
-  tools and no write, messaging, payment, browsing, or resource-discovery
-  authority.
+- Finish the read-only Difficult Question Desk shadow slice. The deploy-dormant
+  fixed compiler, minimized typed context, zero-tool/storage/background provider
+  contract, exact claim inventory, whole-output validation, hidden evaluation
+  packet, pseudonymous audit, and manual provider-outage path now pass 16
+  focused cases. Next add the disabled workbench states, consent-only silent
+  runner, comparison workflow, and 100 representative/adversarial packet
+  review before any model output is visible or staging is enabled. The model
+  gets no write, messaging, payment, browsing, or resource-discovery authority.
 - Keep every authoritative price, margin, staffing, production, catalog,
   revision, and entitlement value outside model authority. Steward may prepare,
   compare, explain, and stage an unsaved review; existing trusted paths alone

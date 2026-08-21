@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-25 00:38:30 CDT
 
-Status: Phase 0 source controls validated; runtime work stays separately scoped
+Status: Phase 0 validated; first Phase 1 shadow compiler implemented; runtime work stays separately scoped
 Created: August 15, 2026
 Type: High-risk full-stack feature
 Approach: Security foundation followed by vertical slices
@@ -69,10 +69,11 @@ and packet tampering with 100% expected negative-test coverage.
 
 ## Phase 1: Difficult Question Desk shadow mode
 
-- [ ] Implement fixed `draft_response` context and provider adapter with no
-  tools, no writes, no packet reload, and no customer send.
-- [ ] Implement strict schema, claim inventory, policy/source validation, and
-  provider failure behavior.
+- [x] Implement a deploy-dormant fixed `draft_response` context and provider-
+  adapter contract with no tools, writes, packet reload, composer handoff, or
+  customer send. No configured provider transport or runtime export exists.
+- [x] Implement strict schema, exact claim inventory, policy/source validation,
+  redacted audit metadata, kill gates, and provider failure/refusal behavior.
 - [ ] Add read-only workbench states and ordinary-composer handoff disabled.
 - [ ] Run packets silently for consenting internal/pilot users; compare with
   human responses without showing model output in production work.
