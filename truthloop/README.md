@@ -1,0 +1,79 @@
+# QuotePilot Commercial Truth Loop
+
+Read-only, deterministic reconciliation of the QuotePilot commercial chain.
+
+- Architecture decision and authority boundary: [`docs/COMMERCIAL_TRUTH_LOOP_ADR.md`](../docs/COMMERCIAL_TRUTH_LOOP_ADR.md)
+- Rule catalog, contracts, and metrics: [`docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`](../docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md)
+
+## What this is
+
+It reads an exported evidence bundle and reports where the chain from customer
+request to realized contribution disagrees with itself.
+
+## What this is not
+
+It has no write path, no network access, no credentials, and no authority. It
+cannot price, charge, accept, book, or settle anything. Every commercial fact in
+QuotePilot is still created and changed only by the existing TypeScript
+services. Findings are staff observations, never customer output and never
+accounting truth.
+
+## Requirements
+
+Python 3.11+. Nothing else — no runtime dependencies, no test dependencies, no
+install step. That is a deliberate constraint, not an oversight
+(ADR binding decision 5).
+
+## Use
+
+From the repository root:
+
+```bash
+npm run test:truthloop                                            # unit tests
+npm run truthloop:rules                                           # rule catalog
+npm run truthloop:reconcile truthloop/fixtures/example-bundle.json
+```
+
+Directly:
+
+```bash
+PYTHONPATH=truthloop/src python3 -m quotepilot_truthloop reconcile <bundle.json>
+```
+
+Exit codes: `0` fully reconciled, `1` findings present, `2` bundle unreadable.
+
+## Layout
+
+```
+src/quotepilot_truthloop/
+  money.py       integer-cent arithmetic; rejects floats rather than rounding
+  contracts.py   finding and report contracts, evidence and status vocabulary
+  model.py       the commercial chain as frozen, read-only evidence
+  loader.py      strict bundle parsing; a bad record is rejected, not coerced
+  rules/         one module per chain link; the registry defines coverage
+  engine.py      runs every rule against every record
+  cli.py         the only I/O in the package
+tests/           rule, loader, engine, and CLI tests (standard-library unittest)
+fixtures/        the worked example from the design doc
+```
+
+## Optional developer tooling
+
+```bash
+pip install -e 'truthloop[dev]'   # ruff only
+bash scripts/run-truthloop.sh lint
+```
+
+The lint pass is optional and is not part of the CI gate; the gate is the test
+suite, which needs no installation.
+
+## Extending it
+
+Add a rule module under `rules/`, subclass `Rule`, and register it in
+`rules/__init__.py`. Two things are required of any new rule:
+
+1. It returns exactly one `Finding` for every record, including records with
+   almost no evidence. Missing evidence returns `unverifiable`, never a pass.
+2. Any threshold or rate it needs is *declared evidence supplied by the
+   operator*, carried as `EvidenceStatus.DECLARED` and named in the finding.
+   Never back-solve a value from history and then apply it as policy.

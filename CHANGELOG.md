@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-20 15:58:46 CDT
+Last updated: 2026-08-21 12:20:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -26,6 +26,32 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
+- Introduced Python as a read-only reconciliation tier and shipped its first
+  capability, the Commercial Truth Loop (`truthloop/`). The reconciler reads an
+  exported evidence bundle and reports where the chain from customer request
+  through authorized quote, accepted snapshot, deposit obligation, payment
+  receipt, processor payout, operational consumption, and actual contribution
+  disagrees with itself. Eleven rules cover payment amount mismatches, missing
+  or duplicate charges, superseded or unconfirmed catalog revisions, provisional
+  cost bases, processor-fee discrepancies, margin category omissions, accepted
+  promises absent from operational plans, labor and purchasing overruns,
+  expected revenue not received, customer changes not reflected in the accepted
+  record, and estimated-versus-realized contribution.
+  The tier has no write path, no credentials, and no network access; findings
+  carry `authority: "observation_only"` and are never pricing, approval, or
+  customer-facing authority. Money is integer cents and the loader rejects
+  floats rather than rounding them. Missing evidence returns `unverifiable`,
+  which keeps a record outside `fullyReconciled` rather than counting as a
+  pass. Rate and threshold inputs such as processor fee schedules are
+  operator-declared evidence; the reconciler never back-solves a rate from
+  history and applies it as policy. The package is standard-library-only, so
+  `npm run test:truthloop` runs inside the existing `lane:core` job with no
+  install step, no network access, and no new required CI status context.
+  This is local reconciliation-logic evidence only: the TypeScript evidence
+  exporter, any staff surface, hosted verification, provider evidence, and
+  human acceptance remain separate and unshipped. Architecture decision in
+  `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`; rule catalog and contracts in
+  `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`.
 - Gave the quote workspace a navigation entry. Every row in Quotes now carries
   a `Workspace` action that opens `/app/quote-workspace?quoteId=<id>` for that
   quote, so staff can reach the read-only workspace and its Activity & Save

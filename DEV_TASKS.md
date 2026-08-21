@@ -1,10 +1,38 @@
 # Dev Tasks
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-21 12:20:00 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
+
+## P1 - Commercial Truth Loop Follow-Through
+
+The read-only Python reconciler exists but has no data source. These items are
+what turn it from tested logic into operator value. Design and boundaries:
+`docs/COMMERCIAL_TRUTH_LOOP_ADR.md`, `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`.
+
+- Build the TypeScript evidence exporter that projects Firestore into
+  `truthloop-evidence-bundle-v1`. Tenant isolation and role checks stay in the
+  tier that already owns them; the exporter reads only, and a bundle must never
+  carry a secret, token, raw provider record, or customer-facing field.
+- Record processor payout settlement (gross, net, and payout reference) against
+  the existing payment ledger's provider references so payout reconciliation has
+  an input. Sequence this against the Stripe Connect stopping gate in
+  `docs/STRIPE_CONNECT_PROGRAM.md`.
+- Add an organization-declared processor fee schedule to settings, captured as
+  operator-declared evidence with actor and timestamp. The reconciler must never
+  infer this rate from history.
+- Capture post-event actual labor and purchasing consumption so overrun and
+  realized-contribution rules can run on real events.
+- Decide whether delivery/travel revenue enters the margin model, or record why
+  it stays outside it. Today `margin_category_omission` reports every record
+  carrying travel revenue, which is correct but will be noisy at scale.
+- Bind the reconciliation report to a role-safe staff surface through
+  `docs/capability-surfacing-contracts.json` before any finding is shown in the
+  product. Until then the tier stays headless developer infrastructure.
+- Decide per-organization overrun tolerances rather than shipping the package
+  defaults (10% and a $25.00 floor) as if they were policy.
 
 ## P0 - Production Acceptance
 

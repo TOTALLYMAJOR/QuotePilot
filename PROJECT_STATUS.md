@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-20 15:58:46 CDT
+Last updated: 2026-08-21 12:20:00 CDT
 
 ## Current Production Release
 
@@ -30,6 +30,30 @@ Last updated: 2026-08-20 15:58:46 CDT
   public-edge reachability only. They do not prove authenticated staff/portal
   acceptance, production-data correctness, provider delivery, recipient
   acknowledgement, or human acceptance.
+
+## Commercial Truth Loop (Python Tier)
+
+- A read-only Python reconciliation tier landed at `truthloop/` with eleven
+  rules covering the commercial chain from customer request to realized
+  contribution. It is standard-library-only and runs in `lane:core` through
+  `npm run test:truthloop` (97 tests) without adding a required CI context.
+- **It has no data source.** The tier reconciles fixtures only. The TypeScript
+  evidence exporter that would project Firestore into
+  `truthloop-evidence-bundle-v1` is not built, so no production commercial
+  record is reconciled today and no operator sees a finding.
+- Three chain inputs have no producer anywhere in the system yet and will
+  report `unverifiable` against real data until one exists: processor payout
+  settlement, the organization-declared processor fee schedule, and post-event
+  actual labor/purchasing consumption. Stripe payout and fee reconciliation is
+  additionally gated behind the Connect program's stopping point in
+  `docs/STRIPE_CONNECT_PROGRAM.md`.
+- Active risk: the loop's narratives read as authoritative. Findings carry
+  `authority: "observation_only"` and must not be presented to a customer or
+  used as a repricing, approval, or accounting authority. The kill criteria in
+  `docs/COMMERCIAL_TRUTH_LOOP_ADR.md` are the disable trigger.
+- Passing the Python gate is local reconciliation-logic evidence. It is not an
+  exporter, a staff surface, hosted verification, provider evidence, a
+  production deployment, or human acceptance.
 
 ## Pending Production Completion
 

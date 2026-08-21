@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-21 12:20:00 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -35,7 +35,7 @@ it.
 
 | Change Type | Trigger Examples | Required Canonical Doc Update |
 |---|---|---|
-| code | `src/`, `functions/`, `e2e/`, runtime behavior files | `CHANGELOG.md` |
+| code | `src/`, `functions/`, `e2e/`, `truthloop/`, runtime behavior files | `CHANGELOG.md` |
 | backend capability | `functions/`, rules/indexes, data/provider clients, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
 | process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
@@ -94,6 +94,7 @@ as separate claims.
 | Package Workspace product and implementation program | `docs/PACKAGE_WORKSPACE.md` | Entry point for the QuotePilot Package Workspace audit, PRD, UI specification, ADR, technical design, and phased plan. Current implementation truth remains in the Feature Matrix; operational proof remains in `PROJECT_STATUS.md`. |
 | Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | The clean-main baseline lives in `docs/performance/bundle-budget.json`; any active temporary absolute ceilings live separately in `docs/performance/bundle-exception.json` and must match that baseline exactly. |
 | Backend-to-interface capability contracts | `docs/capability-surfacing-contracts.json` | Machine-checked structural traceability; current release evidence remains in `PROJECT_STATUS.md`. |
+| Commercial Truth Loop reconciliation tier | `docs/COMMERCIAL_TRUTH_LOOP_ADR.md` | Authority boundary and binding decisions for the read-only Python tier. Rule catalog, evidence-bundle contract, and metrics live in `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`; package usage lives in `truthloop/README.md`; operational truth remains in `PROJECT_STATUS.md`. |
 | Stripe Connect architecture and staged program | `docs/STRIPE_CONNECT_PROGRAM.md` | Fixed commercial model, isolation boundaries, delivery sequence, and Sandbox stopping gate; operational truth remains in `PROJECT_STATUS.md`. |
 
 ## Redundancy Rules

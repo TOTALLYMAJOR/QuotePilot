@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quotepilot-truthloop"
+version = "0.1.0"
+description = "Read-only deterministic reconciliation of the QuotePilot commercial chain."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "UNLICENSED" }
+
+# Intentionally empty and intended to stay that way. The reconciler runs on the
+# Python standard library only, so the CI gate needs no install step, no
+# network access, and no dependency review. See
+# docs/COMMERCIAL_TRUTH_LOOP_ADR.md, binding decision 5.
+dependencies = []
+
+[project.optional-dependencies]
+# Developer conveniences only. Nothing here is required to run the gate.
+dev = ["ruff==0.14.4"]
+
+[project.scripts]
+quotepilot-truthloop = "quotepilot_truthloop.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 95
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
