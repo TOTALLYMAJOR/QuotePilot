@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 00:29:35 CDT
+Last updated: 2026-08-21 00:40:15 CDT
 
 All notable project changes are documented in this file.
 
@@ -28,6 +28,17 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
+- Added the deploy-dormant first Difficult Question Desk shadow compiler. One
+  fixed `draft_response` task now minimizes authorized quote/policy excerpts,
+  sends an injected provider adapter a storage-off, background-off, zero-tool
+  request, requires an exact claim inventory, validates every source and the
+  whole response, produces a hidden expiring evaluation packet and pseudonymous
+  audit metadata, and keeps composer handoff, customer send, writes, and packet
+  reload unavailable. Sixteen focused cases cover success, prompt injection,
+  foreign/stale sources, kill gates, admin checkpoints, refusal, malformed or
+  unsafe output, provider outage, and needs-information behavior. No configured
+  provider transport, credential, runtime import/export, callable, UI,
+  persistence, customer contact, deployment, or production capability exists.
 - Completed the source-only Steward Phase 0 control layer. A synthetic redacted
   adversarial corpus now covers prompt attacks, secrets, sensitive data,
   prohibited sales tactics, and provider-mutation requests. Pure controls add

@@ -1,8 +1,8 @@
 # Technical Design: QuotePilot Steward
 
-Last updated: 2026-08-21 00:06:22 CDT
+Last updated: 2026-08-21 00:40:15 CDT
 
-Status: Phase 0 private validation and control foundation implemented in source; no runtime capability is claimed
+Status: Phase 0 validated and first Difficult Question Desk shadow compiler implemented in source; no runtime capability is claimed
 Date: August 15, 2026
 PRD: `docs/STEWARD_PRD.md`
 ADR: `docs/STEWARD_ADR.md`
@@ -44,8 +44,18 @@ serialization, 15-minute authority-bound packet integrity, pseudonymous
 allowlisted audit metadata, bounded retention/deletion plans, incident holds,
 and global/provider/organization/task/model kill gates. An explicitly synthetic
 redacted corpus covers prompt injection, secret/sensitive data, prohibited
-tactics, and provider-mutation requests. The four focused suites contain 32
-passing tests.
+tactics, and provider-mutation requests.
+
+The first Phase 1 source slice adds
+`src/lib/steward/difficultQuestionDesk.cjs`. Its fixed `draft_response` shadow
+compiler minimizes authorized quote/policy excerpts, rejects blocked input and
+stale or foreign sources before provider use, emits a provider-neutral request
+with `store: false`, background disabled, no tools, and a fixed token cap,
+requires an exact claim inventory, validates every claim/source and the whole
+response through the Phase 0 packet controls, and returns only hidden
+evaluation packets plus pseudonymous audit metadata. Provider failure,
+refusal, malformed output, and kill gates retain the ordinary manual path. Five
+focused suites now contain 48 passing tests, including 16 Desk-specific cases.
 
 Nine planned private collection paths are explicitly browser-denied in
 `firestore.rules`; the emulator suite passes 76 tests including every read,
@@ -53,9 +63,11 @@ list, create, update, and delete denial for signed-out, same-tenant, and
 cross-tenant browser roles. `docs/STEWARD_INCIDENT_RUNBOOK.md` fixes the source
 containment, evidence, rollback, deletion, and release policy.
 
-This checkpoint does not add context reads, private storage, provider or
-billing adapters, a callable, a frontend, a runtime gate, pricing authority,
-configuration authority, customer contact, deployment, or production evidence.
+This checkpoint does not add canonical context reads, private storage, a
+configured provider transport or credential, billing, a callable, a frontend,
+a runtime import/export, pricing authority, configuration authority, customer
+contact, deployment, or production evidence. The injected adapter exists only
+as the deploy-dormant compiler boundary and test seam.
 
 ## Existing codebase analysis
 
