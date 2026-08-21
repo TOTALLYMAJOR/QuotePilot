@@ -1,18 +1,19 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 50,
+  "catalogVersion": 51,
   "contracts": [
     {
       "id": "steward-private-validation-foundation",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
-      "deliveryType": "headless",
-      "capabilityKind": "security_private",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
       "audiences": [
+        "staff",
         "internal_security",
         "steward_implementers"
       ],
-      "summary": "Deploy-dormant pure Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content and prompt attacks, deterministic commercial provenance, expiring tamper-evident Decision Packets, pseudonymous audit metadata, bounded retention/deletion, incident recovery, kill/rollback gates, and explicit private-record browser denial. The Difficult Question Desk adds fixed minimized context, zero-tool/storage/background provider-request parameters, exact claim inventory and whole-output rejection, hidden packets, manual-path provider failure, current organization and participant consent, a pinned 100-case corpus, digest-only human-comparison receipts, and non-authoritative promotion evidence without adding runtime integration.",
+      "summary": "Deploy-dormant Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content and prompt attacks, deterministic commercial provenance, expiring tamper-evident Decision Packets, pseudonymous audit metadata, bounded retention/deletion, incident recovery, kill/rollback gates, and explicit private-record browser denial. The Difficult Question Desk adds fixed minimized context, zero-tool/storage/background provider-request parameters, exact claim inventory and whole-output rejection, hidden packets, manual-path provider failure, current organization and participant consent, a pinned 100-case corpus, digest-only human-comparison receipts, non-authoritative promotion evidence, and a staff-visible unavailable-state panel that renders no model prose and enables only the existing manual message path.",
       "backendPaths": [
         "firestore.rules",
         "src/lib/steward/contracts.cjs",
@@ -23,9 +24,25 @@
         "src/lib/steward/validate.cjs"
       ],
       "backendExports": [],
-      "frontendPaths": [],
-      "entryPointLocators": [],
+      "frontendPaths": [
+        "src/components/QuoteWorkspaceConceptPage.jsx",
+        "src/components/StewardWorkbench.jsx",
+        "src/components/stewardWorkbench.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/StewardWorkbench.jsx",
+          "locator": "data-capability-id=\"steward-difficult-question-workbench\""
+        },
+        {
+          "path": "src/components/QuoteWorkspaceConceptPage.jsx",
+          "locator": "state=\"provider_unavailable\""
+        }
+      ],
       "testPaths": [
+        "e2e/steward-workbench.spec.js",
+        "src/components/__tests__/quoteWorkspaceConcept.test.jsx",
+        "src/components/__tests__/stewardWorkbench.test.jsx",
         "src/lib/__tests__/stewardContracts.server.test.js",
         "src/lib/__tests__/stewardControls.server.test.js",
         "src/lib/__tests__/stewardPolicy.server.test.js",
@@ -35,6 +52,18 @@
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
+        {
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "keeps the ordinary manual composer available during provider outage"
+        },
+        {
+          "path": "src/components/__tests__/quoteWorkspaceConcept.test.jsx",
+          "locator": "renders saved quote evidence and opens a read-only activity and save-health dialog"
+        },
+        {
+          "path": "e2e/steward-workbench.spec.js",
+          "locator": "keeps Steward truthful and bounded at"
+        },
         {
           "path": "src/lib/__tests__/stewardContracts.server.test.js",
           "locator": "accepts only same-tenant, current, revision-fenced source handles"
@@ -69,16 +98,67 @@
         }
       ],
       "documentationPaths": [
-        "docs/FEATURE_MATRIX.md"
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
           "locator": "Private Steward validation, control, and Difficult Question Desk shadow foundation"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Difficult Question Desk preview"
         }
       ],
-      "headlessReason": "These pure server-side modules and private-rule declarations must remain unexported and undiscoverable because they are security controls and a hidden shadow-evaluation seam, not a user capability. No runtime imports them, and they expose no callable, frontend path, configured provider transport or credential, persisted Steward record, pricing calculation, payment operation, configuration action, composer handoff, or customer contact. The 100-case corpus is test data, not completed pilot evidence.",
-      "safeOutcome": "Future Steward slices have a tested fail-closed base for exact task and source contracts, US-only and role policy, prompt/secret/sensitive-data rejection, deterministic commercial evidence, safe text, packet integrity, pseudonymous audits, bounded retention/deletion, kill/rollback controls, browser-denied private records, a fixed hidden response-draft compiler, current organization and participant consent, and digest-only human-comparison evidence that cannot promote itself, while current users and production behavior remain unchanged."
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The authorized staff Quote Workspace now includes a compact paper-and-ledger Difficult Question Desk status panel. The live source/local state is fixed to provider unavailable, says no changes were made, renders no model output, keeps Steward handoff disabled, and offers one ordinary manual-message recovery action. Focused component tests cover the full status-copy matrix and safe text rendering; real-route Playwright checks cover desktop and mobile overflow, 44-pixel actions, disabled handoff, and manual workflow continuity.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the loading state to named preparation work",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the empty state to no available Steward output",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the success state to a hidden review packet",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the stale state to exact revision drift",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the partial state to structurally visible evidence gaps",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the error state to a held policy boundary",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps recovery to the ordinary manual workflow",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Authorized staff can discover that the Difficult Question Desk exists, see its exact unavailable/read-only boundary, and continue through QuotePilot's ordinary manual message workflow without exposing model prose or implying a provider request, saved packet, quote change, composer handoff, customer send, configuration action, promotion, deployment, or production evidence."
     },
     {
       "id": "firebase-email-action-return-policy",

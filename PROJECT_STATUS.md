@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-21 00:53:58 CDT
+Last updated: 2026-08-21 01:08:52 CDT
 
 ## Current Production Release
 
@@ -725,8 +725,16 @@ route evidence are complete.
     hidden-only results, digest-only human-comparison receipts, duplicate
     rejection, and source-local evidence thresholds that cannot promote
     themselves. Fourteen added tests pass. The corpus is not 100 completed human
-    reviews; private runtime, provider-backed pilot, UI, persistence,
-    deployment, production behavior, and human acceptance remain absent.
+    reviews; private runtime, provider-backed pilot, model-output UI,
+    persistence, deployment, production behavior, and human acceptance remain
+    absent.
+    The authorized staff Quote Workspace now includes the bounded Desk status
+    panel. Its live state is provider-unavailable, renders no model prose,
+    labels no changes made, disables Steward handoff, and routes only to the
+    existing manual-message workflow. Twenty-two UI tests and three local real-
+    route Playwright checks pass at desktop and mobile. This does not prove a
+    provider run, pilot, hosting, deployment, production behavior, or human
+    acceptance.
 16. Production-only dependency audits are clean for the root app, default
     Functions, and Connect Functions. The full root audit retains six high-
     severity development-tool findings through Lighthouse CI's current
@@ -764,11 +772,11 @@ route evidence are complete.
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
 10. Finish the read-only Difficult Question Desk shadow proof with a reviewed
-    private runtime, disabled workbench states, actual consenting silent
-    execution, and 100 human packet reviews. Its deploy-dormant fixed compiler,
-    consent/evaluation contract, pinned 100-case corpus, digest-only comparison
-    receipts, and 30-case focused suite are complete; no model output is user-
-    visible and no staging is enabled. Sequence expanded
+    private runtime, actual consenting silent execution, and 100 human packet
+    reviews. Its deploy-dormant fixed compiler, consent/evaluation contract,
+    pinned 100-case corpus, digest-only comparison receipts, 30-case server
+    suite, and unavailable-state Quote Workspace panel are complete; no model
+    output is user-visible and no staging is enabled. Sequence expanded
     setup/workflow, provider-readiness, margin, and client-memory tasks only
     after their pure privacy, memory, no-secret, and adversarial contracts pass;
     keep provider, billing, deployment, production, and autonomous authority

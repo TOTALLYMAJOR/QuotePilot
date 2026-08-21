@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 00:53:58 CDT
+Last updated: 2026-08-21 01:08:52 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -213,11 +213,13 @@ Only open work belongs here. Current operational truth lives in
   packet, pseudonymous audit, manual provider-outage path, current owner/admin
   and participant consent, 100-case pinned corpus, digest-only human-comparison
   receipts, and non-authoritative evidence thresholds now pass 30 focused cases.
-  Next bind these deploy-dormant contracts to a reviewed private runtime, add
-  the disabled workbench states, run the consenting silent pilot, and complete
-  100 actual human packet reviews before any model output is visible or staging
-  is enabled. The model gets no write, messaging, payment, browsing, or
-  resource-discovery authority.
+  The authorized Quote Workspace now exposes the full read-only status matrix
+  with its live state fixed to provider-unavailable, Steward handoff disabled,
+  and only the ordinary manual-message path enabled. Next bind the contracts to
+  a reviewed private runtime, run the consenting silent pilot, and complete 100
+  actual human packet reviews before any model output is visible or staging is
+  enabled. The model gets no write, messaging, payment, browsing, or resource-
+  discovery authority.
 - Keep every authoritative price, margin, staffing, production, catalog,
   revision, and entitlement value outside model authority. Steward may prepare,
   compare, explain, and stage an unsaved review; existing trusted paths alone

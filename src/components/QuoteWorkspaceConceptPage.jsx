@@ -8,6 +8,7 @@ import {
 import { buildAmbientLivingOpportunityPresentation } from "./ambientLivingOpportunityPresentation";
 import ProductBrandLockup from "./ProductBrandLockup";
 import QuoteWorkspaceActivityDrawer from "./QuoteWorkspaceActivityDrawer";
+import StewardWorkbench from "./StewardWorkbench";
 import "./quoteWorkspaceConcept.css";
 
 const CURRENT_QUOTES_PATH = "/app/quotes";
@@ -620,6 +621,12 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
               </dl>
               <p><ConceptIcon name={Number.isFinite(grossMargin) ? "check" : "alert"} size={18} /> {Number.isFinite(grossMargin) ? "Margin is recorded on this quote." : "Margin evidence is not available in this summary."}</p>
             </section>
+
+            <StewardWorkbench
+              state="provider_unavailable"
+              quoteNumber={quoteNumber}
+              onOpenManualComposer={() => go(messagePath)}
+            />
 
             <section className="qwc-side-panel qwc-activity" aria-labelledby="qwc-activity-title">
               <h2 id="qwc-activity-title">Recent activity</h2>
