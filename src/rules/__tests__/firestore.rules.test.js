@@ -134,6 +134,32 @@ const OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS = Object.freeze([
   ["ownerSmsOutbox", "outbox-org-a-1"]
 ]);
 
+const STEWARD_SERVER_ONLY_PATHS = Object.freeze([
+  ["organizations", "org-a", "stewardRuns", "run-1"],
+  ["organizations", "org-a", "stewardPackets", "packet-1"],
+  ["organizations", "org-a", "stewardAuditReceipts", "audit-1"],
+  ["organizations", "org-a", "stewardUsageBuckets", "usage-2026-08"],
+  ["organizations", "org-a", "stewardEntitlementReceipts", "entitlement-1"],
+  ["organizations", "org-a", "stewardClientMemory", "memory-1"],
+  ["organizations", "org-a", "stewardPolicies", "policy-v1"],
+  ["organizations", "org-a", "stewardDeletionReceipts", "deletion-1"],
+  ["organizations", "org-a", "stewardIncidentDirectives", "incident-1"]
+]);
+
+test("enumerates every Steward private collection for browser denial coverage", () => {
+  expect(STEWARD_SERVER_ONLY_PATHS.map((pathParts) => pathParts.at(-2))).toEqual([
+    "stewardRuns",
+    "stewardPackets",
+    "stewardAuditReceipts",
+    "stewardUsageBuckets",
+    "stewardEntitlementReceipts",
+    "stewardClientMemory",
+    "stewardPolicies",
+    "stewardDeletionReceipts",
+    "stewardIncidentDirectives"
+  ]);
+});
+
 test("enumerates every owner SMS private collection for browser denial coverage", () => {
   expect(OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS.map(([collectionName]) => collectionName))
     .toEqual([
@@ -2158,6 +2184,57 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       }));
       await assertFails(updateDoc(existingRef, { serverOwned: false }));
       await assertFails(deleteDoc(existingRef));
+    }
+  }, 30_000);
+
+  test("Steward private records deny every browser operation", async () => {
+    const browserContexts = [
+      ["unauthenticated", () => testEnv.unauthenticatedContext()],
+      ["same-org customer", () => testEnv.authenticatedContext("customer-org-a", {
+      email: "customer-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+      })],
+      ["same-org sales", () => testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+      })],
+      ["same-org admin", () => testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+      })],
+      ["cross-tenant staff", () => testEnv.authenticatedContext("sales-org-b", {
+      email: "sales-b@example.com",
+      email_verified: true,
+      organizationId: "org-b"
+      })]
+    ];
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const privatePath of STEWARD_SERVER_ONLY_PATHS) {
+        await setDoc(doc(db, ...privatePath), {
+          schemaVersion: "steward-controls-v1",
+          organizationId: "org-a",
+          serverOwned: true
+        });
+      }
+    });
+
+    for (const [_label, contextFactory] of browserContexts) {
+      const browserDb = contextFactory().firestore();
+      for (const privatePath of STEWARD_SERVER_ONLY_PATHS) {
+        const existingRef = doc(browserDb, ...privatePath);
+        const collectionPath = privatePath.slice(0, -1);
+        const forgedRef = doc(browserDb, ...collectionPath, `${privatePath.at(-1)}-browser-created`);
+        await assertFails(getDoc(existingRef));
+        await assertFails(getDocs(query(collection(browserDb, ...collectionPath), limit(5))));
+        await assertFails(setDoc(forgedRef, { organizationId: "org-a", serverOwned: false }));
+        await assertFails(updateDoc(existingRef, { serverOwned: false }));
+        await assertFails(deleteDoc(existingRef));
+      }
     }
   }, 30_000);
 

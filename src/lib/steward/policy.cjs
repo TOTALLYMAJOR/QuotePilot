@@ -43,6 +43,12 @@ const PROVIDER_MUTATION_PATTERNS = Object.freeze([
   { code: "autonomous_contact", pattern: /\b(?:send it now|contact the client|email the client|text the client|auto[- ]?send)\b/iu }
 ]);
 
+const PROMPT_ATTACK_PATTERNS = Object.freeze([
+  { code: "instruction_override", pattern: /\b(?:ignore|disregard|override)\b.{0,50}\b(?:instructions|policy|system prompt|rules)\b/iu },
+  { code: "resource_exfiltration", pattern: /\b(?:print|reveal|show|export|list)\b.{0,60}\b(?:every|all|other)\b.{0,40}\b(?:customer|client|tenant|secret|record|prompt)\b/iu },
+  { code: "resource_discovery", pattern: /\b(?:search|browse|discover|enumerate)\b.{0,50}\b(?:other tenants?|all records?|internal data|customer database)\b/iu }
+]);
+
 const ADMIN_REVIEW_PATTERNS = Object.freeze([
   { code: "discount", pattern: /\b(?:discount|markdown|price override|waive (?:the )?fee)\b/iu },
   { code: "custom_menu", pattern: /\b(?:custom menu|off[- ]menu|new menu item|custom dish)\b/iu },
@@ -61,6 +67,7 @@ function inspectStewardContent(value) {
     sensitivePersonalData: matches(SENSITIVE_PERSONAL_PATTERNS, value),
     prohibitedTactics: matches(PROHIBITED_TACTIC_PATTERNS, value),
     providerMutations: matches(PROVIDER_MUTATION_PATTERNS, value),
+    promptAttacks: matches(PROMPT_ATTACK_PATTERNS, value),
     adminReview: matches(ADMIN_REVIEW_PATTERNS, value)
   };
 }
@@ -77,6 +84,7 @@ function evaluateStewardRequestPolicy(input) {
   if (findings.sensitivePersonalData.length) reasons.push(...findings.sensitivePersonalData);
   if (findings.prohibitedTactics.length) reasons.push(...findings.prohibitedTactics);
   if (findings.providerMutations.length) reasons.push(...findings.providerMutations);
+  if (findings.promptAttacks.length) reasons.push(...findings.promptAttacks);
   const uniqueReasons = [...new Set(reasons)];
   if (uniqueReasons.length) {
     return {

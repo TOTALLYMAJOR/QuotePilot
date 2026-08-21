@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-20 23:05:48 CDT
+Last updated: 2026-08-21 00:06:22 CDT
 
 All notable project changes are documented in this file.
 
@@ -17,6 +17,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
+- Completed the source-only Steward Phase 0 control layer. A synthetic redacted
+  adversarial corpus now covers prompt attacks, secrets, sensitive data,
+  prohibited sales tactics, and provider-mutation requests. Pure controls add
+  pseudonymous allowlisted audit metadata, bounded retention and deletion
+  plans, global/provider/organization/task/model kill gates, evidence-gated
+  incident release, and a containment/deletion runbook. Nine planned private
+  collections explicitly deny every browser operation; 32 focused tests and
+  all 76 Firestore emulator tests pass. The layer remains unimported,
+  unexported, deploy-dormant, and incapable of provider or product mutation.
 - Added the deploy-dormant private validation foundation for QuotePilot
   Steward. Pure server-side modules now enforce fixed tasks, exact request and
   source shapes, same-tenant and revision fences, US-only and role policy,

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 49,
+  "catalogVersion": 50,
   "contracts": [
     {
       "id": "steward-private-validation-foundation",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
@@ -12,9 +12,11 @@
         "internal_security",
         "steward_implementers"
       ],
-      "summary": "Deploy-dormant pure Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content, deterministic commercial provenance, and expiring tamper-evident Decision Packets before any provider or runtime integration exists.",
+      "summary": "Deploy-dormant pure Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content and prompt attacks, deterministic commercial provenance, expiring tamper-evident Decision Packets, pseudonymous audit metadata, bounded retention/deletion, incident recovery, kill/rollback gates, and explicit private-record browser denial before any provider or runtime integration exists.",
       "backendPaths": [
+        "firestore.rules",
         "src/lib/steward/contracts.cjs",
+        "src/lib/steward/controls.cjs",
         "src/lib/steward/policy.cjs",
         "src/lib/steward/validate.cjs"
       ],
@@ -23,13 +25,23 @@
       "entryPointLocators": [],
       "testPaths": [
         "src/lib/__tests__/stewardContracts.server.test.js",
+        "src/lib/__tests__/stewardControls.server.test.js",
         "src/lib/__tests__/stewardPolicy.server.test.js",
-        "src/lib/__tests__/stewardDecisionPacket.server.test.js"
+        "src/lib/__tests__/stewardDecisionPacket.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
         {
           "path": "src/lib/__tests__/stewardContracts.server.test.js",
           "locator": "accepts only same-tenant, current, revision-fenced source handles"
+        },
+        {
+          "path": "src/lib/__tests__/stewardControls.server.test.js",
+          "locator": "uses only synthetic redacted adversarial fixtures and matches every expected policy result"
+        },
+        {
+          "path": "src/lib/__tests__/stewardControls.server.test.js",
+          "locator": "creates non-executing deletion plans with owner-only organization scope"
         },
         {
           "path": "src/lib/__tests__/stewardPolicy.server.test.js",
@@ -38,6 +50,10 @@
         {
           "path": "src/lib/__tests__/stewardDecisionPacket.server.test.js",
           "locator": "detects packet tampering, authority drift, and expiry"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "Steward private records deny every browser operation"
         }
       ],
       "documentationPaths": [
@@ -46,11 +62,11 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Private Steward validation foundation"
+          "locator": "Private Steward validation and control foundation"
         }
       ],
-      "headlessReason": "These pure server-side modules must remain unexported and undiscoverable because they are security validators, not a user capability. No runtime imports them, and they expose no callable, frontend path, provider request, Firestore access, persistence, pricing calculation, payment operation, configuration action, or customer contact.",
-      "safeOutcome": "Future Steward slices have a tested fail-closed base for exact task and source contracts, US-only and role policy, secret and sensitive-data rejection, deterministic commercial evidence, safe plain text, and revision-bound expiring packet integrity, while current users and production behavior remain unchanged."
+      "headlessReason": "These pure server-side modules and private-rule declarations must remain unexported and undiscoverable because they are security controls, not a user capability. No runtime imports them, and they expose no callable, frontend path, provider request, persisted Steward record, pricing calculation, payment operation, configuration action, or customer contact.",
+      "safeOutcome": "Future Steward slices have a tested fail-closed base for exact task and source contracts, US-only and role policy, prompt/secret/sensitive-data rejection, deterministic commercial evidence, safe text, packet integrity, pseudonymous audits, bounded retention/deletion, kill/rollback controls, and browser-denied private records, while current users and production behavior remain unchanged."
     },
     {
       "id": "firebase-email-action-return-policy",

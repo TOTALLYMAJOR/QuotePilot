@@ -1,8 +1,8 @@
 # Technical Design: QuotePilot Steward
 
-Last updated: 2026-08-20 23:05:48 CDT
+Last updated: 2026-08-21 00:06:22 CDT
 
-Status: Phase 0 private validation foundation implemented in source; no runtime capability is claimed
+Status: Phase 0 private validation and control foundation implemented in source; no runtime capability is claimed
 Date: August 15, 2026
 PRD: `docs/STEWARD_PRD.md`
 ADR: `docs/STEWARD_ADR.md`
@@ -33,16 +33,27 @@ largest_risks:
 
 ## Source checkpoint: private validation foundation
 
-The first Phase 0 code slice now exists in `src/lib/steward/contracts.cjs`,
-`src/lib/steward/policy.cjs`, and `src/lib/steward/validate.cjs`. These
+The Phase 0 source foundation now exists in `src/lib/steward/contracts.cjs`,
+`src/lib/steward/policy.cjs`, `src/lib/steward/validate.cjs`, and
+`src/lib/steward/controls.cjs`. These
 server-oriented CommonJS modules are pure, unimported by runtime code, and
 unexported. They fix task/request/source shapes, same-tenant and
 revision fences, US-only/role/content policy, secret and sensitive-data blocks,
 deterministic commercial-number provenance, safe plain-text output, canonical
-serialization, and 15-minute authority-bound packet integrity. The three
-focused suites contain 20 passing adversarial tests.
+serialization, 15-minute authority-bound packet integrity, pseudonymous
+allowlisted audit metadata, bounded retention/deletion plans, incident holds,
+and global/provider/organization/task/model kill gates. An explicitly synthetic
+redacted corpus covers prompt injection, secret/sensitive data, prohibited
+tactics, and provider-mutation requests. The four focused suites contain 32
+passing tests.
 
-This checkpoint does not add context reads, private storage/rules, provider or
+Nine planned private collection paths are explicitly browser-denied in
+`firestore.rules`; the emulator suite passes 76 tests including every read,
+list, create, update, and delete denial for signed-out, same-tenant, and
+cross-tenant browser roles. `docs/STEWARD_INCIDENT_RUNBOOK.md` fixes the source
+containment, evidence, rollback, deletion, and release policy.
+
+This checkpoint does not add context reads, private storage, provider or
 billing adapters, a callable, a frontend, a runtime gate, pricing authority,
 configuration authority, customer contact, deployment, or production evidence.
 

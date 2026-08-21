@@ -1,8 +1,8 @@
 # Work Plan: QuotePilot Steward
 
-Last updated: 2026-08-20 23:05:48 CDT
+Last updated: 2026-08-21 00:06:22 CDT
 
-Status: Phase 0 private validation foundation implemented; remaining execution stays separately scoped
+Status: Phase 0 source controls implemented; remaining validation and runtime work stays separately scoped
 Created: August 15, 2026
 Type: High-risk full-stack feature
 Approach: Security foundation followed by vertical slices
@@ -49,16 +49,21 @@ messaging, payment, provider, or customer authority.
 - [x] Confirm the three threat-model context questions.
 - [x] Accept the PRD, ADR, UI specification, technical design, threat model,
   and work plan for implementation planning.
-- [ ] Finish the versioned policy set. Sensitive-claim, prohibited-tactic,
-  role, US-pilot, no-secret, and provider-action policies now exist; retention,
-  redaction, deletion, and kill/rollback policy remain open.
+- [x] Finish the versioned policy set: sensitive-claim, prohibited-tactic,
+  prompt-attack, role, US-pilot, no-secret, provider-action, retention,
+  redaction, deletion, and kill/rollback policy.
 - [x] Build packet/source canonicalization and validators with no provider.
-- [ ] Build the adversarial eval corpus and redacted fixture policy.
-- [ ] Add private record rules and browser-denial tests before exports exist.
-- [ ] Define incident, provider kill, organization kill, model rollback, and
+- [x] Build the synthetic adversarial eval corpus and redacted fixture policy.
+- [x] Add private record rules and browser-denial tests before exports exist.
+- [x] Define incident, provider kill, organization kill, model rollback, and
   content deletion runbooks.
-- [ ] Run the quick/core, auth-rules, pricing, capability, and security checks
-  appropriate to the touched foundation.
+- [ ] Close the two branch-wide validation blockers. Focused Steward tests,
+  Firestore rules, environment, build, capability, documentation, and secret
+  checks pass. The full unit gate still has the pre-existing
+  `quoteStore.versioning` pricing-authority assertion, while the auth/rules and
+  authoritative-pricing orchestration lanes stop before browser proof because
+  Node cannot resolve the extensionless `src/lib/brandLogoUrl` import from
+  `src/data/mockCatalog.js`.
 
 Completion gate: Pure code rejects foreign sources, unsupported tasks,
 forbidden claims, malformed output, stale revisions, unsafe rendering values,

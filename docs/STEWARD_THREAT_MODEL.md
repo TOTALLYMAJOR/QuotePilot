@@ -1,6 +1,6 @@
 # Preliminary Threat Model: QuotePilot Steward
 
-Last updated: 2026-08-20 20:18:11 CDT
+Last updated: 2026-08-21 00:06:22 CDT
 
 Status: Accepted for implementation planning; owner context recorded
 Date: August 15, 2026
@@ -155,6 +155,24 @@ would have a larger blast radius than application controls can eliminate.
 - Every billing entitlement is backed by signed provider evidence or trusted
   reconciliation.
 - Provider failure never removes the manual/deterministic quoting path.
+
+## Phase 0 source-control evidence
+
+The deploy-dormant source foundation now rejects prompt override, resource
+discovery/exfiltration, secret-shaped input, sensitive personal data,
+protected-trait sales tactics, willingness-to-pay manipulation, and direct
+provider or customer actions using a synthetic redacted adversarial corpus.
+It produces only allowlisted HMAC-pseudonymous audit metadata, defines bounded
+retention without any raw-prompt/raw-response category, requires reviewed
+expiry for client-memory facts, and creates non-executing deletion plans that
+accept a precomputed actor digest rather than a raw user identifier.
+
+Global, provider, organization, task, incident, and pinned-model gates fail
+closed. Releasing a hold requires admin/owner authority and a recovery-evidence
+digest. Nine future Steward private collections explicitly deny every browser
+operation; the Firestore emulator proves signed-out, same-tenant customer,
+sales, admin, and cross-tenant denial. These controls are not imported or
+exported and therefore are source evidence, not deployed enforcement.
 
 ## Residual risks
 
