@@ -137,6 +137,10 @@ describe("QuoteWorkspaceConceptPage", () => {
     expect(container.textContent).toContain("$19,475.00");
     expect(container.textContent).toContain("Connected preview");
     expect(container.textContent).toContain("all changes continue in the authoritative quote workspace");
+    expect(container.textContent).toContain("Difficult Question Desk");
+    expect(container.textContent).toContain("Steward is unavailable; quoting is not");
+    expect(container.textContent).toContain("Steward handoff unavailable");
+    expect(container.querySelector('[data-steward-state="provider_unavailable"]')).not.toBeNull();
 
     const openDrawer = Array.from(container.querySelectorAll("button"))
       .find((button) => button.textContent.includes("Activity & save health"));

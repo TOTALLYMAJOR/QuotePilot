@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-25 00:38:30 CDT
 
-Status: Phase 0 validated and Difficult Question Desk compiler plus consent-only evaluation contract implemented in source; no runtime capability is claimed
+Status: Phase 0 validated; Difficult Question Desk compiler, consent evaluation, and unavailable-state workbench implemented in source; no model runtime capability is claimed
 Date: August 15, 2026
 PRD: `docs/STEWARD_PRD.md`
 ADR: `docs/STEWARD_ADR.md`
@@ -75,11 +75,22 @@ cross-tenant browser roles. `docs/STEWARD_INCIDENT_RUNBOOK.md` fixes the source
 containment, evidence, rollback, deletion, and release policy.
 
 This checkpoint does not add canonical context reads, private storage, a
-configured provider transport or credential, billing, a callable, a frontend,
-a runtime import/export, pricing authority, configuration authority, customer
-contact, deployment, pilot evidence, or production evidence. The injected
-adapter and consent/evaluation layer exist only as deploy-dormant server-side
-contracts and test seams.
+configured provider transport or credential, billing, a callable, a model-
+output frontend, a runtime import/export for the compiler, pricing authority,
+configuration authority, customer contact, deployment, pilot evidence, or
+production evidence. The injected adapter and consent/evaluation layer exist
+only as deploy-dormant server-side contracts and test seams.
+
+The authorized staff quote workspace now includes a discoverable read-only
+`StewardWorkbench`. This source/local surface implements every planned Desk
+status shell without rendering model prose. The live integration is fixed to
+`provider_unavailable`, keeps `Steward handoff unavailable` disabled, labels
+that no change was made, explains the boundary through progressive disclosure,
+and routes only to the existing manual message workflow. Twenty-two focused UI
+tests and three real-route Playwright checks cover the status matrix, safe text
+rendering, disabled handoff, manual recovery, 44-pixel action targets, and no
+horizontal overflow at 1440x1000 and 390x844. These checks are local browser
+evidence, not hosted, provider, pilot, production, or human acceptance.
 
 ## Existing codebase analysis
 

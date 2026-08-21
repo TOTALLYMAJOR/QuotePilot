@@ -1,0 +1,226 @@
+.steward-workbench {
+  --steward-ink: var(--qwc-ink, #1f2023);
+  --steward-muted: var(--qwc-muted, #5f6268);
+  --steward-line: var(--qwc-line, #e6ddcb);
+  --steward-brass: var(--qwc-brass, #a4761f);
+  padding: 1rem;
+  color: var(--steward-ink);
+  border: 1px solid var(--steward-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 14px 34px -32px rgba(31, 32, 35, 0.55);
+}
+
+.steward-workbench-heading {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.steward-workbench-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0.45rem;
+  color: var(--steward-brass);
+  border: 1px solid rgba(164, 118, 31, 0.34);
+  border-radius: 50%;
+  background: #fffaf1;
+}
+
+.steward-workbench-heading p,
+.steward-workbench-heading h2 {
+  margin: 0;
+}
+
+.steward-workbench-heading p {
+  color: var(--steward-brass);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.steward-workbench-heading h2 {
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.steward-workbench-heading > span {
+  padding: 0.25rem 0.45rem;
+  color: var(--steward-muted);
+  border: 1px solid var(--steward-line);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.steward-workbench-status {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--steward-line);
+}
+
+.steward-workbench-status strong {
+  display: block;
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.18;
+}
+
+.steward-workbench-status p,
+.steward-workbench-context p,
+.steward-workbench details p {
+  color: var(--steward-muted);
+  font-size: 0.72rem;
+  line-height: 1.52;
+}
+
+.steward-workbench-status p {
+  margin: 0.5rem 0 0;
+}
+
+.steward-workbench-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steward-workbench-stages li {
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0.3rem;
+  color: var(--steward-muted);
+  border: 1px solid var(--steward-line);
+  border-radius: 7px;
+  font-size: 0.62rem;
+  text-align: center;
+}
+
+.steward-workbench-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.55rem;
+  margin-top: 0.9rem;
+  padding: 0.7rem;
+  border: 1px solid var(--steward-line);
+  border-radius: 8px;
+  background: rgba(244, 244, 242, 0.58);
+}
+
+.steward-workbench-context > span {
+  color: var(--steward-muted);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.steward-workbench-context > strong {
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.steward-workbench-context p {
+  grid-column: 1 / -1;
+  margin: 0.35rem 0 0;
+}
+
+.steward-workbench-actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.steward-workbench-actions button {
+  min-height: 44px;
+  padding: 0.6rem 0.75rem;
+  color: var(--steward-ink);
+  background: transparent;
+  border: 1px solid rgba(164, 118, 31, 0.48);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.steward-workbench-actions button:hover,
+.steward-workbench-actions button:focus-visible {
+  border-color: var(--steward-brass);
+  outline: 2px solid rgba(164, 118, 31, 0.2);
+  outline-offset: 2px;
+}
+
+.steward-workbench-actions button:disabled {
+  color: var(--steward-muted);
+  background: rgba(244, 244, 242, 0.7);
+  border-color: var(--steward-line);
+  cursor: not-allowed;
+  opacity: 0.82;
+}
+
+.steward-workbench details {
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--steward-line);
+}
+
+.steward-workbench summary {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  color: var(--steward-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.steward-workbench details p {
+  margin: 0.35rem 0 0;
+}
+
+.steward-workbench-refused,
+.steward-workbench-stale,
+.steward-workbench-expired {
+  border-color: rgba(166, 74, 58, 0.34);
+}
+
+.steward-workbench-refused .steward-workbench-icon,
+.steward-workbench-stale .steward-workbench-icon,
+.steward-workbench-expired .steward-workbench-icon {
+  color: #8f3f33;
+  border-color: rgba(166, 74, 58, 0.34);
+  background: #fff5f2;
+}
+
+@media (max-width: 920px) {
+  .steward-workbench {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .steward-workbench-heading {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .steward-workbench-heading > span {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .steward-workbench-stages {
+    grid-template-columns: 1fr;
+  }
+}

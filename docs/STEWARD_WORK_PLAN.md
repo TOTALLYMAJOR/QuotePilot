@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-25 00:38:30 CDT
 
-Status: Phase 0 validated; Phase 1 shadow compiler and consent/evaluation contracts implemented; runtime work stays separately scoped
+Status: Phase 0 validated; Phase 1 compiler, consent evaluation, and unavailable-state workbench implemented; runtime work stays separately scoped
 Created: August 15, 2026
 Type: High-risk full-stack feature
 Approach: Security foundation followed by vertical slices
@@ -78,7 +78,10 @@ and packet tampering with 100% expected negative-test coverage.
   admin pilot approval plus participant opt-in, hidden-only results, a pinned
   100-case representative/adversarial corpus, digest-only human-comparison
   receipts, duplicate rejection, and non-authoritative promotion thresholds.
-- [ ] Add read-only workbench states and ordinary-composer handoff disabled.
+- [x] Add the read-only workbench status matrix to the authorized quote
+  workspace. The connected state remains fixed to provider-unavailable, model
+  output is not rendered, Steward handoff is disabled, and only the existing
+  ordinary manual-message path is enabled.
 - [ ] Bind the consent contract to a reviewed private runtime, then run packets
   silently for consenting internal/pilot users and compare with human responses
   without showing model output in production work.

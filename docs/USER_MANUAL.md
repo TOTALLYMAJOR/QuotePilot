@@ -1994,6 +1994,21 @@ even reconciliation could not complete — is pre-existing behavior, now
 literally marked for automated coverage; recording a cost uses the exact
 same save path as every other catalog field.
 
+## Difficult Question Desk preview
+
+Authorized sales and administrative staff can see the Difficult Question Desk
+in the connected Quote Workspace. The current source/local checkpoint is a
+read-only boundary preview: it says `Steward is unavailable; quoting is not`,
+shows that no changes were made, and keeps `Steward handoff unavailable`
+disabled. It does not display a model draft, call a configured provider, save a
+packet, alter the quote, or send a customer message.
+
+Use `Open manual message` to continue through QuotePilot's ordinary messaging
+workflow. That button is a manual recovery path, not a Steward-generated draft
+or proof that a message was accepted, delivered, read, or answered. The `Why
+Steward is limited` disclosure summarizes the current no-save, no-send,
+no-approval, no-discount, no-charge, and no-configuration boundary.
+
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.
 - If starter packs do not appear in Catalog for an admin on hosted deployments, verify the organization has a `settings/config` document in Firestore and that your account is an admin for that same organization. A missing `settings`/`settings/config` document will keep catalog bootstrapping in a recoverable blocked state.

@@ -146,6 +146,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   quote, so staff can reach the read-only workspace and its Activity & Save
   Health drawer without typing an address. Organization scope and quote
   mutation authority remain unchanged.
+- Added a discoverable read-only Difficult Question Desk panel to the authorized
+  staff Quote Workspace. Its live state truthfully reports that Steward is not
+  connected to a reviewed runtime/provider, renders no model prose, labels that
+  no change was made, disables Steward handoff, and keeps the ordinary manual
+  message workflow available. Twenty-two focused UI tests and three real-route
+  Playwright checks pass, including 1440x1000 and 390x844 overflow, target-size,
+  safe-rendering, state-matrix, and workflow-continuity proof. This is local
+  browser evidence only, not a provider run, pilot, deployment, or production
+  acceptance.
 - Added the deploy-dormant Difficult Question Desk silent-evaluation contract.
   Current owner/admin pilot approval and exact participant opt-in are required
   before any injected provider adapter can run. Results remain hidden; a pinned
