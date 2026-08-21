@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 00:16:18 CDT
+Last updated: 2026-08-21 00:29:35 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -207,17 +207,15 @@ Only open work belongs here. Current operational truth lives in
 
 ## P1 - QuotePilot Steward
 
-- Finish the remaining Steward Phase 0 validation lanes before the read-only
-  Difficult Question Desk shadow slice. The deploy-dormant packet, source,
+- Begin the separately scoped read-only Difficult Question Desk shadow slice.
+  Steward Phase 0 validation is complete: the deploy-dormant packet, source,
   request-policy, semantic-validation, commercial-provenance, synthetic
   adversarial corpus, pseudonymous audit, retention/deletion, kill/rollback,
   incident-runbook, and private-record browser-denial controls now have focused
-  source/local coverage. Focused tests, rules, environment, build, capability,
-  docs, and secret checks pass. The native-Node catalog import blocker is fixed
-  with explicit local extensions and regression coverage; both Firebase
-  orchestration lanes now pass. Close the remaining
-  pre-existing full-unit `quoteStore.versioning` pricing-authority assertion.
-  The later model gets no
+  source/local coverage. The native-Node catalog import and local pricing-
+  snapshot enrichment regressions are fixed; the full 3,883-test unit gate,
+  Firestore rules, environment, build, capability, documentation, and both
+  Firebase orchestration lanes pass. The later model gets no
   tools and no write, messaging, payment, browsing, or resource-discovery
   authority.
 - Keep every authoritative price, margin, staffing, production, catalog,

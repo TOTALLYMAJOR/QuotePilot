@@ -1044,28 +1044,7 @@ function resolvePersistedPricingSnapshot({
   ownerEmail = "",
   reason = ""
 } = {}) {
-  const normalized = pricingSnapshot && typeof pricingSnapshot === "object"
-    ? normalizePricingOutput(pricingSnapshot)
-    : buildPricingSnapshotFromClientTotals({
-      form,
-      totals,
-      settings,
-      catalog,
-      selection,
-      organizationId,
-      quoteId,
-      quoteNumber,
-      actor: {
-        uid: ownerUid,
-        email: ownerEmail,
-        role: "sales"
-      },
-      reason: reason || `fallback_${catalogSource || "unknown"}`
-    });
-
-  if (normalized?.commercialSnapshot) return normalized;
-
-  return buildPricingSnapshotFromClientTotals({
+  const fallbackPricing = buildPricingSnapshotFromClientTotals({
     form,
     totals,
     settings,
@@ -1081,6 +1060,18 @@ function resolvePersistedPricingSnapshot({
     },
     reason: reason || `fallback_${catalogSource || "unknown"}`
   });
+
+  if (!pricingSnapshot || typeof pricingSnapshot !== "object") {
+    return fallbackPricing;
+  }
+
+  const normalized = normalizePricingOutput(pricingSnapshot);
+  if (normalized.commercialSnapshot) return normalized;
+
+  return {
+    ...normalized,
+    commercialSnapshot: fallbackPricing.commercialSnapshot
+  };
 }
 
 async function syncPortalSnapshotFromQuoteDoc(quoteId, organizationId = "") {

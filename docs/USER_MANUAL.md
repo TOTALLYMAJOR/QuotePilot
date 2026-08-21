@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: August 13, 2026
+Last updated: 2026-08-21 00:29:35 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -447,6 +447,10 @@ unchanged.
     from current tenant settings and atomically updates the quote/portal while
     creating the next version; terminal customer, booking, or payment evidence
     blocks the edit.
+  - In the local development fallback, QuotePilot retains an already normalized
+    pricing snapshot while adding the private commercial-cost evidence needed
+    by staff margin context. That local record is source/test evidence only; it
+    does not prove a hosted server-authoritative quote write.
   - While editing a Firebase-backed saved quote, use `Preview change impact` to
     compare the saved canonical revision with a server-authoritatively repriced
     snapshot of the unsaved form. Review exact fact changes, total and deposit

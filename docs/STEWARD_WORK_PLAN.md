@@ -1,8 +1,8 @@
 # Work Plan: QuotePilot Steward
 
-Last updated: 2026-08-21 00:06:22 CDT
+Last updated: 2026-08-21 00:29:35 CDT
 
-Status: Phase 0 source controls implemented; remaining validation and runtime work stays separately scoped
+Status: Phase 0 source controls validated; runtime work stays separately scoped
 Created: August 15, 2026
 Type: High-risk full-stack feature
 Approach: Security foundation followed by vertical slices
@@ -57,13 +57,11 @@ messaging, payment, provider, or customer authority.
 - [x] Add private record rules and browser-denial tests before exports exist.
 - [x] Define incident, provider kill, organization kill, model rollback, and
   content deletion runbooks.
-- [ ] Close the two branch-wide validation blockers. Focused Steward tests,
-  Firestore rules, environment, build, capability, documentation, and secret
-  checks pass. The full unit gate still has the pre-existing
-  `quoteStore.versioning` pricing-authority assertion, while the auth/rules and
-  authoritative-pricing orchestration lanes stop before browser proof because
-  Node cannot resolve the extensionless `src/lib/brandLogoUrl` import from
-  `src/data/mockCatalog.js`.
+- [x] Close the two branch-wide validation blockers. Explicit native-Node import
+  extensions repair both Firebase orchestration lanes, and local pricing-
+  snapshot enrichment now preserves exact supplied pricing while attaching
+  private commercial evidence. All 3,883 unit tests, 76 Firestore rules tests,
+  environment, build, capability, documentation, and orchestration gates pass.
 
 Completion gate: Pure code rejects foreign sources, unsupported tasks,
 forbidden claims, malformed output, stale revisions, unsafe rendering values,

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 00:16:18 CDT
+Last updated: 2026-08-21 00:29:35 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Preserved a supplied normalized pricing snapshot when local quote persistence
+  attaches newly required private commercial-cost evidence. The enrichment no
+  longer replaces the snapshot's exact totals or authority label; focused and
+  full-unit regressions cover the boundary, while Firebase remains the only
+  hosted server-authoritative quote-write path.
 - Made `src/data/mockCatalog.js` loadable through native Node ESM by adding
   explicit `.js` extensions to its local imports. Firebase seed and emulator
   scripts no longer stop before browser tests on `brandLogoUrl` resolution; a
