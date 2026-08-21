@@ -1,6 +1,8 @@
 # Product Requirements: QuotePilot Steward
 
-Status: Proposed for owner review
+Last updated: 2026-08-20 20:18:11 CDT
+
+Status: Accepted for implementation planning
 Date: August 15, 2026
 Related research: `docs/STEWARD_COMPETITIVE_RESEARCH.md`
 
@@ -8,10 +10,11 @@ Related research: `docs/STEWARD_COMPETITIVE_RESEARCH.md`
 
 ### One-line summary
 
-QuotePilot Steward is a paid, tenant-bounded copilot that prepares menu setup,
-review-ready quotes, difficult customer responses, and sales strategy while
-leaving pricing, saving, sending, approval, and customer commitments under
-existing human and server authority.
+QuotePilot Steward is a paid, tenant-bounded business copilot that helps teams
+configure menus and workflows, understand provider readiness, protect margin,
+prepare quotes and responses, and advise each client from reviewed first-party
+history while leaving every write, payment, send, approval, and customer
+commitment under existing human and server authority.
 
 ### Product principle
 
@@ -33,16 +36,17 @@ write persuasive text but may invent facts, expose data, or blur who approved
 the result.
 
 Steward should make the on-the-spot moment calmer and more ambitious: the
-operator can ask for a menu, quote, answer, or strategy and receive a structured
-Decision Packet that can be challenged and reviewed before entering the
-trusted quote flow.
+operator can ask for setup guidance, a menu, workflow, provider-readiness
+check, quote, margin review, client plan, answer, or strategy and receive a
+structured Decision Packet that can be challenged and reviewed before entering
+the trusted QuotePilot flow.
 
 ## Primary users
 
 | User | Need | Authority |
 |---|---|---|
-| Organization owner/admin | Set up menus and house rules, govern data use, purchase the add-on, review safety and usage | Configure Steward policy and entitlement; retain existing admin-only authorities |
-| Sales or event operator | Build a fast, defensible quote and answer difficult questions | Request packets and stage permitted suggestions into an unsaved draft; existing quote authority remains unchanged |
+| Organization owner/admin | Set up menus, workflows, providers, and house rules; govern data use; purchase the add-on; review safety and usage | Configure Steward policy and entitlement; review staged setup plans; retain existing admin-only authorities |
+| Sales or event operator | Build a fast, defensible quote, protect margin, understand a client, and answer difficult questions | Request packets and stage permitted suggestions into an unsaved draft; existing quote and communication authority remains unchanged |
 | Operations staff | Understand staffing and production consequences | Read bounded consequences when already authorized for the underlying event; no commercial apply authority is added |
 | Customer | Receive accurate, respectful, human-approved communication | No direct Steward access or autonomous contact in MVP |
 
@@ -61,6 +65,20 @@ trusted quote flow.
 4. **Strategy Table:** Prepare discovery questions, option architecture,
    negotiation boundaries, upsell opportunities, and risk-aware next steps
    without making customer commitments.
+5. **Workflow Coach:** Review the organization's recorded workflow policies,
+   attention rules, reminders, templates, and operational gates; produce a
+   staged configuration plan for an administrator to apply through the
+   existing authoritative settings surfaces.
+6. **Margin Advisor:** Monitor complete recorded-cost margin evidence, explain
+   below-target or unavailable states, and prepare bounded price/scope scenarios
+   through existing deterministic pricing and Commercial Change simulation.
+7. **Client Advisor:** Build a source-labeled relationship brief from
+   tenant-owned accepted/booked history, confirmed preferences, recorded
+   interactions, and operator-reviewed memory without inferring protected or
+   sensitive traits.
+8. **Provider Setup Guide:** Explain non-secret readiness, missing evidence,
+   test-mode steps, and safe handoffs for Stripe and other approved integrations
+   without receiving credentials or creating provider objects.
 
 ## User journey
 
@@ -94,6 +112,10 @@ flowchart LR
     D[Strategy guidance]
     E[Decision Packet]
     F[Human-reviewed staging]
+    M[Workflow setup preview]
+    N[Margin monitoring and scenarios]
+    O[Client advisory memory]
+    P[Provider readiness guidance]
   end
   subgraph OUT[Out of scope]
     G[Autonomous quote save]
@@ -102,11 +124,18 @@ flowchart LR
     J[Legal or allergen guarantee]
     K[Open-ended tools or web access]
     L[Cross-tenant learning]
+    Q[Secret or credential handling]
+    R[Provider-side configuration or payment action]
+    S[Hidden client profiling]
   end
   A --> E
   B --> E
   C --> E
   D --> E
+  M --> E
+  N --> E
+  O --> E
+  P --> E
   E --> F
 ```
 
@@ -115,8 +144,9 @@ flowchart LR
 ### Must have: MVP
 
 - **STW-FR-001: Bounded tasks.** The user must select one of `setup_menu`,
-  `prepare_quote`, `draft_response`, or `plan_strategy`; arbitrary tool-running
-  requests are rejected.
+  `configure_workflow`, `guide_provider_setup`, `prepare_quote`,
+  `review_margin`, `advise_client`, `draft_response`, or `plan_strategy`;
+  arbitrary tool-running requests are rejected.
   - AC-001: An unsupported task returns a stable refusal code and no provider
     request.
   - AC-002: The model never receives a general-purpose tool, browser, database,
@@ -186,6 +216,49 @@ flowchart LR
   catalog import, or customer communication.
   - AC-021: Recovery points to the existing deterministic/manual path.
   - AC-022: No partial packet can be staged.
+- **STW-FR-012: Workflow configuration safety.** Steward may compare current
+  tenant workflow policy with an approved goal and prepare a versioned settings
+  diff, but it cannot enable a gate, schedule a job, change a role, or write a
+  policy.
+  - AC-023: Every proposed configuration field maps to an existing role-safe
+    editor and names the current value, proposed value, consequence, do-nothing
+    outcome, owner, and required approval.
+  - AC-024: Applying any configuration remains an explicit administrator action
+    through the existing revision-fenced authority and receipt path.
+- **STW-FR-013: Deterministic margin advice.** Steward may explain and compare
+  margin only after the existing margin authority establishes complete
+  recorded-cost coverage for the exact quote or scenario.
+  - AC-025: Background margin monitoring is deterministic and server- or
+    client-rule driven; it never spends model tokens or changes a quote by
+    itself.
+  - AC-026: Costs, target margin, and margin advice remain staff-only. A margin
+    task may send only the minimum verified margin/target/delta context allowed
+    by tenant policy—never raw cost lines—and no result may enter a proposal,
+    portal, customer response, or customer-safe projection.
+- **STW-FR-014: Governed client memory.** Client advice may use only current-
+  tenant canonical activity and operator-confirmed memory facts with source,
+  freshness, scope, and review state.
+  - AC-027: Steward cannot infer or retain protected traits, health/dietary
+    details, religion, disability, minors' data, sentiment, personality,
+    willingness to overpay, or hidden vulnerability scores.
+  - AC-028: Authorized staff can inspect the source behind every memory fact;
+    administrators can correct, expire, or delete it; stale or disputed facts
+    are excluded from provider context and recommendations.
+  - AC-029: Recorded behavior means exact first-party events—such as accepted
+    selections, booked event patterns, explicit preferences, and separately
+    evidenced communication states—not inferred intent or cross-tenant trends.
+- **STW-FR-015: Provider setup guidance.** Steward may read bounded, non-secret
+  QuotePilot readiness projections and prepare an ordered setup checklist for
+  Stripe, Resend, SMS, or another approved integration.
+  - AC-030: The interface rejects API keys, webhook secrets, payment-card data,
+    bank information, and recovery codes before provider use and never asks the
+    user to paste them into Steward.
+  - AC-031: Steward cannot create or modify provider accounts, webhooks,
+    products, prices, subscriptions, charges, refunds, payouts, routing, secret
+    bindings, runtime gates, or production configuration.
+  - AC-032: Each provider step links to the existing role-safe QuotePilot or
+    provider-hosted surface and keeps configuration, provider acceptance,
+    settlement, activation, and production evidence separate.
 
 ### Should have: controlled follow-up
 
@@ -203,6 +276,8 @@ flowchart LR
 - Consent-based transcription after a separate privacy and recording-law
   review.
 - Operator-curated reusable strategy recipes and response patterns.
+- Admin-reviewed workflow and provider setup recipes that reference only
+  versioned non-secret configuration fields and existing authoritative routes.
 - A customer-facing clarification form that gathers facts but never exposes the
   agent or allows autonomous negotiation.
 
@@ -213,6 +288,8 @@ flowchart LR
   access.
 - Automatic acceptance, discount approval, proposal publication, messaging,
   booking, payment, refund, or production release.
+- Autonomous provider setup, secret handling, gate promotion, background model
+  surveillance, or automatic margin-driven repricing.
 - Inferred allergens, dietary safety, medical suitability, legal conclusions,
   tax advice, or guaranteed availability.
 - Cross-tenant training, benchmarking, retrieval, or imitation.
@@ -228,7 +305,7 @@ flowchart LR
 | Performance | Target p50 <= 8 seconds and p95 <= 20 seconds for text-only packet preparation; deterministic preflight <= 1 second excluding network |
 | Availability | Steward may target 99.5% monthly availability without changing QuotePilot's core quoting availability target |
 | Accessibility | WCAG 2.2 AA; complete keyboard path; status and consequence changes announced without color-only meaning |
-| Privacy | Data minimization by task; no raw prompt in analytics; operator-visible disclosure before provider-backed use; documented deletion and provider-retention posture |
+| Privacy | Data minimization by task; no raw prompt in analytics; operator-visible disclosure before provider-backed use; reviewable/deletable tenant memory; documented deletion and provider-retention posture |
 | Cost | Per-run token and time ceilings, organization allowance, hard cap, duplicate suppression, and admin-visible usage |
 | Explainability | 100% of deterministic values show their authority source; model suggestions are visibly distinct from verified evidence |
 
@@ -249,6 +326,12 @@ flowchart LR
    those fields are generated by deterministic systems, not the model.
 7. Accessibility audit scores 100% for critical interaction paths and has zero
    serious automated violations before pilot promotion.
+8. 100% of client-advice memory facts show a canonical source and freshness
+   state; disputed, stale, sensitive, or deleted facts appear in zero provider
+   requests.
+9. 100% of margin alerts and scenarios are traceable to the existing
+   deterministic margin/pricing authorities, with no model-originated fallback
+   numbers.
 
 ## Commercial hypothesis
 
@@ -277,10 +360,20 @@ pay, provider cost, support load, and packet completion rate before launch.
 | Subscription spoof or billing confusion | High | Separate Stripe Billing rail, signed webhooks, immutable entitlement transitions, clear cancellation and usage UI |
 | Provider data retention conflicts with customer expectations | High | Pre-launch DPA/privacy review, task minimization, `store: false`, no files/background/tools, truthful disclosure, ZDR treated as optional verified control |
 | Model drift changes behavior | High | Pinned model snapshot, prompt/policy versions, eval gate, canary, instant provider/model kill switch |
+| Stale or inferred client memory creates bad advice | High | First-party sources only, explicit freshness, operator review, correction/deletion, no protected or sensitive inference |
+| Setup guidance crosses into provider or production authority | Critical | Non-secret readiness DTOs, no tools, no secret input, role-safe handoffs, existing provider and release gates remain separate |
+| Margin optimization encourages harmful or deceptive treatment | High | Deterministic numerics, policy constraints, no protected-trait use, explicit tradeoffs, human review, no automatic repricing |
 
-## Approval gate
+## Owner approval record
 
-This PRD remains Proposed until the owner confirms the three threat-model
-assumptions listed in `docs/STEWARD_THREAT_MODEL.md`. Acceptance authorizes
-implementation planning, not provider enablement, billing activation, deploy,
-production promotion, or autonomous authority.
+The owner reviewed and accepted this PRD and the related ADR, UI specification,
+technical design, threat model, and work plan on August 20, 2026. The approved
+launch context is recorded in `docs/STEWARD_THREAT_MODEL.md`. Acceptance
+authorizes implementation planning, not provider enablement, billing
+activation, deployment, production promotion, or autonomous authority.
+
+Later on August 20, 2026, the owner directed this planning scope to include
+menu and workflow configuration, provider-readiness guidance, deterministic
+margin monitoring, and tenant-owned client advisory memory. That direction
+does not broaden Steward's write, secret, payment, provider, customer-contact,
+deployment, or production authority.

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 19, 2026
+Last updated: 2026-08-20 23:05:48 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -207,28 +207,44 @@ Only open work belongs here. Current operational truth lives in
 
 ## P1 - QuotePilot Steward
 
-- Review and accept the proposed governed-copilot program in
-  `docs/STEWARD_PRD.md`, `docs/STEWARD_ADR.md`, `docs/STEWARD_UI_SPEC.md`,
-  `docs/STEWARD_DESIGN.md`, `docs/STEWARD_THREAT_MODEL.md`, and
-  `docs/STEWARD_WORK_PLAN.md`. Resolve the three threat-context questions before
-  final risk ranking or implementation approval.
-- Begin only with the read-only Difficult Question Desk shadow slice after the
-  pure packet, source, policy, semantic-validation, private-rule, redaction,
-  kill-switch, and adversarial-eval contracts pass. The model gets no tools and
-  no write, messaging, payment, browsing, or resource-discovery authority.
+- Complete Steward Phase 0 before the read-only Difficult Question Desk shadow
+  slice. The deploy-dormant packet, source, request-policy, semantic-validation,
+  commercial-provenance, and initial adversarial contracts now have focused
+  source/local coverage. Private-record rules and browser-denial tests,
+  retention/redaction fixtures, kill/rollback contracts, incident runbooks,
+  and the remaining security lanes are still open. The later model gets no
+  tools and no write, messaging, payment, browsing, or resource-discovery
+  authority.
 - Keep every authoritative price, margin, staffing, production, catalog,
   revision, and entitlement value outside model authority. Steward may prepare,
   compare, explain, and stage an unsaved review; existing trusted paths alone
   may import, save, approve, publish, send, book, charge, or reconcile.
+- Deliver the expanded Setup and Configuration Studio through existing guarded
+  surfaces: menu import preview, versioned workflow-policy editors, and bounded
+  non-secret Integration Ops/Stripe Connect readiness. Steward may prepare a
+  typed diff or checklist, but it must never receive credentials, create a
+  provider object, change routing, enable a gate, deploy, or apply settings.
+- Add Margin Advisor only on complete current recorded-cost evidence from the
+  existing deterministic margin/pricing/Commercial Change adapters. Missing
+  costs remain unavailable; monitoring is deterministic; all scenarios stay in
+  the existing review-before-draft and trusted-save path.
+- Add Client Advisor with exact tenant/client binding, canonical accepted/booked
+  activity, explicit preferences, and operator-reviewed memory facts. Require
+  source, freshness, review, dispute, correction, expiry, deletion, and tenant-
+  cleanup contracts; prohibit sensitive/protected inference, sentiment,
+  vulnerability, perceived wealth, willingness-to-pay, approximate identity,
+  hidden profiles, and cross-tenant learning.
 - Design the paid add-on on a separate Stripe Billing rail. Do not reuse quote
   deposits, final balances, buyer access, Connect, their customer identities,
   products, keys, webhooks, collections, or state machines. MVP has a hard
   included allowance and no automatic overage.
 - Treat provider/project/model/data controls, retention, DPA/privacy terms,
   Stripe test evidence, hosted role/tenant denial, production-data acceptance,
-  human review, and promotion approval as separate gates. Do not add Steward to
-  the Feature Matrix or User Manual until a discoverable role-safe capability
-  and its executable state evidence ship together.
+  human review, and promotion approval as separate gates. The Feature Matrix
+  may record the private unexported foundation as security evidence, but do not
+  present Steward in the User Manual or as a user capability until a
+  discoverable role-safe surface and its executable state evidence ship
+  together.
 
 ## P1 - Workspace Design Follow-ups
 

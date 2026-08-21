@@ -1,6 +1,8 @@
 # Architecture Decision: QuotePilot Steward as a Bounded Decision Compiler
 
-Status: Proposed
+Last updated: 2026-08-20 20:18:11 CDT
+
+Status: Accepted for implementation planning
 Date: August 15, 2026
 Decision owner: QuotePilot owner
 
@@ -12,10 +14,10 @@ customer change requests, Commercial Change Authority, and role-gated Firebase
 operations. A new AI setup agent could reuse those authorities or accidentally
 create a parallel authority that is easier to prompt, spoof, or misunderstand.
 
-The design must support useful preparation across menu setup, quoting,
-difficult customer questions, and strategy while ensuring that model behavior
-cannot directly become customer, pricing, catalog, payment, or production
-truth.
+The design must support useful preparation across menu and workflow setup,
+provider readiness, quoting, margin review, client advice, difficult customer
+questions, and strategy while ensuring that model behavior cannot directly
+become customer, pricing, catalog, payment, configuration, or production truth.
 
 ## Decision
 
@@ -75,6 +77,27 @@ flowchart LR
     verified before enablement. `store: false` is required but must not be
     described as Zero Data Retention unless the exact API project is approved
     and verified for that control.
+11. **Configuration is plan-and-handoff only.** Steward may produce a typed
+    menu, workflow, integration, or policy diff, but existing administrator
+    editors, revision fences, recent-auth checks, confirmations, and receipts
+    remain the only write authority.
+12. **Provider guidance is credential-blind.** Steward may interpret bounded
+    non-secret readiness projections and link to an existing safe setup path.
+    It receives no secret and has no Stripe, Resend, SMS, cloud, deployment, or
+    provider tool.
+13. **Margin monitoring is deterministic.** Existing recorded-cost and pricing
+    code detects missing coverage, below-target states, and scenario numerics.
+    The model may explain verified results but cannot calculate, backfill, or
+    automatically act on them.
+14. **Client memory is a governed source, not hidden model memory.** Advice may
+    use same-tenant canonical activity and operator-confirmed facts only when
+    source, freshness, review state, and deletion controls are present. No
+    protected/sensitive inference, cross-tenant pattern transfer, sentiment
+    scoring, or provider conversation state is permitted.
+15. **No background model surveillance.** Deterministic code may surface an
+    attention state from current records, but a human must open a bounded task
+    before provider inference. Steward does not continuously watch customers,
+    spend tokens, contact providers, or trigger workflow actions.
 
 ## Options considered
 
@@ -92,6 +115,8 @@ flowchart LR
 - Model failures are contained before customer-impacting side effects.
 - Existing pricing, versioning, catalog, portal, payment, and production
   authorities stay singular.
+- Existing workflow, integration, and client-record authorities also remain
+  singular while Steward can explain their current state and next safe step.
 - The product can explain not only a recommendation but whether and how it may
   be used.
 - Provider replacement remains possible because the application contract is
@@ -118,6 +143,10 @@ these are observed:
 - a packet directly triggers a write, send, booking, payment, or approval;
 - stale or expired packet content can be staged;
 - raw customer content, secrets, or unrestricted output enters logs;
+- Steward requests, receives, stores, or echoes a provider credential;
+- client advice uses an inferred protected/sensitive trait, disputed memory,
+  cross-tenant pattern, or source without a freshness state;
+- a background model run occurs without a current bounded human request;
 - an entitlement is granted from a browser return instead of a verified
   provider event;
 - unsafe allergen, legal, tax, availability, discount, or contractual claims
@@ -130,6 +159,9 @@ these are observed:
 - Isolate Steward modules from the existing large Functions entry point and
   export only narrow callables through `functions/index.js`.
 - Preserve deterministic extraction in CREATE as the availability floor.
+- Reuse existing margin, client-history, workflow-policy, integration-status,
+  and Stripe Connect readiness projections rather than creating parallel
+  summaries or provider clients.
 - Prefer server-created source handles over sending full records from the
   browser.
 - Render output through normal React text interpolation; do not support model
@@ -146,6 +178,9 @@ these are observed:
 - `docs/INTENT_INTAKE_ADR.md`
 - `docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md`
 - `docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md`
+- `docs/REVENUE_AUTOPILOT_ADR.md`
+- `docs/STRIPE_CONNECT_PROGRAM.md`
+- `docs/POST_COMPETITIVE_DESIGN.md`
 - `docs/STEWARD_PRD.md`
 - `docs/STEWARD_DESIGN.md`
 - `docs/STEWARD_THREAT_MODEL.md`
