@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 07:46:30 CDT
+Last updated: 2026-08-21 22:57:08 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Preserved Steward's adversarial secret-shaped response coverage while
+  constructing the synthetic Stripe-key fixture at runtime, so the repository
+  secret scanner no longer mistakes test source for a committed credential.
 - Made ignored Firebase/Vite configuration persistent across linked Git
   worktrees. Environment validation and Vite now load the primary checkout as
   a safe default, preserve worktree-local overrides, and keep injected shell,

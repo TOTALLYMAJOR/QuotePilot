@@ -299,7 +299,7 @@ describe("Steward Difficult Question Desk silent evaluation", () => {
     })).toThrow(/not eligible/u);
     expect(() => buildDifficultQuestionReviewReceipt({
       ...input,
-      humanResponse: "Use sk_live_abcdefghijklmnopqrstuvwxyz1234567890 in the reply."
+      humanResponse: `Use ${["sk", "live", "abcdefghijklmnopqrstuvwxyz1234567890"].join("_")} in the reply.`
     })).toThrow(/Secret-shaped/u);
   });
 
