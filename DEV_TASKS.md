@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-21 05:46:54 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -347,6 +347,14 @@ each bullet below carries its decided direction. The source completed by PR
 #57 is merged and tagged; open production, provider, hosted-role, human-
 acceptance, and explicitly deferred product work remains listed here.
 
+- Event Profit Review rollout: keep `eventProfitReviewEnabled` off by default.
+  Before any promotion, expand callable emulator acceptance for admin write,
+  sales/customer/cross-tenant denial, revision conflict, replay and uncertain-
+  outcome reconciliation; complete authenticated keyboard/responsive review at
+  390/768/1440px; then activate one explicitly approved independent full-service
+  caterer and compare at least ten finalized events against its spreadsheet.
+  Do not market accounting revenue, cash settlement, recovered revenue, or
+  guaranteed savings from this operational contribution review.
 - Run an authenticated staff acceptance pass across the exact production
   `v0.7.0` eight-gate combination. Public route reachability and provider
   acceptance do not substitute for that pass.

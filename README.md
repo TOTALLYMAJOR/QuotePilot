@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-20 14:10:10 CDT
+Last updated: 2026-08-21 07:46:30 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -236,6 +236,14 @@ Create `.env` from `.env.example` and set required Firebase keys:
 - `VITE_FIREBASE_STORAGE_BUCKET`
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
+
+Linked Git worktrees automatically inherit ignored environment files from the
+primary checkout. A worktree's own `.env*` files override the shared values,
+and shell, CI, or hosting-provider variables override both. This keeps secrets
+out of Git while allowing `npm run check:env`, Vite, and builds to work from an
+isolated branch without copying credentials. `npm run env:local:firebase`
+writes the shared primary-checkout `.env.local` even when invoked in a linked
+worktree.
 
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`

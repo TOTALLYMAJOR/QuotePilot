@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-21 07:46:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Made ignored Firebase/Vite configuration persistent across linked Git
+  worktrees. Environment validation and Vite now load the primary checkout as
+  a safe default, preserve worktree-local overrides, and keep injected shell,
+  CI, or hosting-provider values authoritative. The Firebase config helper also
+  writes the shared primary-checkout `.env.local`, so feature branches no
+  longer require copied credentials or fail merely because their worktree has
+  no local env file.
 - Preserved a supplied normalized pricing snapshot when local quote persistence
   attaches newly required private commercial-cost evidence. The enrichment no
   longer replaces the snapshot's exact totals or authority label; focused and
@@ -28,6 +35,18 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
+- Added a source-only, default-off Event Profit Review inside the existing
+  authoritative post-event closeout. Admins can record guided revenue, direct
+  costs, optional overhead, and non-additive loss signals with explicit-zero
+  confirmation, revision fencing, replay-stable receipts, and guarded
+  save/finalize/reopen actions. The server derives contribution, optional
+  profit after allocated overhead, fail-closed quote comparison, largest
+  comparable variance driver, and an advisory next-event price. Sales receives
+  only the finalized staff-safe summary; callable-owned inputs and notes remain
+  browser-private and absent from customer artifacts. Local focused tests and
+  the production build pass; Firebase deployment, tenant activation, emulator
+  acceptance expansion, authenticated three-width review, spreadsheet pilot,
+  and human acceptance remain pending.
 - Added a discoverable read-only Difficult Question Desk panel to the authorized
   staff Quote Workspace. Its live state truthfully reports that Steward is not
   connected to a reviewed runtime/provider, renders no model prose, labels that

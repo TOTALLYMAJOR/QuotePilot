@@ -197,6 +197,8 @@ function OpportunityCard({
   onCreateRebook,
   rebookCreationAvailable,
   closeoutReviewAvailable,
+  profitReviewEnabled,
+  isAdmin,
   onCloseoutReceipt
 }) {
   const actionQuoteId = opportunity.reviewedAction?.sourceQuoteId || opportunity.quoteId;
@@ -233,6 +235,8 @@ function OpportunityCard({
             <PostEventCloseoutReviewAction
               opportunity={opportunity}
               available={closeoutReviewAvailable}
+              profitReviewEnabled={profitReviewEnabled}
+              isAdmin={isAdmin}
               onReceipt={onCloseoutReceipt}
             />
           </>
@@ -299,6 +303,8 @@ export function CustomerRevenueOpportunitiesPresentation({
   onCreateRebook,
   rebookCreationAvailable = true,
   closeoutReviewAvailable = true,
+  profitReviewEnabled = false,
+  isAdmin = false,
   onCloseoutReceipt
 }) {
   const state = error && !radar
@@ -379,6 +385,8 @@ export function CustomerRevenueOpportunitiesPresentation({
                   onCreateRebook={onCreateRebook}
                   rebookCreationAvailable={rebookCreationAvailable}
                   closeoutReviewAvailable={closeoutReviewAvailable}
+                  profitReviewEnabled={profitReviewEnabled}
+                  isAdmin={isAdmin}
                   onCloseoutReceipt={onCloseoutReceipt}
                 />
               ))}

@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 19, 2026
+Last updated: 2026-08-21 22:53:22 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -91,8 +91,17 @@ Use this log when a change intentionally departs from stable-first policy or req
   The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
   recalibration, not a claim that the Package Workspace alone caused the
   increase and not general growth headroom.
+  The source-only Event Profit Review and permanent linked-worktree environment
+  loader then measure 3,236,003 / 387,248 bytes for compatibility and
+  3,920,076 / 387,248 bytes for Ambient. The temporary ceilings are therefore
+  3,243,028 and 3,920,379 aggregate bytes respectively, retaining only the same
+  7,025-byte compatibility and 303-byte Ambient runner offsets. The
+  391,901-byte largest-chunk ceiling remains unchanged. This recalibration is
+  exact to the reviewed source candidate plus the already observed offsets and
+  grants no general growth headroom.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
-  recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
+  recalibration, or revert Event Profit Review and its exact recalibration;
+  then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
   CI matrix, prior compatibility ceiling, and clean-main baseline remain
   recoverable and unchanged.
@@ -102,8 +111,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   and preserve exact rollback evidence before AIUI-48 retirement or Ambient
   promotion.
 - Verification evidence: Seven focused profiler/release-policy tests, workflow
-  lint, and fresh local production builds for both graphs pass. CI exact-SHA
-  confirmation, hosted timing, and human acceptance remain open.
+  lint, and fresh local production builds for both graphs pass. The Event
+  Profit Review candidate was additionally measured with the exact CI flag
+  matrices at 3,236,003 compatibility and 3,920,076 Ambient aggregate bytes;
+  both retain a 387,248-byte largest chunk. CI exact-SHA confirmation, hosted
+  timing, and human acceptance remain open.
 
 ## Superseded Exceptions
 

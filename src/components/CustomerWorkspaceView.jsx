@@ -337,6 +337,7 @@ export default function CustomerWorkspaceView({
   scheduleAvailable = true,
   tenantTimeZone = "",
   isAdmin = false,
+  eventProfitReviewEnabled = false,
   currentUserRole = "staff",
   ambientMode = false,
   arrivalContext = null,
@@ -628,6 +629,8 @@ export default function CustomerWorkspaceView({
             onCreateRebook={onCreateRebook}
             rebookCreationAvailable={workspace.source === "firebase"}
             closeoutReviewAvailable={workspace.source === "firebase"}
+            profitReviewEnabled={eventProfitReviewEnabled}
+            isAdmin={isAdmin}
             onCloseoutReceipt={() => setRefreshToken((value) => value + 1)}
           />
           <RevenueAutopilotCustomerControls

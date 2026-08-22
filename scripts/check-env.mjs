@@ -1,6 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import { parseEnv } from "node:util";
+import { loadWorktreeEnvironment } from "./worktree-env.mjs";
 
 const REQUIRED = [
   "VITE_FIREBASE_API_KEY",
@@ -68,17 +66,7 @@ if (buildProfile && buildProfile !== RELEASE_CANDIDATE_BUILD_PROFILE) {
   process.exit(1);
 }
 const isReleaseCandidateBuild = buildProfile === RELEASE_CANDIDATE_BUILD_PROFILE;
-const productionEnv = {};
-for (const fileName of [
-  ".env",
-  ".env.local",
-  ".env.production",
-  ".env.production.local"
-]) {
-  const filePath = path.resolve(cwd, fileName);
-  if (!fs.existsSync(filePath)) continue;
-  Object.assign(productionEnv, parseEnv(fs.readFileSync(filePath, "utf8")));
-}
+const productionEnv = loadWorktreeEnvironment({ cwd, mode: "production" });
 
 function effectiveValue(key) {
   if (Object.prototype.hasOwnProperty.call(process.env, key)) {

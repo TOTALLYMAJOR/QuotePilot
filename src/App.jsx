@@ -1864,6 +1864,7 @@ export default function App({
     || "Organization workspace"
   ).trim();
   const tenantTimeZone = String(effectiveSettings.businessTimeZone || "").trim();
+  const eventProfitReviewEnabled = effectiveSettings.eventProfitReviewEnabled === true;
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
   const brandDarkAccentColor = catalog.settings?.brandDarkAccentColor || "#8d611a";
@@ -4933,6 +4934,7 @@ export default function App({
             scheduleAvailable={eventScheduleEnabled}
             tenantTimeZone={tenantTimeZone}
             isAdmin={authSession.isAdmin}
+            eventProfitReviewEnabled={eventProfitReviewEnabled}
             currentUserRole={authSession.role}
             ambientMode={AMBIENT_UI_ENABLED}
             arrivalContext={workspaceArrivalContext?.surfaceId === "client-overview"

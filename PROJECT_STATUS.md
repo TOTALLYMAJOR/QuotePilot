@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-21 05:46:54 CDT
 
 ## Current Production Release
 
@@ -42,6 +42,17 @@ Last updated: 2026-08-21 01:08:52 CDT
 
 ## Engineering Checkpoint Detail
 
+- A current source-only Event Profit Review is implemented inside the existing
+  authoritative closeout, behind `eventProfitReviewEnabled === true` with a
+  strict default-off normalization. Admins own detailed manual actuals and
+  revision-fenced save/finalize/reopen receipts; sales receives only finalized
+  bounded contribution results on the staff quote projection. Customer portal
+  construction remains an explicit whitelist and private closeout/receipt
+  records remain browser-denied. Formula, explicit-zero, comparison mismatch,
+  replay, legacy-closeout, client-boundary, UI-state, catalog-gate, and build
+  checks are local source evidence only. No tenant is activated; Firebase
+  deployment, full emulator callable acceptance, authenticated 390/768/1440px
+  review, ten-event spreadsheet comparison, and human acceptance remain open.
 - The owner authorized exact-candidate publication and coordinated Firebase
   and Vercel production deployment for live testing after the required gates.
   Vercel is complete; Firebase remains pending as recorded above. Provider

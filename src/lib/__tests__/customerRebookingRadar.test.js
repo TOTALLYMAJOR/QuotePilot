@@ -195,6 +195,39 @@ describe("Customer 360 rebooking radar", () => {
     expect(radar.excludedReasonCounts.outside_opportunity_window).toBe(2);
   });
 
+  test("carries only the bounded finalized profit summary from the authoritative closeout projection", () => {
+    const quote = makeQuote({ id: "profit-final", date: "2026-08-08" });
+    quote.workflow = {
+      postEventCloseout: {
+        schemaVersion: 1,
+        closeoutId: "closeout-profit-final",
+        organizationId: quote.organizationId,
+        quoteId: quote.id,
+        customerId: quote.customerId,
+        eventDate: quote.event.date,
+        dueDate: "2026-08-15",
+        state: "pending",
+        policy: { state: "configured", timeZone: "America/Chicago" },
+        reviewItems: {},
+        profitReview: {
+          schemaVersion: 1,
+          state: "final",
+          reviewRevision: 2,
+          summary: { contributionCents: 125000, comparison: { available: false } },
+          finalizedAtISO: "2026-08-15T12:00:00.000Z"
+        }
+      }
+    };
+    const radar = build(makeWorkspace({ quotes: [quote] }), { date: "2026-08-15" });
+    expect(radar.opportunities[0].profitReview).toMatchObject({
+      state: "final",
+      reviewRevision: 2,
+      summary: { contributionCents: 125000 }
+    });
+    expect(radar.opportunities[0].profitReview).not.toHaveProperty("actuals");
+    expect(radar.opportunities[0].profitReview).not.toHaveProperty("notes");
+  });
+
   test("creates a same-week-last-year anniversary cue from calendar dates", () => {
     const sameWeek = makeQuote({ id: "same-week", date: "2025-08-14" });
     const nextWeek = makeQuote({ id: "next-week", date: "2025-08-18" });

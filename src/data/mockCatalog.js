@@ -367,6 +367,7 @@ export const DEFAULT_SETTINGS = {
   chefCostRate: null,
   bartenderCostRate: null,
   targetMarginPct: null,
+  eventProfitReviewEnabled: false,
   staffingChargeMode: "per_hour",
   staffingRateTypes: DEFAULT_STAFFING_RATE_TYPES,
   defaultStaffingRateType: "standard",
@@ -1142,6 +1143,7 @@ export function normalizeCatalog(raw) {
       chefCostRate: toNullableNumber(rawSettings.chefCostRate),
       bartenderCostRate: toNullableNumber(rawSettings.bartenderCostRate),
       targetMarginPct: toNullableNumber(rawSettings.targetMarginPct),
+      eventProfitReviewEnabled: rawSettings.eventProfitReviewEnabled === true,
       staffingChargeMode: normalizeStaffingChargeMode(
         rawSettings.staffingChargeMode,
         DEFAULT_SETTINGS.staffingChargeMode

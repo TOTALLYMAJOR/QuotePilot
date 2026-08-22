@@ -4117,6 +4117,168 @@ hr {
   }
 }
 
+.event-profit-review {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.45rem;
+  padding-top: 1rem;
+  border-top: 1px solid #bdd1c4;
+}
+
+.event-profit-review-flow,
+.event-profit-review fieldset {
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.event-profit-review fieldset {
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid #d7e2db;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.event-profit-review legend {
+  padding: 0 0.3rem;
+  color: var(--tone-ink-1);
+  font-weight: 800;
+}
+
+.event-profit-review-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-profit-review-steps button {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #c8d6cd;
+  border-radius: 8px;
+  background: #f6f9f7;
+  color: #315b46;
+  font-weight: 750;
+}
+
+.event-profit-review-steps [aria-current="step"] button {
+  border-color: #47735d;
+  background: #e6efe9;
+  color: #234834;
+}
+
+.event-profit-review-field {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 0.75fr);
+  align-items: center;
+  gap: 0.45rem 0.8rem;
+}
+
+.event-profit-review-field > label:first-child {
+  color: var(--tone-ink-1);
+  font-weight: 700;
+}
+
+.event-profit-review .money-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.event-profit-review .money-input input {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.event-profit-zero-confirm {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  color: var(--tone-ink-2);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.event-profit-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.event-profit-review-summary {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.9rem;
+  border-left: 4px solid #47735d;
+  background: #fff;
+}
+
+.event-profit-review-primary {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.event-profit-review-primary span,
+.event-profit-review-facts dt {
+  color: var(--tone-ink-3);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.event-profit-review-primary strong {
+  color: var(--tone-ink-1);
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-profit-review-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.event-profit-review-facts div {
+  min-width: 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid #dfe8e2;
+}
+
+.event-profit-review-facts dd {
+  margin: 0.2rem 0 0;
+  color: var(--tone-ink-1);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .event-profit-review-steps,
+  .event-profit-review-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .event-profit-review-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .event-profit-review-actions,
+  .event-profit-review-actions button,
+  .event-profit-review > button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
 .rule-config-list {
   margin-top: 0.6rem;
   display: grid;
