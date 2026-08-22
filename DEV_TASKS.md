@@ -1,50 +1,85 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-08-21 21:56:00 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
 
-## P1 - Commercial Truth Loop Evidence Supply Chain
+## P1 - Commercial Truth Loop Follow-Through (post-merge sequencing)
 
-The evidence supply chain now exists end to end as
+The supply chain merged to `main` in PR #103 as
 `authoritative source → producer/exporter → canonical bundle → reconciler →
-verdict + reason` (`docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`). What remains is
-what stands between it and a real record reaching `fullyReconciled`.
+verdict + reason` (walkthrough: `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`
+§ How it works). It runs on exporter-generated fixtures only. The items below
+are ordered; the coverage report (`npm run truthloop:coverage`) names each gap
+and its constraint class.
 
-### Blocking a real record today
+### Slice A — Firestore reader (next; the only item that creates operator value)
 
-- **Firestore reader.** The exporter projects already-read documents; nothing
-  reads them from Firestore yet. Build a tenant-scoped, role-checked read that
-  assembles quote, acceptance receipt, active version, change-request record,
-  and organization settings per record. Reads only; a bundle must never carry a
-  secret, token, raw provider record, or customer-facing field.
-- **Processor payout settlement (`integration`).** No settlement store exists
-  and the payout producer is inert behind the Connect stopping point in
-  `docs/STRIPE_CONNECT_PROGRAM.md`. Sequence a settlement store against that
-  gate; do not unblock the producer before it.
-- **Declared processor fee schedules (`business_policy`).** Add
-  `settings.processorFeeSchedule` (whole basis points, whole cents, declaring
-  actor, timestamp) to organization settings and a way for an owner to declare
-  it. The reconciler must never infer this rate.
-- **Post-event consumption capture (`engineering`).** No surface or schema
-  exists for actual labor and purchasing. Until one does, every delivered event
-  blocks the overrun and realized-contribution rules.
+- Build the tenant-scoped, role-checked read that assembles the five documents
+  per record the exporter's `--source` seam already expects: quote, acceptance
+  receipt, active quote version, change-request record, organization settings.
+  Reads only; a bundle must never carry a secret, token, raw provider record,
+  or customer-facing field beyond what the reconciler contract names.
+- Shape: an explicitly invoked operator script (house pattern:
+  `scripts/*-emulator-acceptance.mjs`), validated against a disposable `demo-*`
+  Auth+Firestore emulator project with seeded fixtures, wired as a
+  `test:truthloop-export:emulator` lane. Keep it under the existing
+  `commercial-evidence-exporter` capability contract (revision bump) or a
+  sibling `developer_infrastructure` contract.
+- Payoff on day one: 8 of 11 rules already reach verdicts, so real discrepancy
+  detection (payment mismatches, stale catalog revisions, promises missing
+  from plans, revenue not received) starts here — before any producer lands.
+  `fullyReconciled` stays 0 by design until Slices C–E; discrepancies-found is
+  the value metric, `fullyReconciled` the completeness metric.
 
-### Then
+### Slice B — Decision gates before the first real run (owner decisions, not code)
 
-- Decide whether delivery/travel revenue enters the margin model, or record why
-  it stays outside it. Today `margin_category_omission` fires on every record
-  carrying travel revenue, which is correct but will be noisy at scale.
-- Decide per-organization overrun tolerances rather than shipping the package
-  defaults (10% and a $25.00 floor) as if they were policy.
-- Bind the reconciliation report and its reason codes to a role-safe staff
-  surface through `docs/capability-surfacing-contracts.json` before any finding
-  is shown in the product. Until then the tier stays headless developer
-  infrastructure.
-- Schedule and retain bundles so a finding stays reproducible, and decide the
-  retention boundary for provenance that names customer-facing fields.
+- **Travel/margin policy.** `margin_category_omission` will fire on every
+  record carrying delivery revenue; an all-flagged first report reads as noise
+  and burns trust. Either (a) bring travel into the margin model with a travel
+  cost basis, or (b) add an operator-declared, timestamped exclusion the rule
+  treats as explained — declared policy explaining an observation, the same
+  pattern as the fee schedule. Decide before Slice A ships or accept the noise
+  knowingly.
+- **Processor fee rate.** Record the declared rate (whole basis points + whole
+  cents, declaring actor, timestamp) as a decision now; it is one sentence of
+  policy. Defer the settings surface to Slice E — the declaration unlocks
+  nothing until payout evidence exists, since `processor_fee_discrepancy`
+  requires both.
+- **Overrun tolerances.** Decide per-organization labor/purchasing tolerances
+  rather than shipping the package defaults (10% and a $25.00 floor) as if
+  they were policy.
+
+### Slice C — Post-event consumption capture (`engineering`)
+
+- A staff-facing surface and schema for actual labor and purchasing per
+  delivered event. Full capability treatment required (frontend entry point,
+  UI-state tests, Feature Matrix, User Manual). Until it ships, every
+  delivered event blocks `operational_overrun` and
+  `estimated_versus_realized_contribution` with `evidence_missing`.
+
+### Slice D — Operator surface for findings
+
+- Bind the reconciliation report and its machine-readable reason codes
+  (`reasonCode`, `blockedSection`, `blockedBy`) to a role-safe staff surface
+  through `docs/capability-surfacing-contracts.json` before any finding is
+  shown in the product. Until then the tier stays headless developer
+  infrastructure and findings never reach a customer.
+- Schedule and retain bundles so a finding stays reproducible weeks later, and
+  decide the retention boundary for provenance that names customer-facing
+  fields.
+
+### Slice E — Processor payout settlement (`integration`; Connect-gated)
+
+- Blocked behind the stopping point in `docs/STRIPE_CONNECT_PROGRAM.md`. Do
+  not build a settlement store, unblock the payout producer, or pass any
+  settlement source before that program authorizes it — the producer refuses
+  unauthorized sources by design, and that refusal must stay. When authorized:
+  settlement store (gross, net, payout reference keyed by provider reference),
+  the `settings.processorFeeSchedule` field and owner declaration surface from
+  Slice B, then the fee rule reconciles end to end.
 
 ## P0 - Production Acceptance
 
