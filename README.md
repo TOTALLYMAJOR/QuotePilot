@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-08-21 21:41:00 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
 with a read-only Python reconciliation tier for commercial evidence.
@@ -744,7 +744,8 @@ behavior, production promotion, visual acceptance, or human acceptance.
 The Commercial Truth Loop reconciler consumes an evidence bundle rather than
 reading Firestore itself. `scripts/reconciliation-evidence-export.mjs` produces
 that bundle from already-read authoritative documents and reports what it could
-not produce.
+not produce. The end-to-end walkthrough lives in
+[docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md § How it works](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md#how-it-works).
 
 ```bash
 npm run truthloop:export -- --source <sources.json> \

@@ -1,9 +1,84 @@
 # Commercial Truth Loop: Design
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-08-21 21:41:00 CDT
 
 Architecture decision and authority boundary: `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`.
 Implementation: `truthloop/`.
+
+## How it works
+
+One pass of the loop, start to finish:
+
+1. **Read the sources.** For each event, the exporter is handed the documents
+   QuotePilot already keeps: the quote, its acceptance receipt, the active
+   quote version with its recorded costs, any customer change request, and the
+   organization's settings. The exporter only reads — it holds no credential,
+   opens no network connection, and cannot write anything back.
+
+2. **Turn each document into evidence.** Every piece of the commercial chain
+   becomes an *evidence envelope*: the value, where it came from (document,
+   field, revision, schema version, timestamp, exporter version), and an
+   honest statement of its availability. Evidence the exporter cannot supply
+   is never a blank — it is classified as `missing` (should exist, does not),
+   `not_applicable` (nothing to check at this stage), `not_yet_available`
+   (the event has not reached that stage), `blocked_by_integration` (a named
+   dependency such as the Stripe Connect gate), `contradictory` (two
+   authoritative sources disagree — both values are carried), or
+   `schema_drift` (the source uses a shape this exporter does not know, so it
+   refuses to guess).
+
+3. **Assemble the canonical bundle.** The envelopes for all records are
+   sorted, canonicalized, and stamped with a digest, so the same source state
+   always produces byte-identical output. The evaluation instant is an input,
+   not a clock read — a bundle from last month re-reconciles to the same bytes
+   today.
+
+4. **Run every rule against every record.** The Python reconciler checks each
+   record against eleven rules covering the whole chain — payment amounts,
+   duplicate or missing charges, catalog staleness, processor fees, promise
+   coverage in the operational plan, overruns, margin completeness, customer
+   requests, and realized contribution. Before a rule assesses anything, it
+   gates on evidence availability: a rule whose evidence did not resolve
+   returns `unverifiable` with a machine-readable reason code naming the
+   blocked section, never a guess.
+
+5. **Report verdicts with reasons.** Each rule ends in exactly one of three
+   states — `explained` (the chain agrees), `discrepancy` (the chain
+   disagrees, with the amounts), or `unverifiable` (the evidence to decide is
+   absent, with the reason). A record is `fullyReconciled` only when every
+   rule reached `explained`. Missing evidence never counts as clean, and the
+   metrics segment out records with no accepted promise so drafts cannot
+   flatter the rate.
+
+Concretely: the accepted quote requires a $4,800.00 deposit, the ledger shows
+a $4,800.00 payment, and the processor paid out $4,642.80. Because the
+organization *declared* its fee schedule (3.25% + $1.20 — an operator
+declaration, never a rate inferred from history), the fee rule computes an
+expected fee of $157.20, matches the payout gap exactly, and reports
+**explained**. On the same record, the margin rule notices $450.00 of travel
+revenue sitting outside the margin model and reports a **discrepancy** — so
+the payout is explained and the record still is not reconciled. One answered
+question does not close an event.
+
+The whole run is inspectable before it ever touches real data:
+
+```bash
+npm run truthloop:coverage -- --source <sources.json> --evaluated-at <ISO>
+npm run truthloop:export   -- --source <sources.json> --evaluated-at <ISO> --out bundle.json
+npm run truthloop:reconcile bundle.json
+```
+
+`truthloop:coverage` answers the management question directly: per rule, how
+much required evidence is producible today, and whether each gap is an
+`engineering` problem (build a capture surface), an `integration` problem
+(waiting on a provider program), or a `business_policy` problem (a decision
+nobody has declared). Today 8 of 11 rules can reach a verdict; payout
+settlement, the declared fee schedule, and post-event consumption are the
+three gaps, one of each kind.
+
+Nothing in the loop has authority. Every finding is stamped
+`observation_only`: it is staff evidence for a human decision, never a
+reprice, a charge, an approval, or customer output.
 
 ## The chain
 

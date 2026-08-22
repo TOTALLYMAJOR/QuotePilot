@@ -4,7 +4,7 @@ Read-only projection of authoritative QuotePilot records into the canonical
 reconciliation bundle consumed by `truthloop/`.
 
 - Architecture decision and authority boundary: [`docs/COMMERCIAL_TRUTH_LOOP_ADR.md`](../docs/COMMERCIAL_TRUTH_LOOP_ADR.md)
-- Supply chain, availability states, provenance, producers: [`docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`](../docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md)
+- End-to-end walkthrough, supply chain, availability states, provenance, producers: [`docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`](../docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md) (start at “How it works”)
 - Shared rule/evidence contract: [`docs/truthloop-evidence-contract.json`](../docs/truthloop-evidence-contract.json)
 
 ## What this is not

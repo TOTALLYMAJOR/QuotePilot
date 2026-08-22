@@ -3,7 +3,7 @@
 Read-only, deterministic reconciliation of the QuotePilot commercial chain.
 
 - Architecture decision and authority boundary: [`docs/COMMERCIAL_TRUTH_LOOP_ADR.md`](../docs/COMMERCIAL_TRUTH_LOOP_ADR.md)
-- Rule catalog, contracts, and metrics: [`docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`](../docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md)
+- End-to-end walkthrough, rule catalog, contracts, and metrics: [`docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`](../docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md) (start at “How it works”)
 
 ## What this is
 
