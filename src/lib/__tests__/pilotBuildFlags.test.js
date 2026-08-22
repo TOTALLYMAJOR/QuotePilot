@@ -44,7 +44,8 @@ function extractAcceptedValues(expression, envName) {
 describe("statically foldable Pilot build flags", () => {
   test("selects the Ambient or compatibility App at build time through one exact alias", () => {
     expect(VITE_CONFIG_SOURCE).toContain('import { defineConfig, loadEnv } from "vite";');
-    expect(VITE_CONFIG_SOURCE).toContain('...loadEnv(mode, process.cwd(), "")');
+    expect(VITE_CONFIG_SOURCE).toContain("resolveWorktreeEnvironmentRoots().reduce");
+    expect(VITE_CONFIG_SOURCE).toContain('...loadEnv(mode, root, "")');
     expect(VITE_CONFIG_SOURCE).toContain("...process.env");
     expect(VITE_CONFIG_SOURCE).toContain(
       "const activeApp = ambientGraphEnabled"

@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-20 15:58:46 CDT
+Last updated: 2026-08-21 23:36:37 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,9 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,215,097-byte aggregate
+- The current compatibility graph has a temporary 3,238,608-byte aggregate
   and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 3,899,524-byte aggregate ceiling and
+  graph has a separate temporary 3,926,349-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -60,6 +60,13 @@ Threshold policy:
   and 3,899,524-byte graphs emitted by the protected Playwright job with their
   production presentation flags. This
   recalibration is not general product-growth headroom.
+  The clean-main Event Profit Review candidate measures 3,230,064 / 387,248
+  bytes for compatibility and 3,914,498 / 387,248 bytes for Ambient under the
+  exact CI flag matrices. Relative to the recorded mainline local graphs, those
+  are 23,511-byte and 26,825-byte increases. The temporary ceilings therefore
+  add only those deltas to the current protected-runner ceilings, reaching
+  3,238,608 and 3,926,349 bytes; the largest-chunk ceiling is unchanged and no
+  general growth headroom was added.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining
