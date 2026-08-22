@@ -1,6 +1,7 @@
 "use strict";
 
 const { createHash } = require("node:crypto");
+const { buildInitialEventProfitReview } = require("./eventProfitReview");
 
 const POST_EVENT_CLOSEOUT_SCHEMA_VERSION = 1;
 const POST_EVENT_CLOSEOUT_OFFSET_DAYS = 7;
@@ -434,6 +435,10 @@ function buildPostEventCloseoutRecord({
     policy,
     state: derivePostEventCloseoutState({ reviewItems, policy }),
     reviewItems,
+    profitReview: buildInitialEventProfitReview({
+      sourceVersionId: source.sourceVersionId,
+      acceptanceReceiptId: source.acceptanceReceiptId
+    }),
     completedAtISO: "",
     completedBy: null,
     createdAtISO,

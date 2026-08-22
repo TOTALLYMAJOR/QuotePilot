@@ -18,6 +18,12 @@ describe("normalizeCatalog cost fields", () => {
     expect(catalog.settings.chefCostRate).toBeNull();
     expect(catalog.settings.bartenderCostRate).toBeNull();
     expect(catalog.settings.targetMarginPct).toBeNull();
+    expect(catalog.settings.eventProfitReviewEnabled).toBe(false);
+  });
+
+  test("keeps Event Profit Review default-off unless explicitly enabled", () => {
+    expect(catalogWith({ settings: { eventProfitReviewEnabled: true } }).settings.eventProfitReviewEnabled).toBe(true);
+    expect(catalogWith({ settings: { eventProfitReviewEnabled: "true" } }).settings.eventProfitReviewEnabled).toBe(false);
   });
 
   test("reads plain costPpp/cost fields on packages, addons, and rentals", () => {

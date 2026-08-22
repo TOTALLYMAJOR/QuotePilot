@@ -315,7 +315,8 @@ export default function CustomerWorkspaceView({
   onOpenSchedule,
   scheduleAvailable = true,
   tenantTimeZone = "",
-  isAdmin = false
+  isAdmin = false,
+  eventProfitReviewEnabled = false
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [previewQuoteId, setPreviewQuoteId] = useState("");
@@ -555,6 +556,8 @@ export default function CustomerWorkspaceView({
             onCreateRebook={onCreateRebook}
             rebookCreationAvailable={workspace.source === "firebase"}
             closeoutReviewAvailable={workspace.source === "firebase"}
+            profitReviewEnabled={eventProfitReviewEnabled}
+            isAdmin={isAdmin}
             onCloseoutReceipt={() => setRefreshToken((value) => value + 1)}
           />
           <RevenueAutopilotCustomerControls

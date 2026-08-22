@@ -601,6 +601,14 @@ function buildCloseoutOpportunity({ quote, event, calendarContext, eventDate, qu
       reviewedBy: "",
       lastActionReceiptId: ""
     })),
+    profitReview: isRecord(closeout?.profitReview) ? { ...closeout.profitReview } : {
+      schemaVersion: 1,
+      state: "not_started",
+      reviewRevision: 0,
+      sourceVersionId: "",
+      acceptanceReceiptId: "",
+      updatedAtISO: ""
+    },
     reviewedAction: closeout ? {
       kind: "review_post_event_closeout",
       state: displayState,

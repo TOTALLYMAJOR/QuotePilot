@@ -307,6 +307,23 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   a revised request. These controls record internal staff review only. They do
   not send email, prove provider delivery or opening, record a customer reply,
   or establish a lead, booking, payment, or revenue result.
+- When an administrator has explicitly enabled the tenant's default-off Event
+  Profit Review pilot, the same closeout record adds one guided `Revenue` ->
+  `Costs` -> `Loss signals` -> `Review` flow. Admins record USD amounts; every
+  required `$0` must be confirmed as evidence before finalization. Food waste,
+  overtime premium, and service recovery are optional explanatory subsets and
+  are never added to costs again. Quote variance also stays unavailable unless
+  the admin confirms that actual revenue and cost categories use the same scope
+  as the accepted estimate. `Save draft`, `Finalize review`, and `Reopen
+  for correction` use the displayed revision and an exact replay-stable server
+  receipt; reconcile an uncertain request unchanged. A finalized view shows
+  event contribution, comparison availability, the largest comparable variance
+  driver, and an advisory next-event price only when its inputs are complete.
+  Sales can see that finalized staff-safe summary but cannot edit or read the
+  detailed inputs and notes. Proposals, portals, PDFs, messages, and customer
+  views contain none of this data. The result is operational contribution
+  analysis, not accounting revenue, cash settlement, recovered revenue, or a
+  guaranteed saving; the advisory price never changes a catalog or quote.
 - `Quotes, bookings, and payments` on `Overview` reports quoted, exact-state accepted and
   booked amounts, source-bounded deposit and final-balance measures, and a
   recorded repeat-event signal. Deposit or final-balance value is labeled

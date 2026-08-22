@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 49,
+  "catalogVersion": 50,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -1709,32 +1709,38 @@
     },
     {
       "id": "authoritative-post-event-closeout",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Governed booking creates one deterministic private post-event closeout bound to the exact accepted immutable proposal version and stable customer; the client overview and Workflow expose its bounded state and an exact callable-owned internal review/reopen receipt flow.",
+      "summary": "Governed booking creates one deterministic private post-event closeout bound to the exact accepted immutable proposal version and stable customer; a default-off Event Profit Review adds revision-fenced admin actuals, finalized staff-safe contribution results, and exact callable-owned save, finalize, reopen, and reconciliation receipts without creating a parallel ledger.",
       "backendPaths": [
         "firestore.rules",
+        "functions/eventProfitReview.js",
         "functions/index.js",
         "functions/postEventCloseout.js",
         "scripts/provisioning-emulator-acceptance.mjs",
         "src/lib/customerRebookingRadar.js",
+        "src/lib/postEventProfitReviewClient.js",
         "src/lib/postEventCloseoutClient.js",
         "src/lib/quoteWorkflow.js",
         "src/lib/statusSemantics.js"
       ],
       "backendExports": [
         "functions/index.js#recordPostEventCloseoutReview",
-        "functions/index.js#refreshPostEventCloseoutConfiguration"
+        "functions/index.js#refreshPostEventCloseoutConfiguration",
+        "functions/index.js#getPostEventProfitReview",
+        "functions/index.js#recordPostEventProfitReview"
       ],
       "affectedBackendExports": [
         "functions/index.js#convertQuoteToContract",
         "functions/index.js#recordPostEventCloseoutReview",
-        "functions/index.js#refreshPostEventCloseoutConfiguration"
+        "functions/index.js#refreshPostEventCloseoutConfiguration",
+        "functions/index.js#getPostEventProfitReview",
+        "functions/index.js#recordPostEventProfitReview"
       ],
       "frontendPaths": [
         "src/App.jsx",
@@ -1742,6 +1748,7 @@
         "src/components/CustomerRevenueOpportunities.jsx",
         "src/components/CustomerWorkspaceView.jsx",
         "src/components/PostEventCloseoutReviewAction.jsx",
+        "src/components/PostEventProfitReview.jsx",
         "src/components/SalesWorkflowModal.jsx",
         "src/lib/workspaceRoutes.js",
         "src/styles.css"
@@ -1756,6 +1763,10 @@
           "locator": "data-capability-id=\"cwf-11-authoritative-post-event-closeout\""
         },
         {
+          "path": "src/components/PostEventProfitReview.jsx",
+          "locator": "aria-labelledby={`event-profit-${ids.quoteId}`}"
+        },
+        {
           "path": "src/components/SalesWorkflowModal.jsx",
           "locator": "Open client overview\" : \"Open quote\"} for post-event closeout"
         }
@@ -1766,6 +1777,9 @@
         "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
         "src/lib/__tests__/postEventCloseout.server.test.js",
         "src/lib/__tests__/postEventCloseoutClient.test.js",
+        "src/lib/__tests__/eventProfitReview.server.test.js",
+        "src/lib/__tests__/postEventProfitReviewClient.test.js",
+        "src/components/__tests__/postEventProfitReview.test.jsx",
         "src/lib/__tests__/quoteWorkflow.test.js",
         "src/lib/__tests__/workspaceRoutes.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
@@ -1778,6 +1792,18 @@
         {
           "path": "src/lib/__tests__/postEventCloseout.server.test.js",
           "locator": "reconciles an exact retry without planning a second mutation"
+        },
+        {
+          "path": "src/lib/__tests__/eventProfitReview.server.test.js",
+          "locator": "derives contribution without double-counting explanatory loss signals"
+        },
+        {
+          "path": "src/lib/__tests__/postEventProfitReviewClient.test.js",
+          "locator": "keeps one replay-stable request until an exact receipt returns"
+        },
+        {
+          "path": "src/components/__tests__/postEventProfitReview.test.jsx",
+          "locator": "shows sales only the finalized staff-safe summary"
         },
         {
           "path": "src/lib/__tests__/postEventCloseoutClient.test.js",
@@ -1803,7 +1829,7 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "CWF-11 authoritative post-event closeout:"
+          "locator": "CWF-11 authoritative post-event closeout and Event Profit Review:"
         },
         {
           "path": "docs/USER_MANUAL.md",
@@ -1811,7 +1837,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Governed booking, exact source binding, tenant-calendar configuration blocking, private receipt authority, client-overview and Workflow entry points, responsive review controls, and all mutation/reconciliation states were reviewed together. Revision 3 changes the visible destination label only; callable authority and receipts are unchanged.",
+      "surfaceReviewNote": "Revision 4 adds a default-off, mobile-prioritized Revenue to Costs to Loss signals to Review flow inside the existing closeout surface. Detailed actuals and notes remain callable-owned and admin-only; sales receives only finalized bounded summary fields, while customer artifacts remain on the existing explicit portal whitelist.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -1857,7 +1883,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Same-tenant staff can review or reopen one exact due closeout item and reconcile an uncertain attempt from a server receipt; this proves internal review only and never claims that outbound email was accepted, delivered, opened, answered, or that revenue was recovered."
+      "safeOutcome": "Same-tenant staff can review closeout items, while admins can record and finalize exact event actuals behind a tenant gate. Finalized contribution, comparable variance, and advisory next-price results are staff-only and never claim accounting revenue, cash settlement, recovered revenue, guaranteed savings, or customer delivery; explanatory loss signals are never counted as costs again."
     },
     {
       "id": "commercial-change-impact-preview",

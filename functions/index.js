@@ -78,6 +78,14 @@ const {
   planPostEventCloseoutPolicyRefresh,
   resolvePostEventCloseoutSource
 } = require("./postEventCloseout");
+const {
+  EventProfitReviewError,
+  normalizeEventProfitReviewRequest,
+  normalizeStoredEventProfitReview,
+  planEventProfitReviewMutation,
+  projectEventProfitReviewDetail,
+  projectEventProfitReviewSummary
+} = require("./eventProfitReview");
 const commercialDependencyGraphCore = require("./commercialDependencyGraphCore.cjs");
 const {
   KITCHEN_BEO_FRESHNESS_STATES,
@@ -15994,6 +16002,10 @@ function projectPostEventCloseoutToQuote(record = {}) {
         lastActionReceiptId: normalizeText(item?.lastActionReceiptId)
       }
     ])),
+    profitReview: projectEventProfitReviewSummary(record.profitReview, {
+      sourceVersionId: normalizeText(record.sourceVersionId),
+      acceptanceReceiptId: normalizeText(record.acceptanceReceiptId)
+    }),
     completedAtISO: normalizeText(record.completedAtISO),
     completedBy: record?.completedBy && typeof record.completedBy === "object"
       ? {
@@ -16041,6 +16053,14 @@ function projectUnavailablePostEventCloseoutToQuote({
     },
     state: "blocked_source",
     reviewItems: {},
+    profitReview: {
+      schemaVersion: 1,
+      state: "not_started",
+      reviewRevision: 0,
+      sourceVersionId: normalizeText(acceptedSourceVersionId),
+      acceptanceReceiptId: normalizeText(quote?.acceptanceReceipt?.receiptId),
+      updatedAtISO: ""
+    },
     completedAtISO: "",
     completedBy: null,
     createdAtISO: "",
@@ -16346,6 +16366,251 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
       organizationId,
       failureMessage: "Failed to convert quote to contract."
     });
+  }
+});
+
+function assertEventProfitReviewEnabled(settings = {}) {
+  if (settings?.eventProfitReviewEnabled !== true) {
+    throw new EventProfitReviewError(
+      "failed-precondition",
+      "Event Profit Review is not enabled for this tenant."
+    );
+  }
+}
+
+function assertEventProfitReviewScope({ organizationId, quoteId, closeoutId, quote, closeout } = {}) {
+  if (
+    normalizeOrganizationId(quote?.organizationId) !== organizationId
+    || normalizeText(closeout?.organizationId) !== organizationId
+    || normalizeText(closeout?.quoteId) !== quoteId
+    || normalizeText(closeout?.closeoutId) !== closeoutId
+  ) {
+    throw new EventProfitReviewError(
+      "permission-denied",
+      "The profit review is outside this organization, quote, or closeout scope."
+    );
+  }
+}
+
+function resolveEventProfitReviewSource({
+  organizationId,
+  quoteId,
+  quoteSnap,
+  closeout,
+  sourceVersionSnap,
+  acceptanceReceiptDocumentSnap
+} = {}) {
+  const source = resolvePostEventCloseoutSource({
+    organizationId,
+    quoteId,
+    sourceQuote: { id: quoteSnap.id, ...(quoteSnap.data() || {}) },
+    sourceVersion: { id: sourceVersionSnap.id, ...(sourceVersionSnap.data() || {}) },
+    acceptanceReceiptDocument: acceptanceReceiptDocumentSnap.data() || {}
+  });
+  assertPostEventCloseoutMatchesSource(closeout, source);
+  return source;
+}
+
+exports.getPostEventProfitReview = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const closeoutId = normalizeText(data?.closeoutId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  if (
+    !organizationId || !quoteId || !closeoutId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Profit review detail requires same-organization admin authority."
+    );
+  }
+  try {
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+    const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(quoteId);
+    const closeoutRef = organizationRef.collection("postEventCloseouts").doc(closeoutId);
+    const [quoteSnap, closeoutSnap, settingsSnap] = await Promise.all([
+      quoteRef.get(),
+      closeoutRef.get(),
+      organizationRef.collection("settings").doc("config").get()
+    ]);
+    if (!quoteSnap.exists || !closeoutSnap.exists) {
+      throw new EventProfitReviewError("not-found", "The authoritative quote or closeout is unavailable.");
+    }
+    const quote = quoteSnap.data() || {};
+    const closeout = closeoutSnap.data() || {};
+    assertEventProfitReviewScope({ organizationId, quoteId, closeoutId, quote, closeout });
+    assertEventProfitReviewEnabled(settingsSnap.exists ? settingsSnap.data() || {} : {});
+    const sourceVersionId = normalizeText(closeout.sourceVersionId);
+    const acceptanceReceiptId = normalizeText(closeout.acceptanceReceiptId);
+    const [sourceVersionSnap, acceptanceReceiptDocumentSnap] = await Promise.all([
+      quoteRef.collection("versions").doc(sourceVersionId).get(),
+      organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId).get()
+    ]);
+    if (!sourceVersionSnap.exists || !acceptanceReceiptDocumentSnap.exists) {
+      throw new EventProfitReviewError("failed-precondition", "The accepted profit comparison source is unavailable.");
+    }
+    resolveEventProfitReviewSource({
+      organizationId,
+      quoteId,
+      quoteSnap,
+      closeout,
+      sourceVersionSnap,
+      acceptanceReceiptDocumentSnap
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      closeoutId,
+      profitReview: projectEventProfitReviewDetail(closeout.profitReview, {
+        sourceVersionId,
+        acceptanceReceiptId
+      })
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (error instanceof EventProfitReviewError || error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    functions.logger.error("Profit review detail read failed", {
+      organizationId, quoteId, closeoutId, actorUid: staff.uid, error: normalizeText(error?.message)
+    });
+    throw new functions.https.HttpsError("internal", "Failed to read the event profit review.");
+  }
+});
+
+exports.recordPostEventProfitReview = functions.region(REGION).https.onCall(async (data, context) => {
+  let request;
+  try {
+    request = normalizeEventProfitReviewRequest(data);
+  } catch (error) {
+    if (error instanceof EventProfitReviewError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    throw error;
+  }
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: request.organizationId
+  }));
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== request.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Profit review mutation requires same-organization admin authority."
+    );
+  }
+  try {
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(request.organizationId);
+    const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(request.quoteId);
+    const closeoutRef = organizationRef.collection("postEventCloseouts").doc(request.closeoutId);
+    const receiptRef = closeoutRef.collection("actionReceipts").doc(request.receiptId);
+    const settingsRef = organizationRef.collection("settings").doc("config");
+    const nowISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, closeoutSnap, receiptSnap, settingsSnap] = await Promise.all([
+        tx.get(quoteRef), tx.get(closeoutRef), tx.get(receiptRef), tx.get(settingsRef)
+      ]);
+      if (!quoteSnap.exists || !closeoutSnap.exists) {
+        throw new EventProfitReviewError("not-found", "The authoritative quote or closeout is unavailable.");
+      }
+      const quote = quoteSnap.data() || {};
+      const closeout = closeoutSnap.data() || {};
+      assertEventProfitReviewScope({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        closeoutId: request.closeoutId,
+        quote,
+        closeout
+      });
+      assertEventProfitReviewEnabled(settingsSnap.exists ? settingsSnap.data() || {} : {});
+      const sourceVersionId = normalizeText(closeout.sourceVersionId);
+      const acceptanceReceiptId = normalizeText(closeout.acceptanceReceiptId);
+      const [sourceVersionSnap, acceptanceReceiptDocumentSnap] = await Promise.all([
+        tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+        tx.get(organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId))
+      ]);
+      if (!sourceVersionSnap.exists || !acceptanceReceiptDocumentSnap.exists) {
+        throw new EventProfitReviewError("failed-precondition", "The accepted profit comparison source is unavailable.");
+      }
+      resolveEventProfitReviewSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        quoteSnap,
+        closeout,
+        sourceVersionSnap,
+        acceptanceReceiptDocumentSnap
+      });
+      const binding = { sourceVersionId, acceptanceReceiptId };
+      const currentProfitReview = normalizeStoredEventProfitReview(closeout.profitReview, binding);
+      const planned = planEventProfitReviewMutation({
+        request,
+        currentProfitReview,
+        binding,
+        sourceVersion: { id: sourceVersionSnap.id, ...(sourceVersionSnap.data() || {}) },
+        actor: staff,
+        nowISO,
+        existingReceipt: receiptSnap.exists ? receiptSnap.data() || {} : null
+      });
+      const nextProfitReview = planned.nextProfitReview || currentProfitReview;
+      const nextCloseout = { ...closeout, profitReview: nextProfitReview, updatedAtISO: nowISO };
+      const quoteProjection = projectPostEventCloseoutToQuote(nextCloseout);
+      if (!receiptSnap.exists) {
+        tx.create(receiptRef, { ...planned.receipt, createdAt: FieldValue.serverTimestamp() });
+      }
+      if (planned.nextProfitReview) {
+        tx.update(closeoutRef, {
+          profitReview: nextProfitReview,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.update(quoteRef, {
+          "workflow.postEventCloseout": quoteProjection,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        kind: planned.kind,
+        idempotent: planned.idempotent,
+        profitReview: projectEventProfitReviewDetail(nextProfitReview, binding),
+        postEventCloseout: quoteProjection,
+        receipt: {
+          receiptId: normalizeText(planned.receipt.receiptId),
+          requestId: normalizeText(planned.receipt.requestId),
+          action: normalizeText(planned.receipt.action),
+          priorState: normalizeText(planned.receipt.priorState),
+          resultState: normalizeText(planned.receipt.resultState),
+          priorReviewRevision: Number(planned.receipt.priorReviewRevision),
+          resultReviewRevision: Number(planned.receipt.resultReviewRevision),
+          recordedAtISO: normalizeText(planned.receipt.recordedAtISO),
+          recordedByEmail: normalizeEmail(planned.receipt.recordedBy?.email)
+        }
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      ...result
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (error instanceof EventProfitReviewError || error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    functions.logger.error("Profit review mutation failed", {
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      actorUid: staff.uid,
+      error: normalizeText(error?.message)
+    });
+    throw new functions.https.HttpsError("internal", "Failed to record the event profit review.");
   }
 });
 

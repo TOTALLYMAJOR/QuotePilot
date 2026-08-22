@@ -1,6 +1,10 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import {
+  applyEnvironmentDefaults,
+  resolveWorktreeEnvironmentRoots
+} from "./scripts/worktree-env.mjs";
 
 const COMMERCIAL_DEPENDENCY_GRAPH_CORE = fileURLToPath(
   new URL("./src/lib/commercialDependencyGraphCore.cjs", import.meta.url)
@@ -11,8 +15,13 @@ function environmentFlagEnabled(value) {
 }
 
 export default defineConfig(({ mode }) => {
+  const fileEnvironment = resolveWorktreeEnvironmentRoots().reduce(
+    (environment, root) => ({ ...environment, ...loadEnv(mode, root, "") }),
+    {}
+  );
+  applyEnvironmentDefaults(fileEnvironment, { prefix: "VITE_" });
   const buildEnvironment = {
-    ...loadEnv(mode, process.cwd(), ""),
+    ...fileEnvironment,
     ...process.env
   };
   // Unit tests import active modules directly and exercise both flag states

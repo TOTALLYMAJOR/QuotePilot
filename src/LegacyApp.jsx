@@ -1435,6 +1435,7 @@ function LegacyAppCore({
   ).trim();
   const brandName = tenantBrandName || organizationName || "Catering workspace";
   const tenantTimeZone = String(effectiveSettings.businessTimeZone || "").trim();
+  const eventProfitReviewEnabled = effectiveSettings.eventProfitReviewEnabled === true;
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
   const brandDarkAccentColor = catalog.settings?.brandDarkAccentColor || "#8d611a";
@@ -3931,6 +3932,7 @@ function LegacyAppCore({
             scheduleAvailable={eventScheduleEnabled}
             tenantTimeZone={tenantTimeZone}
             isAdmin={authSession.isAdmin}
+            eventProfitReviewEnabled={eventProfitReviewEnabled}
           />
         </WorkspaceLazyRoute>
       )}

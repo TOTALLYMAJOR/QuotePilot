@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { primaryCheckoutEnvironmentPath } from "./worktree-env.mjs";
 
 function readArg(name) {
   const index = process.argv.indexOf(name);
@@ -30,7 +31,10 @@ if (!/^[a-z0-9][a-z0-9-]{4,28}[a-z0-9]$/.test(projectId)) {
   throw new Error("Pass an explicit Firebase project id with --project.");
 }
 const outputFile = ".env.local";
-const outputPath = path.resolve(process.cwd(), outputFile);
+const outputPath = primaryCheckoutEnvironmentPath(outputFile);
+const outputLabel = path.dirname(outputPath) === path.resolve(process.cwd())
+  ? outputFile
+  : `primary checkout ${outputFile}`;
 const replaceRequested = hasFlag("--replace");
 const replaceConfirmation = readArg("--confirm");
 const expectedConfirmation = `REPLACE ${outputFile} FOR ${projectId}`;
@@ -38,7 +42,7 @@ const expectedConfirmation = `REPLACE ${outputFile} FOR ${projectId}`;
 if (fs.existsSync(outputPath)) {
   if (!replaceRequested) {
     throw new Error(
-      `${outputFile} already exists. Refusing to overwrite it; review the file or rerun with --replace and the exact confirmation token.`
+      `${outputLabel} already exists. Refusing to overwrite it; review the file or rerun with --replace and the exact confirmation token.`
     );
   }
   if (replaceConfirmation !== expectedConfirmation) {
@@ -108,4 +112,4 @@ fs.writeFileSync(outputPath, lines.join("\n"), {
 });
 fs.chmodSync(outputPath, 0o600);
 
-console.log(`Local Firebase environment written to ${outputFile} for ${projectId}.`);
+console.log(`Local Firebase environment written to ${outputLabel} for ${projectId}.`);

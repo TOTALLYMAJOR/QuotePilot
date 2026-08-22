@@ -13,6 +13,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   3,215,097-byte and 3,899,524-byte graphs emitted by the protected Playwright
   job with production presentation flags, without adding general growth
   headroom.
+- Made ignored Firebase/Vite configuration persistent across linked Git
+  worktrees. Environment validation and Vite now load the primary checkout as
+  a safe default, preserve worktree-local overrides, and keep injected shell,
+  CI, or hosting-provider values authoritative. The Firebase config helper also
+  writes the shared primary-checkout `.env.local`, so feature branches no
+  longer require copied credentials or fail merely because their worktree has
+  no local env file.
 - Preserved a supplied server-authoritative pricing snapshot when augmenting a
   locally stored quote version with the new private commercial cost snapshot.
   The augmentation now copies only `commercialSnapshot` from the client-side
@@ -107,6 +114,18 @@ This changelog is backfilled from git history and will be maintained going forwa
   quote, so staff can reach the read-only workspace and its Activity & Save
   Health drawer without typing an address. Organization scope and quote
   mutation authority remain unchanged.
+- Added a source-only, default-off Event Profit Review inside the existing
+  authoritative post-event closeout. Admins can record guided revenue, direct
+  costs, optional overhead, and non-additive loss signals with explicit-zero
+  confirmation, revision fencing, replay-stable receipts, and guarded
+  save/finalize/reopen actions. The server derives contribution, optional
+  profit after allocated overhead, fail-closed quote comparison, largest
+  comparable variance driver, and an advisory next-event price. Sales receives
+  only the finalized staff-safe summary; callable-owned inputs and notes remain
+  browser-private and absent from customer artifacts. Local focused tests and
+  the production build pass; Firebase deployment, tenant activation, emulator
+  acceptance expansion, authenticated three-width review, spreadsheet pilot,
+  and human acceptance remain pending.
 - Added a deterministic task orchestration planner that maps bounded work and
   explicit paths to a runner model tier, reasoning effort, dependency reads,
   canonical documentation obligations, ordered validations, and a task graph.

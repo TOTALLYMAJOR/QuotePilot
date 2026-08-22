@@ -9,6 +9,7 @@ import {
   resetDefinitivePostEventCloseoutAttempt
 } from "../lib/postEventCloseoutClient";
 import StatusChip from "./StatusChip";
+import PostEventProfitReview from "./PostEventProfitReview";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -83,6 +84,8 @@ export function buildPostEventCloseoutPresentation(opportunity = {}, available =
 export default function PostEventCloseoutReviewAction({
   opportunity,
   available = true,
+  profitReviewEnabled = false,
+  isAdmin = false,
   onReceipt
 }) {
   const view = useMemo(
@@ -299,6 +302,12 @@ export default function PostEventCloseoutReviewAction({
           {mutation.receipt?.requestId ? <> Request <code>{mutation.receipt.requestId}</code>.</> : null}
         </div>
       )}
+      <PostEventProfitReview
+        opportunity={opportunity}
+        enabled={profitReviewEnabled && available}
+        isAdmin={isAdmin}
+        onReceipt={onReceipt}
+      />
     </section>
   );
 }

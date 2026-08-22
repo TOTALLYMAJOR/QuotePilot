@@ -1993,7 +1993,13 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
           quoteId: "q1",
           customerId: "customer-a",
           closeoutId,
-          state: "pending"
+          state: "pending",
+          profitReview: {
+            state: "draft",
+            reviewRevision: 2,
+            actuals: { grossRevenueCents: 500000, foodCents: 120000 },
+            notes: "Callable-owned admin detail"
+          }
         }
       );
       await setDoc(
