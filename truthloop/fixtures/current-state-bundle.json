@@ -1,0 +1,299 @@
+{
+  "bundleVersion": "truthloop-evidence-bundle-v2",
+  "evaluatedAtISO": "2026-08-21T14:00:00.000Z",
+  "exporter": {
+    "contractVersion": "truthloop-evidence-contract-v1",
+    "exporterVersion": "commercial-evidence-exporter-v1",
+    "knownSourceSchemaVersions": {
+      "commercialSnapshot": [
+        "commercial-snapshot-v1"
+      ],
+      "paymentLedger": [
+        1
+      ],
+      "pricingCatalogAuthority": [
+        1
+      ],
+      "proposalSnapshot": [
+        2
+      ]
+    },
+    "producers": [
+      {
+        "producerId": "payout-settlement-producer-v1",
+        "section": "payouts"
+      },
+      {
+        "producerId": "declared-fee-schedule-producer-v1",
+        "section": "processorFeeSchedule"
+      },
+      {
+        "producerId": "actual-consumption-producer-v1",
+        "section": "actualConsumption"
+      }
+    ],
+    "recordsDigestSha256": "c27e4693a62e00169b8f86791b0078eebe4172efe4a03ceeb2934bb2a84e321f"
+  },
+  "records": [
+    {
+      "currentCatalogRevision": 12,
+      "eventCompleted": false,
+      "eventDate": "2026-10-17",
+      "evidence": {
+        "acceptedSnapshot": {
+          "availability": "available",
+          "constraintClass": "none",
+          "detail": "Accepted revision rev_7.",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "fields": {
+              "acceptedAtISO": {
+                "derivation": "",
+                "detail": "",
+                "revision": "rev_7",
+                "sourceField": "acceptanceReceipt.acceptedAtISO",
+                "sourceObject": "organizations/org_demo/quotes/quote_demo_1"
+              },
+              "staffing": {
+                "derivation": "staffing is not carried on the signed snapshot; read from the quote at the accepted revision",
+                "detail": "",
+                "revision": "rev_7",
+                "sourceField": "event.servers|chefs|bartenders",
+                "sourceObject": "organizations/org_demo/quotes/quote_demo_1"
+              }
+            },
+            "observedAtISO": "2026-08-05T18:22:11.000Z",
+            "revision": "rev_7",
+            "sourceField": "proposalSnapshot",
+            "sourceObject": "organizations/org_demo/acceptanceReceipts/rcpt_demo_1",
+            "sourceSchemaVersion": "2"
+          },
+          "value": {
+            "acceptedAtISO": "2026-08-05T18:22:11.000Z",
+            "guests": 145,
+            "hours": 5,
+            "revisionId": "rev_7",
+            "selection": {
+              "addons": [
+                "Late Night Snack"
+              ],
+              "menuItems": [
+                "Herb Roast Chicken",
+                "Seasonal Vegetables"
+              ],
+              "rentals": [
+                "Farm Tables",
+                "Gold Flatware"
+              ]
+            },
+            "staffing": {
+              "bartenders": 1,
+              "chefs": 2,
+              "servers": 6
+            },
+            "style": "Buffet",
+            "totalsMinor": {
+              "addons": 180000,
+              "base": 1200000,
+              "deposit": 480000,
+              "labor": 320000,
+              "menu": 0,
+              "rentals": 240000,
+              "serviceFee": 96000,
+              "tax": 178200,
+              "total": 2259200,
+              "travel": 45000
+            }
+          }
+        },
+        "actualConsumption": {
+          "availability": "not_applicable",
+          "constraintClass": "none",
+          "detail": "The event has not been delivered, so there is nothing to consume yet.",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "observedAtISO": "",
+            "revision": "",
+            "sourceField": "",
+            "sourceObject": "",
+            "sourceSchemaVersion": ""
+          }
+        },
+        "authorizedQuote": {
+          "availability": "available",
+          "constraintClass": "none",
+          "detail": "Priced on catalog revision 12.",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "observedAtISO": "2026-08-05T18:22:11.000Z",
+            "revision": "rev_7",
+            "sourceField": "pricingCatalogAuthority",
+            "sourceObject": "organizations/org_demo/quotes/quote_demo_1",
+            "sourceSchemaVersion": "1"
+          },
+          "value": {
+            "activeVersionId": "rev_7",
+            "authorizedAtISO": "2026-08-05T18:22:11.000Z",
+            "catalogAuthority": {
+              "catalogRevision": 12,
+              "catalogSource": "organization",
+              "confirmedCatalogRevision": 12,
+              "settingsFingerprintSha256": "0f2c1b8a4d6e9f70112233445566778899aabbccddeeff001122334455667788"
+            },
+            "latestVersionNumber": 7,
+            "revisionId": "rev_7"
+          }
+        },
+        "costBasis": {
+          "availability": "available",
+          "constraintClass": "none",
+          "detail": "4 costed categor(ies).",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "observedAtISO": "2026-08-01T15:04:05.000Z",
+            "revision": "rev_7",
+            "sourceField": "commercialSnapshot",
+            "sourceObject": "organizations/org_demo/quotes/quote_demo_1/versions/rev_7",
+            "sourceSchemaVersion": "commercial-snapshot-v1"
+          },
+          "value": {
+            "missingCostCategories": [],
+            "plannedCostCents": {
+              "addons": 72000,
+              "base": 540000,
+              "labor": 208000,
+              "rentals": 96000
+            },
+            "provisionalCostCategories": [],
+            "targetMarginBasisPoints": 3500
+          }
+        },
+        "customerRequest": {
+          "availability": "available",
+          "constraintClass": "none",
+          "detail": "Portal decision accepted.",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "fields": {
+              "messageSha256": {
+                "derivation": "sha256 of the stored customer message",
+                "detail": "",
+                "revision": "rev_7",
+                "sourceField": "portalDecision.message",
+                "sourceObject": "organizations/org_demo/quotes/quote_demo_1"
+              },
+              "proposals": {
+                "derivation": "absent: request not triaged",
+                "detail": "",
+                "revision": "rev_7",
+                "sourceField": "proposals",
+                "sourceObject": ""
+              }
+            },
+            "observedAtISO": "2026-08-05T18:22:11.000Z",
+            "revision": "rev_7",
+            "sourceField": "portalDecision",
+            "sourceObject": "organizations/org_demo/quotes/quote_demo_1",
+            "sourceSchemaVersion": ""
+          },
+          "value": {
+            "decision": "accepted",
+            "messageSha256": "e247eb461f1775ea593df06d316c27d52121ada2ee784de920607b89df848f5e",
+            "proposals": [],
+            "recordedProposalIds": [],
+            "requestId": "rcpt_demo_1",
+            "submittedAtISO": "2026-08-05T18:22:11.000Z"
+          }
+        },
+        "operationalPlan": {
+          "availability": "available",
+          "constraintClass": "none",
+          "detail": "Projected the same way the BEO payload projects the plan.",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "observedAtISO": "2026-08-05T18:22:11.000Z",
+            "revision": "rev_7",
+            "sourceField": "selection|event|booking",
+            "sourceObject": "organizations/org_demo/quotes/quote_demo_1",
+            "sourceSchemaVersion": ""
+          },
+          "value": {
+            "guests": 145,
+            "selections": {
+              "addons": [
+                "Late Night Snack"
+              ],
+              "menuItemNames": [
+                "Herb Roast Chicken",
+                "Seasonal Vegetables"
+              ],
+              "rentals": [
+                "Farm Tables",
+                "Gold Flatware"
+              ]
+            },
+            "sourceRevisionId": "rev_7",
+            "staffing": {
+              "bartenders": 1,
+              "chefs": 2,
+              "servers": 6
+            }
+          }
+        },
+        "payments": {
+          "availability": "available",
+          "constraintClass": "none",
+          "detail": "1 ledger operation(s).",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "observedAtISO": "2026-08-05T18:22:11.000Z",
+            "revision": "rev_7",
+            "sourceField": "payment.ledger",
+            "sourceObject": "organizations/org_demo/quotes/quote_demo_1",
+            "sourceSchemaVersion": "1"
+          },
+          "value": [
+            {
+              "amountCents": 480000,
+              "operationId": "op_deposit_1",
+              "paymentKind": "deposit",
+              "providerReference": "cs_test_deposit_1042",
+              "providerSettledAtISO": "2026-08-05T18:25:40.000Z",
+              "state": "paid"
+            }
+          ]
+        },
+        "payouts": {
+          "availability": "blocked_by_integration",
+          "blockedBy": "stripe_connect_stopping_point",
+          "constraintClass": "integration",
+          "detail": "No production processor settlement store exists. The Stripe Connect program stops after hosted Sandbox UAT, so payout evidence cannot be produced or simulated. See docs/STRIPE_CONNECT_PROGRAM.md.",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "observedAtISO": "",
+            "revision": "",
+            "sourceField": "",
+            "sourceObject": "",
+            "sourceSchemaVersion": ""
+          }
+        },
+        "processorFeeSchedule": {
+          "availability": "missing",
+          "constraintClass": "business_policy",
+          "detail": "No organization has declared a processor fee schedule. A payout difference cannot be explained without one, and this producer will not infer a rate from history.",
+          "provenance": {
+            "exporterVersion": "commercial-evidence-exporter-v1",
+            "observedAtISO": "",
+            "revision": "",
+            "sourceField": "settings.processorFeeSchedule",
+            "sourceObject": "",
+            "sourceSchemaVersion": ""
+          }
+        }
+      },
+      "organizationId": "org_demo",
+      "quoteId": "quote_demo_1",
+      "quoteNumber": "QP-1042"
+    }
+  ]
+}

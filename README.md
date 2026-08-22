@@ -1,8 +1,9 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-21 21:41:00 CDT
 
-Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
+Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
+with a read-only Python reconciliation tier for commercial evidence.
 
 ## Quick Links
 - Live app: https://quotepilot.mbmapps.com
@@ -27,6 +28,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Authoritative operational staffing ADR: [docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md](docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md)
 - Orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
 - Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
+- Commercial Truth Loop ADR: [docs/COMMERCIAL_TRUTH_LOOP_ADR.md](docs/COMMERCIAL_TRUTH_LOOP_ADR.md)
+- Commercial Truth Loop design: [docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
 
 ## Application Routes
@@ -169,6 +172,8 @@ Tenant safety mode:
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
 - Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
+- Reconciliation tier: Python 3.11+ (`truthloop/`), standard library only, read-only,
+  no credentials and no write path; see `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
 - Firebase Hosting origin/fallback: `https://tonicatering.web.app`
 - Local runtime options: VS Code Dev Container (recommended), Node (`npm run dev`), or Docker Compose (`web-dev` / `web`)
@@ -177,6 +182,7 @@ Tenant safety mode:
 ### Prerequisites
 - Node.js 22+
 - npm
+- Python 3.11+ (for the Commercial Truth Loop; no packages to install)
 
 ### Install + Validate
 ```bash
@@ -642,6 +648,7 @@ releases do not receive that acknowledgement.
 ```bash
 npm run check:env
 npm run test:unit
+npm run test:truthloop
 npm run test:rules:firestore
 npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
@@ -680,6 +687,16 @@ writes, immutable accepted-version provenance, collision refusal, and the
 mandatory staff-review transition. Passing it is emulator evidence only, not a
 Functions deployment, hosted staff acceptance, customer delivery, booking,
 payment, or revenue result.
+
+`test:truthloop` runs the Commercial Truth Loop reconciler's unit tests. The
+package is standard-library-only, so the gate needs no virtualenv, no package
+install, and no network access; `scripts/run-truthloop.sh` selects the newest
+available Python 3.11+ interpreter and fails closed if none is present. The lane
+runs inside the existing `lane:core` job and adds no new required CI status
+context. Passing it is local reconciliation-logic evidence only: it is not an
+evidence exporter, a staff surface, hosted verification, provider evidence, a
+production deployment, or human acceptance. No commercial record is reconciled
+in production until the TypeScript evidence exporter ships.
 
 `check:workflows` downloads only the platform-specific official actionlint
 v1.7.12 archive, verifies its repository-pinned SHA-256, and checks every
@@ -721,6 +738,50 @@ classified headless security/operational/infrastructure work still requires
 tests and a safe outcome. A headless contract cannot own a callable export. The
 gate proves structural traceability, not semantic completeness, hosted/provider
 behavior, production promotion, visual acceptance, or human acceptance.
+
+## Commercial Evidence Export
+
+The Commercial Truth Loop reconciler consumes an evidence bundle rather than
+reading Firestore itself. `scripts/reconciliation-evidence-export.mjs` produces
+that bundle from already-read authoritative documents and reports what it could
+not produce. The end-to-end walkthrough lives in
+[docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md § How it works](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md#how-it-works).
+
+```bash
+npm run truthloop:export -- --source <sources.json> \
+  --evaluated-at 2026-08-21T14:00:00.000Z --out bundle.json
+npm run truthloop:coverage -- --source <sources.json> \
+  --evaluated-at 2026-08-21T14:00:00.000Z
+npm run truthloop:reconcile bundle.json
+```
+
+The exporter is read-only: it opens no write path, holds no credential, and
+reads no clock (`--evaluated-at` is required so the same source state always
+produces the same bytes, verified by a recorded `recordsDigestSha256`).
+
+Every evidence section carries provenance — source object, source field,
+revision, source schema version, observed timestamp, and exporter version —
+including sections carrying no value, because which source was consulted and
+came up empty is itself evidence. Absence is never collapsed into null: a
+section is classified `available`, `missing`, `not_applicable`,
+`not_yet_available`, `blocked_by_integration`, `contradictory`, or
+`schema_drift`, and only `available` and `not_applicable` let a rule reach a
+verdict. A source declaring an unknown schema version is refused rather than
+read with current-shape assumptions.
+
+`truthloop:coverage` reports, per rule, how much required evidence is producible
+today and classifies each blocker as `engineering`, `integration`, or
+`business_policy`. Three sections have no producer: processor payout settlement
+is blocked behind the Stripe Connect stopping point in
+`docs/STRIPE_CONNECT_PROGRAM.md`, no organization has declared a processor fee
+schedule, and no post-event consumption capture surface exists. Until those
+land, 8 of 11 rules can reach a verdict and no record can reach
+`fullyReconciled`.
+
+Passing these commands is local export and reconciliation-logic evidence only.
+The exporter has no Firestore reader, so it is not a production data path, an
+operator surface, hosted verification, provider evidence, a deployment, or human
+acceptance.
 
 ## Orchestration Lanes
 ```bash

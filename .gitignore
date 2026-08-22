@@ -8,6 +8,11 @@ dist/
 .firebase/
 *.log
 coverage/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+*.egg-info/
+.venv/
 playwright-report/
 test-results/
 .playwright-cli/

@@ -1,12 +1,15 @@
 # Contributing to QuotePilot
 
-Last updated: August 3, 2026
+Last updated: August 21, 2026
 
 ## Setup
 1. Use Node.js 22+.
 2. Run `npm install`.
 3. Create `.env` from `.env.example`.
 4. Validate setup with `npm run check:env`.
+5. For the Commercial Truth Loop reconciler (`truthloop/`), use Python 3.11+.
+   There is nothing to install: the package is standard-library-only and
+   `npm run test:truthloop` runs it directly.
 
 ## Branching
 - `main`: release-only, production-ready branch.
