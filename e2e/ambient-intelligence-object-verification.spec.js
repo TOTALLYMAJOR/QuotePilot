@@ -1357,37 +1357,71 @@ test.describe("Ambient intelligent-object browser verification", () => {
     });
   }
 
-  test("keeps global Pilot contextual outside an opportunity instead of opening generic chat", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/app");
-    const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
-    await trigger.click();
+  for (const viewport of VIEWPORTS) {
+    test(`keeps global Pilot contextual and contained outside an opportunity at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/app");
+      const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
+      await trigger.click();
 
-    const dialog = page.getByRole("dialog", { name: "Pilot", exact: true });
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText("Opportunities · Now");
-    await expect(dialog).toContainText("Choose an opportunity to see guidance based on its saved details here in Now.");
-    await expect(dialog).toContainText("No guidance appears until you choose one");
-    await expect(dialog.getByRole("button", { name: "Choose an opportunity" })).toBeVisible();
-    await expect(dialog.locator("input, textarea")).toHaveCount(0);
-    await dialog.getByRole("button", { name: "Close Pilot" }).click();
-    await expect(trigger).toBeFocused();
-  });
+      const dialog = page.getByRole("dialog", { name: "Pilot", exact: true });
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toContainText("Opportunities · Now");
+      await expect(dialog).toContainText("Choose an opportunity to see guidance based on its saved details here in Now.");
+      await expect(dialog).toContainText("No guidance appears until you choose one");
+      await expect(dialog.getByRole("button", { name: "Choose an opportunity" })).toBeVisible();
+      await expect(dialog.locator("input, textarea")).toHaveCount(0);
 
-  test("focuses the existing deterministic Pilot surface without running a draft action", async ({ page }) => {
-    test.skip(!PILOT_COMMAND_ENABLED, "The exact draft-focus proof needs the independent Pilot command gate.");
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/app/quotes/new");
-    const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
-    await trigger.click();
+      const rect = await dialog.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return { left: box.left, right: box.right, viewportWidth: window.innerWidth };
+      });
+      expect(rect.left).toBeGreaterThanOrEqual(0);
+      expect(rect.right).toBeLessThanOrEqual(rect.viewportWidth + 1);
 
-    const input = page.getByRole("textbox", { name: "Command for this draft" });
-    await expect(input).toBeFocused();
-    await expect(page.locator(".pilot-command-context")).toContainText("Current draft");
-    await expect(page.locator(".pilot-command-context")).toContainText("New quote draft");
-    await expect(page.locator(".pilot-command-preview")).toHaveCount(0);
-    await expect(input).toHaveValue("");
-  });
+      await dialog.getByRole("button", { name: "Close Pilot" }).click();
+      await expect(trigger).toBeFocused();
+    });
+  }
+
+  for (const viewport of VIEWPORTS) {
+    test(`focuses the existing deterministic Pilot surface without left overflow at ${viewport.width}px`, async ({ page }) => {
+      test.skip(!PILOT_COMMAND_ENABLED, "The exact draft-focus proof needs the independent Pilot command gate.");
+      await page.setViewportSize(viewport);
+      await page.goto("/app/quotes/new");
+      const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
+      await trigger.click();
+
+      const input = page.getByRole("textbox", { name: "Command for this draft" });
+      const intake = page.locator(".create-intake-panel");
+      await expect(input).toBeFocused();
+      await expect(page.locator(".pilot-command-context")).toContainText("Current draft");
+      await expect(page.locator(".pilot-command-context")).toContainText("New quote draft");
+      await expect(page.locator(".pilot-command-preview")).toHaveCount(0);
+      await expect(input).toHaveValue("");
+      await expect(intake).toBeVisible();
+
+      const geometry = await page.evaluate(() => {
+        const command = document.querySelector(".pilot-command");
+        const intakePanel = document.querySelector(".create-intake-panel");
+        const commandRect = command?.getBoundingClientRect();
+        const intakeRect = intakePanel?.getBoundingClientRect();
+        return {
+          viewportWidth: window.innerWidth,
+          documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          command: commandRect ? { left: commandRect.left, right: commandRect.right } : null,
+          intake: intakeRect ? { left: intakeRect.left, right: intakeRect.right } : null
+        };
+      });
+
+      expect(geometry.documentOverflow).toBeLessThanOrEqual(1);
+      for (const surface of [geometry.command, geometry.intake]) {
+        expect(surface).not.toBeNull();
+        expect(surface.left).toBeGreaterThanOrEqual(0);
+        expect(surface.right).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+      }
+    });
+  }
 
   for (const viewport of VIEWPORTS) {
     test(`keeps the focused Messages heading clear and overflow-safe at ${viewport.width}px`, async ({ page }) => {

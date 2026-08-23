@@ -128,16 +128,19 @@ export default function ContextSurface({
       const rect = anchor.getBoundingClientRect();
       const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
       const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
-      const dialogHeight = dialogRef.current?.getBoundingClientRect?.().height || 0;
+      const dialogRect = dialogRef.current?.getBoundingClientRect?.();
+      const dialogHeight = dialogRect?.height || 0;
+      const dialogWidth = dialogRect?.width || 0;
       const preferredTop = rect.bottom + 12;
       const maximumTop = Math.max(16, viewportHeight - dialogHeight - 16);
+      const maximumHorizontalInset = Math.max(16, viewportWidth - dialogWidth - 16);
       const nextStyle = {
         "--ambient-context-anchor-top": `${Math.max(16, Math.min(preferredTop, maximumTop))}px`
       };
       if (align === "start") {
-        nextStyle["--ambient-context-anchor-left"] = `${Math.max(16, rect.left)}px`;
+        nextStyle["--ambient-context-anchor-left"] = `${Math.max(16, Math.min(rect.left, maximumHorizontalInset))}px`;
       } else {
-        nextStyle["--ambient-context-anchor-right"] = `${Math.max(16, viewportWidth - rect.right)}px`;
+        nextStyle["--ambient-context-anchor-right"] = `${Math.max(16, Math.min(viewportWidth - rect.right, maximumHorizontalInset))}px`;
       }
       setAnchorStyle(nextStyle);
     }

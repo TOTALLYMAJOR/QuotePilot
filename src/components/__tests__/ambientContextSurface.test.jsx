@@ -27,7 +27,7 @@ function SurfaceHarness() {
   );
 }
 
-function AnchoredSurfaceHarness() {
+function AnchoredSurfaceHarness({ align = "end" }) {
   const anchorRef = useRef(null);
   return (
     <>
@@ -36,6 +36,7 @@ function AnchoredSurfaceHarness() {
         open
         title="Guest count impact"
         anchorRef={anchorRef}
+        align={align}
         onClose={() => {}}
       >
         <p>Dependency evidence</p>
@@ -119,11 +120,13 @@ describe("Ambient ContextSurface", () => {
   });
 
   test("keeps an anchored desktop inspector inside the visible viewport", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 768 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
     const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    let anchorRect = { top: 650, right: 744, bottom: 694, left: 700, width: 44, height: 44 };
     HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
       if (this.matches?.("button")) {
-        return { top: 650, right: 1200, bottom: 694, left: 1050, width: 150, height: 44 };
+        return anchorRect;
       }
       if (this.matches?.(".ambient-context-surface__dialog")) {
         return { top: 0, right: 0, bottom: 620, left: 0, width: 432, height: 620 };
@@ -132,9 +135,14 @@ describe("Ambient ContextSurface", () => {
     };
 
     try {
-      act(() => root.render(<AnchoredSurfaceHarness />));
-      expect(container.querySelector('[role="dialog"]').style.getPropertyValue("--ambient-context-anchor-top"))
-        .toBe("164px");
+      act(() => root.render(<AnchoredSurfaceHarness align="start" />));
+      const dialog = container.querySelector('[role="dialog"]');
+      expect(dialog.style.getPropertyValue("--ambient-context-anchor-top")).toBe("164px");
+      expect(dialog.style.getPropertyValue("--ambient-context-anchor-left")).toBe("320px");
+
+      anchorRect = { top: 650, right: 60, bottom: 694, left: 16, width: 44, height: 44 };
+      act(() => root.render(<AnchoredSurfaceHarness align="end" />));
+      expect(dialog.style.getPropertyValue("--ambient-context-anchor-right")).toBe("320px");
     } finally {
       HTMLElement.prototype.getBoundingClientRect = originalRect;
     }

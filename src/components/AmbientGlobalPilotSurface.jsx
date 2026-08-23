@@ -70,6 +70,7 @@ export function AmbientGlobalPilotSurface({
       consequence={consequence}
       anchorRef={anchorRef}
       returnFocusRef={returnFocusRef}
+      align="start"
       onClose={onClose}
       closeLabel="Close Pilot"
       closeActionId={text(
