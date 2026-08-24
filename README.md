@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-22 15:20:00 CDT
+Last updated: 2026-08-23 20:57:00 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
 with a read-only Python reconciliation tier for commercial evidence.
@@ -649,6 +649,7 @@ releases do not receive that acknowledgement.
 npm run check:env
 npm run test:unit
 npm run test:rules:firestore
+npm run test:truthloop-export:emulator
 npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
 npm run test:operational-staffing:emulator
@@ -753,16 +754,35 @@ not produce. The end-to-end walkthrough lives in
 [docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md § How it works](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md#how-it-works).
 
 ```bash
+# Read one tenant straight from Firestore
+npm run truthloop:export -- --firestore --organization <organizationId> \
+  --evaluated-at 2026-08-21T14:00:00.000Z --out bundle.json
+
+# Or project already-read documents supplied as JSON
 npm run truthloop:export -- --source <sources.json> \
   --evaluated-at 2026-08-21T14:00:00.000Z --out bundle.json
-npm run truthloop:coverage -- --source <sources.json> \
+
+npm run truthloop:coverage -- --firestore --organization <organizationId> \
   --evaluated-at 2026-08-21T14:00:00.000Z
 npm run truthloop:reconcile bundle.json
 ```
 
-The exporter is read-only: it opens no write path, holds no credential, and
-reads no clock (`--evaluated-at` is required so the same source state always
-produces the same bytes, verified by a recorded `recordsDigestSha256`).
+The exporter is read-only: it opens no write path and reads no clock
+(`--evaluated-at` is required so the same source state always produces the same
+bytes, verified by a recorded `recordsDigestSha256`).
+
+`--firestore` requires `--organization`; there is no all-tenant read. Every
+read is rooted at `organizations/{id}` with no `collectionGroup` query, and any
+document whose `organizationId` does not match aborts the run rather than being
+skipped — silently filtering it would hide a real data-integrity bug. Each
+document is projected through an explicit field allowlist
+(`evidence/src/firestoreReader.mjs`), so portal keys, buyer tokens, and
+provider webhook secrets cannot reach a bundle even if the projection changes.
+The Admin SDK bypasses Firestore rules, so this is explicit-scope and allowlist
+containment, not rule-enforced containment. `npm run
+test:truthloop-export:emulator` proves these properties against a real
+disposable Firestore with a populated second tenant; passing it is emulator
+evidence only, not hosted, provider, production, or human acceptance.
 
 Every evidence section carries provenance — source object, source field,
 revision, source schema version, observed timestamp, and exporter version —

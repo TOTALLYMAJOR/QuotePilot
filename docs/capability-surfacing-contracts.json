@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 49,
+  "catalogVersion": 50,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -5410,7 +5410,7 @@
     },
     {
       "id": "commercial-evidence-exporter",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "developer_infrastructure",
@@ -5418,7 +5418,7 @@
         "operator",
         "release operators"
       ],
-      "summary": "The Commercial Truth Loop evidence exporter is a read-only operator tool that projects already-read authoritative QuotePilot documents into a canonical reconciliation bundle, stamps provenance on every section, and reports which evidence it cannot produce and why.",
+      "summary": "The Commercial Truth Loop evidence exporter is a read-only operator tool that reads tenant-scoped authoritative QuotePilot documents from Firestore, projects them through a field allowlist into a canonical reconciliation bundle, stamps provenance on every section, and reports which evidence it cannot produce and why.",
       "backendPaths": [
         "scripts/reconciliation-evidence-export.mjs",
         "evidence/src/exporterCore.mjs",
@@ -5430,14 +5430,17 @@
         "evidence/src/producers/index.mjs",
         "evidence/src/producers/payoutProducer.mjs",
         "evidence/src/producers/feeScheduleProducer.mjs",
-        "evidence/src/producers/consumptionProducer.mjs"
+        "evidence/src/producers/consumptionProducer.mjs",
+        "scripts/truthloop-export-emulator-acceptance.mjs",
+        "evidence/src/firestoreReader.mjs"
       ],
       "backendExports": [],
       "frontendPaths": [],
       "entryPointLocators": [],
       "testPaths": [
         "src/lib/__tests__/commercialEvidenceExporter.test.js",
-        "src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js"
+        "src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js",
+        "src/lib/__tests__/commercialEvidenceReader.test.js"
       ],
       "testLocators": [
         {
@@ -5459,6 +5462,18 @@
         {
           "path": "src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js",
           "locator": "turns a throwing producer into a missing envelope, not a crash"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceReader.test.js",
+          "locator": "aborts on a document that belongs to another tenant"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceReader.test.js",
+          "locator": "does not carry the portal key or buyer token out of Firestore"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceReader.test.js",
+          "locator": "requires an explicit organization \u2014 there is no all-tenant read"
         }
       ],
       "documentationPaths": [
@@ -5480,8 +5495,8 @@
           "locator": "Commercial Truth Loop evidence exporter:"
         }
       ],
-      "headlessReason": "The exporter is an explicitly invoked read-only operator tool that writes files, not application state. It owns no callable export, exposes no customer or staff surface, and grants no tenant, role, pricing, staffing, provider, or production authority.",
-      "safeOutcome": "Operators receive a canonical evidence bundle and a coverage report naming every section the exporter could not produce and why, without creating quote, payment, booking, delivery, provider, or production evidence."
+      "headlessReason": "The exporter and its Firestore reader are an explicitly invoked read-only operator tool that writes files, not application state. They own no callable export, expose no customer or staff surface, and grant no tenant, role, pricing, staffing, provider, or production authority. Reads are rooted at one named organization with no collectionGroup query.",
+      "safeOutcome": "Operators receive a tenant-scoped canonical evidence bundle and a coverage report naming every section the exporter could not produce and why, without creating quote, payment, booking, delivery, provider, or production evidence. The reader performs no writes, requires an explicit organization, refuses any cross-tenant document, and withholds portal keys, buyer tokens, and provider secrets through an explicit field allowlist."
     }
   ]
 }

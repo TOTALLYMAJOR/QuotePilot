@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-08-23 20:57:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -26,6 +26,39 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
+- Gave the Commercial Truth Loop exporter a read-only Firestore reader
+  (`evidence/src/firestoreReader.mjs`), closing the gap between the reconciler
+  and real data. `npm run truthloop:export -- --firestore --organization <id>`
+  assembles the quote, proposal acceptance receipt, active quote version,
+  newest change-request resolution, and organization settings for one
+  explicitly named tenant.
+  Containment is deliberate and tested rather than assumed. There is no
+  all-tenant read: the organization argument is required. Every read is rooted
+  at `organizations/{id}` with no `collectionGroup` query anywhere, and every
+  document is re-checked against the requested tenant after it is read — a
+  mismatch aborts the run rather than being silently skipped, because filtering
+  it would hide a real data-integrity bug. Each document is then projected
+  through an explicit field allowlist, so portal keys, buyer tokens, and
+  provider webhook secrets cannot reach a bundle even if the projection
+  downstream changes. The Admin SDK bypasses Firestore rules, so this is
+  explicit-scope and allowlist containment, not rule-enforced containment.
+  The reader consults no clock: event completion is supplied by the caller,
+  and two reads of unchanged data produce identical canonical bytes.
+- Added `npm run test:truthloop-export:emulator`, a disposable `demo-*`
+  Firestore lane that proves the whole chain — seeded Firestore, reader,
+  exporter, canonical bundle — against a real database with a genuinely
+  populated second organization. It asserts tenant isolation, that no seeded
+  secret reaches the bundle, that provenance resolves to real Firestore paths,
+  that a repeat read is byte-identical, and that both the all-tenant read and a
+  mis-filed cross-tenant document are refused. Nineteen always-on unit tests
+  cover the same containment properties against a fake Firestore that omits
+  `collectionGroup` entirely.
+
+### Fixed
+- Corrected two Firestore paths the exporter stamped into provenance. Receipts
+  live in `proposalAcceptanceReceipts` and change-request records in
+  `changeRequestResolutions`; provenance that names a path an operator cannot
+  open is worse than no provenance.
 - Built the Commercial Truth Loop evidence supply chain:
   `authoritative source → producer/exporter → canonical bundle → reconciler →
   verdict + reason`. A read-only JavaScript exporter (`evidence/`,
