@@ -32,7 +32,7 @@
         "section": "actualConsumption"
       }
     ],
-    "recordsDigestSha256": "c27e4693a62e00169b8f86791b0078eebe4172efe4a03ceeb2934bb2a84e321f"
+    "recordsDigestSha256": "8aa7b995d8c3e30358feb838589ff7381a1c432044837193011b8aaf61958bf6"
   },
   "records": [
     {
@@ -65,7 +65,7 @@
             "observedAtISO": "2026-08-05T18:22:11.000Z",
             "revision": "rev_7",
             "sourceField": "proposalSnapshot",
-            "sourceObject": "organizations/org_demo/acceptanceReceipts/rcpt_demo_1",
+            "sourceObject": "organizations/org_demo/proposalAcceptanceReceipts/rcpt_demo_1",
             "sourceSchemaVersion": "2"
           },
           "value": {

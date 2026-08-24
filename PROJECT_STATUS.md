@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-08-23 20:57:00 CDT
 
 ## Current Production Release
 
@@ -31,37 +31,43 @@ Last updated: 2026-08-21 13:10:00 CDT
   acceptance, production-data correctness, provider delivery, recipient
   acknowledgement, or human acceptance.
 
-## Commercial Truth Loop (Python Tier + Evidence Exporter)
+## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 
-- The reconciler (`truthloop/`, 127 tests) and the evidence exporter
-  (`evidence/`, `scripts/reconciliation-evidence-export.mjs`, 51 tests) are both
-  in source. Together they form the supply chain
-  `authoritative source → producer/exporter → canonical bundle → reconciler →
-  verdict + reason`. Both run in `lane:core` and add no required CI context.
-- **No production record is reconciled.** The exporter projects already-read
-  documents; there is no Firestore reader. Its contract tests drive it from
-  documents built by the real `functions/proposalAcceptance.js` and
-  `functions/paymentLedger.js` planners, which proves it reads the shapes
-  QuotePilot writes — not that it has ever read one from a database.
-- **No record can reach `fullyReconciled` today**, and the coverage report says
-  so explicitly: 8 of 11 rules can reach a verdict. Three sections have no
-  producer — processor payout settlement (`integration`, blocked behind the
-  Connect stopping point), declared processor fee schedules
-  (`business_policy`, the settings field does not exist), and post-event
-  consumption (`engineering`, no capture surface). Run
-  `npm run truthloop:coverage` for the current split.
+- The chain is complete in source: `authoritative Firestore -> reader ->
+  exporter -> canonical bundle -> reconciler -> verdict + reason`. The reader
+  (`evidence/src/firestoreReader.mjs`) landed with 19 always-on unit tests and
+  a disposable `demo-*` emulator lane
+  (`npm run test:truthloop-export:emulator`) that exercises the whole chain
+  against a real Firestore.
+- **It has never run against production data.** The emulator lane is local
+  evidence only: not hosted verification, not provider evidence, not a
+  production data path, and not human acceptance. Running it against a real
+  tenant is a separate, separately authorized step.
+- **No record can reach `fullyReconciled` yet**, and the coverage report says
+  so: 8 of 11 rules can reach a verdict. Three sections still have no producer
+  — processor payout settlement (`integration`, blocked behind the Connect
+  stopping point), declared processor fee schedules (`business_policy`, the
+  settings field does not exist), and post-event consumption (`engineering`,
+  no capture surface). Run `npm run truthloop:coverage` for the current split.
+- Containment is explicit-scope, not rule-enforced. The reader runs on the
+  Admin SDK, which bypasses Firestore rules, so its guarantees come from a
+  required organization argument, reads rooted at that organization, the
+  absence of any `collectionGroup` query, an abort on any cross-tenant
+  document, and a field allowlist that withholds portal keys, buyer tokens,
+  and provider secrets. Those properties are asserted by tests and by the
+  emulator lane against a populated second tenant; they are not enforced by
+  Firestore itself.
 - Active risk: the loop's narratives read as authoritative. Findings carry
   `authority: "observation_only"` and must not be presented to a customer or
   used as a repricing, approval, or accounting authority. The kill criteria in
   `docs/COMMERCIAL_TRUTH_LOOP_ADR.md` are the disable trigger.
-- Active risk: the payout producer is one authorized settlement source away
-  from emitting provider evidence. It refuses any source not explicitly marked
-  authorized, and production code passes none, but that gate is a code
-  guarantee rather than an infrastructure one until the Connect program
-  proceeds.
-- Passing these gates is local export and reconciliation-logic evidence. It is
-  not a Firestore reader, an operator surface, hosted verification, provider
-  evidence, a production deployment, or human acceptance.
+- Active risk: the payout producer remains one authorized settlement source
+  away from emitting provider evidence. It refuses any source not explicitly
+  marked authorized and production passes none, but that is a code guarantee
+  until the Connect program proceeds.
+- Known noise before a first real run: `margin_category_omission` will fire on
+  every record carrying delivery/travel revenue. That is correct but
+  undecided — see the travel/margin decision in `DEV_TASKS.md`.
 
 ## Pending Production Completion
 

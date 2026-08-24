@@ -25,10 +25,18 @@ import { createPayoutProducer } from "../evidence/src/producers/payoutProducer.m
 import { createFeeScheduleProducer } from "../evidence/src/producers/feeScheduleProducer.mjs";
 import { createConsumptionProducer } from "../evidence/src/producers/consumptionProducer.mjs";
 import { missing } from "../evidence/src/availability.mjs";
+import {
+  eventCompletedBefore,
+  readOrganizationEvidence
+} from "../evidence/src/firestoreReader.mjs";
 
 const USAGE = `Usage: reconciliation-evidence-export.mjs [options]
 
-  --source <file>        JSON file of already-read source documents (required)
+  --source <file>        JSON file of already-read source documents
+  --firestore            Read source documents from Firestore instead of --source
+  --organization <id>    Tenant to read (required with --firestore; no all-tenant read)
+  --quote <id>           Restrict to this quote; repeatable
+  --limit <n>            Cap on quotes read with --firestore
   --evaluated-at <ISO>   Evaluation instant (required; never read from a clock)
   --out <file>           Write the evidence bundle here (default: stdout)
   --coverage-out <file>  Write the coverage report JSON here
@@ -39,6 +47,10 @@ const USAGE = `Usage: reconciliation-evidence-export.mjs [options]
 function parseArgs(argv) {
   const options = {
     source: "",
+    firestore: false,
+    organization: "",
+    quoteIds: [],
+    limit: 0,
     evaluatedAt: "",
     out: "",
     coverageOut: "",
@@ -56,6 +68,10 @@ function parseArgs(argv) {
     };
     switch (flag) {
       case "--source": options.source = next(); break;
+      case "--firestore": options.firestore = true; break;
+      case "--organization": options.organization = next(); break;
+      case "--quote": options.quoteIds.push(next()); break;
+      case "--limit": options.limit = Number(next()); break;
       case "--evaluated-at": options.evaluatedAt = next(); break;
       case "--out": options.out = next(); break;
       case "--coverage-out": options.coverageOut = next(); break;
@@ -64,7 +80,20 @@ function parseArgs(argv) {
       default: throw new Error(`Unknown argument: ${flag}`);
     }
   }
-  if (!options.source) throw new Error("--source is required.");
+  if (options.firestore && options.source) {
+    throw new Error("--firestore and --source are mutually exclusive.");
+  }
+  if (!options.firestore && !options.source) {
+    throw new Error("Either --source or --firestore is required.");
+  }
+  // No all-tenant read exists. Reading every organization at once is how a
+  // reconciliation tool turns into a cross-tenant data export.
+  if (options.firestore && !options.organization) {
+    throw new Error("--firestore requires --organization.");
+  }
+  if (options.limit && !Number.isSafeInteger(options.limit)) {
+    throw new Error("--limit must be a whole number.");
+  }
   // The evaluation instant is an input, never a clock read: two runs over the
   // same source state must produce the same bytes.
   if (!options.evaluatedAt) throw new Error("--evaluated-at is required.");
@@ -97,7 +126,34 @@ export function buildProducers(sourceDocument = {}) {
   ]);
 }
 
-function main(argv) {
+/**
+ * Read one organization's evidence from Firestore.
+ *
+ * The Admin SDK bypasses security rules, so the containment here is explicit
+ * rather than rule-enforced: a required organization argument, reads rooted at
+ * that organization, no collectionGroup query, and a tenant re-check on every
+ * document. The reader also projects each document to a field allowlist, so a
+ * secret cannot reach a bundle even if the projection downstream changes.
+ */
+async function readFirestoreSource(options) {
+  const { loadFirebaseAdmin } = await import("./firebase-admin-modular.mjs");
+  const admin = loadFirebaseAdmin();
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || "").trim();
+  if (!admin.getApps().length) {
+    admin.initializeApp(projectId ? { projectId } : {});
+  }
+  const db = admin.getFirestore();
+  const read = await readOrganizationEvidence({
+    db,
+    organizationId: options.organization,
+    quoteIds: options.quoteIds.length ? options.quoteIds : null,
+    limit: options.limit,
+    eventCompleted: eventCompletedBefore(options.evaluatedAt)
+  });
+  return { records: read.records, organizationSettings: read.organizationSettings };
+}
+
+async function main(argv) {
   let options;
   try {
     options = parseArgs(argv);
@@ -107,11 +163,20 @@ function main(argv) {
   }
 
   let sourceDocument;
-  try {
-    sourceDocument = JSON.parse(fs.readFileSync(path.resolve(options.source), "utf8"));
-  } catch (error) {
-    process.stderr.write(`Source could not be read: ${error.message}\n`);
-    return 2;
+  if (options.firestore) {
+    try {
+      sourceDocument = await readFirestoreSource(options);
+    } catch (error) {
+      process.stderr.write(`Firestore evidence could not be read: ${error.message}\n`);
+      return 2;
+    }
+  } else {
+    try {
+      sourceDocument = JSON.parse(fs.readFileSync(path.resolve(options.source), "utf8"));
+    } catch (error) {
+      process.stderr.write(`Source could not be read: ${error.message}\n`);
+      return 2;
+    }
   }
 
   const sources = Array.isArray(sourceDocument.records) ? sourceDocument.records : [];
@@ -151,7 +216,7 @@ function main(argv) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }
 
 export { main, parseArgs };

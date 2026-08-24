@@ -57,8 +57,12 @@ export function quotePath(organizationId, quoteId) {
   return `organizations/${organizationId}/quotes/${quoteId}`;
 }
 
+// Matches PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION in functions/index.js. The
+// collection is named for the acceptance flow that writes it, not for the
+// receipt, and provenance that names the wrong collection is worse than no
+// provenance: it sends an operator to a path that does not exist.
 export function receiptPath(organizationId, receiptId) {
-  return `organizations/${organizationId}/acceptanceReceipts/${receiptId}`;
+  return `organizations/${organizationId}/proposalAcceptanceReceipts/${receiptId}`;
 }
 
 export function organizationPath(organizationId) {

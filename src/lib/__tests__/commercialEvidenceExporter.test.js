@@ -112,7 +112,9 @@ describe("evidence exporter: authoritative projection", () => {
 
   it("records field-level provenance where a value came from another document", () => {
     const accepted = exportOne(sourceFor()).evidence.acceptedSnapshot;
-    expect(accepted.provenance.sourceObject).toContain("acceptanceReceipts/");
+    // The collection is proposalAcceptanceReceipts, matching
+    // PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION in functions/index.js.
+    expect(accepted.provenance.sourceObject).toContain("proposalAcceptanceReceipts/");
     // Staffing is not on the signed snapshot, so it must not claim to be.
     expect(accepted.provenance.fields.staffing.sourceObject).toContain("/quotes/");
     expect(accepted.provenance.fields.staffing.derivation).toContain(

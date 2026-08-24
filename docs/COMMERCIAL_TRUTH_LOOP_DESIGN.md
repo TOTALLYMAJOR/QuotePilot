@@ -1,6 +1,6 @@
 # Commercial Truth Loop: Design
 
-Last updated: 2026-08-21 21:41:00 CDT
+Last updated: 2026-08-23 20:57:00 CDT
 
 Architecture decision and authority boundary: `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`.
 Implementation: `truthloop/`.
@@ -107,6 +107,7 @@ authoritative source → producer/exporter → canonical evidence bundle → rec
 | Stage | Owner | Guarantee |
 |---|---|---|
 | Authoritative source | existing TypeScript services | Firestore documents written by `proposalAcceptance.js`, `paymentLedger.js`, `pricingEngine.js`, and the quote/version writers |
+| Reader | `evidence/src/firestoreReader.mjs` | Read-only, one named tenant, no `collectionGroup`, aborts on a cross-tenant document, field allowlist withholds portal keys and provider secrets |
 | Producer / exporter | `evidence/`, `scripts/reconciliation-evidence-export.mjs` | Read-only projection; provenance on every section; availability classified, never collapsed to null; unknown schemas refused |
 | Canonical bundle | `truthloop-evidence-bundle-v2` | Deterministic: sorted keys, sorted records, caller-supplied instant, `recordsDigestSha256` over the canonical records |
 | Reconciler | `truthloop/` | Gates on availability before assessing; unverifiable verdicts carry a machine-readable reason code |
@@ -331,10 +332,9 @@ Exit codes: `0` fully reconciled, `1` findings present, `2` bundle unreadable.
 
 ## Not yet built
 
-The exporter has **no Firestore reader**. It projects already-read documents, so
-a caller must assemble them. Building that tenant-scoped, role-checked read is
-the next capability, tracked in `DEV_TASKS.md`. Until it ships, the loop runs on
-exporter-generated fixtures and its evidence is local test evidence only.
+The reader exists (`--firestore --organization <id>`), so the chain runs
+against a real database. What remains is producer coverage and one policy
+decision.
 
 Three evidence sections have no producer, and the coverage report names each
 blocker by class:
@@ -350,3 +350,22 @@ and `processor_fee_discrepancy` requires both blocked payout evidence and an
 undeclared fee schedule, **no record can reach `fullyReconciled` today**. The
 coverage report states this rather than leaving it to be inferred from a low
 percentage.
+
+The reader has also never been pointed at production data. The emulator lane is
+local evidence only; running against a real tenant is a separate, separately
+authorized step.
+
+### What containment the reader does and does not provide
+
+It runs on the Firebase Admin SDK, which bypasses Firestore security rules.
+Its guarantees are therefore properties of this code, asserted by tests, not
+properties enforced by the database:
+
+* a required `organizationId` — there is no all-tenant read;
+* every read rooted at `organizations/{id}`, with no `collectionGroup` query;
+* an abort, not a skip, on any document whose `organizationId` differs;
+* an explicit field allowlist applied before anything leaves the reader.
+
+Anyone extending the reader must preserve all four. Adding a `collectionGroup`
+query or widening the allowlist silently removes a guarantee the rest of the
+system assumes.

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 21:56:00 CDT
+Last updated: 2026-08-23 20:57:00 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -15,24 +15,20 @@ verdict + reason` (walkthrough: `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`
 are ordered; the coverage report (`npm run truthloop:coverage`) names each gap
 and its constraint class.
 
-### Slice A — Firestore reader (next; the only item that creates operator value)
+### Slice A — Firestore reader — DONE
 
-- Build the tenant-scoped, role-checked read that assembles the five documents
-  per record the exporter's `--source` seam already expects: quote, acceptance
-  receipt, active quote version, change-request record, organization settings.
-  Reads only; a bundle must never carry a secret, token, raw provider record,
-  or customer-facing field beyond what the reconciler contract names.
-- Shape: an explicitly invoked operator script (house pattern:
-  `scripts/*-emulator-acceptance.mjs`), validated against a disposable `demo-*`
-  Auth+Firestore emulator project with seeded fixtures, wired as a
-  `test:truthloop-export:emulator` lane. Keep it under the existing
-  `commercial-evidence-exporter` capability contract (revision bump) or a
-  sibling `developer_infrastructure` contract.
-- Payoff on day one: 8 of 11 rules already reach verdicts, so real discrepancy
-  detection (payment mismatches, stale catalog revisions, promises missing
-  from plans, revenue not received) starts here — before any producer lands.
-  `fullyReconciled` stays 0 by design until Slices C–E; discrepancies-found is
-  the value metric, `fullyReconciled` the completeness metric.
+Shipped: `evidence/src/firestoreReader.mjs`, wired as
+`npm run truthloop:export -- --firestore --organization <id>`, with 19 always-on
+unit tests and the `npm run test:truthloop-export:emulator` disposable `demo-*`
+lane. Remaining follow-on for this slice:
+
+- Run it against a real tenant once, under separate authorization, and record
+  what the first real coverage report says. Until then the chain has only
+  emulator evidence.
+- Decide whether the reader should ever be promoted from an operator script to
+  a scheduled callable. It owns no callable export today, which is why it
+  stays `developer_infrastructure` in
+  `docs/capability-surfacing-contracts.json`.
 
 ### Slice B — Decision gates before the first real run (owner decisions, not code)
 

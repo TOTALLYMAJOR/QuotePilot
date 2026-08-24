@@ -487,8 +487,9 @@ function buildContext(source, { evaluatedAtISO }) {
     receipt: receiptId ? receiptPath(organizationId, receiptId) : "",
     organization: organizationPath(organizationId),
     quoteVersion: versionId ? quoteVersionPath(organizationId, quoteId, versionId) : "",
+    // functions/index.js writes these to changeRequestResolutions.
     changeRequestRecord: source.changeRequestRecord
-      ? `${quotePath(organizationId, quoteId)}/changeRequestRecords/${text(source.changeRequestRecord.resolutionId)}`
+      ? `${quotePath(organizationId, quoteId)}/changeRequestResolutions/${text(source.changeRequestRecord.resolutionId)}`
       : ""
   };
 

@@ -17,6 +17,7 @@
     "lane:release:cwv": "bash ./scripts/orchestration-lanes.sh lane:release --with-cwv",
     "test:unit": "vitest run",
     "test:truthloop": "bash ./scripts/run-truthloop.sh test",
+    "test:truthloop-export:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-truthloop-export emulators:exec --only firestore \"node scripts/truthloop-export-emulator-acceptance.mjs\"",
     "truthloop:reconcile": "bash ./scripts/run-truthloop.sh reconcile",
     "truthloop:rules": "bash ./scripts/run-truthloop.sh rules",
     "truthloop:export": "node ./scripts/reconciliation-evidence-export.mjs",
