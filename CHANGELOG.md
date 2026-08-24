@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-08-22 19:48:08 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Kept the global Pilot context on-screen when it opens from the bottom-left
+  workspace rail. The Pilot surface now uses start alignment, while the shared
+  anchored-context primitive clamps both horizontal edges using the rendered
+  dialog width; focused component tests and real-browser checks cover the Pilot
+  context, draft command, and email-intake surfaces at 390, 768, and 1440px.
 - Aligned the temporary compatibility and Ambient bundle ceilings to the exact
   3,215,097-byte and 3,899,524-byte graphs emitted by the protected Playwright
   job with production presentation flags, without adding general growth

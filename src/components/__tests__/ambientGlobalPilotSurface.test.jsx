@@ -68,6 +68,7 @@ describe("Ambient global Pilot recovery surface", () => {
 
     const dialog = container.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
+    expect(dialog.closest(".ambient-context-surface").classList.contains("ambient-context-surface--align-start")).toBe(true);
     expect(dialog.textContent).toContain("No opportunity selected");
     expect(dialog.textContent).toContain("Current workspace");
     expect(dialog.textContent).toContain("Choose an opportunity to see guidance based on its saved details");
