@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-21 21:41:00 CDT
+Last updated: 2026-08-22 15:20:00 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
 with a read-only Python reconciliation tier for commercial evidence.
@@ -648,7 +648,6 @@ releases do not receive that acknowledgement.
 ```bash
 npm run check:env
 npm run test:unit
-npm run test:truthloop
 npm run test:rules:firestore
 npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
@@ -659,6 +658,7 @@ npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run test:e2e:firebase:starter-onboarding
 npm run build
+npm run test:truthloop
 npm run check:secrets
 npm run check:workflows
 npm run check:ambient-release-gate
@@ -693,7 +693,12 @@ package is standard-library-only, so the gate needs no virtualenv, no package
 install, and no network access; `scripts/run-truthloop.sh` selects the newest
 available Python 3.11+ interpreter and fails closed if none is present. The lane
 runs inside the existing `lane:core` job and adds no new required CI status
-context. Passing it is local reconciliation-logic evidence only: it is not an
+context. It runs **last** in that lane deliberately: `lane:core` executes under
+`set -e`, so an absent Python toolchain running earlier would suppress the
+build, documentation-governance, and bundle gates above it and leave a
+contributor with no results at all. Running it last costs nothing — the suite
+takes under a second — and keeps a missing interpreter from reading as a broken
+build. Passing it is local reconciliation-logic evidence only: it is not an
 evidence exporter, a staff surface, hosted verification, provider evidence, a
 production deployment, or human acceptance. No commercial record is reconciled
 in production until the TypeScript evidence exporter ships.
