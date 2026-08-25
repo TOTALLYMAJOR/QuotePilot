@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-25 02:06:28 CDT
+Last updated: 2026-08-25 15:55:56 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Strengthened the canonical project-state control plane with explicit project
+  identity and success dimensions, structured primary/supporting journeys,
+  full decision/exploration/proof/blocker contracts, twelve commercial-evidence
+  categories, and a five-minute executive state report. The deterministic gate
+  now detects schema and contract gaps, invalid proof verdicts, unresolved
+  placeholders in evidence-backed claims, false passing-test evidence, broken
+  blocker references, incomplete commercial records, and missing executive
+  sections; seven focused validator tests pass locally, including malformed
+  record crash safety. This remains repository
+  governance evidence, not production, customer-use, or commercial proof.
 - Recorded exact `v0.15.0` production promotion: SHA
   `bc495c8c948d440b12363d5da34209a11ff151fd` passed exact-main CI run
   `32817744859`, then reached Firebase in all-scope run `32818605404` and the

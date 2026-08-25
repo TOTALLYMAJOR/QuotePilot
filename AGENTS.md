@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-25 15:46:40 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -41,6 +41,27 @@ Ship safe changes with validation evidence and canonical documentation sync.
 6. At completion, rerun `npm run plan:task` with the same `--task` and
    `--files` plus `--phase complete`, then report its exact UTC `recordedAt`
    timestamp with changed files, validations, and residual risks.
+
+## Canonical State Completion Contract
+
+Any task that materially changes project capability, architecture, lifecycle
+state, dependencies, blockers, proof status, or product behavior must reconcile
+the Canonical Project State before declaring completion.
+
+Completion reports must answer:
+
+- What changed?
+- What capability changed lifecycle state?
+- What evidence proves the reported state?
+- What remains `UNVERIFIED`?
+- What decision was introduced, contradicted, or superseded?
+- What blocker was created, reprioritized, resolved, or removed?
+- Did the single NEXT PROOF EVENT change?
+- Which canonical state artifacts were updated?
+
+“No canonical documentation changes required” is acceptable only with a stated
+reason. Do not use unqualified `DONE`; report `IMPLEMENTED`, `TESTED`,
+`VERIFIED`, `DEPLOYED`, `USED`, or `PROVEN` according to the evidence class.
 
 ## Guardrails
 - Never commit secrets (`.env`, private keys, token values).

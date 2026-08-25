@@ -12,7 +12,7 @@
     "exact portal issuance and customer-decision evidence",
     "provider and human evidence separation"
   ],
-  "upstreamSystems": ["Firebase", "Vercel", "Stripe", "Resend", "Cloudflare Turnstile"],
+  "upstreamSystems": ["Firebase", "Vercel", "Stripe", "Resend", "Pingram", "Cloudflare Turnstile"],
   "downstreamSystems": [],
   "portfolioStatus": "ACTIVE_COMMERCIAL_PROOF_UNVERIFIED",
   "lastReconciled": "2026-08-25"

@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-25 15:46:40 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -120,6 +120,31 @@ dependency and blocker references, and exactly one next proof event. It also
 checks that compatibility indexes point back to their existing authorities.
 The check runs in `lane:quick`. A pass proves control-plane consistency only,
 not runtime, provider, production, human, usage, or commercial behavior.
+
+## Control-Plane Record Contracts
+
+- `PROJECT_STATE.md` owns the explicit identity, separated north-star outcomes,
+  primary canonical journey, and one structured NEXT PROOF EVENT.
+- `docs/project/CAPABILITIES.md` records intended outcome, lifecycle state,
+  evidence, missing proof, and blocking condition for each representative
+  cohort while the Feature Matrix remains the complete inventory.
+- `docs/project/DECISIONS.md` records current decision status, alternatives,
+  authority, affected components, reversibility, and revisit triggers while
+  linked ADRs retain full rationale.
+- `docs/project/EXPLORATIONS.md` keeps unresolved hypotheses and decision gates
+  separate from committed work.
+- `docs/project/PROOF.md` uses only `PROVEN`, `PARTIALLY_PROVEN`, `UNVERIFIED`,
+  or `CONTRADICTED` verdicts scoped to the exact claim and evidence class.
+- `docs/project/BLOCKERS.md` records evidence, affected goals/journeys,
+  dependencies, and objective resolution conditions; `DEV_TASKS.md` remains
+  the prioritized backlog.
+- `docs/project/EXECUTIVE_STATE.md` is the five-minute current-state view and
+  must not introduce a higher lifecycle or proof claim than the ledger.
+
+The drift gate validates structural completeness and obvious contradictions;
+semantic state promotion remains a human or explicitly authorized agent
+decision. Repository text such as `TODO`, `FIXME`, `TBD`, or `placeholder` is
+not acceptable inside a supposedly evidence-backed ledger claim.
 
 ## Security Scan Note
 Documentation secret scanning blocks real token-like values and allows explicit placeholder values such as `<your_secret_here>`.
