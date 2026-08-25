@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-25 00:58:05 CDT
+Last updated: 2026-08-25 01:20:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Declared the Steward workbench's `prop-types` runtime dependency explicitly,
+  so clean installs and exact-SHA CI resolve the component instead of relying
+  on an unrelated local dependency tree.
 - Reconciled canonical project-state and production-status records with the
   verified `v0.14.0` Vercel and Firebase deployment receipts, the four newer
   green-CI `main` commits, and the failed-closed tenant-250 activation attempt.
