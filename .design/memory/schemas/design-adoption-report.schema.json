@@ -1,0 +1,216 @@
+{
+  "$id": "https://design-intelligence.local/schemas/design-adoption-report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "authorities": {
+      "type": "object"
+    },
+    "baselineMutationPerformed": {
+      "const": false
+    },
+    "capabilityClaims": {
+      "type": "array"
+    },
+    "decisions": {
+      "items": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "ADOPT",
+              "ADAPT",
+              "DEFER",
+              "DECLINE",
+              "BLOCKED"
+            ]
+          },
+          "patternId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "patternId",
+          "decision",
+          "reasons"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "designContract": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "designSystemHealth": {
+      "type": "object"
+    },
+    "errors": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "governanceConstraints": {
+      "properties": {
+        "errors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "receipts": {
+          "type": "array"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "NOT_REQUIRED",
+            "REQUIRED",
+            "PASS",
+            "HELD",
+            "BLOCKED"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "required",
+        "receipts",
+        "errors"
+      ],
+      "type": "object"
+    },
+    "id": {
+      "pattern": "^DAR-[A-F0-9]{16}$",
+      "type": "string"
+    },
+    "implementationPerformed": {
+      "const": false
+    },
+    "implementationReady": {
+      "type": "boolean"
+    },
+    "memoryContext": {
+      "type": "object"
+    },
+    "memoryRequired": {
+      "type": "boolean"
+    },
+    "profile": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repairPerformed": {
+      "const": false
+    },
+    "repositoryRoot": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "sources": {
+      "items": {
+        "properties": {
+          "evidence": {
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "url",
+              "image"
+            ]
+          },
+          "location": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "RESEARCH_REQUIRED",
+              "ANALYZED"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "location",
+          "status",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "RESEARCH_REQUIRED",
+        "REVIEW_REQUIRED",
+        "READY",
+        "DECLINED",
+        "BLOCKED"
+      ]
+    },
+    "surface": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "task",
+    "profile",
+    "surface",
+    "repositoryRoot",
+    "status",
+    "implementationReady",
+    "sources",
+    "authorities",
+    "designSystemHealth",
+    "memoryRequired",
+    "memoryContext",
+    "governanceConstraints",
+    "analysis",
+    "capabilityClaims",
+    "decisions",
+    "designContract",
+    "errors",
+    "implementationPerformed",
+    "repairPerformed",
+    "baselineMutationPerformed"
+  ],
+  "title": "Design Adoption Report",
+  "type": "object"
+}

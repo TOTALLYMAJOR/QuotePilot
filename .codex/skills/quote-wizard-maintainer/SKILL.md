@@ -8,7 +8,9 @@ description: Maintain and evolve the React + Firebase catering quote wizard. Use
 ## Core Workflow
 1. Read `docs/DOC_SYSTEM.md`, `README.md`, `AGENTS.md`, and `PROJECT_STATUS.md`.
 2. Run `npm run plan:task -- --task "<work>" --files <explicit,path,...>` and
-   use its read, documentation, validation, and runner-model recommendation.
+   use its skill, read, documentation, validation, and runner-model
+   recommendations. For UI work, load `design-language` before editing and
+   reconcile it with `docs/DESIGN_SYSTEM.md` and `docs/DESIGN_PRINCIPLES.md`.
 3. Load references before edits:
    - `references/code-map.md`
    - `references/safe-change-checklist.md`

@@ -46,6 +46,8 @@ is the authoritative time included in the final task report.
 - Pass explicit paths in a dirty worktree so unrelated changes do not raise the
   risk/model tier or widen dependency reads.
 - Read the emitted `dependencies.readFirst` set before task-owned source.
+- Load every emitted `dependencies.requiredSkills` entry before acting; UI work
+  requires `design-language` plus both canonical QuotePilot design documents.
 - Implement in `taskGraph` order: discover, implement, governance, verify.
 - Run focused checks before full build/release lanes; do not omit required
   global gates from the emitted validation list.

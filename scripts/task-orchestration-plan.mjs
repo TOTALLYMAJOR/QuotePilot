@@ -204,6 +204,7 @@ export function buildTaskPlan({
       rationale: tier.purpose
     },
     dependencies: {
+      requiredSkills: unique(profile.requiredSkills),
       readFirst: unique(profile.readFirst),
       docRequirements: mergeDocRequirements(profile.docRequirements, capabilityDocs),
       validations: unique(profile.validations)
@@ -249,6 +250,10 @@ function formatText(plan) {
     `- model: ${plan.modelRouting.selectedModel} (${plan.modelRouting.tier}, ${plan.modelRouting.reasoningEffort})`,
     `- switch_authority: ${plan.modelRouting.switchAuthority}`,
     `- files: ${plan.files.length ? plan.files.join(", ") : "working tree auto-detection"}`,
+    "- required_skills:",
+    ...(plan.dependencies.requiredSkills.length
+      ? plan.dependencies.requiredSkills.map((item) => `  - ${item}`)
+      : ["  - none"]),
     "- read_first:",
     ...plan.dependencies.readFirst.map((item) => `  - ${item}`),
     "- required_docs:",

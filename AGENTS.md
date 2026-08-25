@@ -22,7 +22,9 @@ Ship safe changes with validation evidence and canonical documentation sync.
    `--task` and `--files` set, then follow its dependency/read map. An external
    runner may apply the emitted model and reasoning recommendation before work;
    an already-running agent records the recommendation and continues without
-   claiming an in-process model switch.
+   claiming an in-process model switch. Load every emitted `requiredSkills`
+   entry completely before acting. UI work must load `design-language` and use
+   `docs/DESIGN_SYSTEM.md` plus `docs/DESIGN_PRINCIPLES.md` as its local truth.
 3. Use the smallest safe implementation scope.
 4. Run required checks:
    - `npm run check:project-state`

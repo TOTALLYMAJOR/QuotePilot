@@ -42,6 +42,11 @@ describe("task orchestration planning", () => {
       selectedModel: "gpt-5.6-terra",
       reasoningEffort: "medium"
     });
+    expect(plan.dependencies.requiredSkills).toEqual(["design-language"]);
+    expect(plan.dependencies.readFirst).toEqual(expect.arrayContaining([
+      "docs/DESIGN_SYSTEM.md",
+      "docs/DESIGN_PRINCIPLES.md"
+    ]));
     expect(plan.dependencies.docRequirements).toContainEqual({
       mode: "all",
       paths: ["CHANGELOG.md"]
@@ -84,6 +89,7 @@ describe("task orchestration planning", () => {
 
     expect(plan.modelRouting.selectedModel).toBe("runner-balanced-model");
     expect(plan.modelRouting.environmentOverride).toBe("TASK_MODEL_BALANCED");
+    expect(plan.dependencies.requiredSkills).toEqual(["design-language"]);
   });
 
   test("records an exact UTC timestamp for completion handoff", () => {

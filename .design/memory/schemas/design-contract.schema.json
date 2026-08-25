@@ -1,0 +1,171 @@
+{
+  "$id": "https://design-intelligence.local/schemas/design-contract.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "acceptanceCriteria": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "accessibilityRequirements": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "actor": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "authority": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "blocker": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "change": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "decision": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "doNotTouch": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "goal": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "informationPriority": {
+      "additionalProperties": false,
+      "properties": {
+        "primary": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rare": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "secondary": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "supporting": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "primary",
+        "secondary",
+        "supporting",
+        "rare"
+      ],
+      "type": "object"
+    },
+    "introduce": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "object": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "preserve": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "primaryAction": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "product": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "relevantDesignDecisions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "responsiveRequirements": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "reuse": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "state": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "surface": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "taskId": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "product",
+    "surface",
+    "actor",
+    "object",
+    "goal",
+    "decision",
+    "state",
+    "blocker",
+    "authority",
+    "primaryAction",
+    "informationPriority",
+    "preserve",
+    "change",
+    "reuse",
+    "introduce",
+    "doNotTouch",
+    "responsiveRequirements",
+    "accessibilityRequirements",
+    "acceptanceCriteria",
+    "relevantDesignDecisions"
+  ],
+  "title": "Design Contract",
+  "type": "object"
+}

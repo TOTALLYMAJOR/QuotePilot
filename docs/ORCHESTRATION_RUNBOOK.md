@@ -36,6 +36,12 @@ Copy `lifecycle.recordedAt` into the completion report. Governed documentation
 uses the local `Last updated: YYYY-MM-DD HH:MM:SS TZ` header instead; the docs
 gate requires that value to advance whenever the document changes.
 
+For a UI-classified plan, confirm `dependencies.requiredSkills` contains
+`design-language` before editing. Load it completely, then read
+`docs/DESIGN_SYSTEM.md` and `docs/DESIGN_PRINCIPLES.md`. If the skill and local
+product language differ, the repository documents govern QuotePilot-specific
+behavior and the conflict must be reported rather than silently blended.
+
 Preflight:
 ```bash
 npm run lane:quick

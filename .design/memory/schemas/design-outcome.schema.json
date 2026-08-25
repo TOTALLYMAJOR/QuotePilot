@@ -1,0 +1,69 @@
+{
+  "$id": "https://design-intelligence.local/schemas/design-outcome.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "component": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decisionId": {
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "id": {
+      "pattern": "^DO-[A-Z0-9-]+$",
+      "type": "string"
+    },
+    "lesson": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "product": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "result": {
+      "enum": [
+        "accepted",
+        "rejected",
+        "inconclusive"
+      ]
+    },
+    "surface": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "decisionId",
+    "result",
+    "reason",
+    "evidence",
+    "lesson",
+    "recordedAt"
+  ],
+  "title": "Design Outcome",
+  "type": "object"
+}

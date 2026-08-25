@@ -1,35 +1,28 @@
 # Project Status
 
-Last updated: 2026-08-23 20:57:00 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 ## Current Production Release
 
-- PR #95 merged the Document hero landing, Plans rate card, and design-partner
-  program into `main` at `7c2f3d30b8b4e9df97898c7273ffa3ef776570f6`; annotated
-  tag `v0.13.0` resolves to that exact commit.
-- Exact-main CI Quality run `31962010326` passed all eight required jobs,
-  including authoritative pricing, Firebase rules/emulators, the full
-  Playwright interaction suite, performance, bundle, governance, and Docker
-  gates. The release recalibrated the Ambient bundle exception ceiling to
-  `3,853,000` bytes (measured `3,839,490`), recorded in `TECH_EXCEPTIONS.md`.
-- Governed Vercel run `31963532856` deployed exact `v0.13.0` with `v0.12.2`
-  commit `1767e789f6e86f072997a870aadb194583121b08` as its explicit rollback
-  target. The workflow's public-edge probe succeeded at
-  `https://quotepilot.mbmapps.com`, and independent inspection of the served
-  bundle confirmed the Document hero, design-partner, and Plans copy live with
-  no residual "Book a demo" route.
-- Governed Firebase hosting-scope run `31963544037` deployed exact `v0.13.0`
-  to `tonicatering` with `v0.12.0` commit
-  `87e97c113070424c6d522399116f19877a67721a` as its explicit rollback target —
-  the release commit of the latest successful Firebase all-scope run
-  `31918338700` (which superseded the earlier `v0.9.0` record at
-  `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`). Functions, rules, and indexes
-  are unchanged between that commit and `v0.13.0`, so hosting scope was the
-  complete Firebase surface for this release.
-- These receipts prove exact source, CI, per-target deployment, and
-  public-edge reachability only. They do not prove authenticated staff/portal
-  acceptance, production-data correctness, provider delivery, recipient
-  acknowledgement, or human acceptance.
+- Annotated tag `v0.14.0` resolves to
+  `6b245aed6e9019b92c091de554caf8109fd9c99f`.
+- Exact-main CI Quality run `32418251221` passed all eight required jobs,
+  including authoritative pricing, Firebase rules/emulators, Playwright,
+  performance, bundle, governance, and Docker gates.
+- Governed Vercel run `32419441612` deployed exact `v0.14.0` with
+  `f2f08629a784d0ff6c8af9af8139d3746d77085f` as its explicit rollback target.
+- Governed Firebase all-scope run `32419577296` deployed exact `v0.14.0` with
+  `87e97c113070424c6d522399116f19877a67721a` as its explicit Firebase rollback
+  target. The run verified the `pingram` / `pingram-2026-08-14-a` deployment
+  profile, completed the Hosting, Firestore, and default Functions mutation,
+  and passed the Firebase Hosting origin probe.
+- Remote `main` is currently `e70bc59c16fe284852d4fd6e9db552f2ef217f83`,
+  four green-CI commits ahead of the deployed tag. Those commits and this
+  reconciliation branch are source candidates, not production behavior.
+- These receipts prove exact source, CI, and provider workflow success only.
+  They do not prove tenant activation, authenticated staff/portal acceptance,
+  production-data correctness, provider delivery, recipient acknowledgement,
+  or human acceptance.
 
 ## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 
@@ -71,25 +64,35 @@ Last updated: 2026-08-23 20:57:00 CDT
 
 ## Pending Production Completion
 
-- Rotate the Firebase CI credential and run a separately approved exact-main
-  Firebase `all` deployment before changing any tenant capability state. The
-  connected workspace and Activity & Save Health drawer are frontend-only and
-  do not alter Firebase authority or tenant activation.
+- Tenant activation run `32425529671` verified the exact successful `v0.14.0`
+  Firebase all-scope receipt, then failed closed before any patch because
+  `organizations/250/settings/config` does not exist. The workflow did not
+  record tenant activation.
+- Before retrying activation, run a separately reviewed tenant-scoped
+  migration/provisioning dry run to prove organization `250` exists and to
+  establish its required `settings/config` document through the canonical
+  tenant-data path. Do not bypass the protected workflow or create a sparse
+  settings document solely to force the staffing flag.
+- After the precondition is reviewed and applied, rerun **Set Operational
+  Staffing Tenant** against Firebase deployment run `32419577296`, organization
+  `250`, and `enabled=true`, then retain its verified readback before beginning
+  authenticated staff acceptance.
 - Production configuration names Resend as the email provider and keeps owner
   SMS at `none`. Configuration does not prove provider acceptance, delivery,
   staff acknowledgement, attendance, payroll, or human acceptance.
-- The source release includes the Ambient workspace, authoritative operational
-  staffing, Staff workspace and private records, briefing output, manual staff
-  invitations with independently tracked delivery and acknowledgement states,
-  hardened dormant owner-SMS provider support, and the lighter quote-builder
-  decisions. Firebase authority and tenant availability remain unavailable
-  until the pending deployment and tenant activation complete.
+- The deployed release includes the Ambient workspace, authoritative
+  operational staffing, Staff workspace and private records, briefing output,
+  manual staff invitations with independently tracked delivery and
+  acknowledgement states, hardened dormant owner-SMS provider support, and the
+  lighter quote-builder decisions. Tenant availability remains unavailable
+  until the protected activation precondition and workflow complete.
 
 ## Engineering Checkpoint Detail
 
 - The owner authorized exact-candidate publication and coordinated Firebase
   and Vercel production deployment for live testing after the required gates.
-  Vercel is complete; Firebase remains pending as recorded above. Provider
+  Exact `v0.14.0` reached both production targets; tenant activation remains
+  pending on the fail-closed provisioning precondition recorded above. Provider
   acceptance, signed delivery evidence, recipient acknowledgement, and human
   acceptance remain separate post-deployment tests.
 - The Stripe Connect program has begun with a source-only organization

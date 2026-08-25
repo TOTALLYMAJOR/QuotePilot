@@ -60,6 +60,12 @@ canonical documentation obligations, ordered validation commands, and task
 dependency graph. Use explicit `--files` for dirty worktrees so unrelated work
 does not inflate the task or model tier.
 
+The UI profile also emits `design-language` in `dependencies.requiredSkills`
+and places `docs/DESIGN_SYSTEM.md` plus `docs/DESIGN_PRINCIPLES.md` in the
+read-first set. Agents must load that skill before UI analysis or edits, then
+preserve QuotePilot's canonical visual, interaction, copy, accessibility, and
+proof-boundary rules rather than introducing a parallel design language.
+
 The planner recommends `economy`, `balanced`, or `frontier` work and resolves
 those tiers to runner model defaults. `TASK_MODEL_ECONOMY`,
 `TASK_MODEL_BALANCED`, and `TASK_MODEL_FRONTIER` may override those defaults at

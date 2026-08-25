@@ -1,0 +1,200 @@
+{
+  "$defs": {
+    "fileEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "modelEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "severity": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "PASS",
+            "WARN",
+            "FAIL"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "verdict",
+        "severity"
+      ],
+      "type": "object"
+    },
+    "qaEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://totallymajor.local/schemas/baseline-review-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baselineMutationPerformed": {
+      "const": false
+    },
+    "blockers": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "candidateRoot": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "candidates": {
+      "additionalProperties": {
+        "$ref": "#/$defs/fileEvidence"
+      },
+      "minProperties": 1,
+      "type": "object"
+    },
+    "id": {
+      "pattern": "^BR-[A-F0-9]{16}$",
+      "type": "string"
+    },
+    "modelEvidence": {
+      "$ref": "#/$defs/modelEvidence"
+    },
+    "product": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "promotionAuthority": {
+      "const": "human-required"
+    },
+    "qaEvidence": {
+      "$ref": "#/$defs/qaEvidence"
+    },
+    "requestedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "requestedBy": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "requiredHumanApprovals": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "scenarioId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "sourceRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "commitSha": {
+          "pattern": "^[a-fA-F0-9]{7,64}$",
+          "type": "string"
+        },
+        "repository": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "branch",
+        "commitSha"
+      ],
+      "type": "object"
+    },
+    "status": {
+      "enum": [
+        "REVIEWABLE",
+        "BLOCKED"
+      ]
+    },
+    "surface": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "scenarioId",
+    "product",
+    "surface",
+    "status",
+    "requestedBy",
+    "requestedAt",
+    "promotionAuthority",
+    "baselineMutationPerformed",
+    "sourceRevision",
+    "qaEvidence",
+    "modelEvidence",
+    "candidateRoot",
+    "candidates",
+    "blockers",
+    "requiredHumanApprovals"
+  ],
+  "title": "Baseline Review Request",
+  "type": "object"
+}

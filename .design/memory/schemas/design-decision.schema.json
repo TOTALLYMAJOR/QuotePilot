@@ -1,0 +1,148 @@
+{
+  "$id": "https://design-intelligence.local/schemas/design-decision.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "affectedComponents": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "alternatives": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "archetype": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "authorityLevel": {
+      "enum": [
+        "portfolio",
+        "archetype",
+        "product",
+        "surface",
+        "component"
+      ]
+    },
+    "category": {
+      "type": "string"
+    },
+    "component": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "decision": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "id": {
+      "pattern": "^DL-[A-Z0-9-]+$",
+      "type": "string"
+    },
+    "problem": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "product": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "promotion": {
+      "properties": {
+        "authorizedBy": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "outcomeId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "validationEvidence": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "reason": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "reviewAfter": {
+      "format": "date",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "proposed",
+        "accepted",
+        "superseded",
+        "deprecated",
+        "rejected",
+        "experimental"
+      ]
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "surface": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "validatedAt": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "status",
+    "authorityLevel",
+    "decision",
+    "problem",
+    "evidence",
+    "alternatives",
+    "reason",
+    "affectedComponents",
+    "createdAt"
+  ],
+  "title": "Design Decision Record",
+  "type": "object"
+}
