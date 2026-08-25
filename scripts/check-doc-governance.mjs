@@ -284,10 +284,17 @@ function checkTaskOrchestrationContract(errors) {
     }
   }
 
+  const uiProfile = contract.profiles?.ui;
+  if (!uiProfile?.requiredSkills?.includes("design-language")
+    || !uiProfile?.readFirst?.includes("docs/DESIGN_SYSTEM.md")
+    || !uiProfile?.readFirst?.includes("docs/DESIGN_PRINCIPLES.md")) {
+    errors.push("The UI task profile must require design-language and both canonical design documents.");
+  }
+
   const governedText = TASK_ORCHESTRATION_GOVERNANCE_DOCS
     .map((file) => fs.readFileSync(path.join(ROOT, file), "utf8"))
     .join("\n");
-  for (const marker of ["npm run plan:task", "external runner", "task-orchestration-contracts.json"]) {
+  for (const marker of ["npm run plan:task", "external runner", "task-orchestration-contracts.json", "design-language"]) {
     if (!governedText.toLowerCase().includes(marker.toLowerCase())) {
       errors.push(`Task orchestration governance docs are missing required marker: ${marker}`);
     }

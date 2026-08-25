@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-25 00:36:36 CDT
 
 All notable project changes are documented in this file.
 
@@ -75,6 +75,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   Nothing imports or exports the modules yet; there is no callable, provider
   request, Firestore access, persistence, pricing calculation, payment,
   configuration, customer contact, deployment, or production capability.
+- Added `docs/DESIGN-CONTRACT.md` as QuotePilot's commercial workflow design
+  authority. It adapts the useful warm-paper, ledger, hairline, and singular
+  action principles from a reviewed Refero SaaS reference while preserving
+  QuotePilot's typography, tokens, runtime, pricing authority, evidence
+  language, staff/customer separation, responsive behavior, and existing
+  design-system ownership. It also records the rejected reference patterns so
+  future UI work does not import a second brand or component system.
 - Added a deterministic task orchestration planner that maps bounded work and
   explicit paths to a runner model tier, reasoning effort, dependency reads,
   canonical documentation obligations, ordered validations, and a task graph.
@@ -82,6 +89,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   planner changes omit any of its governing policy documents. Planner updates
   and completion reports now carry exact UTC lifecycle timestamps, while
   changed governed documents must advance a local date-time-and-timezone header.
+  UI-classified plans now require the `design-language` skill and both canonical
+  QuotePilot design documents before implementation.
 - Added `npm run check:stripe-connect:staging`, a read-only live Firebase
   preflight for the isolated Stripe Connect staging foundation. The command
   verifies the exact staging project, project number, hosting site, reviewed

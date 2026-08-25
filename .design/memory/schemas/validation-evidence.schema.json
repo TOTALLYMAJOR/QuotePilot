@@ -1,0 +1,60 @@
+{
+  "$id": "https://design-intelligence.local/schemas/validation-evidence.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "commitSha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "playwright",
+        "axe",
+        "dom",
+        "design-linter",
+        "visual-review",
+        "contract",
+        "manual"
+      ]
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "WARN",
+        "FAIL",
+        "NOT_RUN"
+      ]
+    },
+    "surface": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "source",
+    "surface",
+    "status",
+    "artifacts",
+    "recordedAt"
+  ],
+  "title": "Validation Evidence",
+  "type": "object"
+}

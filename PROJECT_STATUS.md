@@ -1,44 +1,45 @@
 # Project Status
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-25 00:36:36 CDT
 
 ## Current Production Release
 
-- PR #83 merged the quote-builder decision-flow enhancements into `main` at
-  `618f8e5c7d0322e0349abf3751eb407d5c03d582`; annotated tag `v0.11.0`
-  resolves to that exact commit.
-- Exact-main CI Quality run `31738817551` passed all eight required jobs,
-  including authoritative pricing, Firebase rules/emulators, the full
-  Playwright interaction suite, performance, bundle, governance, and Docker
-  gates.
-- Governed Vercel run `31739681893` deployed exact `v0.11.0` with `v0.10.0`
-  commit `4e60f484edb1fa4110ada01e1aa792fb0ca7f11e` as its explicit rollback
-  target. Independent HTTP probes returned `200` for both `/` and `/app` at
-  `https://quotepilot.mbmapps.com` with entry artifact `index-7oQ3cwMj.js`.
-- Firebase Hosting and Functions have not been promoted to `v0.11.0`.
-  Firebase all-scope run `31701000896` remains the latest successful recorded
-  deployment, at `v0.9.0` commit
-  `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`. The later `v0.10.0` Firebase
-  attempt failed before mutation because its CI credential was rejected.
-- These receipts prove exact source, CI, Vercel deployment, and public-edge
-  reachability only. They do not prove authenticated staff/portal acceptance,
+- Annotated tag `v0.14.0` and remotely published `main` resolve to
+  `6b245aed6e9019b92c091de554caf8109fd9c99f`.
+- Exact-main CI Quality run `32418251221` passed all eight required jobs,
+  including authoritative pricing, Firebase rules/emulators, Playwright,
+  performance, bundle, governance, and Docker gates.
+- Governed Vercel run `32419441612` deployed exact `v0.14.0` with
+  `f2f08629a784d0ff6c8af9af8139d3746d77085f` as its explicit rollback target.
+- Governed Firebase all-scope run `32419577296` deployed exact `v0.14.0` with
+  `87e97c113070424c6d522399116f19877a67721a` as its explicit Firebase rollback
+  target. The run verified the `pingram` / `pingram-2026-08-14-a` deployment
+  profile, completed the Hosting, Firestore, and default Functions mutation,
+  and passed the Firebase Hosting origin probe.
+- These receipts prove exact source, CI, and provider workflow success only.
+  They do not prove tenant activation, authenticated staff/portal acceptance,
   production-data correctness, provider delivery, recipient acknowledgement,
   or human acceptance.
 
 ## Pending Production Completion
 
-- Rotate the Firebase CI credential, deploy exact `v0.11.0` with Firebase
-  scope `all`, then use that exact successful deployment receipt to set and
-  verify only tenant `250`'s `operationalStaffingAuthorityEnabled` field.
-- Production configuration names Resend as the email provider and keeps owner
-  SMS at `none`. Configuration does not prove provider acceptance, delivery,
-  staff acknowledgement, attendance, payroll, or human acceptance.
-- The source release includes the Ambient workspace, authoritative operational
-  staffing, Staff workspace and private records, briefing output, manual staff
-  invitations with independently tracked delivery and acknowledgement states,
-  hardened dormant owner-SMS provider support, and the lighter quote-builder
-  decisions. Firebase authority and tenant availability remain unavailable
-  until the pending deployment and tenant activation complete.
+- Tenant activation run `32425529671` verified the exact successful `v0.14.0`
+  Firebase all-scope receipt, then failed closed before any patch because
+  `organizations/250/settings/config` does not exist. The workflow did not
+  record tenant activation.
+- Before retrying activation, run a separately reviewed tenant-scoped
+  migration/provisioning dry run to prove organization `250` exists and to
+  establish its required `settings/config` document through the canonical
+  tenant-data path. Do not bypass the protected workflow or create a sparse
+  settings document solely to force the staffing flag.
+- After the precondition is reviewed and applied, rerun **Set Operational
+  Staffing Tenant** against Firebase deployment run `32419577296`, organization
+  `250`, and `enabled=true`, then retain its verified readback before beginning
+  authenticated staff acceptance.
+- Production configuration names Resend as the email provider and binds the
+  reviewed Pingram deployment profile. Configuration and deployment do not
+  prove provider delivery, staff acknowledgement, attendance, payroll, tenant
+  activation, or human acceptance.
 
 ## Engineering Checkpoint Detail
 

@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-20 14:10:10 CDT
+Last updated: 2026-08-20 16:39:56 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -671,7 +671,9 @@ performs the actual model switch. The policy is owned by
 `docs/task-orchestration-contracts.json` and governed by
 `docs/AGENT_GOVERNANCE.md`. Use `--phase update` for a material checkpoint and
 `--phase complete` for final reporting; each result includes the exact UTC
-`lifecycle.recordedAt` timestamp.
+`lifecycle.recordedAt` timestamp. UI plans additionally require the
+`design-language` skill and the repository's canonical design system and
+principles before implementation.
 
 `test:rebook-quote:emulator` is a disposable `demo-*` Auth, Firestore, and
 Functions lane for the exact-version rebook callable. It verifies same-tenant

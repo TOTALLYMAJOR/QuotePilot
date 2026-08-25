@@ -1,0 +1,96 @@
+{
+  "analyzer": {
+    "model": "repository-session-adapter",
+    "name": "codex-human-reviewed-visual-observation",
+    "observedAt": "2026-08-23T15:41:49-05:00",
+    "type": "hybrid",
+    "version": "1"
+  },
+  "capabilityClaims": [
+    {
+      "capability": "authoritative-quote-readiness-score",
+      "evidence": [],
+      "status": "ABSENT"
+    }
+  ],
+  "patterns": [
+    {
+      "category": "layout",
+      "id": "PAT-QP-COMMERCIAL-SUMMARY",
+      "identityElements": [],
+      "implementationImpact": "visual-only",
+      "keywords": [
+        "commercial summary",
+        "send quote action"
+      ],
+      "name": "Action-near commercial summary",
+      "observation": "The quote total, deposit, and payment schedule sit beside the primary send-quote action.",
+      "productRelevance": "QuotePilot must keep authoritative quote totals and send consequences easy to verify without creating another mutation path.",
+      "proposedUse": "Keep authoritative totals and commercial consequences adjacent to the existing send-quote action.",
+      "recommendedDecision": "ADOPT",
+      "requiredCapabilities": [],
+      "riskFlags": [],
+      "source": "docs/design-references/quotepilot-quote-workspace-desktop-v1.png",
+      "whyItWorks": "The operator sees the commercial consequence and the next action in one bounded region before sending."
+    },
+    {
+      "category": "layout",
+      "id": "PAT-QP-EVENT-CONTEXT",
+      "identityElements": [
+        "reference wedding photography",
+        "reference typography",
+        "reference card composition"
+      ],
+      "implementationImpact": "visual-only",
+      "keywords": [
+        "event context",
+        "quote workspace context"
+      ],
+      "name": "Event context at a glance",
+      "observation": "A compact event panel groups date, venue, guest count, and event imagery before quote details.",
+      "productRelevance": "QuotePilot quote work is event-specific, but event context must remain subordinate to canonical package and quote state.",
+      "proposedUse": "Adapt the event-context grouping through existing QuotePilot tokens and canonical quote-workspace components.",
+      "recommendedDecision": "ADAPT",
+      "requiredCapabilities": [],
+      "riskFlags": [],
+      "source": "docs/design-references/quotepilot-quote-workspace-desktop-v1.png",
+      "whyItWorks": "The grouping restores customer and event context before an operator evaluates commercial details."
+    },
+    {
+      "category": "feature",
+      "id": "PAT-QP-UNVERIFIED-READINESS",
+      "identityElements": [],
+      "implementationImpact": "workflow",
+      "keywords": [
+        "quote readiness score",
+        "pricing looks good"
+      ],
+      "name": "Unverified quote readiness score",
+      "observation": "The reference presents a 72 percent readiness score together with an all-pricing-looks-good assertion.",
+      "productRelevance": "QuotePilot cannot imply that pricing or quote readiness is verified when canonical commercial evidence does not establish that conclusion.",
+      "proposedUse": "Display an aggregate readiness percentage and pricing-good assertion.",
+      "recommendedDecision": "DECLINE",
+      "requiredCapabilities": [
+        "authoritative-quote-readiness-score"
+      ],
+      "riskFlags": [
+        "false-authoritative-state"
+      ],
+      "source": "docs/design-references/quotepilot-quote-workspace-desktop-v1.png",
+      "whyItWorks": "A compact score appears to reduce review effort, but only if every contributing rule and source is authoritative and explainable."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourceEvidence": [
+    {
+      "artifacts": [
+        {
+          "kind": "screenshot",
+          "path": "docs/design-references/quotepilot-quote-workspace-desktop-v1.png",
+          "sha256": "5582e81e6354b47f775587f4f645303a0b2213db4235bb61a38489087c135424"
+        }
+      ],
+      "source": "docs/design-references/quotepilot-quote-workspace-desktop-v1.png"
+    }
+  ]
+}

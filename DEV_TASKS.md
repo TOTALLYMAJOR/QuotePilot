@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-25 00:36:36 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -8,6 +8,13 @@ Only open work belongs here. Current operational truth lives in
 
 ## P0 - Production Acceptance
 
+- Repair the tenant-data precondition for organization `250` before retrying
+  operational staffing activation. Run `32425529671` verified the exact
+  successful `v0.14.0` Firebase all-scope receipt, then stopped before mutation
+  because `organizations/250/settings/config` was missing. Use a separately
+  reviewed tenant-scoped migration/provisioning dry run and apply path; do not
+  create a sparse settings document or bypass the protected activation
+  workflow. Then rerun activation and retain the verified field readback.
 - Run an authenticated production staff pass with a real QuotePilot user:
   create and finish a quote, save, read back the exact revision, reopen from
   Quotes, export PDF, and verify the Event Workspace, Customer 360, Workflow,
