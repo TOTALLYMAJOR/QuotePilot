@@ -1,24 +1,25 @@
 # Project Status
 
-Last updated: 2026-08-25 00:58:05 CDT
+Last updated: 2026-08-25 02:06:28 CDT
 
 ## Current Production Release
 
-- Annotated tag `v0.14.0` resolves to
-  `6b245aed6e9019b92c091de554caf8109fd9c99f`.
-- Exact-main CI Quality run `32418251221` passed all eight required jobs,
+- Annotated tag `v0.15.0` resolves to
+  `bc495c8c948d440b12363d5da34209a11ff151fd`.
+- Exact-main CI Quality run `32817744859` passed all eight required jobs,
   including authoritative pricing, Firebase rules/emulators, Playwright,
   performance, bundle, governance, and Docker gates.
-- Governed Vercel run `32419441612` deployed exact `v0.14.0` with
+- Governed Vercel run `32819363438` deployed exact `v0.15.0` with
   `f2f08629a784d0ff6c8af9af8139d3746d77085f` as its explicit rollback target.
-- Governed Firebase all-scope run `32419577296` deployed exact `v0.14.0` with
+- Governed Firebase all-scope run `32818605404` deployed exact `v0.15.0` with
   `87e97c113070424c6d522399116f19877a67721a` as its explicit Firebase rollback
   target. The run verified the `pingram` / `pingram-2026-08-14-a` deployment
   profile, completed the Hosting, Firestore, and default Functions mutation,
   and passed the Firebase Hosting origin probe.
-- Remote `main` is currently `e70bc59c16fe284852d4fd6e9db552f2ef217f83`,
-  four green-CI commits ahead of the deployed tag. Those commits and this
-  reconciliation branch are source candidates, not production behavior.
+- The application artifact at `v0.15.0` is the current production runtime. A
+  later receipt-only documentation commit may place repository `main` ahead of
+  that SHA without changing runtime code or requiring another application
+  deployment.
 - These receipts prove exact source, CI, and provider workflow success only.
   They do not prove tenant activation, authenticated staff/portal acceptance,
   production-data correctness, provider delivery, recipient acknowledgement,
@@ -64,7 +65,7 @@ Last updated: 2026-08-25 00:58:05 CDT
 
 ## Pending Production Completion
 
-- Tenant activation run `32425529671` verified the exact successful `v0.14.0`
+- Tenant activation run `32425529671` verified the then-current successful `v0.14.0`
   Firebase all-scope receipt, then failed closed before any patch because
   `organizations/250/settings/config` does not exist. The workflow did not
   record tenant activation.
@@ -74,11 +75,12 @@ Last updated: 2026-08-25 00:58:05 CDT
   tenant-data path. Do not bypass the protected workflow or create a sparse
   settings document solely to force the staffing flag.
 - After the precondition is reviewed and applied, rerun **Set Operational
-  Staffing Tenant** against Firebase deployment run `32419577296`, organization
+  Staffing Tenant** against Firebase deployment run `32818605404`, organization
   `250`, and `enabled=true`, then retain its verified readback before beginning
   authenticated staff acceptance.
-- Production configuration names Resend as the email provider and keeps owner
-  SMS at `none`. Configuration does not prove provider acceptance, delivery,
+- Production configuration names Resend as the email provider and pins owner
+  SMS to `pingram` generation `pingram-2026-08-14-a`. Configuration does not
+  prove provider acceptance, delivery,
   staff acknowledgement, attendance, payroll, or human acceptance.
 - The deployed release includes the Ambient workspace, authoritative
   operational staffing, Staff workspace and private records, briefing output,
@@ -91,7 +93,7 @@ Last updated: 2026-08-25 00:58:05 CDT
 
 - The owner authorized exact-candidate publication and coordinated Firebase
   and Vercel production deployment for live testing after the required gates.
-  Exact `v0.14.0` reached both production targets; tenant activation remains
+  Exact `v0.15.0` reached both production targets; tenant activation remains
   pending on the fail-closed provisioning precondition recorded above. Provider
   acceptance, signed delivery evidence, recipient acknowledgement, and human
   acceptance remain separate post-deployment tests.
@@ -248,12 +250,14 @@ Last updated: 2026-08-25 00:58:05 CDT
   request, connected account, Account Link, deployment, hosted result, or human
   acceptance exists.
 
-- Current `main` is tagged `v0.8.1` at
+### Historical v0.8.1 checkpoint
+
+- At that checkpoint, `main` was tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
   presentation in both production workflow build environments. The live
   deployment receipts below still identify `v0.7.0`, so this source state is
   not evidence that `v0.8.1` was deployed or accepted.
-- The work after `v0.7.0` is the proposed `v0.8.1` source candidate. This
+- The work after `v0.7.0` was the proposed `v0.8.1` source candidate. That
   source snapshot does not itself establish a published candidate head, release
   tag, exact-candidate CI run, governed deployment receipt, or production
   acceptance; each requires its separate Git, CI, provider, or human evidence.
@@ -528,7 +532,7 @@ Authenticated hosted use and human acceptance remain separate for the listed
 staff capabilities even where source, local/emulator, CI, deployment, and public
 route evidence are complete.
 
-### Implemented in source, not deployed
+### Deployed configuration without provider acceptance
 
 - The owner-SMS rail now has a deployment-owned
   `NOTIFICATIONS_SMS_PROVIDER=none|twilio|pingram` choice, a provider-neutral
@@ -540,14 +544,14 @@ route evidence are complete.
   provider selection, with no browser or callable clear path; provider
   acceptance is not delivery, and claimed or indeterminate attempts are not
   automatically resent.
-- No Pingram Functions deployment, endpoint registration, provider call, or
-  live SMS has occurred. Production remains
-  `NOTIFICATIONS_SMS_PROVIDER=none`. Promotion requires `PINGRAM_API_KEY`,
-  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` in Firebase Secret
-  Manager, one exact approved US/CA/EU Pingram origin, a new lowercase
-  `PINGRAM_CONFIGURATION_GENERATION`, a server-owned E.164
-  owner destination, explicit consent, sender/A2P approval, exact
-  signed-webhook registration, and controlled hosted/provider UAT.
+- Exact `v0.15.0` deployed the Pingram-capable Functions and selected
+  `NOTIFICATIONS_SMS_PROVIDER=pingram` with generation
+  `pingram-2026-08-14-a`. The deployment receipt does not establish endpoint
+  registration, a provider-accepted call, carrier delivery, live SMS, or
+  recipient-device receipt. Controlled hosted/provider UAT still requires the
+  bound secrets, approved origin and sender/compliance posture, server-owned
+  E.164 destination, explicit consent, signed-webhook registration, and exact
+  evidence separation.
 
 ### Deployed but intentionally dormant
 
@@ -557,7 +561,7 @@ route evidence are complete.
 | Commercial Change enforcement | global `false`; all five observed tenant gates off | Simulation and evidence review remain usable. Enforcement requires authenticated admin-role acceptance and a separately authorized exact tenant gate. |
 | Revenue Autopilot preparation | `REVENUE_AUTOPILOT_ENABLED=false`; no observed tenant policies | The complete local authority matrix passes, but an authenticated hosted admin acceptance is still required before the global preparation-only gate is promoted. |
 | Revenue Autopilot outbound sends | `REVENUE_AUTOPILOT_SENDS_ENABLED=false` | The restricted Resend key can send but cannot independently verify webhook registration. Signed provider webhook, delivery/bounce/complaint, and recipient evidence remain open. |
-| SMS | `NOTIFICATIONS_SMS_PROVIDER=none` | Current production is off. Twilio still lacks approved US A2P registration, and the Pingram source slice has not been deployed or provider-tested. No provider may be selected until its sender/compliance, consent, secret, endpoint, and controlled-UAT gates pass. |
+| SMS | `NOTIFICATIONS_SMS_PROVIDER=pingram`; generation `pingram-2026-08-14-a` | The bounded Pingram rail is deployed, but endpoint registration, provider acceptance, carrier delivery, opt-out handling in production, recipient-device receipt, and human acceptance remain unverified. |
 | CRM synchronization | disabled | No reviewed server-authorized connector with provider acceptance is deployed. |
 
 ## Current Validation Evidence
@@ -575,7 +579,7 @@ route evidence are complete.
   payout readiness, and deterministic security review. This is source/local
   evidence only and made no provider or cloud request.
 
-- The QuotePilot Package Workspace source slice passes 45 of 45 focused package
+- The QuotePilot Package Workspace slice passes 45 of 45 focused package
   model, pricing parity, catalog save-state, static presentation, staged
   selector, activation, dependency-review, switch, and revert suites. A fresh
   local real-route browser audit passes at 390, 768, and 1440 pixels with zero
@@ -583,9 +587,9 @@ route evidence are complete.
   pixels, correct mobile/desktop navigation modes, full-viewport mobile selector
   focus, Escape cancellation/focus restoration, Apply staging, dirty package
   switching, activation blocking, and non-mutating dependency review. The local
-  production build and environment check also pass. This is source/local
-  evidence only; authenticated hosted admin/sales behavior, production-data
-  correctness, deployment, and human acceptance remain open.
+  production build and environment check also pass. Exact `v0.15.0` carries
+  this UI, but these local checks do not establish authenticated hosted
+  admin/sales behavior, production-data correctness, or human acceptance.
 
 - The Ambient zero-dead-click release contract now runs as a dedicated step in
   the protected Playwright CI lane with the production presentation flags and
@@ -596,10 +600,11 @@ route evidence are complete.
   3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. The current reconciled source candidate measures 3,221,176 /
+  build steps. The reconciled `v0.15.0` source measured 3,221,176 /
   387,248 bytes for compatibility and 3,905,603 / 387,248 for the explicit
   Ambient production graph. Those exact local measurements are the temporary
-  ceilings pending exact-SHA CI confirmation. Both keep the
+  ceilings, and exact-SHA CI run `32817744859` confirmed the governed bundle
+  profiles. Both keep the
   391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
@@ -614,7 +619,8 @@ route evidence are complete.
   immutable-revision derivation, DST/time/count validation, idempotent replay,
   revision conflicts, overlap exclusion, half-open adjacency, atomic rollback,
   and non-mutation of quote, portal, payment, booking, and BEO evidence. This is
-  local/emulator evidence only; the feature is not deployed or tenant-enabled.
+  local/emulator evidence only. Exact `v0.15.0` deployed the default-off
+  authority, but it is not tenant-enabled for organization `250`.
 - The local default-off Ambient slice has focused contract/component proof. Its
   AIUI-19 Clients slice passes 15 of 15 client-model tests and 8 of 8 component
   tests (23 of 23 combined), 18 of 18 legacy Customer Directory/Customer 360
@@ -714,17 +720,16 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The reconciled candidate uses named per-graph temporary ceilings: 3,221,176
+9. Exact `v0.15.0` uses named per-graph temporary ceilings: 3,221,176
    bytes for compatibility and 3,905,603 bytes for Ambient. Both are exact
-   explicit local production-flag measurements. Exact-SHA CI confirmation is
-   still required before merge, and
-   optimization or reviewed clean-main recalibration is required before the
+   explicit local production-flag measurements confirmed by exact-main CI run
+   `32817744859`. Optimization or reviewed clean-main recalibration is required before the
    exception can close.
 10. `functions.config()` compatibility remains in source and must migrate before
     Firebase removes the legacy API in March 2027.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
-12. Operational staffing code and authority are deployed in exact `v0.14.0`
+12. Operational staffing code and authority are deployed in exact `v0.15.0`
     but remain independently default-off and unavailable to tenant `250`; the
     protected activation run failed closed because the canonical settings
     document is absent. Do not bypass provisioning or enable its tenant gate

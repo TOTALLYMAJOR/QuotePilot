@@ -1,12 +1,21 @@
 # Changelog
 
-Last updated: 2026-08-25 01:20:00 CDT
+Last updated: 2026-08-25 02:06:28 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
 ## [Unreleased]
+
+### Changed
+- Recorded exact `v0.15.0` production promotion: SHA
+  `bc495c8c948d440b12363d5da34209a11ff151fd` passed exact-main CI run
+  `32817744859`, then reached Firebase in all-scope run `32818605404` and the
+  Vercel public edge in run `32819363438`. Deployment is proven separately
+  from tenant activation, provider outcomes, recipient behavior, authenticated
+  human acceptance, usage, and commercial evidence, which remain unverified
+  where no receipt exists.
 
 ### Fixed
 - Declared the Steward workbench's `prop-types` runtime dependency explicitly,
