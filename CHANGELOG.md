@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-25 00:50:07 CDT
+Last updated: 2026-08-25 00:58:05 CDT
 
 All notable project changes are documented in this file.
 
@@ -19,10 +19,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   contiguous Stripe-shaped fixture string into source, so repository secret
   scanning can pass while the runtime validator still receives the same
   assembled test value.
-- Aligned the temporary compatibility and Ambient bundle ceilings to the exact
-  3,215,097-byte and 3,899,524-byte graphs emitted by the protected Playwright
-  job with production presentation flags, without adding general growth
-  headroom.
+- Recalibrated the temporary compatibility and Ambient bundle ceilings to the
+  exact explicit production-flag measurements for the reconciled candidate:
+  3,221,176 and 3,905,603 aggregate bytes, with the largest chunk unchanged.
+  Exact-SHA CI confirmation remains required; no general growth headroom was
+  added.
 - Preserved a supplied server-authoritative pricing snapshot when augmenting a
   locally stored quote version with the new private commercial cost snapshot.
   The augmentation now copies only `commercialSnapshot` from the client-side
@@ -257,12 +258,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   visible target below 44 pixels; hosted roles, deployment, production data,
   and human acceptance remain separate.
 - Recalibrated the active graph-specific temporary bundle exception for the
-  complete combined source candidate, not the Package Workspace alone. Exact
-  local production builds measure 3,206,553 / 387,248 bytes for compatibility
-  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The protected
-  production-flag graphs now pin exact 3,215,097-byte and 3,899,524-byte
-  ceilings, and the 391,901-byte largest-chunk limit is unchanged. Optimization
-  or an explicitly reviewed clean-main baseline is
+  complete reconciled source candidate, not the Package Workspace or Steward
+  Desk alone. Explicit local production builds measure 3,221,176 / 387,248
+  bytes for compatibility and 3,905,603 / 387,248 bytes for Ambient. Those
+  exact measurements are the temporary ceilings, the 391,901-byte
+  largest-chunk limit is unchanged, and exact-SHA CI confirmation remains
+  required. Optimization or an explicitly reviewed clean-main baseline is
   still required before the exception can close.
 - Added cheap-first auto routing to the dormant model-assisted CREATE intake
   lane. `INTENT_PARSER_PROVIDER=auto` now lets `parseIntentDraft` choose from

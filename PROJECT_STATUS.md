@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-25 00:50:07 CDT
+Last updated: 2026-08-25 00:58:05 CDT
 
 ## Current Production Release
 
@@ -596,10 +596,10 @@ route evidence are complete.
   3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. The current combined source candidate measures 3,206,553 /
-  387,248 bytes for compatibility and 3,887,673 / 387,248 for a prior local
-  Ambient build. The temporary ceilings are 3,215,097 and 3,899,524 aggregate
-  bytes respectively, pinned to the exact protected-Playwright graphs. Both keep the
+  build steps. The current reconciled source candidate measures 3,221,176 /
+  387,248 bytes for compatibility and 3,905,603 / 387,248 for the explicit
+  Ambient production graph. Those exact local measurements are the temporary
+  ceilings pending exact-SHA CI confirmation. Both keep the
   391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
@@ -714,10 +714,10 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The combined workspace candidate uses named per-graph temporary ceilings:
-   3,215,097 bytes for compatibility and 3,899,524 bytes for Ambient. Both
-   ceilings are the exact protected-Playwright production-flag graphs. Exact-SHA
-   CI confirmation is still required before merge, and
+9. The reconciled candidate uses named per-graph temporary ceilings: 3,221,176
+   bytes for compatibility and 3,905,603 bytes for Ambient. Both are exact
+   explicit local production-flag measurements. Exact-SHA CI confirmation is
+   still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.
 10. `functions.config()` compatibility remains in source and must migrate before
