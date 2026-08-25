@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-25 00:38:30 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 All notable project changes are documented in this file.
 
@@ -146,6 +146,16 @@ This changelog is backfilled from git history and will be maintained going forwa
   quote, so staff can reach the read-only workspace and its Activity & Save
   Health drawer without typing an address. Organization scope and quote
   mutation authority remain unchanged.
+- Added a canonical project-state and evidence control plane without replacing
+  the Feature Matrix, Project Status, Dev Tasks, changelog, ADRs, or User
+  Manual. The machine ledger preserves eleven lifecycle states, records
+  representative capabilities, journeys, decisions, integrations, risks,
+  blockers, commercial unknowns, and exactly one next proof event. A
+  deterministic `check:project-state` gate validates references, freshness,
+  contradictions, and drift in `lane:quick`; focused tests cover valid,
+  duplicate-event, broken-reference, and stale-evidence cases. This is
+  repository governance evidence only, not new product, deployment, provider,
+  usage, or commercial proof.
 - Added a discoverable read-only Difficult Question Desk panel to the authorized
   staff Quote Workspace. Its live state truthfully reports that Steward is not
   connected to a reviewed runtime/provider, renders no model prose, labels that

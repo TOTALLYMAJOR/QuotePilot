@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -40,6 +40,11 @@ Preflight:
 ```bash
 npm run lane:quick
 ```
+
+The preflight includes `npm run check:project-state`. Run that command alone
+while iterating on lifecycle, proof, blocker, or executive-state records. Its
+success means the repository control plane is internally consistent; it does
+not establish deployment, provider, human, usage, or commercial evidence.
 
 Core:
 ```bash

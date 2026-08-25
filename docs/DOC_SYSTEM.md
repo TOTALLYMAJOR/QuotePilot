@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -11,12 +11,18 @@ Each major topic has one source of truth. Other docs should link to that source 
 - `PROJECT_STATUS.md`: current operational state only (health, active risks, next actions).
 - `DEV_TASKS.md`: prioritized backlog only (open work, grouped by priority).
 - `CHANGELOG.md`: historical record of shipped/merged changes.
+- `PROJECT_STATE.md`: human-readable reconciliation entry point and the single
+  next proof event; it links to, rather than replaces, the authorities above.
+- `.project/state.json`: machine-readable lifecycle, evidence, dependency,
+  blocker, and proof-event ledger for representative cross-functional cohorts.
 
 ## Update Triggers
 - Code or behavior changes: update `CHANGELOG.md`.
 - Current-state/risk/near-term execution changes: update `PROJECT_STATUS.md`.
 - Roadmap priority changes: update `DEV_TASKS.md`.
 - Setup/process/deploy entrypoint changes: update `README.md`.
+- Lifecycle, evidence, blocker, commercial-proof, or next-proof changes: update
+  `.project/state.json` and the applicable thin index under `docs/project/`.
 
 ## Update Timestamps
 Every changed canonical Markdown document, every Markdown file under `docs/`,
@@ -82,6 +88,9 @@ as separate claims.
 | Current delivery health and risk posture | `PROJECT_STATUS.md` | Includes what is working now and current blockers. |
 | Priority backlog and sequencing | `DEV_TASKS.md` | Open items only; no progress narrative. |
 | Historical shipped changes | `CHANGELOG.md` | Immutable history by date/version/merge period. |
+| Cross-source state reconciliation and single next proof event | `PROJECT_STATE.md` and `.project/state.json` | Thin human and machine views. They must reference the canonical capability, operational, backlog, and history sources rather than copying them. |
+| Claim/evidence verdicts and executive reconciliation | `docs/project/PROOF.md` and `docs/project/EXECUTIVE_STATE.md` | Missing evidence is `UNVERIFIED`; no evidence class substitutes for another. |
+| Decision, exploration, capability, and blocker compatibility indexes | `docs/project/` | Index-only views. Feature Matrix, ADRs, Project Status, and Dev Tasks retain authority. |
 | Feature inventory, function served, and implementation cohorts | `docs/FEATURE_MATRIX.md` | Current source mapping plus a Git-grounded chronology index. Detailed change history remains in `CHANGELOG.md`; operational/deployment truth remains in `PROJECT_STATUS.md`. |
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
@@ -102,6 +111,15 @@ as separate claims.
 - Do not duplicate full status snapshots across multiple docs.
 - Do not duplicate command inventories when one canonical location exists.
 - Prefer links to canonical docs instead of copied sections.
+
+## Project-State Drift Gate
+
+`npm run check:project-state` validates the machine ledger, portfolio record,
+repository evidence paths, lifecycle vocabulary, verification freshness,
+dependency and blocker references, and exactly one next proof event. It also
+checks that compatibility indexes point back to their existing authorities.
+The check runs in `lane:quick`. A pass proves control-plane consistency only,
+not runtime, provider, production, human, usage, or commercial behavior.
 
 ## Security Scan Note
 Documentation secret scanning blocks real token-like values and allows explicit placeholder values such as `<your_secret_here>`.

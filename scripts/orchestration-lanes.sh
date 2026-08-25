@@ -12,7 +12,7 @@ usage() {
 Usage: orchestration-lanes.sh <lane> [--with-cwv]
 
 Lanes:
-  lane:quick               check:env + check:secrets + check:workflows
+  lane:quick               project state + env + secrets + release/config/workflow checks
   lane:core                capability surfacing + test:unit + build + docs governance + bundle budget + truthloop
   lane:firebase-auth-rules test:rules:firestore + test:owner-sms:emulator + test:e2e:firebase
   lane:authoritative-pricing
@@ -61,6 +61,7 @@ fi
 case "$lane" in
   lane:quick)
     echo "==> lane:quick"
+    npm run check:project-state
     npm run check:env
     npm run check:secrets
     npm run check:ambient-release-gate
