@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-25 00:38:30 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -447,6 +447,10 @@ unchanged.
     from current tenant settings and atomically updates the quote/portal while
     creating the next version; terminal customer, booking, or payment evidence
     blocks the edit.
+  - In the local development fallback, QuotePilot retains an already normalized
+    pricing snapshot while adding the private commercial-cost evidence needed
+    by staff margin context. That local record is source/test evidence only; it
+    does not prove a hosted server-authoritative quote write.
   - While editing a Firebase-backed saved quote, use `Preview change impact` to
     compare the saved canonical revision with a server-authoritatively repriced
     snapshot of the unsaved form. Review exact fact changes, total and deposit
@@ -1989,6 +1993,21 @@ success (receipt), a validation error, and a reload-required recovery when
 even reconciliation could not complete — is pre-existing behavior, now
 literally marked for automated coverage; recording a cost uses the exact
 same save path as every other catalog field.
+
+## Difficult Question Desk preview
+
+Authorized sales and administrative staff can see the Difficult Question Desk
+in the connected Quote Workspace. The current source/local checkpoint is a
+read-only boundary preview: it says `Steward is unavailable; quoting is not`,
+shows that no changes were made, and keeps `Steward handoff unavailable`
+disabled. It does not display a model draft, call a configured provider, save a
+packet, alter the quote, or send a customer message.
+
+Use `Open manual message` to continue through QuotePilot's ordinary messaging
+workflow. That button is a manual recovery path, not a Steward-generated draft
+or proof that a message was accepted, delivered, read, or answered. The `Why
+Steward is limited` disclosure summarizes the current no-save, no-send,
+no-approval, no-discount, no-charge, and no-configuration boundary.
 
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.

@@ -1,0 +1,85 @@
+{
+  "acceptanceCriteria": [
+    "The primary next action is visible without competing with secondary information.",
+    "Validate numeric clarity and progression from build to decision to booking.",
+    "Ensure primary commercial actions dominate over decorative chrome.",
+    "Rendered evidence verifies Action-near commercial summary as ADOPT without authority expansion.",
+    "Rendered evidence verifies Event context at a glance as ADAPT without authority expansion."
+  ],
+  "accessibilityRequirements": [
+    "Keep controls named and keyboard-operable.",
+    "Validate the rendered desktop and mobile surface."
+  ],
+  "actor": "Sales or operations user building a quote",
+  "authority": "Existing commercial workflow, repository evidence, and product rules",
+  "blocker": "Missing commercial inputs or ambiguous next commercial step",
+  "change": [
+    "Keep authoritative totals and commercial consequences adjacent to the existing send-quote action.",
+    "Adapt the event-context grouping through existing QuotePilot tokens and canonical quote-workspace components."
+  ],
+  "decision": "What to include, price, or change before sending or booking",
+  "doNotTouch": [
+    "second token system",
+    "second component library",
+    "parallel E2E hierarchy",
+    "replacement repository scaffold",
+    "second decision log when an existing authority already exists",
+    "unsupported product capabilities, protected repository authority, and source identity"
+  ],
+  "goal": "Prepare governed QuotePilot workspace reference pilot under deferred repair hold",
+  "informationPriority": {
+    "primary": [
+      "What to include, price, or change before sending or booking",
+      "Make the next commercial action unmistakable"
+    ],
+    "rare": [
+      "Structural migration only when the repository assessment justifies it."
+    ],
+    "secondary": [
+      "Commercial context is known but may be incomplete",
+      "Missing commercial inputs or ambiguous next commercial step"
+    ],
+    "supporting": [
+      "Prioritize numeric clarity, disciplined spacing, and explicit progression states.",
+      "Avoid generic CRM aesthetics that obscure the commercial task."
+    ]
+  },
+  "introduce": [],
+  "object": "Quote workspace",
+  "preserve": [
+    "current runtime scaffold",
+    "existing CSS custom properties styling system",
+    "Local components",
+    "typography hierarchy",
+    "existing Playwright hierarchy",
+    "existing repository instruction authority",
+    "existing design decision memory"
+  ],
+  "primaryAction": "Make the next commercial action unmistakable",
+  "product": "QuotePilot",
+  "relevantDesignDecisions": [
+    "PAT-QP-COMMERCIAL-SUMMARY",
+    "PAT-QP-EVENT-CONTEXT"
+  ],
+  "responsiveRequirements": [
+    "Validate numeric clarity and progression from build to decision to booking.",
+    "Ensure primary commercial actions dominate over decorative chrome."
+  ],
+  "reuse": [
+    "accessibility validation",
+    "agent governance",
+    "architecture decisions",
+    "architecture overview",
+    "backlog",
+    "specifications",
+    "technical debt",
+    "testing e2e",
+    "testing unit",
+    "visual validation",
+    "existing tokens, components, and runtime authority"
+  ],
+  "schemaVersion": 1,
+  "state": "Commercial context is known but may be incomplete",
+  "surface": "Quote workspace",
+  "taskId": "prepare-governed-quotepilot-workspace-reference-pilot-under-deferred-repair-hold"
+}

@@ -1,7 +1,165 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 50,
+  "catalogVersion": 53,
   "contracts": [
+    {
+      "id": "steward-private-validation-foundation",
+      "reviewRevision": 5,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff",
+        "internal_security",
+        "steward_implementers"
+      ],
+      "summary": "Deploy-dormant Steward contracts validate fixed tasks, tenant and revision-bound sources, prohibited content and prompt attacks, deterministic commercial provenance, expiring tamper-evident Decision Packets, pseudonymous audit metadata, bounded retention/deletion, incident recovery, kill/rollback gates, and explicit private-record browser denial. The Difficult Question Desk adds fixed minimized context, zero-tool/storage/background provider-request parameters, exact claim inventory and whole-output rejection, hidden packets, manual-path provider failure, current organization and participant consent, a pinned 100-case corpus, digest-only human-comparison receipts, non-authoritative promotion evidence, and a staff-visible unavailable-state panel that renders no model prose and enables only the existing manual message path.",
+      "backendPaths": [
+        "firestore.rules",
+        "src/lib/steward/contracts.cjs",
+        "src/lib/steward/controls.cjs",
+        "src/lib/steward/difficultQuestionDesk.cjs",
+        "src/lib/steward/difficultQuestionEvaluation.cjs",
+        "src/lib/steward/policy.cjs",
+        "src/lib/steward/validate.cjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/QuoteWorkspaceConceptPage.jsx",
+        "src/components/StewardWorkbench.jsx",
+        "src/components/stewardWorkbench.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/StewardWorkbench.jsx",
+          "locator": "data-capability-id=\"steward-difficult-question-workbench\""
+        },
+        {
+          "path": "src/components/QuoteWorkspaceConceptPage.jsx",
+          "locator": "state=\"provider_unavailable\""
+        }
+      ],
+      "testPaths": [
+        "e2e/steward-workbench.spec.js",
+        "src/components/__tests__/quoteWorkspaceConcept.test.jsx",
+        "src/components/__tests__/stewardWorkbench.test.jsx",
+        "src/lib/__tests__/stewardContracts.server.test.js",
+        "src/lib/__tests__/stewardControls.server.test.js",
+        "src/lib/__tests__/stewardPolicy.server.test.js",
+        "src/lib/__tests__/stewardDecisionPacket.server.test.js",
+        "src/lib/__tests__/stewardDifficultQuestionDesk.server.test.js",
+        "src/lib/__tests__/stewardDifficultQuestionEvaluation.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "keeps the ordinary manual composer available during provider outage"
+        },
+        {
+          "path": "src/components/__tests__/quoteWorkspaceConcept.test.jsx",
+          "locator": "renders saved quote evidence and opens a read-only activity and save-health dialog"
+        },
+        {
+          "path": "e2e/steward-workbench.spec.js",
+          "locator": "keeps Steward truthful and bounded at"
+        },
+        {
+          "path": "src/lib/__tests__/stewardContracts.server.test.js",
+          "locator": "accepts only same-tenant, current, revision-fenced source handles"
+        },
+        {
+          "path": "src/lib/__tests__/stewardControls.server.test.js",
+          "locator": "uses only synthetic redacted adversarial fixtures and matches every expected policy result"
+        },
+        {
+          "path": "src/lib/__tests__/stewardControls.server.test.js",
+          "locator": "creates non-executing deletion plans with owner-only organization scope"
+        },
+        {
+          "path": "src/lib/__tests__/stewardPolicy.server.test.js",
+          "locator": "blocks secret-shaped input before inference"
+        },
+        {
+          "path": "src/lib/__tests__/stewardDecisionPacket.server.test.js",
+          "locator": "detects packet tampering, authority drift, and expiry"
+        },
+        {
+          "path": "src/lib/__tests__/stewardDifficultQuestionDesk.server.test.js",
+          "locator": "prepares one hidden read-only packet with no tools, storage, handoff, or send"
+        },
+        {
+          "path": "src/lib/__tests__/stewardDifficultQuestionEvaluation.server.test.js",
+          "locator": "runs only with current organization approval and participant opt-in"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "Steward private records deny every browser operation"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Private Steward validation, control, and Difficult Question Desk shadow foundation"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Difficult Question Desk preview"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The authorized staff Quote Workspace now includes a compact paper-and-ledger Difficult Question Desk status panel. The live source/local state is fixed to provider unavailable, says no changes were made, renders no model output, keeps Steward handoff disabled, and offers one ordinary manual-message recovery action. Focused component tests cover the full status-copy matrix and safe text rendering; real-route Playwright checks cover desktop and mobile overflow, 44-pixel actions, disabled handoff, and manual workflow continuity.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the loading state to named preparation work",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the empty state to no available Steward output",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the success state to a hidden review packet",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the stale state to exact revision drift",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the partial state to structurally visible evidence gaps",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps the error state to a held policy boundary",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/stewardWorkbench.test.jsx",
+          "locator": "maps recovery to the ordinary manual workflow",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Authorized staff can discover that the Difficult Question Desk exists, see its exact unavailable/read-only boundary, and continue through QuotePilot's ordinary manual message workflow without exposing model prose or implying a provider request, saved packet, quote change, composer handoff, customer send, configuration action, promotion, deployment, or production evidence."
+    },
     {
       "id": "firebase-email-action-return-policy",
       "reviewRevision": 1,
@@ -3391,7 +3549,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 14,
+      "reviewRevision": 15,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -3504,6 +3662,7 @@
         "src/lib/__tests__/packageWorkspaceModel.test.js",
         "src/lib/__tests__/packageWorkspacePricingParity.test.js",
         "src/lib/__tests__/pricingContracts.test.js",
+        "src/lib/__tests__/quoteStore.versioning.test.js",
         "src/lib/__tests__/brandLogoUrl.test.js",
         "src/lib/__tests__/ambientPricingPreview.test.js",
         "src/lib/__tests__/proposalDocumentPreferences.test.js",
@@ -3557,6 +3716,10 @@
         {
           "path": "src/lib/__tests__/pricingContracts.test.js",
           "locator": "builds normalized client-preview pricing snapshot from totals"
+        },
+        {
+          "path": "src/lib/__tests__/quoteStore.versioning.test.js",
+          "locator": "submitQuote creates version 1 and preserves authoritative pricing snapshot"
         },
         {
           "path": "src/components/__tests__/packageWorkspace.test.jsx",
@@ -3662,8 +3825,8 @@
           "locator": "## Evidence Boundary"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only \u2014 truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. Revision 11 treats catalog read failures as recoverable for hosted admin flows while preserving the existing Firebase required-env gate outside local dev. Revision 12 adds catalog-owned proposal font scale, brand/logo readiness, guided-rule and cost/margin coverage summaries, trusted quoteMeta documentFontScale snapshots, Proposal Composer proposal-polish and staff-only margin/cost context, and PDF/client-preview font/letterhead projection. It uses the existing catalog save and margin gate, adds no pricing authority, and keeps costs/margin out of customer-facing proposal artifacts. Revision 13 adds the current-schema Package Workspace as the package editor on the existing Catalog Admin route. Stable-ID switching preserves the whole catalog draft; inclusion selectors stage only on Apply; activation fails closed on deterministic readiness; revert is package-scoped; delete requires an exact dependency review; and all persistence remains behind the existing catalog save states and revision fence. Revision 14 extends the same catalog-owned proposal seam with operator-authored intro/closing copy plus a saved commercial snapshot on trusted quote create/edit so later staff Quote Pulse reads can prefer exact saved cost evidence while customer preview, email, export, and portal artifacts still receive only brand/font/copy presentation. No callable, package schema, or quote-pricing authority changed.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. Revision 11 treats catalog read failures as recoverable for hosted admin flows while preserving the existing Firebase required-env gate outside local dev. Revision 12 adds catalog-owned proposal font scale, brand/logo readiness, guided-rule and cost/margin coverage summaries, trusted quoteMeta documentFontScale snapshots, Proposal Composer proposal-polish and staff-only margin/cost context, and PDF/client-preview font/letterhead projection. It uses the existing catalog save and margin gate, adds no pricing authority, and keeps costs/margin out of customer-facing proposal artifacts. Revision 13 adds the current-schema Package Workspace as the package editor on the existing Catalog Admin route. Stable-ID switching preserves the whole catalog draft; inclusion selectors stage only on Apply; activation fails closed on deterministic readiness; revert is package-scoped; delete requires an exact dependency review; and all persistence remains behind the existing catalog save states and revision fence. Revision 14 extends the same catalog-owned proposal seam with operator-authored intro/closing copy plus a saved commercial snapshot on trusted quote create/edit so later staff Quote Pulse reads can prefer exact saved cost evidence while customer preview, email, export, and portal artifacts still receive only brand/font/copy presentation. No callable, package schema, or quote-pricing authority changed. Revision 15 is backend-only and verifies the existing surfaces unchanged: local snapshot enrichment now attaches missing private commercial evidence without replacing the supplied normalized pricing totals or authority label. This is local source/test behavior only and does not establish hosted server authority.",
       "stateEvidence": [
         {
           "state": "ready",

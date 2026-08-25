@@ -1,35 +1,28 @@
 # Project Status
 
-Last updated: 2026-08-23 20:57:00 CDT
+Last updated: 2026-08-25 00:58:05 CDT
 
 ## Current Production Release
 
-- PR #95 merged the Document hero landing, Plans rate card, and design-partner
-  program into `main` at `7c2f3d30b8b4e9df97898c7273ffa3ef776570f6`; annotated
-  tag `v0.13.0` resolves to that exact commit.
-- Exact-main CI Quality run `31962010326` passed all eight required jobs,
-  including authoritative pricing, Firebase rules/emulators, the full
-  Playwright interaction suite, performance, bundle, governance, and Docker
-  gates. The release recalibrated the Ambient bundle exception ceiling to
-  `3,853,000` bytes (measured `3,839,490`), recorded in `TECH_EXCEPTIONS.md`.
-- Governed Vercel run `31963532856` deployed exact `v0.13.0` with `v0.12.2`
-  commit `1767e789f6e86f072997a870aadb194583121b08` as its explicit rollback
-  target. The workflow's public-edge probe succeeded at
-  `https://quotepilot.mbmapps.com`, and independent inspection of the served
-  bundle confirmed the Document hero, design-partner, and Plans copy live with
-  no residual "Book a demo" route.
-- Governed Firebase hosting-scope run `31963544037` deployed exact `v0.13.0`
-  to `tonicatering` with `v0.12.0` commit
-  `87e97c113070424c6d522399116f19877a67721a` as its explicit rollback target —
-  the release commit of the latest successful Firebase all-scope run
-  `31918338700` (which superseded the earlier `v0.9.0` record at
-  `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`). Functions, rules, and indexes
-  are unchanged between that commit and `v0.13.0`, so hosting scope was the
-  complete Firebase surface for this release.
-- These receipts prove exact source, CI, per-target deployment, and
-  public-edge reachability only. They do not prove authenticated staff/portal
-  acceptance, production-data correctness, provider delivery, recipient
-  acknowledgement, or human acceptance.
+- Annotated tag `v0.14.0` resolves to
+  `6b245aed6e9019b92c091de554caf8109fd9c99f`.
+- Exact-main CI Quality run `32418251221` passed all eight required jobs,
+  including authoritative pricing, Firebase rules/emulators, Playwright,
+  performance, bundle, governance, and Docker gates.
+- Governed Vercel run `32419441612` deployed exact `v0.14.0` with
+  `f2f08629a784d0ff6c8af9af8139d3746d77085f` as its explicit rollback target.
+- Governed Firebase all-scope run `32419577296` deployed exact `v0.14.0` with
+  `87e97c113070424c6d522399116f19877a67721a` as its explicit Firebase rollback
+  target. The run verified the `pingram` / `pingram-2026-08-14-a` deployment
+  profile, completed the Hosting, Firestore, and default Functions mutation,
+  and passed the Firebase Hosting origin probe.
+- Remote `main` is currently `e70bc59c16fe284852d4fd6e9db552f2ef217f83`,
+  four green-CI commits ahead of the deployed tag. Those commits and this
+  reconciliation branch are source candidates, not production behavior.
+- These receipts prove exact source, CI, and provider workflow success only.
+  They do not prove tenant activation, authenticated staff/portal acceptance,
+  production-data correctness, provider delivery, recipient acknowledgement,
+  or human acceptance.
 
 ## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 
@@ -71,25 +64,35 @@ Last updated: 2026-08-23 20:57:00 CDT
 
 ## Pending Production Completion
 
-- Rotate the Firebase CI credential and run a separately approved exact-main
-  Firebase `all` deployment before changing any tenant capability state. The
-  connected workspace and Activity & Save Health drawer are frontend-only and
-  do not alter Firebase authority or tenant activation.
+- Tenant activation run `32425529671` verified the exact successful `v0.14.0`
+  Firebase all-scope receipt, then failed closed before any patch because
+  `organizations/250/settings/config` does not exist. The workflow did not
+  record tenant activation.
+- Before retrying activation, run a separately reviewed tenant-scoped
+  migration/provisioning dry run to prove organization `250` exists and to
+  establish its required `settings/config` document through the canonical
+  tenant-data path. Do not bypass the protected workflow or create a sparse
+  settings document solely to force the staffing flag.
+- After the precondition is reviewed and applied, rerun **Set Operational
+  Staffing Tenant** against Firebase deployment run `32419577296`, organization
+  `250`, and `enabled=true`, then retain its verified readback before beginning
+  authenticated staff acceptance.
 - Production configuration names Resend as the email provider and keeps owner
   SMS at `none`. Configuration does not prove provider acceptance, delivery,
   staff acknowledgement, attendance, payroll, or human acceptance.
-- The source release includes the Ambient workspace, authoritative operational
-  staffing, Staff workspace and private records, briefing output, manual staff
-  invitations with independently tracked delivery and acknowledgement states,
-  hardened dormant owner-SMS provider support, and the lighter quote-builder
-  decisions. Firebase authority and tenant availability remain unavailable
-  until the pending deployment and tenant activation complete.
+- The deployed release includes the Ambient workspace, authoritative
+  operational staffing, Staff workspace and private records, briefing output,
+  manual staff invitations with independently tracked delivery and
+  acknowledgement states, hardened dormant owner-SMS provider support, and the
+  lighter quote-builder decisions. Tenant availability remains unavailable
+  until the protected activation precondition and workflow complete.
 
 ## Engineering Checkpoint Detail
 
 - The owner authorized exact-candidate publication and coordinated Firebase
   and Vercel production deployment for live testing after the required gates.
-  Vercel is complete; Firebase remains pending as recorded above. Provider
+  Exact `v0.14.0` reached both production targets; tenant activation remains
+  pending on the fail-closed provisioning precondition recorded above. Provider
   acceptance, signed delivery evidence, recipient acknowledgement, and human
   acceptance remain separate post-deployment tests.
 - The Stripe Connect program has begun with a source-only organization
@@ -593,10 +596,10 @@ route evidence are complete.
   3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. The current combined source candidate measures 3,206,553 /
-  387,248 bytes for compatibility and 3,887,673 / 387,248 for a prior local
-  Ambient build. The temporary ceilings are 3,215,097 and 3,899,524 aggregate
-  bytes respectively, pinned to the exact protected-Playwright graphs. Both keep the
+  build steps. The current reconciled source candidate measures 3,221,176 /
+  387,248 bytes for compatibility and 3,905,603 / 387,248 for the explicit
+  Ambient production graph. Those exact local measurements are the temporary
+  ceilings pending exact-SHA CI confirmation. Both keep the
   391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
@@ -711,20 +714,23 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The combined workspace candidate uses named per-graph temporary ceilings:
-   3,215,097 bytes for compatibility and 3,899,524 bytes for Ambient. Both
-   ceilings are the exact protected-Playwright production-flag graphs. Exact-SHA
-   CI confirmation is still required before merge, and
+9. The reconciled candidate uses named per-graph temporary ceilings: 3,221,176
+   bytes for compatibility and 3,905,603 bytes for Ambient. Both are exact
+   explicit local production-flag measurements. Exact-SHA CI confirmation is
+   still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.
 10. `functions.config()` compatibility remains in source and must migrate before
     Firebase removes the legacy API in March 2027.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
-12. Operational staffing is source-only and independently default-off. Do not
-    bind or promote its presentation, server, or tenant gates until exact hosted
-    admin/sales/customer denial, responsive accessibility, rollback, and one
-    explicitly approved tenant acceptance are recorded.
+12. Operational staffing code and authority are deployed in exact `v0.14.0`
+    but remain independently default-off and unavailable to tenant `250`; the
+    protected activation run failed closed because the canonical settings
+    document is absent. Do not bypass provisioning or enable its tenant gate
+    until the reviewed migration path, exact hosted admin/sales/customer denial,
+    responsive accessibility, rollback, and one explicitly approved tenant
+    acceptance are recorded.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
     all-positive release checklist. Provider-backed buyer, delivery, payment,
     contract-conversion, and authoritative-staffing items need a separately
@@ -735,10 +741,51 @@ route evidence are complete.
     deployment until the isolated staging resources, trusted authority
     publisher, App Check enforcement/consumption, exact runtime identities, and
     hosted negative/replay evidence are separately reviewed.
-15. Steward remains a proposed, unimplemented program. Do not add provider,
-    billing, storage, callable, or user-facing authority until the owner answers
-    the three threat-context questions and accepts or revises the PRD, ADR, and
-    threat model. Planning documents are not implementation or launch evidence.
+15. The owner reviewed and accepted the Steward PRD, ADR, UI specification,
+    technical design, threat model, and work plan for implementation planning.
+    The approved context excludes sensitive personal information from provider
+    packets, limits the pilot to the US, requires admin checkpoints for
+    discounts/custom menu items/policy text, and permits sales staff to stage
+    response drafts without send authority. The owner then expanded the
+    planning scope to menu/workflow configuration, credential-blind provider
+    readiness, deterministic margin monitoring, and tenant-owned client advice
+    from source-labeled reviewed memory. Steward now has a deploy-dormant pure
+    validation and control foundation only: fixed task/request/source contracts,
+    tenant/revision fences, US/role/content policy, deterministic commercial
+    provenance, safe-text validation, expiring tamper-evident packets,
+    pseudonymous audit metadata, bounded retention/deletion, incident recovery,
+    and kill/rollback gates pass 32 focused tests. Nine planned private
+    collection paths deny browser access across all 76 Firestore emulator
+    tests. The branch-wide validation blockers are now closed: local pricing-
+    snapshot enrichment preserves exact supplied pricing while adding private
+    commercial evidence, all 3,883 unit tests pass, and both Firebase
+    orchestration lanes complete. Nothing imports or exports the Steward
+    modules, and provider/runtime
+    integration, billing, hosted rules proof, deployment,
+    production, background-model, customer contact, and autonomous authority
+    remain absent.
+    The first Phase 1 source slice now adds a fixed hidden `draft_response`
+    compiler: minimized authorized excerpts enter a storage-off, background-off,
+    zero-tool injected-adapter request; exact claim inventory, source/policy,
+    whole-output, kill-gate, refusal, and outage behavior pass 16 focused tests.
+    It remains deploy-dormant with no configured provider transport or
+    credential, runtime import/export, callable, UI, persistence, composer
+    handoff, customer send, deployment, or production evidence.
+    The next source slice adds current organization owner/admin approval plus
+    exact participant opt-in before adapter use, a pinned 100-case corpus,
+    hidden-only results, digest-only human-comparison receipts, duplicate
+    rejection, and source-local evidence thresholds that cannot promote
+    themselves. Fourteen added tests pass. The corpus is not 100 completed human
+    reviews; private runtime, provider-backed pilot, model-output UI,
+    persistence, deployment, production behavior, and human acceptance remain
+    absent.
+    The authorized staff Quote Workspace now includes the bounded Desk status
+    panel. Its live state is provider-unavailable, renders no model prose,
+    labels no changes made, disables Steward handoff, and routes only to the
+    existing manual-message workflow. Twenty-two UI tests and three local real-
+    route Playwright checks pass at desktop and mobile. This does not prove a
+    provider run, pilot, hosting, deployment, production behavior, or human
+    acceptance.
 16. Production-only dependency audits are clean for the root app, default
     Functions, and Connect Functions. The full root audit retains six high-
     severity development-tool findings through Lighthouse CI's current
@@ -775,8 +822,16 @@ route evidence are complete.
    App Check, then bind the edge and worker identities under an explicit hosted
    Sandbox release. Keep `functions-connect/index.js` export-empty until those
    gates pass.
-10. Review the Steward threat-context questions and proposed governance pack;
-    keep runtime implementation blocked until those owner decisions are recorded.
+10. Finish the read-only Difficult Question Desk shadow proof with a reviewed
+    private runtime, actual consenting silent execution, and 100 human packet
+    reviews. Its deploy-dormant fixed compiler, consent/evaluation contract,
+    pinned 100-case corpus, digest-only comparison receipts, 30-case server
+    suite, and unavailable-state Quote Workspace panel are complete; no model
+    output is user-visible and no staging is enabled. Sequence expanded
+    setup/workflow, provider-readiness, margin, and client-memory tasks only
+    after their pure privacy, memory, no-secret, and adversarial contracts pass;
+    keep provider, billing, deployment, production, and autonomous authority
+    outside that authorization.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

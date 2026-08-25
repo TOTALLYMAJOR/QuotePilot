@@ -1,11 +1,13 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-23 20:57:00 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
 with a read-only Python reconciliation tier for commercial evidence.
 
 ## Quick Links
+- Canonical project state: [PROJECT_STATE.md](PROJECT_STATE.md)
+- Executive state: [docs/project/EXECUTIVE_STATE.md](docs/project/EXECUTIVE_STATE.md)
 - Live app: https://quotepilot.mbmapps.com
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
@@ -31,6 +33,10 @@ with a read-only Python reconciliation tier for commercial evidence.
 - Commercial Truth Loop ADR: [docs/COMMERCIAL_TRUTH_LOOP_ADR.md](docs/COMMERCIAL_TRUTH_LOOP_ADR.md)
 - Commercial Truth Loop design: [docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
+
+The project-state control plane reconciles these existing authorities without
+replacing them. Run `npm run check:project-state` to validate lifecycle values,
+evidence paths, freshness, blocker references, and the single next proof event.
 
 ## Application Routes
 - `/`: hospitality-first public QuotePilot marketing page.
@@ -679,7 +685,9 @@ performs the actual model switch. The policy is owned by
 `docs/task-orchestration-contracts.json` and governed by
 `docs/AGENT_GOVERNANCE.md`. Use `--phase update` for a material checkpoint and
 `--phase complete` for final reporting; each result includes the exact UTC
-`lifecycle.recordedAt` timestamp.
+`lifecycle.recordedAt` timestamp. UI plans additionally require the
+`design-language` skill and the repository's canonical design system and
+principles before implementation.
 
 `test:rebook-quote:emulator` is a disposable `demo-*` Auth, Firestore, and
 Functions lane for the exact-version rebook callable. It verifies same-tenant

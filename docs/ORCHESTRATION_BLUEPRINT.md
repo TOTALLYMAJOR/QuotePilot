@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -46,6 +46,8 @@ is the authoritative time included in the final task report.
 - Pass explicit paths in a dirty worktree so unrelated changes do not raise the
   risk/model tier or widen dependency reads.
 - Read the emitted `dependencies.readFirst` set before task-owned source.
+- Load every emitted `dependencies.requiredSkills` entry before acting; UI work
+  requires `design-language` plus both canonical QuotePilot design documents.
 - Implement in `taskGraph` order: discover, implement, governance, verify.
 - Run focused checks before full build/release lanes; do not omit required
   global gates from the emitted validation list.
@@ -54,6 +56,7 @@ is the authoritative time included in the final task report.
 
 ## Lane Taxonomy
 - `lane:quick`
+  - `npm run check:project-state`
   - `npm run check:env`
   - `npm run check:secrets`
   - `npm run check:workflows`
@@ -114,7 +117,9 @@ Risk policy:
 
 ## Evidence and Tracking
 - Source of truth:
-  - repo docs + PR metadata
+  - canonical repo docs + PR metadata
+  - `.project/state.json` as the cross-source machine reconciliation, checked
+    against repository references and the single next proof event
 - Required PR evidence:
   - lane checkboxes
   - classifier summary

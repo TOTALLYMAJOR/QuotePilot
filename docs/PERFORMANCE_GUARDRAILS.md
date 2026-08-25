@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-20 15:58:46 CDT
+Last updated: 2026-08-25 00:58:05 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,9 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,215,097-byte aggregate
+- The current compatibility graph has a temporary 3,221,176-byte aggregate
   and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 3,899,524-byte aggregate ceiling and
+  graph has a separate temporary 3,905,603-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -54,12 +54,11 @@ Threshold policy:
   2,963,542 / 391,901 bytes for compatibility and 3,749,888 / 391,901 for
   Ambient. The shared shell and Now visual-system pass measures 2,964,327 /
   391,901 bytes for compatibility and 3,750,363 / 391,901 for Ambient.
-  The current combined source candidate measures 3,206,553 / 387,248 bytes for
-  local compatibility and 3,887,673 / 387,248 bytes for a prior local Ambient
-  build. Its compatibility and Ambient ceilings are the exact 3,215,097-byte
-  and 3,899,524-byte graphs emitted by the protected Playwright job with their
-  production presentation flags. This
-  recalibration is not general product-growth headroom.
+  The current reconciled source candidate measures 3,221,176 / 387,248 bytes
+  for the explicit compatibility production graph and 3,905,603 / 387,248
+  bytes for the explicit Ambient production graph. Those exact local
+  measurements are the temporary ceilings; exact-SHA CI must independently
+  confirm them. This recalibration is not general product-growth headroom.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

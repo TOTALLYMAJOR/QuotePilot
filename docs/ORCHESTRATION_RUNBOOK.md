@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -36,10 +36,21 @@ Copy `lifecycle.recordedAt` into the completion report. Governed documentation
 uses the local `Last updated: YYYY-MM-DD HH:MM:SS TZ` header instead; the docs
 gate requires that value to advance whenever the document changes.
 
+For a UI-classified plan, confirm `dependencies.requiredSkills` contains
+`design-language` before editing. Load it completely, then read
+`docs/DESIGN_SYSTEM.md` and `docs/DESIGN_PRINCIPLES.md`. If the skill and local
+product language differ, the repository documents govern QuotePilot-specific
+behavior and the conflict must be reported rather than silently blended.
+
 Preflight:
 ```bash
 npm run lane:quick
 ```
+
+The preflight includes `npm run check:project-state`. Run that command alone
+while iterating on lifecycle, proof, blocker, or executive-state records. Its
+success means the repository control plane is internally consistent; it does
+not establish deployment, provider, human, usage, or commercial evidence.
 
 Core:
 ```bash

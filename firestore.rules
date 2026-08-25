@@ -986,6 +986,47 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Steward runs, packets, audit/usage/entitlement receipts, reviewed client
+    // memory, policy versions, deletion evidence, and incident controls are
+    // trusted-server-only records. A later callable may project a bounded DTO,
+    // but no browser role may discover, read, list, create, alter, or delete
+    // these private records directly.
+    match /organizations/{orgId}/stewardRuns/{runId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardPackets/{packetId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardAuditReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardUsageBuckets/{bucketId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardEntitlementReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardClientMemory/{memoryId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardPolicies/{policyId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardDeletionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/stewardIncidentDirectives/{directiveId} {
+      allow read, write: if false;
+    }
+
     // Post-event closeout records and exact action receipts are callable-owned.
     // Staff consume the bounded projection on the canonical quote; customer
     // portal records never receive this internal operational evidence.

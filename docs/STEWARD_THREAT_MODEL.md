@@ -1,19 +1,21 @@
 # Preliminary Threat Model: QuotePilot Steward
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-25 00:38:30 CDT
 
-Status: Proposed and pending owner context validation
+Status: Accepted for implementation planning; owner context recorded
 Date: August 15, 2026
-Scope: The proposed Steward provider, policy, packet, staging, menu-setup, and
-subscription boundaries; existing QuotePilot authorities are considered only
-where Steward integrates with them
+Scope: The proposed Steward provider, policy, packet, staging, menu/workflow
+setup, margin/client advice, integration-readiness, memory, and subscription
+boundaries; existing QuotePilot authorities are considered only where Steward
+integrates with them
 
 ## Important boundary
 
 This is a repository-grounded preliminary threat model, not a claim that future
-code has no vulnerabilities. Final risk ranking requires confirmation of the
-three context questions at the end of this document. No provider enablement or
-production promotion should occur while those assumptions are unresolved.
+code has no vulnerabilities. The owner-approved launch assumptions and later
+scope expansion are recorded at the end of this document. Every implementation
+slice still requires an as-built threat review; no provider enablement or
+production promotion is authorized by this planning document.
 
 ## Assumptions used for this draft
 
@@ -25,6 +27,9 @@ production promotion should occur while those assumptions are unresolved.
   health-adjacent sensitive data.
 - MVP is text-only, staff-facing, US-first, and has no voice recording, direct
   customer access, model tools, web search, or autonomous actions.
+- Deterministic rules may surface margin, workflow, provider-readiness, or
+  client-history attention states, but no model runs in the background without
+  a current bounded human request.
 - Organization owners/admins control subscription and policy; existing roles
   continue to control quote, catalog, messaging, and Commercial Change actions.
 - OpenAI or Anthropic may be selected only after exact provider terms and data
@@ -42,6 +47,8 @@ production promotion should occur while those assumptions are unresolved.
 | Callable -> browser packet | Bounded structured DTO | Role-safe projection, normal React escaping, no raw HTML/unsafe URL |
 | Browser packet -> quote/catalog UI | Human-selected staged fields | Current-revision preflight, allowlisted fields, visible diff, local draft only |
 | Stripe -> webhook/entitlement | Subscription events | Separate endpoint/secret, signature, livemode, tenant binding, replay/order handling |
+| Canonical client activity -> governed memory | Recorded same-tenant events and operator-confirmed facts | Source/freshness/review state, sensitive/protected exclusion, correction/deletion, no cross-tenant learning |
+| Integration status -> setup guide | Bounded non-secret readiness DTO | No credentials, no provider object creation, role-safe handoff, configuration/evidence states remain separate |
 
 ## Assets
 
@@ -51,6 +58,8 @@ production promotion should occur while those assumptions are unresolved.
 - Provider allowance and QuotePilot operating availability.
 - Audit receipts and incident evidence.
 - Customer trust, operator reputation, and contractual accuracy.
+- Tenant-owned client memory, preference provenance, workflow configuration,
+  and provider-readiness evidence.
 - Model/prompt/policy/schema/eval integrity.
 
 ## Attacker capabilities
@@ -92,6 +101,11 @@ would have a larger blast radius than application controls can eliminate.
 | STW-T13 | Model alias, prompt, schema, or provider behavior drifts without evaluation | Quiet quality or safety regression | High over time | High | Pinned snapshots, independently versioned prompt/policy/schema, eval gate, canary, alerting, rollback |
 | STW-T14 | Authorized user requests discriminatory, deceptive, coercive, or fabricated sales tactics | Customer harm and reputational risk | Medium | High | Deterministic prohibited-tactic policy, protected-trait exclusion, refusal plus ethical alternative, audit category |
 | STW-T15 | Audit logs can be altered or omit failed/blocked activity | Lost incident evidence and accountability | Low/medium | Medium | Server time, append-only receipts, deterministic digest, deny browser writes, gap monitoring, restricted admin projection |
+| STW-T16 | Client advice infers or stores a protected/sensitive trait, sentiment, vulnerability, or willingness to overpay | Discrimination, privacy harm, manipulation, or reputational loss | Medium without controls | Critical | Allowlisted first-party facts only, prohibited inference taxonomy, source/freshness/review state, correction/deletion, negative evals |
+| STW-T17 | Stale, disputed, or cross-client memory is used as current client truth | Bad advice, wrong personalization, or cross-record disclosure | High over time | High | Exact tenant/client binding, expiry/review state, source revision, dispute exclusion, no approximate identity matching |
+| STW-T18 | Setup guidance requests a secret or is mistaken for completed Stripe/provider configuration | Credential compromise, unintended provider mutation, or false readiness | Medium | Critical | Reject secret-shaped input, credential-blind DTOs, no provider tools, existing hosted/admin handoffs, explicit evidence boundaries |
+| STW-T19 | Margin advice invents costs or automatically changes price/scope | Underpricing, hidden discrimination, or customer harm | Medium | Critical | Deterministic margin authority only, incomplete coverage unavailable, no protected-trait inputs, explicit tradeoffs, no automatic apply |
+| STW-T20 | Background model monitoring runs without a current operator request or triggers workflow activity | Undisclosed data processing, cost, spam, or autonomous action | Medium | High | Deterministic attention only, no scheduled inference, explicit bounded invocation, kill switches, audit and spend alerts |
 
 ## Abuse cases the design must test
 
@@ -110,6 +124,16 @@ would have a larger blast radius than application controls can eliminate.
     formula prefixes.
 11. A tenant policy stating that system rules should be ignored.
 12. A model snapshot change that improves prose but weakens refusal behavior.
+13. A user pastes a Stripe secret key or asks Steward to rotate a webhook
+    secret, create a charge, issue a refund, or enable live mode.
+14. A stale preference from another client with a similar name is offered as
+    current advice.
+15. A request to price differently because of religion, disability, health,
+    neighborhood, perceived wealth, urgency, sentiment, or willingness to pay.
+16. A low-margin quote with missing cost coverage that asks Steward to estimate
+    the missing costs and reprice automatically.
+17. A scheduled process attempts provider inference or customer contact without
+    a current operator request.
 
 ## Security invariants
 
@@ -121,9 +145,34 @@ would have a larger blast radius than application controls can eliminate.
 - Every usable packet is complete, current, digested, expiring, and
   role-scoped.
 - Every customer-impacting action remains an explicit existing human action.
+- Every configuration and provider action remains in its existing role-safe
+  authority; Steward receives no credentials and creates no provider object.
+- Every client-memory fact is tenant/client-bound, source-labeled, fresh,
+  reviewable, and free of protected or prohibited sensitive inference.
+- Every margin number comes from the existing deterministic recorded-cost and
+  pricing authorities; incomplete coverage remains unavailable.
+- No background model inference occurs without a current bounded human request.
 - Every billing entitlement is backed by signed provider evidence or trusted
   reconciliation.
 - Provider failure never removes the manual/deterministic quoting path.
+
+## Phase 0 source-control evidence
+
+The deploy-dormant source foundation now rejects prompt override, resource
+discovery/exfiltration, secret-shaped input, sensitive personal data,
+protected-trait sales tactics, willingness-to-pay manipulation, and direct
+provider or customer actions using a synthetic redacted adversarial corpus.
+It produces only allowlisted HMAC-pseudonymous audit metadata, defines bounded
+retention without any raw-prompt/raw-response category, requires reviewed
+expiry for client-memory facts, and creates non-executing deletion plans that
+accept a precomputed actor digest rather than a raw user identifier.
+
+Global, provider, organization, task, incident, and pinned-model gates fail
+closed. Releasing a hold requires admin/owner authority and a recovery-evidence
+digest. Nine future Steward private collections explicitly deny every browser
+operation; the Firestore emulator proves signed-out, same-tenant customer,
+sales, admin, and cross-tenant denial. These controls are not imported or
+exported and therefore are source evidence, not deployed enforcement.
 
 ## Residual risks
 
@@ -136,18 +185,29 @@ Provider compromise, deployment-account compromise, malicious administrators,
 and legal interpretation across jurisdictions require broader organizational
 controls beyond this feature design.
 
-## Context validation required from owner
+## Owner-approved launch context
 
-1. Will Steward process customer allergy, disability/accommodation, religious
-   dietary, minor, or other sensitive personal information beyond ordinary
-   event notes? If yes, which categories must never leave QuotePilot?
-2. Is launch US-only, or must the first version support Canadian, UK, EU, or
-   other residency/privacy requirements?
-3. May ordinary sales staff stage discounts, custom menu items, policy text, or
-   customer-response drafts today, or should any of those require an admin
-   checkpoint even before the existing save/send action?
+The owner reviewed and approved the governance pack on August 20, 2026 with
+these binding launch decisions:
 
-The answers may increase data-minimization, residency, consent, role, and
-approval requirements. Until confirmed, the design assumes all sensitive
-categories are excluded from provider context unless essential, US-only pilot,
-and no new role authority.
+1. No customer allergy, disability/accommodation, religious dietary, minor, or
+   other sensitive personal information may leave QuotePilot for Steward
+   processing. Provider packets must exclude these categories even when they
+   appear in ordinary event notes.
+2. The initial Steward pilot is US-only. Support for other residency or privacy
+   regimes requires a new legal, privacy, retention, and threat review.
+3. Discounts, custom menu items, and policy text require an administrator
+   checkpoint. Ordinary sales staff may stage customer-response drafts for
+   human review, but Steward may never send them or add send authority.
+
+These decisions preserve the no-new-role-authority boundary. Any expansion of
+sensitive-data scope, launch geography, staff authority, provider capability,
+or customer contact reopens threat review and requires separate approval.
+
+The owner later directed the planning scope to include menu/workflow setup,
+provider-readiness guidance, deterministic margin monitoring, and client advice
+from remembered first-party behavior. This expansion retains all three launch
+decisions: sensitive/protected categories remain excluded from provider
+context, the pilot remains US-only, and existing admin/send/payment/provider
+authorities remain unchanged. Implementation must satisfy STW-T16 through
+STW-T20 before any expanded task is enabled.

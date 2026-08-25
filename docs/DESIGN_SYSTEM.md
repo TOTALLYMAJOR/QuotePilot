@@ -1,8 +1,27 @@
 # QuotePilot Staff Workspace Design System
 
+Last updated: 2026-08-20 16:39:56 CDT
+
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
 rediscovering it.
+
+## Agent UI Workflow
+
+Before UI analysis or implementation, run the repository task planner and load
+its required `design-language` skill. Treat this document and
+`DESIGN_PRINCIPLES.md` as the product-specific authority: the skill may sharpen
+composition and review, but it may not replace QuotePilot's established
+typography, calm hierarchy, hospitality treatment, accessibility, responsive
+behavior, or evidence language.
+
+Start from the real route and current implementation. For material UI changes,
+capture or inspect the existing surface first, preserve authorization and data
+authority, and validate the affected interaction at the relevant 390, 768, and
+1440 pixel widths. Overflow, clipped actions, covered focus targets, awkward
+wrapping, broken reduced-motion behavior, and unreadable dense panels are
+defects. Local rendering and screenshots remain local evidence, not hosted or
+human visual acceptance.
 
 ## Principles
 

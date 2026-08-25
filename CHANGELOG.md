@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-23 20:57:00 CDT
+Last updated: 2026-08-25 01:20:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,15 +9,35 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
-- Aligned the temporary compatibility and Ambient bundle ceilings to the exact
-  3,215,097-byte and 3,899,524-byte graphs emitted by the protected Playwright
-  job with production presentation flags, without adding general growth
-  headroom.
+- Declared the Steward workbench's `prop-types` runtime dependency explicitly,
+  so clean installs and exact-SHA CI resolve the component instead of relying
+  on an unrelated local dependency tree.
+- Reconciled canonical project-state and production-status records with the
+  verified `v0.14.0` Vercel and Firebase deployment receipts, the four newer
+  green-CI `main` commits, and the failed-closed tenant-250 activation attempt.
+  The ledger now distinguishes deployed default-off staffing code from tenant
+  availability and treats this combined branch as a source candidate until an
+  exact release reaches both governed production targets.
+- Kept the Steward secret-rejection regression realistic without checking a
+  contiguous Stripe-shaped fixture string into source, so repository secret
+  scanning can pass while the runtime validator still receives the same
+  assembled test value.
+- Recalibrated the temporary compatibility and Ambient bundle ceilings to the
+  exact explicit production-flag measurements for the reconciled candidate:
+  3,221,176 and 3,905,603 aggregate bytes, with the largest chunk unchanged.
+  Exact-SHA CI confirmation remains required; no general growth headroom was
+  added.
 - Preserved a supplied server-authoritative pricing snapshot when augmenting a
   locally stored quote version with the new private commercial cost snapshot.
   The augmentation now copies only `commercialSnapshot` from the client-side
   catalog view and cannot downgrade pricing authority, totals, or line items to
   `client_preview`.
+- Made `src/data/mockCatalog.js` loadable through native Node ESM by adding
+  explicit `.js` extensions to its local imports. Firebase seed and emulator
+  scripts no longer stop before browser tests on `brandLogoUrl` resolution; a
+  focused subprocess regression proves the production catalog module loads
+  without Vite's extension resolver, and both Firebase auth/rules and
+  authoritative-pricing orchestration lanes complete successfully.
 - Kept Proposal Composer inline fields usable when a mobile keyboard compresses
   the viewport. While the client email or another inline field is being edited,
   the sticky mobile Review quote bar now yields so it cannot cover the field's
@@ -140,6 +160,70 @@ This changelog is backfilled from git history and will be maintained going forwa
   quote, so staff can reach the read-only workspace and its Activity & Save
   Health drawer without typing an address. Organization scope and quote
   mutation authority remain unchanged.
+- Added a canonical project-state and evidence control plane without replacing
+  the Feature Matrix, Project Status, Dev Tasks, changelog, ADRs, or User
+  Manual. The machine ledger preserves eleven lifecycle states, records
+  representative capabilities, journeys, decisions, integrations, risks,
+  blockers, commercial unknowns, and exactly one next proof event. A
+  deterministic `check:project-state` gate validates references, freshness,
+  contradictions, and drift in `lane:quick`; focused tests cover valid,
+  duplicate-event, broken-reference, and stale-evidence cases. This is
+  repository governance evidence only, not new product, deployment, provider,
+  usage, or commercial proof.
+- Added a discoverable read-only Difficult Question Desk panel to the authorized
+  staff Quote Workspace. Its live state truthfully reports that Steward is not
+  connected to a reviewed runtime/provider, renders no model prose, labels that
+  no change was made, disables Steward handoff, and keeps the ordinary manual
+  message workflow available. Twenty-two focused UI tests and three real-route
+  Playwright checks pass, including 1440x1000 and 390x844 overflow, target-size,
+  safe-rendering, state-matrix, and workflow-continuity proof. This is local
+  browser evidence only, not a provider run, pilot, deployment, or production
+  acceptance.
+- Added the deploy-dormant Difficult Question Desk silent-evaluation contract.
+  Current owner/admin pilot approval and exact participant opt-in are required
+  before any injected provider adapter can run. Results remain hidden; a pinned
+  100-case representative/adversarial corpus, digest-only human-comparison
+  receipts, duplicate rejection, and source-local promotion evidence summaries
+  support review without storing model or human prose or granting promotion
+  authority. Fourteen focused cases pass. The corpus is not 100 completed human
+  reviews, and no runtime, provider-backed pilot, UI, persistence, deployment,
+  or production evidence exists.
+- Added the deploy-dormant first Difficult Question Desk shadow compiler. One
+  fixed `draft_response` task now minimizes authorized quote/policy excerpts,
+  sends an injected provider adapter a storage-off, background-off, zero-tool
+  request, requires an exact claim inventory, validates every source and the
+  whole response, produces a hidden expiring evaluation packet and pseudonymous
+  audit metadata, and keeps composer handoff, customer send, writes, and packet
+  reload unavailable. Sixteen focused cases cover success, prompt injection,
+  foreign/stale sources, kill gates, admin checkpoints, refusal, malformed or
+  unsafe output, provider outage, and needs-information behavior. No configured
+  provider transport, credential, runtime import/export, callable, UI,
+  persistence, customer contact, deployment, or production capability exists.
+- Completed the source-only Steward Phase 0 control layer. A synthetic redacted
+  adversarial corpus now covers prompt attacks, secrets, sensitive data,
+  prohibited sales tactics, and provider-mutation requests. Pure controls add
+  pseudonymous allowlisted audit metadata, bounded retention and deletion
+  plans, global/provider/organization/task/model kill gates, evidence-gated
+  incident release, and a containment/deletion runbook. Nine planned private
+  collections explicitly deny every browser operation; 32 focused tests and
+  all 76 Firestore emulator tests pass. The layer remains unimported,
+  unexported, deploy-dormant, and incapable of provider or product mutation.
+- Added the deploy-dormant private validation foundation for QuotePilot
+  Steward. Pure server-side modules now enforce fixed tasks, exact request and
+  source shapes, same-tenant and revision fences, US-only and role policy,
+  secret/sensitive/prohibited-content blocks, deterministic evidence for
+  commercial numerics, safe plain text, canonical packet digests, and
+  15-minute authority-bound expiry. Twenty focused adversarial tests pass.
+  Nothing imports or exports the modules yet; there is no callable, provider
+  request, Firestore access, persistence, pricing calculation, payment,
+  configuration, customer contact, deployment, or production capability.
+- Added `docs/DESIGN-CONTRACT.md` as QuotePilot's commercial workflow design
+  authority. It adapts the useful warm-paper, ledger, hairline, and singular
+  action principles from a reviewed Refero SaaS reference while preserving
+  QuotePilot's typography, tokens, runtime, pricing authority, evidence
+  language, staff/customer separation, responsive behavior, and existing
+  design-system ownership. It also records the rejected reference patterns so
+  future UI work does not import a second brand or component system.
 - Added a deterministic task orchestration planner that maps bounded work and
   explicit paths to a runner model tier, reasoning effort, dependency reads,
   canonical documentation obligations, ordered validations, and a task graph.
@@ -147,6 +231,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   planner changes omit any of its governing policy documents. Planner updates
   and completion reports now carry exact UTC lifecycle timestamps, while
   changed governed documents must advance a local date-time-and-timezone header.
+  UI-classified plans now require the `design-language` skill and both canonical
+  QuotePilot design documents before implementation.
 - Added `npm run check:stripe-connect:staging`, a read-only live Firebase
   preflight for the isolated Stripe Connect staging foundation. The command
   verifies the exact staging project, project number, hosting site, reviewed
@@ -175,12 +261,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   visible target below 44 pixels; hosted roles, deployment, production data,
   and human acceptance remain separate.
 - Recalibrated the active graph-specific temporary bundle exception for the
-  complete combined source candidate, not the Package Workspace alone. Exact
-  local production builds measure 3,206,553 / 387,248 bytes for compatibility
-  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The protected
-  production-flag graphs now pin exact 3,215,097-byte and 3,899,524-byte
-  ceilings, and the 391,901-byte largest-chunk limit is unchanged. Optimization
-  or an explicitly reviewed clean-main baseline is
+  complete reconciled source candidate, not the Package Workspace or Steward
+  Desk alone. Explicit local production builds measure 3,221,176 / 387,248
+  bytes for compatibility and 3,905,603 / 387,248 bytes for Ambient. Those
+  exact measurements are the temporary ceilings, the 391,901-byte
+  largest-chunk limit is unchanged, and exact-SHA CI confirmation remains
+  required. Optimization or an explicitly reviewed clean-main baseline is
   still required before the exception can close.
 - Added cheap-first auto routing to the dormant model-assisted CREATE intake
   lane. `INTENT_PARSER_PROVIDER=auto` now lets `parseIntentDraft` choose from

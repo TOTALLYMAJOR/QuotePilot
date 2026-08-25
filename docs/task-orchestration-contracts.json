@@ -68,9 +68,14 @@
     "ui": {
       "riskLevel": "medium",
       "modelTier": "balanced",
+      "requiredSkills": [
+        "design-language"
+      ],
       "readFirst": [
         "AGENTS.md",
-        "docs/DOC_SYSTEM.md"
+        "docs/DOC_SYSTEM.md",
+        "docs/DESIGN_SYSTEM.md",
+        "docs/DESIGN_PRINCIPLES.md"
       ],
       "docRequirements": [
         {

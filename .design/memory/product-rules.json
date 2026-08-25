@@ -1,0 +1,125 @@
+{
+  "archetypes": {},
+  "authorityMode": "index-only",
+  "portfolio": [],
+  "products": {
+    "quotepilot": {
+      "archetype": "transactional-commercial",
+      "rules": [
+        {
+          "category": "semantic-correctness",
+          "id": "DL-QP-AUTH-001",
+          "protected": true,
+          "sourceAuthority": "docs/DESIGN-CONTRACT.md",
+          "sourceLines": [14, 24],
+          "statement": "Product truth, authorization, pricing, payment, and provider boundaries outrank visual treatment and institutional-memory summaries."
+        },
+        {
+          "category": "semantic-correctness",
+          "id": "DL-QP-AUTH-002",
+          "protected": true,
+          "sourceAuthority": "docs/DESIGN-CONTRACT.md",
+          "sourceLines": [22, 24],
+          "statement": "No presentation may imply that a quote saved, a message delivered, a payment settled, or an event booked before the authoritative service establishes that state."
+        },
+        {
+          "category": "product-requirement",
+          "id": "DL-QP-DOC-001",
+          "protected": true,
+          "sourceAuthority": "docs/DOC_SYSTEM.md",
+          "sourceLines": [5, 7],
+          "statement": "Each major topic has one canonical source of truth; institutional memory indexes and retrieves that authority instead of duplicating it."
+        },
+        {
+          "category": "hierarchy",
+          "id": "DL-QP-UX-001",
+          "protected": false,
+          "sourceAuthority": "docs/DESIGN_PRINCIPLES.md",
+          "sourceLines": [61, 67],
+          "statement": "The useful next action must be visually undeniable and its consequence clear before activation."
+        },
+        {
+          "category": "content",
+          "id": "DL-QP-UX-002",
+          "protected": false,
+          "sourceAuthority": "docs/DESIGN_PRINCIPLES.md",
+          "sourceLines": [26, 29],
+          "statement": "Internal implementation vocabulary stays out of customer-facing copy while operator-owned catering vocabulary remains available as signal."
+        },
+        {
+          "category": "product-requirement",
+          "id": "DL-QP-COMP-001",
+          "protected": true,
+          "sourceAuthority": "docs/DESIGN-CONTRACT.md",
+          "sourceLines": [43, 58],
+          "statement": "Reference logic must integrate through the existing QuotePilot runtime, tokens, components, and mutation paths rather than creating a parallel application shell."
+        },
+        {
+          "category": "evidence",
+          "id": "DL-QP-REF-001",
+          "protected": true,
+          "sourceAuthority": "docs/DESIGN-CONTRACT.md",
+          "sourceLines": [45, 65],
+          "statement": "External design references are evidence to deconstruct and adapt, not authority or a visual identity to copy."
+        },
+        {
+          "category": "responsive",
+          "id": "DL-QP-RESP-001",
+          "protected": false,
+          "sourceAuthority": "docs/DESIGN_SYSTEM.md",
+          "sourceLines": [55, 60],
+          "statement": "The first useful viewport at 390, 768, and 1440 pixels keeps identity, authoritative state, material risk, and the next action legible."
+        },
+        {
+          "category": "accessibility",
+          "id": "DL-QP-A11Y-001",
+          "protected": true,
+          "sourceAuthority": "docs/DESIGN_SYSTEM.md",
+          "sourceLines": [64, 89],
+          "statement": "Sensory feedback always retains textual acknowledgement, reduced-motion behavior, and visible focus and system-state representation."
+        },
+        {
+          "category": "repository-governance",
+          "id": "DL-QP-GOV-001",
+          "protected": true,
+          "sourceAuthority": "AGENTS.md",
+          "sourceLines": [18, 32],
+          "statement": "UI work follows repository planning, loads design-language, uses QuotePilot design authorities as local truth, and runs scope-specific validation."
+        }
+      ]
+    }
+  },
+  "schemaVersion": 1,
+  "sourceAuthorities": [
+    {
+      "path": "AGENTS.md",
+      "priority": 1,
+      "role": "repository-governance",
+      "sha256": "4a140f94d83014a4f99fc02b0a1cac9e6f802a27d2306e100e88982c4e693290"
+    },
+    {
+      "path": "docs/DOC_SYSTEM.md",
+      "priority": 2,
+      "role": "canonical-ownership",
+      "sha256": "0a7a02ef2e38c6a67abb0a77391bc4a51286f726ca963132aba74f0697e4d335"
+    },
+    {
+      "path": "docs/DESIGN_PRINCIPLES.md",
+      "priority": 3,
+      "role": "product-judgment",
+      "sha256": "767b21aa884d8eca03b9b0a019f19e4954893a8c3725e7a091050e365817895f"
+    },
+    {
+      "path": "docs/DESIGN-CONTRACT.md",
+      "priority": 4,
+      "role": "commercial-interaction",
+      "sha256": "7b1379ddf30bf5e7eea8b30f7498242ba4af98e040c4838e206dffa5e66e568f"
+    },
+    {
+      "path": "docs/DESIGN_SYSTEM.md",
+      "priority": 5,
+      "role": "visual-execution",
+      "sha256": "ef252ec228b26855457053c6aecfd3694313f8b5591ec0c49961465b4235adeb"
+    }
+  ]
+}

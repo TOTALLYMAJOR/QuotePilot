@@ -1,0 +1,263 @@
+{
+  "$id": "https://design-intelligence.local/schemas/reference-analysis.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analyzer": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "observedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "human",
+            "model",
+            "hybrid"
+          ]
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "observedAt"
+      ],
+      "type": "object"
+    },
+    "capabilityClaims": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sha256": {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "evidenceMethod": {
+            "enum": [
+              "repository-search"
+            ]
+          },
+          "status": {
+            "enum": [
+              "VERIFIED",
+              "ABSENT",
+              "UNRESOLVED"
+            ]
+          }
+        },
+        "required": [
+          "capability",
+          "status",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "patterns": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "accessibility",
+              "component",
+              "content",
+              "conversion",
+              "feature",
+              "interaction",
+              "layout",
+              "mobile",
+              "motion",
+              "navigation",
+              "responsive",
+              "typography",
+              "visual",
+              "workflow"
+            ]
+          },
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "identityElements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "implementationImpact": {
+            "enum": [
+              "visual-only",
+              "component",
+              "workflow",
+              "backend",
+              "architecture"
+            ]
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "memoryDecisionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "observation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "productRelevance": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "proposedUse": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "recommendedDecision": {
+            "description": "Advisory only. The deterministic adoption engine ignores this field.",
+            "enum": [
+              "ADOPT",
+              "ADAPT",
+              "DEFER",
+              "DECLINE",
+              "BLOCKED"
+            ]
+          },
+          "requiredCapabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "riskFlags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "source": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "whyItWorks": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "name",
+          "category",
+          "observation",
+          "whyItWorks",
+          "productRelevance",
+          "proposedUse",
+          "keywords",
+          "requiredCapabilities",
+          "riskFlags",
+          "identityElements",
+          "implementationImpact"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "sourceEvidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifacts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sha256": {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "source": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "artifacts"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "analyzer",
+    "capabilityClaims",
+    "patterns"
+  ],
+  "title": "Reference Analysis",
+  "type": "object"
+}
