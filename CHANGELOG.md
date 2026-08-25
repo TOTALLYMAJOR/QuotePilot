@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-25 00:50:07 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Fixed
+- Reconciled canonical project-state and production-status records with the
+  verified `v0.14.0` Vercel and Firebase deployment receipts, the four newer
+  green-CI `main` commits, and the failed-closed tenant-250 activation attempt.
+  The ledger now distinguishes deployed default-off staffing code from tenant
+  availability and treats this combined branch as a source candidate until an
+  exact release reaches both governed production targets.
+- Kept the Steward secret-rejection regression realistic without checking a
+  contiguous Stripe-shaped fixture string into source, so repository secret
+  scanning can pass while the runtime validator still receives the same
+  assembled test value.
 - Aligned the temporary compatibility and Ambient bundle ceilings to the exact
   3,215,097-byte and 3,899,524-byte graphs emitted by the protected Playwright
   job with production presentation flags, without adding general growth

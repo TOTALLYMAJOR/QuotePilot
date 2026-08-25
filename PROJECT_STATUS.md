@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-25 00:50:07 CDT
 
 ## Current Production Release
 
@@ -724,10 +724,13 @@ route evidence are complete.
     Firebase removes the legacy API in March 2027.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
-12. Operational staffing is source-only and independently default-off. Do not
-    bind or promote its presentation, server, or tenant gates until exact hosted
-    admin/sales/customer denial, responsive accessibility, rollback, and one
-    explicitly approved tenant acceptance are recorded.
+12. Operational staffing code and authority are deployed in exact `v0.14.0`
+    but remain independently default-off and unavailable to tenant `250`; the
+    protected activation run failed closed because the canonical settings
+    document is absent. Do not bypass provisioning or enable its tenant gate
+    until the reviewed migration path, exact hosted admin/sales/customer denial,
+    responsive accessibility, rollback, and one explicitly approved tenant
+    acceptance are recorded.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
     all-positive release checklist. Provider-backed buyer, delivery, payment,
     contract-conversion, and authoritative-staffing items need a separately

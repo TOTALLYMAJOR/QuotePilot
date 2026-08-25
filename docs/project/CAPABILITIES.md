@@ -1,6 +1,6 @@
 # Capability State Index
 
-Last updated: 2026-08-24 20:18:29 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 ## Authority
 
@@ -18,8 +18,8 @@ drift checker. This index does not create a second feature register.
 | Proposal and customer decision | `DEPLOYED` | Provider acceptance, recipient behavior, and customer decision are separate. |
 | Deposit and final-balance rails | `DEPLOYED` | Coordinated hosted provider acceptance remains open. |
 | Event Workspace and BEO operations | `DEPLOYED` | Hosted canonical-data and human acceptance remain open. |
-| Operational staffing | `TESTED` | Exact Firebase promotion and tenant activation remain open. |
-| Ambient workspace presentation | `DEPLOYED` | Vercel/public-edge proof does not establish authenticated acceptance. |
+| Operational staffing | `DEPLOYED` | Exact `v0.14.0` deployed the default-off authority; tenant-250 provisioning and protected activation remain open. |
+| Ambient workspace presentation | `DEPLOYED` | Exact `v0.14.0` dual-target proof does not establish authenticated acceptance. |
 | Buyer onboarding | `TESTED` | Restricted-key and bounded hosted safety evidence remain open. |
 | Stripe Connect control plane | `TESTED` | Unexported, uninstantiated, and provider disabled. |
 | Steward decision compiler | `TESTED` | No provider runtime, background execution, or production authority. |

@@ -15,5 +15,5 @@
   "upstreamSystems": ["Firebase", "Vercel", "Stripe", "Resend", "Cloudflare Turnstile"],
   "downstreamSystems": [],
   "portfolioStatus": "ACTIVE_COMMERCIAL_PROOF_UNVERIFIED",
-  "lastReconciled": "2026-08-24"
+  "lastReconciled": "2026-08-25"
 }

@@ -1,15 +1,17 @@
 # QuotePilot Canonical Project State
 
-Last updated: 2026-08-24 20:18:29 CDT
+Last updated: 2026-08-25 00:43:38 CDT
 
 ## Current State
 
 QuotePilot is a deployed commercial SaaS product with a broad, tested source
-surface and a split production release: exact `v0.11.0` is recorded at the
-Vercel public edge, while Firebase Hosting and Functions remain at the latest
-recorded successful `v0.9.0` promotion. The primary operating journey exists,
-but current authenticated production, provider, recipient, human-acceptance,
-adoption, and revenue evidence are incomplete or UNVERIFIED.
+surface. Exact `v0.14.0` is recorded at both the Vercel public edge and the
+Firebase Hosting, Functions, rules, and indexes target. Remote `main` is four
+green-CI commits newer than that release, and this reconciled branch contains
+additional source-only work. The primary operating journey exists, but current
+candidate deployment, tenant-250 provisioning/activation, authenticated
+production, provider, recipient, human-acceptance, adoption, and revenue
+evidence are incomplete or UNVERIFIED.
 
 The machine-readable reconciliation is [`.project/state.json`](.project/state.json).
 This page is an entry point, not a replacement for established authorities.
@@ -43,20 +45,22 @@ acceptance, use, or commercial value.
 - Primary journey: demand intake → authoritative quote → exact saved revision →
   proposal → customer decision → payment evidence → BEO/staffing handoff.
 - Strongest current evidence: source inventory, focused/local tests, exact-main
-  CI, Vercel deployment, and public-edge reachability.
+  CI, exact `v0.14.0` dual-target deployment, and public-edge reachability.
 - Largest uncertainty: the exact current authenticated production journey and
   the commercial adoption/revenue layer.
 
 ## NEXT PROOF EVENT
 
-After separately authorized Firebase credential rotation, exact `v0.11.0`
-all-scope deployment, and tenant-250 staffing activation, one authorized
-tenant-250 operator completes the exact quote-to-operations journey: create and
-save a quote revision, reopen it, issue its current proposal, record the
-customer decision, and generate the revision-bound BEO. The proof must include
-the release/deployment receipt, exact revision readback, role-safe UI evidence,
-cross-tenant and invalid-portal denial, and honest separation of any missing
-provider or recipient outcome.
+After the reconciled candidate passes exact-SHA CI, is published and promoted
+to both governed production targets, and tenant `250` is established through a
+reviewed provisioning/migration path before the protected staffing activation
+workflow succeeds, one authorized tenant-250 operator completes the exact
+quote-to-operations journey: create and save a quote revision, reopen it, issue
+its current proposal, record the customer decision, and generate the
+revision-bound BEO. The proof must include the exact release/deployment
+receipts, tenant setting readback, exact revision readback, role-safe UI
+evidence, cross-tenant and invalid-portal denial, and honest separation of any
+missing provider or recipient outcome.
 
 This is the only designated next proof event. It reduces uncertainty across the
 quote, proposal, event-operations, staffing, and Ambient presentation cohorts.
