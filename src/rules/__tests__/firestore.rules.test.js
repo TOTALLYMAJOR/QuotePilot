@@ -1215,6 +1215,49 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }
   });
 
+  test("buyer access orders are denied to every browser context", async () => {
+    const orderId = "buyer-access-order-0001";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "buyerAccessOrders", orderId), {
+        ownerUid: "admin-org-a",
+        ownerEmail: "admin-a@example.com",
+        organizationId: "buyer-org-a",
+        amountCents: 100,
+        currency: "usd",
+        status: "checkout_open"
+      });
+    });
+
+    const browserContexts = [
+      ["public", testEnv.unauthenticatedContext()],
+      ["owner", testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["other-user", testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })]
+    ];
+
+    for (const [label, context] of browserContexts) {
+      const db = context.firestore();
+      const existingRef = doc(db, "buyerAccessOrders", orderId);
+      const newRef = doc(db, "buyerAccessOrders", `browser-created-${label}`);
+      await assertFails(getDoc(existingRef));
+      await assertFails(setDoc(newRef, {
+        ownerUid: label,
+        amountCents: 100,
+        currency: "usd",
+        status: "paid"
+      }));
+      await assertFails(updateDoc(existingRef, { status: "provisioned" }));
+      await assertFails(deleteDoc(existingRef));
+    }
+  });
+
   test("Stripe payment state, references, and provider audit fields remain server-owned", async () => {
     const depositLink = "https://checkout.stripe.com/c/pay/cs_test_server";
     const stripeSessionId = "cs_test_server";
@@ -1295,6 +1338,106 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         updatedAtISO: "2026-03-22T02:30:00.000Z"
       }));
     }
+  });
+
+  test("final-balance and ledger payment maps remain server-owned across browser roles", async () => {
+    const protectedPaymentMaps = {
+      finalBalance: {
+        amountCents: 70000,
+        currency: "usd",
+        checkoutGeneration: 1,
+        stripeSessionId: "cs_test_final_balance_server",
+        stripeCheckoutState: "open"
+      },
+      ledger: {
+        version: 1,
+        totalCents: 100000,
+        depositCents: 30000,
+        finalBalanceCents: 70000,
+        entries: [{
+          operationId: "deposit-server-1",
+          paymentKind: "deposit",
+          amountCents: 30000,
+          state: "paid",
+          providerReference: "cs_test_deposit_server"
+        }]
+      }
+    };
+    const browserContexts = [
+      ["admin", testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["sales", testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["customer", testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["public", testEnv.unauthenticatedContext()]
+    ];
+
+    for (const [label, context] of browserContexts) {
+      const quoteRef = doc(context.firestore(), "organizations", "org-a", "quotes", "q1");
+      for (const [field, value] of Object.entries(protectedPaymentMaps)) {
+        await assertFails(updateDoc(quoteRef, {
+          [`payment.${field}`]: value,
+          updatedAtISO: `2026-03-22T04:0${label.length}:00.000Z`
+        }));
+      }
+    }
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const ref of [
+        doc(db, "organizations", "org-a", "quotes", "q1"),
+        doc(db, "customerPortalQuotes", VALID_PORTAL_KEY)
+      ]) {
+        await updateDoc(ref, {
+          "payment.finalBalance": protectedPaymentMaps.finalBalance,
+          "payment.ledger": protectedPaymentMaps.ledger
+        });
+      }
+    });
+
+    for (const [label, context] of browserContexts) {
+      const db = context.firestore();
+      for (const ref of [
+        doc(db, "organizations", "org-a", "quotes", "q1"),
+        doc(db, "customerPortalQuotes", VALID_PORTAL_KEY)
+      ]) {
+        await assertFails(updateDoc(ref, {
+          "payment.finalBalance.stripeCheckoutState": `forged-${label}`,
+          updatedAtISO: "2026-03-22T04:20:00.000Z"
+        }));
+        await assertFails(updateDoc(ref, {
+          "payment.ledger.entries": [],
+          updatedAtISO: "2026-03-22T04:25:00.000Z"
+        }));
+        await assertFails(updateDoc(ref, {
+          "payment.finalBalance": deleteField(),
+          "payment.ledger": deleteField(),
+          updatedAtISO: "2026-03-22T04:30:00.000Z"
+        }));
+      }
+    }
+
+    const salesQuoteRef = quoteRefFor(
+      "sales-org-a",
+      "sales-a@example.com",
+      "org-a",
+      "q1"
+    );
+    await assertSucceeds(updateDoc(salesQuoteRef, {
+      "booking.staffLead": "Final Balance Event Lead",
+      "booking.staffAssignedAtISO": "2026-03-22T04:35:00.000Z",
+      updatedAtISO: "2026-03-22T04:35:00.000Z"
+    }));
   });
 
   test("public and authenticated customer portal paths cannot forge Stripe payment evidence", async () => {

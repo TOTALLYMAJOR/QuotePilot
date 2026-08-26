@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getIntegrationSetupStatus, sendIntegrationTestSms } from "../lib/commerceOps";
+import {
+  buildBuyerAccessRepairConfirmationToken,
+  getIntegrationSetupStatus,
+  repairBuyerAccessInvoice,
+  sendIntegrationTestSms
+} from "../lib/commerceOps";
 import {
   archiveOrganizationWorkspace,
   deleteOrganizationWorkspace,
@@ -25,19 +30,18 @@ const STATES = ["queued", "success", "error", "retrying", "skipped"];
 const DIRECTIONS = ["push", "pull"];
 const PROVISION_PLANS = ["starter", "growth", "enterprise"];
 const FUNCTIONS_ENV_SETUP_GUIDANCE = [
-  "For local/emulator validation only, edit the ignored file functions/.env.tonicatering (mode 0600).",
-  "Use placeholders or non-production provider values only; never commit or paste secrets here:",
+  "For local validation of the production deploy configuration only, keep non-secret configuration in the ignored functions/.env.tonicatering file (mode 0600):",
   "NOTIFICATIONS_SMS_PROVIDER=twilio",
   "TWILIO_ACCOUNT_SID=",
   "TWILIO_AUTH_TOKEN=",
   "TWILIO_FROM_NUMBER=",
   "NOTIFICATIONS_OWNER_PHONE=",
-  "STRIPE_SECRET_KEY=",
-  "STRIPE_WEBHOOK_SECRET=",
+  "STRIPE_MODE=live",
   "",
-  "Validate without rewriting:",
+  "Validate the production dotenv payload without rewriting:",
   "FIREBASE_PROJECT_ID=tonicatering node --env-file=functions/.env.tonicatering scripts/materialize-functions-env.mjs --validate-only",
-  "Never upload this file or place production credentials in it. Production values belong only in the trusted deployer/runtime secret channel."
+  "The production materializer rejects Resend and Stripe secret values. Do not use it for emulator setup: disposable emulator configuration must use STRIPE_MODE=test, with expendable RESEND_API_KEY, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET fixtures only in the separately ignored functions/.secret.local file.",
+  "Never upload either file or use production credentials locally; production provider credentials belong only in Firebase Secret Manager bindings."
 ].join("\n");
 const SMS_DISABLE_GUIDANCE = [
   "Keep NOTIFICATIONS_SMS_PROVIDER=none in the trusted runtime configuration",
@@ -254,6 +258,15 @@ export default function IntegrationOpsModal({
     loading: false,
     error: "",
     result: null
+  });
+  const [buyerRepairState, setBuyerRepairState] = useState({
+    loading: false,
+    error: "",
+    result: null
+  });
+  const [buyerRepairForm, setBuyerRepairForm] = useState({
+    orderId: "",
+    confirmationToken: ""
   });
   const [cleanupForm, setCleanupForm] = useState({
     organizationId: normalizeOrganizationSlug(organizationId),
@@ -621,6 +634,56 @@ export default function IntegrationOpsModal({
     }
   };
 
+  const handleRepairBuyerInvoice = async () => {
+    if (!canProvisionCustomer) {
+      setBuyerRepairState((prev) => ({
+        ...prev,
+        error: "Platform administrator authority is required for buyer invoice repair."
+      }));
+      return;
+    }
+    const orderId = String(buyerRepairForm.orderId || "").trim().toLowerCase();
+    const expectedToken = buildBuyerAccessRepairConfirmationToken(orderId);
+    if (!expectedToken) {
+      setBuyerRepairState((prev) => ({
+        ...prev,
+        error: "Enter a valid buyer access order id."
+      }));
+      return;
+    }
+    if (String(buyerRepairForm.confirmationToken || "").trim() !== expectedToken) {
+      setBuyerRepairState((prev) => ({
+        ...prev,
+        error: `Repair token mismatch. Use exactly: ${expectedToken}`
+      }));
+      return;
+    }
+    const confirmed = window.confirm(
+      `Verify and permanently void the terminal Stripe test Invoice for "${orderId}"? This action is audited and cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setBuyerRepairState({ loading: true, error: "", result: null });
+    setFeedback("");
+    try {
+      const result = await repairBuyerAccessInvoice({
+        orderId,
+        confirmationToken: expectedToken
+      });
+      setBuyerRepairState({ loading: false, error: "", result });
+      setBuyerRepairForm({ orderId, confirmationToken: "" });
+      setFeedback(
+        `Buyer Invoice ${orderId} is provider-verified void. A fresh request is allowed after the server-owned email window.`
+      );
+    } catch (err) {
+      setBuyerRepairState({
+        loading: false,
+        error: err?.message || "Buyer invoice repair failed.",
+        result: null
+      });
+    }
+  };
+
   const handleDeleteOrganization = async () => {
     if (!canProvisionCustomer) {
       setCleanupState((prev) => ({ ...prev, error: "Admin role is required for organization cleanup." }));
@@ -708,6 +771,8 @@ export default function IntegrationOpsModal({
     });
     setLastProvisioningResult(readLastProvisioningResult(currentUserUid));
     setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
+    setBuyerRepairState({ loading: false, error: "", result: null });
+    setBuyerRepairForm({ orderId: "", confirmationToken: "" });
     if (!provisioningOnly) {
       setCleanupState({
         loading: false,
@@ -1195,6 +1260,83 @@ export default function IntegrationOpsModal({
             </>
           )}
         </section>
+
+        {canManageProviders && <section className="admin-section">
+          <div className="admin-section-head">
+            <h3>Buyer Invoice Recovery (Platform Admin)</h3>
+          </div>
+          <p className="warning-note">
+            This recovery is only for a terminal unpaid Stripe test Invoice. QuotePilot verifies the exact stored
+            Invoice, voids an uncollectible Invoice at Stripe, rechecks that no workspace or invitation exists, and
+            records an operator audit before a replacement can be requested.
+          </p>
+          {!canProvisionCustomer && (
+            <p className="warning-note">Recovery controls require platform administrator authority.</p>
+          )}
+          {canProvisionCustomer && (
+            <>
+              {buyerRepairState.error && <p className="error-note">{buyerRepairState.error}</p>}
+              <div className="admin-grid-settings integration-form-grid">
+                <label>
+                  Buyer test purchase reference
+                  <input
+                    type="text"
+                    placeholder="ba-<40 hex characters>"
+                    value={buyerRepairForm.orderId}
+                    onChange={(event) => setBuyerRepairForm((prev) => ({
+                      ...prev,
+                      orderId: event.target.value,
+                      confirmationToken: ""
+                    }))}
+                  />
+                </label>
+                <label>
+                  Repair token
+                  <input
+                    type="text"
+                    placeholder={buildBuyerAccessRepairConfirmationToken(buyerRepairForm.orderId)
+                      || "VOID BUYER INVOICE ba-..."}
+                    value={buyerRepairForm.confirmationToken}
+                    onChange={(event) => setBuyerRepairForm((prev) => ({
+                      ...prev,
+                      confirmationToken: event.target.value
+                    }))}
+                  />
+                </label>
+              </div>
+              <div className="right-actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setBuyerRepairForm((prev) => ({
+                    ...prev,
+                    confirmationToken: buildBuyerAccessRepairConfirmationToken(prev.orderId)
+                  }))}
+                  disabled={!buildBuyerAccessRepairConfirmationToken(buyerRepairForm.orderId)}
+                >
+                  Fill Repair Token
+                </button>
+                <button
+                  type="button"
+                  className="cta"
+                  onClick={handleRepairBuyerInvoice}
+                  disabled={buyerRepairState.loading}
+                >
+                  {buyerRepairState.loading ? "Verifying Stripe..." : "Void and Release Test Invoice"}
+                </button>
+              </div>
+              {buyerRepairState.result?.ok && (
+                <div className="status-strip">
+                  <span>Order: <strong>{buyerRepairState.result.orderId}</strong></span>
+                  <span>Provider: <strong>{buyerRepairState.result.providerState}</strong></span>
+                  <span>Provider void verified: <strong>{buyerRepairState.result.providerVoidVerified ? "yes" : "no"}</strong></span>
+                  <span>24-hour email window: <strong>{buyerRepairState.result.emailWindowStillApplies ? "still applies" : "unknown"}</strong></span>
+                  <span>Audit: <strong>{buyerRepairState.result.auditEventId}</strong></span>
+                </div>
+              )}
+            </>
+          )}
+        </section>}
 
         {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">

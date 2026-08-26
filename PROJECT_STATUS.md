@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 3, 2026
+Last updated: August 4, 2026
 
 ## Operational Health
 - Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is
@@ -15,9 +15,9 @@ Last updated: August 3, 2026
   branding; the legacy Firebase project ID and hosting origin remain unchanged
   infrastructure identifiers.
 - Candidate validation: draft PR #23 publishes the combined sell-readiness
-  candidate. Prior exact head `7d053b0c44dd2bb2f4e77726e6c95e7b9f6f3db1`
-  passed all eight source CI jobs in run `30879068700`; Vercel Preview
-  `dpl_7B4kCqeR2iTvwDpdvigVSX5opJTc` failed
+  candidate. Exact head `d97258870b4e5a44070cbea0be781f2133b0a7cb`
+  passed all eight source CI jobs in run `30884396855`; Vercel Preview
+  `dpl_A53KRxvmA6WUNeakQuDLZuAsbmZk` failed
   before build because all six required `VITE_FIREBASE_*` values are scoped
   only to the older `fix/quote-history-role-permissions` branch. The local
   quick/core gates pass: 721 unit tests pass with 41 intentional skips, the
@@ -32,10 +32,116 @@ Last updated: August 3, 2026
   results are not hosted tenant or provider acceptance.
   All local/emulator results remain distinct from hosted tenant and provider
   acceptance.
+  The final-balance source work is on
+  `feature/server-authoritative-final-balance`, based on that candidate; neither
+  branch is merged to `main`.
 - Functions runtime readiness: Functions now target Node.js 22 and use Firebase
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
-- Current branch Stripe deposit lifecycle: an exact approved payment scope now
+- Current branch account recovery: the staff sign-in screen now lets
+  email/password users request a Firebase password-reset message. The helper
+  normalizes the entered email, supplies a validated HTTPS `/app` return
+  URL, returns the same on-screen confirmation for unknown or disabled account
+  errors, and preserves operational failures instead of claiming a message was
+  sent. Seven focused unit tests and an isolated two-test
+  Auth/Firestore/Functions browser run pass, including action-code creation,
+  password replacement, QuotePilot return state, and sign-in with the new
+  password. Exact-head CI must repeat the package lane, and emulator evidence
+  remains distinct from hosted password-reset delivery. Production acceptance
+  must separately verify the return domain is authorized and Firebase
+  email-enumeration protection is enabled. Public registration may still
+  return an existing-email error, so this feature is not claimed as full
+  account-enumeration resistance.
+- Current branch release UAT contract: checklist version `2026-08-04.10` now
+  makes hosted password recovery and target-applicable deposit, final-balance,
+  webhook/reconciliation, cross-rail isolation, projection privacy, and payment
+  surface observations mandatory. It also binds public buyer onboarding to
+  target-specific Turnstile entry, durable rate/idempotency controls, true
+  Hosted Invoice Page creation, pinned buyer API/webhook version `2024-06-20`,
+  signed invoice lifecycle, paid workspace preparation, pending invite,
+  secret-keyed pre-read status throttling, proof-safe manual account setup at
+  `workspaceReady=true`, optional onboarding-email provider acceptance,
+  separate Firebase verification-email delivery and continue URL, no user role
+  or access before verified claim, replay/cross-account denial, and quote-Stripe
+  isolation observations. Browser targets own locked UI/instructions only;
+  backend targets own provider and fulfillment evidence. The
+  regression suite fixes those critical IDs to their intended target profiles
+  so a mechanical checklist edit cannot silently remove them.
+- Current branch provider-secret hardening: generic `RESEND_API_KEY`,
+  `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET` reads are now strict Firebase
+  Secret Manager bindings on only the complete consuming Function call graph;
+  the generic webhook statically verifies signatures and does not receive the
+  Stripe API key. The Functions dotenv materializer rejects and does not emit
+  those three values, while the ignored `functions/.secret.local` is reserved
+  for expendable emulator fixtures. This is source evidence only. The known
+  exposed or locally cached generic Resend/Stripe credentials remain a hard
+  release blocker until fresh provider credentials complete the documented
+  overlap/cutover, exact hosted UAT, old-key revocation, and provider readback.
+- Current branch public invoice-first buyer candidate:
+  `feature/paid-buyer-onboarding` adds `/start` on the existing `tonicatering`
+  Firebase project behind independent browser and Functions gates. Preparation
+  workflows compile the route and marketing CTA only with a syntactically valid
+  non-placeholder public Turnstile site key; `check:env` cannot prove provider
+  setup or human review. The server
+  gate remains disabled by default and requires a Secret Manager Turnstile
+  secret plus exact production hostnames. `createBuyerAccessInvoice` applies
+  server-owned Turnstile, durable rate-limit, and idempotency controls, then
+  fixes Starter to $1 USD using a dedicated Stripe test-mode client and returns
+  only a true Stripe Hosted Invoice Page. The dedicated buyer client and
+  endpoint are pinned to Stripe API version `2024-06-20` without changing the
+  generic quote Stripe client or version. `buyerAccessStripeWebhook` accepts
+  only signed, deduplicated `invoice.paid`, `invoice.payment_failed`,
+  `invoice.voided`, and `invoice.marked_uncollectible` events. A paid invoice
+  prepares the organization, neutral settings, Starter workspace plan
+  entitlements, provisioning record, and pending invite, but creates no user
+  membership, admin role, custom claims, or application access. The public
+  status can advance to `activation_sent` only after durable onboarding-email
+  provider acceptance. Independently, token-bound `provisioning` with
+  `workspaceReady=true` now stops automatic `/start` polling and offers `/app`
+  as a manual exact-invoice-email registration/sign-in and Firebase verification
+  path. That handoff does not claim Resend acceptance or delivery, membership,
+  claims, or access; the optional onboarding message is not required to start
+  verified-email activation. An exact matching Firebase account must separately
+  verify the invoice email and consume the invite, and only `active` is
+  access-ready.
+  `getBuyerAccessInvoiceStatus` remains a public capability-token callable, but
+  each public request now consumes an atomic secret-keyed per-network lease
+  before its first buyer-order read; later fulfillment reads remain within that
+  bounded request. The 60-request-per-five-minute status budget also charges
+  well-formed unknown-order and wrong-token requests and fails closed when the
+  dedicated rate secret or Firestore limiter is unavailable. Creation
+  now atomically reserves a request-scoped `(email, requestId)` order before any
+  Auth, invite, or order read. Exact retry consumes IP capacity again without a
+  duplicate email charge during the 24-hour reservation; reservation and rate
+  records carry a Firestore Timestamp `expiresAt`. After the one-email-per-
+  24-hour window, a fresh request can replace only a prior provider-verified
+  void order,
+  which is durably marked superseded so stale events cannot fulfill it. Open
+  and payment-failed orders return the same invoice only to the exact original
+  creation request. Uncollectible/expired, paid, and activation orders cannot
+  be replaced automatically. The source candidate now includes a platform-
+  admin-only Buyer Invoice Recovery surface and callable. It accepts only an
+  exact order-bound confirmation, derives provider identity server-side,
+  retrieves the terminal unpaid test Invoice from Stripe, permanently voids an
+  uncollectible Invoice, rechecks the absence of fulfillment artifacts in the
+  commit transaction, and records a private operator audit before replacement
+  eligibility. Paid, open, partially paid, fulfilled, superseded, and
+  mismatched targets fail closed. This closes the source recovery gap but
+  remains unproved in hosted Stripe test mode. Creation and status record
+  identifiers are HMAC-derived without raw network or email identity.
+  The source now declares the `buyerAccessRateLimits.expiresAt` TTL policy in
+  deployable Firestore configuration. The Functions gate must still stay off
+  until the fourth Secret Manager binding, exact-config promotion and TTL
+  provider readback, coordinated deployment, and
+  hosted valid/invalid polling acceptance are provider-proven; optional edge or
+  App Check controls remain defense in depth rather than source evidence.
+  The existing live quote-payment mode, credentials, `stripeWebhook`,
+  deposit, and final-balance rails remain separate. Controlled test-mode
+  markers require exclusion from live revenue and paid-customer reporting.
+  Focused source, unit, rules, browser, and emulator evidence remains local.
+  The branch has not been merged, tagged, deployed, hosted-accepted,
+  Stripe-provider-accepted, or approved for live-mode sale.
+- Current branch Stripe payment lifecycle: an exact approved deposit scope now
   binds the quote revision, current portal issuance, customer email, currency,
   and amount before one resumable server operation prepares/restores the
   Checkout Session and sends the payment-request email. A newly prepared
@@ -55,8 +161,29 @@ Last updated: August 3, 2026
   `checkout.session.async_payment_failed`, and `checkout.session.expired`
   events own monotonic payment transitions. Same-tenant admins can reconcile
   the server-recorded Session when webhook delivery needs review, while client
-  payment-evidence writes fail closed. This is source/local evidence only and
-  is not deployed or provider-accepted behavior.
+  payment-evidence writes fail closed.
+  The final-balance branch adds a separate exact approval and payment rail for
+  booked contracts after a verified provider-paid deposit. QuotePilot derives
+  the remaining amount from the authoritative total and deposit, binds that
+  amount plus the contract and deposit evidence into the approval, and records
+  final-balance operations in a versioned ledger and a distinct
+  `payment.finalBalance` projection. The same private-before-email-acceptance,
+  resumable dispatch, signed-webhook, monotonic transition, and admin provider
+  reconciliation boundaries apply without allowing a final-balance event to
+  rewrite deposit truth. The customer portal receives only customer-safe final
+  balance status, amount, confirmation, and an accepted published link; Stripe
+  Session identifiers remain private. Late provider settlement may promote a
+  failed or expired balance to paid, while an accepted email whose Checkout
+  expires during interrupted publication closes its approval and permits a
+  fresh request instead of remaining in progress. If the portal expires while
+  email dispatch is still `sending` or ambiguous, recovery keeps the provider
+  outcome unknown, waits through a 15-minute stale-attempt boundary before
+  touching Stripe, resolves the exact Checkout without downgrading paid or
+  refunded truth, and closes the stale approval for reconciliation rather than
+  resending. Missing or mismatched expired portal projection is flagged and
+  skipped instead of blocking quote/ledger closure. This is source/local
+  evidence only and is not deployed, hosted-accepted, or
+  Stripe-provider-accepted behavior.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best
   scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
@@ -345,38 +472,79 @@ Last updated: August 3, 2026
   live-mode acceptance are recorded. Acceptance must include browser-inaccessible
   prepared state, same-key recovery from ambiguous creation/email outcomes,
   publication-only recovery after durable provider acceptance, and safe
-  definite-failure cleanup; a happy-path email alone is insufficient. The
-  current candidate automates deposit checkout only. Refund initiation/status,
-  dispute handling, and final-balance collection/reconciliation remain manual
-  or unimplemented.
+  definite-failure cleanup for both deposit and final-balance rails, plus proof
+  that events cannot cross those rails; a happy-path email alone is
+  insufficient. The final-balance automation is currently source-only on a
+  feature branch based on the sell-readiness candidate, not `main`. Refund
+  initiation/status and dispute handling remain manual or unimplemented.
+- The public `$1` invoice-first path is still a Stripe test-mode source
+  candidate, not a live sales launch. Its public initiation surface raises
+  abuse, duplicate-invoice, provider-delivery, and identity-claim risk, so the
+  independently disabled server gate, exact Turnstile host/action checks,
+  secret-keyed durable rate limits before status order reads, deterministic
+  idempotency, four separate buyer Secret Manager bindings, promoted and
+  provider-verified Firestore rate TTL,
+  signed invoice events, pending-invite boundary, proof-safe manual verified-
+  email handoff when the workspace is ready, exact-email claim, and hosted
+  negative-path
+  evidence are release requirements. No hosted invoice, payment, webhook,
+  workspace preparation, optional onboarding-email acceptance, Firebase verification-
+  email delivery, verified claim, role readback, or proof that the live quote
+  Stripe rail stayed unchanged exists yet. The platform-admin terminal Invoice
+  repair is also source-only: hosted UAT has not proved exact provider void,
+  private audit persistence, fulfillment-artifact denial, or the subsequent
+  post-window replacement. Refund,
+  dispute, cancellation, account/access revocation, support, tax/accounting,
+  and any live-mode launch remain separate operating gates.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Keep draft PR #23 source-green on its exact head and intentionally scope the
+1. Finish and review the single-project invoice-first buyer candidate, keeping
+   the server gate disabled until Turnstile, durable rate/idempotency controls,
+   all four dedicated buyer secrets, tracked rate-record TTL promotion/readback,
+   and target-scoped UAT are approved. Route the
+   four supported buyer invoice events only to `buyerAccessStripeWebhook`, keep
+   the existing live quote Stripe configuration and `stripeWebhook` unchanged,
+   and treat the compiled public CTA as artifact configuration rather than
+   backend release authority.
+2. Keep draft PR #23 source-green on its exact head and intentionally scope the
    six non-secret Vercel Preview Firebase variables to its release branch, then
    complete hosted release-candidate acceptance on that exact deployment.
-2. Configure protected no-bypass GitHub environments and independent direct
+3. Configure protected no-bypass GitHub environments and independent direct
    reviewers, disable provider-side bypasses, implement the separately owned
    trusted deployer plus provider-specific staging/LKG receipts, and complete a
    non-production rehearsal before any promotion.
-3. After those controls are qualified, promote the exact reviewed
+4. After those controls are qualified, promote the exact reviewed
    rules/Functions/frontend artifacts and run the hosted owner/quote/portal
    tenant acceptance checklist, including current/invalid issuance, active,
    expired, deleted, approval execution, contract, and change-request paths.
-4. As part of that coordinated rollout, configure the matching Stripe mode/key
-   and all four Checkout Session webhook events, then capture hosted test-mode
-   approval/send/webhook/reconciliation evidence before separately authorized
-   live-mode acceptance. Do not infer either from local emulator coverage.
-5. Verify the intended Resend sender domain in the Resend dashboard and
+5. Run invoice-first buyer onboarding through the same reviewed main, semantic
+   tag, exact-main CI, target-specific UAT, prepare-artifact, and trusted-deployer
+   path. Verify fresh Turnstile and abuse-control paths, one idempotent true $1
+   Hosted Invoice Page, signed invoice transitions, paid workspace preparation,
+   pending invite with no user role/access, proof-safe manual `/app` handoff at
+   `workspaceReady=true`, optional onboarding-email provider acceptance before
+   `activation_sent`, separate Firebase verification-email delivery and
+   continue URL, successful exact-email verified claim, cross-
+   account/replay/failure denial, controlled test-data classification, and
+   quote-Stripe isolation. Disable the server gate after the bounded acceptance window; a
+   live-mode launch requires separate approval.
+6. As part of the coordinated quote-payment rollout, configure the matching Stripe mode/key
+   and all four Checkout Session webhook events, then capture separate hosted
+   test-mode approval/send/webhook/reconciliation evidence for deposit and
+   final-balance collection before separately authorized live-mode acceptance.
+   Prove that payment-kind metadata and stored Session scope prevent cross-rail
+   updates. Do not infer any provider result from local emulator coverage.
+7. Verify the intended Resend sender domain in the Resend dashboard and
    authoritative DNS; only then configure
    `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and
    recipient proof from one controlled test.
-6. Run and review the scoped production portal-projection dry run, resolve any
+8. Run and review the scoped production portal-projection dry run, resolve any
    conflicts, then explicitly authorize guarded apply and retain count-only
    evidence.
-7. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+9. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

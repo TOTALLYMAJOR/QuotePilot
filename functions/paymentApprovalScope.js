@@ -2,6 +2,7 @@ const { createHash } = require("node:crypto");
 
 const PAYMENT_APPROVAL_SCOPE_VERSION = 1;
 const PAYMENT_APPROVAL_SCOPE_KIND = "stripe_checkout_deposit_request";
+const FINAL_BALANCE_APPROVAL_SCOPE_KIND = "stripe_checkout_final_balance_request";
 const PAYMENT_APPROVAL_SCOPE_KEYS = Object.freeze([
   "version",
   "kind",
@@ -15,6 +16,16 @@ const PAYMENT_APPROVAL_SCOPE_KEYS = Object.freeze([
   "paymentKind",
   "currency",
   "amountCents"
+]);
+const FINAL_BALANCE_APPROVAL_SCOPE_KEYS = Object.freeze([
+  ...PAYMENT_APPROVAL_SCOPE_KEYS,
+  "depositStatus",
+  "depositAmountCents",
+  "depositStripeSessionId",
+  "depositConfirmedAtISO",
+  "contractNumber",
+  "contractConvertedAtISO",
+  "checkoutGeneration"
 ]);
 
 class PaymentApprovalScopeError extends Error {
@@ -41,7 +52,7 @@ function normalizePaymentApprovalScope(input = {}) {
     ? input
     : {};
   const amountCents = Number(scope.amountCents);
-  return {
+  const normalized = {
     version: Number(scope.version),
     kind: text(scope.kind, 80),
     organizationId: text(scope.organizationId, 160).toLowerCase(),
@@ -55,21 +66,42 @@ function normalizePaymentApprovalScope(input = {}) {
     currency: text(scope.currency, 3).toLowerCase(),
     amountCents: Number.isSafeInteger(amountCents) ? amountCents : 0
   };
+  if (normalized.kind !== FINAL_BALANCE_APPROVAL_SCOPE_KIND) return normalized;
+  const depositAmountCents = Number(scope.depositAmountCents);
+  const checkoutGeneration = Number(scope.checkoutGeneration);
+  return {
+    ...normalized,
+    depositStatus: text(scope.depositStatus, 32).toLowerCase(),
+    depositAmountCents: Number.isSafeInteger(depositAmountCents) ? depositAmountCents : 0,
+    depositStripeSessionId: text(scope.depositStripeSessionId, 200),
+    depositConfirmedAtISO: normalizeISO(scope.depositConfirmedAtISO),
+    contractNumber: text(scope.contractNumber, 120),
+    contractConvertedAtISO: normalizeISO(scope.contractConvertedAtISO),
+    checkoutGeneration: Number.isSafeInteger(checkoutGeneration) ? checkoutGeneration : 0
+  };
 }
 
 function assertCanonicalScopeShape(input, normalized) {
   const keys = input && typeof input === "object" && !Array.isArray(input)
     ? Object.keys(input).sort()
     : [];
-  const expectedKeys = [...PAYMENT_APPROVAL_SCOPE_KEYS].sort();
+  const finalBalanceScope = normalized.kind === FINAL_BALANCE_APPROVAL_SCOPE_KIND;
+  const expectedKeys = [
+    ...(finalBalanceScope
+      ? FINAL_BALANCE_APPROVAL_SCOPE_KEYS
+      : PAYMENT_APPROVAL_SCOPE_KEYS)
+  ].sort();
   if (JSON.stringify(keys) !== JSON.stringify(expectedKeys)) {
     throw new PaymentApprovalScopeError(
       "Payment approval scope fields are missing or unexpected. Request a new approval."
     );
   }
-  if (
+  const commonInvalid = (
     normalized.version !== PAYMENT_APPROVAL_SCOPE_VERSION
-    || normalized.kind !== PAYMENT_APPROVAL_SCOPE_KIND
+    || !new Set([
+      PAYMENT_APPROVAL_SCOPE_KIND,
+      FINAL_BALANCE_APPROVAL_SCOPE_KIND
+    ]).has(normalized.kind)
     || !normalized.organizationId
     || !normalized.quoteId
     || !normalized.quoteRevisionId
@@ -77,10 +109,22 @@ function assertCanonicalScopeShape(input, normalized) {
     || !normalized.portalIssuedAtISO
     || !normalized.portalExpiresAtISO
     || !normalized.customerEmail
-    || normalized.paymentKind !== "deposit"
     || !/^[a-z]{3}$/.test(normalized.currency)
     || normalized.amountCents <= 0
-  ) {
+  );
+  const depositInvalid = !finalBalanceScope && normalized.paymentKind !== "deposit";
+  const finalBalanceInvalid = finalBalanceScope && (
+    normalized.paymentKind !== "final_balance"
+    || normalized.depositStatus !== "paid"
+    || normalized.depositAmountCents <= 0
+    || !/^cs_[A-Za-z0-9_]+$/.test(normalized.depositStripeSessionId)
+    || !normalized.depositConfirmedAtISO
+    || !normalized.contractNumber
+    || !normalized.contractConvertedAtISO
+    || !Number.isSafeInteger(normalized.checkoutGeneration)
+    || normalized.checkoutGeneration <= 0
+  );
+  if (commonInvalid || depositInvalid || finalBalanceInvalid) {
     throw new PaymentApprovalScopeError(
       "Payment approval scope is incomplete or invalid. Request a new approval."
     );
@@ -93,8 +137,25 @@ function paymentApprovalScopeDigest(scope) {
     scope,
     normalizePaymentApprovalScope(scope)
   );
-  const ordered = PAYMENT_APPROVAL_SCOPE_KEYS.map((key) => String(normalized[key]));
+  const scopeKeys = normalized.kind === FINAL_BALANCE_APPROVAL_SCOPE_KIND
+    ? FINAL_BALANCE_APPROVAL_SCOPE_KEYS
+    : PAYMENT_APPROVAL_SCOPE_KEYS;
+  const ordered = scopeKeys.map((key) => String(normalized[key]));
   return createHash("sha256").update(ordered.join("\n")).digest("hex");
+}
+
+function moneyToCents(value, label) {
+  const amount = Number(value);
+  const scaled = amount * 100;
+  const cents = Math.round(scaled);
+  if (
+    !Number.isFinite(amount)
+    || amount < 0
+    || !Number.isSafeInteger(cents)
+  ) {
+    throw new PaymentApprovalScopeError(`${label} cannot be represented safely in cents.`);
+  }
+  return cents;
 }
 
 function buildPaymentApprovalScope({
@@ -130,17 +191,74 @@ function buildPaymentApprovalScope({
   };
 }
 
+function buildFinalBalanceApprovalScope({
+  quote = {},
+  quoteId = "",
+  organizationId = "",
+  quoteRevisionId = "",
+  portalKey = "",
+  portalIssuedAtISO = "",
+  portalExpiresAtISO = "",
+  currency = "usd",
+  reuseCurrentCheckoutGeneration = false
+} = {}) {
+  const totalCents = moneyToCents(quote?.totals?.total, "Quote total");
+  const depositAmountCents = moneyToCents(quote?.totals?.deposit, "Quote deposit");
+  const amountCents = totalCents - depositAmountCents;
+  const finalBalance = quote?.payment?.finalBalance || {};
+  const currentGeneration = Number(finalBalance.checkoutGeneration || 0);
+  const currentSessionId = text(finalBalance.stripeSessionId, 200);
+  const currentProviderState = text(finalBalance.stripeCheckoutState, 32).toLowerCase();
+  const currentSessionGeneration = currentSessionId
+    && (
+      reuseCurrentCheckoutGeneration
+      || !["failed", "expired"].includes(currentProviderState)
+    );
+  const checkoutGeneration = currentSessionGeneration
+    ? currentGeneration
+    : currentGeneration + 1;
+  const actionScope = normalizePaymentApprovalScope({
+    version: PAYMENT_APPROVAL_SCOPE_VERSION,
+    kind: FINAL_BALANCE_APPROVAL_SCOPE_KIND,
+    organizationId,
+    quoteId,
+    quoteRevisionId,
+    portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
+    customerEmail: quote?.customer?.email,
+    paymentKind: "final_balance",
+    currency,
+    amountCents,
+    depositStatus: quote?.payment?.depositStatus,
+    depositAmountCents,
+    depositStripeSessionId: quote?.payment?.stripeSessionId,
+    depositConfirmedAtISO: quote?.payment?.depositConfirmedAtISO,
+    contractNumber: quote?.booking?.contractNumber,
+    contractConvertedAtISO: quote?.booking?.contractConvertedAtISO,
+    checkoutGeneration
+  });
+  assertCanonicalScopeShape(actionScope, actionScope);
+  return {
+    actionScope,
+    actionScopeDigest: paymentApprovalScopeDigest(actionScope)
+  };
+}
+
 function assertPaymentApprovalRequestScope({ approvalRequest, expected } = {}) {
   const request = approvalRequest && typeof approvalRequest === "object"
     ? approvalRequest
     : {};
-  if (text(request.action, 80) !== "send_payment_request") {
+  const expectedScope = expected?.actionScope;
+  const expectedAction = expectedScope?.kind === FINAL_BALANCE_APPROVAL_SCOPE_KIND
+    ? "send_final_balance_request"
+    : "send_payment_request";
+  if (text(request.action, 80) !== expectedAction) {
     throw new PaymentApprovalScopeError(
       "Approval request does not authorize a payment request.",
       "permission-denied"
     );
   }
-  const expectedScope = expected?.actionScope;
   const expectedDigest = text(expected?.actionScopeDigest, 64).toLowerCase();
   const storedScope = request.actionScope;
   const storedDigest = text(request.actionScopeDigest, 64).toLowerCase();
@@ -168,11 +286,14 @@ function assertPaymentApprovalRequestScope({ approvalRequest, expected } = {}) {
 }
 
 module.exports = {
+  FINAL_BALANCE_APPROVAL_SCOPE_KEYS,
+  FINAL_BALANCE_APPROVAL_SCOPE_KIND,
   PAYMENT_APPROVAL_SCOPE_KIND,
   PAYMENT_APPROVAL_SCOPE_KEYS,
   PAYMENT_APPROVAL_SCOPE_VERSION,
   PaymentApprovalScopeError,
   assertPaymentApprovalRequestScope,
+  buildFinalBalanceApprovalScope,
   buildPaymentApprovalScope,
   normalizePaymentApprovalScope,
   paymentApprovalScopeDigest

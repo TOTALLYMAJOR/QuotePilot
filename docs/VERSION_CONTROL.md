@@ -63,6 +63,9 @@ git checkout -b feature/<scope>-<topic>
 1. Create `release/<version>` from `main`.
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
+   - If GitHub does not enqueue the normal `pull_request` run, manually
+     dispatch `CI Quality` against the exact published PR head and retain that
+     run as the CI evidence. Do not substitute a run from another commit.
    - `Classify Changes + Lane Plan`
    - `lane:quick (Preflight + Secrets)`
      - runs before dependency installation, so its environment and secret

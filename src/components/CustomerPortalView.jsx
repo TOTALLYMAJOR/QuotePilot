@@ -72,18 +72,32 @@ function decisionReceipt(quote) {
   };
 }
 
-export function getPaymentReturnMessage(paymentReturn, payment = {}) {
+export function getPaymentReturnMessage(
+  paymentReturn,
+  payment = {},
+  paymentKindInput = "deposit"
+) {
   const returnState = String(paymentReturn || "").trim().toLowerCase();
+  const paymentKind = normalizePaymentReturnKind(paymentKindInput);
+  const finalBalance = payment.finalBalance || {};
+  const isFinalBalance = paymentKind === "final_balance";
   const depositStatus = String(payment.depositStatus || "").trim().toLowerCase();
-  const checkoutState = String(payment.stripeCheckoutState || "").trim().toLowerCase();
+  const paymentStatus = isFinalBalance
+    ? String(finalBalance.status || "").trim().toLowerCase()
+    : depositStatus;
+  const checkoutState = String(
+    isFinalBalance ? finalBalance.stripeCheckoutState : payment.stripeCheckoutState
+  ).trim().toLowerCase();
   if (!new Set(["success", "cancelled"]).has(returnState)) return null;
-  if (depositStatus === "paid") {
+  if (paymentStatus === "paid") {
     return {
       tone: "confirmed",
-      text: "Deposit confirmed. This status comes from Stripe's verified server notification."
+      text: isFinalBalance
+        ? "Final balance confirmed. This status comes from Stripe's verified server notification."
+        : "Deposit confirmed. This status comes from Stripe's verified server notification."
     };
   }
-  if (depositStatus === "refunded") {
+  if (!isFinalBalance && depositStatus === "refunded") {
     return {
       tone: "refunded",
       text: "The deposit is recorded as refunded in the verified payment record."
@@ -92,30 +106,109 @@ export function getPaymentReturnMessage(paymentReturn, payment = {}) {
   if (checkoutState === "processing") {
     return {
       tone: "processing",
-      text: "Stripe reports that this payment is processing. Deposit confirmation is not final yet; this page will refresh briefly."
+      text: isFinalBalance
+        ? "Stripe reports that the final-balance payment is processing. Confirmation is not final yet; this page will refresh briefly."
+        : "Stripe reports that this payment is processing. Deposit confirmation is not final yet; this page will refresh briefly."
     };
   }
   if (["failed", "expired"].includes(checkoutState)) {
     return {
       tone: "failed",
-      text: "Stripe did not confirm this payment. Contact the quote owner for a fresh payment request."
+      text: isFinalBalance
+        ? "Stripe did not confirm this final-balance payment. Contact the quote owner for a fresh request."
+        : "Stripe did not confirm this payment. Contact the quote owner for a fresh payment request."
     };
   }
   if (returnState === "cancelled") {
     return {
       tone: "cancelled",
-      text: "You returned without a verified payment confirmation. Your current payment status appears below; you can return when you are ready."
+      text: isFinalBalance
+        ? "You returned from final-balance checkout without verified confirmation. The current balance status appears below; you can return when you are ready."
+        : "You returned without a verified payment confirmation. Your current payment status appears below; you can return when you are ready."
     };
   }
   return {
     tone: "processing",
-    text: "You returned from checkout, but no verified payment confirmation has been received. This page will refresh briefly."
+    text: isFinalBalance
+      ? "You returned from final-balance checkout, but no verified confirmation has been received. This page will refresh briefly."
+      : "You returned from checkout, but no verified payment confirmation has been received. This page will refresh briefly."
   };
+}
+
+export function normalizePaymentReturnKind(value) {
+  return String(value || "").trim().toLowerCase() === "final_balance"
+    ? "final_balance"
+    : "deposit";
+}
+
+export function readPaymentReturnKind(search = undefined) {
+  const query = search === undefined && typeof window !== "undefined"
+    ? window.location.search
+    : String(search || "");
+  return normalizePaymentReturnKind(new URLSearchParams(query).get("payment_kind"));
+}
+
+function finalBalanceStatusLabel(status) {
+  const normalized = String(status || "unpaid").trim().toLowerCase();
+  if (["unpaid", "not_started"].includes(normalized)) return "unpaid";
+  if (normalized === "prepared") return "preparing checkout";
+  if (normalized === "sent") return "awaiting payment";
+  if (normalized === "processing") return "processing";
+  if (normalized === "paid") return "paid";
+  if (normalized === "failed") return "payment failed";
+  if (normalized === "expired") return "payment link expired";
+  return "unpaid";
+}
+
+export function getCustomerFinalBalanceUi(quote = {}) {
+  const safeQuote = quote && typeof quote === "object" ? quote : {};
+  const payment = safeQuote.payment || {};
+  const finalBalance = payment.finalBalance || {};
+  const amountCents = Number(finalBalance.amountCents);
+  const status = String(finalBalance.status || "unpaid").trim().toLowerCase();
+  const checkoutState = String(finalBalance.stripeCheckoutState || "")
+    .trim()
+    .toLowerCase();
+  const displayStatus = status === "paid"
+    ? "paid"
+    : ["prepared", "processing", "failed", "expired"].includes(checkoutState)
+      ? checkoutState
+      : status;
+  const bookedContract = String(safeQuote.status || "").trim().toLowerCase() === "booked"
+    && Boolean(String(safeQuote.booking?.contractNumber || "").trim());
+  const visible = bookedContract && Number.isSafeInteger(amountCents) && amountCents > 0;
+  const canPay = visible
+    && String(payment.depositStatus || "").trim().toLowerCase() === "paid"
+    && status === "sent"
+    && ["", "open"].includes(checkoutState);
+  return {
+    visible,
+    amountCents: visible ? amountCents : 0,
+    currency: /^[a-z]{3}$/.test(String(finalBalance.currency || "").trim().toLowerCase())
+      ? String(finalBalance.currency).trim().toLowerCase()
+      : "usd",
+    status,
+    statusLabel: finalBalanceStatusLabel(displayStatus),
+    confirmedAtISO: String(finalBalance.confirmedAtISO || "").trim(),
+    paymentLink: canPay ? sanitizeStripePaymentLink(finalBalance.paymentLink) : ""
+  };
+}
+
+function formatPaymentCents(amountCents, currencyCode) {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: String(currencyCode || "usd").toUpperCase()
+    }).format(Number(amountCents || 0) / 100);
+  } catch {
+    return currency(Number(amountCents || 0) / 100);
+  }
 }
 
 export default function CustomerPortalView({
   initialPortalKey = "",
   initialPaymentReturn = "",
+  initialPaymentKind = "",
   onBackToStaff
 }) {
   const [portalKey, setPortalKey] = useState(initialPortalKey);
@@ -139,6 +232,10 @@ export default function CustomerPortalView({
   const totals = quote?.totals || {};
   const payment = quote?.payment || {};
   const approvedPaymentLink = sanitizeStripePaymentLink(payment.depositLink);
+  const paymentReturnKind = initialPaymentKind
+    ? normalizePaymentReturnKind(initialPaymentKind)
+    : readPaymentReturnKind();
+  const finalBalanceUi = getCustomerFinalBalanceUi(quote);
 
   const load = async (nextPortalKey = portalKey) => {
     const key = String(nextPortalKey || "").trim();
@@ -210,11 +307,21 @@ export default function CustomerPortalView({
   }, [initialPortalKey]);
 
   useEffect(() => {
+    const returnedPayment = paymentReturnKind === "final_balance"
+      ? payment.finalBalance || {}
+      : payment;
+    const returnedStatus = String(
+      paymentReturnKind === "final_balance"
+        ? returnedPayment.status
+        : returnedPayment.depositStatus
+    ).trim().toLowerCase();
     if (
       initialPaymentReturn !== "success"
       || !quote?.portalKey
-      || payment.depositStatus === "paid"
-      || ["failed", "expired"].includes(String(payment.stripeCheckoutState || "").toLowerCase())
+      || returnedStatus === "paid"
+      || ["failed", "expired"].includes(
+        String(returnedPayment.stripeCheckoutState || "").toLowerCase()
+      )
       || paymentRefreshAttempts >= 4
     ) {
       return undefined;
@@ -226,13 +333,20 @@ export default function CustomerPortalView({
     return () => window.clearTimeout(timer);
   }, [
     initialPaymentReturn,
+    paymentReturnKind,
     payment.depositStatus,
     payment.stripeCheckoutState,
+    payment.finalBalance?.status,
+    payment.finalBalance?.stripeCheckoutState,
     paymentRefreshAttempts,
     quote?.portalKey
   ]);
 
-  const paymentReturnMessage = getPaymentReturnMessage(initialPaymentReturn, payment);
+  const paymentReturnMessage = getPaymentReturnMessage(
+    initialPaymentReturn,
+    payment,
+    paymentReturnKind
+  );
 
   const pricingRows = [
     ["Package", totals.base],
@@ -334,13 +448,36 @@ export default function CustomerPortalView({
                   <div className="portal-price-deposit"><dt>Deposit</dt><dd>{currency(quote.deposit || 0)}</dd></div>
                 </dl>
                 <div className="portal-payment-state">
-                  <span>Payment status</span>
+                  <span>Deposit status</span>
                   <strong>{payment.depositStatus || "unpaid"}</strong>
                   {payment.depositConfirmedAtISO && <small>Confirmed {fmtDate(payment.depositConfirmedAtISO)}</small>}
                 </div>
                 {approvedPaymentLink && ["accepted", "booked"].includes(quote.status) && payment.depositStatus !== "paid" && (
                   <a className="cta portal-pay-link" href={approvedPaymentLink} target="_blank" rel="noreferrer">
                     Pay Deposit
+                  </a>
+                )}
+                {finalBalanceUi.visible && (
+                  <div className="portal-payment-state">
+                    <span>Final balance</span>
+                    <strong>{formatPaymentCents(
+                      finalBalanceUi.amountCents,
+                      finalBalanceUi.currency
+                    )}</strong>
+                    <small>Status: {finalBalanceUi.statusLabel}</small>
+                    {finalBalanceUi.confirmedAtISO && (
+                      <small>Confirmed {fmtDate(finalBalanceUi.confirmedAtISO)}</small>
+                    )}
+                  </div>
+                )}
+                {finalBalanceUi.paymentLink && (
+                  <a
+                    className="cta portal-pay-link"
+                    href={finalBalanceUi.paymentLink}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Pay Final Balance
                   </a>
                 )}
                 <p className="portal-expiry">Proposal expires {fmtDate(quote.expiresAtISO)}</p>

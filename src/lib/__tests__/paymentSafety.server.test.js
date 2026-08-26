@@ -160,6 +160,17 @@ describe("server payment state safety", () => {
     });
     expect(first).toBe(repeated);
     expect(first).not.toBe(changed);
+    expect(first).toMatch(/^quotepilot-deposit-v1-/);
+    const finalBalance = buildStripeCheckoutIdempotencyKey({
+      quoteId: "quote-1",
+      organizationId: "org-a",
+      portalKey: "portal-a",
+      amountTotal: 12345,
+      checkoutGeneration: 1,
+      paymentKind: "final_balance"
+    });
+    expect(finalBalance).toMatch(/^quotepilot-final-balance-v1-/);
+    expect(finalBalance).not.toBe(first);
     expect(first.length).toBeLessThan(255);
   });
 

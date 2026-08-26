@@ -17,6 +17,10 @@ const PRODUCTION_UNSAFE_FLAGS = [
   "VITE_ALLOW_LOCAL_CATALOG_FALLBACK",
   "VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING"
 ];
+const BUYER_ACCESS_ROUTE_FLAG = "VITE_BUYER_ACCESS_ENABLED";
+const BUYER_ACCESS_CTA_FLAG = "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED";
+const BUYER_ACCESS_TURNSTILE_SITE_KEY = "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY";
+const BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET = "VITE_BUYER_ACCESS_TURNSTILE_SECRET";
 
 const cwd = process.cwd();
 const productionEnv = {};
@@ -47,6 +51,12 @@ function isPlaceholder(value) {
 
 function isTruthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+function isBooleanLike(value) {
+  return ["", "0", "1", "true", "false", "yes", "no", "on", "off"].includes(
+    String(value || "").trim().toLowerCase()
+  );
 }
 
 const missing = REQUIRED.filter((key) => !effectiveValue(key));
@@ -89,6 +99,50 @@ if (enabledUnsafeFlags.length) {
   console.error("Production-unsafe browser flags must be disabled:");
   enabledUnsafeFlags.forEach((key) => console.error(`- ${key}`));
   process.exit(1);
+}
+
+const buyerAccessRouteValue = effectiveValue(BUYER_ACCESS_ROUTE_FLAG);
+const buyerAccessCtaValue = effectiveValue(BUYER_ACCESS_CTA_FLAG);
+const invalidBuyerAccessFlags = [
+  [BUYER_ACCESS_ROUTE_FLAG, buyerAccessRouteValue],
+  [BUYER_ACCESS_CTA_FLAG, buyerAccessCtaValue]
+]
+  .filter(([, value]) => !isBooleanLike(value))
+  .map(([name]) => name);
+if (invalidBuyerAccessFlags.length) {
+  console.error("Buyer-access browser flags must use an explicit boolean value:");
+  invalidBuyerAccessFlags.forEach((key) => console.error(`- ${key}`));
+  process.exit(1);
+}
+
+const buyerAccessRouteEnabled = isTruthy(buyerAccessRouteValue);
+const buyerAccessCtaEnabled = isTruthy(buyerAccessCtaValue);
+if (buyerAccessCtaEnabled && !buyerAccessRouteEnabled) {
+  console.error(
+    `${BUYER_ACCESS_CTA_FLAG} cannot be enabled unless ${BUYER_ACCESS_ROUTE_FLAG} is also enabled.`
+  );
+  process.exit(1);
+}
+
+if (effectiveValue(BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET)) {
+  console.error(
+    `${BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET} is forbidden because VITE_ values are browser-visible; bind the secret to Firebase Functions instead.`
+  );
+  process.exit(1);
+}
+
+if (buyerAccessRouteEnabled || buyerAccessCtaEnabled) {
+  const turnstileSiteKey = effectiveValue(BUYER_ACCESS_TURNSTILE_SITE_KEY);
+  if (
+    !turnstileSiteKey
+    || isPlaceholder(turnstileSiteKey)
+    || !/^[A-Za-z0-9_-]{10,100}$/.test(turnstileSiteKey)
+  ) {
+    console.error(
+      `${BUYER_ACCESS_TURNSTILE_SITE_KEY} must be a syntactically valid non-placeholder public Turnstile site key whenever buyer access is compiled into a production artifact; provider setup and human review are separate release evidence.`
+    );
+    process.exit(1);
+  }
 }
 
 console.log("Firebase env check passed.");

@@ -441,17 +441,35 @@ service cloud.firestore {
       let nextPayment = request.resource.data.get("payment", {});
       return previousPayment is map
         && nextPayment is map
-        && nextPayment.get("depositLink", "") == previousPayment.get("depositLink", "")
-        && nextPayment.get("depositStatus", "unpaid") == previousPayment.get("depositStatus", "unpaid")
-        && nextPayment.get("depositConfirmedAtISO", "") == previousPayment.get("depositConfirmedAtISO", "")
-        && nextPayment.get("stripeSessionId", "") == previousPayment.get("stripeSessionId", "")
-        && nextPayment.get("stripeCheckoutState", "") == previousPayment.get("stripeCheckoutState", "")
-        && nextPayment.get("lastCheckoutCreatedAtISO", "") == previousPayment.get("lastCheckoutCreatedAtISO", "")
-        && nextPayment.get("lastHost", "") == previousPayment.get("lastHost", "")
-        && nextPayment.get("lastEventType", "") == previousPayment.get("lastEventType", "")
-        && nextPayment.get("lastOrganizationId", "") == previousPayment.get("lastOrganizationId", "")
-        && nextPayment.get("checkoutGeneration", 0) == previousPayment.get("checkoutGeneration", 0)
-        && nextPayment.get("knownStripeSessionIds", []) == previousPayment.get("knownStripeSessionIds", []);
+        && [
+          nextPayment.get("finalBalance", {}),
+          nextPayment.get("ledger", {}),
+          nextPayment.get("depositLink", ""),
+          nextPayment.get("depositStatus", "unpaid"),
+          nextPayment.get("depositConfirmedAtISO", ""),
+          nextPayment.get("stripeSessionId", ""),
+          nextPayment.get("stripeCheckoutState", ""),
+          nextPayment.get("lastCheckoutCreatedAtISO", ""),
+          nextPayment.get("lastHost", ""),
+          nextPayment.get("lastEventType", ""),
+          nextPayment.get("lastOrganizationId", ""),
+          nextPayment.get("checkoutGeneration", 0),
+          nextPayment.get("knownStripeSessionIds", [])
+        ] == [
+          previousPayment.get("finalBalance", {}),
+          previousPayment.get("ledger", {}),
+          previousPayment.get("depositLink", ""),
+          previousPayment.get("depositStatus", "unpaid"),
+          previousPayment.get("depositConfirmedAtISO", ""),
+          previousPayment.get("stripeSessionId", ""),
+          previousPayment.get("stripeCheckoutState", ""),
+          previousPayment.get("lastCheckoutCreatedAtISO", ""),
+          previousPayment.get("lastHost", ""),
+          previousPayment.get("lastEventType", ""),
+          previousPayment.get("lastOrganizationId", ""),
+          previousPayment.get("checkoutGeneration", 0),
+          previousPayment.get("knownStripeSessionIds", [])
+        ];
     }
 
     function serverOwnedContractEvidenceUnchanged() {
@@ -830,6 +848,13 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/privatePaymentDispatches/{dispatchId} {
+      allow read, write: if false;
+    }
+
+    // Buyer checkout identity, provider state, and fulfillment evidence are
+    // server-owned. Browser clients use owner-scoped callables instead of
+    // reading or mutating these records directly.
+    match /buyerAccessOrders/{orderId} {
       allow read, write: if false;
     }
 

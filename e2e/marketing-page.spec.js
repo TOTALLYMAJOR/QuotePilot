@@ -13,6 +13,7 @@ test("public landing page presents QuotePilot for catering teams with truthful r
 
   const demoLinks = page.getByRole("link", { name: "Book a demo" });
   await expect(demoLinks.first()).toHaveAttribute("href", "https://mbmapps.com/contact");
+  await expect(page.getByRole("link", { name: "Try $1 test access" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Staff login" }).first()).toHaveAttribute("href", "/app");
   await expect(page.getByRole("link", { name: "Explore the platform" })).toHaveAttribute("href", "/system");
 

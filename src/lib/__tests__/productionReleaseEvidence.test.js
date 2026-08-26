@@ -54,17 +54,26 @@ const DEPLOYMENT_PROFILES = [
 const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   "firebase-hosting": [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
+    "auth.password-recovery",
+    "buyer.public-entry-turnstile",
+    "buyer.verified-activation-surface",
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
     "portal.decision",
     "delivery.link-surface-gating",
+    "payment.customer-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
   ],
   "firebase-backend": [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
+    "buyer.public-initiation-controls",
+    "buyer.hosted-invoice-lifecycle",
+    "buyer.pending-invite-activation",
     "quote.save",
     "quote.authoritative-create",
     "quote.authoritative-edit",
@@ -75,11 +84,23 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "delivery.invalid-issuance",
     "approval.execution-audit-replay",
     "contract.approved-conversion",
+    "payment.deposit-scoped-dispatch",
+    "payment.final-balance-scoped-dispatch",
+    "payment.webhook-reconciliation",
+    "payment.cross-rail-isolation",
+    "payment.customer-projection-privacy",
     "integrations.status",
     "sms.disabled-nonblocking"
   ],
   "firebase-all": [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
+    "auth.password-recovery",
+    "buyer.public-entry-turnstile",
+    "buyer.public-initiation-controls",
+    "buyer.hosted-invoice-lifecycle",
+    "buyer.pending-invite-activation",
+    "buyer.verified-activation-surface",
     "quote.save",
     "quote.authoritative-create",
     "quote.authoritative-edit",
@@ -93,21 +114,52 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "delivery.link-surface-gating",
     "approval.execution-audit-replay",
     "contract.approved-conversion",
+    "payment.deposit-scoped-dispatch",
+    "payment.final-balance-scoped-dispatch",
+    "payment.webhook-reconciliation",
+    "payment.cross-rail-isolation",
+    "payment.customer-projection-privacy",
+    "payment.customer-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
   ],
   vercel: [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
+    "auth.password-recovery",
+    "buyer.public-entry-turnstile",
+    "buyer.verified-activation-surface",
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
     "portal.decision",
     "delivery.link-surface-gating",
+    "payment.customer-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
   ]
+});
+const CRITICAL_UAT_TARGETS = Object.freeze({
+  "security.provider-secret-cutover": [
+    "firebase-hosting",
+    "firebase-backend",
+    "firebase-all",
+    "vercel"
+  ],
+  "auth.password-recovery": ["firebase-hosting", "firebase-all", "vercel"],
+  "buyer.public-entry-turnstile": ["firebase-hosting", "firebase-all", "vercel"],
+  "buyer.public-initiation-controls": ["firebase-backend", "firebase-all"],
+  "buyer.hosted-invoice-lifecycle": ["firebase-backend", "firebase-all"],
+  "buyer.pending-invite-activation": ["firebase-backend", "firebase-all"],
+  "buyer.verified-activation-surface": ["firebase-hosting", "firebase-all", "vercel"],
+  "payment.deposit-scoped-dispatch": ["firebase-backend", "firebase-all"],
+  "payment.final-balance-scoped-dispatch": ["firebase-backend", "firebase-all"],
+  "payment.webhook-reconciliation": ["firebase-backend", "firebase-all"],
+  "payment.cross-rail-isolation": ["firebase-backend", "firebase-all"],
+  "payment.customer-projection-privacy": ["firebase-backend", "firebase-all"],
+  "payment.customer-surface": ["firebase-hosting", "firebase-all", "vercel"]
 });
 const NOW = new Date("2026-08-04T12:00:00.000Z");
 const CI_COMPLETED_AT = "2026-08-04T09:00:00.000Z";
@@ -528,7 +580,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v2"
     );
-    expect(checklist.checklist.version).toBe("2026-08-03.2");
+    expect(checklist.checklist.version).toBe("2026-08-04.10");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -546,6 +598,53 @@ describe("tracked UAT checklist", () => {
     ]);
     expect(checklist.itemIdsByTarget["firebase-all"]).toEqual(
       checklist.itemIds.filter((itemId) => combinedNarrowTargets.has(itemId))
+    );
+  });
+
+  test("cannot silently drop or weaken critical auth, buyer-onboarding, or payment UAT coverage", () => {
+    const targetsByItemId = new Map(
+      checklist.checklist.items.map((item) => [item.id, item.targets])
+    );
+    const labelsByItemId = new Map(
+      checklist.checklist.items.map((item) => [item.id, item.label])
+    );
+
+    for (const [itemId, expectedTargets] of Object.entries(CRITICAL_UAT_TARGETS)) {
+      expect(targetsByItemId.get(itemId), itemId).toEqual(expectedTargets);
+    }
+
+    expect(labelsByItemId.get("buyer.hosted-invoice-lifecycle")).toMatch(
+      /API version 2024-06-20/i
+    );
+    expect(labelsByItemId.get("buyer.hosted-invoice-lifecycle")).toMatch(
+      /live quote client, API version/i
+    );
+    expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
+      /each public status request.*60-request-per-five-minute.*before its first buyer-order read.*wrong-token.*later fulfillment reads.*TTL/is
+    );
+    expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
+      /before any Auth.*request-scoped.*without duplicate email charge.*provider-verified void.*stale events/is
+    );
+    expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
+      /open and payment-failed.*exact original creation request.*uncollectible or expired, paid, and activation.*reject automatic replacement.*platform-admin recovery.*terminal unpaid test Invoice.*voids an uncollectible Invoice.*no fulfillment artifacts.*operator audit.*paid, open, partially paid, fulfilled, superseded, and mismatched.*fail closed/is
+    );
+    expect(labelsByItemId.get("security.provider-secret-cutover")).toMatch(
+      /buyer gate stayed off.*least-privilege Firebase Secret Manager.*new-plus-old overlap.*Turnstile.*HMAC-key rotation.*revoked only after exact hosted\/provider UAT/is
+    );
+    expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
+      /Starter workspace plan entitlements/i
+    );
+    expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
+      /activation_sent.*provider acceptance.*Firebase verification-email delivery/is
+    );
+    expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
+      /workspaceReady=true.*manual exact-invoice-email/is
+    );
+    expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
+      /does not claim onboarding-email provider acceptance/i
+    );
+    expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
+      /stops automatic status polling.*manual Check again.*only active/is
     );
   });
 

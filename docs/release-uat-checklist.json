@@ -1,12 +1,47 @@
 {
   "schema": "com.mbmapps.quotepilot.release-uat-checklist/v2",
-  "version": "2026-08-03.2",
+  "version": "2026-08-04.10",
   "maximumAttestationAgeHours": 24,
   "items": [
     {
       "id": "staging.immutable-release",
       "label": "The immutable staging deployment identifies the exact release candidate.",
       "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
+    },
+    {
+      "id": "security.provider-secret-cutover",
+      "label": "The provider-secret cutover record proves the buyer gate stayed off while fresh generic Resend and Stripe credentials moved to least-privilege Firebase Secret Manager bindings; each applicable Stripe signing secret completed provider-issued new-plus-old overlap, exact signed-delivery UAT, and a new-only backend revision; any Turnstile site-key and secret rotation was coordinated across the exact frontend and backend; any HMAC-key rotation was accepted as fresh rate and reservation windows while old Timestamp records remained for TTL; and old credentials were revoked only after exact hosted/provider UAT plus rollback proof.",
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
+    },
+    {
+      "id": "auth.password-recovery",
+      "label": "Email/password recovery shows the same on-screen confirmation for a designated account and an unknown address, the designated reset action changes the password and returns to the canonical app URL, and provider evidence confirms email-enumeration protection plus the authorized continue domain.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
+    },
+    {
+      "id": "buyer.public-entry-turnstile",
+      "label": "The exact reviewed artifact exposes the public /start organization and owner form plus marketing CTA only with a syntactically valid non-placeholder public Turnstile site key; provider widget configuration and human review remain separately evidenced, initiation requires a fresh challenge, the page identifies the fixed $1 USD Stripe test invoice truthfully, QuotePilot collects no password or card data, and the return stays locked rather than granting application access.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
+    },
+    {
+      "id": "buyer.public-initiation-controls",
+      "label": "The public initiation endpoint remains disabled until explicitly released, then accepts only a server-verified fresh Turnstile token for an exact approved hostname and action. Before any Auth, invitation, or order lookup it atomically reserves the request-scoped order identity and consumes HMAC-keyed durable per-network plus one-per-normalized-email rate limits; exact retry consumes network capacity again without duplicate email charge during the 24-hour Timestamp-backed reservation, and a fresh post-window request supersedes only a prior provider-verified void order while stale events are deduped and ignored. Open and payment-failed orders return the same invoice only to the exact original creation request; uncollectible or expired, paid, and activation orders reject automatic replacement. Platform-admin recovery derives the exact Invoice identity server-side, permits only a terminal unpaid test Invoice, permanently voids an uncollectible Invoice at Stripe, rechecks that no fulfillment artifacts exist, records a private operator audit, and cannot bypass the email window; paid, open, partially paid, fulfilled, superseded, and mismatched targets fail closed. Each public status request atomically consumes one 60-request-per-five-minute network lease before its first buyer-order read; well-formed unknown-order and wrong-token attempts consume the same budget, later fulfillment reads remain inside that bounded request, rate configuration or store failure prevents the initial order read, and the configured Firestore TTL expires Timestamp-backed rate and reservation records.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "buyer.hosted-invoice-lifecycle",
+      "label": "Dedicated Firebase Secret Manager Stripe test credentials use a buyer-only Stripe client pinned to API version 2024-06-20 to create and finalize a true fixed $1 USD send_invoice invoice before payment and return only its Stripe Hosted Invoice Page; buyerAccessStripeWebhook is configured for and rejects events outside that same API version, accepts payment state only from the exact signed and replay-deduplicated buyer invoice lifecycle, buyer events cannot enter stripeWebhook or mutate the existing live quote client, API version, deposit, or final-balance rails, and provider evidence confirms the invoice page, endpoint version, and delivery path.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "buyer.pending-invite-activation",
+      "label": "A matching paid buyer invoice prepares the server-owned organization, neutral settings, Starter workspace plan entitlements, provisioning record, controlled test-mode markers, audit evidence, and pending invitation but creates no user membership, admin role, custom claims, or application access. Token-bound provisioning with workspaceReady=true may initiate a manual exact-invoice-email Firebase registration and verification path without claiming onboarding-email acceptance; activation_sent is observed only after optional exact activation-instructions provider acceptance is durably recorded. Provider evidence separately confirms Firebase verification-email delivery and the authorized continue URL, and only an exact normalized verified invoice email consuming the unexpired invitation creates user access and active status, while mismatch, failure, expiry, replay, and cross-account paths restore or grant no access and test records remain excluded from live revenue and paid-customer classification.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "buyer.verified-activation-surface",
+      "label": "The browser pending surface displays truthful locked invoice, workspace-preparation, activation-instructions, and verified-email claim guidance; workspaceReady=true stops automatic status polling, retains manual Check again, and offers /app only as an exact-invoice-email account-setup path, while only active is access-ready. Nonmatching or unverified identities receive no access. This browser observation does not claim onboarding-email provider acceptance, Firebase verification-email delivery, backend provisioning, role creation, or provider configuration.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {
       "id": "quote.save",
@@ -72,6 +107,36 @@
       "id": "contract.approved-conversion",
       "label": "An accepted quote converts through the exact approved server action to one booked contract with a server-owned contract number and availability result; an unapproved or mismatched conversion fails closed.",
       "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.deposit-scoped-dispatch",
+      "label": "An exact approved deposit request binds the current quote, portal, customer, amount, and currency; Checkout stays private until durable provider-email acceptance publishes one link, ambiguous retry reuses the same provider identities, and definite failure neutralizes the unsent Session before replacement.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.final-balance-scoped-dispatch",
+      "label": "A booked contract with a provider-paid deposit collects only the server-derived remaining balance through its own exact approval, checkout generation, ledger entry, and final-balance projection; stale scope or missing prerequisites fail closed.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.webhook-reconciliation",
+      "label": "Signed and replay-deduplicated completed, async-success, async-failure, and expired Checkout events plus admin reconciliation apply only provider-observed truth, accept valid late settlement, and never downgrade paid or refunded state.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.cross-rail-isolation",
+      "label": "Deposit and final-balance metadata, Session scope, ledger entries, reconciliation, and webhook handling remain isolated so an event or browser request cannot mutate the other payment rail.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.customer-projection-privacy",
+      "label": "The customer portal projection publishes only customer-safe deposit and final-balance state and an accepted eligible link, without Stripe Session, operation, known-Session, or private-dispatch identifiers.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.customer-surface",
+      "label": "Staff surfaces expose only eligible deposit and final-balance send, resume, and reconcile actions, while the customer portal renders each rail independently and never exposes an unpublished link or private provider identifier.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {
       "id": "proposal.pdf",

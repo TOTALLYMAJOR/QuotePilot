@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: August 3, 2026
+Last updated: August 4, 2026
 
 This matrix maps the master feature checklist to current implementation and source locations.
 
@@ -23,7 +23,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 5 | Live sticky summary panel with real-time totals | Implemented (local mobile acceptance) | `src/components/LiveBreakdown.jsx`, `src/App.jsx` (`MobilePricingSummary`), `src/styles.css` (`.breakdown-panel`, `.mobile-pricing-summary`), `e2e/quote-wizard.smoke.spec.js` |
 | 6 | Quote system (trusted create/duplicate/edit, snapshots, statuses) | Implemented (branch) | `functions/index.js` (`createQuoteDraft`, `duplicateQuoteDraft`, `updateQuoteDraft`), `functions/quoteCreation.js`, `src/lib/quoteStore.js` (`submitQuote`, `duplicateQuote`, `updateQuote`), `src/components/QuoteHistoryModal.jsx` |
 | 7 | Quote history + versioning | Implemented | `src/lib/quoteStore.js` (`saveQuoteVersion`, `getQuoteHistory`), `firestore.rules` (`organizations/{orgId}/quotes/{quoteId}/versions/{versionId}`) |
-| 8 | Quote management UI (list, sort, filters, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing, scope-bound Stripe deposit request/reconciliation, provider-owned deposit status) | Implemented (branch) | `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js` (`duplicateQuote`, `reopenQuote`, `hardDeleteQuote`), `src/lib/commerceOps.js`, `src/lib/proposalExport.js`, `functions/quoteDelivery.js`, `functions/paymentApprovalScope.js`, `functions/paymentDispatchState.js`, `functions/paymentSafety.js`, `functions/stripeProviderState.js`, `functions/index.js` (`sendQuoteToCustomer`, `resolveQuoteDeliveryOutcome`, `sendPaymentRequestEmail`, `reconcileDepositCheckout`, `stripeWebhook`, disabled direct `createDepositCheckout`, `rotateQuotePortalKey`, `reopenQuote`, `hardDeleteQuote`; the legacy bulk purge callable fails closed), `firestore.rules` (`privatePaymentDispatches` is server-only) |
+| 8 | Quote management UI (list, sort, filters, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing, isolated Stripe deposit and final-balance request/reconciliation rails, provider-owned payment status) | Implemented (branch) | `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js` (`duplicateQuote`, `reopenQuote`, `hardDeleteQuote`), `src/lib/commerceOps.js`, `src/lib/proposalExport.js`, `functions/quoteDelivery.js`, `functions/paymentApprovalScope.js`, `functions/paymentDispatchState.js`, `functions/paymentSafety.js`, `functions/paymentLedger.js`, `functions/finalBalancePayment.js`, `functions/stripeProviderState.js`, `functions/index.js` (`sendQuoteToCustomer`, `resolveQuoteDeliveryOutcome`, `sendPaymentRequestEmail`, `sendFinalBalanceRequestEmail`, `reconcileDepositCheckout`, `reconcileFinalBalanceCheckout`, `stripeWebhook`, disabled direct `createDepositCheckout`, `rotateQuotePortalKey`, `reopenQuote`, `hardDeleteQuote`; the legacy bulk purge callable fails closed), `firestore.rules` (`privatePaymentDispatches` is server-only) |
 | 9 | Admin panel tabbed UX + hierarchical menu management | Implemented | `src/components/AdminCatalogModal.jsx`, `src/styles.css` (`.admin-tabs`) |
 | 10 | Inline editing with blur/enter persistence | Implemented | `src/components/AdminCatalogModal.jsx` (`handleManagedMenuItemBlur`, `handleManagedMenuItemKeyDown`) |
 | 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented (contract callable deploy pending) | `functions/contractWorkflow.js`, `functions/index.js` (`convertQuoteToContract`), `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
@@ -33,7 +33,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 15 | Event schedule board (month/week, conflicts, assignments, production checklist) | Implemented | `src/components/EventScheduleModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`, `updateQuoteBookingAssignment`, `updateQuoteProductionChecklist`) |
 | 16 | Session diagnostics (runtime capture + staff export/clear tools) | Implemented | `src/lib/sessionDiagnostics.js`, `src/components/DiagnosticsModal.jsx`, `src/main.jsx`, `src/App.jsx` |
 | 17 | Global event + organization context across surfaces | Implemented | `src/context/EventTypeContext.jsx`, `src/context/OrganizationContext.jsx`, `src/main.jsx`, `src/App.jsx`, `src/components/AdminCatalogModal.jsx` |
-| 18 | Verified-email auth, org bootstrap, and role-gated controls | Implemented (branch) | `src/lib/authClient.js`, `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `functions/index.js` (`ensureOrganizationBootstrap`), `firestore.rules` |
+| 18 | Verified-email auth, email/password recovery with same-confirmation UI and QuotePilot return URL, org bootstrap, and role-gated controls | Implemented (branch; hosted Auth configuration pending) | `src/lib/authClient.js`, `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `e2e/firebase-auth-rules.smoke.spec.js`, `functions/index.js` (`ensureOrganizationBootstrap`), `firestore.rules` |
 | 19 | Optional guided selling recommendations + rules | Implemented / Optional | `src/lib/recommendations.js`, `src/components/AdminCatalogModal.jsx`, `src/data/mockCatalog.js` |
 | 20 | Good/Better/Best scenario compare workflow | Implemented / Optional | `src/lib/quoteWorkflow.js` (`buildQuoteScenarios`), `src/components/QuoteCompareModal.jsx`, `src/App.jsx` |
 | 21 | Optional admin security/audit depth (beyond role gating) | Partial / Optional | Role-gated access and rules are shipped in `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `firestore.rules`; sync log audit trail exists in `src/lib/quoteStore.js`, but full cross-surface audit pipeline remains limited |
@@ -41,6 +41,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 23 | Sales workflow (attention queue/count, readiness, follow-ups, request-ID-bound current change handling, lifecycle, approval queue and exact action execution) | Implemented (branch; approval callables and workflow rules deploy pending) | `src/App.jsx`, `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js`, `functions/approvalWorkflow.js`, `functions/contractWorkflow.js`, `functions/index.js` (approval and governed-action callables), `firestore.rules` |
 | 24 | Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback) | Implemented (branch) | `src/components/ImportStudioModal.jsx`, `src/lib/importStudio.js`, `src/lib/importBatchService.js`, `firestore.rules` (`importBatches`) |
 | 25 | Platform tenant provisioning (verified owner, neutral defaults, atomic create, explicit entitlements, repair, cleanup) | Implemented (branch; production acceptance pending) | `functions/index.js` (`preflightCustomerOrder`, `provisionCustomerOrder`, `repairCustomerProvisioningOrder`, cleanup callables), `src/components/IntegrationOpsModal.jsx`, `scripts/provisioning-emulator-acceptance.mjs` |
+| 26 | Public $1 invoice-first buyer onboarding on `tonicatering` (Turnstile, pre-identity HMAC-keyed create reservation and status abuse controls, request-scoped exact retry plus signed or audited operator provider-void replacement, Stripe API `2024-06-20` Hosted Invoice Page and signed invoice lifecycle, terminal unpaid Invoice recovery, paid workspace preparation, pending invite, optional provider-accepted activation instructions, exact verified-email user activation, quote-rail isolation) | Implemented (branch/source candidate; merged/deployed/provider/hosted acceptance and live launch pending) | `src/components/BuyerAccessPage.jsx`, `src/lib/buyerAccess.js`, `functions/buyerAccess.js`, `functions/index.js` (`repairBuyerAccessInvoice`, `createBuyerAccessInvoice`, `getBuyerAccessInvoiceStatus`, `buyerAccessStripeWebhook`), `src/components/IntegrationOpsModal.jsx`, Firebase Secret Manager bindings, `firestore.rules` (`buyerAccessOrders`), `e2e/buyer-access.spec.js`, `scripts/provisioning-emulator-acceptance.mjs` |
 
 ## Guided Flow (Where It Lives)
 - Wizard flow entry and steps: `src/App.jsx`
@@ -74,21 +75,62 @@ This matrix maps the master feature checklist to current implementation and sour
   permanent deletion require an exact approved request. Functions record the
   server-owned execution outcome in the quote workflow and in an admin-readable,
   server-write-only organization audit record.
-- The Stripe deposit request approval is additionally bound to the exact quote
-  revision, portal issuance, recipient, currency, and amount. The resumable
-  server operation registers a prepared Session with no browser-readable link,
-  stores QuotePilot's URL copy only in a client-denied private dispatch record,
-  and publishes to the quote/portal only after durable email-provider
-  acceptance. Ambiguous creation or send outcomes reuse the exact approval and
-  executing-admin/provider identities; durable acceptance resumes publication
-  without another send, while definite failure requires safe checkout
-  neutralization before a new approval. Direct standalone checkout creation and
-  browser payment-evidence writes fail closed.
+- Stripe deposit and final-balance requests use separate exact approvals and
+  payment rails. Deposit scope binds the quote revision, portal issuance,
+  recipient, currency, and amount. Final balance additionally requires a
+  booked contract and verified provider-paid deposit, derives the remainder
+  from authoritative totals, and binds the contract and deposit evidence. A
+  versioned ledger plus `payment.finalBalance` projection prevents one rail
+  from rewriting the other.
+  Both resumable server operations register a prepared Session with no
+  browser-readable link, keep QuotePilot's URL copy only in a client-denied
+  private dispatch record, and publish to the quote/portal only after durable
+  email-provider acceptance. Ambiguous creation or send outcomes reuse the
+  exact approval and executing-admin/provider identities; durable acceptance
+  resumes publication without another send, while definite failure requires
+  safe checkout neutralization before a new approval. Direct standalone
+  checkout creation and browser payment-evidence writes fail closed.
   Explicit `STRIPE_MODE` must match the key and provider objects. Four signed
-  Checkout Session events drive monotonic state, and same-tenant admins can
-  reconcile the exact server-recorded Session. This branch has no hosted Stripe
-  test/live acceptance, and refunds, disputes, and final-balance automation are
-  not implemented.
+  Checkout Session events drive monotonic, payment-kind-isolated state, and
+  same-tenant admins can reconcile the exact server-recorded Session for each
+  rail. This source branch has no hosted Stripe test/live acceptance. Refund
+  initiation/status and dispute handling remain manual or unimplemented.
+- Generic Resend and quote Stripe API/webhook credentials are strict Firebase
+  Secret Manager bindings on only their consuming Functions; the generic
+  webhook does not receive the API key. The Functions dotenv materializer
+  rejects all three values. Fresh provider rotation, ordered webhook overlap,
+  exact hosted UAT, and revocation of the known exposed/cached values remain a
+  hard release blocker.
+- The public `/start` path uses the existing `tonicatering` Firebase project but
+  remains an independently disabled Stripe test rail. Browser route and CTA
+  flags require a syntactically valid non-placeholder public Turnstile site key;
+  Cloudflare setup and human review remain separate evidence. The server
+  separately verifies exact hosts/actions, reserves a request-scoped HMAC-keyed
+  create lease before identity/order reads, consumes the public status network
+  lease once per request before its first buyer-order read, and holds its
+  Turnstile, buyer Stripe, and rate-limit secrets in Firebase Secret Manager.
+  Exact create retries recharge
+  network capacity without a duplicate email charge during the 24-hour
+  reservation; only a prior signed-void order may be superseded after that
+  email window.
+  `createBuyerAccessInvoice` creates a true fixed $1 Hosted Invoice Page, and
+  the dedicated buyer API client and webhook endpoint are pinned to Stripe API
+  version `2024-06-20`; the generic quote Stripe client remains unchanged. Only
+  the four supported signed, deduplicated invoice events may establish payment
+  state. `invoice.paid` prepares the organization, neutral settings, Starter
+  workspace plan entitlements, provisioning record, and pending invitation, but
+  no user membership, admin role, claims, or access. `activation_sent` requires
+  durably recorded onboarding-email provider acceptance. Independently,
+  token-bound `provisioning` with `workspaceReady=true` offers a manual `/app`
+  exact-email Firebase verification path and stops automatic polling without
+  claiming Resend acceptance, membership, claims, or access. Only an exact
+  matching verified Firebase email may consume the invite, and only `active`
+  is access-ready.
+  Controlled test-mode markers require exclusion from live revenue and paid-
+  customer reporting. The quote-payment mode, credentials, `stripeWebhook`,
+  deposit, and final-balance rails remain isolated. This is branch/source
+  evidence, not Turnstile, Stripe, Firebase-delivery, hosted, or live-launch
+  acceptance.
 - Firebase quote email is bound to the saved revision and portal issuance. Only
   server-recorded provider acceptance owns the `sent` transition, and only
   acceptance for the exact current valid issuance activates its portal. If the

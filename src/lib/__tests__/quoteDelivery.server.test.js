@@ -35,6 +35,12 @@ function callableSource(name, nextName) {
   return FUNCTIONS_INDEX_SOURCE.slice(start, end);
 }
 
+function approvedPaymentRequestSource() {
+  const start = FUNCTIONS_INDEX_SOURCE.indexOf("async function sendApprovedPaymentRequestEmail");
+  const end = FUNCTIONS_INDEX_SOURCE.indexOf("exports.sendPaymentRequestEmail =", start + 1);
+  return FUNCTIONS_INDEX_SOURCE.slice(start, end);
+}
+
 function draftQuote(overrides = {}) {
   return {
     id: "quote-a",
@@ -220,6 +226,26 @@ describe("server-authoritative quote delivery", () => {
       portalSnapshot,
       nowISO: "2026-08-03T18:00:06.000Z"
     })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
+    expect(assertQuoteDeliveryPortalSnapshot({
+      quote,
+      quoteId: quote.id,
+      organizationId: quote.organizationId,
+      portalSnapshot,
+      nowISO: "2026-08-03T18:00:06.000Z",
+      allowExpired: true
+    })).toMatchObject({
+      portalKey: quote.portalKey,
+      portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
+      portalExpiresAtISO: quote.portalExpiresAtISO
+    });
+    expect(() => assertQuoteDeliveryPortalSnapshot({
+      quote,
+      quoteId: quote.id,
+      organizationId: quote.organizationId,
+      portalSnapshot: { ...portalSnapshot, portalKey: "wrong-portal-key-abcdefghijklmnop" },
+      nowISO: "2026-08-03T18:00:06.000Z",
+      allowExpired: true
+    })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
   });
 
   test("requires current provider activation evidence before reusing a portal", () => {
@@ -266,6 +292,17 @@ describe("server-authoritative quote delivery", () => {
       portalSnapshot,
       nowISO: NOW
     })).toMatchObject({ revisionId, portalKey: PORTAL_KEY });
+    expect(assertQuoteDeliveryPortalActivation({
+      quote: { ...quote, portalExpiresAtISO: "2026-08-03T17:59:59.000Z" },
+      quoteId: quote.id,
+      organizationId: quote.organizationId,
+      portalSnapshot: {
+        ...portalSnapshot,
+        portalExpiresAtISO: "2026-08-03T17:59:59.000Z"
+      },
+      nowISO: NOW,
+      allowExpired: true
+    })).toMatchObject({ revisionId, portalKey: PORTAL_KEY });
     expect(() => assertQuoteDeliveryPortalActivation({
       quote: {
         ...quote,
@@ -279,9 +316,9 @@ describe("server-authoritative quote delivery", () => {
   });
 
   test("payment email claims require current portal activation evidence", () => {
-    const source = callableSource("sendPaymentRequestEmail", "getIntegrationSetupStatus");
-    expect(source).toContain("derivePaymentRequestApprovalScope");
-    expect(source.indexOf("derivePaymentRequestApprovalScope"))
+    const source = approvedPaymentRequestSource();
+    expect(source).toContain("deriveApprovedPaymentRequestScope");
+    expect(source.indexOf("deriveApprovedPaymentRequestScope"))
       .toBeLessThan(source.indexOf("sendCustomerEmail"));
   });
 
@@ -882,15 +919,51 @@ describe("server-authoritative quote delivery", () => {
     );
   });
 
-  test("rejects delivery while a sensitive approved action is executing", () => {
-    expect(() => assertNoConflictingQuoteExecution(draftQuote({
-      workflow: {
-        approvalRequests: [{
-          action: "rotate_portal_link",
-          executionState: "in_progress"
-        }]
+  test("allows a booked contract portal renewal to be provider-activated", () => {
+    const booked = draftQuote({
+      status: "booked",
+      booking: {
+        contractNumber: "C-260804-12345",
+        contractConvertedAtISO: "2026-08-04T12:00:00.000Z"
+      },
+      payment: {
+        depositStatus: "paid",
+        stripeSessionId: "cs_test_paid_deposit",
+        depositConfirmedAtISO: "2026-08-04T13:00:00.000Z"
       }
-    }))).toThrowError(expect.objectContaining({ code: "aborted" }));
+    });
+    expect(acquire(booked)).toMatchObject({
+      state: "acquired",
+      delivery: { state: "sending" }
+    });
+    expect(() => acquire(draftQuote({ status: "booked" }))).toThrow(/contract.*deposit/i);
+
+    const payloadStart = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "function buildQuoteDeliveryEmailPayload"
+    );
+    const payloadEnd = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "function annotateQuoteDeliveryAttemptError",
+      payloadStart
+    );
+    const payloadSource = FUNCTIONS_INDEX_SOURCE.slice(payloadStart, payloadEnd);
+    const renewalBranch = payloadSource.indexOf("if (bookedPortalRenewal)");
+    const genericQuoteCopy = payloadSource.indexOf("Your quote ${quoteNumber} is ready");
+    expect(renewalBranch).toBeGreaterThan(-1);
+    expect(genericQuoteCopy).toBeGreaterThan(renewalBranch);
+    expect(payloadSource).toContain("Your secure portal access has been renewed");
+    expect(payloadSource).toContain("Your event remains booked");
+    expect(payloadSource).toContain("Deposit received");
+    expect(payloadSource).toContain("Review your booked contract and payment status");
+  });
+
+  test("rejects delivery while a sensitive approved action is executing", () => {
+    for (const action of ["rotate_portal_link", "send_payment_request", "send_final_balance_request"]) {
+      expect(() => assertNoConflictingQuoteExecution(draftQuote({
+        workflow: {
+          approvalRequests: [{ action, executionState: "in_progress" }]
+        }
+      }))).toThrowError(expect.objectContaining({ code: "aborted" }));
+    }
     expect(assertNoConflictingQuoteExecution(draftQuote({
       workflow: {
         approvalRequests: [{

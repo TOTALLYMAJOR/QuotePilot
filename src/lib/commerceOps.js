@@ -57,6 +57,49 @@ export async function getIntegrationSetupStatus() {
   return result.data || {};
 }
 
+export function buildBuyerAccessRepairConfirmationToken(orderId = "") {
+  const normalizedOrderId = String(orderId || "").trim().toLowerCase();
+  return /^ba-[a-f0-9]{40}$/.test(normalizedOrderId)
+    ? `VOID BUYER INVOICE ${normalizedOrderId}`
+    : "";
+}
+
+export async function repairBuyerAccessInvoice({ orderId, confirmationToken } = {}) {
+  ensureFunctionsReady();
+  const normalizedOrderId = String(orderId || "").trim().toLowerCase();
+  const expectedConfirmationToken = buildBuyerAccessRepairConfirmationToken(normalizedOrderId);
+  if (!expectedConfirmationToken) {
+    throw new Error("A valid buyer access order id is required for repair.");
+  }
+  if (String(confirmationToken || "").trim() !== expectedConfirmationToken) {
+    throw new Error(`Buyer invoice repair token mismatch. Use exactly: ${expectedConfirmationToken}`);
+  }
+  const call = httpsCallable(cloudFunctions, "repairBuyerAccessInvoice");
+  const result = await call({
+    orderId: normalizedOrderId,
+    confirmationToken: expectedConfirmationToken
+  });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.orderId || "").trim().toLowerCase() !== normalizedOrderId
+    || String(response.status || "").trim().toLowerCase() !== "void"
+    || String(response.providerState || "").trim().toLowerCase() !== "void"
+    || response.providerVoidVerified !== true
+    || response.emailWindowStillApplies !== true
+    || !["voided", "already_void"].includes(
+      String(response.providerMutation || "").trim().toLowerCase()
+    )
+    || !/^stripe-buyer-repair-[a-f0-9-]{36}$/.test(
+      String(response.auditEventId || "").trim().toLowerCase()
+    )
+    || Object.keys(response).some((key) => /url|secret|token/i.test(key))
+  ) {
+    throw new Error("Buyer invoice repair returned an invalid authoritative response.");
+  }
+  return response;
+}
+
 export async function reconcileDepositCheckout({ quoteId } = {}) {
   ensureFunctionsReady();
   const normalizedQuoteId = String(quoteId || "").trim();
@@ -78,6 +121,34 @@ export async function reconcileDepositCheckout({ quoteId } = {}) {
     || Object.prototype.hasOwnProperty.call(response, "url")
   ) {
     throw new Error("Payment reconciliation returned an invalid authoritative response.");
+  }
+  return response;
+}
+
+export async function reconcileFinalBalanceCheckout({ quoteId } = {}) {
+  ensureFunctionsReady();
+  const normalizedQuoteId = String(quoteId || "").trim();
+  if (!normalizedQuoteId) {
+    throw new Error("Quote id is required for final-balance reconciliation.");
+  }
+  const call = httpsCallable(cloudFunctions, "reconcileFinalBalanceCheckout");
+  const result = await call({ quoteId: normalizedQuoteId });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== normalizedQuoteId
+    || String(response.paymentKind || "").trim().toLowerCase() !== "final_balance"
+    || !Number.isSafeInteger(response.amountCents)
+    || response.amountCents <= 0
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !["open", "processing", "paid", "failed", "expired", "unknown"].includes(
+      String(response.providerState || "").trim().toLowerCase()
+    )
+    || !String(response.auditEventId || "").trim()
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Final-balance reconciliation returned an invalid authoritative response.");
   }
   return response;
 }
@@ -241,6 +312,39 @@ export async function sendPaymentRequestToCustomerEmail({
     || Object.prototype.hasOwnProperty.call(response, "url")
   ) {
     throw new Error("Payment request returned an invalid authoritative response.");
+  }
+  return response;
+}
+
+export async function sendFinalBalanceRequestToCustomerEmail({
+  quoteId,
+  approvalRequestId
+} = {}) {
+  ensureFunctionsReady();
+  const call = httpsCallable(cloudFunctions, "sendFinalBalanceRequestEmail");
+  const result = await call({
+    quoteId,
+    approvalRequestId
+  });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== String(quoteId || "").trim()
+    || String(response.paymentKind || "").trim().toLowerCase() !== "final_balance"
+    || !Number.isSafeInteger(response.amountCents)
+    || response.amountCents <= 0
+    || String(response.approvalRequest?.id || "").trim() !== String(approvalRequestId || "").trim()
+    || String(response.approvalRequest?.executionState || "").trim().toLowerCase() !== "succeeded"
+    || response.email?.sent !== true
+    || !String(response.email?.provider || "").trim()
+    || !String(response.email?.messageId || "").trim()
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !Number.isSafeInteger(Number(response.checkoutGeneration))
+    || typeof response.published !== "boolean"
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Final-balance request returned an invalid authoritative response.");
   }
   return response;
 }
