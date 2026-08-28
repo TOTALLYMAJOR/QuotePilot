@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 13:08:03 CDT
+Last updated: 2026-08-28 17:25:14 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -31,6 +31,7 @@ Execution rules:
 
 | Order | Task ID and outcome | Capability truth | Dependencies | Acceptance criteria | Current boundary |
 |---:|---|---|---|---|---|
+| 0 | `QP-OBS-018` — Product Truth Digest and drift control | Cross-cutting source/release/capability/evidence observability; no new product authority | Accepted ADR/design; deterministic source adapters; current contradiction fixtures; existing task evidence, capability, release, and canonical-doc contracts | `status:product` answers live/candidate/proof/drift/owner-decision questions; `check:product-drift` detects conflicting release identity, branch divergence, evidence gaps, and capability-gate failures; every finding cites exact sources; unavailable evidence stays `unknown`; no generated digest becomes authority | Repository implementation and advisory CI wiring are complete locally. One real local digest exposes the known release-identity conflict and dirty-worktree capability failure. Exact CI observation, owner comprehension review, freshness calibration, and any required-gate promotion remain human/external. Hosted/provider/production/human evidence remains independently sourced. |
 | 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | Clean committed candidate passes; the dirty shared tree remains unqualified mixed WIP |
 | 2 | `QP-PERF-002` — close temporary bundle exceptions | Rows 29, 60, 62, 64 and the performance guardrail | Clean-main/candidate measurements; exact graph profile; accepted optimization or reviewed baseline recalibration | Compatibility and Ambient graphs pass the standard budget without a no-headroom exception; build, browser/CWV, and docs gates pass; no route, accessibility, or authority regression | Minifier slice restores 21.7 KB of headroom under the unchanged exception; full exception retirement remains a reviewed graph-optimization or baseline decision |
 | 3 | `QP-CONFIG-003` — remove remaining `functions.config()` compatibility | Runtime/deployment capabilities using Firebase Functions | Source migration complete; exact coordinated backend release; runtime readback; March 2027 deadline | No production runtime depends on `functions.config()`; local fallback and secret boundaries remain intact; function tests, env materialization, build, emulator lanes, and deployment docs pass | Source candidate complete; deployment/runtime proof is `human/external` |
@@ -48,6 +49,12 @@ Execution rules:
 | 15 | `QP-ATTEND-015` — attendance persistence and confirmation bridge | Row 60 attendance source note; attendance ADR Slice B onward | Direct terminology/channel research; accepted migration and authority plan; unchanged exact `event.guests`; existing Commercial Change receipts | Versioned planning/confirmation evidence persists with source/actor/time; legacy reads remain valid; differing confirmed counts remain proposed until exact-revision apply; BEO/closeout freshness stays separate; portal, rules, role, tenant, and browser acceptance pass | `blocked on product/human decisions`; read-only Slice A/C is complete locally |
 | 16 | `QP-PWA-016` — qualify the installable safe recovery shell | Row 62 | Repository manifest, cache namespace, asset allowlist, navigation fallback, responsive recovery, and production-preview proof complete; exact deployment and supported test devices remain | On the exact hosted candidate, supported desktop/mobile browsers install and relaunch; offline navigation reaches the truthful recovery page; reconnect succeeds; no authenticated data or trusted mutation is represented as offline-capable | Repository slice complete; exact deployment, hosted install/relaunch, and physical-device acceptance are `human/external` |
 | 17 | `QP-AUDIT-017` — complete optional cross-surface security/audit depth | Row 21 plus row 63 Operations Audit | Bounded taxonomy, retention/privacy boundary, server receipt authority, tenant/role visibility, and legacy-event compatibility are implemented locally | Final quote approvals and organization role changes have server-owned, tenant-scoped, role-stamped immutable receipt projections; Operations Audit exposes only bounded safe fields; replay, failed execution, foreign-tenant rejection, retention, truncation, and export/clear policy tests pass | Repository slice complete; deployment, authenticated hosted role/tenant denial, production-data review, and human acceptance are `human/external`; provider-derived outcomes remain separately evidenced |
+
+`QP-OBS-018` is the implemented source/local cross-cutting control before
+additional provider promotion work. Its deterministic commands and advisory CI
+job now exist. Observe the first exact CI digest, review owner comprehension and
+false positives, calibrate freshness, and require a separate owner decision
+before enforcement.
 
 The repository-preparable slices for `QP-GOV-001`, `QP-CONFIG-003`,
 `QP-ACCEPT-004`, `QP-AMBIENT-012`, and the current `QP-PERF-002` headroom

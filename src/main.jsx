@@ -5,7 +5,11 @@ import {
   createRecoverableLazy,
   RecoverableErrorBoundary
 } from "./components/RecoverableErrorBoundary";
-import { initSessionDiagnostics, recordDiagnosticError } from "./lib/sessionDiagnostics";
+import {
+  initSessionDiagnostics,
+  recordDiagnosticError,
+  recordDiagnosticEvent
+} from "./lib/sessionDiagnostics";
 import "./styles.css";
 
 const SystemMarketingPage = createRecoverableLazy(
@@ -71,6 +75,29 @@ const isStaffInvitationRoute = !isPortalRoute
 const isMarketingRoute = normalizedPath === "/" && !isPortalRoute;
 const isSystemMarketingRoute = normalizedPath === "/system" && !isPortalRoute;
 const isBuyerAccessRoute = normalizedPath === "/start" && !isPortalRoute;
+const routeKind = isStaffInvitationRoute
+  ? "staff-invitation"
+  : isRevenueAutopilotUnsubscribeRoute
+    ? "revenue-autopilot-unsubscribe"
+    : isMarketingRoute
+      ? "marketing"
+      : isSystemMarketingRoute
+        ? "system-marketing"
+        : isBuyerAccessRoute
+          ? "buyer-access"
+          : isPortalRoute
+            ? "customer-portal"
+            : "workspace";
+
+recordDiagnosticEvent({
+  level: "info",
+  type: "route.resolved",
+  message: "Route resolved",
+  context: {
+    routeKind,
+    path: normalizedPath
+  }
+});
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

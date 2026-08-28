@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 13:08:03 CDT
+Last updated: 2026-08-28 17:25:14 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Implemented Product Truth Observability as a source/local candidate. The read-only `status:product` digest reconciles Git, canonical release claims, capability validation, development-evidence coverage, and optional reachability without becoming another authority; `check:product-drift` fails closed for blocking contradictions and malformed required inputs. Eleven focused compiler/CLI contracts pass. CI now publishes an advisory text/JSON digest and observes the gate without making it required; exact CI observation, freshness calibration, owner comprehension, and any enforcement promotion remain human/external.
+- Added the repository operating-system audit and Development Evidence Compiler. `npm run evidence:task` writes ignored local JSON records that keep source, local, CI, hosted, provider, production, human, and outcome evidence separate; `npm run evidence:index` summarizes validation outcomes, proof coverage, repeated risks, and next actions without replacing `plan:task --phase complete` or release authority.
+
 - Reassessed the deploy-dormant Steward foundation at its Phase 1 safety gate.
   Eight focused test files pass 84 tests, the repository secret scan passes,
   and three responsive real-route checks keep model prose hidden, Steward

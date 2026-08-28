@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-08-20 16:39:56 CDT
+Last updated: 2026-08-28 17:25:14 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -28,6 +28,10 @@ This document defines governance for repository-managed agent and skill assets u
   - `npm run lane:release`
 - Governance controls:
   - `npm run plan:task -- --task "<work>" --files <path,...>`
+  - `npm run evidence:task -- --task "<work>" --phase complete ...`
+  - `npm run evidence:index`
+  - `npm run status:product`
+  - `npm run check:product-drift`
   - `npm run check:docs:governance`
   - `npm run check:perf:bundle`
   - `npm run check:perf:cwv`
@@ -83,3 +87,18 @@ execute `taskGraph` in dependency order, and run the narrowest relevant check
 before global checks. Changes to the planner or its contract fail documentation
 governance unless this policy, the orchestration blueprint and runbook, and the
 documentation ownership map move together.
+
+## Task Evidence Loop
+For meaningful implementation, process, release, or architecture work, agents
+may record a local ignored task evidence file with `npm run evidence:task`.
+The command is not a replacement for `plan:task --phase complete`; it captures
+the surrounding proof, residual risks, human decision, and later outcome signal
+described in `docs/DEVELOPMENT_EVIDENCE_COMPILER.md`.
+
+Use `npm run evidence:index` to inspect repeated development-system friction
+before adding new process, skills, checks, or planner rules.
+
+Use `npm run status:product` for the read-only owner projection and
+`npm run check:product-drift` before PR or release preparation. The CI job is
+advisory until an explicit owner promotion; a generated digest never replaces
+canonical documents, exact receipts, or human acceptance.

@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-08-20 16:39:56 CDT
+Last updated: 2026-08-28 17:25:14 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -17,6 +17,9 @@ Each major topic has one source of truth. Other docs should link to that source 
 - Current-state/risk/near-term execution changes: update `PROJECT_STATUS.md`.
 - Roadmap priority changes: update `DEV_TASKS.md`.
 - Setup/process/deploy entrypoint changes: update `README.md`.
+- Product-truth observability contract or drift-policy changes: update the
+  accepted ADR/design, orchestration workflow, and `PROJECT_STATUS.md`; do not
+  copy a generated digest into another canonical status authority.
 
 ## Update Timestamps
 Every changed canonical Markdown document, every Markdown file under `docs/`,
@@ -86,6 +89,9 @@ as separate claims.
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
+| Repository operating-system maturity | `docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md` | Adapted solo-agent harness assessment and target architecture; it summarizes but does not replace the owning governance docs. |
+| Development task evidence capture | `docs/DEVELOPMENT_EVIDENCE_COMPILER.md` | Local ignored evidence-record contract for request, validation, proof-boundary, residual-risk, and learning capture. |
+| Product truth observability and drift policy | `docs/adr/ADR-0002-product-truth-observability.md`, `docs/design/product-truth-observability-design.md` | Accepted decision and implementation contract for the read-only owner digest and advisory drift gate. `PROJECT_STATUS.md`, the Feature Matrix, release receipts, and other named inputs retain authority; generated digests are projections only. |
 | Task classification, model tier, dependency reads, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. The external runner owns actual model switching. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |

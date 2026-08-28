@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 13:08:03 CDT
+Last updated: 2026-08-28 17:25:14 CDT
 
 ## Current Production Release
 
@@ -23,6 +23,18 @@ Last updated: 2026-08-28 13:08:03 CDT
 
 ## Pending Production Completion
 
+- Product Truth Observability is implemented as a read-only source/local
+  repository/CI candidate. Its first real `status:product` digest found the
+  expected conflicting local production
+  claims (`v0.14.0` and a retained `v0.7.0` operational section), while current
+  remote main contains a later `v0.15.0` release receipt; the active branch is
+  both ahead of and behind main. The digest preserves exact HEAD, labels the
+  dirty capability-surfacing failure as worktree evidence, keeps unavailable
+  CI/hosted/provider/production/human/outcome proof `unknown`, and does not
+  select a convenient source or treat reachability as deployed identity. Ten
+  focused contracts pass, and CI wiring is advisory only. Exact CI observation,
+  owner comprehension review, freshness calibration, and any promotion to a
+  required gate remain pending human/external decisions.
 - Steward has no remaining repository-preparable work before its reviewed
   private-runtime and human-evaluation gate. The deploy-dormant compiler,
   policy/validation controls, consent/evaluation contracts, pinned synthetic
@@ -804,7 +816,13 @@ route evidence are complete.
     Puppeteer/`extract-zip` chain; npm's available remediation is a breaking
     Lighthouse CI downgrade and must not be forced without a reviewed tooling
     migration.
-
+17. Cloud runner handoff is now documented as a source/process contract in the
+    orchestration blueprint and runbook. Hosted agents should bootstrap with
+    `npm ci`, `npm run check:env`, a bounded `plan:task --json` packet, emitted
+    validations, and a matching `--phase complete` packet. This improves
+    repeatability only; it does not prove a configured cloud provider account,
+    injected secrets, hosted deployment, production behavior, or human
+    acceptance.
 ## Current Focus
 
 1. Complete an authenticated production operator pass for quote create/save/

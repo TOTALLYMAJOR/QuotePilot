@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: August 11, 2026
+Last updated: 2026-08-28 17:25:14 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -23,6 +23,11 @@ git checkout -b feature/<scope>-<topic>
    - For CI workflow edits, confirm the CI gate steps are runnable in GitHub Actions and documented in `CHANGELOG.md`.
 5. Update canonical docs per `docs/DOC_SYSTEM.md`.
 6. Open PR with validation evidence and doc impact declaration.
+
+Run `npm run status:product` after sync/branch selection and
+`npm run check:product-drift` before opening a PR. The generated digest is a
+source-linked projection, not authority. Its CI job remains advisory until an
+explicit owner promotion after real-run review.
 
 ## Release-Only Main Rule
 - `main` is for production-intent merges only.
@@ -61,6 +66,17 @@ git checkout -b feature/<scope>-<topic>
 - Commit logical units only.
 - Avoid mixing unrelated refactors and behavior changes.
 - Never commit local state or secrets.
+- Keep local tool scratch outside tracked source. Browser, Lighthouse, emulator,
+  and cloud-runner temporary profiles belong under OS temp paths or ignored
+  cache directories; they must not be committed or used as release evidence.
+- For meaningful local implementation, process, release, or architecture work,
+  use `npm run evidence:task` when a compact handoff record would save future
+  agent/human reconstruction. Its `.cache/development-evidence/` output is
+  ignored local task evidence only; it does not replace commit history, CI,
+  hosted/provider receipts, production deployment proof, or human acceptance.
+- Use `npm run evidence:index` to inspect local task-record trends before
+  adding new process or automation. Repeated friction may justify a script,
+  planner rule, skill, or check; one-off friction should stay as evidence.
 
 ## Release Workflow
 1. Create `release/<version>` from `main`.
@@ -249,3 +265,6 @@ If a topic changes, only update the owning doc and cross-link from others.
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`
 - Runbook: `docs/ORCHESTRATION_RUNBOOK.md`
+- Product truth decision: `docs/adr/ADR-0002-product-truth-observability.md`
+- Product truth design: `docs/design/product-truth-observability-design.md`
+- Product truth work plan: `docs/plans/20260828-feature-product-truth-observability.md`

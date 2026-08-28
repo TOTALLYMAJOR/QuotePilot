@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_DIR = path.join(".cache", "development-evidence");
-const EVIDENCE_CLASSES = ["source", "local", "ci", "hosted", "provider", "production", "human", "outcome"];
+export const EVIDENCE_CLASSES = ["source", "local", "ci", "hosted", "provider", "production", "human", "outcome"];
 
 function parseArgs(argv) {
   const parsed = {
@@ -44,7 +45,7 @@ function increment(counts, key) {
   counts[normalized] = (counts[normalized] || 0) + 1;
 }
 
-function readRecords(dir) {
+export function readRecords(dir) {
   if (!fs.existsSync(dir)) return { records: [], invalidRecords: [] };
 
   const files = fs.readdirSync(dir)
@@ -66,7 +67,7 @@ function readRecords(dir) {
   return { records, invalidRecords };
 }
 
-function buildSummary({ dir, records, invalidRecords, limit }) {
+export function buildSummary({ dir, records, invalidRecords, limit }) {
   const byPhase = {};
   const byBranch = {};
   const validationOutcomes = {};
@@ -243,9 +244,11 @@ function main() {
   console.log(args.json ? JSON.stringify(summary, null, 2) : formatText(summary));
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(`Development evidence index failed: ${error.message}`);
-  process.exit(1);
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  try {
+    main();
+  } catch (error) {
+    console.error(`Development evidence index failed: ${error.message}`);
+    process.exit(1);
+  }
 }

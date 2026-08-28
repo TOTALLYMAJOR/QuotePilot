@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 52,
+  "catalogVersion": 54,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -122,6 +122,116 @@
         }
       },
       "safeOutcome": "An authenticated same-tenant admin can distinguish immutable role-change and quote-approval receipts from bounded legacy delivery and catalog observations. Replayed role receipts collapse to one row, foreign-tenant rows fail the defense-in-depth filter, failed approval executions remain visible, raw security metadata stays private, the table caps at 50 rows from bounded server samples, and retention is explicitly indefinite with no browser export or implemented clear workflow."
+    },
+    {
+      "id": "privacy-bounded-session-diagnostics",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "staff",
+        "operators",
+        "developers"
+      ],
+      "summary": "Session diagnostics provide app-local runtime route, session, and error observability for staff troubleshooting while stripping URL query/hash values, redacting sensitive context, and hashing stable identifiers before export.",
+      "backendPaths": [
+        "src/lib/sessionDiagnostics.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/DiagnosticsModal.jsx",
+        "src/main.jsx"
+      ],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/sessionDiagnostics.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/sessionDiagnostics.test.js",
+          "locator": "records errors with redacted context and user session details"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/ORCHESTRATION_RUNBOOK.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Privacy-bounded session diagnostics"
+        },
+        {
+          "path": "docs/ORCHESTRATION_RUNBOOK.md",
+          "locator": "## Runtime Diagnostics"
+        }
+      ],
+      "headlessReason": "The diagnostics library is operational infrastructure for troubleshooting and handoff rather than a customer workflow or authority-changing callable.",
+      "safeOutcome": "Staff can export bounded local browser diagnostics for triage without storing raw emails, phone numbers, tokens, user identifiers, URL query/hash values, or stack traces."
+    },
+    {
+      "id": "product-truth-observability",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "repository_owners",
+        "release_operators",
+        "developers"
+      ],
+      "summary": "A deterministic read-only compiler reconciles Git identity and divergence, canonical production claims, capability inventory and gate output, development-evidence coverage, and optional bounded reachability into a source-linked text or JSON digest with separate status and fail-closed gate exit policies.",
+      "backendPaths": [
+        "scripts/product-truth-observability.mjs",
+        "scripts/summarize-development-evidence.mjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/productTruthObservability.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "emits blocking release drift and nonblocking dirty divergence"
+        },
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "status and gate emit the same digest semantics with different exit policy"
+        },
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "malformed required input exits 2 with the exact locator"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/ORCHESTRATION_RUNBOOK.md",
+        "docs/adr/ADR-0002-product-truth-observability.md",
+        "docs/design/product-truth-observability-design.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Product Truth Observability"
+        },
+        {
+          "path": "docs/ORCHESTRATION_RUNBOOK.md",
+          "locator": "## Product Truth Reconciliation"
+        },
+        {
+          "path": "docs/adr/ADR-0002-product-truth-observability.md",
+          "locator": "Adopt a generated, read-only Product Truth Digest"
+        },
+        {
+          "path": "docs/design/product-truth-observability-design.md",
+          "locator": "### Digest Contract"
+        }
+      ],
+      "headlessReason": "The command is repository and release-process observability. It reads existing authorities, emits an ignored or ephemeral projection, and has no customer, application-runtime, provider, deployment, data, pricing, role, or mutation authority.",
+      "safeOutcome": "Repository owners can see independent production claims, exact candidate identity, proof-class coverage, blocking drift, and bounded next decisions without the digest selecting a convenient source, persisting secrets or customer data, or promoting local, reachability, CI, provider, production, or human evidence into another class."
     },
     {
       "id": "steward-private-validation-foundation",
