@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-28 17:39:06 CDT
+Last updated: 2026-08-28 17:56:30 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -138,6 +138,17 @@ consenting silent execution, 100 actual human reviews, hosted rules evidence,
 deployment, and human acceptance remain human/external. Model output and
 Steward handoff remain unavailable; no source-only adapter may fabricate those
 gates.
+
+Ambient read-recovery source note for row 60: **Now**, **Opportunities**, and
+**Events** use the shared `WorkspaceRecoveryState` for unavailable first reads.
+Each state hides raw provider text and duplicate warnings, names the unchanged
+record boundary, exposes one retry and one supported continuation, and keeps
+completed-empty and missing-exact-route outcomes separate. Opportunities and
+Events retain bounded source context behind **About this view**. Populated
+Events leads with event basics, distinguishes recorded lifecycle from live
+operational readiness, and does not advertise Control Room or Replay while
+their authority is unavailable. This is source/local presentation only; it
+adds no quote, event, workflow, provider, role, or tenant authority.
 
 Ambient NOW source note for row 60: when both the default-off Ambient and NOW
 presentation gates are enabled, `AmbientNowView` replaces the denser card

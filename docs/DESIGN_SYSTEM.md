@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-20 16:39:56 CDT
+Last updated: 2026-08-28 17:56:30 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -129,6 +129,16 @@ stays in bounded same-app history state rather than the URL. Missing, stale,
 truncated, mismatched, or unavailable evidence recovers in context and may not
 substitute a nearby item. Schedule and Reporting remain non-primary-ready until
 equivalent consumers exist.
+
+Ambient read failures use one calm, outcome-led recovery grammar. **Now**,
+**Opportunities**, and **Events** must withhold raw provider text, avoid empty
+or caught-up claims, name what remained unchanged, and present one dominant
+retry with at most one productive continuation. Source and bounded-read detail
+stays available through a collapsed **About this view** disclosure when it is
+useful to staff, but it may not compete with the recovery decision. A completed
+empty read remains distinct from an unavailable read, and an exact route may
+never substitute a nearby opportunity or event. Recovery actions retain a
+named group, 44px targets, and a single-column phone layout.
 
 User-facing language stays observational and human: **Connected details** and
 **Details affecting this quote** introduce the object layer; **Current picture**

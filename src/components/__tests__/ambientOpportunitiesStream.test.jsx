@@ -244,8 +244,12 @@ describe("AmbientOpportunitiesStream", () => {
     );
 
     expect(markup).toContain('data-opportunity-stream-state="incomplete"');
-    expect(markup).toContain("We couldn’t finish loading opportunities");
-    expect(markup).toContain("Caught-up status is unavailable until the current records finish loading");
+    expect(markup).toContain('data-opportunities-state="unavailable"');
+    expect(markup).toContain("We couldn’t load opportunities");
+    expect(markup).toContain("No quote or customer record changed");
+    expect(markup).toContain("Try again");
+    expect(markup).toContain("Start a quote");
+    expect(markup).toContain("About this view");
     expect(markup).not.toContain("No opportunities are recorded");
     expect(markup).not.toContain('data-caught-up="true"');
   });

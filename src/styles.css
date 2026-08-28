@@ -13273,7 +13273,44 @@ hr {
 
 .live-ops-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
+}
+
+.live-ops-panel > .staff-evidence-rail {
+  grid-column: 1;
+}
+
+.live-ops-evidence-disclosure {
+  border-block: 1px solid var(--tone-cream-3);
+}
+
+.live-ops-evidence-disclosure > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  color: var(--tone-ink-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.live-ops-evidence-disclosure > summary strong {
+  color: var(--tone-ink-3);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: right;
+}
+
+.live-ops-evidence-disclosure > summary:hover,
+.live-ops-evidence-disclosure > summary:focus-visible {
+  color: var(--tone-gold-3);
+}
+
+.live-ops-evidence-disclosure__body {
+  padding: var(--space-3) 0;
 }
 
 .live-ops-authority {

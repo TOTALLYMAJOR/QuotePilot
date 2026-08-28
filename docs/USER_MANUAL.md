@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 17:39:06 CDT
+Last updated: 2026-08-28 17:56:30 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1752,12 +1752,39 @@ receipts for those actions and evidence.
   does not mean a customer was contacted, a provider delivered anything, or a
   payment was collected. Expand **Read details** whenever the compact freshness
   line reports stale, partial, unavailable, unknown, or bounded evidence.
+- If the first **Now** read is unavailable, the briefing withholds priorities
+  and caught-up language, hides raw provider text, and presents one **Try
+  again** action plus **Start a quote**. No quote, customer, or Workflow record
+  changes from either the failed read or retry request.
 - Open **Opportunities** to use the default-off editorial stream over the
   existing tenant-scoped bounded quote read. Each opportunity shows identity
   and four separate views of where things stand: proposal completeness,
   pricing and margin, customer state, and event planning. Only proposal
   completeness may appear as a percentage; QuotePilot does not blend the four
   views into an event-readiness score.
+- If Opportunities cannot complete its first bounded read, it shows the same
+  calm recovery grammar as Now and Events: **Try again** is primary, **Start a
+  quote** remains available, and raw provider text is withheld. Expand **About
+  this view** only when source and read-boundary detail is needed; an
+  unavailable read never becomes an empty or caught-up claim.
+- Open **Events** for accepted or booked planning records. If the current read
+  is unavailable, Events withholds raw provider text, confirms that no event
+  status changed, and offers one primary **Try again** action plus a return to
+  **Opportunities**. The unavailable state removes the duplicate header refresh
+  and keeps staff-read diagnostics collapsed under **About this view**, so the
+  recovery remains the first decision. A completed empty read instead leads back to
+  **Opportunities** or **Start a quote**. An unknown event link never opens a
+  different event in its place.
+- When an accepted or booked event remains available during a partial, stale,
+  truncated, or otherwise bounded read, Events keeps the event usable and
+  collapses source diagnostics under **Some data may be out of date**. In
+  **Event Focus**, event basics appear before planning status. The recorded
+  accepted/booked state does not by itself establish operational readiness;
+  unavailable live phase, issue, labor-actual, and replay evidence is named once
+  as **Planning view only**. Until that authority is enabled, Events does not
+  present Control Room or Replay as active actions. A direct link to either
+  unavailable view keeps the exact event visible and offers **Back to Event
+  Focus** or **Open quote record**.
 - Quote lifecycle, booking confirmation, deposit, and final balance remain
   separate recorded details in each row. Select the single primary action to
   open that exact opportunity or its existing role-safe Workflow item. An

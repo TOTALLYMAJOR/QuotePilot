@@ -9,6 +9,7 @@ import {
   buildAmbientOpportunityStream
 } from "../lib/ambientOpportunityStream";
 import { formatWorkspaceDateTime } from "../lib/workspacePresentation";
+import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import "./ambientOpportunitiesStream.css";
 
 const MOMENTUM_LABELS = Object.freeze({
@@ -168,16 +169,15 @@ function ReadBoundary({ boundary, omittedCount }) {
     concerns.push(`${omittedCount} record${omittedCount === 1 ? " was" : "s were"} omitted because exact identity could not be established.`);
   }
   return (
-    <aside
+    <details
       className="ambient-opportunities__boundary"
-      aria-labelledby="ambient-opportunities-boundary-title"
       data-read-current={boundary.currentComplete ? "true" : "false"}
     >
-      <div>
-        <p className="ambient-opportunity__reference">Where this came from</p>
-        <h3 id="ambient-opportunities-boundary-title">{boundary.sourceLabel}</h3>
-      </div>
-      <div>
+      <summary>
+        <span>About this view</span>
+        <strong>{boundary.sourceLabel}</strong>
+      </summary>
+      <div className="ambient-opportunities__boundary-body">
         <p>{boundary.sourceBoundary}</p>
         {boundary.loadedAtISO && (
           <p>Last checked on this device {formatWorkspaceDateTime(boundary.loadedAtISO)}.</p>
@@ -188,7 +188,7 @@ function ReadBoundary({ boundary, omittedCount }) {
           </ul>
         )}
       </div>
-    </aside>
+    </details>
   );
 }
 
@@ -393,16 +393,18 @@ export default function AmbientOpportunitiesStream({
             Each opportunity keeps proposal, pricing, customer, and event-planning details separate, with one useful next step.
           </p>
         </div>
-        <button
-          type="button"
-          className="ambient-opportunities__refresh"
-          data-ambient-action-id={refreshAction.id}
-          disabled={!refreshAction.enabled}
-          title={refreshAction.disabledReason || undefined}
-          onClick={requestRefresh}
-        >
-          {stream.readBoundary.loading ? "Refreshing…" : "Refresh"}
-        </button>
+        {stream.state !== "incomplete" && (
+          <button
+            type="button"
+            className="ambient-opportunities__refresh"
+            data-ambient-action-id={refreshAction.id}
+            disabled={!refreshAction.enabled}
+            title={refreshAction.disabledReason || undefined}
+            onClick={requestRefresh}
+          >
+            {stream.readBoundary.loading ? "Refreshing…" : "Refresh"}
+          </button>
+        )}
       </header>
 
       {acknowledgement && (
@@ -444,22 +446,36 @@ export default function AmbientOpportunitiesStream({
       )}
 
       {stream.state === "incomplete" && (
-        <section className="ambient-opportunities__state" aria-labelledby="ambient-opportunities-incomplete-title">
-          <p className="ambient-opportunity__reference">Still checking</p>
-          <h3 id="ambient-opportunities-incomplete-title">We couldn’t finish loading opportunities.</h3>
-          <p>Caught-up status is unavailable until the current records finish loading.</p>
+        <WorkspaceRecoveryState
+          className="ambient-opportunities__recovery"
+          data-opportunities-state="unavailable"
+          eyebrow="Opportunities unavailable"
+          title="We couldn’t load opportunities."
+          description="Try again when you’re ready. No quote or customer record changed, and you can still start a new quote."
+          titleId="ambient-opportunities-incomplete-title"
+          actionGroupLabel="Opportunity recovery actions"
+        >
           {refreshAction.enabled && (
             <button
               type="button"
-              className="ambient-opportunity__primary-action"
+              className="cta"
               data-ambient-action-id={refreshAction.id}
               onClick={requestRefresh}
             >
-              Refresh opportunities
-              <span aria-hidden="true">→</span>
+              Try again
             </button>
           )}
-        </section>
+          {startAction.enabled && (
+            <button
+              type="button"
+              className="ghost"
+              data-ambient-action-id={startAction.id}
+              onClick={startOpportunity}
+            >
+              Start a quote
+            </button>
+          )}
+        </WorkspaceRecoveryState>
       )}
 
       {stream.rows.length > 0 && (

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 17:45:27 CDT
+Last updated: 2026-08-28 17:59:34 CDT
 
 All notable project changes are documented in this file.
 
@@ -104,6 +104,28 @@ This changelog is backfilled from git history and will be maintained going forwa
   Product Truth Observability added an advisory job. The test still requires
   every checkout step to disable persisted credentials, but no longer fails
   merely because another equally protected checkout is added.
+- Unified Ambient **Now**, **Opportunities**, and **Events** on one shared,
+  outcome-led recovery primitive. Failed first reads now suppress raw provider
+  text and duplicated evidence warnings, state what did not change, and offer
+  one primary retry plus one productive continuation. Opportunities keeps
+  source detail available behind **About this view**; Now no longer fractures
+  into implicit side-by-side columns at phone width. Events now leads with the
+  recovery instead of repeating a competing read-unavailable panel and header
+  refresh; technical read context remains available behind **About this view**.
+  Events retains its completed-empty handoff, and missing exact event links
+  still recover without silently substituting another event.
+- Reprioritized the populated **Event Focus** around the event itself. When a
+  bounded accepted/booked record remains available during a partial refresh,
+  source diagnostics collapse behind **Some data may be out of date** instead
+  of preceding the work. Event basics now lead, the recorded opportunity state
+  remains distinct from operational readiness, and the live-operations boundary
+  appears once in user-facing language rather than as duplicated authority-gate
+  diagnostics.
+- Removed the active **Control Room** and **Replay** affordances from Events
+  while live operations authority is unavailable. Event lists now lead to the
+  exact planning view or quote record; direct live/replay links explain the
+  unavailable capability and offer a truthful return to **Event Focus** instead
+  of sending the operator into another predictable dead end.
 - Preserved a supplied normalized pricing snapshot when local quote persistence
   attaches newly required private commercial-cost evidence. The enrichment no
   longer replaces the snapshot's exact totals or authority label; focused and

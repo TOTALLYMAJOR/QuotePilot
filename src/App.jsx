@@ -4880,6 +4880,9 @@ export default function App({
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
             onOpenOperations={() => navigateWorkspace(WORKSPACE_PATHS.operations)}
+            onOpenEvents={() => navigateWorkspace(WORKSPACE_PATHS.events)}
+            onOpenOpportunities={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
+            onStartOpportunity={handleGetInstantQuote}
           />
         </WorkspaceLazyRoute>
       )}
