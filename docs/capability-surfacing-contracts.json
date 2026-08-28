@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 54,
+  "catalogVersion": 55,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -4340,7 +4340,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 12,
+      "reviewRevision": 13,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4485,6 +4485,7 @@
         }
       ],
       "testPaths": [
+        "e2e/ambient-intelligence-accessibility.spec.js",
         "e2e/ambient-opportunities-stream.spec.js",
         "e2e/ambient-library.spec.js",
         "e2e/ambient-intelligence-object-verification.spec.js",
@@ -4721,6 +4722,18 @@
           "locator": "renders a populated content-first context with five visibly separate evidence rails"
         },
         {
+          "path": "e2e/ambient-intelligence-accessibility.spec.js",
+          "locator": "keeps Conversation evidence ahead of repeated arrival explanation"
+        },
+        {
+          "path": "src/lib/__tests__/ambientConversationObject.test.js",
+          "locator": "does not turn the quote-store default follow-up shell into scheduled work"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceArrivalContract.test.js",
+          "locator": "preserves an exact quote-scoped Conversation object on a general thread arrival"
+        },
+        {
           "path": "src/lib/__tests__/pilotCommandPolicy.test.js",
           "locator": "defines all eight classes while limiting v1 execution to the four bounded classes"
         },
@@ -4814,10 +4827,15 @@
         }
       ],
       "documentationPaths": [
+        "docs/DESIGN_SYSTEM.md",
         "docs/FEATURE_MATRIX.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "For a general Conversation handoff, the canonical object is the exact quote ID"
+        },
         {
           "path": "docs/FEATURE_MATRIX.md",
           "locator": "purpose-bearing editorial grammar, accepted/booked receipt domains, and equivalent mobile manipulation"

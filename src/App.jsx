@@ -718,11 +718,16 @@ function ambientWorkflowArrivalInput(target = {}, options = {}) {
 function ambientConversationArrivalInput(quoteId, options = {}) {
   const normalizedQuoteId = String(quoteId || "").trim();
   const messageId = String(options?.arrivalContext?.target?.messageId || "").trim();
+  const requestedObject = options?.arrivalContext?.object || {};
+  const exactConversationObject = requestedObject.type === "customer-communication-evidence"
+    && String(requestedObject.id || "").trim() === normalizedQuoteId;
   return {
     destination: "messages",
     object: messageId
       ? { id: messageId, type: "customer-communication-evidence" }
-      : { id: normalizedQuoteId, type: "opportunity" },
+      : exactConversationObject
+        ? { id: normalizedQuoteId, type: "customer-communication-evidence" }
+        : { id: normalizedQuoteId, type: "opportunity" },
     focus: messageId
       ? { quoteId: normalizedQuoteId, messageId }
       : { quoteId: normalizedQuoteId },

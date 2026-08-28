@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-28 18:12:02 CDT
+Last updated: 2026-08-28 18:39:44 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -144,6 +144,18 @@ useful to staff, but it may not compete with the recovery decision. A completed
 empty read remains distinct from an unavailable read, and an exact route may
 never substitute a nearby opportunity or event. Recovery actions retain a
 named group, 44px targets, and a single-column phone layout.
+
+For a general Conversation handoff, the canonical object is the exact quote ID
+typed as customer communication, while the event name stays on the loaded page
+rather than entering browser history state. The arrival rail therefore says
+**Finding Conversation** during canonical-body loading and **Conversation
+ready** only after the exact event heading receives focus. A just-completed,
+error-free quote-history read may establish the caller's observation as fresh;
+an in-progress refresh or retained snapshot after a failed read remains stale,
+and a missing observation remains unknown. A normalized but otherwise untouched
+`followUp.stage = "new"` shell is not scheduled work; a due date, note,
+completion, non-default stage, actor, or update timestamp is required before a
+follow-up may outrank the Conversation handoff.
 
 User-facing language stays observational and human: **Connected details** and
 **Details affecting this quote** introduce the object layer; **Current picture**
@@ -348,8 +360,10 @@ internal follow-up evidence remain separate supporting regions. Lavender may
 identify customer-originated activity, but it cannot imply that staff read,
 acknowledged, or resolved it. The inspector provides no send or mark-read
 control; only a populated Messaging or Workflow handoff may continue the work.
-Dismissal restores the exact inspect trigger and changes no saved, message, or
-workflow state.
+The five rails and current next action precede the repeated arrival explanation;
+**Why this view** keeps that explanation available without repeating it later
+in the body. Dismissal restores the exact inspect trigger and changes no saved,
+message, or workflow state.
 
 The last completed local flag-enabled intelligent-object browser lane passes 40
 of 40 cases.

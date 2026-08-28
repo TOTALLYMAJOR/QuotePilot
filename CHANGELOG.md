@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 18:31:41 CDT
+Last updated: 2026-08-28 18:39:44 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Preserved the exact quote-scoped communication object through the Living
+  Opportunity Conversation handoff and moved its five evidence rails plus
+  current next action ahead of repeated arrival explanation. The long inspector
+  keeps **Why this view** available as a collapsed disclosure, restores focus on
+  dismissal, and adds dedicated 390px/1440px keyboard, geometry, and axe
+  coverage. This adds no message, read-receipt, workflow, quote, lifecycle, or
+  provider authority.
 - Added one fail-closed canonical browser-arrival protocol for quote-scoped
   **Payment**, **Proposal**, and general **Conversation** intent. Payment and
   Proposal target the existing Quote administration route with exact quote and

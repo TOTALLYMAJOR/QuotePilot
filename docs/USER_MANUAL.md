@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 18:12:02 CDT
+Last updated: 2026-08-28 18:39:44 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -388,6 +388,13 @@ unchanged.
   event-oriented groups. `Customer last replied` means only that the latest
   recorded actor in the server summary is the customer. It is not an unread or
   read receipt.
+- From a Living Opportunity, open **Conversation details**, then choose **Open
+  event conversation** when no higher-priority recorded reply, customer request,
+  or real follow-up needs review. The arrival rail says **Finding Conversation**
+  while QuotePilot loads the exact quote-scoped bodies; it changes to
+  **Conversation ready** only after the matching event heading is focused. A
+  blank default follow-up shell is not scheduled work, and a refresh-in-progress
+  or retained-after-error quote snapshot cannot be presented as fresh.
 - The inbox listens to up to 50 same-tenant quote documents ordered by their
   most recent conversation summary and merges that activity with the existing
   bounded workspace context. The station normalizes event/thread identity plus
@@ -1933,9 +1940,10 @@ receipts for those actions and evidence.
 - Select `Review conversation` to review what QuotePilot currently knows about
   the conversation: sent, provider-reported delivery, portal view, latest reply,
   and bounded inferred engagement remain separate. The same context also
-  explains exact change-request and follow-up evidence. It contains no send or
-  mark-read control; use its focused Messaging or Workflow handoff when
-  available. Closing or pressing `Escape`
+  explains exact change-request and follow-up evidence. **Why this view** keeps
+  the longer entry explanation available without repeating it above and below
+  the current evidence. It contains no send or mark-read control; use its
+  focused Messaging or Workflow handoff when available. Closing or pressing `Escape`
   restores focus to `Review conversation` and changes no conversation or
   workflow state.
 - Pilot classifies navigation, query, draft mutation, simulation, trusted

@@ -4313,6 +4313,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.conversationObject.descriptor.why}
         consequence={model.conversationObject.descriptor.consequence}
+        collapseArrivalDetails
         anchorRef={conversationInspectRef}
         returnFocusRef={conversationInspectRef}
         onClose={dismissConversationContext}

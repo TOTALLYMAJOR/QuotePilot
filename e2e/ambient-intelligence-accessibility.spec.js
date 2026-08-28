@@ -406,6 +406,61 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     expect(JSON.stringify(observations)).not.toContain("Maya Bennett");
   });
 
+  test("keeps Conversation evidence ahead of repeated arrival explanation", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 1000 }
+    ]) {
+      await page.setViewportSize(viewport);
+      const surface = await openAmbientOpportunity(page);
+      const trigger = surface.getByRole("button", { name: "Review conversation" });
+
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Conversation details" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Close context" })).toBeFocused();
+
+      const arrivalDetails = dialog.locator("details.ambient-context-surface__arrival-details");
+      const arrivalDisclosure = arrivalDetails.getByText("Why this view", { exact: true });
+      const detailsRegion = dialog.getByRole("region", { name: "Conversation details" });
+      await expect(arrivalDetails).not.toHaveAttribute("open", "");
+      await expect(detailsRegion.locator('[data-context-arrival-duplicate="reason"]')).toBeHidden();
+      await expect(detailsRegion.locator('[data-context-arrival-duplicate="consequence"]')).toBeHidden();
+      await expect(detailsRegion.getByRole("heading", { name: "Recorded conversation activity" }))
+        .toBeVisible();
+
+      const geometry = await detailsRegion.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        top: element.getBoundingClientRect().top,
+        bottom: element.getBoundingClientRect().bottom
+      }));
+      expect(geometry.clientHeight).toBeGreaterThanOrEqual(viewport.width === 390 ? 420 : 360);
+      expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+      expect(geometry.top).toBeGreaterThanOrEqual(0);
+      expect(geometry.bottom).toBeLessThanOrEqual(viewport.height);
+
+      await page.keyboard.press("Tab");
+      await expect(arrivalDisclosure).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(arrivalDetails).toHaveAttribute("open", "");
+      await page.keyboard.press("Tab");
+      await expect(detailsRegion).toBeFocused();
+
+      const accessibility = await new AxeBuilder({ page })
+        .include('[role="dialog"]')
+        .analyze();
+      expect(accessibility.violations).toEqual([]);
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+    }
+  });
+
   test("retains explicit controls and focus visibility in forced-colors mode", async ({ page }) => {
     await page.emulateMedia({ forcedColors: "active" });
     await page.setViewportSize({ width: 768, height: 900 });

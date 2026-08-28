@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-28 18:12:02 CDT
+Last updated: 2026-08-28 18:39:44 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -159,6 +159,15 @@ Events leads with event basics, distinguishes recorded lifecycle from live
 operational readiness, and does not advertise Control Room or Replay while
 their authority is unavailable. This is source/local presentation only; it
 adds no quote, event, workflow, provider, role, or tenant authority.
+
+Ambient Conversation source note for row 60: the long Conversation inspector now
+uses the same opt-in **Why this view** arrival disclosure as Payment and Proposal.
+Its five message-evidence rails, current next action, change-request state, and
+follow-up state remain visible in the ordinary scroll region; only repeated
+reason/consequence rows are suppressed in that compact wrapper. This changes no
+message, read-receipt, workflow, lifecycle, provider, or pricing authority.
+Direct source is `src/components/AmbientConversationContext.jsx` with its
+Living Opportunity call site and focused unit/Playwright coverage.
 
 Ambient NOW source note for row 60: when both the default-off Ambient and NOW
 presentation gates are enabled, `AmbientNowView` replaces the denser card
