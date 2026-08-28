@@ -45,6 +45,16 @@ function opportunityInput(overrides = {}) {
   };
 }
 
+function administrationInput(overrides = {}) {
+  return {
+    destination: "administration",
+    object: { id: "quote-42", type: "payment-evidence" },
+    focus: { quoteId: "quote-42" },
+    intentId: "review_payment_controls",
+    ...overrides
+  };
+}
+
 function clientInput(overrides = {}) {
   return {
     destination: "client",
@@ -238,6 +248,52 @@ describe("workspace exact-arrival handoff", () => {
     });
     expect(handoff.contract.consequence).toMatch(/changes no quote, pricing, customer, or operational evidence/i);
     expect(parseWorkspaceArrivalHandoff(locationFor(handoff))).toEqual(handoff);
+  });
+
+  test("builds quote-scoped Payment and Proposal administration arrivals", () => {
+    const payment = createWorkspaceArrivalHandoff(administrationInput());
+    const proposal = createWorkspaceArrivalHandoff(administrationInput({
+      object: { id: "quote-42", type: "customer-decision-artifact" },
+      intentId: "review_proposal_controls"
+    }));
+
+    expect(payment).toMatchObject({
+      ok: true,
+      contract: {
+        destination: "administration",
+        routeId: "quote-list",
+        surfaceId: "quote-administration",
+        object: { id: "quote-42", type: "payment-evidence", label: "Payment" },
+        intentId: "review_payment_controls",
+        focus: { quoteId: "quote-42" }
+      },
+      navigation: { path: "/app/quotes", primaryActionReady: true }
+    });
+    expect(proposal).toMatchObject({
+      ok: true,
+      contract: {
+        object: { id: "quote-42", type: "customer-decision-artifact", label: "Proposal" },
+        intentId: "review_proposal_controls"
+      }
+    });
+    expect(parseWorkspaceArrivalHandoff(locationFor(payment))).toEqual(payment);
+    expect(parseWorkspaceArrivalHandoff(locationFor(proposal))).toEqual(proposal);
+  });
+
+  test("rejects substituted administration records, objects, and routes", () => {
+    const wrongQuote = createWorkspaceArrivalHandoff(administrationInput({
+      object: { id: "quote-other", type: "payment-evidence" }
+    }));
+    const wrongIntent = createWorkspaceArrivalHandoff(administrationInput({
+      object: { id: "quote-42", type: "customer-decision-artifact" }
+    }));
+    const payment = createWorkspaceArrivalHandoff(administrationInput());
+
+    expect(wrongQuote).toMatchObject({ ok: false, recovery: { code: "unsupported_combination" } });
+    expect(wrongIntent).toMatchObject({ ok: false, recovery: { code: "unsupported_combination" } });
+    expect(parseWorkspaceArrivalHandoff(locationFor(payment, {
+      pathname: "/app/quotes/quote-42"
+    }))).toMatchObject({ ok: false, recovery: { code: "route_mismatch" } });
   });
 
   test("uses canonical proposal-gap semantics without carrying caller-authored prose", () => {
@@ -443,6 +499,28 @@ describe("workspace exact-arrival handoff", () => {
       navigation: { path: "/app/messages?quoteId=quote-42" }
     });
     expect(handoff.contract.focus).not.toHaveProperty("messageId");
+    expect(parseWorkspaceArrivalHandoff(locationFor(handoff))).toEqual(handoff);
+  });
+
+  test("preserves an exact quote-scoped Conversation object on a general thread arrival", () => {
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "messages",
+      object: { id: "quote-42", type: "customer-communication-evidence" },
+      focus: { quoteId: "quote-42" },
+      intentId: "review_conversation"
+    });
+
+    expect(handoff).toMatchObject({
+      ok: true,
+      contract: {
+        object: {
+          id: "quote-42",
+          type: "customer-communication-evidence",
+          label: "Conversation"
+        },
+        focus: { quoteId: "quote-42" }
+      }
+    });
     expect(parseWorkspaceArrivalHandoff(locationFor(handoff))).toEqual(handoff);
   });
 
