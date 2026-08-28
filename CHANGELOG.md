@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 10:33:04 CDT
+Last updated: 2026-08-28 10:50:36 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Restored compatibility-bundle headroom without increasing the active ceiling:
+  production minification now converts eligible non-constructable functions to
+  arrow form, reducing clean-candidate JavaScript from 3,219,178 to 3,197,496
+  bytes and the largest chunk from 387,248 to 384,998 bytes. The full unit suite
+  and a minified local-preview lazy-route smoke pass. The temporary exception is
+  still active; this does not claim standard-budget closure, CWV, hosted,
+  production, or human acceptance.
 - Hardened the existing Ambient release policy so `lane:quick` now fails if
   the canonical AIUI-01–50 inventory becomes incomplete, the authenticated
   operator UAT item loses its browser-target/safe-off applicability, or

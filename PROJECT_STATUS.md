@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 10:33:04 CDT
+Last updated: 2026-08-28 10:50:36 CDT
 
 ## Current Production Release
 
@@ -236,9 +236,15 @@ Last updated: 2026-08-28 10:33:04 CDT
   the replacement graph. Local mode-specific `.env` flags and explicit release
   shell overrides resolve consistently. The compatibility boundary retains
   portal-token isolation, unsaved quote/Catalog recovery, and privacy-bounded
-  analytics, and passes the existing bundle ceiling without increasing it.
-  This is local source/build qualification only; no hosted candidate or
-  production runtime changed.
+  analytics. A clean committed candidate initially exceeded its unchanged
+  temporary ceiling by 5,600 bytes; eligible function-to-arrow minification now
+  reduces total JavaScript by 21,682 bytes to 3,197,496 bytes and the largest
+  chunk to 384,998 bytes. The full unit suite and a minified local-preview lazy-
+  route smoke pass with zero page errors. The temporary exception remains
+  active: standard-budget retirement still requires reviewed graph optimization
+  or baseline policy, browser/CWV evidence, and both build profiles. This is
+  local source/build qualification only; no hosted candidate or production
+  runtime changed.
 - The `v0.7.0` deployment receipts do not establish authenticated hosted-role
   behavior, production-data correctness, downstream provider acceptance,
   recipient evidence, or human acceptance.
@@ -780,9 +786,11 @@ route evidence are complete.
    opt-out-hold proof, and one controlled UAT plan.
 6. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
    denial matrix.
-7. Complete the bundle-exception closure path, then include the environment-only
-   Functions configuration candidate in an exact coordinated backend release
-   and verify runtime readback before closing the migration operationally.
+7. Review the remaining bundle-exception retirement path—graph optimization or
+   clean-main baseline policy—then run both build profiles, browser, and CWV
+   gates. Separately include the environment-only Functions configuration
+   candidate in an exact coordinated backend release and verify runtime readback
+   before closing that migration operationally.
 8. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any
    all-positive attestation or production-intent merge.

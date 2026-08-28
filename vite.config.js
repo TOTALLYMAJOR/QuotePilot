@@ -112,7 +112,8 @@ export default defineConfig(({ mode }) => {
       module: true,
       toplevel: true,
       compress: {
-        passes: 3
+        passes: 3,
+        unsafe_arrows: true
       },
       format: {
         ecma: 2020,

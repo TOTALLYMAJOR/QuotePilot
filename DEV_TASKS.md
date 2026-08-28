@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 10:33:04 CDT
+Last updated: 2026-08-28 10:50:36 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -31,8 +31,8 @@ Execution rules:
 
 | Order | Task ID and outcome | Capability truth | Dependencies | Acceptance criteria | Current boundary |
 |---:|---|---|---|---|---|
-| 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | `ready after ownership`; current dirty tree cannot be path-staged safely |
-| 2 | `QP-PERF-002` — close temporary bundle exceptions | Rows 29, 60, 62, 64 and the performance guardrail | Clean-main/candidate measurements; exact graph profile; accepted optimization or reviewed baseline recalibration | Compatibility and Ambient graphs pass the standard budget without a no-headroom exception; build, browser/CWV, and docs gates pass; no route, accessibility, or authority regression | `ready after clean checkout`; clean-main recalibration may require review |
+| 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | Clean committed candidate passes; the dirty shared tree remains unqualified mixed WIP |
+| 2 | `QP-PERF-002` — close temporary bundle exceptions | Rows 29, 60, 62, 64 and the performance guardrail | Clean-main/candidate measurements; exact graph profile; accepted optimization or reviewed baseline recalibration | Compatibility and Ambient graphs pass the standard budget without a no-headroom exception; build, browser/CWV, and docs gates pass; no route, accessibility, or authority regression | Minifier slice restores 21.7 KB of headroom under the unchanged exception; full exception retirement remains a reviewed graph-optimization or baseline decision |
 | 3 | `QP-CONFIG-003` — remove remaining `functions.config()` compatibility | Runtime/deployment capabilities using Firebase Functions | Source migration complete; exact coordinated backend release; runtime readback; March 2027 deadline | No production runtime depends on `functions.config()`; local fallback and secret boundaries remain intact; function tests, env materialization, build, emulator lanes, and deployment docs pass | Source candidate complete; deployment/runtime proof is `human/external` |
 | 4 | `QP-ACCEPT-004` — exact authenticated staff/operator acceptance | Rows 5, 8, 18, 27, 29–30, 34–45, 47–60, 63, 68–72 as applicable to the candidate | Immutable exact SHA and flag profile; real QuotePilot staff session; canonical tenant data; rollback artifact | Named route/task matrix proves create, save, exact readback/version, export, Workflow, Event Workspace, Customer 360, Messaging, BEO, Decision Debt, payments, staffing boundaries, and role denials; every result is tied to the SHA and evidence level | Machine contract prepared as `operator.authenticated-workspace-journey`; execution remains `human/external` |
 | 5 | `QP-TENANT-005` — disposable tenant lifecycle and isolation proof | Rows 1, 18, 25–26, 30 | Exact provisioning candidate; verified disposable owner; cleanup/tombstone plan; hosted auth | Plan/create/activate/defaults/starter review/pricing/quote/portal/cross-tenant denial/cleanup all produce exact receipts; no foreign-tenant or expired-token disclosure; cleanup is verified | `human/external` production coordination |
@@ -42,15 +42,18 @@ Execution rules:
 | 9 | `QP-STAFF-009` — one-tenant authoritative staffing qualification | Row 59 and Commercial Change/Workflow dependencies | Repaired tenant settings precondition; exact all-scope deployment; admin/sales/customer/cross-tenant role matrix; rollback | Profile, availability, assignment, reconciliation, conflict, immutable receipts, responsive accessibility, and denials pass; exactly one approved tenant is enabled; acknowledgement is not attendance/payroll/readiness | `human/external`; tenant mutation requires reviewed authorization |
 | 10 | `QP-SMS-010` — one governed owner-SMS provider path | Row 67 | Choose Pingram or Twilio; credentials in Secret Manager; sender/A2P/consent; exact origin/generation; signed webhook; rollback | One controlled owner-only UAT separates request acceptance, indeterminate dispatch, carrier delivery/failure, opt-out hold, and recipient receipt; STOP/unsubscribe blocks all providers; no automatic retry of claimed/indeterminate sends | `human/external` compliance, provider, and recipient evidence |
 | 11 | `QP-CONNECT-011` — isolated Stripe Connect Sandbox foundation | Rows 65–66 | Reviewed cloud plan/digest; separate state; exact database/IAM/egress identities; authority publisher; App Check observation then enforcement | Applied resources match the secret-free manifest; edge cannot read the Stripe key; worker-only provider access, replay/quarantine, authority drift, and withheld-link paths pass; only then may exports be considered; Hosted Sandbox UAT is the stopping gate | `human/external` cloud apply and provider UAT; exports remain empty |
-| 12 | `QP-AMBIENT-012` — qualify and promote the Ambient candidate | Rows 60, 64 and related source/local rows 61, 68–72 | `QP-GOV-001`; `QP-PERF-002`; immutable candidate; exact flag/rollback profile; authenticated roles | All 50 material items satisfy their complete acceptance contracts at 390/768/1440, keyboard/AT boundaries, connected data, first-minute comprehension, role denial, rollback, and explicit promotion approval; AIUI-48 deletion waits for parity and accepted release | Repository quick gate binds the 50-item inventory, operator UAT, and fail-closed retirement contract; full qualification/promotion remains `human/external` and blocked by `QP-GOV-001`/`QP-PERF-002` |
+| 12 | `QP-AMBIENT-012` — qualify and promote the Ambient candidate | Rows 60, 64 and related source/local rows 61, 68–72 | `QP-GOV-001`; `QP-PERF-002`; immutable candidate; exact flag/rollback profile; authenticated roles | All 50 material items satisfy their complete acceptance contracts at 390/768/1440, keyboard/AT boundaries, connected data, first-minute comprehension, role denial, rollback, and explicit promotion approval; AIUI-48 deletion waits for parity and accepted release | Repository quick gate binds the 50-item inventory, operator UAT, and fail-closed retirement contract; full qualification/promotion remains `human/external`, and exception retirement remains under `QP-PERF-002` |
 | 13 | `QP-PACKAGE-013` — Package Workspace hosted acceptance | Row 70 | Immutable candidate; admin and sales fixtures; catalog revision-conflict fixture; rollback | Hosted admin access, sales denial/availability, production-data review, revision recovery, responsive accessibility, and moderated operator acceptance pass without changing pricing, selected-at-zero, managed-menu, or missing-cost behavior | `human/external`; local proof is already complete |
 | 14 | `QP-STEWARD-014` — consenting silent Difficult Question Desk pilot | Row 71 | Reviewed private runtime/provider transport; canonical context reads; private persistence; consent; kill/rollback; billing/privacy review | No model output is user-visible; exact packet validation and tenant/revision fences hold; 100 actual human packet reviews are recorded separately from the pinned corpus; promotion thresholds cannot self-authorize | Secret-scan preflight blocker repaired without weakening policy; Phase 1 private runtime and 100 reviews remain `human/external`; later product phases remain backlog |
 | 15 | `QP-ATTEND-015` — attendance persistence and confirmation bridge | Row 60 attendance source note; attendance ADR Slice B onward | Direct terminology/channel research; accepted migration and authority plan; unchanged exact `event.guests`; existing Commercial Change receipts | Versioned planning/confirmation evidence persists with source/actor/time; legacy reads remain valid; differing confirmed counts remain proposed until exact-revision apply; BEO/closeout freshness stays separate; portal, rules, role, tenant, and browser acceptance pass | `blocked on product/human decisions`; read-only Slice A/C is complete locally |
 
-The next repository-executable order is `QP-GOV-001`, `QP-PERF-002`, then
-`QP-CONFIG-003`. Tasks `QP-ACCEPT-004` through `QP-CONNECT-011` may proceed only
-when their named external evidence is available. `QP-AMBIENT-012` can continue
-with repository-owned harness/rollback slices while its promotion gate waits.
+The repository-preparable slices for `QP-GOV-001`, `QP-CONFIG-003`,
+`QP-ACCEPT-004`, `QP-AMBIENT-012`, and the current `QP-PERF-002` headroom
+repair are complete. Tasks `QP-ACCEPT-004` through `QP-CONNECT-011` may proceed
+only when their named external evidence is available. Full `QP-PERF-002`
+exception retirement requires reviewed graph ownership or baseline policy;
+Ambient promotion, Package acceptance, Steward pilot execution, and attendance
+authority likewise remain behind their explicit human/external decisions.
 The remaining sections retain the detailed task contracts; this table does not
 replace their safety conditions.
 
@@ -463,8 +466,10 @@ acceptance, and explicitly deferred product work remains listed here.
 
 ## P1 - Performance and Accessibility
 
-- Close the temporary no-headroom bundle exception through route/chunk
-  optimization or a reviewed clean-main baseline recalibration. Re-run bundle,
+- The compatibility build now retains 21.7 KB of headroom under the unchanged
+  temporary exception through tested function-to-arrow minification. Close the
+  exception itself only through reviewed route/chunk graph optimization or a
+  reviewed clean-main baseline recalibration; rerun both graph profiles,
   browser, and CWV gates before removing it.
 - Continue mobile-density, wrapping, overflow, keyboard/focus, reduced-motion,
   and screen-reader acceptance across the routed workspace.
