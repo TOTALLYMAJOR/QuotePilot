@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 17:39:06 CDT
+Last updated: 2026-08-28 17:45:27 CDT
 
 All notable project changes are documented in this file.
 
@@ -100,6 +100,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   one **Try catalog again** action. The fully blocked catalog gate uses the same
   safe language in both active application graphs without exposing Firebase
   error text or weakening catalog and pricing authority.
+- Kept the CI checkout credential-safety contract cardinality-independent after
+  Product Truth Observability added an advisory job. The test still requires
+  every checkout step to disable persisted credentials, but no longer fails
+  merely because another equally protected checkout is added.
 - Preserved a supplied normalized pricing snapshot when local quote persistence
   attaches newly required private commercial-cost evidence. The enrichment no
   longer replaces the snapshot's exact totals or authority label; focused and
