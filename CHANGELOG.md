@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 18:02:58 CDT
+Last updated: 2026-08-28 18:06:52 CDT
 
 All notable project changes are documented in this file.
 
@@ -126,6 +126,20 @@ This changelog is backfilled from git history and will be maintained going forwa
   exact planning view or quote record; direct live/replay links explain the
   unavailable capability and offer a truthful return to **Event Focus** instead
   of sending the operator into another predictable dead end.
+- Kept shared desktop context inspectors inside the visible viewport when their
+  invoking object sits near the left or right edge. Current Event-date browser
+  proof found a 432px inspector beginning at x = -84.6px on a 1440px viewport,
+  clipping its title, arrival context, saved value, dependencies, and footer.
+  The shared anchor calculation now clamps both start- and end-aligned offsets
+  to a 16px viewport inset while preserving mobile bottom-sheet behavior,
+  focus restoration, and the invoking-object relationship. No event, draft,
+  save, reservation, availability, role, tenant, or provider authority changed.
+- Hardened the shared `ContextSurface` accessibility contract. Its scroll body
+  is now a named focusable region without duplicated `details` wording, and an
+  opt-in native **Why this view** disclosure participates in the modal focus
+  trap while preserving the exact opportunity and outcome controls. The shared
+  primitive changes presentation and focus only; it grants no quote, event,
+  payment, proposal, message, role, tenant, or provider authority.
 - Preserved a supplied normalized pricing snapshot when local quote persistence
   attaches newly required private commercial-cost evidence. The enrichment no
   longer replaces the snapshot's exact totals or authority label; focused and

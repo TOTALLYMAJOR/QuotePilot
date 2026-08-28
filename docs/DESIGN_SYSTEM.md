@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-28 17:56:30 CDT
+Last updated: 2026-08-28 18:06:52 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -58,6 +58,10 @@ bounded risk, and one ranked next action; intelligent objects read as content;
 context appears temporarily in an anchored desktop inspector or mobile bottom
 sheet; and hairlines do most grouping work. The top layer must expose identity,
 state, risk, and next action inside the first viewport at 390, 768, and 1440px.
+Desktop inspectors align to their invoking object when space allows and clamp
+both horizontal edges to a 16px viewport inset when the anchor sits too close
+to either edge. Anchoring may not clip the title, arrival context, evidence, or
+persistent outcome controls.
 
 ### Behavioral chromatic and sensory semantics
 
@@ -96,8 +100,9 @@ only when `VITE_AMBIENT_UI_ENABLED=true`.
   activation with explicit apply/cancel, validation, pending, recovery, and
   focus restoration.
 - `ContextSurface`: refuses empty content, carries reason and consequence,
-  traps and restores focus, and constrains its evidence body so the outcome
-  footer remains visible on mobile.
+  optionally demotes repeated arrival explanation behind the native **Why this
+  view** disclosure, traps and restores focus, and constrains its evidence body
+  so the outcome footer remains visible on mobile.
 - `AmbientUndoRail`: bounded newest-first history with asynchronous undo and
   retryable failure recovery.
 - `AmbientContextSnapshot`: one immutable selected-object context for the
