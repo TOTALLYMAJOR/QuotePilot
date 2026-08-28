@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 12:17:10 CDT
+Last updated: 2026-08-28 12:27:02 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Completed the source/local PWA safe-shell candidate with stable install
+  identity, 192/512 maskable icons, a namespaced versioned recovery cache, and
+  an accessible offline page at 390, 768, and 1440 pixels. The service worker
+  now preserves unrelated caches and caches only the public recovery shell plus
+  allowlisted build/brand assets; it never caches application, API, quote, or
+  customer routes, fabricates authenticated Firebase data, or queues trusted
+  writes. Six deterministic contracts, four axe/browser cases, and a real
+  minified production-preview service-worker fallback pass. This is not a
+  deployment, hosted install/relaunch result, or physical-device acceptance.
 - Removed Steward Workbench's undeclared runtime `prop-types` import and legacy
   development-only validators. The component already defaults unknown states
   to its provider-unavailable boundary and keeps its existing DOM, capability

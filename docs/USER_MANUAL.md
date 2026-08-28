@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-28 12:27:02 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -659,6 +659,23 @@ unchanged.
 - Before retrying an operation with an uncertain provider or save outcome,
   check the most recent stored work or provider evidence. The recovery screen
   deliberately shows safe guidance rather than internal error paths or stacks.
+
+### Install and reconnect (source candidate)
+
+- A supported browser may offer **Install QuotePilot** from its own address-bar
+  or application menu. Installation changes how the public shell opens; it does
+  not create another account, retain a trusted offline workspace, or change
+  role and tenant access.
+- If a navigation happens while the device is offline, the candidate shows one
+  recovery page with **Try QuotePilot again**. Reconnect before reviewing
+  quotes, payments, customer messages, or event operations.
+- The recovery page confirms that nothing was sent, saved, or changed. QuotePilot
+  does not queue trusted writes or present cached authenticated records as
+  current. If a save or provider action became uncertain before connectivity
+  was lost, verify the latest stored or provider evidence after reconnecting.
+- This install/recovery behavior is source/local evidence. The currently hosted
+  app still has the earlier scaffold until an exact release is deployed, and
+  hosted installation/relaunch plus physical-device acceptance remain open.
 
 ## Workflow
 - Open `Workflow` from the top navigation or `/app/workflow`.

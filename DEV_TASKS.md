@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 12:11:45 CDT
+Last updated: 2026-08-28 12:27:02 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -46,7 +46,7 @@ Execution rules:
 | 13 | `QP-PACKAGE-013` — Package Workspace hosted acceptance | Row 70 | Immutable candidate; admin and sales fixtures; catalog revision-conflict fixture; rollback | Hosted admin access, sales denial/availability, production-data review, revision recovery, responsive accessibility, and moderated operator acceptance pass without changing pricing, selected-at-zero, managed-menu, or missing-cost behavior | `human/external`; local proof is already complete |
 | 14 | `QP-STEWARD-014` — consenting silent Difficult Question Desk pilot | Row 71 | Reviewed private runtime/provider transport; canonical context reads; private persistence; consent; kill/rollback; billing/privacy review | No model output is user-visible; exact packet validation and tenant/revision fences hold; 100 actual human packet reviews are recorded separately from the pinned corpus; promotion thresholds cannot self-authorize | Secret-scan preflight blocker repaired without weakening policy; Phase 1 private runtime and 100 reviews remain `human/external`; later product phases remain backlog |
 | 15 | `QP-ATTEND-015` — attendance persistence and confirmation bridge | Row 60 attendance source note; attendance ADR Slice B onward | Direct terminology/channel research; accepted migration and authority plan; unchanged exact `event.guests`; existing Commercial Change receipts | Versioned planning/confirmation evidence persists with source/actor/time; legacy reads remain valid; differing confirmed counts remain proposed until exact-revision apply; BEO/closeout freshness stays separate; portal, rules, role, tenant, and browser acceptance pass | `blocked on product/human decisions`; read-only Slice A/C is complete locally |
-| 16 | `QP-PWA-016` — finish the installable app-shell capability | Row 62 | Decide scaffold-only versus authenticated offline-workspace scope; verify manifest, registration, cache versioning, navigation fallback, update/recovery, and safe offline boundaries | Supported browsers can install and relaunch the app shell; offline navigation never invents authenticated Firebase data or queues trusted mutations; deterministic tests, production build, browser installability/offline recovery, and device acceptance are recorded | Repository installability and safe-shell qualification is `ready`; physical-device acceptance remains `human/external` |
+| 16 | `QP-PWA-016` — qualify the installable safe recovery shell | Row 62 | Repository manifest, cache namespace, asset allowlist, navigation fallback, responsive recovery, and production-preview proof complete; exact deployment and supported test devices remain | On the exact hosted candidate, supported desktop/mobile browsers install and relaunch; offline navigation reaches the truthful recovery page; reconnect succeeds; no authenticated data or trusted mutation is represented as offline-capable | Repository slice complete; exact deployment, hosted install/relaunch, and physical-device acceptance are `human/external` |
 | 17 | `QP-AUDIT-017` — complete optional cross-surface security/audit depth | Row 21 plus row 63 Operations Audit | Define the sensitive-action taxonomy, retention/privacy boundary, server receipt authority, tenant/role visibility, and legacy-event compatibility | Every in-scope sensitive action has a server-owned, tenant-scoped, role-stamped immutable receipt; Operations Audit exposes only bounded safe projections; replay, failure, cross-tenant denial, retention, and export/clear policy tests pass | `ready for bounded taxonomy and gap inventory`; provider-derived outcomes remain separately evidenced |
 
 The repository-preparable slices for `QP-GOV-001`, `QP-CONFIG-003`,
@@ -57,7 +57,8 @@ exception retirement requires reviewed graph ownership or baseline policy;
 Ambient promotion, Package acceptance, Steward pilot execution, and attendance
 authority likewise remain behind their explicit human/external decisions. The
 explicitly partial matrix rows now continue with repository-ready
-`QP-PWA-016`, then `QP-AUDIT-017`; `QP-CONNECT-011` and `QP-STEWARD-014` retain
+`QP-AUDIT-017`; `QP-PWA-016` is repository-complete and retains only its exact
+deployment/device gate, while `QP-CONNECT-011` and `QP-STEWARD-014` retain
 their higher-risk infrastructure, provider, privacy, and human gates.
 The remaining sections retain the detailed task contracts; this table does not
 replace their safety conditions.

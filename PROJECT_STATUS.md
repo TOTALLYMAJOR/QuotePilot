@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 10:50:36 CDT
+Last updated: 2026-08-28 12:27:02 CDT
 
 ## Current Production Release
 
@@ -23,6 +23,15 @@ Last updated: 2026-08-28 10:50:36 CDT
 
 ## Pending Production Completion
 
+- The PWA safe recovery shell is repository-complete in the current source
+  candidate. Its install manifest has stable identity and 192/512 maskable
+  icons; the service worker owns only its namespaced shell cache, allowlists
+  public build/brand assets, preserves unrelated caches, and serves an explicit
+  reconnect page instead of cached authenticated routes. Six unit contracts,
+  four responsive axe/browser checks, and a real minified-preview service-worker
+  fallback pass locally. The hosted app still serves the prior scaffold;
+  deployment, hosted installation/relaunch, and physical-device acceptance
+  remain open.
 - The tracked release-UAT contract now includes the stable
   `operator.authenticated-workspace-journey` item for Hosting, Firebase-all,
   and Vercel targets. It binds the required authenticated route/task matrix to
@@ -810,6 +819,11 @@ route evidence are complete.
     after their pure privacy, memory, no-secret, and adversarial contracts pass;
     keep provider, billing, deployment, production, and autonomous authority
     outside that authorization.
+11. On the exact deployed PWA candidate, install and relaunch from supported
+    desktop and mobile devices, verify offline navigation reaches the truthful
+    reconnect state, reconnect successfully, and record the browser/OS/build
+    identity. Do not interpret installation as authenticated offline-data or
+    queued-mutation support.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).
