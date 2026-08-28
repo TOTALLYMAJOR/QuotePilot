@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 10:28:54 CDT
+Last updated: 2026-08-28 10:33:04 CDT
 
 All notable project changes are documented in this file.
 
@@ -35,6 +35,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   provider configuration, production readback, or human acceptance is claimed.
 
 ### Fixed
+- Replaced a literal Stripe-secret-shaped value in the Steward Difficult
+  Question evaluation test with a runtime-constructed, explicitly synthetic
+  credential shape. Steward still rejects the comparison as secret-shaped,
+  while the repository secret scanner no longer mistakes tracked adversarial
+  test data for a committed credential. Scanner patterns, Steward policy,
+  corpus coverage, runtime exports, provider boundaries, and customer-visible
+  behavior are unchanged.
 - Preserved a supplied normalized pricing snapshot when local quote persistence
   attaches newly required private commercial-cost evidence. The enrichment no
   longer replaces the snapshot's exact totals or authority label; focused and

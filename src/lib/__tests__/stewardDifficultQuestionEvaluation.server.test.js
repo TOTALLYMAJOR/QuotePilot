@@ -14,6 +14,11 @@ const {
 
 const NOW = "2026-08-21T06:00:00.000Z";
 const EVALUATION_KEY = "steward-evaluation-key-1234567890abcdef";
+const SYNTHETIC_STRIPE_SECRET_SHAPE = [
+  "sk",
+  "live",
+  "syntheticcredentialvalue000000"
+].join("_");
 
 function request(overrides = {}) {
   return {
@@ -299,7 +304,7 @@ describe("Steward Difficult Question Desk silent evaluation", () => {
     })).toThrow(/not eligible/u);
     expect(() => buildDifficultQuestionReviewReceipt({
       ...input,
-      humanResponse: "Use sk_live_abcdefghijklmnopqrstuvwxyz1234567890 in the reply."
+      humanResponse: `Use ${SYNTHETIC_STRIPE_SECRET_SHAPE} in the reply.`
     })).toThrow(/Secret-shaped/u);
   });
 

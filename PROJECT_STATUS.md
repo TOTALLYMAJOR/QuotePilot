@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 10:28:54 CDT
+Last updated: 2026-08-28 10:33:04 CDT
 
 ## Current Production Release
 
@@ -743,6 +743,11 @@ route evidence are complete.
     reviews; private runtime, provider-backed pilot, model-output UI,
     persistence, deployment, production behavior, and human acceptance remain
     absent.
+    The tracked review-receipt negative test now constructs its clearly
+    synthetic Stripe credential shape at runtime. The exact secret-rejection
+    assertion still passes 14/14, the repository secret scan and complete
+    `lane:quick` pass, and the release lane now advances to the independently
+    known capability-surfacing debt. No scanner rule or Steward policy changed.
     The authorized staff Quote Workspace now includes the bounded Desk status
     panel. Its live state is provider-unavailable, renders no model prose,
     labels no changes made, disables Steward handoff, and routes only to the
