@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 10:22:18 CDT
+Last updated: 2026-08-28 10:28:54 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Hardened the existing Ambient release policy so `lane:quick` now fails if
+  the canonical AIUI-01–50 inventory becomes incomplete, the authenticated
+  operator UAT item loses its browser-target/safe-off applicability, or
+  AIUI-48 permits legacy removal before parity, exact rollback, accepted
+  release, and explicit promotion approval all pass. The protected zero-dead-
+  click browser command, 250ms acknowledgement, production flags, compatibility
+  build, and Staffing boundary remain required. This is source-policy evidence
+  only; it does not close any of the 50 acceptance contracts or authorize
+  preview, retirement, deployment, promotion, or human acceptance.
 - Added the stable `operator.authenticated-workspace-journey` release-UAT item
   for browser targets. The exact-SHA checklist now requires an authenticated
   route/task matrix across quote creation/readback/export, Workflow, Event

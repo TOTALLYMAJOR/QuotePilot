@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assessAmbientLegacyRetirement } from "../src/lib/ambientLegacyRetirement.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -19,6 +20,13 @@ const PRODUCTION_WORKFLOWS = Object.freeze([
 ]);
 const BROWSER_SPEC = "e2e/ambient-intelligence-accessibility.spec.js";
 const ORCHESTRATION_SCRIPT = "scripts/orchestration-lanes.sh";
+const WORK_PLAN = "docs/AMBIENT_INTELLIGENCE_WORK_PLAN.md";
+const UAT_CHECKLIST = "docs/release-uat-checklist.json";
+const AUTHENTICATED_OPERATOR_UAT_ITEM_ID = "operator.authenticated-workspace-journey";
+const AMBIENT_ITEM_IDS = Object.freeze(Array.from(
+  { length: 50 },
+  (_, index) => `AIUI-${String(index + 1).padStart(2, "0")}`
+));
 
 function read(root, relativePath) {
   const absolutePath = path.join(root, relativePath);
@@ -40,7 +48,10 @@ function requireText(errors, source, expected, message) {
   if (!source.includes(expected)) errors.push(message);
 }
 
-export function assertAmbientReleaseGate({ root = ROOT } = {}) {
+export function assertAmbientReleaseGate({
+  root = ROOT,
+  assessRetirement = assessAmbientLegacyRetirement
+} = {}) {
   const errors = [];
   let packageJson;
   try {
@@ -60,12 +71,71 @@ export function assertAmbientReleaseGate({ root = ROOT } = {}) {
   let ciWorkflow = "";
   let browserSpec = "";
   let orchestration = "";
+  let workPlan = "";
+  let uatChecklist = null;
   try {
     ciWorkflow = read(root, CI_WORKFLOW);
     browserSpec = read(root, BROWSER_SPEC);
     orchestration = read(root, ORCHESTRATION_SCRIPT);
+    workPlan = read(root, WORK_PLAN);
+    uatChecklist = JSON.parse(read(root, UAT_CHECKLIST));
   } catch (error) {
     errors.push(error.message);
+  }
+
+  const definedAmbientItemIds = [...workPlan.matchAll(
+    /^- \*\*(AIUI-\d{2})\b/gm
+  )].map((match) => match[1]);
+  if (
+    definedAmbientItemIds.length !== AMBIENT_ITEM_IDS.length
+    || new Set(definedAmbientItemIds).size !== AMBIENT_ITEM_IDS.length
+    || AMBIENT_ITEM_IDS.some((itemId) => !definedAmbientItemIds.includes(itemId))
+  ) {
+    errors.push("the canonical Ambient work plan must retain exactly one definition for AIUI-01 through AIUI-50");
+  }
+
+  const operatorUatItem = uatChecklist?.items?.find(
+    ({ id }) => id === AUTHENTICATED_OPERATOR_UAT_ITEM_ID
+  );
+  if (
+    !operatorUatItem
+    || JSON.stringify(operatorUatItem.targets) !== JSON.stringify([
+      "firebase-hosting",
+      "firebase-all",
+      "vercel"
+    ])
+  ) {
+    errors.push("the Ambient release gate must retain the browser-target authenticated operator UAT item");
+  }
+  const safeOffProfile = uatChecklist?.candidateProfiles?.find(
+    ({ id }) => id === "staging-safe-off"
+  );
+  if (safeOffProfile?.itemStates?.[AUTHENTICATED_OPERATOR_UAT_ITEM_ID]?.state !== "applicable") {
+    errors.push("the fixed safe-off candidate must classify authenticated operator UAT as applicable");
+  }
+
+  try {
+    const defaultRetirement = assessRetirement();
+    const partialRetirement = assessRetirement({
+      parityAccepted: true,
+      rollbackArtifactVerified: true,
+      releaseAccepted: true
+    });
+    const completeRetirement = assessRetirement({
+      parityAccepted: true,
+      rollbackArtifactVerified: true,
+      releaseAccepted: true,
+      productionPromotionApproved: true
+    });
+    if (
+      defaultRetirement?.removalAuthorized !== false
+      || partialRetirement?.removalAuthorized !== false
+      || completeRetirement?.removalAuthorized !== true
+    ) {
+      errors.push("AIUI-48 removal must remain blocked until parity, rollback, release acceptance, and promotion approval all pass");
+    }
+  } catch (error) {
+    errors.push(`the AIUI-48 retirement contract could not be evaluated: ${error.message}`);
   }
 
   const gateStep = stepBlock(ciWorkflow, "Run Ambient zero-dead-click release gate");
@@ -205,7 +275,10 @@ export function assertAmbientReleaseGate({ root = ROOT } = {}) {
 
   return Object.freeze({
     browserCommand: AMBIENT_RELEASE_GATE_SCRIPT,
+    materialItemCount: AMBIENT_ITEM_IDS.length,
+    operatorUatItemId: AUTHENTICATED_OPERATOR_UAT_ITEM_ID,
     productionWorkflowCount: PRODUCTION_WORKFLOWS.length,
+    retirementGateCount: 4,
     acknowledgementDeadlineMs: 250,
     requiredDeadClickRate: 0
   });
@@ -218,7 +291,7 @@ if (isDirectExecution) {
   try {
     const result = assertAmbientReleaseGate();
     process.stdout.write(
-      `Ambient release gate is bound to protected CI: ${result.requiredDeadClickRate} dead clicks, ${result.acknowledgementDeadlineMs}ms acknowledgement contract.\n`
+      `Ambient release gate is bound to protected CI: ${result.materialItemCount} material items, ${result.requiredDeadClickRate} dead clicks, ${result.acknowledgementDeadlineMs}ms acknowledgement contract.\n`
     );
   } catch (error) {
     process.stderr.write(`${error?.message || error}\n`);

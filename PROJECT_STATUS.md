@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 10:22:18 CDT
+Last updated: 2026-08-28 10:28:54 CDT
 
 ## Current Production Release
 
@@ -276,6 +276,12 @@ Last updated: 2026-08-28 10:22:18 CDT
   payment steps, and limits quiet progress to timestamp-backed internal
   workflow receipts. All 50 remain partial against their complete acceptance
   contracts.
+  The quick Ambient release policy now also verifies that all 50 canonical
+  work-item definitions remain present, the authenticated operator UAT item is
+  browser-applicable under the fixed safe-off profile, and AIUI-48 cannot
+  authorize legacy removal before parity, exact rollback, release acceptance,
+  and explicit promotion approval all pass. This closes a repository policy
+  gap only; no item is formally closed and no external gate is reported passed.
   The exact CI-equivalent production Ambient build passes locally with 3,714,204 total
   JavaScript bytes and a 391,901-byte largest chunk, inside the existing
   temporary ceiling without recalibration. Its selected graph excludes the
