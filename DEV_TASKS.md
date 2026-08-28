@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 10:09:20 CDT
+Last updated: 2026-08-28 10:14:02 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -33,7 +33,7 @@ Execution rules:
 |---:|---|---|---|---|---|
 | 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | `ready after ownership`; current dirty tree cannot be path-staged safely |
 | 2 | `QP-PERF-002` — close temporary bundle exceptions | Rows 29, 60, 62, 64 and the performance guardrail | Clean-main/candidate measurements; exact graph profile; accepted optimization or reviewed baseline recalibration | Compatibility and Ambient graphs pass the standard budget without a no-headroom exception; build, browser/CWV, and docs gates pass; no route, accessibility, or authority regression | `ready after clean checkout`; clean-main recalibration may require review |
-| 3 | `QP-CONFIG-003` — remove remaining `functions.config()` compatibility | Runtime/deployment capabilities using Firebase Functions | Inventory of remaining reads; environment/Secret Manager replacement contract; March 2027 deadline | No production runtime depends on `functions.config()`; local fallback and secret boundaries remain intact; function tests, env materialization, build, emulator lanes, and deployment docs pass | `ready for bounded source slices`; deployment proof is external |
+| 3 | `QP-CONFIG-003` — remove remaining `functions.config()` compatibility | Runtime/deployment capabilities using Firebase Functions | Source migration complete; exact coordinated backend release; runtime readback; March 2027 deadline | No production runtime depends on `functions.config()`; local fallback and secret boundaries remain intact; function tests, env materialization, build, emulator lanes, and deployment docs pass | Source candidate complete; deployment/runtime proof is `human/external` |
 | 4 | `QP-ACCEPT-004` — exact authenticated staff/operator acceptance | Rows 5, 8, 18, 27, 29–30, 34–45, 47–60, 63, 68–72 as applicable to the candidate | Immutable exact SHA and flag profile; real QuotePilot staff session; canonical tenant data; rollback artifact | Named route/task matrix proves create, save, exact readback/version, export, Workflow, Event Workspace, Customer 360, Messaging, BEO, Decision Debt, payments, staffing boundaries, and role denials; every result is tied to the SHA and evidence level | `human/external`; repository can prepare the matrix only |
 | 5 | `QP-TENANT-005` — disposable tenant lifecycle and isolation proof | Rows 1, 18, 25–26, 30 | Exact provisioning candidate; verified disposable owner; cleanup/tombstone plan; hosted auth | Plan/create/activate/defaults/starter review/pricing/quote/portal/cross-tenant denial/cleanup all produce exact receipts; no foreign-tenant or expired-token disclosure; cleanup is verified | `human/external` production coordination |
 | 6 | `QP-BUYER-006` — bounded buyer-access test window | Row 26 plus quote/payment isolation in row 8 | Dedicated restricted Stripe test key; exact webhook events; existing Turnstile verification; rollback/close plan | Test-mode invoice creation, idempotency, rate limits, signed lifecycle, paid preparation, invitation/activation, eligible repair, negative paths, and quote-rail isolation pass; gate is closed afterward unless launch is separately approved | `human/external` credential and provider dashboard actions |
@@ -234,7 +234,9 @@ replace their safety conditions.
   mutation step.
 - Rehearse an immutable staging/UAT pass and rejected invalid-evidence deploy
   without mutating production.
-- Migrate remaining `functions.config()` compatibility before March 2027.
+- Deploy the environment-only Functions configuration candidate through an
+  exact coordinated backend release and verify runtime readback before March
+  2027. Source no longer reads `functions.config()`; deployment remains open.
 
 ## P1 - Ambient Intelligence Interface Program
 

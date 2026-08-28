@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-25 00:36:36 CDT
+Last updated: 2026-08-28 10:14:02 CDT
 
 ## Current Production Release
 
@@ -673,8 +673,10 @@ route evidence are complete.
    candidate. Exact-SHA CI confirmation is still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.
-10. `functions.config()` compatibility remains in source and must migrate before
-    Firebase removes the legacy API in March 2027.
+10. The sole `functions.config()` compatibility read is removed in the current
+    source candidate. Production still runs the prior deployed revision, so an
+    exact coordinated backend release and runtime readback remain required
+    before the March 2027 platform removal can be called operationally closed.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
 12. Operational staffing is source-only and independently default-off. Do not
@@ -761,8 +763,9 @@ route evidence are complete.
    opt-out-hold proof, and one controlled UAT plan.
 6. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
    denial matrix.
-7. Complete the bundle-exception closure path and continue `functions.config()`
-   migration planning.
+7. Complete the bundle-exception closure path, then include the environment-only
+   Functions configuration candidate in an exact coordinated backend release
+   and verify runtime readback before closing the migration operationally.
 8. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any
    all-positive attestation or production-intent merge.

@@ -485,8 +485,6 @@ const PAYMENT_REQUEST_FLOWS = Object.freeze({
     callableLabel: "final-balance request"
   })
 });
-let cachedFunctionsConfig = undefined;
-let functionsConfigErrorLogged = false;
 const CLAIMS_VERSION = 1;
 const PROVISIONING_EMAIL_LEASE_MS = 2 * 60 * 1000;
 const QUOTE_DELIVERY_LEASE_MS = 2 * 60 * 1000;
@@ -498,32 +496,6 @@ const UNKNOWN_HOST_WINDOW_MS = Math.max(1_000, Number(readConfig("security.unkno
 const UNKNOWN_HOST_LIMIT = Math.max(1, Number(readConfig("security.unknown_host_limit", "20")) || 20);
 const unknownHostCounter = new Map();
 const recordPortalRecoveryAttempt = createPortalRecoveryThrottle();
-function getFunctionsConfigSnapshot() {
-  if (cachedFunctionsConfig !== undefined) {
-    return cachedFunctionsConfig;
-  }
-
-  if (typeof functions.config !== "function") {
-    cachedFunctionsConfig = {};
-    return cachedFunctionsConfig;
-  }
-
-  try {
-    const config = functions.config();
-    cachedFunctionsConfig = config && typeof config === "object" ? config : {};
-  } catch (err) {
-    if (!functionsConfigErrorLogged) {
-      functions.logger.warn("functions.config() unavailable; falling back to environment variables.", {
-        message: normalizeText(err?.message).slice(0, 180)
-      });
-      functionsConfigErrorLogged = true;
-    }
-    cachedFunctionsConfig = {};
-  }
-
-  return cachedFunctionsConfig;
-}
-
 function readEnvConfig(path) {
   const envKey = String(path || "")
     .trim()
@@ -539,14 +511,7 @@ function readEnvConfig(path) {
 
 function readConfig(path, fallback = "") {
   const envValue = readEnvConfig(path);
-  if (envValue.present) return envValue.value;
-
-  const config = getFunctionsConfigSnapshot();
-  const value = path.split(".").reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), config);
-  if (value !== undefined && value !== null && String(value).trim()) {
-    return String(value).trim();
-  }
-  return fallback;
+  return envValue.present ? envValue.value : fallback;
 }
 
 function readBoundSecret(name) {

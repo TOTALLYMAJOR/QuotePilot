@@ -1,12 +1,21 @@
 # Changelog
 
-Last updated: 2026-08-25 00:36:36 CDT
+Last updated: 2026-08-28 10:14:02 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
 ## [Unreleased]
+
+### Changed
+- Removed the sole deprecated Firebase `functions.config()` compatibility
+  read. Default Functions now consume reviewed non-secret runtime values only
+  from project-scoped environment variables and provider credentials only from
+  their existing Secret Manager bindings. Existing names, fail-closed
+  defaults, emulator behavior, role/tenant checks, provider gates, and local
+  fallback remain unchanged. This is source validation only; no deployment,
+  provider configuration, production readback, or human acceptance is claimed.
 
 ### Fixed
 - Preserved a supplied normalized pricing snapshot when local quote persistence
