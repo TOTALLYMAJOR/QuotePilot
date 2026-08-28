@@ -16,7 +16,8 @@ import {
   isFinalBalanceRequestEligible,
   getQuoteHistoryActionPermissions,
   getQuoteHistoryFinancialCells,
-  getQuoteHistoryKitchenBeoMode
+  getQuoteHistoryKitchenBeoMode,
+  getAmbientQuoteSourceFreshness
 } from "../QuoteHistoryModal";
 
 describe("quote history presentation helpers", () => {
@@ -61,6 +62,35 @@ describe("quote history presentation helpers", () => {
     expect(getQuoteHistoryFinancialCells({ totals: { total: 0, deposit: 0 } })).toEqual({
       total: "$0.00",
       deposit: "$0.00"
+    });
+  });
+
+  test("marks only a completed error-free quote-history observation as fresh", () => {
+    const loadedAtISO = "2026-08-28T07:52:00.000Z";
+    expect(getAmbientQuoteSourceFreshness({
+      source: "firebase",
+      complete: true,
+      loadedAtISO
+    })).toMatchObject({
+      state: "fresh",
+      observedAt: loadedAtISO,
+      reason: expect.stringContaining("latest completed Firestore quote history read")
+    });
+
+    expect(getAmbientQuoteSourceFreshness({
+      source: "firebase",
+      complete: true,
+      loading: true,
+      loadedAtISO
+    })).toMatchObject({
+      state: "stale",
+      observedAt: loadedAtISO,
+      reason: expect.stringContaining("while QuotePilot refreshes")
+    });
+
+    expect(getAmbientQuoteSourceFreshness({ source: "firebase" })).toMatchObject({
+      state: "unknown",
+      reason: expect.stringContaining("not available yet")
     });
   });
 });

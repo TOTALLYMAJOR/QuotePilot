@@ -869,7 +869,7 @@ function buildAmbientActions({
     label: "Pricing"
   };
   const conversationReference = {
-    id: "conversation",
+    id: model.quoteId,
     type: "customer-communication-evidence",
     label: "Conversation"
   };

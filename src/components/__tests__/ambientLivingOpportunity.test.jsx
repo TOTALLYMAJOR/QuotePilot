@@ -703,7 +703,7 @@ describe("AmbientLivingOpportunity", () => {
       arrivalContext: {
         surfaceId: "conversation",
         object: {
-          id: "conversation",
+          id: "quote-alpha",
           type: "customer-communication-evidence",
           label: "Conversation"
         },
@@ -766,7 +766,7 @@ describe("AmbientLivingOpportunity", () => {
       arrivalContext: {
         surfaceId: "workflow",
         object: {
-          id: "conversation",
+          id: "quote-alpha",
           type: "customer-communication-evidence",
           label: "Conversation"
         },

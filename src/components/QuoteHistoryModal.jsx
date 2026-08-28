@@ -421,6 +421,43 @@ export function getQuoteHistoryFinancialCells(quote = {}) {
   };
 }
 
+export function getAmbientQuoteSourceFreshness({
+  source = "",
+  complete = false,
+  loading = false,
+  stale = false,
+  loadedAtISO = "",
+  error = ""
+} = {}) {
+  const observedAt = String(loadedAtISO || "").trim();
+  const sourceLabel = String(source || "").trim().toLowerCase() === "firebase"
+    ? "Firestore quote history"
+    : "quote history";
+
+  if (complete && !loading && !stale && !error && observedAt) {
+    return {
+      state: "fresh",
+      observedAt,
+      reason: `This exact quote came from the latest completed ${sourceLabel} read.`
+    };
+  }
+
+  if (complete && observedAt && (loading || stale || error)) {
+    return {
+      state: "stale",
+      observedAt,
+      reason: loading
+        ? `A prior ${sourceLabel} snapshot remains visible while QuotePilot refreshes it.`
+        : `A prior ${sourceLabel} snapshot remains visible because the latest read did not complete successfully.`
+    };
+  }
+
+  return {
+    state: "unknown",
+    reason: `A completed ${sourceLabel} observation is not available yet.`
+  };
+}
+
 const fmtDate = formatQuoteHistoryDate;
 
 function canConvertToContract(quote) {
@@ -1186,6 +1223,10 @@ export function QuoteHistoryView({
     state.readError,
     state.truncated
   ]);
+  const ambientQuoteSourceFreshness = useMemo(() => getAmbientQuoteSourceFreshness({
+    ...ambientOpportunityReadBoundary,
+    source: state.source
+  }), [ambientOpportunityReadBoundary, state.source]);
 
   // Keep the child conversation mounted across a blocked route transition so
   // its in-memory request identity cannot be destroyed before /app/quotes is
@@ -2154,10 +2195,7 @@ export function QuoteHistoryView({
                     label: String(focusedQuote.event?.name || focusedQuote.quoteNumber || "Selected opportunity")
                   },
                   revision: focusedQuote.activeVersionId || focusedQuote.versionMeta?.versionId || null,
-                  sourceFreshness: {
-                    state: "unknown",
-                    reason: "Quote history does not expose a source observation timestamp."
-                  },
+                  sourceFreshness: ambientQuoteSourceFreshness,
                   pendingPreview: null
                 }}
                 onBackToQuotes={onBackToQuotes}

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 18:27:41 CDT
+Last updated: 2026-08-28 18:31:41 CDT
 
 All notable project changes are documented in this file.
 
@@ -22,6 +22,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   outrank the ordinary exact conversation handoff. Genuine recorded follow-up
   priority is unchanged, and no message, workflow, quote, or provider state is
   written by this compatibility correction.
+- Bound Conversation presentation to the exact quote-scoped communication
+  object and replaced its unconditional unknown source label with an explicit
+  fresh/stale/unknown classifier from the completed Quote History observation.
+  Refresh-in-progress and retained-after-error snapshots stay stale; a missing
+  observation stays unknown. This strengthens evidence labeling only and adds
+  no message, read-receipt, workflow, quote, or provider authority.
 - Implemented Product Truth Observability as a source/local candidate. The read-only `status:product` digest reconciles Git, canonical release claims, capability validation, development-evidence coverage, and optional reachability without becoming another authority; `check:product-drift` fails closed for blocking contradictions and malformed required inputs. Eleven focused compiler/CLI contracts pass. CI now publishes an advisory text/JSON digest and observes the gate without making it required; exact CI observation, freshness calibration, owner comprehension, and any enforcement promotion remain human/external.
 - Added the repository operating-system audit and Development Evidence Compiler. `npm run evidence:task` writes ignored local JSON records that keep source, local, CI, hosted, provider, production, human, and outcome evidence separate; `npm run evidence:index` summarizes validation outcomes, proof coverage, repeated risks, and next actions without replacing `plan:task --phase complete` or release authority.
 

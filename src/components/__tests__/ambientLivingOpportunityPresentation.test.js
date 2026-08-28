@@ -467,7 +467,7 @@ describe("ambient Living Opportunity presentation", () => {
       executionTarget: { surfaceId: "conversation-context" },
       arrivalContract: {
         object: {
-          id: "conversation",
+          id: "quote-alpha",
           type: "customer-communication-evidence",
           label: "Conversation"
         }
