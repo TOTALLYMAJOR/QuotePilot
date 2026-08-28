@@ -23,6 +23,7 @@ import {
   validateCustomerProvisioningPayload
 } from "../lib/customerProvisioning";
 import { currency } from "../lib/quoteCalculator";
+import { resolveOperationsAuditCapabilityState } from "../lib/operationsAuditPresentation";
 import {
   getQuoteHistory,
   recordQuoteIntegrationSync
@@ -301,7 +302,12 @@ export function IntegrationOpsView({
     source: "",
     quotes: []
   });
-  const [auditState, setAuditState] = useState({ loading: false, error: "", snapshot: null });
+  const [auditState, setAuditState] = useState({
+    loading: false,
+    recovering: false,
+    error: "",
+    snapshot: null
+  });
   const [feedback, setFeedback] = useState("");
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
@@ -361,14 +367,24 @@ export function IntegrationOpsView({
 
   const load = async () => {
     setState((prev) => ({ ...prev, loading: true, error: "" }));
-    if (canManageProviders) setAuditState((prev) => ({ ...prev, loading: true, error: "" }));
+    if (canManageProviders) {
+      setAuditState((prev) => ({
+        ...prev,
+        loading: true,
+        recovering: Boolean(prev.error),
+        error: ""
+      }));
+    }
     try {
       const [result, auditResult] = await Promise.all([
         getQuoteHistory({ organizationId }),
         canManageProviders
           ? getOperationsAuditSnapshot({ organizationId })
             .then((snapshot) => ({ snapshot, error: "" }))
-            .catch((err) => ({ snapshot: null, error: err?.message || "Operations audit is unavailable." }))
+            .catch(() => ({
+              snapshot: null,
+              error: "Operations audit could not be loaded. Try again."
+            }))
           : Promise.resolve({ snapshot: null, error: "" })
       ]);
       setState({
@@ -382,7 +398,12 @@ export function IntegrationOpsView({
         quoteId: prev.quoteId || result.quotes[0]?.id || ""
       }));
       if (canManageProviders) {
-        setAuditState({ loading: false, error: auditResult.error, snapshot: auditResult.snapshot });
+        setAuditState({
+          loading: false,
+          recovering: false,
+          error: auditResult.error,
+          snapshot: auditResult.snapshot
+        });
       }
     } catch (err) {
       setState((prev) => ({
@@ -391,7 +412,7 @@ export function IntegrationOpsView({
         error: err?.message || "Failed to load integration data."
       }));
       if (canManageProviders) {
-        setAuditState((prev) => ({ ...prev, loading: false }));
+        setAuditState((prev) => ({ ...prev, loading: false, recovering: false }));
       }
     }
   };
@@ -968,6 +989,7 @@ export function IntegrationOpsView({
   );
 
   const integrationStatus = setupState.status || {};
+  const operationsAuditCapabilityState = resolveOperationsAuditCapabilityState(auditState);
   const stripeStatus = integrationStatus.stripe || {};
   const stripeMissingFields = Array.isArray(stripeStatus.missingFields) ? stripeStatus.missingFields : [];
   const canShowRecoveredProvisioningResult = !provisionState.loading && !provisionState.error;
@@ -1101,13 +1123,17 @@ export function IntegrationOpsView({
 
         {!provisioningOnly && canManageProviders && <OrganizationRoleAuthorityPanel />}
 
-        {!provisioningOnly && canManageProviders && <section className="admin-section operations-audit-panel">
+        {!provisioningOnly && canManageProviders && <section
+          className="admin-section operations-audit-panel"
+          data-capability-id="bounded-security-audit"
+          data-capability-state={operationsAuditCapabilityState}
+        >
           <div className="admin-section-head">
             <div>
               <h3>Operations Audit</h3>
               <p className="source-note">Server-derived delivery health, recorded sync trend, and role-stamped sensitive actions.</p>
             </div>
-            {auditState.loading && <span>Loading...</span>}
+            {auditState.loading && <span>{auditState.recovering ? "Checking again..." : "Loading..."}</span>}
           </div>
           {auditState.error && <p className="warning-note">{auditState.error}</p>}
           {auditState.snapshot && (
@@ -1119,6 +1145,8 @@ export function IntegrationOpsView({
                 <div className="metric-card"><span>7-day sync success</span><strong>{Number(auditState.snapshot.sync?.successRate || 0).toFixed(1)}%</strong></div>
                 <div className="metric-card"><span>Admins</span><strong>{auditState.snapshot.roles?.admin || 0}</strong></div>
                 <div className="metric-card"><span>Sales staff</span><strong>{auditState.snapshot.roles?.sales || 0}</strong></div>
+                <div className="metric-card"><span>Receipt-backed actions</span><strong>{auditState.snapshot.security?.receiptBackedActionCount || 0}</strong></div>
+                <div className="metric-card"><span>Legacy observations</span><strong>{auditState.snapshot.security?.legacyObservationCount || 0}</strong></div>
               </div>
               <div className="status-strip" aria-label="Seven-day integration health trend">
                 {(auditState.snapshot.sync?.trend || []).map((row) => (
@@ -1127,14 +1155,14 @@ export function IntegrationOpsView({
               </div>
               <div className="history-table-wrap">
                 <table>
-                  <thead><tr><th>When</th><th>Action</th><th>State</th><th>Quote</th><th>Actor role</th><th>Actor</th><th>Authority</th></tr></thead>
+                  <thead><tr><th>When</th><th>Action</th><th>State</th><th>Target</th><th>Actor role</th><th>Actor</th><th>Evidence</th></tr></thead>
                   <tbody>
                     {(auditState.snapshot.actions || []).map((row) => (
                       <tr key={row.id}>
                         <td>{formatDateTime(row.occurredAtISO)}</td>
                         <td>{row.action}</td>
                         <td>{row.state || "-"}</td>
-                        <td>{row.quoteNumber || row.quoteId || "-"}</td>
+                        <td>{row.targetEmail || row.quoteNumber || row.quoteId || "-"}</td>
                         <td>{row.actorRole || "-"}</td>
                         <td>{row.actorEmail || "-"}</td>
                         <td>{row.authority}</td>
@@ -1147,7 +1175,7 @@ export function IntegrationOpsView({
                 </table>
               </div>
               <p className="source-note">
-                Retry counts are operational candidates, not proof that a resend occurred. Recorded sync events are operator audit entries until a server connector is enabled.
+                Receipt-backed rows are durable server evidence for the bounded action taxonomy. Delivery and catalog rows remain labeled legacy observations. Retry counts are operational candidates, not proof that a resend occurred. Browser export and clear are unavailable, and no receipt-clear workflow is implemented.
               </p>
             </>
           )}

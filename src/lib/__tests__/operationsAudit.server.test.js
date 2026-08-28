@@ -51,6 +51,21 @@ describe("operations audit snapshot", () => {
         { uid: "admin-1", role: "admin" },
         { uid: "sales-1", role: "sales" }
       ],
+      roleAuthorityReceipts: [{
+        schemaVersion: 1,
+        requestId: "role-authority-request-0001",
+        organizationId: "org-a",
+        actorUid: "private-owner-uid",
+        actorEmail: "OWNER@EXAMPLE.COM",
+        actorWasOwner: true,
+        targetUid: "private-target-uid",
+        targetEmail: "STAFF@EXAMPLE.COM",
+        previousRole: "sales",
+        nextRole: "admin",
+        changedAtISO: "2026-08-06T17:30:00.000Z",
+        authenticatedAtISO: "2026-08-06T17:29:00.000Z",
+        appCheckAppId: "private-app-id"
+      }],
       settings: {
         pricingConfirmation: {
           actorUid: "admin-1",
@@ -59,6 +74,7 @@ describe("operations audit snapshot", () => {
           confirmedCatalogRevision: 4
         }
       },
+      organizationId: "org-a",
       nowISO
     });
     expect(result.delivery).toMatchObject({ total: 2, retryAvailable: 1, reviewRequired: 1 });
@@ -66,10 +82,63 @@ describe("operations audit snapshot", () => {
     expect(result.sync.successRate).toBe(50);
     expect(result.roles).toEqual({ admin: 1, sales: 1, staff: 2 });
     expect(result.actions.map((row) => row.action)).toEqual([
+      "organization_role_changed",
       "convert_to_contract",
       "quote_delivery_confirmed_not_sent",
       "catalog_pricing_confirmed"
     ]);
-    expect(result.actions.every((row) => row.authority === "server")).toBe(true);
+    expect(result.security).toMatchObject({
+      taxonomyVersion: 1,
+      receiptBackedActionCount: 2,
+      legacyObservationCount: 2,
+      storageRetention: "indefinite_server_record",
+      clearPolicy: "not_available",
+      exportPolicy: "not_available",
+      privacy: "bounded_projection"
+    });
+    expect(result.actions.slice(0, 2).every((row) => row.authority === "server_receipt")).toBe(true);
+    expect(result.actions.slice(2).every((row) => row.authority === "server_projection")).toBe(true);
+    expect(JSON.stringify(result.actions)).not.toMatch(/private-owner-uid|private-target-uid|private-app-id|authenticatedAtISO/);
+  });
+
+  test("deduplicates replayed receipts, drops cross-tenant rows, retains failed executions, and bounds projection", () => {
+    const roleAuthorityReceipts = Array.from({ length: 55 }, (_, index) => ({
+      schemaVersion: 1,
+      requestId: `role-request-${String(index).padStart(3, "0")}`,
+      organizationId: "org-a",
+      actorEmail: "owner@example.com",
+      actorWasOwner: true,
+      targetEmail: `staff-${index}@example.com`,
+      previousRole: "sales",
+      nextRole: "admin",
+      changedAtISO: new Date(Date.parse("2026-08-06T18:00:00.000Z") - index * 1000).toISOString()
+    }));
+    roleAuthorityReceipts.push(
+      { ...roleAuthorityReceipts[0] },
+      { ...roleAuthorityReceipts[1], requestId: "foreign", organizationId: "org-b" }
+    );
+    const result = buildOperationsAuditSnapshot({
+      organizationId: "org-a",
+      roleAuthorityReceipts,
+      executions: [{
+        approvalRequestId: "failed-approval",
+        action: "hard_delete_quote",
+        state: "failed",
+        quoteId: "quote-1",
+        completedAtISO: "2026-08-06T18:01:00.000Z",
+        executedBy: { role: "admin", email: "admin@example.com" }
+      }],
+      nowISO: "2026-08-06T18:02:00.000Z"
+    });
+
+    expect(result.security.receiptBackedActionCount).toBe(56);
+    expect(result.actions).toHaveLength(50);
+    expect(result.actions[0]).toMatchObject({
+      action: "hard_delete_quote",
+      state: "failed",
+      evidenceClass: "immutable_receipt"
+    });
+    expect(result.actions.some((row) => row.id === "role:foreign")).toBe(false);
+    expect(result.actions.filter((row) => row.id === "role:role-request-000")).toHaveLength(1);
   });
 });

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 12:27:02 CDT
+Last updated: 2026-08-28 12:45:54 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -47,7 +47,7 @@ Execution rules:
 | 14 | `QP-STEWARD-014` — consenting silent Difficult Question Desk pilot | Row 71 | Reviewed private runtime/provider transport; canonical context reads; private persistence; consent; kill/rollback; billing/privacy review | No model output is user-visible; exact packet validation and tenant/revision fences hold; 100 actual human packet reviews are recorded separately from the pinned corpus; promotion thresholds cannot self-authorize | Secret-scan preflight blocker repaired without weakening policy; Phase 1 private runtime and 100 reviews remain `human/external`; later product phases remain backlog |
 | 15 | `QP-ATTEND-015` — attendance persistence and confirmation bridge | Row 60 attendance source note; attendance ADR Slice B onward | Direct terminology/channel research; accepted migration and authority plan; unchanged exact `event.guests`; existing Commercial Change receipts | Versioned planning/confirmation evidence persists with source/actor/time; legacy reads remain valid; differing confirmed counts remain proposed until exact-revision apply; BEO/closeout freshness stays separate; portal, rules, role, tenant, and browser acceptance pass | `blocked on product/human decisions`; read-only Slice A/C is complete locally |
 | 16 | `QP-PWA-016` — qualify the installable safe recovery shell | Row 62 | Repository manifest, cache namespace, asset allowlist, navigation fallback, responsive recovery, and production-preview proof complete; exact deployment and supported test devices remain | On the exact hosted candidate, supported desktop/mobile browsers install and relaunch; offline navigation reaches the truthful recovery page; reconnect succeeds; no authenticated data or trusted mutation is represented as offline-capable | Repository slice complete; exact deployment, hosted install/relaunch, and physical-device acceptance are `human/external` |
-| 17 | `QP-AUDIT-017` — complete optional cross-surface security/audit depth | Row 21 plus row 63 Operations Audit | Define the sensitive-action taxonomy, retention/privacy boundary, server receipt authority, tenant/role visibility, and legacy-event compatibility | Every in-scope sensitive action has a server-owned, tenant-scoped, role-stamped immutable receipt; Operations Audit exposes only bounded safe projections; replay, failure, cross-tenant denial, retention, and export/clear policy tests pass | `ready for bounded taxonomy and gap inventory`; provider-derived outcomes remain separately evidenced |
+| 17 | `QP-AUDIT-017` — complete optional cross-surface security/audit depth | Row 21 plus row 63 Operations Audit | Bounded taxonomy, retention/privacy boundary, server receipt authority, tenant/role visibility, and legacy-event compatibility are implemented locally | Final quote approvals and organization role changes have server-owned, tenant-scoped, role-stamped immutable receipt projections; Operations Audit exposes only bounded safe fields; replay, failed execution, foreign-tenant rejection, retention, truncation, and export/clear policy tests pass | Repository slice complete; deployment, authenticated hosted role/tenant denial, production-data review, and human acceptance are `human/external`; provider-derived outcomes remain separately evidenced |
 
 The repository-preparable slices for `QP-GOV-001`, `QP-CONFIG-003`,
 `QP-ACCEPT-004`, `QP-AMBIENT-012`, and the current `QP-PERF-002` headroom
@@ -55,10 +55,10 @@ repair are complete. Tasks `QP-ACCEPT-004` through `QP-CONNECT-011` may proceed
 only when their named external evidence is available. Full `QP-PERF-002`
 exception retirement requires reviewed graph ownership or baseline policy;
 Ambient promotion, Package acceptance, Steward pilot execution, and attendance
-authority likewise remain behind their explicit human/external decisions. The
-explicitly partial matrix rows now continue with repository-ready
-`QP-AUDIT-017`; `QP-PWA-016` is repository-complete and retains only its exact
-deployment/device gate, while `QP-CONNECT-011` and `QP-STEWARD-014` retain
+authority likewise remain behind their explicit human/external decisions.
+`QP-AUDIT-017` and `QP-PWA-016` are repository-complete and retain only their
+exact deployment, hosted-role/data, device, or human gates. The explicitly
+partial matrix rows now remain `QP-CONNECT-011` and `QP-STEWARD-014`, with
 their higher-risk infrastructure, provider, privacy, and human gates.
 The remaining sections retain the detailed task contracts; this table does not
 replace their safety conditions.

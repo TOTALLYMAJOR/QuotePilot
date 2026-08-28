@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 12:27:02 CDT
+Last updated: 2026-08-28 12:45:54 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Completed the source/local bounded security-audit slice. The admin-only
+  Operations Audit callable now projects replay-stable organization-role-change
+  receipts alongside final quote-approval execution receipts, rejects
+  foreign-tenant rows again inside the projection, caps output at 50 rows from
+  bounded samples, and removes principal UIDs, App Check identity, recent-auth
+  timestamps, and raw receipt fields. Delivery reconciliation and catalog
+  confirmation remain explicitly labeled legacy server observations rather
+  than immutable receipts. Role-authority receipts are retained as indefinite
+  server records with no browser export, clear control, or implemented receipt-
+  clear workflow. Focused replay, failed-action,
+  cross-tenant, privacy, truncation, and UI-state tests pass. This is not a
+  deployment, hosted role/tenant result, provider outcome, or human acceptance.
 - Completed the source/local PWA safe-shell candidate with stable install
   identity, 192/512 maskable icons, a namespaced versioned recovery cache, and
   an accessible offline page at 390, 768, and 1440 pixels. The service worker

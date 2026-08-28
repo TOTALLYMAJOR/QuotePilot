@@ -1,7 +1,128 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 51,
+  "catalogVersion": 52,
   "contracts": [
+    {
+      "id": "bounded-security-operations-audit",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "organization_admins",
+        "platform_operators"
+      ],
+      "summary": "Operations Audit gives same-tenant organization admins a bounded projection of immutable quote-approval and organization-role-change receipts while labeling delivery reconciliation and catalog confirmation as legacy server projections rather than immutable evidence.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/operationsAudit.js",
+        "functions/organizationRoleAuthority.js",
+        "src/lib/commerceOps.js",
+        "src/lib/operationsAuditPresentation.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getOperationsAuditSnapshot"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getOperationsAuditSnapshot"
+      ],
+      "frontendPaths": [
+        "src/components/IntegrationOpsModal.jsx",
+        "src/lib/operationsAuditPresentation.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/IntegrationOpsModal.jsx",
+          "locator": "data-capability-id=\"bounded-security-audit\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/operationsAudit.server.test.js",
+        "src/lib/__tests__/operationsAuditPresentation.test.js",
+        "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/operationsAudit.server.test.js",
+          "locator": "deduplicates replayed receipts, drops cross-tenant rows, retains failed executions, and bounds projection"
+        },
+        {
+          "path": "src/lib/__tests__/operationsAudit.server.test.js",
+          "locator": "summarizes delivery retry/review states, sync trend, roles, and server actions"
+        },
+        {
+          "path": "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+          "locator": "requires authentication within five minutes"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "organization role authority receipts are private and immutable in browsers"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Bounded cross-surface security audit"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Operations Audit"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The existing admin-only Operations Audit now separates immutable receipt evidence from legacy server observations, projects role-change receipts without UID, recent-auth, App Check, or raw receipt fields, reports source truncation, and exposes no browser export or clear control. Role-authority receipts remain indefinite server records because no receipt-clear workflow is implemented.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "Operations Audit performs a fresh callable read on open and refresh and does not retain a cached snapshot after failure, so it never presents a stale-data variant."
+        }
+      },
+      "safeOutcome": "An authenticated same-tenant admin can distinguish immutable role-change and quote-approval receipts from bounded legacy delivery and catalog observations. Replayed role receipts collapse to one row, foreign-tenant rows fail the defense-in-depth filter, failed approval executions remain visible, raw security metadata stays private, the table caps at 50 rows from bounded server samples, and retention is explicitly indefinite with no browser export or implemented clear workflow."
+    },
     {
       "id": "steward-private-validation-foundation",
       "reviewRevision": 5,

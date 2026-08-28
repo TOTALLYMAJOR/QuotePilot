@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 12:27:02 CDT
+Last updated: 2026-08-28 12:45:54 CDT
 
 ## Current Production Release
 
@@ -23,6 +23,15 @@ Last updated: 2026-08-28 12:27:02 CDT
 
 ## Pending Production Completion
 
+- The optional bounded security-audit slice is repository-complete in the
+  current source candidate. Operations Audit has an explicit two-action
+  immutable taxonomy for final quote-approval executions and organization role
+  changes, a bounded privacy-safe DTO, replay and foreign-tenant filtering,
+  source-truncation state, and an explicit indefinite server-retention/no-clear
+  policy. Delivery and catalog rows remain legacy observations; provider
+  outcomes remain separate.
+  Deployment, authenticated hosted admin/tenant denial checks, production-data
+  review, and human acceptance remain open.
 - The PWA safe recovery shell is repository-complete in the current source
   candidate. Its install manifest has stable identity and 192/512 maskable
   icons; the service worker owns only its namespaced shell cache, allowlists

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 12:27:02 CDT
+Last updated: 2026-08-28 12:45:54 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -966,9 +966,19 @@ unchanged.
   review quote-delivery retry candidates, outcomes requiring provider review,
   and the last seven days of recorded integration success/error activity.
 - The role totals reflect current authoritative admin and sales assignments.
-  The action table is limited to server-owned approval execution, delivery
-  reconciliation, and catalog pricing-confirmation evidence, including the
-  role stamped when that server action was executed where available.
+  Receipt-backed rows cover final quote-approval executions and organization
+  role changes. They are server-owned, role-stamped, tenant-filtered, and
+  replay-stable. The table never includes principal UIDs, App Check identity,
+  recent-auth timestamps, or raw receipt fields.
+- Delivery reconciliation and catalog pricing confirmation remain labeled
+  `server_projection` legacy observations rather than immutable receipts. A
+  provider-derived outcome still requires its own provider evidence.
+- The server samples at most 500 quotes, 200 approval executions, 200 role
+  records, and 200 role-authority receipts, then returns at most 50 action rows.
+  The surface reports a partial state when a source sample reaches its bound.
+- Browsers cannot export or clear the security receipt history. Role-authority
+  receipts are indefinite server records; no receipt-clear workflow is
+  implemented in this source candidate.
 - A `Retry available` count is a work queue, not evidence that QuotePilot sent
   or resent a message. Check the quote's exact delivery state before acting.
 - Integration success/error trends summarize operator-recorded audit entries

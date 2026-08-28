@@ -11698,25 +11698,38 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, { expectedOrganizationId: organizationId }));
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(staff.organizationId);
-  const [quotesSnap, executionsSnap, rolesSnap, settingsSnap] = await Promise.all([
+  const [quotesSnap, executionsSnap, rolesSnap, settingsSnap, roleAuthorityReceiptsSnap] = await Promise.all([
     organizationRef.collection(QUOTES_COLLECTION).limit(500).get(),
     organizationRef.collection(QUOTE_APPROVAL_EXECUTIONS_COLLECTION).limit(200).get(),
     db.collection(ROLES_COLLECTION).where("organizationId", "==", staff.organizationId).limit(200).get(),
-    organizationRef.collection("settings").doc("config").get()
+    organizationRef.collection("settings").doc("config").get(),
+    db.collection(ORGANIZATION_ROLE_AUTHORITY_RECEIPTS_COLLECTION)
+      .where("organizationId", "==", staff.organizationId)
+      .limit(200)
+      .get()
   ]);
+  const sourceTruncated = quotesSnap.size >= 500
+    || executionsSnap.size >= 200
+    || rolesSnap.size >= 200
+    || roleAuthorityReceiptsSnap.size >= 200;
   return {
     ok: true,
     source: "firebase",
     organizationId: staff.organizationId,
     sampledQuotes: quotesSnap.size,
     sampledExecutions: executionsSnap.size,
+    sampledRoleAuthorityReceipts: roleAuthorityReceiptsSnap.size,
     ...buildOperationsAuditSnapshot({
       quotes: quotesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       executions: executionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      roleAuthorityReceipts: roleAuthorityReceiptsSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() })),
       roles: rolesSnap.docs.map((doc) => ({ uid: doc.id, ...doc.data() })),
       settings: settingsSnap.exists ? settingsSnap.data() : {},
+      organizationId: staff.organizationId,
       nowISO: new Date().toISOString()
-    })
+    }),
+    sourceTruncated
   };
 });
 
