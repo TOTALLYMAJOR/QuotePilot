@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 17:59:34 CDT
+Last updated: 2026-08-28 18:02:58 CDT
 
 All notable project changes are documented in this file.
 
@@ -145,6 +145,25 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
+- Added the first source/local attendance architecture slice: a pure
+  `attendance-state-v1` compatibility normalizer with exhaustive legacy,
+  planning-range, final-count due, source-backed response, changed-count review,
+  receipt-backed apply, actual-attendance, malformed-envelope, and immutability
+  tests. It keeps `event.guests` as the exact commercial basis, rejects evidence
+  that cannot support its claimed state, requires applied source and revision
+  evidence to match the quote's exact current revision, returns a frozen read
+  model, and performs no I/O. It remains unconnected to a committed user surface
+  or attendance persistence. No capability or authority delta is claimed.
+- Added an accepted, phased attendance-state architecture and mixed-evidence
+  role journey for the gap between CREATE's draft-only uncertain guest counts,
+  the exact saved `event.guests` commercial basis, Decision Debt's **Final
+  guest count** timing, Commercial Change receipts, Kitchen BEO freshness, and
+  post-event actual attendance. The decision keeps the current exact pricing
+  input unchanged, requires source-backed confirmation and reviewed true-up,
+  places actual attendance under closeout authority, and defines six bounded
+  implementation slices. This documentation introduces no persistence,
+  pricing, staffing, proposal, BEO, payment, reservation, role, tenant, or
+  provider capability by itself.
 - Added a discoverable read-only Difficult Question Desk panel to the authorized
   staff Quote Workspace. Its live state truthfully reports that Steward is not
   connected to a reviewed runtime/provider, renders no model prose, labels that
