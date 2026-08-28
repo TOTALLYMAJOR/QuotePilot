@@ -1260,6 +1260,32 @@ function buildAmbientActions({
       },
       primary: false
     }),
+    reviewFinalCountDecision: createAmbientAction({
+      ...common,
+      enabled: Boolean(workflowHandlerAvailable),
+      disabledReason: workflowHandlerAvailable
+        ? null
+        : "The existing Workflow destination is unavailable in this workspace.",
+      id: "review-final-guest-count-in-workflow",
+      outcomeLabel: "Review final-count task",
+      purpose: "advance",
+      authorityLevel: "presentation",
+      previewPolicy: "none",
+      executionTarget: {
+        kind: "route",
+        targetId: model.quoteId,
+        surfaceId: "workflow"
+      },
+      receiptType: "pending",
+      reversibility: noRecovery,
+      arrivalContract: {
+        object: guestCountObject,
+        reason: "Open the exact final guest-count decision already recorded for this quote.",
+        consequence: "Workflow opens for review. Navigation does not confirm attendance, change the quote, or resolve the decision.",
+        nextResolutionIds: ["review-exact-workflow-item", "inspect-guest-count"]
+      },
+      primary: false
+    }),
     dismissGuestContext: createAmbientAction({
       ...common,
       id: "dismiss-guest-count-context",

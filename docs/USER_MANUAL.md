@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 17:56:30 CDT
+Last updated: 2026-08-28 18:12:02 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -731,6 +731,26 @@ unchanged.
   still require a coordinated release before they alter production behavior.
 
 ## Commercial Change Authority
+
+### Living Opportunity attendance evidence (source only)
+
+- Open **Guest count → See connections** to compare the exact **Saved priced
+  count** with the best separate planning, final-count, applied, or actual-
+  attendance evidence available on that quote. A legacy quote remains valid and
+  says that separate attendance evidence is not recorded.
+- An **Open decision** appears only from a recorded final-count request or a
+  fresh exact-quote Decision Debt item. Loading, stale, failed, incomplete, or
+  mismatched decision reads do not produce a due claim.
+- When the exact Decision Debt item is available, **Review final-count task**
+  opens that item in Workflow. Navigation does not confirm attendance, resolve
+  the task, change pricing or staffing, resize quantities, reserve capacity,
+  update the proposal or BEO, or save the quote.
+- If a future attendance record is malformed, QuotePilot keeps the saved priced
+  count visible and labels the added evidence **Attendance evidence needs
+  review**. Do not treat the review state as a final or applied count.
+- This is a source/local read presentation. QuotePilot does not yet persist new
+  planning or confirmation envelopes through this surface, and hosted data and
+  human acceptance remain separate.
 
 ### Living Opportunity guest-count pricing preview (source only)
 

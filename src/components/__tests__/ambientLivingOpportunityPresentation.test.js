@@ -288,7 +288,32 @@ describe("ambient Living Opportunity presentation", () => {
       enabled: true,
       primary: false
     });
+    expect(model.actions.reviewFinalCountDecision).toMatchObject({
+      id: "review-final-guest-count-in-workflow",
+      executionTarget: { surfaceId: "workflow" },
+      enabled: false,
+      primary: false
+    });
     expect(model.actions.primary.primary).toBe(true);
+  });
+
+  test("registers a presentation-only final-count Workflow handoff when the host supplies it", () => {
+    const model = buildAmbientLivingOpportunityPresentation(quote(), {
+      source: "firebase",
+      ordinaryEditAllowed: true,
+      workflowHandlerAvailable: true
+    });
+
+    expect(model.actions.reviewFinalCountDecision).toMatchObject({
+      id: "review-final-guest-count-in-workflow",
+      outcomeLabel: "Review final-count task",
+      authorityLevel: "presentation",
+      receiptType: "pending",
+      enabled: true,
+      disabledReason: null
+    });
+    expect(model.actions.reviewFinalCountDecision.arrivalContract.consequence)
+      .toContain("does not confirm attendance");
   });
 
   test("puts an exact Workflow blocker ahead of advisory recommendations", () => {

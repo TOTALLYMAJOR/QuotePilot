@@ -380,7 +380,108 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("Why this recommendation");
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.textContent).toContain("Saved priced count");
+    expect(dialog.textContent).toContain("Separate attendance evidence not recorded");
+    expect(dialog.textContent).toContain("does not confirm attendance");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this recommendation");
     expect(container.textContent).toContain("Guest count context opened");
+  });
+
+  test("shows planning and exact final-count timing evidence and opens only its exact Workflow task", () => {
+    const onOpenWorkflow = vi.fn(() => ({ status: "pending" }));
+    const quote = Object.freeze({
+      ...QUOTE,
+      event: Object.freeze({
+        ...QUOTE.event,
+        attendance: Object.freeze({
+          schemaVersion: 1,
+          planning: Object.freeze({
+            kind: "approximate",
+            value: 120,
+            min: 100,
+            max: 140,
+            sourceType: "customer_inquiry",
+            sourceReferenceId: "inquiry-001",
+            observedAtISO: "2026-08-11T11:45:00.000Z",
+            recordedByUid: "staff-alpha"
+          }),
+          confirmation: Object.freeze({
+            state: "requested",
+            requestedAtISO: "2026-09-01T15:00:00.000Z",
+            dueDate: "2026-09-12",
+            submittedCount: null,
+            sourceType: "",
+            sourceReferenceId: "",
+            submittedAtISO: "",
+            submittedByRole: "",
+            appliedRevisionId: "",
+            commercialChangeReceiptId: ""
+          }),
+          commercialBasis: Object.freeze({
+            source: "planning",
+            sourceReferenceId: "inquiry-001",
+            appliedRevisionId: ""
+          })
+        })
+      })
+    });
+    const decisionDebtSnapshot = Object.freeze({
+      snapshot: Object.freeze({
+        items: Object.freeze([Object.freeze({
+          id: "debt-final-count-001",
+          decisionType: "guest_count",
+          resolutionState: "open",
+          lockDate: "2026-09-12",
+          daysUntilLock: 4
+        })])
+      })
+    });
+
+    mount({ quote, decisionDebtSnapshot, onOpenWorkflow });
+    act(() => button("See connections").click());
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Saved priced count");
+    expect(dialog.textContent).toContain("Planning estimate: about 120 guests (100–140)");
+    expect(dialog.textContent).toContain("Customer inquiry · Aug 11, 2026");
+    expect(dialog.textContent).toContain("Final count due Sep 12, 2026");
+    expect(dialog.textContent).toContain("4 days remain until the final guest-count lock date");
+    expect(dialog.querySelector('[data-attendance-dimension="commercial-basis"]')).toBeTruthy();
+    expect(dialog.querySelector('[data-attendance-dimension="best-evidence"]')).toBeTruthy();
+    expect(dialog.querySelector('[data-attendance-dimension="decision-timing"]')).toBeTruthy();
+
+    act(() => button("Review final-count task").click());
+
+    expect(onOpenWorkflow).toHaveBeenCalledWith({
+      quoteId: "quote-alpha",
+      attentionType: "decision_debt",
+      requestId: "debt-final-count-001"
+    }, expect.objectContaining({
+      arrivalContext: expect.objectContaining({ surfaceId: "workflow" })
+    }));
+  });
+
+  test("keeps the exact priced count visible when added attendance evidence is malformed", () => {
+    mount({
+      quote: {
+        ...QUOTE,
+        event: {
+          ...QUOTE.event,
+          attendance: { schemaVersion: 99 }
+        }
+      }
+    });
+
+    act(() => button("See connections").click());
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Saved priced count");
+    expect(dialog.textContent).toContain("120 guests");
+    expect(dialog.textContent).toContain("Attendance evidence needs review");
+    expect(dialog.textContent).not.toContain("Final count applied");
   });
 
   test("opens populated five-domain Money evidence and restores its exact trigger", async () => {

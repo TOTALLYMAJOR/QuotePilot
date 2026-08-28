@@ -9,7 +9,11 @@ const PILOT_COMMAND_ENABLED = ["1", "true", "yes", "on"].includes(
 const CAPTURE_PROOF = ["1", "true", "yes", "on"].includes(
   String(process.env.CAPTURE_AMBIENT_BROWSER_PROOF || "").trim().toLowerCase()
 );
+const ATTENDANCE_PROOF_STAGE = String(
+  process.env.ATTENDANCE_PROOF_STAGE || "current"
+).trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-") || "current";
 const PROOF_DIRECTORY = "output/playwright/ambient-intelligence-current";
+const ATTENDANCE_PROOF_DIRECTORY = "output/playwright/quotepilot-attendance-strip-audit";
 const VIEWPORTS = [
   { width: 390, height: 844 },
   { width: 768, height: 900 },
@@ -39,6 +43,36 @@ const BASE_QUOTE = {
     venueAddress: "1200 East Fifth Street, Austin, TX",
     style: "Plated",
     guests: 120,
+    attendance: {
+      schemaVersion: 1,
+      planning: {
+        kind: "approximate",
+        value: 120,
+        min: 100,
+        max: 140,
+        sourceType: "customer_inquiry",
+        sourceReferenceId: "ambient-inquiry-001",
+        observedAtISO: "2026-08-11T11:45:00.000Z",
+        recordedByUid: "ambient-proof-admin"
+      },
+      confirmation: {
+        state: "requested",
+        requestedAtISO: "2026-09-01T15:00:00.000Z",
+        dueDate: "2026-09-12",
+        submittedCount: null,
+        sourceType: "",
+        sourceReferenceId: "",
+        submittedAtISO: "",
+        submittedByRole: "",
+        appliedRevisionId: "",
+        commercialChangeReceiptId: ""
+      },
+      commercialBasis: {
+        source: "planning",
+        sourceReferenceId: "ambient-inquiry-001",
+        appliedRevisionId: ""
+      }
+    },
     servers: 8,
     chefs: 3,
     bartenders: 0
@@ -446,6 +480,61 @@ test.describe("Ambient intelligent-object browser verification", () => {
       await expect(dialog).toHaveCount(0);
       await expect(timeTrigger).toBeFocused();
       await expectNoHorizontalOverflow(page, surface);
+    });
+  }
+
+  for (const viewport of VIEWPORTS) {
+    test(`keeps Guest count status, dependencies, and preview authority clear at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      const surface = await openOpportunity(page);
+      const savedBefore = await readPersistedQuote(page);
+      const trigger = surface.getByRole("button", { name: "See connections" });
+
+      await trigger.click();
+      let dialog = page.getByRole("dialog", { name: "Guest count connections" });
+      await expect(dialog).toBeVisible();
+      await expect(page.getByRole("dialog")).toHaveCount(1);
+      await expect(dialog.locator("summary")).toHaveText("Why this view");
+      await expect(dialog.getByText("Saved priced count", { exact: true })).toBeVisible();
+      await expect(dialog).toContainText("Exact commercial basis on this quote");
+      await expect(dialog).toContainText("Planning estimate: about 120 guests (100–140)");
+      await expect(dialog).toContainText("Customer inquiry · Aug 11, 2026");
+      await expect(dialog).toContainText("Final count requested · due Sep 12, 2026");
+      await expect(dialog).toContainText("No response is inferred");
+      await expect(dialog).toContainText("Price and scope");
+      await expect(dialog).toContainText("Staffing");
+      await expect(dialog).toContainText("Quantity rules");
+      await expect(dialog).toContainText("does not confirm attendance");
+      await expect(dialog.locator('[data-attendance-dimension="commercial-basis"]')).toBeVisible();
+      await expect(dialog.locator('[data-attendance-dimension="best-evidence"]')).toBeVisible();
+      await expect(dialog.locator('[data-attendance-dimension="decision-timing"]')).toBeVisible();
+      await expect(dialog.locator('[data-context-arrival-duplicate="reason"]')).toBeHidden();
+      await expectNoHorizontalOverflow(page, surface);
+
+      if (CAPTURE_PROOF && [390, 1440].includes(viewport.width)) {
+        await page.screenshot({
+          path: `${ATTENDANCE_PROOF_DIRECTORY}/${ATTENDANCE_PROOF_STAGE}-${viewport.width}.png`,
+          fullPage: true
+        });
+      }
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+
+      await surface.getByRole("button", { name: "Change Guest count scenario" }).click();
+      await surface.getByRole("spinbutton", { name: "Guest count scenario" }).fill("150");
+      await surface.getByRole("button", { name: "Apply change" }).click();
+      dialog = page.getByRole("dialog", { name: "Guest count connections" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText("Unsaved guest-count preview", { exact: true })).toBeVisible();
+      await expect(dialog).toContainText("Saved record: 120 guests");
+      await expect(dialog).toContainText("150 guests");
+      await expectNoHorizontalOverflow(page, surface);
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      expect(await readPersistedQuote(page)).toEqual(savedBefore);
     });
   }
 

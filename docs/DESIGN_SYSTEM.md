@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-28 18:06:52 CDT
+Last updated: 2026-08-28 18:12:02 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -306,12 +306,34 @@ simulation, trusted mutation, communication, bulk action, and destructive
 action separately; v1 executes only the first four through already-existing
 handlers. These pure adapters perform no I/O and grant no authority.
 
-### Proposal and Conversation evidence grammar
+### Guest count, Proposal, and Conversation evidence grammar
 
-Proposal and Conversation join Money as evidence-first objects, not miniature
-administration panels. Their Living Opportunity rows show one concise current
-conclusion and open a populated `ContextSurface` whose header always repeats the
-exact opportunity, entry reason, and consequence before deeper evidence.
+Guest count, Proposal, and Conversation join Money as evidence-first objects,
+not miniature administration panels. Their Living Opportunity rows show one
+concise current conclusion and open a populated `ContextSurface` whose header
+always repeats the exact opportunity, entry reason, and consequence before
+deeper evidence.
+
+Guest count must distinguish the saved record from an unsaved preview wherever
+the value is shown. A saved value is labeled **Saved guest count**; a changed
+value is labeled **Unsaved guest-count preview** and keeps the saved count
+adjacent. Price/scope, staffing, and quantity-rule dependencies precede repeated
+methodology. QuotePilot does not infer expected, guaranteed, or actual
+attendance states unless the source record establishes those states explicitly.
+Previewing or inspecting guest count does not reprice, resize quantities, change
+staffing, reserve capacity, alter the draft, or save the quote.
+
+When `attendance-state-v1` evidence exists, the Guest-count inspector leads
+with three open rows in this order: **Saved priced count**, **Best attendance
+evidence**, and a source-backed **Open decision** when one exists. A fresh exact-
+quote Decision Debt read may supply final-count timing through the already-
+mounted quote panel; stale, failed, incomplete, mismatched, or absent reads make
+no due claim. Legacy quotes say that separate attendance evidence is not
+recorded. Malformed future envelopes keep the saved priced count visible but
+fall back to **Attendance evidence needs review**. Only an exact loaded Decision
+Debt item may replace the ordinary priced-editor footer with **Review final-
+count task**; that route handoff confirms, resolves, prices, staffs, reserves,
+saves, or changes nothing.
 
 Proposal keeps saved immutable revision, authoritative pricing, exact customer
 projection, portal issuance, and provider evidence visually distinct. It may

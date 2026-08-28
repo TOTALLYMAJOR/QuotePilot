@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-28 17:56:30 CDT
+Last updated: 2026-08-28 18:12:02 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -138,6 +138,16 @@ consenting silent execution, 100 actual human reviews, hosted rules evidence,
 deployment, and human acceptance remain human/external. Model output and
 Steward handoff remain unavailable; no source-only adapter may fabricate those
 gates.
+
+Ambient attendance source note for row 60: the Guest-count inspector now
+consumes the pure `attendance-state-v1` read model and orders **Saved priced
+count**, **Best attendance evidence**, and a source-backed **Open decision**
+before dependencies. It shares the existing completed exact-quote Decision Debt
+read without another callable, ignores stale/error/loading/mismatched reads,
+keeps malformed future evidence in a bounded review state, and routes an exact
+final-count item only to its existing Workflow destination. This is source/local
+presentation with no attendance persistence, confirmation, repricing, staffing,
+reservation, proposal, BEO, closeout, payment, or provider authority.
 
 Ambient read-recovery source note for row 60: **Now**, **Opportunities**, and
 **Events** use the shared `WorkspaceRecoveryState` for unavailable first reads.

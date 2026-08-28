@@ -1,6 +1,6 @@
 # Attendance State and Confirmation Architecture Decision
 
-Last updated: 2026-08-28 18:02:58 CDT
+Last updated: 2026-08-28 18:12:02 CDT
 
 Status: Accepted direction; phased implementation required
 
@@ -276,19 +276,19 @@ Carry CREATE's exact/approximate/range metadata into the versioned quote through
 the existing trusted draft write. Add schema validation, Firestore/rules tests,
 capability traceability, Feature Matrix, User Manual, and UI states.
 
-### Slice C — Living Opportunity attendance strip (next source/local presentation slice)
+### Slice C — Living Opportunity attendance strip (implemented source/local)
 
 Combine the commercial basis, planning evidence, and Decision Debt due state in
 the Guest-count inspector. Provide one dominant action and exact focus recovery.
 
-The next presentation slice will render the exact saved priced count, best
-supported attendance evidence, and an open-decision row only when request or
-fresh Decision Debt evidence supports it. It must share the already-mounted
-exact-quote Decision Debt read, add no callable or duplicate I/O, reject stale,
-error, loading, and mismatched timing evidence, and route only an exact task to
-its existing Workflow destination. Navigation may not resolve the task or alter
-the quote. Malformed future envelopes must retain the priced count and render a
-bounded review state.
+Current source renders the exact saved priced count, best supported attendance
+evidence, and an open-decision row only when request or fresh Decision Debt
+evidence supports it. It shares the already-mounted exact-quote Decision Debt
+read, adds no callable or duplicate I/O, rejects stale, error, loading, and
+mismatched timing evidence, and routes only an exact task to its existing
+Workflow destination. Navigation does not resolve the task or alter the quote.
+Malformed future envelopes retain the priced count and render a bounded review
+state. New planning/confirmation persistence remains Slice B/D work.
 
 ### Slice D — Customer confirmation request and response
 

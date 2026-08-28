@@ -694,6 +694,67 @@ button.ambient-event-logistics-value:focus-visible {
   background: rgba(199, 104, 85, 0.08);
 }
 
+.ambient-attendance-strip {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--ambient-hairline);
+  border-bottom: 1px solid var(--ambient-hairline);
+  box-shadow: inset 3px 0 0 var(--ambient-teal-local);
+}
+
+.ambient-attendance-strip[data-tone="mint"] {
+  box-shadow: inset 3px 0 0 var(--ambient-mint-local);
+}
+
+.ambient-attendance-strip[data-tone="coral"] {
+  box-shadow: inset 3px 0 0 var(--ambient-coral-local);
+}
+
+.ambient-attendance-strip > div {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+  padding: 0.82rem 0.85rem 0.82rem 1rem;
+}
+
+.ambient-attendance-strip > div + div {
+  border-top: 1px solid var(--ambient-hairline);
+}
+
+.ambient-attendance-strip dt {
+  color: var(--ambient-muted);
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ambient-attendance-strip dd {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.ambient-attendance-strip strong {
+  color: var(--ambient-ink);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.ambient-attendance-strip [data-attendance-dimension="commercial-basis"] strong {
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: 1.7rem;
+  font-weight: 550;
+}
+
+.ambient-attendance-strip small {
+  color: var(--ambient-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .ambient-package-menu-context section {
   min-width: 0;
 }

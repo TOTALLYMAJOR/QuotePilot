@@ -66,6 +66,7 @@ import AmbientMoneyContext from "./AmbientMoneyContext";
 import AmbientConversationContext from "./AmbientConversationContext";
 import AmbientProposalContext from "./AmbientProposalContext";
 import AmbientOperationalReceipts from "./AmbientOperationalReceipts";
+import { deriveAttendanceState } from "./attendanceState";
 import "./ambientLivingOpportunity.css";
 
 const AMBIENT_INTERACTION_EVENT_NAME = "quotepilot:ambient-interaction";
@@ -106,6 +107,157 @@ function money(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount);
+}
+
+const ATTENDANCE_SOURCE_LABELS = Object.freeze({
+  customer_inquiry: "Customer inquiry",
+  staff_intake: "Staff intake",
+  customer_portal: "Customer response",
+  staff_recorded: "Staff-recorded response",
+  import: "Imported record",
+  legacy: "Legacy quote"
+});
+
+function attendanceDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T00:00:00.000Z`)
+    : new Date(text);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(date);
+}
+
+function attendanceSourceLabel(value) {
+  const key = String(value || "").trim().toLowerCase();
+  return ATTENDANCE_SOURCE_LABELS[key] || "Recorded source";
+}
+
+function deriveAttendanceRead(quote, decisionDebtSnapshot) {
+  try {
+    return {
+      state: deriveAttendanceState({ quote, decisionDebtSnapshot }),
+      errorScope: ""
+    };
+  } catch {
+    try {
+      return {
+        state: deriveAttendanceState({ quote }),
+        errorScope: "decision_timing"
+      };
+    } catch {
+      const event = quote?.event && typeof quote.event === "object"
+        ? quote.event
+        : {};
+      const { attendance: _unsupportedAttendance, ...legacyEvent } = event;
+      try {
+        return {
+          state: deriveAttendanceState({
+            quote: { ...(quote || {}), event: legacyEvent }
+          }),
+          errorScope: "attendance"
+        };
+      } catch {
+        return { state: null, errorScope: "attendance" };
+      }
+    }
+  }
+}
+
+function attendancePresentation(read) {
+  const state = read?.state;
+  if (!state) {
+    return {
+      stateId: "UNAVAILABLE",
+      tone: "coral",
+      evidenceLabel: "Attendance evidence unavailable",
+      evidenceDetail: "The saved guest-count record is not valid enough to classify here.",
+      timingLabel: "",
+      timingDetail: "",
+      rowSummary: "Attendance evidence is unavailable."
+    };
+  }
+
+  if (read.errorScope === "attendance") {
+    return {
+      stateId: "INVALID_EVIDENCE",
+      tone: "coral",
+      evidenceLabel: "Attendance evidence needs review",
+      evidenceDetail: "The exact priced count remains visible, but the added attendance record is not valid enough to classify.",
+      timingLabel: "",
+      timingDetail: "",
+      rowSummary: "Added attendance evidence needs review."
+    };
+  }
+
+  const planning = state.planning;
+  const confirmation = state.confirmation;
+  const actual = state.actual;
+  let evidenceLabel = "Separate attendance evidence not recorded";
+  let evidenceDetail = "This quote has one exact priced count, but no separate planning, final-count, or actual-attendance source record.";
+  let tone = "teal";
+
+  if (actual) {
+    evidenceLabel = `Actual attendance: ${actual.count} guests`;
+    evidenceDetail = `Post-event closeout evidence recorded ${attendanceDate(actual.recordedAtISO) || "at the recorded time"}.`;
+  } else if (["received", "applied", "superseded"].includes(confirmation.state)) {
+    evidenceLabel = confirmation.state === "applied"
+      ? `Final count applied: ${confirmation.submittedCount} guests`
+      : confirmation.state === "superseded"
+        ? `Earlier final-count response: ${confirmation.submittedCount} guests`
+        : `Final count received: ${confirmation.submittedCount} guests`;
+    evidenceDetail = `${attendanceSourceLabel(confirmation.sourceType)}${confirmation.submittedAtISO ? ` · ${attendanceDate(confirmation.submittedAtISO)}` : ""}. ${confirmation.state === "received" ? "It remains proposed until reviewed through the commercial-change workflow." : confirmation.state === "applied" ? "The response is bound to an applied quote revision and commercial-change receipt." : "A newer response or applied basis replaced this submission."}`;
+    tone = confirmation.state === "received"
+      && confirmation.submittedCount !== state.commercialBasis.count
+      ? "coral"
+      : "mint";
+  } else if (planning.sourceType !== "legacy" && planning.kind !== "unknown") {
+    const range = planning.min !== null && planning.max !== null
+      ? ` (${planning.min}–${planning.max})`
+      : "";
+    evidenceLabel = planning.kind === "exact"
+      ? `Planning count: ${planning.value} guests`
+      : planning.kind === "approximate"
+        ? `Planning estimate: about ${planning.value} guests${range}`
+        : `Planning range: ${planning.min}–${planning.max} guests`;
+    evidenceDetail = `${attendanceSourceLabel(planning.sourceType)}${planning.observedAtISO ? ` · ${attendanceDate(planning.observedAtISO)}` : ""}. This evidence does not replace the exact priced count.`;
+  }
+
+  let timingLabel = "";
+  let timingDetail = "";
+  if (read.errorScope === "decision_timing") {
+    timingLabel = "Final-count timing needs review";
+    timingDetail = "The loaded decision record is incomplete, so no due claim is shown.";
+    tone = "coral";
+  } else if (state.decisionDebt?.state === "due_or_overdue") {
+    timingLabel = `Final count due ${attendanceDate(state.decisionDebt.lockDate) || "now"}`;
+    timingDetail = "This exact Decision Debt item is due or overdue and remains unresolved.";
+    tone = "coral";
+  } else if (state.decisionDebt?.state === "scheduled") {
+    timingLabel = `Final count due ${attendanceDate(state.decisionDebt.lockDate)}`;
+    timingDetail = state.decisionDebt.reason;
+  } else if (confirmation.state === "requested" && confirmation.dueDate) {
+    timingLabel = `Final count requested · due ${attendanceDate(confirmation.dueDate)}`;
+    timingDetail = `Request recorded ${attendanceDate(confirmation.requestedAtISO) || "at the recorded time"}. No response is inferred.`;
+  } else if (confirmation.state === "requested") {
+    timingLabel = "Final count requested";
+    timingDetail = "A request is recorded, but no due date or response is established here.";
+  }
+
+  return {
+    stateId: state.derived.id,
+    tone,
+    evidenceLabel,
+    evidenceDetail,
+    timingLabel,
+    timingDetail,
+    rowSummary: timingLabel || evidenceLabel
+  };
 }
 
 function pricingCapabilityState(state, preview) {
@@ -289,6 +441,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   pricingMargin = null,
   packageMenuCatalogEvidence = null,
   eventLogisticsEvidence = null,
+  decisionDebtSnapshot = null,
   onBackToQuotes,
   onEditQuote,
   onSimulatePricing,
@@ -421,6 +574,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     ambientRole,
     proposalSourceFreshness
   ]);
+  const attendanceRead = useMemo(() => (
+    deriveAttendanceRead(quote, decisionDebtSnapshot)
+  ), [decisionDebtSnapshot, quote]);
+  const attendanceView = useMemo(() => (
+    attendancePresentation(attendanceRead)
+  ), [attendanceRead]);
 
   useEffect(() => {
     if (!arrivalContext || typeof onArrivalResolution !== "function") return undefined;
@@ -2053,6 +2212,83 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
   };
 
+  const openFinalCountDecision = () => {
+    const action = model.actions.reviewFinalCountDecision;
+    const runtimeToken = beginAction(action);
+    const decisionId = String(attendanceRead.state?.decisionDebt?.id || "").trim();
+    if (!decisionId || typeof onOpenWorkflow !== "function") {
+      emitFeedback("warning");
+      acknowledge({
+        action,
+        runtimeToken,
+        kind: "recovery",
+        label: "Final-count task is unavailable",
+        reason: decisionId
+          ? "The exact Workflow destination is unavailable in this workspace."
+          : "No exact final guest-count decision is loaded for this quote.",
+        consequence: "The quote, attendance evidence, and Workflow state remain unchanged.",
+        nextActionId: "inspect-guest-count",
+        nextResolution: "Keep reviewing the saved count or return when the exact task is available."
+      });
+      return;
+    }
+    const pendingResult = acknowledge({
+      action,
+      runtimeToken,
+      kind: "pending",
+      label: "Opening final-count task",
+      nextResolution: "Review the exact due decision in Workflow; navigation changes nothing.",
+      deferRuntime: true
+    });
+    try {
+      const navigationResult = onOpenWorkflow({
+        quoteId: model.identity.quoteId,
+        attentionType: "decision_debt",
+        requestId: decisionId
+      }, {
+        arrivalContext: {
+          surfaceId: "workflow",
+          object: action.arrivalContract.object,
+          reason: action.arrivalContract.reason,
+          consequence: action.arrivalContract.consequence,
+          nextResolution: "Review the exact final-count decision without changing the quote by navigation."
+        }
+      });
+      if (["cancelled", "recovery"].includes(navigationResult?.status)) {
+        acknowledge({
+          action,
+          runtimeToken,
+          kind: "recovery",
+          label: "Final-count task was not opened",
+          reason: navigationResult.reason || "The exact Workflow item was not opened.",
+          consequence: navigationResult.consequence || "The quote and decision remain unchanged.",
+          nextActionId: "inspect-guest-count",
+          nextResolution: navigationResult.nextResolution || "Keep reviewing the attendance evidence or try again."
+        });
+        return;
+      }
+      actionRuntime.acknowledge(runtimeToken, {
+        result: pendingResult,
+        destination: {
+          surface: model.surfaceContracts.workflow,
+          isEmpty: false
+        }
+      });
+    } catch (error) {
+      emitFeedback("warning");
+      acknowledge({
+        action,
+        runtimeToken,
+        kind: "recovery",
+        label: "Final-count task was not opened",
+        reason: error?.userMessage || "The exact Workflow item could not be opened.",
+        consequence: "The quote and decision remain unchanged.",
+        nextActionId: "inspect-guest-count",
+        nextResolution: "Keep reviewing the attendance evidence or try again."
+      });
+    }
+  };
+
   const dismissGuestContext = () => {
     const action = model.actions.dismissGuestContext;
     const runtimeToken = beginAction(action);
@@ -2492,7 +2728,22 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     <p className="ambient-boundary-note">{activeEventLogisticsObject.permissions.reason}</p>
   ) : null;
 
-  const guestFooter = ordinaryEditAllowed ? (
+  const finalCountDecisionAvailable = Boolean(
+    !model.guestObject.scenarioChanged
+    && attendanceRead.state?.decisionDebt?.id
+    && model.actions.reviewFinalCountDecision.enabled
+  );
+  const guestFooter = finalCountDecisionAvailable ? (
+    <button
+      type="button"
+      className="cta ambient-outcome-button"
+      onClick={openFinalCountDecision}
+      data-ambient-action-id={model.actions.reviewFinalCountDecision.id}
+    >
+      Review final-count task
+      <ArrowRight size={17} aria-hidden="true" />
+    </button>
+  ) : ordinaryEditAllowed ? (
     <button
       type="button"
       className="cta ambient-outcome-button"
@@ -2985,7 +3236,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           <p>Explore a detail to understand what it connects to, why it matters, and what happens if it stays as it is.</p>
         </div>
         <div className="ambient-object-list">
-          <div className="ambient-object-row" data-intelligent-object="guest-count">
+          <div
+            className="ambient-object-row"
+            data-intelligent-object="guest-count"
+            data-attendance-state={attendanceView.stateId.toLowerCase()}
+          >
             <div className="ambient-object-symbol" aria-hidden="true">
               <UsersThree size={22} weight="duotone" />
             </div>
@@ -2993,12 +3248,20 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
               <span>Guest count</span>
               <InlineValue
                 ref={guestInlineRef}
-                label="Guest count scenario"
+                label={model.guestObject.scenarioChanged
+                  ? "Unsaved guest preview"
+                  : "Saved guest count"}
                 value={model.guestObject.scenarioGuestCount}
                 displayValue={`${model.guestObject.scenarioGuestCount} guests`}
                 inputType="number"
                 inputMode="numeric"
-                editorProps={{ min: 1, max: 400, step: 1 }}
+                editorProps={{
+                  min: 1,
+                  max: 400,
+                  step: 1,
+                  "aria-label": "Guest count scenario"
+                }}
+                editLabel="Change Guest count scenario"
                 parseValue={(value) => Number(value)}
                 validate={validateAmbientGuestCount}
                 onCommit={commitGuestScenario}
@@ -3015,7 +3278,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
               <small>
                 {model.guestObject.scenarioChanged
                   ? `Scenario only. Saved record: ${recordedGuestCount} guests.`
-                  : "Saved guest count. Select it to see what a change could affect."}
+                  : `Exact priced basis. ${attendanceView.rowSummary}`}
               </small>
             </div>
             <button
@@ -3419,18 +3682,51 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.guestObject.why}
         consequence={model.guestObject.consequence}
+        collapseArrivalDetails
         anchorRef={guestInspectRef}
         returnFocusRef={guestInspectRef}
         onClose={dismissGuestContext}
         closeActionId={model.actions.dismissGuestContext.id}
         footer={guestFooter}
       >
-        <div className="ambient-context-content">
-          <div className="ambient-context-state" data-tone="teal">
-            <span>Scenario</span>
-            <strong>{model.guestObject.scenarioGuestCount} guests</strong>
-            <small>{model.guestObject.preview.reason}</small>
-          </div>
+        <div
+          className="ambient-context-content ambient-attendance-context"
+          data-attendance-state={attendanceView.stateId.toLowerCase()}
+        >
+          <dl className="ambient-attendance-strip" data-tone={attendanceView.tone}>
+            <div data-attendance-dimension="commercial-basis">
+              <dt>Saved priced count</dt>
+              <dd>
+                <strong>{model.guestObject.currentGuestCount} guests</strong>
+                <small>Exact commercial basis on this quote. It remains the pricing input until an intentional reviewed save succeeds.</small>
+              </dd>
+            </div>
+            <div data-attendance-dimension="best-evidence">
+              <dt>Best attendance evidence</dt>
+              <dd>
+                <strong>{attendanceView.evidenceLabel}</strong>
+                <small>{attendanceView.evidenceDetail}</small>
+              </dd>
+            </div>
+            {attendanceView.timingLabel && (
+              <div data-attendance-dimension="decision-timing">
+                <dt>Open decision</dt>
+                <dd>
+                  <strong>{attendanceView.timingLabel}</strong>
+                  <small>{attendanceView.timingDetail}</small>
+                </dd>
+              </div>
+            )}
+          </dl>
+          {model.guestObject.scenarioChanged && (
+            <div className="ambient-context-state" data-tone="teal">
+              <span>Unsaved guest-count preview</span>
+              <strong>{model.guestObject.scenarioGuestCount} guests</strong>
+              <small>
+                Saved record: {model.guestObject.currentGuestCount} guests. {model.guestObject.preview.reason}
+              </small>
+            </div>
+          )}
           <section>
             <h3>What this connects to</h3>
             <ul className="ambient-dependency-list">
@@ -3443,7 +3739,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             </ul>
           </section>
           <section className="ambient-counterfactuals">
-            <div>
+            <div data-context-arrival-duplicate="reason">
               <CheckCircle size={18} weight="fill" aria-hidden="true" />
               <h3>Why this recommendation</h3>
               <p>{model.guestObject.why}</p>
@@ -3456,6 +3752,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           </section>
           <p className="ambient-provenance">
             <strong>Confidence: {model.guestObject.confidence}.</strong> Source: {model.guestObject.provenance}.
+          </p>
+          <p className="ambient-boundary-note">
+            Reviewing attendance evidence does not confirm attendance, change pricing or staffing, resize quantities, reserve capacity, update the proposal or BEO, or save this quote.
           </p>
         </div>
       </ContextSurface>

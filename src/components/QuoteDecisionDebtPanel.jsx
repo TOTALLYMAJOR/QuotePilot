@@ -10,7 +10,8 @@ export default function QuoteDecisionDebtPanel({
   organizationId = "",
   quoteId = "",
   available = true,
-  onOpenWorkflow
+  onOpenWorkflow,
+  onReadStateChange
 }) {
   const generationRef = useRef(0);
   const [read, setRead] = useState({
@@ -65,6 +66,18 @@ export default function QuoteDecisionDebtPanel({
       generationRef.current += 1;
     };
   }, [load]);
+
+  useEffect(() => {
+    if (typeof onReadStateChange !== "function") return;
+    onReadStateChange({
+      organizationId: text(organizationId),
+      quoteId: text(quoteId),
+      loading: read.loading,
+      stale: read.stale,
+      error: read.error,
+      result: read.loading || read.stale || read.error ? null : read.result
+    });
+  }, [onReadStateChange, organizationId, quoteId, read.error, read.loading, read.result, read.stale]);
 
   const items = Array.isArray(read.result?.snapshot?.items)
     ? read.result.snapshot.items

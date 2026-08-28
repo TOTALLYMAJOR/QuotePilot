@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getIntegrationSetupStatus,
   reconcileDepositCheckout,
@@ -805,6 +805,10 @@ export function QuoteHistoryView({
   const [resolvingDeliveryId, setResolvingDeliveryId] = useState("");
   const [conversationQuote, setConversationQuote] = useState(null);
   const [kitchenBeoQuote, setKitchenBeoQuote] = useState(null);
+  const [focusedDecisionDebtRead, setFocusedDecisionDebtRead] = useState(null);
+  const handleFocusedDecisionDebtRead = useCallback((nextRead) => {
+    setFocusedDecisionDebtRead(nextRead && typeof nextRead === "object" ? nextRead : null);
+  }, []);
   const kitchenBeoQuoteRef = useRef(null);
   const [deliveryClockMs, setDeliveryClockMs] = useState(() => Date.now());
   const dialogRef = useRef(null);
@@ -1222,6 +1226,15 @@ export function QuoteHistoryView({
     source: state.source
   });
   const focusedQuote = quoteHistoryController.eventRoom.quote;
+  const focusedDecisionDebtSnapshot = state.source === "firebase"
+    && focusedQuote
+    && focusedDecisionDebtRead?.organizationId === String(organizationId || "").trim()
+    && focusedDecisionDebtRead?.quoteId === String(focusedQuote.id || "").trim()
+    && focusedDecisionDebtRead.loading === false
+    && focusedDecisionDebtRead.stale === false
+    && !focusedDecisionDebtRead.error
+      ? focusedDecisionDebtRead.result
+      : null;
   const focusedQuoteIsVisible = Boolean(
     focusedQuote && filteredQuotes.some((quote) => quote.id === focusedQuote.id)
   );
@@ -2128,6 +2141,7 @@ export function QuoteHistoryView({
                 onGlobalPilotResolution={onGlobalPilotResolution}
                 arrivalContext={arrivalContext}
                 quoteActionController={quoteHistoryController.actions}
+                decisionDebtSnapshot={focusedDecisionDebtSnapshot}
                 onArrivalResolution={onArrivalResolution}
                 ambientContext={{
                   organizationId: String(organizationId || focusedQuote.organizationId || "local-fallback"),
@@ -2199,6 +2213,7 @@ export function QuoteHistoryView({
               quoteId={focusedQuote.id}
               available={Boolean(organizationId)}
               onOpenWorkflow={onOpenWorkflow}
+              onReadStateChange={handleFocusedDecisionDebtRead}
             />
           )}
           {conversationQuote && (
@@ -2521,6 +2536,7 @@ export function QuoteHistoryView({
             quoteId={focusedQuote.id}
             available={Boolean(organizationId)}
             onOpenWorkflow={onOpenWorkflow}
+            onReadStateChange={handleFocusedDecisionDebtRead}
           />
         )}
         {AMBIENT_UI_ENABLED && AmbientOpportunitiesStream && (

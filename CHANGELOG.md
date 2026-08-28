@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 18:06:52 CDT
+Last updated: 2026-08-28 18:12:02 CDT
 
 All notable project changes are documented in this file.
 
@@ -85,6 +85,39 @@ This changelog is backfilled from git history and will be maintained going forwa
   fallback remain unchanged. This is source validation only; no deployment,
   provider configuration, production readback, or human acceptance is claimed.
 
+### Added
+- Connected the pure `attendance-state-v1` model to the Living Opportunity
+  Guest-count inspector. The read-only strip leads with the exact saved priced
+  count, then the best source-supported attendance evidence, then a recorded or
+  fresh exact-quote final-count decision when available. The already-mounted
+  Decision Debt panel shares its completed read without another callable;
+  loading, stale, failed, incomplete, and mismatched reads make no due claim.
+  Malformed future envelopes retain the priced count and show a bounded review
+  state. An exact Decision Debt item can open its existing Workflow destination,
+  but navigation confirms, resolves, reprices, staffs, reserves, saves, sends,
+  or changes nothing. This is source/local presentation only; no attendance
+  persistence, customer response, commercial apply, BEO, closeout, payment,
+  role, tenant, or provider authority changed.
+- Added the first source/local attendance architecture slice: a pure
+  `attendance-state-v1` compatibility normalizer with exhaustive legacy,
+  planning-range, final-count due, source-backed response, changed-count review,
+  receipt-backed apply, actual-attendance, malformed-envelope, and immutability
+  tests. It keeps `event.guests` as the exact commercial basis, rejects evidence
+  that cannot support its claimed state, requires applied source and revision
+  evidence to match the quote's exact current revision, returns a frozen read
+  model, and performs no I/O. It remains unconnected to a committed user surface
+  or attendance persistence. No capability or authority delta is claimed.
+- Added an accepted, phased attendance-state architecture and mixed-evidence
+  role journey for the gap between CREATE's draft-only uncertain guest counts,
+  the exact saved `event.guests` commercial basis, Decision Debt's **Final
+  guest count** timing, Commercial Change receipts, Kitchen BEO freshness, and
+  post-event actual attendance. The decision keeps the current exact pricing
+  input unchanged, requires source-backed confirmation and reviewed true-up,
+  places actual attendance under closeout authority, and defines six bounded
+  implementation slices. This documentation introduces no persistence,
+  pricing, staffing, proposal, BEO, payment, reservation, role, tenant, or
+  provider capability by itself.
+
 ### Fixed
 - Replaced a literal Stripe-secret-shaped value in the Steward Difficult
   Question evaluation test with a runtime-constructed, explicitly synthetic
@@ -93,6 +126,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   test data for a committed credential. Scanner patterns, Steward policy,
   corpus coverage, runtime exports, provider boundaries, and customer-visible
   behavior are unchanged.
+- Clarified the Guest-count journey after current 390px and 1440px route proof
+  found the saved record labeled generically as a scenario while repeated
+  methodology pushed pricing, staffing, and quantity dependencies below the
+  first useful viewport. The row and inspector now distinguish **Saved guest
+  count** from an **Unsaved guest-count preview**, keep the saved value adjacent
+  to any preview, place repeated reason/consequence behind native **Why this
+  view**, and suppress only the duplicate lower-body rationale. No guest count,
+  pricing, staffing, package, menu, event, draft, save, reservation,
+  availability, role, tenant, or provider authority changed.
 - Replaced raw catalog/provider errors in the quote-builder journey with a
   scoped recovery notice near the start of the draft. Staff can keep outlining
   event and client details while QuotePilot names the package, menu, and pricing
