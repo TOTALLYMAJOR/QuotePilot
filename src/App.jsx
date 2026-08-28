@@ -5,6 +5,7 @@ import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import CatalogReadNotice from "./components/CatalogReadNotice";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
@@ -4027,13 +4028,14 @@ export default function App({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Your Catalog Connection Needs Attention</h1>
-          <p className="muted">
-            Firebase catalog access is required in this environment.
-          </p>
-          <p className="source-note">{catalog.error || "Configure Firebase credentials and reload."}</p>
+          <CatalogReadNotice
+            canContinue={false}
+            loading={catalog.loading}
+            onRetry={catalog.reload}
+            headingLevel={1}
+            titleId="catalog-blocked-title"
+          />
           <div className="auth-actions">
-            <button type="button" className="cta" onClick={catalog.reload}>Retry Catalog</button>
             <button type="button" className="ghost" onClick={() => window.location.reload()}>Reload Workspace</button>
             <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
@@ -4386,7 +4388,6 @@ export default function App({
           Editing quote {editingQuote.quoteNumber}. Saving updates this quote (with version history) and keeps labor rates locked by snapshot.
         </p>
       )}
-      {catalog.error && <p className="error-note">{catalog.error}</p>}
       {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
       {availabilityBlock && (
         <article className="warning-note availability-recovery" role="alert">
@@ -4424,6 +4425,16 @@ export default function App({
       {submitState.message && <p className="source-note">{submitState.message}</p>}
     </>
   );
+
+  const catalogReadNotice = catalog.error ? (
+    <CatalogReadNotice
+      canContinue
+      loading={catalog.loading}
+      onRetry={catalog.reload}
+      headingLevel={2}
+      titleId="quote-builder-catalog-read-title"
+    />
+  ) : null;
 
   // "What will this change affect?" — the server-checked impact preview for a
   // saved quote being edited. Shared so it renders identically in the
@@ -5154,6 +5165,7 @@ export default function App({
                 }
           />
         )}
+        {catalogReadNotice}
         {proposalComposerSurface}
         {!proposalComposerActive && (
         <>

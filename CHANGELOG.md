@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-08-28 17:39:06 CDT
 
 All notable project changes are documented in this file.
 
@@ -93,6 +93,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   test data for a committed credential. Scanner patterns, Steward policy,
   corpus coverage, runtime exports, provider boundaries, and customer-visible
   behavior are unchanged.
+- Replaced raw catalog/provider errors in the quote-builder journey with a
+  scoped recovery notice near the start of the draft. Staff can keep outlining
+  event and client details while QuotePilot names the package, menu, and pricing
+  limits, confirms that the failed read saved and repriced nothing, and offers
+  one **Try catalog again** action. The fully blocked catalog gate uses the same
+  safe language in both active application graphs without exposing Firebase
+  error text or weakening catalog and pricing authority.
 - Preserved a supplied normalized pricing snapshot when local quote persistence
   attaches newly required private commercial-cost evidence. The enrichment no
   longer replaces the snapshot's exact totals or authority label; focused and

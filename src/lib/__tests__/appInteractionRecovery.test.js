@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { describe, expect, test } from "vitest";
 
 const appSource = fs.readFileSync(new URL("../../App.jsx", import.meta.url), "utf8");
+const legacyAppSource = fs.readFileSync(new URL("../../LegacyApp.jsx", import.meta.url), "utf8");
 const wizardSource = fs.readFileSync(new URL("../../components/WizardSteps.jsx", import.meta.url), "utf8");
 
 describe("workspace interaction recovery wiring", () => {
@@ -10,7 +11,10 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain('href="https://mbmapps.com/contact"');
     expect(appSource).toContain('onClick={handleRefreshAccess}');
     expect(appSource).toContain("await authSession.refreshAccess()");
-    expect(appSource).toContain('onClick={catalog.reload}>Retry Catalog');
+    expect(appSource).toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
+    expect(appSource.match(/onRetry=\{catalog\.reload\}/g)).toHaveLength(2);
+    expect(legacyAppSource).toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
+    expect(legacyAppSource.match(/onRetry=\{catalog\.reload\}/g)).toHaveLength(2);
     expect(appSource).toContain("Check for catalog updates");
   });
 

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 12:45:54 CDT
+Last updated: 2026-08-28 17:39:06 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -43,6 +43,11 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    wizard on a phone or tablet, all five steps keep Total and Deposit in view.
    Use `View breakdown` for the focus-contained itemized sheet and `Close` or
    Escape to return focus to the workflow.
+   - If **Catalog updates are unavailable** appears, event and client details
+     can still be outlined, but package, menu, and pricing choices may be
+     incomplete. Select **Try catalog again** before trusting those choices.
+     The failed read does not save or reprice the draft. If the catalog cannot
+     load at all, quote creation remains blocked until a retry succeeds.
 4. Select `Save draft` from the final step. Saving creates or updates the quote
    but does not send it to the customer or mark it sent.
 5. In a customer-centered workspace build, the Event Workspace opens on the
