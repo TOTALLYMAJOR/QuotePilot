@@ -69,6 +69,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
+    "operator.authenticated-workspace-journey",
     "portal.decision",
     "delivery.link-surface-gating",
     "payment.customer-surface",
@@ -124,6 +125,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "quote.legacy-bulk-purge-denied",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
+    "operator.authenticated-workspace-journey",
     "portal.decision",
     "delivery.current-issuance",
     "delivery.invalid-issuance",
@@ -156,6 +158,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
+    "operator.authenticated-workspace-journey",
     "portal.decision",
     "delivery.link-surface-gating",
     "payment.customer-surface",
@@ -180,6 +183,11 @@ const CRITICAL_UAT_TARGETS = Object.freeze({
   "buyer.hosted-invoice-lifecycle": ["firebase-backend", "firebase-all"],
   "buyer.pending-invite-activation": ["firebase-backend", "firebase-all"],
   "buyer.verified-activation-surface": ["firebase-hosting", "firebase-all", "vercel"],
+  "operator.authenticated-workspace-journey": [
+    "firebase-hosting",
+    "firebase-all",
+    "vercel"
+  ],
   "payment.deposit-scoped-dispatch": ["firebase-backend", "firebase-all"],
   "payment.final-balance-scoped-dispatch": ["firebase-backend", "firebase-all"],
   "payment.webhook-reconciliation": ["firebase-backend", "firebase-all"],
@@ -719,7 +727,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v3"
     );
-    expect(checklist.checklist.version).toBe("2026-08-12.1");
+    expect(checklist.checklist.version).toBe("2026-08-28.1");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -799,6 +807,9 @@ describe("tracked UAT checklist", () => {
     );
     expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
       /stops automatic status polling.*manual Check again.*only active/is
+    );
+    expect(labelsByItemId.get("operator.authenticated-workspace-journey")).toMatch(
+      /exact release SHA.*deployment id.*organization.*user role.*evidence level.*Workflow.*Event Workspace.*Customer 360.*Messaging Station.*Kitchen BEO.*Decision Debt.*denied-role.*cross-tenant.*human acceptance/is
     );
     expect(labelsByItemId.get("staffing.authoritative-plan")).toMatch(
       /same-tenant admins.*operator-confirmed plans.*immutable quote revision.*fail closed.*immutable receipt/is

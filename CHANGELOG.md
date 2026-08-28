@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 10:14:02 CDT
+Last updated: 2026-08-28 10:22:18 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added the stable `operator.authenticated-workspace-journey` release-UAT item
+  for browser targets. The exact-SHA checklist now requires an authenticated
+  route/task matrix across quote creation/readback/export, Workflow, Event
+  Workspace, Customer 360, Messaging Station, Kitchen BEO, Decision Debt,
+  Schedule, Reporting, Operations Audit, payment, Staffing, role denial, and
+  cross-tenant denial, with each result bound to identity, tenant, deployment,
+  target, and evidence level. This prepares the repository contract only; no
+  hosted session, provider result, deployment, or human acceptance is claimed.
 - Removed the sole deprecated Firebase `functions.config()` compatibility
   read. Default Functions now consume reviewed non-secret runtime values only
   from project-scoped environment variables and provider credentials only from

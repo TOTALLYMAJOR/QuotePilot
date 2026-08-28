@@ -1,6 +1,6 @@
 {
   "schema": "com.mbmapps.quotepilot.release-uat-checklist/v3",
-  "version": "2026-08-12.1",
+  "version": "2026-08-28.1",
   "maximumAttestationAgeHours": 24,
   "candidateProfiles": [
     {
@@ -40,6 +40,7 @@
         "quote.legacy-bulk-purge-denied": { "state": "applicable" },
         "quote.legacy-bulk-purge-ui-absent": { "state": "applicable" },
         "history.open": { "state": "applicable" },
+        "operator.authenticated-workspace-journey": { "state": "applicable" },
         "portal.decision": {
           "state": "blocked",
           "reason": "The email provider is fixed to none, so the profile cannot create provider-accepted delivery evidence for an active customer portal."
@@ -184,6 +185,11 @@
     {
       "id": "history.open",
       "label": "The saved quote appears in Quote History and opens successfully.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
+    },
+    {
+      "id": "operator.authenticated-workspace-journey",
+      "label": "An authenticated QuotePilot staff/operator route-and-task matrix binds every result to the exact release SHA, immutable deployment id, target, organization, user role, and evidence level; proves create, save, exact readback and version, export, Workflow, Event Workspace, Customer 360, Messaging Station, Kitchen BEO, Decision Debt, Schedule, Reporting, Operations Audit, payment, and Staffing boundary journeys against the coordinated hosted candidate; and records denied-role and cross-tenant attempts as fail-closed without treating source, local, provider, or automated evidence as human acceptance.",
       "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {

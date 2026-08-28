@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 10:14:02 CDT
+Last updated: 2026-08-28 10:22:18 CDT
 
 ## Current Production Release
 
@@ -23,6 +23,12 @@ Last updated: 2026-08-28 10:14:02 CDT
 
 ## Pending Production Completion
 
+- The tracked release-UAT contract now includes the stable
+  `operator.authenticated-workspace-journey` item for Hosting, Firebase-all,
+  and Vercel targets. It binds the required authenticated route/task matrix to
+  the exact SHA, immutable deployment, target, organization, role, and evidence
+  level. Repository validation does not complete the real staff session,
+  hosted data checks, denied-role/cross-tenant observations, or human acceptance.
 - Tenant activation run `32425529671` verified the exact successful `v0.14.0`
   Firebase all-scope receipt, then failed closed before any patch because
   `organizations/250/settings/config` does not exist. The workflow did not
