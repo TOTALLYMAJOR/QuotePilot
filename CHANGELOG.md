@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 10:50:36 CDT
+Last updated: 2026-08-28 12:17:10 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Removed Steward Workbench's undeclared runtime `prop-types` import and legacy
+  development-only validators. The component already defaults unknown states
+  to its provider-unavailable boundary and keeps its existing DOM, capability
+  markers, manual fallback, and hidden-output policy unchanged. This restores
+  reproducible clean-checkout builds without adding a package or changing
+  Steward authority, availability, provider status, or human acceptance.
 - Restored compatibility-bundle headroom without increasing the active ceiling:
   production minification now converts eligible non-constructable functions to
   arrow form, reducing clean-candidate JavaScript from 3,219,178 to 3,197,496
