@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 12:45:54 CDT
+Last updated: 2026-08-28 13:03:27 CDT
 
 ## Current Production Release
 
@@ -23,6 +23,16 @@ Last updated: 2026-08-28 12:45:54 CDT
 
 ## Pending Production Completion
 
+- Stripe Connect has no remaining repository-preparable foundation gap before
+  its cloud/provider gate. The reviewed Accounts v2 model remains full Stripe
+  Dashboard access, Stripe fee collection, Stripe negative-balance liability,
+  and direct charges with no QuotePilot application fee. Foundation,
+  infrastructure, and onboarding checks pass, and the read-only live staging
+  preflight currently confirms the exact project, Web app, and protected
+  `connect-control` database. Runtime exports stay empty and provider access
+  stays disabled until a human reviews and authorizes the saved Terraform plan,
+  reconciles applied identities, observes then promotes App Check, binds the
+  restricted Sandbox credential, and accepts hosted negative/replay UAT.
 - The optional bounded security-audit slice is repository-complete in the
   current source candidate. Operations Audit has an explicit two-action
   immutable taxonomy for final quote-approval executions and organization role

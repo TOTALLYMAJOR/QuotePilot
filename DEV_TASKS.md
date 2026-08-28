@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 12:45:54 CDT
+Last updated: 2026-08-28 13:03:27 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -60,6 +60,12 @@ authority likewise remain behind their explicit human/external decisions.
 exact deployment, hosted-role/data, device, or human gates. The explicitly
 partial matrix rows now remain `QP-CONNECT-011` and `QP-STEWARD-014`, with
 their higher-risk infrastructure, provider, privacy, and human gates.
+The `QP-CONNECT-011` dormant repository foundation is also complete: its three
+source checks pass and the read-only live staging inventory preflight is
+`READY`. It remains partial because the saved-plan review/authorization,
+Terraform apply, identity/manifest reconciliation, App Check observation and
+promotion, restricted provider credential, exports, and hosted Sandbox UAT are
+human/external work. Do not manufacture another source slice across that gate.
 The remaining sections retain the detailed task contracts; this table does not
 replace their safety conditions.
 

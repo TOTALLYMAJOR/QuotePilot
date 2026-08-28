@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 12:45:54 CDT
+Last updated: 2026-08-28 13:03:27 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reassessed the deploy-dormant Stripe Connect foundation against the reviewed
+  Accounts v2 model and current live Firebase inventory. The foundation,
+  infrastructure, onboarding, and read-only staging checks pass; the exact
+  staging project, Web app, and protected `connect-control` database are
+  visible. No export, credential, App Check binding, provider call, connected
+  account, deployment, or hosted acceptance was added. The next gate remains a
+  separately reviewed and authorized cloud plan/apply plus provider UAT.
 - Completed the source/local bounded security-audit slice. The admin-only
   Operations Audit callable now projects replay-stable organization-role-change
   receipts alongside final quote-approval execution receipts, rejects
