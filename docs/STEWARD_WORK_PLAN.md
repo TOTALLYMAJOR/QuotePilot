@@ -1,6 +1,6 @@
 # Work Plan: QuotePilot Steward
 
-Last updated: 2026-08-21 01:08:52 CDT
+Last updated: 2026-08-28 13:08:03 CDT
 
 Status: Phase 0 validated; Phase 1 compiler, consent evaluation, and unavailable-state workbench implemented; runtime work stays separately scoped
 Created: August 15, 2026
@@ -89,6 +89,21 @@ and packet tampering with 100% expected negative-test coverage.
 
 Completion gate: No unauthorized source or sensitive unsupported claim passes;
 manual communication remains fully available during provider outage.
+
+### Phase 1 completion boundary
+
+The repository-preparable dormant foundation is complete before private
+runtime execution. Eight focused test files pass 84 tests, the secret scan
+passes, and three responsive real-route checks prove that model prose remains
+hidden, Steward handoff remains disabled, and manual messaging remains usable.
+
+The two unchecked Phase 1 items are intentionally not source-only work. They
+require a reviewed provider transport and credential, canonical private context
+reads, private persistence, privacy and billing approval, current consent,
+hosted rules evidence, a controlled silent-execution window, and 100 actual
+human packet reviews. The pinned synthetic corpus is not that review evidence.
+Do not import/export the compiler, expose model output, or create a placeholder
+runtime to bypass this gate.
 
 ## Phase 2: Quote Partner, Margin Advisor, and Decision Packet
 

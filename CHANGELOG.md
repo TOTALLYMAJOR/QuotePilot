@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 13:03:27 CDT
+Last updated: 2026-08-28 13:08:03 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reassessed the deploy-dormant Steward foundation at its Phase 1 safety gate.
+  Eight focused test files pass 84 tests, the repository secret scan passes,
+  and three responsive real-route checks keep model prose hidden, Steward
+  handoff disabled, and the ordinary manual-message workflow available. No
+  runtime import/export, provider transport, private persistence, billing,
+  silent execution, deployment, or human review was added; those remain a
+  separately reviewed human/external program.
 - Reassessed the deploy-dormant Stripe Connect foundation against the reviewed
   Accounts v2 model and current live Firebase inventory. The foundation,
   infrastructure, onboarding, and read-only staging checks pass; the exact

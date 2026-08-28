@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 13:03:27 CDT
+Last updated: 2026-08-28 13:08:03 CDT
 
 ## Current Production Release
 
@@ -23,6 +23,15 @@ Last updated: 2026-08-28 13:03:27 CDT
 
 ## Pending Production Completion
 
+- Steward has no remaining repository-preparable work before its reviewed
+  private-runtime and human-evaluation gate. The deploy-dormant compiler,
+  policy/validation controls, consent/evaluation contracts, pinned synthetic
+  corpus, hidden-output workbench, disabled handoff, and manual recovery route
+  pass 84 focused tests, the secret scan, and three responsive browser checks.
+  A reviewed provider transport and credential, canonical context reads,
+  private persistence, billing/privacy approval, consenting silent execution,
+  100 actual human packet reviews, hosted rules evidence, deployment, and human
+  acceptance remain external. Model output stays unavailable to users.
 - Stripe Connect has no remaining repository-preparable foundation gap before
   its cloud/provider gate. The reviewed Accounts v2 model remains full Stripe
   Dashboard access, Stripe fee collection, Stripe negative-balance liability,

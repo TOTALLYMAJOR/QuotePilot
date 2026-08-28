@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 13:03:27 CDT
+Last updated: 2026-08-28 13:08:03 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -66,6 +66,14 @@ source checks pass and the read-only live staging inventory preflight is
 Terraform apply, identity/manifest reconciliation, App Check observation and
 promotion, restricted provider credential, exports, and hosted Sandbox UAT are
 human/external work. Do not manufacture another source slice across that gate.
+The `QP-STEWARD-014` deploy-dormant compiler, consent/evaluation contract,
+unavailable-state UI, security fixtures, and manual fallback are likewise
+repository-complete before the private-runtime gate. Eight focused files pass
+84 tests, the secret scan passes, and three responsive browser checks pass.
+Provider/credential and privacy/billing review, canonical context reads,
+private persistence, consenting silent execution, 100 actual human reviews,
+hosted rules evidence, deployment, and acceptance are human/external. Do not
+expose model output or create a runtime adapter merely to remove `Partial`.
 The remaining sections retain the detailed task contracts; this table does not
 replace their safety conditions.
 

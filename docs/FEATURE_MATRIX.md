@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-28 13:03:27 CDT
+Last updated: 2026-08-28 13:08:03 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -126,6 +126,17 @@ human/external saved-plan review and authorized apply, identity/manifest
 reconciliation, App Check observation and promotion, restricted Sandbox
 credential binding, runtime exports, provider execution, hosted UAT, and human
 acceptance. No additional source-only runtime slice may bypass those gates.
+
+Steward completion-boundary note for row 71: the deploy-dormant security,
+compiler, consent/evaluation, hidden-output workbench, and manual-recovery
+foundation is repository-complete before its private-runtime gate. Eight
+focused files pass 84 tests, the secret scan passes, and three responsive
+real-route checks pass. Row 71 remains `Partial` because provider/credential and
+privacy/billing review, canonical context reads, private persistence,
+consenting silent execution, 100 actual human reviews, hosted rules evidence,
+deployment, and human acceptance remain human/external. Model output and
+Steward handoff remain unavailable; no source-only adapter may fabricate those
+gates.
 
 Ambient NOW source note for row 60: when both the default-off Ambient and NOW
 presentation gates are enabled, `AmbientNowView` replaces the denser card
