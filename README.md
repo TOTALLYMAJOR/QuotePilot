@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-29 03:22:47 CDT
+Last updated: 2026-08-29 03:33:19 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -656,6 +656,12 @@ or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth. Backe
 and all-surface releases also pass Firebase's explicit non-interactive
 acknowledgement for reviewed Functions retry-policy changes; hosting-only
 releases do not receive that acknowledgement.
+
+Firebase mutation does not install a provider CLI from npm at the credentialed
+step. The workflow first downloads the official v15.24.0 Linux release asset,
+verifies its repository-pinned SHA-256, and passes only that verified path to
+the deploy command. The governed staging-candidate Firebase mutation uses the
+same verifier; a missing or changed artifact fails before mutation.
 
 ## Quality Gates
 ```bash

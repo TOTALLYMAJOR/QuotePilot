@@ -211,11 +211,16 @@ describe("direct production deployment safety", () => {
 
   test("requires ephemeral workload identity credentials for Firebase production", () => {
     const source = fs.readFileSync(FIREBASE_STUB, "utf8");
+    const workflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
 
     expect(source).toContain("GOOGLE_APPLICATION_CREDENTIALS");
     expect(source).toContain('credentials?.type !== "external_account"');
     expect(source).toContain("forbids legacy FIREBASE_TOKEN authentication");
     expect(source).not.toMatch(/["']--token["']/u);
+    expect(source).toContain("validateFirebaseToolsBinary(process.env.FIREBASE_CLI_PATH)");
+    expect(source).not.toMatch(/run\("npx"/u);
+    expect(workflow).toContain("node ./scripts/firebase-tools-binary.mjs --print-path");
+    expect(workflow).toMatch(/FIREBASE_CLI_PATH:\s*\$\{\{ steps\.firebase_cli\.outputs\.path \}\}/u);
   });
 
   test("does not persist checkout credentials in the UAT attestation job", () => {

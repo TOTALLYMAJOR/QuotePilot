@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 03:22:47 CDT
+Last updated: 2026-08-29 03:33:19 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Replaced runtime-fetched Firebase mutation commands with the official
+  `firebase-tools` 15.24.0 Linux release artifact pinned to its published
+  SHA-256. Production prepares and verifies the 247 MB artifact before OIDC
+  authentication; the production and staging-candidate deploy commands both
+  reject missing or byte-mismatched binaries before provider mutation. A
+  rejected root dependency approach was removed after it added 511 packages
+  and three moderate audit findings, leaving the root audit at zero.
 - Completed the repository-side Firebase token retirement path for the separate
   operational-staffing tenant mutation. Its protected workflow now uses the
   same reviewed workload-identity provider with a distinct tenant-operator

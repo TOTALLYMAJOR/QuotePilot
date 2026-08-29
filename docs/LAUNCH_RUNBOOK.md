@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 03:22:47 CDT
+Last updated: 2026-08-29 03:33:19 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -110,6 +110,12 @@ bindings, least-privilege IAM roles, and all three variables above are
 independently reviewed. After one governed deployment and an authorized tenant
 gate rollback/readback succeed, remove the legacy `FIREBASE_TOKEN` secret; its
 presence does not authorize or satisfy either current workflow.
+
+The Firebase deploy workflow prepares the official Linux v15.24.0 standalone
+CLI before authentication and verifies SHA-256
+`bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`.
+Do not substitute another binary or bypass `scripts/firebase-tools-binary.mjs`;
+the deploy command independently verifies the artifact again before mutation.
 
 Configure the external release controls before the first promotion:
 

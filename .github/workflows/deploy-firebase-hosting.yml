@@ -156,6 +156,10 @@ jobs:
           BUYER_ACCESS_TURNSTILE_HOSTNAMES: ${{ vars.BUYER_ACCESS_TURNSTILE_HOSTNAMES }}
         run: node ./scripts/materialize-functions-env.mjs
 
+      - name: Prepare checksum-verified Firebase CLI
+        id: firebase_cli
+        run: echo "path=$(node ./scripts/firebase-tools-binary.mjs --print-path)" >> "${GITHUB_OUTPUT}"
+
       - name: Validate Firebase workload identity configuration
         env:
           FIREBASE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
@@ -182,6 +186,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.google_auth.outputs.credentials_file_path }}
           GOOGLE_CLOUD_PROJECT: tonicatering
+          FIREBASE_CLI_PATH: ${{ steps.firebase_cli.outputs.path }}
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}

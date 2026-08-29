@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 03:22:47 CDT
+Last updated: 2026-08-29 03:33:19 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -173,7 +173,9 @@ git push origin v<major>.<minor>.<patch>
     typed confirmation. Firebase uses GitHub OIDC through the reviewed
     `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
     `FIREBASE_DEPLOY_SERVICE_ACCOUNT` repository variables and rejects legacy
-    token or static-key authentication; Vercel retains its scoped token. The
+    token or static-key authentication. Its mutation client must be the
+    repository-verified official v15.24.0 Linux artifact; Vercel retains its
+    scoped token. The
     provider credential is available only to the final deploy step. Record
     provider acceptance/READY evidence and update the
     target-specific last-known-good receipt only after post-launch verification

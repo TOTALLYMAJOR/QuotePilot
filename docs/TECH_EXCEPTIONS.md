@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-29 02:49:23 CDT
+Last updated: 2026-08-29 03:33:19 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -33,8 +33,9 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Risk impact: LHCI 0.15.1 was released against Lighthouse 12.6.1, so
   Lighthouse 13.4.1 is an upstream-unsupported pairing even though the public
   autorun contract passes locally. Lighthouse 13.4.1 also requires Node
-  22.19 or newer; local validation uses Node 22.22.2, and exact remote CI must
-  prove the hosted Node 22 runner resolves a compatible patch before release.
+  22.19 or newer; local validation uses Node 22.22.2, and exact remote CI
+  Quality run `33242537210` proves the hosted Node 22 runner resolves a
+  compatible patch for this candidate.
 - Performance impact: Audit scoring or metric implementation may shift across
   the Lighthouse major version. QuotePilot does not relax any threshold: the
   existing performance, LCP, CLS, and TBT assertions remain unchanged and the
@@ -49,7 +50,8 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Verification evidence: `npm ls` resolves Lighthouse 13.4.1, Puppeteer
   25.9.0, and `@puppeteer/browsers` 3.2.1 with no `extract-zip`; `npm audit`
   reports zero vulnerabilities; `npm run check:perf:cwv` passes locally with
-  the existing configuration and thresholds. Exact remote CI remains pending.
+  the existing configuration and thresholds. Exact remote CI Quality run
+  `33242537210` also passed the unchanged CWV gate under this graph.
 
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers

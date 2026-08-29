@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { FIREBASE_TOOLS_VERSION, prepareFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
 import {
   RELEASE_CANDIDATE_POLICY,
   RELEASE_CANDIDATE_UAT_PROFILE,
@@ -28,8 +29,7 @@ import {
 } from "./release-candidate-policy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FIREBASE_TOOLS = "firebase-tools@15.24.0";
-const FIREBASE_TOOLS_VERSION = "15.24.0";
+const FIREBASE_TOOLS = `firebase-tools@${FIREBASE_TOOLS_VERSION}`;
 const VERCEL_CLI = "vercel@57.0.0";
 const require = createRequire(import.meta.url);
 
@@ -426,7 +426,8 @@ async function deployFirebase({
   functionsGates,
   secretPrerequisites,
   reservation,
-  attempt
+  attempt,
+  firebaseCliPath
 }) {
   updateCandidateReceipt(reservation, { status: "preparing" });
   run("npm", ["run", "build"], { env: browserEnv });
@@ -454,9 +455,7 @@ async function deployFirebase({
       providerMutationAttempted: true,
       providerMutationAttemptedAt: new Date().toISOString()
     });
-    const output = capture("npx", [
-      "--yes",
-      FIREBASE_TOOLS,
+    const output = capture(firebaseCliPath, [
       "deploy",
       "--config",
       temporaryConfigPath,
@@ -670,6 +669,9 @@ async function main() {
     const secretPrerequisites = target === "firebase-all"
       ? await validateFirebaseSecretPrerequisites()
       : undefined;
+    const firebaseCliPath = target === "firebase-all"
+      ? await prepareFirebaseToolsBinary()
+      : undefined;
     const stagingBackendEvidence = target === "vercel-preview"
       ? readFirebaseFunctions()
       : undefined;
@@ -687,6 +689,7 @@ async function main() {
       browserEnv,
       functionsGates,
       secretPrerequisites,
+      firebaseCliPath,
       stagingBackendEvidence,
       reservation,
       attempt

@@ -141,6 +141,20 @@ describe("governed release candidate deployment", () => {
     expect(source).not.toContain("createSecret(");
   });
 
+  test("prepares the checksum-verified Firebase binary before receipt reservation and mutation", () => {
+    const source = fs.readFileSync(SCRIPT, "utf8");
+    const prepareOffset = source.lastIndexOf("await prepareFirebaseToolsBinary()");
+    const reserveOffset = source.lastIndexOf("reservation = reserveCandidateReceipt");
+    const mutationOffset = source.indexOf("attempt.providerMutationAttempted = true");
+    const firebaseMutation = source.slice(mutationOffset, source.indexOf("response = parseJsonOutput", mutationOffset));
+
+    expect(prepareOffset).toBeGreaterThan(0);
+    expect(reserveOffset).toBeGreaterThan(prepareOffset);
+    expect(firebaseMutation).toContain("capture(firebaseCliPath");
+    expect(firebaseMutation).not.toContain('capture("npx"');
+    expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
+  });
+
   test("keeps operational staffing authority explicitly off", () => {
     expect(validateCandidateFunctionsEnvironment(functionsEnvironment()))
       .toMatchObject({ OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false" });

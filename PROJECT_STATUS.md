@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 03:22:47 CDT
+Last updated: 2026-08-29 03:33:19 CDT
 
 ## Current Production Release
 
@@ -102,6 +102,14 @@ Last updated: 2026-08-29 03:22:47 CDT
   `FIREBASE_DEPLOY_SERVICE_ACCOUNT` and
   `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT` are not configured. This is source/local
   preparation only, not cloud IAM proof or deployment readiness.
+- Firebase production and staging-candidate mutation now execute only the
+  official v15.24.0 Linux CLI artifact after verifying SHA-256
+  `bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`.
+  The production workflow downloads it before OIDC authentication and passes
+  its verified path only to the deploy step. Candidate read-only SDK config,
+  Functions, Hosting/rules, and secret-metadata inspection still depends on an
+  exact-version local or npm-cache Firebase module, and Vercel CLI execution is
+  still runtime-resolved; full provider-client retirement remains open.
 - Release PR #111 publishes `release/v0.16.0`. Exact candidate
   `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run
   `33240762183`, including all eight required jobs, the exact Ambient

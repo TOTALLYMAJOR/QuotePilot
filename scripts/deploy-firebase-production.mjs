@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { validateFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
 import { verifyDirectProductionReleaseEvidence } from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -155,6 +156,7 @@ if (readArg("--confirm") !== selected.confirmation) {
   throw new Error(`Production deployment requires --confirm "${selected.confirmation}".`);
 }
 validateApplicationDefaultCredentials();
+const firebaseCliPath = await validateFirebaseToolsBinary(process.env.FIREBASE_CLI_PATH);
 const releaseTarget = `firebase-${scope}`;
 const verify = (headSha) => verifyDirectProductionReleaseEvidence({
   releaseSha: readArg("--release-sha"),
@@ -178,9 +180,7 @@ if (selected.build) run("npm", ["run", "build"]);
 await verify(validateWorkflowContext());
 
 if (scope !== "backend") {
-  run("npx", [
-    "--yes",
-    "firebase-tools@15.24.0",
+  run(firebaseCliPath, [
     "target:apply",
     "hosting",
     "app",
@@ -189,9 +189,7 @@ if (scope !== "backend") {
     PROJECT_ID
   ]);
 }
-run("npx", [
-  "--yes",
-  "firebase-tools@15.24.0",
+run(firebaseCliPath, [
   "deploy",
   "--only",
   selected.selector,
