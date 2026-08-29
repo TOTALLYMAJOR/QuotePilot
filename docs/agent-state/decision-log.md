@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 02:34:41 CDT
+Last updated: 2026-08-29 03:43:26 CDT
 
-Checkpoint recorded: 2026-08-29T07:34:41Z
+Checkpoint recorded: 2026-08-29T08:49:48.059Z
 
 ## Decisions made
 
@@ -26,6 +26,9 @@ Checkpoint recorded: 2026-08-29T07:34:41Z
 18. Do not bypass the candidate prerequisite checker. An absent staging invitation-token placeholder and an unproven Commercial Change false readback are real deployment blockers, not permission to use direct provider CLIs.
 19. Stop the autonomous promotion at the published/green-CI boundary. Creating a Secret Manager value requires separate authorization, and production promotion remains gated by complete positive-path hosted/human evidence.
 20. Treat an authenticated local GitHub CLI session as valid read-only CI proof input after explicit token variables, but never as broader provider or deployment authority. Preserve the candidate's independent secret, staging, UAT, and production gates.
+21. Replace production and protected tenant-operation legacy Firebase tokens with GitHub OIDC/WIF source contracts using distinct least-privilege identities. Do not create service-account keys or infer cloud readiness from source completion.
+22. Lock privileged Firebase mutation to the checksum-verified official v15.24.0 Linux artifact. Do not add the full Firebase CLI dependency graph to the root application after the attempted install produced new audit findings.
+23. Preserve the original 74-commit LOC/capability inventory as the product-stack baseline and report later release-control commits separately.
 
 ## Unresolved decisions
 
@@ -33,3 +36,4 @@ Checkpoint recorded: 2026-08-29T07:34:41Z
 2. Unresolved: Whether Product Truth Observability remains advisory or becomes a required CI gate after owner comprehension and freshness calibration.
 3. Unresolved: Which named owners authorize and execute the Stripe Connect, Steward, tenant activation, hosted acceptance, production evidence, and manual accessibility gates.
 4. Unresolved: Which production-authorized Truth Loop source bundle and evaluation instant should be evaluated first.
+5. Unresolved: Who approves and provisions the production WIF provider, deploy identity, tenant-operator identity, least-privilege bindings, and repository variables.

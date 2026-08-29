@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 03:33:19 CDT
+Last updated: 2026-08-29 03:43:26 CDT
 
 ## Current Production Release
 
@@ -75,8 +75,8 @@ Last updated: 2026-08-29 03:33:19 CDT
   `303eec5237d143fc11398e23f24e86fcb28c2655` changes 180 files with 12,313
   insertions and 1,030 deletions (net +11,283). The capability and holdback
   inventory is recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md`.
-- The local high-risk release profile plus Core Web Vitals passes after the
-  documentation gate correctly required timestamp reconciliation: 4,092 unit
+- The current full release lane plus Core Web Vitals passes after the
+  documentation gate correctly required timestamp reconciliation: 4,098 unit
   tests pass with 78 skipped, 127 Truth Loop tests pass, the 503-module build
   passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
   auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
@@ -110,13 +110,14 @@ Last updated: 2026-08-29 03:33:19 CDT
   Functions, Hosting/rules, and secret-metadata inspection still depends on an
   exact-version local or npm-cache Firebase module, and Vercel CLI execution is
   still runtime-resolved; full provider-client retirement remains open.
-- Release PR #111 publishes `release/v0.16.0`. Exact candidate
-  `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run
-  `33240762183`, including all eight required jobs, the exact Ambient
-  zero-dead-click journey, both bundle graphs, the production flag matrix, and
-  the advisory Product Truth Digest. Exact-SHA Stripe Connect source-only runs
-  `33240762176` and `33240762182` also passed without credentials, exports,
-  provider calls, plan, apply, or deploy.
+- Release PR #111 publishes `release/v0.16.0`. Current code-bearing candidate
+  `a096d20c34d6ba018c34653387ca30673f6039ef` passed all eight jobs in matching
+  CI Quality run `33243677607` and has successful exact-SHA Stripe Connect runs
+  `33243677627` and `33243677615`. The release-branch hardening after the
+  original 74-commit inventory remediates Lighthouse audit findings, replaces
+  production and tenant legacy-token paths with distinct WIF identities, and
+  checksum-locks the Firebase CLI used for mutation. These receipts do not
+  establish deployment, credentials, provider behavior, or production use.
 - Governed candidate deployment was attempted for both targets and stopped
   before provider mutation or receipt reservation. Firebase staging lacks an
   enabled `STAFF_INVITATION_TOKEN_SECRET`; the candidate tool will not create

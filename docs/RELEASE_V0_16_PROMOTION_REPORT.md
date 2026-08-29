@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 02:34:41 CDT
+Last updated: 2026-08-29 03:43:26 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -14,8 +14,11 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
 - Files changed: 180 total; 178 text files and 2 binary brand assets.
 - Text change volume: 12,313 insertions, 1,030 deletions, net +11,283 lines.
 - Intended release: `v0.16.0`, assembled on `release/v0.16.0` from current
-  `origin/main`. The published release-branch and CI receipts, not this
-  pre-publication document, identify the immutable candidate SHA.
+  `origin/main`. The 74-commit figures above are the original unpublished
+  product-stack baseline; later commits on the release branch are bounded
+  release-control hardening and do not rewrite that inventory.
+- Current code-bearing candidate: exact
+  `a096d20c34d6ba018c34653387ca30673f6039ef`, published in PR #111.
 - Current production and rollback baseline: exact `v0.15.0`; target-specific
   provider receipts in `PROJECT_STATUS.md` remain authoritative until a newer
   promotion passes post-deploy verification.
@@ -71,7 +74,8 @@ correctness, use, or human acceptance.
 
 - Environment, secret, project-state, workflow, Ambient release, Stripe
   isolation, capability-surfacing, and documentation-governance checks passed.
-- Unit lane: 363 files passed and 3 skipped; 4,091 tests passed and 78 skipped.
+- Current full release lane: 364 files passed and 3 skipped; 4,098 tests passed
+  and 78 skipped.
 - Truth Loop: 127 tests passed.
 - Vite production build passed with 503 modules.
 - Bundle budget passed: 3,208,389 bytes total and 384,998 bytes largest asset,
@@ -88,19 +92,29 @@ correctness, use, or human acceptance.
 - Documentation timestamps were advanced after the first governance run
   correctly rejected seven changed canonical/checkpoint documents.
 
-These are local/source results. Remote CI, hosted candidates, production,
-provider, tenant, physical-device, and human results remain separate.
+These are local/source results. The exact remote receipts below establish CI
+only; hosted candidates, production, provider, tenant, physical-device, and
+human results remain separate.
 
 ## Promotion Execution Status
 
-- Release branch `release/v0.16.0` is published in PR #111. Exact candidate
-  `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run
-  `33240762183`: all eight required jobs passed, including the repaired Ambient
-  release journey, both bundle graphs, Firebase auth/rules, authoritative
-  pricing, Core Web Vitals, Docker, and Product Truth Digest.
-- Exact-SHA Stripe Connect onboarding run `33240762176` and infrastructure run
-  `33240762182` passed their source-only dormant contracts. They performed no
-  credential use, provider call, Terraform plan/apply, export, or deployment.
+- Release branch `release/v0.16.0` is published in PR #111. Exact code-bearing
+  candidate `a096d20c34d6ba018c34653387ca30673f6039ef` has successful Stripe
+  Connect onboarding run `33243677627` and infrastructure run `33243677615`;
+  both are source-only dormant contracts with no credential use, provider call,
+  Terraform plan/apply, export, or deployment. Exact matching CI Quality run
+  `33243677607` passed all eight required jobs.
+- Four bounded release-control commits follow the original inventory:
+  Lighthouse dependency remediation (`60b0b119`), production Firebase WIF
+  enforcement (`49fe2a7e`), distinct least-privilege tenant-operation WIF
+  enforcement (`5dad0467`), and checksum-verified Firebase mutation tooling
+  (`a096d20c`). Each passed its exact remote CI before the next slice was
+  published; the final code-bearing candidate also passes the full local
+  release lane.
+- Production and tenant workflows no longer accept `FIREBASE_TOKEN` or a
+  service-account key. They require GitHub OIDC/WIF with separate deploy and
+  tenant-operator identities. Firebase production and candidate mutation use
+  the official v15.24.0 Linux binary only after SHA-256 verification.
 - The governed Firebase candidate command stopped before mutation and before
   receipt reservation because staging Secret Manager has no enabled
   `STAFF_INVITATION_TOKEN_SECRET`. The tool explicitly requires the separate
@@ -116,14 +130,17 @@ provider, tenant, physical-device, and human results remain separate.
   or provider mutation on the same missing staging secret. This removes the
   misleading unauthenticated GitHub API 404 without weakening any staging,
   secret, UAT, or production prerequisite.
-- The maximum safe promotion achieved in this pass is therefore publication
-  plus exact-SHA CI qualification. No Firebase staging, Vercel preview, main,
-  tag, production, tenant, Stripe, Steward, SMS, or buyer-access mutation was
-  performed. Current production and rollback authority remain exact `v0.15.0`.
+- The maximum safe promotion achieved in this pass is therefore publication,
+  exact-SHA CI qualification, and source-complete release hardening. No
+  Firebase staging, Vercel preview, main, tag, production, tenant, Stripe,
+  Steward, SMS, or buyer-access mutation was performed. Current production and
+  rollback authority remain exact `v0.15.0`.
 
-The next executable dependency chain is fixed: authorize the non-provider
-staging secret placeholder, deploy the latest exact-CI SHA to Firebase under
-`staging-safe-off`, verify the Functions gate readback, deploy Vercel preview,
+The next executable dependency chain is fixed: provision and independently
+review the production WIF pool/provider and two least-privilege service
+accounts; bind the three repository variables; authorize the non-provider
+staging secret placeholder; deploy the latest exact-CI SHA to Firebase under
+`staging-safe-off`; verify the Functions gate readback; deploy Vercel preview;
 then execute applicable hosted and named human UAT. Full production promotion
 remains prohibited until the blocked positive-path items are real evidence.
 
@@ -160,6 +177,15 @@ Applicable means eligible to test; it does not mean passed. Blocked is not
 
 ## Owner Review or Input Required
 
+- Approve or assign the production Google Cloud WIF pool/provider, deploy
+  service account, tenant-operator service account, least-privilege IAM review,
+  and GitHub variable binding. Do not create service-account keys. Retire the
+  legacy repository `FIREBASE_TOKEN` only after governed deploy and tenant
+  rollback/readback receipts exist.
+- Authorize or assign creation of the staging
+  `STAFF_INVITATION_TOKEN_SECRET` placeholder through the governed secret
+  process; the release tool may verify existence/version but will not create or
+  inspect the value.
 - Name the reviewer for the release PR and the authenticated tenant/operator
   who can execute the exact hosted journey.
 - Confirm the required real-device/assistive-technology matrix for PWA and UI

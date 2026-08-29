@@ -1,10 +1,28 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 02:34:41 CDT
+Last updated: 2026-08-29 03:43:26 CDT
 
-Checkpoint recorded: 2026-08-29T07:34:41Z
+Checkpoint recorded: 2026-08-29T08:49:48.059Z
 
 ## Published candidate, exact CI, and deployment boundary
+
+- File/path: Release PR #111; branch `release/v0.16.0`; code-bearing candidate `a096d20c34d6ba018c34653387ca30673f6039ef`
+- Evidence: Stripe Connect onboarding run `33243677627` and infrastructure run `33243677615` completed successfully for the exact candidate; CI Quality run `33243677607` passed all eight matching main-lane jobs. The clean local candidate passes 364 test files with 3 skipped, 4,098 tests with 78 skipped, a 503-module build, 127 Truth Loop tests, and the full governed release lane.
+- Why it matters: Release-control hardening is evaluated on one exact published source identity rather than being inferred from earlier candidate receipts.
+- Confidence: High for Git, local validation, and the named remote receipts.
+- Unverified gaps: Deployment, cloud identity configuration, hosted behavior, provider outcome, production data, human acceptance, use, and outcome remain separate.
+
+- File/path: `.github/workflows/deploy-firebase-hosting.yml`; `.github/workflows/set-operational-staffing-tenant.yml`; `scripts/deploy-firebase-production.mjs`; `scripts/set-operational-staffing-tenant.mjs`
+- Evidence: Production deploy and tenant-gate source reject `FIREBASE_TOKEN` and service-account keys. Both use commit-pinned Google authentication with one provider and distinct deploy/tenant-operator repository variables; the tenant path requests only a short-lived Datastore-scoped token for its exact read/patch/readback step. Production-project inspection found no workload identity pool or matching service accounts, the required repository variables are absent, and the legacy secret name remains configured.
+- Why it matters: Source is prepared for keyless least privilege, but production cannot be honestly called deploy-ready until external IAM and repository configuration are reviewed and proven.
+- Confidence: High for source, read-only cloud inventory, and GitHub configuration-name evidence.
+- Unverified gaps: Approved IAM plan, created pool/provider, service-account bindings, variable values, governed deploy receipt, tenant rollback/readback, and safe legacy-secret retirement.
+
+- File/path: `scripts/firebase-tools-binary.mjs`; production and candidate deployment scripts
+- Evidence: Firebase mutation resolves the official v15.24.0 Linux release artifact, verifies SHA-256 `bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`, revalidates cached bytes, and executes only the verified path. The real 247 MB artifact was downloaded, verified, and executed locally as Firebase CLI 15.24.0. A rejected root dependency approach was removed because it introduced 511 packages and three moderate transitive audit findings; root `npm audit --omit=optional` remains zero.
+- Why it matters: The privileged Firebase mutation client is immutable and independently verified without degrading the root dependency graph.
+- Confidence: High for source, focused tests, real artifact verification, and audit output.
+- Unverified gaps: Candidate read-only Firebase module resolution and runtime-resolved Vercel CLI are not yet independently locked.
 
 - File/path: Release PR #111; branch `release/v0.16.0`; CI runs `33240762183`, `33240762176`, and `33240762182`
 - Evidence: Exact candidate `7f6d40bec472a82ce6e0b9ead063410a23ca154b` is clean and published. CI Quality passed all eight jobs. The dedicated Ambient route-handoff journey and production flag matrix passed; both bundle graphs, Firebase auth/rules, authoritative pricing, Core Web Vitals, Docker, and Product Truth Digest passed. Stripe Connect onboarding and infrastructure source-only workflows passed without provider action.
@@ -30,7 +48,7 @@ Checkpoint recorded: 2026-08-29T07:34:41Z
 - Evidence: The unpublished range contains 74 commits changing 180 files: 12,313 insertions, 1,030 deletions, net +11,283. Cohorts are 52 runtime files (+3,255/-511), 55 test files (+3,388/-54), 50 docs (+4,335/-434), 8 tooling files (+1,151/-3), and 13 other files (+184/-28); two changes are binary brand assets.
 - Why it matters: The owner can evaluate release size and capability breadth without confusing gross repository work with runtime code alone.
 - Confidence: High; exact Git range and numstat classification from the fresh, zero-behind branch.
-- Unverified gaps: Remote release-branch SHA, pull request, and CI do not exist yet.
+- Unverified gaps: This baseline inventory predates later release-control hardening; current remote identity and CI are recorded above.
 
 - File/path: Complete repository; release-manager high-risk plus CWV profile
 - Evidence: Environment, secrets, project state, workflow, Ambient, Connect isolation, capability surfaces, documentation governance, build, bundle, Truth Loop, Firestore rules, owner-SMS emulator, Firebase authenticated/rules browser, authoritative pricing browser, and Lighthouse/CWV gates pass. Unit results are 363 files passed/3 skipped and 4,091 tests passed/78 skipped; Truth Loop has 127 passes; Firestore rules has 76 passes; authoritative pricing has 3 passes; the build contains 503 modules.
