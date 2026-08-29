@@ -1,10 +1,10 @@
 # Open Questions
 
-Last updated: 2026-08-28 20:46:47 CDT
+Last updated: 2026-08-28 20:56:59 CDT
 
-Checkpoint recorded: 2026-08-29T01:46:47Z
+Checkpoint recorded: 2026-08-29T01:56:59Z
 
-1. Who will review the 72-commit local stack and authorize push, remote CI, deployment, and rollback preparation? None is implied by local completion.
+1. Who will review the complete local commit stack and authorize push, remote CI, deployment, and rollback preparation? None is implied by local completion.
 2. Which exact immutable commit will be selected for remote review and deployment after the agent-state commit, and what rollback artifact must accompany it?
 3. Who will supply and review the first production-authorized Truth Loop source bundle and explicit evaluation instant? Missing payout, fee-schedule, and post-event-consumption evidence must not be inferred.
 4. Who will review the exact Stripe Connect Terraform plan/digest, authorize apply, reconcile deployed identity/manifest state, observe/promote App Check, bind the restricted Sandbox credential, authorize runtime exports, and execute hosted Sandbox UAT?

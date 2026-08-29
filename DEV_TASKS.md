@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-08-28 20:56:59 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -31,8 +31,8 @@ Execution rules:
 
 | Order | Task ID and outcome | Capability truth | Dependencies | Acceptance criteria | Current boundary |
 |---:|---|---|---|---|---|
-| 0 | `QP-OBS-018` — Product Truth Digest and drift control | Cross-cutting source/release/capability/evidence observability; no new product authority | Accepted ADR/design; deterministic source adapters; current contradiction fixtures; existing task evidence, capability, release, and canonical-doc contracts | `status:product` answers live/candidate/proof/drift/owner-decision questions; `check:product-drift` detects conflicting release identity, branch divergence, evidence gaps, and capability-gate failures; every finding cites exact sources; unavailable evidence stays `unknown`; no generated digest becomes authority | Repository implementation and advisory CI wiring are complete locally. One real local digest exposes the known release-identity conflict and dirty-worktree capability failure. Exact CI observation, owner comprehension review, freshness calibration, and any required-gate promotion remain human/external. Hosted/provider/production/human evidence remains independently sourced. |
-| 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | Clean committed candidate passes; the dirty shared tree remains unqualified mixed WIP |
+| 0 | `QP-OBS-018` — Product Truth Digest and drift control | Cross-cutting source/release/capability/evidence observability; no new product authority | Accepted ADR/design; deterministic source adapters; current contradiction fixtures; existing task evidence, capability, release, and canonical-doc contracts | `status:product` answers live/candidate/proof/drift/owner-decision questions; `check:product-drift` detects conflicting release identity, branch divergence, evidence gaps, and capability-gate failures; every finding cites exact sources; unavailable evidence stays `unknown`; no generated digest becomes authority | Repository implementation and advisory CI wiring are complete locally. The clean reconciled candidate resolves exact v0.15 production identity with no product-truth drift. Exact CI observation, owner comprehension review, freshness calibration, and any required-gate promotion remain human/external. Hosted/provider/production/human evidence remains independently sourced. |
+| 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | Complete locally: the clean committed candidate passes the capability-surfacing gate; remote CI observation remains `human/external` |
 | 2 | `QP-PERF-002` — close temporary bundle exceptions | Rows 29, 60, 62, 64 and the performance guardrail | Clean-main/candidate measurements; exact graph profile; accepted optimization or reviewed baseline recalibration | Compatibility and Ambient graphs pass the standard budget without a no-headroom exception; build, browser/CWV, and docs gates pass; no route, accessibility, or authority regression | Minifier slice restores 21.7 KB of headroom under the unchanged exception; full exception retirement remains a reviewed graph-optimization or baseline decision |
 | 3 | `QP-CONFIG-003` — remove remaining `functions.config()` compatibility | Runtime/deployment capabilities using Firebase Functions | Source migration complete; exact coordinated backend release; runtime readback; March 2027 deadline | No production runtime depends on `functions.config()`; local fallback and secret boundaries remain intact; function tests, env materialization, build, emulator lanes, and deployment docs pass | Source candidate complete; deployment/runtime proof is `human/external` |
 | 4 | `QP-ACCEPT-004` — exact authenticated staff/operator acceptance | Rows 5, 8, 18, 27, 29–30, 34–45, 47–60, 63, 68–72 as applicable to the candidate | Immutable exact SHA and flag profile; real QuotePilot staff session; canonical tenant data; rollback artifact | Named route/task matrix proves create, save, exact readback/version, export, Workflow, Event Workspace, Customer 360, Messaging, BEO, Decision Debt, payments, staffing boundaries, and role denials; every result is tied to the SHA and evidence level | Machine contract prepared as `operator.authenticated-workspace-journey`; execution remains `human/external` |
@@ -224,8 +224,10 @@ replace their safety conditions.
   Kitchen BEO freshness, and Decision Debt. Enable the global enforcement gate
   only with an explicitly named tenant and rollback record; never bulk-enable
   all tenants.
-- Keep production `NOTIFICATIONS_SMS_PROVIDER=none` while qualifying exactly
-  one owner-SMS provider. For the Pingram path, create `PINGRAM_API_KEY`,
+- Exact `v0.15.0` selected `NOTIFICATIONS_SMS_PROVIDER=pingram` with generation
+  `pingram-2026-08-14-a`, but the owner-SMS rail remains operationally off and
+  unaccepted. Do not run another provider attempt or enable automatic alerts
+  while qualifying the one selected provider. Create `PINGRAM_API_KEY`,
   `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` only in Firebase
   Secret Manager; choose one exact approved US/CA/EU origin and a new lowercase
   `PINGRAM_CONFIGURATION_GENERATION`; verify the

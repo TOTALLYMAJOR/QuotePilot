@@ -1,13 +1,13 @@
 # Evidence Ledger
 
-Last updated: 2026-08-28 20:46:47 CDT
+Last updated: 2026-08-28 20:56:59 CDT
 
-Checkpoint recorded: 2026-08-29T01:46:47Z
+Checkpoint recorded: 2026-08-29T01:56:59Z
 
 ## Current Git identity and reconciliation
 
 - File/path: Git branch history; merge commit `0731ef26556b011c64904a103438bf326872b705`
-- Evidence: `feature/landing-document-hero` is 72 commits ahead and 0 behind `origin/main` at `24b61cfd013c6c88130479faabd597e22af2e33d`. An isolated `-X ours` merge candidate was validated before the same merge was applied to the branch, preserving newer local conflicting hunks and accepting non-conflicting v0.15/Commercial Truth Loop additions. The real merge tree matched validated candidate tree `0da3d3c9f4629aa738e53f0a78fc04a0db17cb9f` exactly.
+- Evidence: A fresh `git fetch origin main` left `origin/main` at `d40ec929e5d70142683966e872b6f91b4a508cad`. At completion-audit base `8c8ea0d2f9bda6c00580e4fc6bbf768eacd76204`, `feature/landing-document-hero` is 73 commits ahead and 0 behind, and `origin/main` is an ancestor. An isolated `-X ours` merge candidate was validated before the same merge was applied to the branch, preserving newer local conflicting hunks and accepting non-conflicting v0.15/Commercial Truth Loop additions. The real merge tree matched validated candidate tree `0da3d3c9f4629aa738e53f0a78fc04a0db17cb9f` exactly.
 - Why it matters: The local product stack is no longer based on a stale mainline and did not silently lose the newer local implementation during reconciliation.
 - Confidence: High; exact Git identities, ancestry, divergence, and tree equality were checked locally.
 - Unverified gaps: The branch has not been pushed, reviewed in a remote pull request, or exercised by hosted CI after this reconciliation.
@@ -27,6 +27,15 @@ Checkpoint recorded: 2026-08-29T01:46:47Z
 - Why it matters: A maintainer receives one current operational claim while preserving older receipts as history rather than contradictory runtime truth.
 - Confidence: High for canonical repository claims and local reconciliation behavior.
 - Unverified gaps: Reachability probes were disabled; no new hosted, provider, production-data, human, or outcome evidence was generated.
+
+## Completion audit and canonical drift correction
+
+- File/path: `DEV_TASKS.md`, `docs/FEATURE_MATRIX.md`, `docs/agent-state/*`; completion-audit candidate based on `8c8ea0d`
+- Evidence: The audit removed stale dirty-worktree and 72-commit claims, preserved the clean v0.15/no-drift result, and reconciled the owner-SMS row with the governed deployment receipt: Pingram is selected in exact v0.15, while endpoint registration, credentials, provider acceptance, delivery, recipient receipt, and human acceptance remain unverified. The exact candidate passes the release manager's high-risk plus CWV readiness profile.
+- Validation notes: Direct wrapper execution exited `126` because the tracked script is not executable. The first `bash` invocation stopped at `check:env` because the isolated worktree had no ignored local Firebase env files. After binding the existing ignored root env files by symlink without reading their values, the full run passed 363 test files / 4,091 tests, a 503-module build, 127 Truth Loop tests, both high-risk emulator lanes, and Lighthouse/CWV. During emulator discovery, Firebase attempted read-only Secret Manager lookups for the fake `demo-e2e` project; every lookup returned `403`, no secret was accessed, and the fail-closed emulator tests still passed. No provider send or production/provider mutation occurred.
+- Why it matters: The durable handoff and active execution map now describe the actual committed branch and do not instruct a future operator to overwrite a deployed selection with stale `none` guidance.
+- Confidence: High for local Git identity, canonical repository consistency, and deterministic validation.
+- Unverified gaps: The branch remains local; remote CI, deployment, provider behavior, production data, and human acceptance were not exercised.
 
 ## Product Truth Observability control plane
 
