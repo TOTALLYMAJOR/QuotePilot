@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 20:04:38 CDT
+Last updated: 2026-08-28 20:07:52 CDT
 
 All notable project changes are documented in this file.
 
@@ -32,6 +32,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   repeated arrival rationale no longer consumes the first useful viewport.
   This changes presentation only and grants no pricing, selection, staffing,
   availability, save, role, tenant, or provider authority.
+- Made the unsettled Payment object's next resolution name the exact existing
+  **quote workspace** handoff instead of an abstract governed workflow. Added
+  regression coverage that keeps core proposal gaps and exact Staffing review
+  ahead of optional phone enrichment while retaining phone as a discoverable
+  recommendation once required readiness and saved staffing are satisfied. No
+  payment request, settlement, quote edit, staffing change, or provider action
+  is performed by this presentation contract.
 - Added one fail-closed canonical browser-arrival protocol for quote-scoped
   **Payment**, **Proposal**, and general **Conversation** intent. Payment and
   Proposal target the existing Quote administration route with exact quote and

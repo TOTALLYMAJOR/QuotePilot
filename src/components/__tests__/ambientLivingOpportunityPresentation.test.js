@@ -343,6 +343,112 @@ describe("ambient Living Opportunity presentation", () => {
     });
   });
 
+  test("puts core proposal details ahead of phone enrichment and staffing guidance", () => {
+    const model = buildAmbientLivingOpportunityPresentation(quote({
+      customer: { name: "Maya Bennett", email: "maya@example.test", phone: "" },
+      event: {
+        ...quote().event,
+        time: "",
+        hours: 5
+      },
+      selection: {
+        ...quote().selection,
+        packageId: "classic",
+        menuItems: ["garden-salad"]
+      }
+    }), {
+      source: "local",
+      ordinaryEditAllowed: true
+    });
+
+    expect(model.risk).toMatchObject({
+      id: "proposal-gap-event-time",
+      title: "Event time needs review"
+    });
+    expect(model.nextAction).toMatchObject({
+      kind: "edit",
+      label: "Review draft"
+    });
+  });
+
+  test("puts an exact staffing review ahead of phone-only enrichment", () => {
+    const model = buildAmbientLivingOpportunityPresentation(quote({
+      customer: { name: "Maya Bennett", email: "maya@example.test", phone: "" },
+      event: {
+        ...quote().event,
+        hours: 5
+      },
+      selection: {
+        ...quote().selection,
+        packageId: "classic",
+        menuItems: ["garden-salad"]
+      }
+    }), {
+      source: "local",
+      ordinaryEditAllowed: true
+    });
+
+    expect(model.risk).toMatchObject({
+      id: "staffing-guidance",
+      title: "Staffing may need attention"
+    });
+    expect(model.nextAction).toMatchObject({
+      id: "inspect-staffing",
+      kind: "staffing",
+      category: "recommendation",
+      label: "Review staffing"
+    });
+    expect(model.actions.primary).toBe(model.actions.inspectStaffing);
+    expect(model.actions.primary.primary).toBe(true);
+    expect(model.pilotSentence).toBe(
+      "Staffing may need attention. Reviewing staffing is the clearest available next step."
+    );
+  });
+
+  test("keeps phone review available after the saved staffing meets the guide", () => {
+    const model = buildAmbientLivingOpportunityPresentation(quote({
+      customer: { name: "Maya Bennett", email: "maya@example.test", phone: "" },
+      event: {
+        ...quote().event,
+        hours: 5,
+        servers: 10,
+        chefs: 3
+      },
+      selection: {
+        ...quote().selection,
+        packageId: "classic",
+        menuItems: ["garden-salad"]
+      }
+    }), {
+      source: "local",
+      ordinaryEditAllowed: true
+    });
+
+    expect(model.risk).toMatchObject({
+      id: "proposal-recommendation-customer-phone",
+      label: "Optional detail",
+      title: "Customer phone could help"
+    });
+    expect(model.nextAction).toMatchObject({
+      kind: "edit",
+      category: "recommendation",
+      label: "Review contact"
+    });
+    expect(model.proposalObject.readiness).toMatchObject({
+      score: 100,
+      coverageScore: 95,
+      complete: true,
+      gaps: []
+    });
+    expect(model.proposalObject.readiness.recommendedGaps.map((entry) => entry.id)).toEqual([
+      "customer-phone"
+    ]);
+    expect(model.momentumContract.domains.proposal).toMatchObject({
+      state: "healthy",
+      completenessPercent: 100
+    });
+  });
+
   test("registers every local interaction with a complete arrival contract", () => {
     const model = buildAmbientLivingOpportunityPresentation(quote(), {
       source: "local",
@@ -692,6 +798,41 @@ describe("ambient Living Opportunity presentation", () => {
       enabled: true,
       disabledReason: null
     });
+  });
+
+  test("does not describe a staffing recommendation as requiring no action", () => {
+    const completeQuote = quote({
+      customer: {
+        name: "Maya Bennett",
+        email: "maya@example.test",
+        phone: "205-555-0142"
+      },
+      event: {
+        ...quote().event,
+        hours: 5
+      },
+      selection: {
+        ...quote().selection,
+        packageId: "classic",
+        menuItems: ["garden-salad"]
+      }
+    });
+    const model = buildAmbientLivingOpportunityPresentation(completeQuote, {
+      source: "local",
+      ordinaryEditAllowed: false
+    });
+
+    expect(model.risk.title).toBe("Staffing may need attention");
+    expect(model.nextAction).toMatchObject({
+      id: "inspect-staffing",
+      kind: "staffing",
+      label: "Review staffing",
+      title: "Staffing may need attention"
+    });
+    expect(model.pilotSentence).toBe(
+      "Staffing may need attention. Reviewing staffing is the clearest available next step."
+    );
+    expect(model.pilotSentence).not.toContain("No action required");
   });
 
   test("maps operational staffing context to its independent default-off presentation gate", () => {
