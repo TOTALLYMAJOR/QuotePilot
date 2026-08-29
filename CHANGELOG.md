@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 15:42:14 CDT
+Last updated: 2026-08-29 16:05:36 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Accepted the checksum-pinned Firebase 15.24.0 Hosting deployment result's
+  numeric-project resource form in addition to its shorter site form. Both
+  representations remain bound to staging project number `844470813106`, site
+  `quotepilot-staging-20260804`, and a non-empty immutable version id; another
+  project or site still fails closed. This corrects the receipt boundary found
+  after a real staging operation deployed 95 Functions with zero errors and
+  released Rules and Hosting, but does not retroactively mark that partial
+  receipt verified.
 - Restored checksum-pinned Firebase Functions manifest discovery by pinning the
   supported Firebase Admin 13.6.0 line (`jwks-rsa` 3 / `jose` 4), keeping the
   Functions dependency audit at zero, and loading `jspdf` only when the

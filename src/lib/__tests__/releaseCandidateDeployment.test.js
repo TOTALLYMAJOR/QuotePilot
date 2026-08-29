@@ -503,6 +503,26 @@ describe("governed release candidate deployment", () => {
         result: { hosting: "sites/quotepilot-staging-20260804/versions/0123456789abcdef" }
       }
     }).providerDeploymentId).toContain("/versions/");
+    expect(validateFirebaseReceipt({
+      releaseSha: SHA,
+      response: {
+        status: "success",
+        result: {
+          hosting: "projects/844470813106/sites/quotepilot-staging-20260804/versions/0123456789abcdef"
+        }
+      }
+    }).providerDeploymentId).toBe(
+      "projects/844470813106/sites/quotepilot-staging-20260804/versions/0123456789abcdef"
+    );
+    expect(() => validateFirebaseReceipt({
+      releaseSha: SHA,
+      response: {
+        status: "success",
+        result: {
+          hosting: "projects/999999999999/sites/quotepilot-staging-20260804/versions/0123456789abcdef"
+        }
+      }
+    })).toThrow(/fixed staging Hosting version id/i);
     expect(validateVercelReceipt({
       releaseSha: SHA,
       deployment: {

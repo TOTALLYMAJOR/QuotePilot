@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 15:28:21 CDT
+Last updated: 2026-08-29 16:05:36 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -156,6 +156,16 @@ human results remain separate.
   Lighthouse/CWV gate also pass with this repair. Firebase enabled Cloud
   Scheduler API in staging during this preflight; no code deployment was
   established by the dry run.
+- Exact `815c38f` and CI Quality run `33274213339` then passed every repository
+  gate and executed the full staging provider operation. Firebase reported 95
+  Functions deployed with zero errors, released Firestore Rules, and finalized
+  and released Hosting version `0915b89d0813002a`. The governed receipt remains
+  `partial`, not verified: Firebase 15.24.0 returned the Hosting version under
+  `projects/844470813106/...`, while the source validator admitted only the
+  shorter `sites/...` representation and therefore stopped before hosted
+  manifest and provider readback. The current repair admits only those two
+  exact fixed-project resource forms; it does not broaden the allowed project,
+  site, or version boundary.
 - The governed Vercel preview command for all three exact heads also stopped before
   mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions

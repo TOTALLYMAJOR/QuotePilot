@@ -1,14 +1,14 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 15:42:14 CDT
+Last updated: 2026-08-29 16:05:36 CDT
 
 Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
 ## Published candidate, exact CI, and deployment boundary
 
 - File/path: Branch `release/v0.16.0` through exact
-  `5a0c55ec4efea279f14387a4d68265b3bc8ebcfb`; CI Quality runs
-  `33271755281`, `33272292112`, and `33272856057`; governed
+  `815c38fe156c096c810472fd88159f3a1f5347eb`; CI Quality runs
+  `33271755281`, `33272292112`, `33272856057`, and `33274213339`; governed
   `staging-staffing-authority` candidate attempts
 - Evidence: Each published staffing-control correction passed all eight exact
   CI Quality jobs and both matching Stripe source-only workflows. The first
@@ -20,13 +20,20 @@ Checkpoint recorded: 2026-08-29T19:20:40.340Z
   manifest analysis returned HTTP 400 before deployment because Firebase Admin
   14 resolved `jwks-rsa` 4 / ESM-only `jose` 6. That receipt is `partial`, with
   provider mutation attempted and completion unproven; it is not deployment or
-  hosted evidence.
+  hosted evidence. Exact `815c38f` then passed all eight CI jobs plus both
+  Stripe source-only workflows and reached a completed staging provider
+  operation: Firebase reports 95 Functions deployed with zero errors,
+  Firestore Rules released, and Hosting version `0915b89d0813002a` finalized
+  and released. Its receipt is nevertheless `partial` because the CLI returned
+  the version as a numeric-project resource while the validator admitted only
+  the shorter site resource. Post-deployment manifest and provider readback did
+  not run, so this is observed provider deployment, not a verified candidate.
 - Why it matters: The candidate process failed at explicit, independently
   repairable client/analyzer boundaries without converting partial execution
   into a successful staging claim.
 - Confidence: High for exact Git/CI identities, command failures, and receipt
   status.
-- Unverified gaps: A fresh exact-SHA governed candidate receipt, Functions,
+- Unverified gaps: A fresh exact-SHA governed verified receipt, exact Functions,
   Hosting and Rules readback, Vercel preview, hosted UAT, and human acceptance.
 
 - File/path: Staging project `quotepilot-staging-20260804`; ignored staging
@@ -53,7 +60,7 @@ Checkpoint recorded: 2026-08-29T19:20:40.340Z
   or treating placeholder staging credentials as provider activation.
 - Confidence: High for local dependency resolution, audit, secret metadata,
   dry-run completion, and the observed staging API enablement.
-- Unverified gaps: Exact-SHA CI, real candidate deployment/readback, disposable
+- Unverified gaps: New exact-SHA CI, verified candidate readback, disposable
   staging tenant data, hosted behavior, and human acceptance.
 
 - File/path: Google Cloud project `tonicatering`; Workload Identity pool

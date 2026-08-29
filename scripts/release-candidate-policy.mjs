@@ -9,6 +9,7 @@ export const RELEASE_CANDIDATE_POLICY = Object.freeze({
   requiredCiJobs: RELEASE_EVIDENCE_POLICY.requiredCiJobs,
   firebase: Object.freeze({
     projectId: "quotepilot-staging-20260804",
+    projectNumber: "844470813106",
     siteId: "quotepilot-staging-20260804",
     hostingUrl: "https://quotepilot-staging-20260804.web.app",
     appId: "1:844470813106:web:1b2137f26676ef780ca4ab",
@@ -402,8 +403,12 @@ export function validateFirebaseReceipt({ response, releaseSha }) {
   const sha = requireFullSha(releaseSha);
   if (response?.status !== "success") reject("Firebase did not report a successful deployment.");
   const version = String(response?.result?.hosting || "");
-  const prefix = `sites/${RELEASE_CANDIDATE_POLICY.firebase.siteId}/versions/`;
-  if (!version.startsWith(prefix) || version.length <= prefix.length) {
+  const prefixes = [
+    `sites/${RELEASE_CANDIDATE_POLICY.firebase.siteId}/versions/`,
+    `projects/${RELEASE_CANDIDATE_POLICY.firebase.projectNumber}/sites/${RELEASE_CANDIDATE_POLICY.firebase.siteId}/versions/`
+  ];
+  const prefix = prefixes.find((candidate) => version.startsWith(candidate));
+  if (!prefix || version.length <= prefix.length) {
     reject("Firebase did not return the fixed staging Hosting version id.");
   }
   return Object.freeze({

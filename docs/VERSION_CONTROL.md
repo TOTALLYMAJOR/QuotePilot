@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 15:42:14 CDT
+Last updated: 2026-08-29 16:05:36 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -97,6 +97,10 @@ explicit owner promotion after real-run review.
      pinned analyzer, and pass the explicit retry-policy acknowledgement for
      tracked retry-enabled event functions. Firebase may enable a required API
      during preflight even under `--dry-run`; record that provider mutation.
+   - Treat the pinned Firebase CLI Hosting result as an exact resource identity.
+     It may use either `sites/<fixed-site>/versions/<id>` or
+     `projects/<fixed-project-number>/sites/<fixed-site>/versions/<id>`; reject
+     every other project, site, or empty version before provider readback.
    - If GitHub does not enqueue the normal `pull_request` run, manually
      dispatch `CI Quality` against the exact published PR head and retain that
      run as the CI evidence. Do not substitute a run from another commit.
