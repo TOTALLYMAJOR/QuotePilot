@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-28 20:34:32 CDT
+Last updated: 2026-08-29 01:51:51 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -27,7 +27,7 @@ Threshold policy:
   `bundle-budget.json`.
 - The current compatibility graph has a temporary 3,213,578-byte aggregate
   and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 3,887,976-byte aggregate ceiling and
+  graph has a separate temporary 3,928,552-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -54,10 +54,14 @@ Threshold policy:
   2,963,542 / 391,901 bytes for compatibility and 3,749,888 / 391,901 for
   Ambient. The shared shell and Now visual-system pass measures 2,964,327 /
   391,901 bytes for compatibility and 3,750,363 / 391,901 for Ambient.
-  The current combined source candidate measures 3,206,553 / 387,248 bytes for
-  compatibility and 3,887,673 / 387,248 bytes for Ambient. Its profile ceilings
-  retain only the previously observed 7,025-byte and 303-byte CI offsets; the
-  recalibration is not general product-growth headroom.
+  The earlier combined source checkpoint measured 3,206,553 / 387,248 bytes
+  for compatibility and 3,887,673 / 387,248 bytes for Ambient. Exact-SHA CI run
+  `33239048234` on release candidate `6ff9d605` measured 3,208,826 / 384,998
+  bytes for compatibility and 3,928,479 / 388,269 bytes for Ambient. The
+  CI-equivalent local Ambient build measured 3,928,552 / 388,303 bytes. The
+  Ambient ceiling is pinned to that larger literal exact-candidate measurement;
+  the 73-byte local/runner difference is the only retained environment margin,
+  and the reconciliation is not general product-growth headroom.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

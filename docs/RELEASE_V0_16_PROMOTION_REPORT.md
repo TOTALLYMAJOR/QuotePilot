@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 01:12:39 CDT
+Last updated: 2026-08-29 01:51:51 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -76,6 +76,11 @@ correctness, use, or human acceptance.
 - Vite production build passed with 503 modules.
 - Bundle budget passed: 3,208,389 bytes total and 384,998 bytes largest asset,
   within the active temporary ceilings of 3,213,578 and 391,901 bytes.
+- The exact-SHA production-equivalent Ambient build measured 3,928,479 /
+  388,269 bytes in CI and 3,928,552 / 388,303 bytes in a CI-equivalent local
+  rebuild. The Ambient aggregate exception is reconciled to the larger literal
+  result with no discretionary growth headroom; a fresh exact-SHA CI pass is
+  required before candidate deployment.
 - Firestore rules: 76 tests passed.
 - Owner-SMS emulator and full Firebase authenticated/rules browser lanes passed.
 - Authoritative pricing browser lane: 3 tests passed.

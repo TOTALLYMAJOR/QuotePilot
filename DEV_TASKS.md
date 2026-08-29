@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 01:03:25 CDT
+Last updated: 2026-08-29 01:51:51 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -370,11 +370,13 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   sales roles, revision-conflict recovery, responsive layout, and rollback
   evidence before describing AIUI-20 as complete.
 - Continue reducing the production-equivalent Ambient aggregate from the
-  measured 3,887,673 JavaScript bytes toward the standard clean-main budget.
-  The measured largest chunk is 387,248 bytes under the retained 391,901-byte
-  ceiling, and CI independently enforces detected compatibility and Ambient
-  graph profiles; the temporary 3,887,976 Ambient aggregate ceiling retains
-  only the existing 303-byte runner offset and has no general growth headroom.
+  exact-candidate 3,928,552-byte CI-equivalent local measurement toward the
+  standard clean-main budget. Exact-SHA CI run `33239048234` measured 3,928,479
+  aggregate bytes and a 388,269-byte largest chunk; the local build measured a
+  388,303-byte largest chunk. CI independently enforces detected compatibility
+  and Ambient graph profiles; the temporary 3,928,552 Ambient aggregate ceiling
+  is pinned to the larger literal measurement, retaining only the observed
+  73-byte environment difference and no general growth headroom.
   Close the exception through optimization or an explicit reviewed clean-main
   recalibration before AIUI-48 retirement or Ambient production promotion.
 - Add inline editing on the event workspace quote page: editable fields with

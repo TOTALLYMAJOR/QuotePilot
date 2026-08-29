@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 01:40:28 CDT
+Last updated: 2026-08-29 01:51:51 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reconciled the production-equivalent Ambient bundle exception to the exact
+  assembled v0.16 candidate rather than the earlier partial-source checkpoint.
+  Exact-SHA CI measured 3,928,479 aggregate bytes and the CI-equivalent local
+  build measured 3,928,552; the temporary ceiling is pinned to the larger
+  literal result with no discretionary growth headroom. The unchanged
+  391,901-byte largest-chunk ceiling still contains both measured graphs.
 - Repaired the Ambient zero-dead-click release gate after exact remote CI
   exposed a stale hard-coded `Review draft` expectation. The governed fixture
   currently ranks the staffing recommendation first, so the gate now exercises

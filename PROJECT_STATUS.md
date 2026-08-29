@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 01:12:39 CDT
+Last updated: 2026-08-29 01:51:51 CDT
 
 ## Current Production Release
 
@@ -687,11 +687,13 @@ route evidence are complete.
   3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. The current combined source candidate measures 3,206,553 /
-  387,248 bytes for compatibility and 3,887,673 / 387,248 for Ambient. The
-  temporary ceilings are 3,213,578 and 3,887,976 aggregate bytes respectively,
-  retaining only the previously observed per-profile CI offsets; both keep the
-  391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
+  build steps. Exact-SHA CI run `33239048234` on release candidate `6ff9d605`
+  measures 3,208,826 / 384,998 bytes for compatibility and 3,928,479 / 388,269
+  for Ambient; a CI-equivalent local Ambient build measures 3,928,552 / 388,303.
+  The temporary ceilings are 3,213,578 and 3,928,552 aggregate bytes
+  respectively, with Ambient pinned to the larger literal exact-candidate
+  measurement and no discretionary growth headroom; both keep the 391,901-byte
+  largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
@@ -807,9 +809,10 @@ route evidence are complete.
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
 9. The combined workspace candidate uses named per-graph temporary ceilings:
-   3,213,578 bytes for compatibility and 3,887,976 bytes for Ambient, each
-   retaining only its previously observed runner offset above the measured
-   candidate. Exact-SHA CI confirmation is still required before merge, and
+   3,213,578 bytes for compatibility and 3,928,552 bytes for Ambient. The
+   Ambient ceiling is pinned to the larger of exact-SHA CI and CI-equivalent
+   local candidate measurements, a 73-byte environment difference with no
+   discretionary headroom. A fresh exact-SHA CI pass is still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
    exception can close.
 10. The sole `functions.config()` compatibility read is removed in the current

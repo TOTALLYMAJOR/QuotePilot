@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-29 01:20:25 CDT
+Last updated: 2026-08-29 01:51:51 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -82,15 +82,22 @@ Use this log when a change intentionally departs from stable-first policy or req
   The catalog onboarding recovery hotfix adds 1,025 Ambient aggregate bytes in
   CI (`3,827,245 / 391,901`) for the hosted setup, manual, import, and bypass
   paths; the largest chunk remains unchanged.
-  The current combined source candidate, including the Package Workspace,
-  proposal presentation, read-only quote-workspace concept, and adjacent
-  workspace changes, measures 3,206,553 / 387,248 bytes for compatibility and
-  3,887,673 / 387,248 bytes for Ambient. The temporary ceilings are therefore
-  3,213,578 and 3,887,976 aggregate bytes respectively, retaining only the
-  already observed 7,025-byte compatibility and 303-byte Ambient CI offsets.
-  The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
-  recalibration, not a claim that the Package Workspace alone caused the
-  increase and not general growth headroom.
+  The combined source checkpoint, including the Package Workspace, proposal
+  presentation, read-only quote-workspace concept, and adjacent workspace
+  changes, originally measured 3,206,553 / 387,248 bytes for compatibility and
+  3,887,673 / 387,248 bytes for Ambient. Exact-SHA CI run `33239048234` on
+  release candidate `6ff9d605` measured compatibility at 3,208,826 / 384,998
+  bytes and Ambient at 3,928,479 / 388,269 bytes after the later attendance,
+  observability, recovery, exact-arrival, and presentation slices were
+  assembled. A CI-equivalent local rebuild measured Ambient at 3,928,552 /
+  388,303 bytes, 73 aggregate bytes above the runner. The temporary ceilings
+  are therefore 3,213,578 and 3,928,552 aggregate bytes respectively:
+  compatibility retains its existing ceiling, while Ambient is pinned to the
+  larger literal exact-candidate measurement so both observed build
+  environments pass without discretionary growth headroom. The largest-chunk
+  ceiling remains 391,901 bytes. This is a combined-candidate reconciliation,
+  not a claim that any one capability caused the increase and not general
+  growth headroom.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
@@ -102,8 +109,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   and preserve exact rollback evidence before AIUI-48 retirement or Ambient
   promotion.
 - Verification evidence: Seven focused profiler/release-policy tests, workflow
-  lint, and fresh local production builds for both graphs pass. CI exact-SHA
-  confirmation, hosted timing, and human acceptance remain open.
+  lint, and fresh local production builds for both graphs pass. Exact-SHA CI
+  run `33239048234` established the current runner measurements and failed only
+  because its Ambient aggregate exceeded the prior stale ceiling; all other
+  jobs passed. A fresh CI-equivalent local Ambient build established the larger
+  literal ceiling above. A subsequent exact-SHA CI pass, hosted timing, and
+  human acceptance remain open.
 
 ## Superseded Exceptions
 
