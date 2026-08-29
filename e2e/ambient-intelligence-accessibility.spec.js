@@ -361,7 +361,7 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     })).toBeVisible();
   });
 
-  test("maps every enabled Alpha control and records an exact zero-dead-click primary handoff", async ({ page }) => {
+  test("maps every enabled Alpha control and records an exact zero-dead-click route handoff", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     const surface = await openAmbientOpportunity(page);
     await page.evaluate(() => {
@@ -387,7 +387,11 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     const primaryAction = surface.locator('[data-glance="next"] button[data-ambient-action-id]');
     await expect(primaryAction).toHaveAccessibleName("Review staffing");
     await primaryAction.click();
-    await expect(page.getByRole("dialog", { name: "Staffing suggestion" })).toBeVisible();
+    const staffingDialog = page.getByRole("dialog", { name: "Staffing suggestion" });
+    await expect(staffingDialog).toBeVisible();
+    await staffingDialog.getByRole("button", { name: "Use recommendation" }).click();
+    await staffingDialog.getByRole("button", { name: "Stage staffing in editor" }).click();
+    await expect(page.locator(".wizard-panel")).toBeVisible();
 
     const observations = await page.evaluate(() => window.__ambientInteractionObservations);
     const primaryReceipt = observations.find((item) => (

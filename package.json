@@ -31,7 +31,7 @@
     "test:owner-sms:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-owner-sms emulators:exec --only firestore \"node scripts/owner-sms-emulator-acceptance.mjs\"",
     "test:e2e": "bash ./scripts/run-playwright.sh test",
     "test:e2e:headed": "bash ./scripts/run-playwright.sh test --headed",
-    "test:e2e:ambient-release-gate": "bash ./scripts/run-playwright.sh test e2e/ambient-intelligence-accessibility.spec.js --grep \"maps every enabled Alpha control and records an exact zero-dead-click primary handoff\"",
+    "test:e2e:ambient-release-gate": "bash ./scripts/run-playwright.sh test e2e/ambient-intelligence-accessibility.spec.js --grep \"maps every enabled Alpha control and records an exact zero-dead-click route handoff\"",
     "test:e2e:firebase": "node ./scripts/run-firebase-e2e.mjs",
     "test:e2e:firebase:authoritative": "node ./scripts/run-firebase-e2e-authoritative.mjs",
     "test:e2e:firebase:starter-onboarding": "node ./scripts/run-firebase-e2e-starter-onboarding.mjs",

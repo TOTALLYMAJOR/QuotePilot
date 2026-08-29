@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 01:38:36 CDT
+Last updated: 2026-08-29 01:40:28 CDT
 
 All notable project changes are documented in this file.
 
@@ -13,9 +13,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   exposed a stale hard-coded `Review draft` expectation. The governed fixture
   currently ranks the staffing recommendation first, so the gate now exercises
   the visible `Review staffing` primary action, verifies its exact staffing
-  context arrival, and requires a zero-dead-click contextual acknowledgement.
-  Product behavior, ranking, staffing authority, and saved quote state are
-  unchanged.
+  context arrival, continues through the explicit unsaved staffing-review
+  handoff into the editor, and requires a zero-dead-click contextual
+  acknowledgement. Product behavior, ranking, staffing authority, and saved
+  quote state are unchanged.
 - Reconciled the local feature stack with the current v0.15 release base while
   preserving newer local conflict hunks and importing the non-conflicting
   Commercial Truth Loop and project-state control plane. Canonical operational
