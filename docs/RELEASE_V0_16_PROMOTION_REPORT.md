@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 03:43:26 CDT
+Last updated: 2026-08-29 04:16:11 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -115,6 +115,14 @@ human results remain separate.
   service-account key. They require GitHub OIDC/WIF with separate deploy and
   tenant-operator identities. Firebase production and candidate mutation use
   the official v15.24.0 Linux binary only after SHA-256 verification.
+- Candidate provider-client locking is repository-complete: Firebase Web
+  config, Functions, Hosting, secret metadata, and mutation all execute through
+  the verified binary; Rules content is read from the public Firebase Rules API
+  through exact `google-auth-library` 10.5.0 ADC; Vercel preview uses a
+  deterministic Build Output API v3 artifact and narrow REST
+  upload/deploy/readback. The candidate command contains no `npx`, local/global
+  Firebase-module search, or runtime-resolved Vercel CLI. The added dependency
+  graph audits at zero findings. Hosted execution remains unproven.
 - The governed Firebase candidate command stopped before mutation and before
   receipt reservation because staging Secret Manager has no enabled
   `STAFF_INVITATION_TOKEN_SECRET`. The tool explicitly requires the separate

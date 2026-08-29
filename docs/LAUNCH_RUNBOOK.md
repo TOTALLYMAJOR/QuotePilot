@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 03:33:19 CDT
+Last updated: 2026-08-29 04:16:11 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -926,13 +926,25 @@ disabled-provider residue, and contain no unreviewed variables. Before any
 Firebase mutation, the command checks metadata only—never secret values—for an
 enabled version of every Secret Manager name bound by the tracked Functions.
 Missing metadata is a blocker and this command does not create placeholders.
+Every Firebase CLI operation, including read-only Web config, Functions,
+Hosting, and secret metadata, uses the checksum-verified official v15.24.0
+binary. Exact Firestore Rules content readback uses the public Rules API through
+the repository-pinned `google-auth-library` 10.5.0 client and requires ADC with
+read permission. The command resolves the ADC token and proves release-list
+read access before receipt reservation or mutation; it never searches a local,
+global, or npm-cache Firebase module tree.
 
 Both candidates compile Ambient UI and the staffing browser surface on; that is
 presentation evidence, not staffing or commercial write authority. The Vercel
 preview build uses an explicit exact-staging validation profile; ordinary
 `npm run check:env` remains production-only. Vercel also requires provider
 readback showing the coordinated staging Functions retain every fail-closed
-runtime value before it deploys the browser preview.
+runtime value before it deploys the browser preview. `VERCEL_TOKEN` must resolve
+the fixed linked team/project during a read-only preflight. The command then
+builds a deterministic Build Output API v3 directory locally, rejects symlinks,
+uploads SHA-1-addressed files through `/v2/files`, creates only a preview through
+`/v13/deployments?prebuilt=1`, and waits for immutable `READY` readback. It does
+not install or execute a Vercel CLI.
 
 GitHub CI verification resolves authentication in this order:
 `GITHUB_TOKEN`, `GH_TOKEN`, then the authenticated local GitHub CLI session.

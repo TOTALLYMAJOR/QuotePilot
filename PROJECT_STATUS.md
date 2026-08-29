@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 03:43:26 CDT
+Last updated: 2026-08-29 04:16:11 CDT
 
 ## Current Production Release
 
@@ -106,10 +106,14 @@ Last updated: 2026-08-29 03:43:26 CDT
   official v15.24.0 Linux CLI artifact after verifying SHA-256
   `bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`.
   The production workflow downloads it before OIDC authentication and passes
-  its verified path only to the deploy step. Candidate read-only SDK config,
-  Functions, Hosting/rules, and secret-metadata inspection still depends on an
-  exact-version local or npm-cache Firebase module, and Vercel CLI execution is
-  still runtime-resolved; full provider-client retirement remains open.
+  its verified path only to the deploy step. Candidate Web config, Functions,
+  Hosting, and secret-metadata inspection now use that same verified path;
+  Firestore Rules readback uses exact `google-auth-library` 10.5.0 ADC and the
+  public Rules API. Vercel preview uses a locally built Build Output API v3
+  artifact plus narrow REST upload/deploy/readback requests. No candidate path
+  searches local/global/npm-cache Firebase modules or runtime-downloads a
+  Vercel CLI. This provider-client lock is source/local evidence; it has not
+  produced a staging or preview receipt.
 - Release PR #111 publishes `release/v0.16.0`. Current code-bearing candidate
   `a096d20c34d6ba018c34653387ca30673f6039ef` passed all eight jobs in matching
   CI Quality run `33243677607` and has successful exact-SHA Stripe Connect runs

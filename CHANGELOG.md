@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 03:33:19 CDT
+Last updated: 2026-08-29 04:16:11 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Locked every release-candidate provider client to a reviewed source. Firebase
+  Web config, Functions, Hosting, and secret-metadata reads now use the same
+  checksum-verified official 15.24.0 binary as mutation; exact Firestore Rules
+  readback uses the pinned `google-auth-library` 10.5.0 client with ADC and the
+  public Rules API. Vercel preview now builds a deterministic Build Output API
+  v3 artifact and uses narrow file-upload, deployment, and immutable-readback
+  REST requests instead of a runtime-downloaded CLI. Focused tests assert path,
+  payload, safe routing, symlink rejection, no inline file content, receipt
+  ordering, and the absence of candidate `npx`; the root audit remains zero.
 - Replaced runtime-fetched Firebase mutation commands with the official
   `firebase-tools` 15.24.0 Linux release artifact pinned to its published
   SHA-256. Production prepares and verifies the 247 MB artifact before OIDC

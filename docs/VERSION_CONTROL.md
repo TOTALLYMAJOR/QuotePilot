@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 03:33:19 CDT
+Last updated: 2026-08-29 04:16:11 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -200,6 +200,14 @@ Checklist applicability limits each receipt to the selected payload surface and
 observed compatibility; it does not prove an unbound dependency's SHA or
 provider identity. A `firebase-all` staging receipt must bind Hosting,
 Functions, and Firestore rules together before that profile can be operational.
+Candidate provider clients are fixed as part of this contract: all Firebase CLI
+operations use the checksum-verified official v15.24.0 binary, Rules content
+readback uses exact `google-auth-library` 10.5.0 ADC against the public API, and
+Vercel preview uses a deterministic Build Output API v3 artifact plus narrow
+REST upload/deploy/readback. Both Rules and Vercel project access are proven by
+read-only preflight before receipt reservation or provider mutation. Runtime
+`npx`, provider-client discovery, and Git-triggered Vercel deployment are not
+valid release paths.
 
 ## Rollback Control
 If a regression appears in production, use the target-specific signed

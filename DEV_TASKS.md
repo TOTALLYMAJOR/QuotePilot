@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 03:33:19 CDT
+Last updated: 2026-08-29 04:16:11 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -281,11 +281,13 @@ replace their safety conditions.
   control exists; do not imply independent review in the meantime.
 - Keep Vercel Git deployment disabled and both provider deployments behind the
   exact tagged-main, exact-CI, rollback-receipt, typed-confirmation workflows.
-- Finish provider-client locking. Firebase production and candidate mutations
-  now use the official v15.24.0 Linux artifact pinned to its published SHA-256,
-  with production preparation before OIDC authentication. Replace the remaining
-  candidate read-only Firebase module path and runtime-resolved Vercel CLI with
-  locked or narrow clients while keeping credentials at their bounded steps.
+- Exercise the locked candidate provider clients after external prerequisites
+  exist. Firebase CLI reads/mutation use the checksum-verified official 15.24.0
+  binary; Firestore Rules readback uses exact `google-auth-library` 10.5.0 ADC;
+  Vercel preview uses Build Output API v3 plus narrow REST calls. Acceptance is
+  an exact Firebase safe-off receipt proving Hosting/Functions/rules, followed
+  by an exact Vercel preview receipt proving immutable source and READY state;
+  neither receipt may weaken the separate human/UAT gates.
 - Rehearse an immutable staging/UAT pass and rejected invalid-evidence deploy
   without mutating production.
 - Deploy the environment-only Functions configuration candidate through an

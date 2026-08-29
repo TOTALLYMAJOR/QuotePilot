@@ -19,7 +19,12 @@ import {
   validateFirebaseRulesReadback,
   validateVercelReceipt
 } from "../../../scripts/release-candidate-policy.mjs";
-import { resolveGitHubToken } from "../../../scripts/deploy-release-candidate.mjs";
+import {
+  buildVercelOutputConfig,
+  collectVercelBuildFiles,
+  resolveGitHubToken,
+  vercelDeploymentPayload
+} from "../../../scripts/deploy-release-candidate.mjs";
 
 const ROOT = process.cwd();
 const SCRIPT = path.join(ROOT, "scripts", "deploy-release-candidate.mjs");
@@ -136,7 +141,8 @@ describe("governed release candidate deployment", () => {
       "TWILIO_AUTH_TOKEN"
     ]));
     const source = fs.readFileSync(SCRIPT, "utf8");
-    expect(source).toContain("getSecretMetadata(project, name, \"latest\")");
+    expect(source).toContain('"functions:secrets:get"');
+    expect(source).toContain('version?.state === "ENABLED"');
     expect(source).not.toContain("accessSecretVersion(");
     expect(source).not.toContain("createSecret(");
   });
@@ -144,12 +150,16 @@ describe("governed release candidate deployment", () => {
   test("prepares the checksum-verified Firebase binary before receipt reservation and mutation", () => {
     const source = fs.readFileSync(SCRIPT, "utf8");
     const prepareOffset = source.lastIndexOf("await prepareFirebaseToolsBinary()");
+    const rulesPreflightOffset = source.lastIndexOf("await readFirebaseRulesReleases(firebaseRulesAccessToken)");
+    const vercelPreflightOffset = source.lastIndexOf("await validateVercelProjectAccess(vercelToken)");
     const reserveOffset = source.lastIndexOf("reservation = reserveCandidateReceipt");
     const mutationOffset = source.indexOf("attempt.providerMutationAttempted = true");
     const firebaseMutation = source.slice(mutationOffset, source.indexOf("response = parseJsonOutput", mutationOffset));
 
     expect(prepareOffset).toBeGreaterThan(0);
     expect(reserveOffset).toBeGreaterThan(prepareOffset);
+    expect(reserveOffset).toBeGreaterThan(rulesPreflightOffset);
+    expect(reserveOffset).toBeGreaterThan(vercelPreflightOffset);
     expect(firebaseMutation).toContain("capture(firebaseCliPath");
     expect(firebaseMutation).not.toContain('capture("npx"');
     expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
@@ -427,6 +437,56 @@ describe("governed release candidate deployment", () => {
     }).providerDeploymentId).toBe("dpl_candidate123");
   });
 
+  test("builds a deterministic Vercel Build Output v3 payload without a runtime CLI", () => {
+    expect(buildVercelOutputConfig()).toEqual({
+      version: 3,
+      routes: [
+        {
+          src: "^(?:/(.*))$",
+          headers: {
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "strict-origin-when-cross-origin"
+          },
+          continue: true
+        },
+        { handle: "filesystem" },
+        { src: "^(?:/(.*))$", dest: "/index.html", check: true },
+        { handle: "error" },
+        { status: 404, src: "^(?!/api).*$", dest: "/404.html" }
+      ],
+      crons: []
+    });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-vercel-output-"));
+    const output = path.join(root, ".vercel", "output");
+    try {
+      fs.mkdirSync(path.join(output, "static", "assets"), { recursive: true });
+      fs.writeFileSync(path.join(output, "config.json"), '{"version":3}\n');
+      fs.writeFileSync(path.join(output, "static", "index.html"), "<main>candidate</main>\n");
+      fs.writeFileSync(path.join(output, "static", "assets", "app.js"), "export default true;\n");
+      const files = collectVercelBuildFiles(output, { root });
+      expect(files.map((file) => file.file)).toEqual([
+        ".vercel/output/config.json",
+        ".vercel/output/static/assets/app.js",
+        ".vercel/output/static/index.html"
+      ]);
+      expect(files.every((file) => /^[0-9a-f]{40}$/.test(file.sha))).toBe(true);
+      const payload = vercelDeploymentPayload({ files, releaseSha: SHA, ciRunId: 123 });
+      expect(payload).toMatchObject({
+        name: "quoteflow",
+        project: RELEASE_CANDIDATE_POLICY.vercel.projectId,
+        version: 2,
+        meta: { candidateSha: SHA, candidateCiRunId: "123" }
+      });
+      expect(payload.files).toHaveLength(3);
+      expect(JSON.stringify(payload)).not.toContain("content");
+      fs.symlinkSync(path.join(output, "config.json"), path.join(output, "static", "linked-config.json"));
+      expect(() => collectVercelBuildFiles(output, { root })).toThrow(/symbolic links/i);
+      expect(() => collectVercelBuildFiles(root, { root })).toThrow(/inside the repository/i);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("fails closed before provider access and contains no production promotion command", () => {
     const result = spawnSync(process.execPath, [SCRIPT, "--force"], {
       cwd: ROOT,
@@ -460,6 +520,12 @@ describe("governed release candidate deployment", () => {
     expect(source).toContain('VITE_PILOT_MODEL_ENABLED: "false"');
     expect(source).toContain('QUOTEPILOT_BUILD_PROFILE: "release-candidate"');
     expect(source).toContain('"apps:sdkconfig"');
+    expect(source).not.toContain('capture("npx"');
+    expect(source).not.toContain('run("npx"');
+    expect(source).not.toContain("VERCEL_CLI");
+    expect(source).not.toContain("locateFirebaseToolsRoot");
+    expect(source).toContain('"https://api.vercel.com"');
+    expect(source).toContain("https://firebaserules.googleapis.com/v1/");
     expect(source.indexOf("reserveCandidateReceipt({")).toBeLessThan(
       source.indexOf("await deployFirebase(context)")
     );

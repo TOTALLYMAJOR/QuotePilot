@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-29 03:33:19 CDT
+Last updated: 2026-08-29 04:16:11 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -12,7 +12,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
-  Firebase staging or Vercel preview only; see the launch runbook)
+  Firebase staging or Vercel preview only; checksum-verified Firebase binary,
+  ADC Rules readback, and direct Vercel APIs; see the launch runbook)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Design system: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
@@ -1338,6 +1339,14 @@ allowlisted human dispatcher. The same live evidence is checked again after
 the build and immediately before provider mutation. The Vercel token and the
 Firebase workload-identity ADC file are scoped to their final mutation steps;
 Firebase production rejects the legacy `FIREBASE_TOKEN` path.
+
+The pre-merge candidate path is narrower than the production workflows. It
+uses the checksum-verified official Firebase v15.24.0 binary for every Firebase
+CLI read or mutation, exact `google-auth-library` 10.5.0 ADC for public Rules
+API readback, and direct Vercel Build Output/file/deployment APIs for preview.
+Rules permission and the fixed Vercel project are checked read-only before a
+receipt can enter a provider-mutation state. The candidate path does not invoke
+`npx` or dynamically resolve a Firebase/Vercel package.
 
 The Vercel step uses the fixed reviewed project link, pulls that project's
 production settings with the scoped token, revalidates the fixed project

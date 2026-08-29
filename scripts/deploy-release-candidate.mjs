@@ -2,10 +2,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { FIREBASE_TOOLS_VERSION, prepareFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
+import { GoogleAuth } from "google-auth-library";
+import { prepareFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
 import {
   RELEASE_CANDIDATE_POLICY,
   RELEASE_CANDIDATE_UAT_PROFILE,
@@ -29,9 +30,8 @@ import {
 } from "./release-candidate-policy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FIREBASE_TOOLS = `firebase-tools@${FIREBASE_TOOLS_VERSION}`;
-const VERCEL_CLI = "vercel@57.0.0";
-const require = createRequire(import.meta.url);
+const VERCEL_API = "https://api.vercel.com";
+const VERCEL_DEPLOYMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 function readArgs(argv = process.argv.slice(2)) {
   const allowed = new Set(["--target", "--release-sha", "--ci-run-id", "--confirm"]);
@@ -172,20 +172,15 @@ async function verifyCi(ciRunId, releaseSha, branch) {
   });
 }
 
-function readFixedFirebaseWebConfig() {
-  const tokenArgs = String(process.env.FIREBASE_TOKEN || "").trim()
-    ? ["--token", process.env.FIREBASE_TOKEN]
-    : [];
-  const output = capture("npx", [
-    "--yes",
-    FIREBASE_TOOLS,
+function readFixedFirebaseWebConfig(firebaseCliPath) {
+  const output = capture(firebaseCliPath, [
     "apps:sdkconfig",
     "WEB",
     RELEASE_CANDIDATE_POLICY.firebase.appId,
     "--project",
     RELEASE_CANDIDATE_POLICY.firebase.projectId,
     "--json",
-    ...tokenArgs
+    ...firebaseTokenArgs()
   ]);
   const response = parseJsonOutput(output, "Firebase Web SDK config");
   if (response?.status !== "success" || !response?.result?.sdkConfig) {
@@ -202,8 +197,8 @@ function readFixedFirebaseWebConfig() {
   };
 }
 
-function candidateBrowserEnvironment() {
-  const providerConfig = readFixedFirebaseWebConfig();
+function candidateBrowserEnvironment(firebaseCliPath) {
+  const providerConfig = readFixedFirebaseWebConfig(firebaseCliPath);
   const fixed = validateCandidateBrowserEnvironment(providerConfig);
   return {
     ...process.env,
@@ -300,64 +295,33 @@ function firebaseTokenArgs() {
     : [];
 }
 
-function locateFirebaseToolsRoot() {
-  const candidates = [path.join(ROOT, "node_modules", "firebase-tools")];
-  try {
-    candidates.push(path.join(capture("npm", ["root", "-g"]), "firebase-tools"));
-  } catch {
-    // Continue to the exact package downloaded by npx.
-  }
-  try {
-    const npxRoot = path.join(capture("npm", ["config", "get", "cache"]), "_npx");
-    if (fs.existsSync(npxRoot)) {
-      for (const entry of fs.readdirSync(npxRoot)) {
-        candidates.push(path.join(npxRoot, entry, "node_modules", "firebase-tools"));
-      }
-    }
-  } catch {
-    // The fixed exact-version validation below remains authoritative.
-  }
-  for (const candidate of candidates) {
-    try {
-      const packageRoot = fs.realpathSync(candidate);
-      const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
-      if (packageJson?.name === "firebase-tools" && packageJson?.version === FIREBASE_TOOLS_VERSION) {
-        return packageRoot;
-      }
-    } catch {
-      // Try the next exact package location.
-    }
-  }
-  throw new Error(`Release candidate rejected: firebase-tools ${FIREBASE_TOOLS_VERSION} provider readback client is unavailable.`);
-}
-
-async function authenticateFirebaseTools(packageRoot) {
-  const firebaseAuth = require(path.join(packageRoot, "lib", "auth.js"));
-  const { requireAuth } = require(path.join(packageRoot, "lib", "requireAuth.js"));
+async function validateFirebaseSecretPrerequisites(firebaseCliPath) {
   const project = RELEASE_CANDIDATE_POLICY.firebase.projectId;
-  const account = firebaseAuth.getGlobalDefaultAccount();
-  const authOptions = {
-    project,
-    ...(String(process.env.FIREBASE_TOKEN || "").trim()
-      ? { token: process.env.FIREBASE_TOKEN }
-      : account || {})
-  };
-  await requireAuth(authOptions);
-  return project;
-}
-
-async function validateFirebaseSecretPrerequisites() {
-  const packageRoot = locateFirebaseToolsRoot();
-  const secretManager = require(path.join(packageRoot, "lib", "gcp", "secretManager.js"));
-  const project = await authenticateFirebaseTools(packageRoot);
-  const results = await Promise.all(CANDIDATE_REQUIRED_SECRET_METADATA.map(async (name) => {
-    const metadata = await secretManager.getSecretMetadata(project, name, "latest");
+  const results = CANDIDATE_REQUIRED_SECRET_METADATA.map((name) => {
+    let response;
+    try {
+      response = parseJsonOutput(capture(firebaseCliPath, [
+        "functions:secrets:get",
+        name,
+        "--project",
+        project,
+        "--json",
+        ...firebaseTokenArgs()
+      ]), `Firebase Secret Manager metadata for ${name}`);
+    } catch {
+      response = undefined;
+    }
+    const versions = response?.status === "success" && Array.isArray(response?.result?.secrets)
+      ? response.result.secrets
+      : [];
     return {
       name,
-      available: metadata?.secret?.name === name
-        && metadata?.secretVersion?.state === "ENABLED"
+      available: versions.some((version) => (
+        String(version?.secret || "").endsWith(`/secrets/${name}`)
+        && version?.state === "ENABLED"
+      ))
     };
-  }));
+  });
   const missing = results.filter((result) => !result.available).map((result) => result.name);
   if (missing.length) {
     throw new Error(
@@ -371,35 +335,82 @@ async function validateFirebaseSecretPrerequisites() {
   };
 }
 
-async function readFirebaseHostingAndRules({ providerDeploymentId }) {
-  const packageRoot = locateFirebaseToolsRoot();
-  const hostingApi = require(path.join(packageRoot, "lib", "hosting", "api.js"));
-  const rulesApi = require(path.join(packageRoot, "lib", "gcp", "rules.js"));
-  const project = await authenticateFirebaseTools(packageRoot);
-  const [channel, releases] = await Promise.all([
-    hostingApi.getChannel(project, RELEASE_CANDIDATE_POLICY.firebase.siteId, "live"),
-    rulesApi.listAllReleases(project)
-  ]);
+async function resolveFirebaseRulesAccessToken() {
+  const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
+  const client = await auth.getClient();
+  const accessTokenResult = await client.getAccessToken();
+  const accessToken = typeof accessTokenResult === "string"
+    ? accessTokenResult
+    : accessTokenResult?.token;
+  if (!accessToken) {
+    throw new Error("Release candidate rejected: ADC did not provide an access token for Firestore Rules readback.");
+  }
+  return accessToken;
+}
+
+async function readFirebaseRulesReleases(accessToken) {
+  const project = RELEASE_CANDIDATE_POLICY.firebase.projectId;
+  const releasesResponse = await fetchJson(
+    `https://firebaserules.googleapis.com/v1/projects/${project}/releases?pageSize=100`,
+    { token: accessToken, label: "Firebase Rules releases" }
+  );
+  if (releasesResponse.nextPageToken) {
+    throw new Error("Release candidate rejected: Firebase Rules release evidence exceeds one complete provider page.");
+  }
+  if (!Array.isArray(releasesResponse.releases)) {
+    throw new Error("Release candidate rejected: Firebase Rules release readback is unavailable.");
+  }
+  return releasesResponse.releases;
+}
+
+async function readFirebaseRules(accessToken) {
+  const project = RELEASE_CANDIDATE_POLICY.firebase.projectId;
+  const releases = await readFirebaseRulesReleases(accessToken);
   const firestoreRelease = releases.find((release) => (
     release?.name === `projects/${project}/releases/cloud.firestore`
   ));
-  const files = firestoreRelease
-    ? await rulesApi.getRulesetContent(firestoreRelease.rulesetName)
+  const ruleset = firestoreRelease?.rulesetName
+    ? await fetchJson(`https://firebaserules.googleapis.com/v1/${firestoreRelease.rulesetName}`, {
+        token: accessToken,
+        label: "Firebase Rules ruleset"
+      })
+    : undefined;
+  return validateFirebaseRulesReadback({
+    release: firestoreRelease,
+    files: ruleset?.source?.files,
+    localRulesSource: fs.readFileSync(path.join(ROOT, "firestore.rules"), "utf8")
+  });
+}
+
+async function readFirebaseHostingAndRules({
+  providerDeploymentId,
+  firebaseCliPath,
+  firebaseRulesAccessToken
+}) {
+  const project = RELEASE_CANDIDATE_POLICY.firebase.projectId;
+  const hostingResponse = parseJsonOutput(capture(firebaseCliPath, [
+    "hosting:channel:list",
+    "--site",
+    RELEASE_CANDIDATE_POLICY.firebase.siteId,
+    "--project",
+    project,
+    "--json",
+    ...firebaseTokenArgs()
+  ]), "Firebase Hosting channel readback");
+  const channels = hostingResponse?.status === "success" && Array.isArray(hostingResponse?.result?.channels)
+    ? hostingResponse.result.channels
     : [];
+  const channel = channels.find((entry) => entry?.name === (
+    `projects/${project}/sites/${RELEASE_CANDIDATE_POLICY.firebase.siteId}/channels/live`
+  ));
   return {
     hosting: validateFirebaseHostingReadback({ channel, providerDeploymentId }),
-    firestoreRules: validateFirebaseRulesReadback({
-      release: firestoreRelease,
-      files,
-      localRulesSource: fs.readFileSync(path.join(ROOT, "firestore.rules"), "utf8")
-    })
+    firestoreRules: await readFirebaseRules(firebaseRulesAccessToken)
   };
 }
 
-function readFirebaseFunctions() {
-  const output = capture("npx", [
-    "--yes",
-    FIREBASE_TOOLS,
+function readFirebaseFunctions(firebaseCliPath) {
+  const output = capture(firebaseCliPath, [
     "functions:list",
     "--project",
     RELEASE_CANDIDATE_POLICY.firebase.projectId,
@@ -411,10 +422,10 @@ function readFirebaseFunctions() {
   });
 }
 
-async function readFirebaseProviderEvidence(providerDeploymentId) {
+async function readFirebaseProviderEvidence(providerDeploymentId, firebaseCliPath, firebaseRulesAccessToken) {
   const [surfaces, functions] = await Promise.all([
-    readFirebaseHostingAndRules({ providerDeploymentId }),
-    Promise.resolve().then(() => readFirebaseFunctions())
+    readFirebaseHostingAndRules({ providerDeploymentId, firebaseCliPath, firebaseRulesAccessToken }),
+    Promise.resolve().then(() => readFirebaseFunctions(firebaseCliPath))
   ]);
   return { ...surfaces, functions };
 }
@@ -427,7 +438,8 @@ async function deployFirebase({
   secretPrerequisites,
   reservation,
   attempt,
-  firebaseCliPath
+  firebaseCliPath,
+  firebaseRulesAccessToken
 }) {
   updateCandidateReceipt(reservation, { status: "preparing" });
   run("npm", ["run", "build"], { env: browserEnv });
@@ -484,7 +496,11 @@ async function deployFirebase({
     }
   });
   const manifestUrl = await validateHostedManifest(RELEASE_CANDIDATE_POLICY.firebase.hostingUrl, manifest);
-  const providerSurfaces = await readFirebaseProviderEvidence(provider.providerDeploymentId);
+  const providerSurfaces = await readFirebaseProviderEvidence(
+    provider.providerDeploymentId,
+    firebaseCliPath,
+    firebaseRulesAccessToken
+  );
   const functionsTree = capture("git", ["rev-parse", `${releaseSha}:functions`]);
   if (!/^[0-9a-f]{40,64}$/i.test(functionsTree)) {
     throw new Error("Release candidate rejected: exact Functions source tree cannot be resolved.");
@@ -526,47 +542,237 @@ function validateVercelLink() {
   }
 }
 
+export function buildVercelOutputConfig() {
+  return {
+    version: 3,
+    routes: [
+      {
+        src: "^(?:/(.*))$",
+        headers: {
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "strict-origin-when-cross-origin"
+        },
+        continue: true
+      },
+      { handle: "filesystem" },
+      { src: "^(?:/(.*))$", dest: "/index.html", check: true },
+      { handle: "error" },
+      { status: 404, src: "^(?!/api).*$", dest: "/404.html" }
+    ],
+    crons: []
+  };
+}
+
+function writeVercelBuildOutput({ browserEnv, releaseSha, ciRunId }) {
+  run("npm", ["run", "build"], { env: browserEnv });
+  const outputDirectory = path.join(ROOT, ".vercel", "output");
+  const staticDirectory = path.join(outputDirectory, "static");
+  fs.rmSync(outputDirectory, { recursive: true, force: true });
+  fs.mkdirSync(staticDirectory, { recursive: true });
+  fs.cpSync(path.join(ROOT, "dist"), staticDirectory, { recursive: true });
+  fs.writeFileSync(
+    path.join(outputDirectory, "config.json"),
+    `${JSON.stringify(buildVercelOutputConfig(), null, 2)}\n`,
+    { encoding: "utf8", mode: 0o644 }
+  );
+  const manifest = writeCandidateManifest(staticDirectory, releaseSha, ciRunId);
+  return { outputDirectory, manifest };
+}
+
+export function collectVercelBuildFiles(outputDirectory, { root = ROOT } = {}) {
+  const absoluteOutput = path.resolve(outputDirectory);
+  const absoluteRoot = path.resolve(root);
+  let outputStat;
+  try {
+    outputStat = fs.lstatSync(absoluteOutput);
+  } catch {
+    throw new Error("Release candidate rejected: Vercel Build Output directory is unavailable.");
+  }
+  if (
+    !absoluteOutput.startsWith(`${absoluteRoot}${path.sep}`)
+    || !outputStat.isDirectory()
+    || outputStat.isSymbolicLink()
+    || !fs.realpathSync(absoluteOutput).startsWith(`${fs.realpathSync(absoluteRoot)}${path.sep}`)
+  ) {
+    throw new Error("Release candidate rejected: Vercel Build Output must remain inside the repository.");
+  }
+  const files = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = path.join(directory, entry.name);
+      const stat = fs.lstatSync(absolutePath);
+      if (stat.isSymbolicLink()) {
+        throw new Error("Release candidate rejected: Vercel Build Output may not contain symbolic links.");
+      }
+      if (stat.isDirectory()) {
+        visit(absolutePath);
+      } else if (stat.isFile()) {
+        const content = fs.readFileSync(absolutePath);
+        files.push({
+          absolutePath,
+          file: path.relative(absoluteRoot, absolutePath).split(path.sep).join("/"),
+          sha: crypto.createHash("sha1").update(content).digest("hex"),
+          size: stat.size,
+          mode: stat.mode,
+          content
+        });
+      } else {
+        throw new Error("Release candidate rejected: Vercel Build Output contains a non-file entry.");
+      }
+    }
+  };
+  visit(absoluteOutput);
+  return files.sort((left, right) => left.file.localeCompare(right.file));
+}
+
+async function vercelFetch(pathname, {
+  token,
+  method = "GET",
+  headers = {},
+  body,
+  timeoutMs = 30_000
+}) {
+  if (!token) throw new Error("Release candidate rejected: VERCEL_TOKEN is required for preview deployment.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${VERCEL_API}${pathname}`, {
+      method,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "QuotePilot-release-candidate",
+        ...headers
+      },
+      body,
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      let providerMessage = "";
+      try {
+        const payload = await response.json();
+        providerMessage = String(payload?.error?.code || payload?.error?.message || "").slice(0, 200);
+      } catch {
+        // Keep provider response bodies out of release logs.
+      }
+      throw new Error(
+        `Vercel request failed with HTTP ${response.status}${providerMessage ? ` (${providerMessage})` : ""}.`
+      );
+    }
+    return response;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function uploadVercelFiles(files, token) {
+  const teamId = encodeURIComponent(RELEASE_CANDIDATE_POLICY.vercel.orgId);
+  const uniqueFiles = new Map(files.map((file) => [file.sha, file]));
+  for (const file of uniqueFiles.values()) {
+    await vercelFetch(`/v2/files?teamId=${teamId}`, {
+      token,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(file.size),
+        "x-vercel-digest": file.sha,
+        "x-now-digest": file.sha,
+        "x-now-size": String(file.size)
+      },
+      body: file.content
+    });
+  }
+}
+
+export function vercelDeploymentPayload({ files, releaseSha, ciRunId }) {
+  return {
+    name: RELEASE_CANDIDATE_POLICY.vercel.projectName,
+    project: RELEASE_CANDIDATE_POLICY.vercel.projectId,
+    version: 2,
+    files: files.map(({ file, sha, size, mode }) => ({ file, sha, size, mode })),
+    meta: {
+      candidateSha: releaseSha,
+      candidateCiRunId: String(ciRunId)
+    }
+  };
+}
+
+async function createVercelDeployment({ files, releaseSha, ciRunId, token }) {
+  const teamId = encodeURIComponent(RELEASE_CANDIDATE_POLICY.vercel.orgId);
+  const response = await vercelFetch(
+    `/v13/deployments?teamId=${teamId}&forceNew=1&skipAutoDetectionConfirmation=1&prebuilt=1`,
+    {
+      token,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(vercelDeploymentPayload({ files, releaseSha, ciRunId }))
+    }
+  );
+  return response.json();
+}
+
+async function waitForVercelDeployment(deployment, token) {
+  const deploymentId = String(deployment?.id || "");
+  if (!deploymentId.startsWith("dpl_")) {
+    throw new Error("Release candidate rejected: Vercel did not return a deployment id.");
+  }
+  const teamId = encodeURIComponent(RELEASE_CANDIDATE_POLICY.vercel.orgId);
+  const startedAt = Date.now();
+  let current = deployment;
+  while (!["READY", "ready"].includes(current?.readyState || current?.state)) {
+    if (["ERROR", "CANCELED"].includes(current?.readyState || current?.state)) {
+      throw new Error("Release candidate rejected: Vercel preview deployment failed before READY.");
+    }
+    if (Date.now() - startedAt >= VERCEL_DEPLOYMENT_TIMEOUT_MS) {
+      throw new Error("Release candidate rejected: Vercel preview did not reach READY within five minutes.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const response = await vercelFetch(`/v13/deployments/${encodeURIComponent(deploymentId)}?teamId=${teamId}`, {
+      token
+    });
+    current = await response.json();
+  }
+  return current;
+}
+
+async function validateVercelProjectAccess(token) {
+  const teamId = encodeURIComponent(RELEASE_CANDIDATE_POLICY.vercel.orgId);
+  const projectId = encodeURIComponent(RELEASE_CANDIDATE_POLICY.vercel.projectId);
+  const response = await vercelFetch(`/v9/projects/${projectId}?teamId=${teamId}`, { token });
+  const project = await response.json();
+  if (
+    project?.id !== RELEASE_CANDIDATE_POLICY.vercel.projectId
+    || project?.name !== RELEASE_CANDIDATE_POLICY.vercel.projectName
+    || project?.accountId !== RELEASE_CANDIDATE_POLICY.vercel.orgId
+  ) {
+    throw new Error("Release candidate rejected: Vercel token does not resolve the fixed preview project.");
+  }
+}
+
 async function deployVercel({
   releaseSha,
   ciRunId,
   browserEnv,
   stagingBackendEvidence,
   reservation,
-  attempt
+  attempt,
+  vercelToken
 }) {
-  const token = String(process.env.VERCEL_TOKEN || "").trim();
-  const tokenArgs = token ? ["--token", token] : [];
+  const token = vercelToken;
   updateCandidateReceipt(reservation, { status: "preparing" });
   validateVercelLink();
-  run("npx", ["--yes", VERCEL_CLI, "pull", "--yes", "--environment=preview", ...tokenArgs]);
-  validateVercelLink();
-  run("npx", ["--yes", VERCEL_CLI, "build", ...tokenArgs], { env: browserEnv });
-  const manifest = writeCandidateManifest(
-    path.join(ROOT, ".vercel", "output", "static"),
-    releaseSha,
-    ciRunId
-  );
+  const { outputDirectory, manifest } = writeVercelBuildOutput({ browserEnv, releaseSha, ciRunId });
+  const files = collectVercelBuildFiles(outputDirectory);
   attempt.providerMutationAttempted = true;
   updateCandidateReceipt(reservation, {
     status: "deploying",
     providerMutationAttempted: true,
     providerMutationAttemptedAt: new Date().toISOString()
   });
-  const output = capture("npx", [
-    "--yes",
-    VERCEL_CLI,
-    "deploy",
-    "--prebuilt",
-    "--yes",
-    "--meta",
-    `candidateSha=${releaseSha}`,
-    "--meta",
-    `candidateCiRunId=${ciRunId}`,
-    ...tokenArgs
-  ]);
-  const deploymentUrl = output.split(/\r?\n/).map((line) => line.trim()).reverse()
-    .find((line) => /^https:\/\//i.test(line));
-  if (!deploymentUrl) throw new Error("Vercel did not return a deployment URL.");
+  await uploadVercelFiles(files, token);
+  const created = await createVercelDeployment({ files, releaseSha, ciRunId, token });
+  const deploymentUrl = `https://${String(created?.url || "").replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
+  if (!/^https:\/\/[^/]+$/.test(deploymentUrl)) throw new Error("Vercel did not return a deployment URL.");
   updateCandidateReceipt(reservation, {
     status: "provider_succeeded_unverified",
     provider: {
@@ -576,18 +782,8 @@ async function deployVercel({
       deploymentUrl
     }
   });
-  const inspect = parseJsonOutput(capture("npx", [
-    "--yes",
-    VERCEL_CLI,
-    "inspect",
-    deploymentUrl,
-    "--wait",
-    "--timeout",
-    "5m",
-    "--format=json",
-    ...tokenArgs
-  ]), "Vercel inspect");
-  const provider = validateVercelReceipt({ deployment: inspect, releaseSha });
+  const ready = await waitForVercelDeployment(created, token);
+  const provider = validateVercelReceipt({ deployment: ready, releaseSha });
   updateCandidateReceipt(reservation, {
     status: "provider_succeeded_unverified",
     provider: {
@@ -662,20 +858,28 @@ async function main() {
     }
     const branch = validateWorkspace(releaseSha);
     const ciEvidence = await verifyCi(args["--ci-run-id"], releaseSha, branch);
-    const browserEnv = candidateBrowserEnvironment();
+    const firebaseCliPath = await prepareFirebaseToolsBinary();
+    const browserEnv = candidateBrowserEnvironment(firebaseCliPath);
     const functionsGates = target === "firebase-all"
       ? validateFunctionsEnvironmentFile()
       : undefined;
     const secretPrerequisites = target === "firebase-all"
-      ? await validateFirebaseSecretPrerequisites()
+      ? await validateFirebaseSecretPrerequisites(firebaseCliPath)
       : undefined;
-    const firebaseCliPath = target === "firebase-all"
-      ? await prepareFirebaseToolsBinary()
+    const firebaseRulesAccessToken = target === "firebase-all"
+      ? await resolveFirebaseRulesAccessToken()
       : undefined;
+    if (firebaseRulesAccessToken) await readFirebaseRulesReleases(firebaseRulesAccessToken);
     const stagingBackendEvidence = target === "vercel-preview"
-      ? readFirebaseFunctions()
+      ? readFirebaseFunctions(firebaseCliPath)
       : undefined;
-    if (target === "vercel-preview") validateVercelLink();
+    const vercelToken = target === "vercel-preview"
+      ? String(process.env.VERCEL_TOKEN || "").trim()
+      : undefined;
+    if (target === "vercel-preview") {
+      validateVercelLink();
+      await validateVercelProjectAccess(vercelToken);
+    }
     reservation = reserveCandidateReceipt({
       root: ROOT,
       target,
@@ -690,7 +894,9 @@ async function main() {
       functionsGates,
       secretPrerequisites,
       firebaseCliPath,
+      firebaseRulesAccessToken,
       stagingBackendEvidence,
+      vercelToken,
       reservation,
       attempt
     };
