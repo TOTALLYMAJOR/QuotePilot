@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 01:51:51 CDT
+Last updated: 2026-08-29 02:05:00 CDT
 
 ## Current Production Release
 
@@ -81,11 +81,26 @@ Last updated: 2026-08-29 01:51:51 CDT
   passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
   auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
   Lighthouse/CWV pass.
-- This is not a deployment claim. The tracked `staging-safe-off` UAT plan has
-  17 applicable and 21 blocked items for Firebase-all, and 11 applicable and 7
-  blocked items for Vercel preview. A published exact release SHA, remote CI,
-  immutable staging/preview receipts, applicable hosted results, and named
-  human review are the next evidence classes.
+- Release PR #111 publishes `release/v0.16.0`. Exact candidate parent
+  `55d37faa1cb266137f156037626c3266f71035f2` passed CI Quality run
+  `33239568701`, including all eight required jobs, the exact Ambient
+  zero-dead-click journey, both bundle graphs, the production flag matrix, and
+  the advisory Product Truth Digest. Exact-SHA Stripe Connect source-only runs
+  `33239568718` and `33239568653` also passed without credentials, exports,
+  provider calls, plan, apply, or deploy.
+- Governed candidate deployment was attempted for both targets and stopped
+  before provider mutation or receipt reservation. Firebase staging lacks an
+  enabled `STAFF_INVITATION_TOKEN_SECRET`; the candidate tool will not create
+  or read its value. Vercel preview then stopped because the current staging
+  `acceptQuoteProposal` Functions readback does not prove
+  `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`. The required order is: authorize
+  and create the non-provider staging placeholder through the secret process,
+  deploy the Firebase `staging-safe-off` candidate, verify the Functions
+  readback, then deploy Vercel preview.
+- The tracked `staging-safe-off` UAT plan still has 17 applicable and 21
+  blocked items for Firebase-all, and 11 applicable and 7 blocked items for
+  Vercel preview. Applicable hosted results and named human review remain
+  separate evidence classes; current production remains exact `v0.15.0`.
 - Stripe Connect remains deploy-empty/provider-disabled; Steward remains
   providerless with model output hidden; buyer access, Commercial Change,
   Revenue Autopilot, and authoritative staffing remain fail-closed. Candidate

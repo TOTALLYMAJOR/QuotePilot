@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 01:51:51 CDT
+Last updated: 2026-08-29 02:05:00 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -90,6 +90,34 @@ correctness, use, or human acceptance.
 
 These are local/source results. Remote CI, hosted candidates, production,
 provider, tenant, physical-device, and human results remain separate.
+
+## Promotion Execution Status
+
+- Release branch `release/v0.16.0` is published in PR #111. Exact candidate
+  parent `55d37faa1cb266137f156037626c3266f71035f2` passed CI Quality run
+  `33239568701`: all eight required jobs passed, including the repaired Ambient
+  release journey, both bundle graphs, Firebase auth/rules, authoritative
+  pricing, Core Web Vitals, Docker, and Product Truth Digest.
+- Exact-SHA Stripe Connect onboarding run `33239568718` and infrastructure run
+  `33239568653` passed their source-only dormant contracts. They performed no
+  credential use, provider call, Terraform plan/apply, export, or deployment.
+- The governed Firebase candidate command stopped before mutation and before
+  receipt reservation because staging Secret Manager has no enabled
+  `STAFF_INVITATION_TOKEN_SECRET`. The tool explicitly requires the separate
+  authorized staging-secret process and will not create or inspect the value.
+- The governed Vercel preview command also stopped before mutation and receipt
+  reservation because the current staging `acceptQuoteProposal` Functions
+  readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
+- The maximum safe promotion achieved in this pass is therefore publication
+  plus exact-SHA CI qualification. No Firebase staging, Vercel preview, main,
+  tag, production, tenant, Stripe, Steward, SMS, or buyer-access mutation was
+  performed. Current production and rollback authority remain exact `v0.15.0`.
+
+The next executable dependency chain is fixed: authorize the non-provider
+staging secret placeholder, deploy the latest exact-CI SHA to Firebase under
+`staging-safe-off`, verify the Functions gate readback, deploy Vercel preview,
+then execute applicable hosted and named human UAT. Full production promotion
+remains prohibited until the blocked positive-path items are real evidence.
 
 ## Candidate UAT Boundary
 

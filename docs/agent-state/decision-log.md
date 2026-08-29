@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 01:12:39 CDT
+Last updated: 2026-08-29 02:05:00 CDT
 
-Checkpoint recorded: 2026-08-29T06:12:39Z
+Checkpoint recorded: 2026-08-29T07:05:00Z
 
 ## Decisions made
 
@@ -22,6 +22,9 @@ Checkpoint recorded: 2026-08-29T06:12:39Z
 14. Publish the whole reconciled stack as one release candidate rather than selectively cherry-picking interdependent commits; use feature/provider flags and the tracked `staging-safe-off` profile to preserve dormant boundaries.
 15. Keep Stripe Connect deploy-empty/provider-disabled and Steward providerless/model-hidden. Keep buyer access, Commercial Change, Revenue Autopilot, and authoritative staffing off until their separate gates produce evidence.
 16. Treat local green gates as permission to begin remote qualification, not as production qualification. Full production promotion still requires the complete pre-merge UAT contract, exact-main CI, same-SHA tag, rollback receipts, and protected deployments.
+17. Reconcile the Ambient temporary exception to the larger literal exact-candidate measurement, 3,928,552 bytes, after exact-SHA CI exposed that the earlier ceiling described only a partial source checkpoint. Preserve the 391,901-byte largest-chunk ceiling and add no discretionary aggregate headroom.
+18. Do not bypass the candidate prerequisite checker. An absent staging invitation-token placeholder and an unproven Commercial Change false readback are real deployment blockers, not permission to use direct provider CLIs.
+19. Stop the autonomous promotion at the published/green-CI boundary. Creating a Secret Manager value requires separate authorization, and production promotion remains gated by complete positive-path hosted/human evidence.
 
 ## Unresolved decisions
 

@@ -1,8 +1,28 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 01:12:39 CDT
+Last updated: 2026-08-29 02:05:00 CDT
 
-Checkpoint recorded: 2026-08-29T06:12:39Z
+Checkpoint recorded: 2026-08-29T07:05:00Z
+
+## Published candidate, exact CI, and deployment boundary
+
+- File/path: Release PR #111; branch `release/v0.16.0`; CI runs `33239568701`, `33239568718`, and `33239568653`
+- Evidence: Exact parent `55d37faa1cb266137f156037626c3266f71035f2` is clean and published. CI Quality passed all eight jobs. The dedicated Ambient route-handoff journey passed 1 of 1; the production flag matrix passed 2 of 2; compatibility measured 3,210,757 / 384,998 bytes in the production-profile job and Ambient measured 3,928,479 / 388,269 against ceilings 3,213,578 / 391,901 and 3,928,552 / 391,901. Stripe Connect onboarding and infrastructure source-only workflows passed without provider action.
+- Why it matters: The assembled product candidate has immutable remote source/CI proof and the prior Ambient test and budget drift are repaired without weakening dormant capability boundaries.
+- Confidence: High for exact Git and CI evidence.
+- Unverified gaps: Hosted candidates, production, tenant/provider behavior, physical devices, human acceptance, use, and outcomes remain separate.
+
+- File/path: `scripts/deploy-release-candidate.mjs`; governed Firebase candidate attempt
+- Evidence: The first invocation without a GitHub token stopped at the read-only CI lookup with HTTP 404. Re-running with the existing authenticated CLI token cleared CI verification, then stopped before receipt reservation or provider mutation because staging Secret Manager has no enabled `STAFF_INVITATION_TOKEN_SECRET`. The command explicitly refuses to create or inspect secret values.
+- Why it matters: Firebase staging is not deployable until a separately authorized, non-provider placeholder exists; no deployment or secret mutation occurred.
+- Confidence: High; failure happened in the prerequisite sequence before reservation and mutation.
+- Unverified gaps: Secret creation authorization, enabled-version receipt, Firebase candidate deploy, Functions/rules/Hosting readback, and hosted UAT.
+
+- File/path: `scripts/deploy-release-candidate.mjs`; governed Vercel preview attempt
+- Evidence: Exact CI and workspace verification passed, then the command stopped before receipt reservation or provider mutation because the staging `us-central1/acceptQuoteProposal` Functions readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
+- Why it matters: Vercel preview correctly depends on a safe-off staging backend and cannot be promoted independently against unqualified Functions state.
+- Confidence: High; the failure is a deterministic prerequisite rejection before the deploy path.
+- Unverified gaps: Exact Firebase staging deployment/readback, Vercel preview receipt, preview reachability, and hosted/human UAT.
 
 ## v0.16.0 release inventory and qualification
 

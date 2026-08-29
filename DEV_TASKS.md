@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 01:51:51 CDT
+Last updated: 2026-08-29 02:05:00 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -32,7 +32,13 @@ Execution rules:
 Release checkpoint: the owner authorized publication and governed deployment
 pursuit for the 74-commit v0.16.0 candidate on 2026-08-29. This authorizes the
 release workflow, not bypassing it. The local high-risk plus CWV profile passes;
-full production qualification remains blocked by the positive-path items in the
+exact parent `55d37faa1cb266137f156037626c3266f71035f2` passes PR #111 CI run
+`33239568701` and both Stripe Connect source-only workflows. Governed Firebase
+and Vercel candidate commands stopped before mutation: staging first needs the
+separately authorized non-provider `STAFF_INVITATION_TOKEN_SECRET` placeholder,
+then an exact Firebase safe-off deploy/readback must prove
+`COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false` before Vercel preview can proceed.
+Full production qualification remains blocked by the positive-path items in the
 tracked UAT plan. `docs/RELEASE_V0_16_PROMOTION_REPORT.md` owns the point-in-time
 candidate inventory and human-input checklist. Source-only commits remain
 separate from release publication, and dormant gates remain off.
@@ -94,6 +100,12 @@ replace their safety conditions.
 
 ## P0 - Production Acceptance
 
+- Through the separately authorized staging secret process, create and enable
+  a non-provider `STAFF_INVITATION_TOKEN_SECRET` placeholder without exposing
+  its value. Re-run the governed Firebase candidate deployment for the latest
+  clean, published, exact-CI SHA. After its Functions readback proves every
+  safe-off gate, run the governed Vercel preview deployment. Do not bypass the
+  prerequisite checker or use production/provider credentials.
 - Repair the tenant-data precondition for organization `250` before retrying
   operational staffing activation. Run `32425529671` verified the exact
   successful `v0.14.0` Firebase all-scope receipt, then stopped before mutation
