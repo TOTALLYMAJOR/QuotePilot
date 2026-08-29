@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-28 18:51:48 CDT
+Last updated: 2026-08-28 19:58:28 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -318,22 +318,27 @@ simulation, trusted mutation, communication, bulk action, and destructive
 action separately; v1 executes only the first four through already-existing
 handlers. These pure adapters perform no I/O and grant no authority.
 
-### Guest count, Proposal, and Conversation evidence grammar
+### Guest count, Package, Menu, Selection, Pricing, Staffing, Proposal, and Conversation evidence grammar
 
-Guest count, Proposal, and Conversation join Money as evidence-first objects,
-not miniature administration panels. Their Living Opportunity rows show one
-concise current conclusion and open a populated `ContextSurface` whose header
-always repeats the exact opportunity, entry reason, and consequence before
-deeper evidence.
+Guest count, Package, Menu, Selection, Pricing, Staffing, Proposal, and Conversation join Money as evidence-first
+objects, not miniature administration panels. Their Living Opportunity rows
+show one concise current conclusion and open a populated `ContextSurface` whose
+header repeats the exact opportunity. In the long Guest count, Package, Menu,
+Selection, Pricing, Staffing, Payment, Proposal, and Conversation inspectors, the repeated entry reason and
+consequence remain immediately
+available behind **Why this view** so current state receives the first useful
+viewport; the same reason copy is not repeated again in the visible evidence
+body. Shorter contexts may keep the entry explanation expanded when it still
+improves orientation.
 
 Guest count must distinguish the saved record from an unsaved preview wherever
 the value is shown. A saved value is labeled **Saved guest count**; a changed
 value is labeled **Unsaved guest-count preview** and keeps the saved count
 adjacent. Price/scope, staffing, and quantity-rule dependencies precede repeated
-methodology. QuotePilot does not infer expected, guaranteed, or actual
-attendance states unless the source record establishes those states explicitly.
-Previewing or inspecting guest count does not reprice, resize quantities, change
-staffing, reserve capacity, alter the draft, or save the quote.
+methodology. QuotePilot does not infer expected, guaranteed, or actual attendance
+states unless the source record establishes those states explicitly. Previewing
+or inspecting guest count does not reprice, resize quantities, change staffing,
+reserve capacity, alter the draft, or save the quote.
 
 When `attendance-state-v1` evidence exists, the Guest-count inspector leads
 with three open rows in this order: **Saved priced count**, **Best attendance
@@ -346,6 +351,21 @@ fall back to **Attendance evidence needs review**. Only an exact loaded Decision
 Debt item may replace the ordinary priced-editor footer with **Review final-
 count task**; that route handoff confirms, resolves, prices, staffs, reserves,
 saves, or changes nothing.
+
+Package and Menu keep the saved selection summary, exact recorded inclusions
+or order, quantities, package-inclusion labels, catalog-match state, and
+draft-only replacement or reorder controls ahead of repeated methodology.
+Disclosure changes hierarchy only: it does not infer catalog identity, grant
+replacement authority, reprice, confirm availability or preparation, alter
+the draft, or save the quote.
+
+Selection keeps its saved multi-group summary and the first quantity-aware
+object ahead of arrival methodology. The complete add-on, rental, bar, and
+service evidence, unsaved reversible previews, dependencies, counterfactuals,
+confidence, provenance, and advisory boundary remain available. Disclosure
+changes hierarchy only: it does not alter a selection, price or save a preview,
+reserve inventory or staff, confirm availability, contact a customer, or grant
+catalog, role, tenant, or provider authority.
 
 Proposal keeps saved immutable revision, authoritative pricing, exact customer
 projection, portal issuance, and provider evidence visually distinct. It may

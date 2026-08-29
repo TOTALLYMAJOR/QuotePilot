@@ -1303,7 +1303,9 @@ test.describe("Ambient intelligent-object browser verification", () => {
   test("renders the staffing inspector as an overflow-safe mobile sheet", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const surface = await openOpportunity(page);
-    const staffingTrigger = surface.getByRole("button", { name: "Review staffing" });
+    const staffingTrigger = surface
+      .getByLabel("Details affecting this quote")
+      .getByRole("button", { name: "Review staffing" });
     await staffingTrigger.click();
     const dialog = page.getByRole("dialog", { name: "Staffing suggestion" });
     await expect(dialog).toBeVisible();

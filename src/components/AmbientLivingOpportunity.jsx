@@ -3851,6 +3851,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.packageObject.why}
         consequence={model.packageObject.consequence}
+        collapseArrivalDetails
         anchorRef={packageInspectRef}
         returnFocusRef={packageInspectRef}
         onClose={dismissPackageContext}
@@ -3938,7 +3939,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           </section>
 
           <section className="ambient-counterfactuals">
-            <div>
+            <div data-context-arrival-duplicate="reason">
               <CheckCircle size={18} weight="fill" aria-hidden="true" />
               <h3>Why this matters</h3>
               <p>{model.packageObject.why}</p>
@@ -3966,6 +3967,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.menuObject.why}
         consequence={model.menuObject.consequence}
+        collapseArrivalDetails
         anchorRef={menuInspectRef}
         returnFocusRef={menuInspectRef}
         onClose={dismissMenuContext}
@@ -4107,7 +4109,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             </ul>
           </section>
           <section className="ambient-counterfactuals">
-            <div>
+            <div data-context-arrival-duplicate="reason">
               <CheckCircle size={18} weight="fill" aria-hidden="true" />
               <h3>Why this matters</h3>
               <p>{model.menuObject.why}</p>
@@ -4135,6 +4137,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.actions.inspectSelections.arrivalContract.reason}
         consequence={model.actions.inspectSelections.arrivalContract.consequence}
+        collapseArrivalDetails
         anchorRef={selectionInspectRef}
         returnFocusRef={selectionInspectRef}
         onClose={dismissSelectionContext}
@@ -4177,6 +4180,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.pricingObject.why}
         consequence={model.pricingObject.consequence}
+        collapseArrivalDetails
         anchorRef={pricingInspectRef}
         returnFocusRef={pricingInspectRef}
         onClose={dismissPricingContext}
@@ -4342,7 +4346,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           )}
 
           <section className="ambient-counterfactuals">
-            <div>
+            <div data-context-arrival-duplicate="reason">
               <CheckCircle size={18} weight="fill" aria-hidden="true" />
               <h3>Why this is here</h3>
               <p>{model.pricingObject.why}</p>
@@ -4418,6 +4422,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.staffingObject.why}
         consequence={model.staffingObject.consequence}
+        collapseArrivalDetails
         anchorRef={staffingContextTriggerRef}
         returnFocusRef={staffingContextTriggerRef}
         onClose={dismissStaffingContext}
@@ -4466,7 +4471,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             </ul>
           </section>
           <section className="ambient-counterfactuals">
-            <div>
+            <div data-context-arrival-duplicate="reason">
               <CheckCircle size={18} weight="fill" aria-hidden="true" />
               <h3>Why this recommendation</h3>
               <p>{model.staffingObject.why}</p>

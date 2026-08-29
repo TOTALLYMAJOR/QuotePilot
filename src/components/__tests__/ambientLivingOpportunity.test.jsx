@@ -302,12 +302,22 @@ describe("AmbientLivingOpportunity", () => {
     expect(container.textContent).toContain("Event details shown");
 
     act(() => remoteButtons[1].click());
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Menu details");
+    const menuDialog = container.querySelector('[role="dialog"]');
+    expect(menuDialog?.textContent).toContain("Menu details");
+    expect(menuDialog?.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(menuDialog?.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this matters");
     act(() => container.querySelector('[aria-label="Close context"]').click());
     await settle();
 
     act(() => remoteButtons[2].click());
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Pricing details");
+    const pricingDialog = container.querySelector('[role="dialog"]');
+    expect(pricingDialog?.textContent).toContain("Pricing details");
+    expect(pricingDialog?.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(pricingDialog?.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this is here");
     act(() => container.querySelector('[aria-label="Close context"]').click());
     await settle();
 
@@ -964,6 +974,10 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
     expect(dialog.textContent).toContain("Sources:");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this matters");
 
     act(() => container.querySelector('[aria-label="Close context"]').click());
     act(() => button("Review menu").click());
@@ -975,6 +989,10 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
     expect(dialog.textContent).toContain("Sources:");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this matters");
   });
 
   test("explores a reversible selection scenario with exact context and undo without mutating the quote", async () => {
@@ -998,6 +1016,8 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
     expect(dialog.textContent).toContain("Sources:");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
     expect(container.textContent).toContain("Selection details ready");
 
     const rentalCard = dialog.querySelector('[data-selection-kind="rental"]');
@@ -1346,6 +1366,10 @@ describe("AmbientLivingOpportunity", () => {
 
     act(() => button("Review staffing").click());
     const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this recommendation");
     expect(dialog.textContent).toContain("Staffing suggestion");
     expect(dialog.textContent).toContain("8 servers · 3 chefs · 0 bartenders");
     expect(dialog.textContent).toContain("10 servers · 3 chefs · 0 bartenders");
