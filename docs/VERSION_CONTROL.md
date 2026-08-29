@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 02:21:11 CDT
+Last updated: 2026-08-29 03:07:28 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -170,8 +170,12 @@ git push origin v<major>.<minor>.<patch>
 ```
 10. Dispatch `Deploy Firebase Production` or `Deploy Vercel Production` with
     the release SHA, exact-SHA CI run id, target rollback SHA, exact scope, and
-    typed confirmation. The provider credential is available only to the final
-    deploy step. Record provider acceptance/READY evidence and update the
+    typed confirmation. Firebase uses GitHub OIDC through the reviewed
+    `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
+    `FIREBASE_DEPLOY_SERVICE_ACCOUNT` repository variables and rejects legacy
+    token or static-key authentication; Vercel retains its scoped token. The
+    provider credential is available only to the final deploy step. Record
+    provider acceptance/READY evidence and update the
     target-specific last-known-good receipt only after post-launch verification
     succeeds.
 11. When a reviewed release requires the operational-staffing tenant gate,

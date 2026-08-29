@@ -95,6 +95,38 @@ function validateFunctionsEnvironment() {
   }
 }
 
+function validateApplicationDefaultCredentials() {
+  if (String(process.env.FIREBASE_TOKEN || "").trim()) {
+    throw new Error("Firebase production deployment forbids legacy FIREBASE_TOKEN authentication.");
+  }
+  const configuredPath = String(process.env.GOOGLE_APPLICATION_CREDENTIALS || "").trim();
+  if (!configuredPath) {
+    throw new Error("Firebase production deployment requires workload-identity Application Default Credentials.");
+  }
+  const credentialsPath = path.resolve(ROOT, configuredPath);
+  const relativePath = path.relative(ROOT, credentialsPath);
+  if (
+    !relativePath
+    || relativePath.startsWith(`..${path.sep}`)
+    || path.isAbsolute(relativePath)
+    || !/^gha-creds-[^/\\]+\.json$/u.test(path.basename(credentialsPath))
+  ) {
+    throw new Error("Firebase production credentials must be the GitHub workload-identity credentials file in the checkout.");
+  }
+  if (!fs.existsSync(credentialsPath) || !fs.statSync(credentialsPath).isFile()) {
+    throw new Error("Firebase production workload-identity credentials file is missing.");
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf8"));
+  } catch {
+    throw new Error("Firebase production workload-identity credentials file is not valid JSON.");
+  }
+  if (credentials?.type !== "external_account") {
+    throw new Error("Firebase production deployment requires external-account workload identity credentials.");
+  }
+}
+
 validateArgs();
 const scope = readArg("--scope");
 const scopes = {
@@ -122,9 +154,7 @@ if (!selected) throw new Error("--scope must be one of: hosting, backend, all.")
 if (readArg("--confirm") !== selected.confirmation) {
   throw new Error(`Production deployment requires --confirm "${selected.confirmation}".`);
 }
-if (!String(process.env.FIREBASE_TOKEN || "").trim()) {
-  throw new Error("Firebase production deployment requires FIREBASE_TOKEN.");
-}
+validateApplicationDefaultCredentials();
 const releaseTarget = `firebase-${scope}`;
 const verify = (headSha) => verifyDirectProductionReleaseEvidence({
   releaseSha: readArg("--release-sha"),
@@ -156,9 +186,7 @@ if (scope !== "backend") {
     "app",
     PROJECT_ID,
     "--project",
-    PROJECT_ID,
-    "--token",
-    process.env.FIREBASE_TOKEN
+    PROJECT_ID
   ]);
 }
 run("npx", [
@@ -172,7 +200,5 @@ run("npx", [
   "--non-interactive",
   "--message",
   `QuotePilot ${readArg("--release-sha")}`,
-  "--token",
-  process.env.FIREBASE_TOKEN,
   ...(selected.functions ? ["--force"] : [])
 ]);

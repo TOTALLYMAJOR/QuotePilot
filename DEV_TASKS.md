@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 02:49:23 CDT
+Last updated: 2026-08-29 03:07:28 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -268,9 +268,12 @@ replace their safety conditions.
 
 ## P0 - Release and Security Controls
 
-- Migrate the Firebase production workflow from deprecated `FIREBASE_TOKEN`
-  authentication to Application Default Credentials or GitHub workload identity
-  federation without committing a service-account key.
+- Provision and independently review the production Google Cloud workload
+  identity pool/provider, least-privilege Firebase deploy service account, and
+  repository variables `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
+  `FIREBASE_DEPLOY_SERVICE_ACCOUNT`; then prove one governed deployment before
+  revoking the legacy `FIREBASE_TOKEN` secret. Repository source now accepts
+  only ephemeral external-account ADC and never accepts a service-account key.
 - Add an independently enforceable review/UAT control when repository ownership
   permits it. Preserve the current solo-operator allowlist until that stronger
   control exists; do not imply independent review in the meantime.

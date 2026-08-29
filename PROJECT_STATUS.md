@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 02:49:23 CDT
+Last updated: 2026-08-29 03:07:28 CDT
 
 ## Current Production Release
 
@@ -89,6 +89,15 @@ Last updated: 2026-08-29 02:49:23 CDT
   unchanged real CWV gate, and leaves `npm audit` at zero findings. The major
   tool-compatibility boundary is recorded in `docs/TECH_EXCEPTIONS.md` and
   still requires exact remote CI before release use.
+- The Firebase production workflow source now uses a commit-pinned Google
+  authentication action and accepts only GitHub workload-identity ADC for the
+  fixed `tonicatering` project; its deploy command rejects `FIREBASE_TOKEN`,
+  static service-account JSON, missing credentials, and credentials outside the
+  checkout. No Google Cloud workload identity pool or deploy service account is
+  currently present in the production project, and repository variables
+  `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
+  `FIREBASE_DEPLOY_SERVICE_ACCOUNT` are not configured. This is source/local
+  preparation only, not cloud IAM proof or deployment readiness.
 - Release PR #111 publishes `release/v0.16.0`. Exact candidate
   `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run
   `33240762183`, including all eight required jobs, the exact Ambient

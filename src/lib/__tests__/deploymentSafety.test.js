@@ -74,13 +74,23 @@ describe("direct production deployment safety", () => {
       expect(source).toMatch(/--sms-configuration-generation "\$\{SMS_CONFIGURATION_GENERATION\}"/);
       expect(source).toMatch(/EXPECTED_SMS_PROVIDER:\s*\$\{\{ inputs\.sms_provider \}\}/);
       expect(source).toMatch(/EXPECTED_SMS_CONFIGURATION_GENERATION:\s*\$\{\{ inputs\.sms_configuration_generation \}\}/);
+      expect(source).toMatch(/id-token:\s*write/);
+      expect(source).toMatch(/google-github-actions\/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093/);
+      expect(source).toMatch(/workload_identity_provider:\s*\$\{\{ vars\.FIREBASE_WORKLOAD_IDENTITY_PROVIDER \}\}/);
+      expect(source).toMatch(/service_account:\s*\$\{\{ vars\.FIREBASE_DEPLOY_SERVICE_ACCOUNT \}\}/);
+      expect(source).toMatch(/export_environment_variables:\s*false/);
+      expect(source).toMatch(/GOOGLE_APPLICATION_CREDENTIALS:\s*\$\{\{ steps\.google_auth\.outputs\.credentials_file_path \}\}/);
+      expect(source).not.toContain("secrets.FIREBASE_TOKEN");
+      const authOffset = source.indexOf("- name: Authenticate to Google Cloud for Firebase deployment");
+      const deployOffset = source.indexOf("- name: Deploy selected Firebase surface");
+      expect(authOffset).toBeGreaterThan(0);
+      expect(deployOffset).toBeGreaterThan(authOffset);
+    } else {
+      expect(source).toMatch(/VERCEL_TOKEN:\s*\$\{\{ secrets\.VERCEL_TOKEN \}\}/);
+      const tokenOffset = source.indexOf("VERCEL_TOKEN:");
+      const deployStepOffset = source.indexOf("- name: Build and deploy exact release");
+      expect(tokenOffset).toBeGreaterThan(deployStepOffset);
     }
-    expect(source).toMatch(new RegExp(`${provider.toUpperCase()}_TOKEN:\\s*\\$\\{\\{ secrets\\.${provider.toUpperCase()}_TOKEN \\}\\}`));
-    const tokenOffset = source.indexOf(`${provider.toUpperCase()}_TOKEN:`);
-    const deployStepOffset = source.indexOf(provider === "Firebase"
-      ? "- name: Deploy selected Firebase surface"
-      : "- name: Build and deploy exact release");
-    expect(tokenOffset).toBeGreaterThan(deployStepOffset);
   });
 
   test.each([
@@ -197,6 +207,15 @@ describe("direct production deployment safety", () => {
 
     expect(source).toContain('...(selected.functions ? ["--force"] : [])');
     expect(allowedArguments).not.toContain('"--force"');
+  });
+
+  test("requires ephemeral workload identity credentials for Firebase production", () => {
+    const source = fs.readFileSync(FIREBASE_STUB, "utf8");
+
+    expect(source).toContain("GOOGLE_APPLICATION_CREDENTIALS");
+    expect(source).toContain('credentials?.type !== "external_account"');
+    expect(source).toContain("forbids legacy FIREBASE_TOKEN authentication");
+    expect(source).not.toMatch(/["']--token["']/u);
   });
 
   test("does not persist checkout credentials in the UAT attestation job", () => {

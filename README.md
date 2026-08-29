@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-08-29 03:07:28 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -642,8 +642,12 @@ defaults off. The existing quote-payment `STRIPE_MODE`, credentials, and
 
 The manual Firebase production workflow materializes only reviewed non-secret
 runtime configuration plus the allowlisted platform-admin identity immediately
-before deployment. Provider credentials remain in Firebase Secret Manager and
-are never written to Functions dotenv files, artifacts, or logs. The approved
+before deployment. Its Firebase CLI authentication is short-lived GitHub OIDC
+through Google Cloud Workload Identity Federation; the workflow requires the
+fixed-project provider and deployer identity named by
+`FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and `FIREBASE_DEPLOY_SERVICE_ACCOUNT`.
+Application provider credentials remain in Firebase Secret Manager and are
+never written to Functions dotenv files, artifacts, or logs. The approved
 sender identity in configuration does not prove the Resend domain is verified
 or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth. Backend
 and all-surface releases also pass Firebase's explicit non-interactive
@@ -1322,8 +1326,9 @@ available ancestor, that the dispatch came from the canonical workflow, and
 that the configured production environment is protected-branch-only with
 administrator bypass disabled. Solo mode additionally requires the one
 allowlisted human dispatcher. The same live evidence is checked again after
-the build and immediately before provider mutation. Provider tokens are scoped
-to that final workflow step.
+the build and immediately before provider mutation. The Vercel token and the
+Firebase workload-identity ADC file are scoped to their final mutation steps;
+Firebase production rejects the legacy `FIREBASE_TOKEN` path.
 
 The Vercel step uses the fixed reviewed project link, pulls that project's
 production settings with the scoped token, revalidates the fixed project
