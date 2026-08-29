@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-25 02:06:28 CDT
+Last updated: 2026-08-29 04:51:41 CDT
 
 ## Current Production Release
 
@@ -792,11 +792,11 @@ route evidence are complete.
     provider run, pilot, hosting, deployment, production behavior, or human
     acceptance.
 16. Production-only dependency audits are clean for the root app, default
-    Functions, and Connect Functions. The full root audit retains six high-
-    severity development-tool findings through Lighthouse CI's current
-    Puppeteer/`extract-zip` chain; npm's available remediation is a breaking
-    Lighthouse CI downgrade and must not be forced without a reviewed tooling
-    migration.
+    Functions, and Connect Functions. The full root lock now narrowly
+    overrides the latest `@lhci/cli` Lighthouse copies to 13.4.1, selects
+    Puppeteer 25.9.0, removes the vulnerable `extract-zip` chain, and audits at
+    zero known findings. The unchanged real CWV gate and exact remote CI remain
+    mandatory because the override crosses a Lighthouse major-version boundary.
 
 ## Current Focus
 
