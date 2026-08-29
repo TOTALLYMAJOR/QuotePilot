@@ -1,12 +1,12 @@
 # Open Questions
 
-Last updated: 2026-08-29 03:43:26 CDT
+Last updated: 2026-08-29 04:32:10 CDT
 
-Checkpoint recorded: 2026-08-29T08:49:48.059Z
+Checkpoint recorded: 2026-08-29T09:32:04.918Z
 
 1. Who reviews and authorizes the production Google Cloud WIF pool/provider, distinct deploy and tenant-operator service accounts, least-privilege IAM bindings, and the three GitHub repository variable values?
 2. Who is the named release-PR and hosted-UAT reviewer, and which authorized tenant/operator account will execute the authenticated journey?
-3. Who authorizes and executes creation of the non-provider staging `STAFF_INVITATION_TOKEN_SECRET` placeholder, and who verifies only that an enabled version exists without exposing its value?
+3. Who authorizes and executes creation of enabled staging versions for the eleven candidate-required secret names recorded in the promotion report, and who verifies only metadata/existence without exposing values?
 4. After Firebase safe-off deployment, who reviews the exact Functions readback and authorizes the dependent Vercel preview attempt?
 5. Who will supply and review the first production-authorized Truth Loop source bundle and explicit evaluation instant? Missing payout, fee-schedule, and post-event-consumption evidence must not be inferred.
 6. Who will review the exact Stripe Connect Terraform plan/digest, authorize apply, reconcile deployed identity/manifest state, observe/promote App Check, bind the restricted Sandbox credential, authorize runtime exports, and execute hosted Sandbox UAT?

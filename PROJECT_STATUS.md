@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 04:16:11 CDT
+Last updated: 2026-08-29 04:32:10 CDT
 
 ## Current Production Release
 
@@ -76,7 +76,7 @@ Last updated: 2026-08-29 04:16:11 CDT
   insertions and 1,030 deletions (net +11,283). The capability and holdback
   inventory is recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md`.
 - The current full release lane plus Core Web Vitals passes after the
-  documentation gate correctly required timestamp reconciliation: 4,098 unit
+  documentation gate correctly required timestamp reconciliation: 4,099 unit
   tests pass with 78 skipped, 127 Truth Loop tests pass, the 503-module build
   passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
   auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
@@ -115,20 +115,27 @@ Last updated: 2026-08-29 04:16:11 CDT
   Vercel CLI. This provider-client lock is source/local evidence; it has not
   produced a staging or preview receipt.
 - Release PR #111 publishes `release/v0.16.0`. Current code-bearing candidate
-  `a096d20c34d6ba018c34653387ca30673f6039ef` passed all eight jobs in matching
-  CI Quality run `33243677607` and has successful exact-SHA Stripe Connect runs
-  `33243677627` and `33243677615`. The release-branch hardening after the
+  `e620ce80f096033abfdc420e649499f4ed92dff1` passed all eight jobs in matching
+  CI Quality run `33245272679` and has successful exact-SHA Stripe Connect runs
+  `33245272566` and `33245272601`. The release-branch hardening after the
   original 74-commit inventory remediates Lighthouse audit findings, replaces
   production and tenant legacy-token paths with distinct WIF identities, and
   checksum-locks the Firebase CLI used for mutation. These receipts do not
   establish deployment, credentials, provider behavior, or production use.
-- Governed candidate deployment was attempted for both targets and stopped
-  before provider mutation or receipt reservation. Firebase staging lacks an
-  enabled `STAFF_INVITATION_TOKEN_SECRET`; the candidate tool will not create
-  or read its value. Vercel preview then stopped because the current staging
-  `acceptQuoteProposal` Functions readback does not prove
+- Governed candidate deployment was attempted for both targets at exact
+  `e620ce80`. Both stopped before provider mutation or receipt reservation.
+  Firebase staging lacks enabled versions for all eleven candidate-required
+  secret names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
+  `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,
+  `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`,
+  `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`,
+  `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, and `TWILIO_AUTH_TOKEN`. The candidate tool will not
+  create or read their values. Vercel preview then stopped because the current
+  staging `acceptQuoteProposal` Functions readback does not prove
   `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`. The required order is: authorize
-  and create the non-provider staging placeholder through the secret process,
+  and create the required non-provider staging placeholders through the secret
+  process,
   deploy the Firebase `staging-safe-off` candidate, verify the Functions
   readback, then deploy Vercel preview.
 - The bounded release-tooling correction makes the candidate command use

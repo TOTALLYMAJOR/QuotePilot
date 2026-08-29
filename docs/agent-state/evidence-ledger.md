@@ -1,13 +1,13 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 03:43:26 CDT
+Last updated: 2026-08-29 04:32:10 CDT
 
-Checkpoint recorded: 2026-08-29T08:49:48.059Z
+Checkpoint recorded: 2026-08-29T09:32:04.918Z
 
 ## Published candidate, exact CI, and deployment boundary
 
-- File/path: Release PR #111; branch `release/v0.16.0`; code-bearing candidate `a096d20c34d6ba018c34653387ca30673f6039ef`
-- Evidence: Stripe Connect onboarding run `33243677627` and infrastructure run `33243677615` completed successfully for the exact candidate; CI Quality run `33243677607` passed all eight matching main-lane jobs. The clean local candidate passes 364 test files with 3 skipped, 4,098 tests with 78 skipped, a 503-module build, 127 Truth Loop tests, and the full governed release lane.
+- File/path: Release PR #111; branch `release/v0.16.0`; code-bearing candidate `e620ce80f096033abfdc420e649499f4ed92dff1`
+- Evidence: Stripe Connect onboarding run `33245272566` and infrastructure run `33245272601` completed successfully for the exact candidate; CI Quality run `33245272679` passed all eight matching main-lane jobs. The clean local candidate passes 364 test files with 3 skipped, 4,099 tests with 78 skipped, a 503-module build, 127 Truth Loop tests, and the full governed release lane.
 - Why it matters: Release-control hardening is evaluated on one exact published source identity rather than being inferred from earlier candidate receipts.
 - Confidence: High for Git, local validation, and the named remote receipts.
 - Unverified gaps: Deployment, cloud identity configuration, hosted behavior, provider outcome, production data, human acceptance, use, and outcome remain separate.
@@ -18,11 +18,11 @@ Checkpoint recorded: 2026-08-29T08:49:48.059Z
 - Confidence: High for source, read-only cloud inventory, and GitHub configuration-name evidence.
 - Unverified gaps: Approved IAM plan, created pool/provider, service-account bindings, variable values, governed deploy receipt, tenant rollback/readback, and safe legacy-secret retirement.
 
-- File/path: `scripts/firebase-tools-binary.mjs`; production and candidate deployment scripts
-- Evidence: Firebase mutation resolves the official v15.24.0 Linux release artifact, verifies SHA-256 `bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`, revalidates cached bytes, and executes only the verified path. The real 247 MB artifact was downloaded, verified, and executed locally as Firebase CLI 15.24.0. A rejected root dependency approach was removed because it introduced 511 packages and three moderate transitive audit findings; root `npm audit --omit=optional` remains zero.
-- Why it matters: The privileged Firebase mutation client is immutable and independently verified without degrading the root dependency graph.
-- Confidence: High for source, focused tests, real artifact verification, and audit output.
-- Unverified gaps: Candidate read-only Firebase module resolution and runtime-resolved Vercel CLI are not yet independently locked.
+- File/path: `scripts/firebase-tools-binary.mjs`; `scripts/deploy-release-candidate.mjs`; `src/lib/__tests__/releaseCandidateDeployment.test.js`; `package.json`; `package-lock.json`
+- Evidence: Firebase mutation, Web config, Functions, Hosting, and secret-metadata reads resolve the official v15.24.0 Linux release artifact, verify SHA-256 `bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`, revalidate cached bytes, and execute only the verified path. Rules release/source readback uses the public Rules API through exact `google-auth-library` 10.5.0 and ADC. Vercel preview creates a deterministic Build Output API v3 artifact, hashes and uploads unique regular-file bytes, creates the preview, polls the exact deployment, and verifies immutable host/project plus the hosted candidate manifest through narrow REST calls. Source contains no `npx`, runtime Firebase-module search, or runtime Vercel CLI. Focused deployment tests pass 17/17; root audit has zero findings.
+- Why it matters: Every candidate provider client is explicit, pinned, and testable; read-only access and safe-off proof fail before receipt reservation or provider mutation.
+- Confidence: High for source, focused/full validation, real Firebase artifact verification, audit output, and exact-SHA remote CI.
+- Unverified gaps: Successful provider authentication, staging deployment/readback, Vercel upload/deployment, hosted behavior, and human acceptance remain external.
 
 - File/path: Release PR #111; branch `release/v0.16.0`; CI runs `33240762183`, `33240762176`, and `33240762182`
 - Evidence: Exact candidate `7f6d40bec472a82ce6e0b9ead063410a23ca154b` is clean and published. CI Quality passed all eight jobs. The dedicated Ambient route-handoff journey and production flag matrix passed; both bundle graphs, Firebase auth/rules, authoritative pricing, Core Web Vitals, Docker, and Product Truth Digest passed. Stripe Connect onboarding and infrastructure source-only workflows passed without provider action.
@@ -30,14 +30,14 @@ Checkpoint recorded: 2026-08-29T08:49:48.059Z
 - Confidence: High for exact Git and CI evidence.
 - Unverified gaps: Hosted candidates, production, tenant/provider behavior, physical devices, human acceptance, use, and outcomes remain separate.
 
-- File/path: `scripts/deploy-release-candidate.mjs`; governed Firebase candidate attempt at `7f6d40bec472a82ce6e0b9ead063410a23ca154b`
-- Evidence: The repository now resolves GitHub CI authentication from `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI. Unit coverage asserts the order and bounded failure. A live candidate command with both token environment variables explicitly unset verified exact CI run `33240762183` through the CLI, then stopped before receipt reservation or provider mutation because staging Secret Manager has no enabled `STAFF_INVITATION_TOKEN_SECRET`. The command explicitly refuses to create or inspect secret values.
-- Why it matters: The false unauthenticated GitHub API 404 is removed, while Firebase staging remains fail-closed until a separately authorized non-provider placeholder exists; no deployment or secret mutation occurred.
-- Confidence: High; failure happened in the prerequisite sequence before reservation and mutation.
-- Unverified gaps: Secret creation authorization, enabled-version receipt, Firebase candidate deploy, Functions/rules/Hosting readback, and hosted UAT.
+- File/path: `scripts/deploy-release-candidate.mjs`; governed Firebase candidate attempt at exact `e620ce80f096033abfdc420e649499f4ed92dff1`
+- Evidence: With `GITHUB_TOKEN` and `GH_TOKEN` explicitly unset, the authenticated local GitHub CLI verified exact green run `33245272679`; the verified Firebase binary then read secret metadata and rejected the candidate before receipt reservation or provider mutation. No enabled staging version exists for `BUYER_ACCESS_RATE_LIMIT_SECRET`, `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`, `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, or `TWILIO_AUTH_TOKEN`. The command did not create or inspect values, and no evidence artifact or working-tree change was produced.
+- Why it matters: Firebase staging remains fail-closed at the exact provider prerequisite boundary; absence is recorded precisely rather than compressed into one stale secret claim.
+- Confidence: High; the live failure occurred in the prerequisite sequence before reservation and mutation.
+- Unverified gaps: Secret-creation authorization, enabled-version receipts, ADC Rules permission, Firebase candidate deploy, Functions/rules/Hosting readback, and hosted UAT.
 
-- File/path: `scripts/deploy-release-candidate.mjs`; governed Vercel preview attempt
-- Evidence: Exact CI and workspace verification passed, then the command stopped before receipt reservation or provider mutation because the staging `us-central1/acceptQuoteProposal` Functions readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
+- File/path: `scripts/deploy-release-candidate.mjs`; governed Vercel preview attempt at exact `e620ce80f096033abfdc420e649499f4ed92dff1`
+- Evidence: Exact CI and workspace verification passed through the locked clients, then the command stopped before Vercel access, receipt reservation, upload, or deployment because the staging `us-central1/acceptQuoteProposal` Functions readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`. No evidence artifact or working-tree change was produced.
 - Why it matters: Vercel preview correctly depends on a safe-off staging backend and cannot be promoted independently against unqualified Functions state.
 - Confidence: High; the failure is a deterministic prerequisite rejection before the deploy path.
 - Unverified gaps: Exact Firebase staging deployment/readback, Vercel preview receipt, preview reachability, and hosted/human UAT.

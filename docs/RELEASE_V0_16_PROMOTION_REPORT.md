@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 04:16:11 CDT
+Last updated: 2026-08-29 04:32:10 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -18,7 +18,7 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
   product-stack baseline; later commits on the release branch are bounded
   release-control hardening and do not rewrite that inventory.
 - Current code-bearing candidate: exact
-  `a096d20c34d6ba018c34653387ca30673f6039ef`, published in PR #111.
+  `e620ce80f096033abfdc420e649499f4ed92dff1`, published in PR #111.
 - Current production and rollback baseline: exact `v0.15.0`; target-specific
   provider receipts in `PROJECT_STATUS.md` remain authoritative until a newer
   promotion passes post-deploy verification.
@@ -74,7 +74,7 @@ correctness, use, or human acceptance.
 
 - Environment, secret, project-state, workflow, Ambient release, Stripe
   isolation, capability-surfacing, and documentation-governance checks passed.
-- Current full release lane: 364 files passed and 3 skipped; 4,098 tests passed
+- Current full release lane: 364 files passed and 3 skipped; 4,099 tests passed
   and 78 skipped.
 - Truth Loop: 127 tests passed.
 - Vite production build passed with 503 modules.
@@ -99,16 +99,17 @@ human results remain separate.
 ## Promotion Execution Status
 
 - Release branch `release/v0.16.0` is published in PR #111. Exact code-bearing
-  candidate `a096d20c34d6ba018c34653387ca30673f6039ef` has successful Stripe
-  Connect onboarding run `33243677627` and infrastructure run `33243677615`;
+  candidate `e620ce80f096033abfdc420e649499f4ed92dff1` has successful Stripe
+  Connect onboarding run `33245272566` and infrastructure run `33245272601`;
   both are source-only dormant contracts with no credential use, provider call,
   Terraform plan/apply, export, or deployment. Exact matching CI Quality run
-  `33243677607` passed all eight required jobs.
-- Four bounded release-control commits follow the original inventory:
+  `33245272679` passed all eight required jobs.
+- Five bounded release-control commits follow the original inventory:
   Lighthouse dependency remediation (`60b0b119`), production Firebase WIF
   enforcement (`49fe2a7e`), distinct least-privilege tenant-operation WIF
-  enforcement (`5dad0467`), and checksum-verified Firebase mutation tooling
-  (`a096d20c`). Each passed its exact remote CI before the next slice was
+  enforcement (`5dad0467`), checksum-verified Firebase mutation tooling
+  (`a096d20c`), and locked candidate provider clients (`e620ce80`). Each passed
+  its exact remote CI before the next slice was
   published; the final code-bearing candidate also passes the full local
   release lane.
 - Production and tenant workflows no longer accept `FIREBASE_TOKEN` or a
@@ -123,11 +124,18 @@ human results remain separate.
   upload/deploy/readback. The candidate command contains no `npx`, local/global
   Firebase-module search, or runtime-resolved Vercel CLI. The added dependency
   graph audits at zero findings. Hosted execution remains unproven.
-- The governed Firebase candidate command stopped before mutation and before
-  receipt reservation because staging Secret Manager has no enabled
-  `STAFF_INVITATION_TOKEN_SECRET`. The tool explicitly requires the separate
-  authorized staging-secret process and will not create or inspect the value.
-- The governed Vercel preview command also stopped before mutation and receipt
+- The governed Firebase candidate command for exact `e620ce80` stopped before
+  mutation and before receipt reservation because staging Secret Manager has
+  no enabled version for eleven required names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
+  `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,
+  `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`,
+  `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`,
+  `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, and `TWILIO_AUTH_TOKEN`. The tool explicitly requires
+  the separately authorized staging-secret process and will not create or
+  inspect values.
+- The governed Vercel preview command for exact `e620ce80` also stopped before
+  mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions
   readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
 - Release-candidate CI authentication is hardened: the tool uses
@@ -146,8 +154,8 @@ human results remain separate.
 
 The next executable dependency chain is fixed: provision and independently
 review the production WIF pool/provider and two least-privilege service
-accounts; bind the three repository variables; authorize the non-provider
-staging secret placeholder; deploy the latest exact-CI SHA to Firebase under
+accounts; bind the three repository variables; authorize the required
+non-provider staging secret placeholders; deploy the latest exact-CI SHA to Firebase under
 `staging-safe-off`; verify the Functions gate readback; deploy Vercel preview;
 then execute applicable hosted and named human UAT. Full production promotion
 remains prohibited until the blocked positive-path items are real evidence.

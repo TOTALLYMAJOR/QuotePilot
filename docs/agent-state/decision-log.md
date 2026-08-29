@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 03:43:26 CDT
+Last updated: 2026-08-29 04:32:10 CDT
 
-Checkpoint recorded: 2026-08-29T08:49:48.059Z
+Checkpoint recorded: 2026-08-29T09:32:04.918Z
 
 ## Decisions made
 
@@ -23,12 +23,13 @@ Checkpoint recorded: 2026-08-29T08:49:48.059Z
 15. Keep Stripe Connect deploy-empty/provider-disabled and Steward providerless/model-hidden. Keep buyer access, Commercial Change, Revenue Autopilot, and authoritative staffing off until their separate gates produce evidence.
 16. Treat local green gates as permission to begin remote qualification, not as production qualification. Full production promotion still requires the complete pre-merge UAT contract, exact-main CI, same-SHA tag, rollback receipts, and protected deployments.
 17. Reconcile the Ambient temporary exception to the larger literal exact-candidate measurement, 3,928,552 bytes, after exact-SHA CI exposed that the earlier ceiling described only a partial source checkpoint. Preserve the 391,901-byte largest-chunk ceiling and add no discretionary aggregate headroom.
-18. Do not bypass the candidate prerequisite checker. An absent staging invitation-token placeholder and an unproven Commercial Change false readback are real deployment blockers, not permission to use direct provider CLIs.
+18. Do not bypass the candidate prerequisite checker. Absent enabled staging versions for the candidate-required secret names and an unproven Commercial Change false readback are real deployment blockers, not permission to use direct provider CLIs.
 19. Stop the autonomous promotion at the published/green-CI boundary. Creating a Secret Manager value requires separate authorization, and production promotion remains gated by complete positive-path hosted/human evidence.
 20. Treat an authenticated local GitHub CLI session as valid read-only CI proof input after explicit token variables, but never as broader provider or deployment authority. Preserve the candidate's independent secret, staging, UAT, and production gates.
 21. Replace production and protected tenant-operation legacy Firebase tokens with GitHub OIDC/WIF source contracts using distinct least-privilege identities. Do not create service-account keys or infer cloud readiness from source completion.
 22. Lock privileged Firebase mutation to the checksum-verified official v15.24.0 Linux artifact. Do not add the full Firebase CLI dependency graph to the root application after the attempted install produced new audit findings.
 23. Preserve the original 74-commit LOC/capability inventory as the product-stack baseline and report later release-control commits separately.
+24. Lock candidate Firebase inspection and mutation to the checksum-verified official binary plus the public Rules API through ADC, and lock Vercel preview to the Build Output API and narrow REST calls. Reject missing provider access or safe-off proof before receipt reservation and mutation; do not restore runtime CLI discovery or `npx` downloads.
 
 ## Unresolved decisions
 

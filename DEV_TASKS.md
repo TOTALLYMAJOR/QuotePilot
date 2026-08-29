@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 04:16:11 CDT
+Last updated: 2026-08-29 04:32:10 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -32,11 +32,13 @@ Execution rules:
 Release checkpoint: the owner authorized publication and governed deployment
 pursuit for the 74-commit v0.16.0 candidate on 2026-08-29. This authorizes the
 release workflow, not bypassing it. The local high-risk plus CWV profile passes;
-exact parent `55d37faa1cb266137f156037626c3266f71035f2` passes PR #111 CI run
-`33239568701` and both Stripe Connect source-only workflows. Governed Firebase
-and Vercel candidate commands stopped before mutation: staging first needs the
-separately authorized non-provider `STAFF_INVITATION_TOKEN_SECRET` placeholder,
-then an exact Firebase safe-off deploy/readback must prove
+exact code-bearing candidate `e620ce80f096033abfdc420e649499f4ed92dff1`
+passes all eight PR #111 CI Quality jobs in run `33245272679` and exact-SHA
+Stripe Connect source-only runs `33245272566` and `33245272601`. Governed
+Firebase and Vercel candidate commands stopped before mutation: staging first
+needs separately authorized enabled versions for the eleven names recorded in
+`docs/RELEASE_V0_16_PROMOTION_REPORT.md`, then an exact Firebase safe-off
+deploy/readback must prove
 `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false` before Vercel preview can proceed.
 Full production qualification remains blocked by the positive-path items in the
 tracked UAT plan. `docs/RELEASE_V0_16_PROMOTION_REPORT.md` owns the point-in-time
