@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-28 20:44:00 CDT
+Last updated: 2026-08-29 01:12:39 CDT
 
 ## Current Production Release
 
@@ -67,6 +67,30 @@ Last updated: 2026-08-28 20:44:00 CDT
   undecided — see the travel/margin decision in `DEV_TASKS.md`.
 
 ## Pending Production Completion
+
+### v0.16.0 bounded promotion in progress
+
+- The owner authorized remote publication and governed deployment pursuit for
+  the current 74-commit candidate. Against `origin/main`, baseline
+  `303eec5237d143fc11398e23f24e86fcb28c2655` changes 180 files with 12,313
+  insertions and 1,030 deletions (net +11,283). The capability and holdback
+  inventory is recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md`.
+- The local high-risk release profile plus Core Web Vitals passes after the
+  documentation gate correctly required timestamp reconciliation: 4,091 unit
+  tests pass with 78 skipped, 127 Truth Loop tests pass, the 503-module build
+  passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
+  auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
+  Lighthouse/CWV pass.
+- This is not a deployment claim. The tracked `staging-safe-off` UAT plan has
+  17 applicable and 21 blocked items for Firebase-all, and 11 applicable and 7
+  blocked items for Vercel preview. A published exact release SHA, remote CI,
+  immutable staging/preview receipts, applicable hosted results, and named
+  human review are the next evidence classes.
+- Stripe Connect remains deploy-empty/provider-disabled; Steward remains
+  providerless with model output hidden; buyer access, Commercial Change,
+  Revenue Autopilot, and authoritative staffing remain fail-closed. Candidate
+  deployment may inspect their safe unavailable/presentation states but cannot
+  activate them or convert their external gates into production qualification.
 
 - Product Truth Observability is implemented as a read-only source/local
   repository/CI candidate. The branch now contains the governed `v0.15.0`

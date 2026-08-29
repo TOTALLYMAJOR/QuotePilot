@@ -1,23 +1,23 @@
 # Next Actions
 
-Last updated: 2026-08-28 20:56:59 CDT
+Last updated: 2026-08-29 01:12:39 CDT
 
-Checkpoint recorded: 2026-08-29T01:56:59Z
+Checkpoint recorded: 2026-08-29T06:12:39Z
 
-1. Human review: inspect the local commit stack, canonical v0.15 truth, beta-critical onboarding/recovery journeys, and residual gate list; select the immutable candidate and rollback artifact. Do not push or deploy without explicit authorization.
-2. External-owner review: assign named owners and execution receipts for Stripe Connect activation, Steward private-runtime/human evaluation, tenant-250 provisioning, authenticated role/tenant UAT, manual accessibility/PWA devices, and the first explicit Truth Loop production evidence run.
-3. Authorized release only: push the selected candidate, observe remote CI and advisory product-truth output, execute governed Vercel/Firebase deployment, then record exact hosted/provider/production/human/outcome evidence without collapsing those proof classes.
+1. Commit the v0.16.0 promotion record, assemble and publish `release/v0.16.0` from current `origin/main`, open the release PR, and wait for exact remote CI.
+2. If the clean published SHA and provider prerequisites pass, deploy that exact SHA to isolated Firebase staging and Vercel preview under `staging-safe-off`; retain receipts and run every applicable non-human hosted check.
+3. Present the remaining authenticated, provider, accessibility/device, tenant, Stripe Connect, Steward, attendance, and observability decisions for named human review. Merge/tag/production-promote only if the complete mandatory release qualification becomes real.
 
 # Context Handoff Capsule
 
-- Mission: Preserve and reconcile QuotePilot's intentional local work into clean, dependency-ordered, validated commits on the current v0.15 base, without pushing or deploying, leaving only explicit human/provider review gates.
-- Branch/SHA: `feature/landing-document-hero` at completion-audit base `8c8ea0d2f9bda6c00580e4fc6bbf768eacd76204`; the final checkpoint commit is its direct child. The audited base was 73 ahead / 0 behind fresh `origin/main`.
-- Scope: Repository-local preservation, validation, documentation, and commits only. No push, deployment, Terraform/Firebase/Stripe/tenant mutation, credential binding, runtime activation, or evidence promotion.
+- Mission: Promote the 74 unpublished commits as the largest safe bounded v0.16.0 release candidate and leave only exact human/provider gates.
+- Branch/SHA: `feature/landing-document-hero` at `303eec5237d143fc11398e23f24e86fcb28c2655` before the release-preparation documentation commit; 74 ahead / 0 behind fresh `origin/main`.
+- Scope: Release docs/commit, release branch/PR/CI, fixed staging and preview candidate deployment, read-only verification, and conditional governed production promotion. No bypass, secret disclosure, unauthorized Terraform/provider/tenant mutation, or false evidence promotion.
 - Evidence used: Git identity/tree equality; `PROJECT_STATE.md`; `PROJECT_STATUS.md`; `docs/FEATURE_MATRIX.md`; `CHANGELOG.md`; Connect and Steward program docs; Product Truth Observability output; exact-candidate release, browser, CWV, connected-arrival, and Truth Loop results.
-- Work completed: All intentional local product slices committed; v0.15 mainline reconciled through merge `0731ef2`; webfont CLS stabilized; connected arrivals and beta-critical onboarding/recovery qualified; architecture/acceptance docs reconciled; current operational truth corrected in `24b61cf`; durable state committed in `8c8ea0d`; final audit corrected stale counts and Pingram operational wording.
-- Files changed: Product/source/test/docs changes are isolated in their owning commits. The completion-audit slice changes only `DEV_TASKS.md`, `docs/FEATURE_MATRIX.md`, and the five `docs/agent-state/*` files.
+- Work completed: All product slices and reconciliation are committed; 74-commit LOC/capability inventory complete; high-risk plus CWV local release profile passes; safe-off UAT plan generated; promotion/holdback report prepared.
+- Files changed: Current release-preparation slice changes `PROJECT_STATUS.md`, `DEV_TASKS.md`, `docs/FEATURE_MATRIX.md`, `docs/RELEASE_V0_16_PROMOTION_REPORT.md`, and `docs/agent-state/*`.
 - Commands run: Fresh upstream fetch; Git identity/status/log/divergence/ancestry/tree checks; task planner at plan/complete phases; isolated candidate creation; focused/full Vitest and Playwright; release-manager readiness with high-risk and CWV profiles; project-state, env, secret, workflow, capability, docs, bundle, Stripe-isolation and Ambient gates; build; Truth Loop; `status:product`; `check:product-drift`.
 - Validation results: The earlier exact candidate tree `a1219853194e63721953aa065b1d65ae8fb3f154` passed 4,091 JavaScript tests with 78 skipped, 127 Truth Loop tests, a 501-module build, and the full release lane. The exact completion-audit candidate also passes the release manager's high-risk plus CWV profile. Clean-candidate product truth resolves v0.15 with no drift. Landing CLS remains within the governed threshold. No hosted/provider/human/outcome claim is inferred.
-- Risks/unknowns: The branch is local and not online. Remote CI/deployment, hosted authenticated behavior, tenant/provider data, Stripe Connect activation, Steward private runtime and 100 human reviews, manual accessibility/PWA devices, production Truth Loop input, and human acceptance are absent or pending named owners.
-- Next 3 actions: Human candidate/rollback review; assign and execute external provider/human gates; only after authorization, push/deploy and capture exact proof-class receipts.
-- Resume prompt: Continue from `docs/agent-state/*` as durable truth. Verify Git identity first. Do not reopen completed local slices. The local reconciliation goal is complete; the next work is human/provider review and, only with explicit authorization, remote publication and governed evidence capture. Never promote source/local validation into hosted, provider, production, human, or outcome proof.
+- Risks/unknowns: Remote CI and candidate receipts do not yet exist. Full UAT is blocked on positive-path provider/authenticated/device work. Stripe Connect, Steward, buyer access, authoritative staffing, Commercial Change, and Revenue Autopilot must remain dormant.
+- Next 3 actions: publish release branch/PR and observe CI; deploy exact safe-off candidates where prerequisites pass; complete non-human checks and report the named human/external gates before any merge/tag/production action.
+- Resume prompt: Continue the active v0.16.0 promotion from `docs/agent-state/*`. Verify Git identity, then publish the release branch and obtain exact CI. Use only the tracked candidate deploy command and safe-off profile. Do not enable dormant capabilities or treat applicable/blocked UAT items as passed.

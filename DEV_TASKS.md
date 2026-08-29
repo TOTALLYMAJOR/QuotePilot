@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-28 20:56:59 CDT
+Last updated: 2026-08-29 01:03:25 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -28,6 +28,14 @@ Execution rules:
 - `human/external` means repository work cannot produce the missing evidence.
   Prepare the immutable checklist or harness, then stop before the external or
   human action and continue with another `ready` slice.
+
+Release checkpoint: the owner authorized publication and governed deployment
+pursuit for the 74-commit v0.16.0 candidate on 2026-08-29. This authorizes the
+release workflow, not bypassing it. The local high-risk plus CWV profile passes;
+full production qualification remains blocked by the positive-path items in the
+tracked UAT plan. `docs/RELEASE_V0_16_PROMOTION_REPORT.md` owns the point-in-time
+candidate inventory and human-input checklist. Source-only commits remain
+separate from release publication, and dormant gates remain off.
 
 | Order | Task ID and outcome | Capability truth | Dependencies | Acceptance criteria | Current boundary |
 |---:|---|---|---|---|---|

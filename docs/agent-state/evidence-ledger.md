@@ -1,8 +1,28 @@
 # Evidence Ledger
 
-Last updated: 2026-08-28 20:56:59 CDT
+Last updated: 2026-08-29 01:12:39 CDT
 
-Checkpoint recorded: 2026-08-29T01:56:59Z
+Checkpoint recorded: 2026-08-29T06:12:39Z
+
+## v0.16.0 release inventory and qualification
+
+- File/path: Git range `origin/main..303eec5237d143fc11398e23f24e86fcb28c2655`; `docs/RELEASE_V0_16_PROMOTION_REPORT.md`
+- Evidence: The unpublished range contains 74 commits changing 180 files: 12,313 insertions, 1,030 deletions, net +11,283. Cohorts are 52 runtime files (+3,255/-511), 55 test files (+3,388/-54), 50 docs (+4,335/-434), 8 tooling files (+1,151/-3), and 13 other files (+184/-28); two changes are binary brand assets.
+- Why it matters: The owner can evaluate release size and capability breadth without confusing gross repository work with runtime code alone.
+- Confidence: High; exact Git range and numstat classification from the fresh, zero-behind branch.
+- Unverified gaps: Remote release-branch SHA, pull request, and CI do not exist yet.
+
+- File/path: Complete repository; release-manager high-risk plus CWV profile
+- Evidence: Environment, secrets, project state, workflow, Ambient, Connect isolation, capability surfaces, documentation governance, build, bundle, Truth Loop, Firestore rules, owner-SMS emulator, Firebase authenticated/rules browser, authoritative pricing browser, and Lighthouse/CWV gates pass. Unit results are 363 files passed/3 skipped and 4,091 tests passed/78 skipped; Truth Loop has 127 passes; Firestore rules has 76 passes; authoritative pricing has 3 passes; the build contains 503 modules.
+- Why it matters: The complete candidate is locally qualified for remote release-candidate evaluation.
+- Confidence: High for source/local evidence.
+- Unverified gaps: CI, hosted, provider, production-data, human, use, and outcome proof remain distinct.
+
+- File/path: `scripts/release-uat-plan.mjs`; Firebase-all and Vercel `staging-safe-off` plans
+- Evidence: Firebase-all classifies 17 items applicable and 21 blocked; Vercel preview classifies 11 applicable and 7 blocked. Buyer, portal positive paths, payment/provider paths, authoritative staffing, and related external evidence are among the blocked groups.
+- Why it matters: A safe candidate may be deployed for bounded review, but the partial plan cannot qualify production or be mislabeled as full UAT.
+- Confidence: High; deterministic tracked planner output.
+- Unverified gaps: Applicable items have not yet been executed against immutable hosted candidates.
 
 ## Current Git identity and reconciliation
 
