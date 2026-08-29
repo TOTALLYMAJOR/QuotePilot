@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 04:32:10 CDT
+Last updated: 2026-08-29 05:07:11 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -103,8 +103,9 @@ replace their safety conditions.
 ## P0 - Production Acceptance
 
 - Through the separately authorized staging secret process, create and enable
-  a non-provider `STAFF_INVITATION_TOKEN_SECRET` placeholder without exposing
-  its value. Re-run the governed Firebase candidate deployment for the latest
+  non-provider staging versions for all eleven candidate-required secret names
+  recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md` without exposing their
+  values. Re-run the governed Firebase candidate deployment for the latest
   clean, published, exact-CI SHA. After its Functions readback proves every
   safe-off gate, run the governed Vercel preview deployment. Do not bypass the
   prerequisite checker or use production/provider credentials.
@@ -270,6 +271,12 @@ replace their safety conditions.
 
 ## P0 - Release and Security Controls
 
+- Review and merge narrow security PR #112 at exact
+  `204f0d2eefd72a8f2d41a6fbb4e7ec6728bd454c` to resolve default-branch
+  Dependabot alert #139 while v0.16 remains held. Its eight-job CI Quality run
+  `33246642372` and Stripe source-only runs `33246642371`/`33246642373` pass;
+  the alert remains open until the remediation reaches `main`. Do not dismiss
+  it merely because either candidate branch audits clean.
 - Provision and independently review the production Google Cloud workload
   identity pool/provider, least-privilege Firebase deploy service account, and
   repository variables `FIREBASE_WORKLOAD_IDENTITY_PROVIDER`,
@@ -280,7 +287,9 @@ replace their safety conditions.
   credentials and never accepts a service-account key.
 - Add an independently enforceable review/UAT control when repository ownership
   permits it. Preserve the current solo-operator allowlist until that stronger
-  control exists; do not imply independent review in the meantime.
+  control exists; do not imply independent review in the meantime. Current
+  readback shows `RELEASE_APPROVAL_MODE=solo-operator`, one attester/operator id,
+  and zero required PR approvals.
 - Keep Vercel Git deployment disabled and both provider deployments behind the
   exact tagged-main, exact-CI, rollback-receipt, typed-confirmation workflows.
 - Exercise the locked candidate provider clients after external prerequisites

@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 04:32:10 CDT
+Last updated: 2026-08-29 05:07:11 CDT
 
-Checkpoint recorded: 2026-08-29T09:32:04.918Z
+Checkpoint recorded: 2026-08-29T10:08:00.173Z
 
 ## Decisions made
 
@@ -30,6 +30,8 @@ Checkpoint recorded: 2026-08-29T09:32:04.918Z
 22. Lock privileged Firebase mutation to the checksum-verified official v15.24.0 Linux artifact. Do not add the full Firebase CLI dependency graph to the root application after the attempted install produced new audit findings.
 23. Preserve the original 74-commit LOC/capability inventory as the product-stack baseline and report later release-control commits separately.
 24. Lock candidate Firebase inspection and mutation to the checksum-verified official binary plus the public Rules API through ADC, and lock Vercel preview to the Build Output API and narrow REST calls. Reject missing provider access or safe-off proof before receipt reservation and mutation; do not restore runtime CLI discovery or `npx` downloads.
+25. Preserve the all-positive production UAT contract. Do not convert safe-off blocked items into N/A, waive them because CI is green, or merge/tag/deploy while hosted and human evidence is absent. Record the current solo-operator/zero-required-review configuration as observed governance, not independent review.
+26. Isolate the default-branch `extract-zip` remediation in PR #112 so it can be reviewed and merged independently of the unqualified v0.16 product release. Exact green branch evidence does not close the default-branch alert; reviewed merge and readback do.
 
 ## Unresolved decisions
 

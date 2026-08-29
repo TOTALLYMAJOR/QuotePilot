@@ -1,14 +1,15 @@
 # Open Questions
 
-Last updated: 2026-08-29 04:32:10 CDT
+Last updated: 2026-08-29 05:07:11 CDT
 
-Checkpoint recorded: 2026-08-29T09:32:04.918Z
+Checkpoint recorded: 2026-08-29T10:08:00.173Z
 
 1. Who reviews and authorizes the production Google Cloud WIF pool/provider, distinct deploy and tenant-operator service accounts, least-privilege IAM bindings, and the three GitHub repository variable values?
-2. Who is the named release-PR and hosted-UAT reviewer, and which authorized tenant/operator account will execute the authenticated journey?
+2. Who is the named release-PR and hosted-UAT reviewer, and which authorized tenant/operator account will execute the authenticated journey? Should this release explicitly retain the observed solo-operator mode, or should repository/environment protection be upgraded to enforce an independent reviewer before merge?
 3. Who authorizes and executes creation of enabled staging versions for the eleven candidate-required secret names recorded in the promotion report, and who verifies only metadata/existence without exposing values?
 4. After Firebase safe-off deployment, who reviews the exact Functions readback and authorizes the dependent Vercel preview attempt?
 5. Who will supply and review the first production-authorized Truth Loop source bundle and explicit evaluation instant? Missing payout, fee-schedule, and post-event-consumption evidence must not be inferred.
+6. Who will review and merge narrow security PR #112, then confirm Dependabot alert #139 closes on exact `main`?
 6. Who will review the exact Stripe Connect Terraform plan/digest, authorize apply, reconcile deployed identity/manifest state, observe/promote App Check, bind the restricted Sandbox credential, authorize runtime exports, and execute hosted Sandbox UAT?
 7. Who owns Steward provider/credential and privacy/billing review, canonical private context/persistence, current consent, controlled silent execution, 100 actual human packet reviews, hosted rules evidence, deployment, and acceptance?
 8. Which canonical tenant and named operators will execute authenticated staff/customer/denied-role/cross-tenant beta journeys, including the tenant-250 provisioning/activation boundary?

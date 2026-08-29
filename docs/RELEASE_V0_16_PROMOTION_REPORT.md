@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 04:32:10 CDT
+Last updated: 2026-08-29 05:07:11 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -104,6 +104,10 @@ human results remain separate.
   both are source-only dormant contracts with no credential use, provider call,
   Terraform plan/apply, export, or deployment. Exact matching CI Quality run
   `33245272679` passed all eight required jobs.
+- Evidence-only head `98f53951481992c114adce594568fbb948fa25a1`
+  is clean, matches the published branch, and is mergeable. Exact-head CI
+  Quality run `33245866511` passed all eight required jobs; Stripe Connect
+  source-only runs `33245866516` and `33245866512` also passed.
 - Five bounded release-control commits follow the original inventory:
   Lighthouse dependency remediation (`60b0b119`), production Firebase WIF
   enforcement (`49fe2a7e`), distinct least-privilege tenant-operation WIF
@@ -124,7 +128,8 @@ human results remain separate.
   upload/deploy/readback. The candidate command contains no `npx`, local/global
   Firebase-module search, or runtime-resolved Vercel CLI. The added dependency
   graph audits at zero findings. Hosted execution remains unproven.
-- The governed Firebase candidate command for exact `e620ce80` stopped before
+- The governed Firebase candidate command for exact `e620ce80`, then again for
+  exact evidence head `98f5395`, stopped before
   mutation and before receipt reservation because staging Secret Manager has
   no enabled version for eleven required names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
   `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,
@@ -134,7 +139,7 @@ human results remain separate.
   `STRIPE_WEBHOOK_SECRET`, and `TWILIO_AUTH_TOKEN`. The tool explicitly requires
   the separately authorized staging-secret process and will not create or
   inspect values.
-- The governed Vercel preview command for exact `e620ce80` also stopped before
+- The governed Vercel preview command for both exact heads also stopped before
   mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions
   readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
@@ -151,6 +156,14 @@ human results remain separate.
   Firebase staging, Vercel preview, main, tag, production, tenant, Stripe,
   Steward, SMS, or buyer-access mutation was performed. Current production and
   rollback authority remain exact `v0.15.0`.
+- Default-branch Dependabot alert #139 remains open for development-only
+  `extract-zip` path traversal. The candidate removes that dependency and
+  audits clean. A separate narrow backport is published as PR #112 at exact
+  `204f0d2eefd72a8f2d41a6fbb4e7ec6728bd454c`; CI Quality run `33246642372`
+  passes all eight jobs and Stripe source-only runs `33246642371` and
+  `33246642373` pass. It does not change this release candidate, and closing
+  the alert still requires reviewed merge to `main`, not dismissal based on a
+  branch result.
 
 The next executable dependency chain is fixed: provision and independently
 review the production WIF pool/provider and two least-privilege service
@@ -193,31 +206,20 @@ Applicable means eligible to test; it does not mean passed. Blocked is not
 
 ## Owner Review or Input Required
 
-- Approve or assign the production Google Cloud WIF pool/provider, deploy
-  service account, tenant-operator service account, least-privilege IAM review,
-  and GitHub variable binding. Do not create service-account keys. Retire the
-  legacy repository `FIREBASE_TOKEN` only after governed deploy and tenant
-  rollback/readback receipts exist.
-- Authorize or assign creation of the staging
-  `STAFF_INVITATION_TOKEN_SECRET` placeholder through the governed secret
-  process; the release tool may verify existence/version but will not create or
-  inspect the value.
-- Name the reviewer for the release PR and the authenticated tenant/operator
-  who can execute the exact hosted journey.
-- Confirm the required real-device/assistive-technology matrix for PWA and UI
-  acceptance.
-- Approve the tenant-250 provisioning/migration plan before any staffing
-  activation retry.
-- Provide or assign the Stripe, Resend/Pingram, Turnstile, and Stripe Connect
-  provider/dashboard evidence owners; no credentials belong in this report.
-- Review and authorize the exact Stripe Connect Terraform plan digest before
-  any apply or runtime export.
-- Decide whether Product Truth Observability stays advisory after its first
-  remote observation or becomes a required gate after calibration.
-- Decide the attendance terminology/channel and authority model before a
-  persistence slice.
-- Approve Steward privacy/billing/provider terms and the consenting 100-review
-  evaluation before any private runtime activation.
+| Decision/input | Current observed boundary | Evidence required to proceed | Unlocks |
+|---|---|---|---|
+| Production Google Cloud identity | No workload identity pool or matching deploy/tenant service account was returned; the three required GitHub variables are absent and legacy `FIREBASE_TOKEN` remains named | Reviewed WIF provider, distinct least-privilege deploy and tenant-operator identities/bindings, three variable bindings, then governed deploy plus tenant rollback/readback receipts; no service-account key | Governed production Firebase and protected tenant operations; only then safe legacy-secret retirement |
+| Staging secret prerequisites | No enabled version exists for `BUYER_ACCESS_RATE_LIMIT_SECRET`, `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`, `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, or `TWILIO_AUTH_TOKEN` | Separate secret-process authorization and enabled-version metadata for all eleven names without exposing values | Firebase `staging-safe-off` candidate attempt |
+| Firebase candidate review | No staging deployment receipt; current Functions readback does not prove every safe-off gate | Exact-SHA verified Hosting, Functions revisions/runtime flags, Firestore release/ruleset, and hosted manifest receipt | Vercel preview precondition |
+| Vercel preview and hosted acceptance | No preview upload/deployment was attempted because the Firebase safe-off prerequisite failed | Same-SHA immutable READY preview receipt plus applicable hosted checks and authenticated operator journey | Pre-merge release decision |
+| Human review governance | PR #111 is mergeable but has no review decision; branch protection requires zero approvals; variables configure one solo attester/operator | Name the accountable release/UAT reviewer and authenticated tenant operator; either explicitly accept the governed solo-operator mode or configure an independently enforceable reviewer/attester boundary | Truthful human acceptance and merge authorization |
+| Default-branch dependency remediation | Dependabot alert #139 remains open; narrow PR #112 is mergeable and exact-CI green but unreviewed/unmerged | Review PR #112 and merge it to `main`, or let the same remediation arrive through a later reviewed v0.16 merge; confirm alert closure afterward | Removes the known development-tool advisory from the current default branch without promoting unqualified product features |
+| Device/accessibility acceptance | Automated responsive/accessibility evidence exists; physical devices and assistive technology remain untested | Approve and execute the required PWA/device/AT matrix | Human UI/PWA acceptance |
+| Tenant `250` staffing | Canonical settings precondition is missing and authority stays off | Reviewed tenant-scoped provisioning/migration dry run, authorization, apply receipt, protected activation and rollback readback | One-tenant authoritative staffing qualification |
+| Provider-backed capabilities | Buyer, email, payment, SMS, and Stripe Connect positive paths are blocked in the safe-off plan | Named Stripe, Resend/Pingram, Turnstile, and Connect evidence owners; reviewed credentials/dashboard configuration, controlled windows, provider receipts, and rollback | Capability-specific hosted/provider qualification; not blanket activation |
+| Stripe Connect | Foundation remains deploy-empty/provider-disabled | Review and authorize the exact Terraform plan digest, reconcile applied identity, observe/promote App Check, bind restricted Sandbox credential, then hosted Sandbox UAT | Consider runtime exports; no production payment authority is implied |
+| Steward | Provider runtime and model output remain unavailable | Privacy/billing/provider approval, private context/persistence, current consent, controlled silent execution, 100 actual human packet reviews, hosted rules, and acceptance | Consider private runtime activation while model output remains governed |
+| Product Truth and attendance decisions | Product Truth is advisory; attendance persistence terminology/channel/authority is unresolved | Owner calibration/enforcement decision for Product Truth; separate attendance terminology/channel/authority decision | Optional future enforcement/persistence slices, not this release |
 
 Until those receipts exist, the safe release boundary is: publish and deploy
 the fail-closed candidate for review, promote only the fully qualified product

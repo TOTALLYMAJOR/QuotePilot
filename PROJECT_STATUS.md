@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 04:32:10 CDT
+Last updated: 2026-08-29 05:07:11 CDT
 
 ## Current Production Release
 
@@ -89,6 +89,14 @@ Last updated: 2026-08-29 04:32:10 CDT
   unchanged real CWV gate, and leaves `npm audit` at zero findings. The major
   tool-compatibility boundary is recorded in `docs/TECH_EXCEPTIONS.md` and
   still requires exact remote CI before release use.
+- GitHub Dependabot alert #139 remains open against default-branch
+  `package-lock.json` for development-only `extract-zip` path traversal. The
+  release candidate no longer contains `extract-zip`, its root audit is clean,
+  and exact remote CWV passes. Narrow backport PR #112 at exact
+  `204f0d2eefd72a8f2d41a6fbb4e7ec6728bd454c` is open and mergeable; CI Quality
+  run `33246642372` passes all eight jobs and Stripe source-only runs
+  `33246642371`/`33246642373` pass. The alert remains operationally open until
+  the reviewed backport or release reaches `main`.
 - The Firebase production workflow source now uses a commit-pinned Google
   authentication action and accepts only GitHub workload-identity ADC for the
   fixed `tonicatering` project; its deploy command rejects `FIREBASE_TOKEN`,
@@ -122,8 +130,15 @@ Last updated: 2026-08-29 04:32:10 CDT
   production and tenant legacy-token paths with distinct WIF identities, and
   checksum-locks the Firebase CLI used for mutation. These receipts do not
   establish deployment, credentials, provider behavior, or production use.
+- Evidence-only head `98f53951481992c114adce594568fbb948fa25a1`
+  is clean, published, mergeable, and passes all eight CI Quality jobs in run
+  `33245866511` plus exact-head Stripe source-only runs `33245866516` and
+  `33245866512`. GitHub currently requires zero approving PR reviews and the
+  release-attestation variables identify one solo operator. Those are observed
+  repository settings, not independent review or human acceptance.
 - Governed candidate deployment was attempted for both targets at exact
-  `e620ce80`. Both stopped before provider mutation or receipt reservation.
+  `e620ce80` and rechecked at exact evidence head `98f5395`. Both stopped before
+  provider mutation or receipt reservation.
   Firebase staging lacks enabled versions for all eleven candidate-required
   secret names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
   `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,

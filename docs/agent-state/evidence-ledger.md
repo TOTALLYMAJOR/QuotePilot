@@ -1,10 +1,34 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 04:32:10 CDT
+Last updated: 2026-08-29 05:07:11 CDT
 
-Checkpoint recorded: 2026-08-29T09:32:04.918Z
+Checkpoint recorded: 2026-08-29T10:08:00.173Z
 
 ## Published candidate, exact CI, and deployment boundary
+
+- File/path: Branch `security/extract-zip-backport` at `204f0d2eefd72a8f2d41a6fbb4e7ec6728bd454c`; PR #112; CI runs `33246642372`, `33246642371`, and `33246642373`
+- Evidence: The branch is clean, published, open, and mergeable. The narrow backport removes `extract-zip` from the resolved development graph through the Lighthouse 13.4.1 override; local package-lock install, clean install, root audit, 4,007 unit tests, 505-module build, docs governance, environment check, and unchanged CWV gate pass. Exact-head CI Quality run `33246642372` passes all eight jobs; both Stripe source-only workflows pass. No merge, default-branch change, alert closure, product deployment, or provider mutation occurred.
+- Why it matters: The current production branch can receive the known security remediation independently of the blocked product release, without representing branch proof as default-branch or production proof.
+- Confidence: High for exact Git/PR/CI identity and local dependency/validation results.
+- Unverified gaps: Human review, merge to `main`, Dependabot alert closure, and any downstream exact-main validation.
+
+- File/path: Branch `release/v0.16.0` at `98f53951481992c114adce594568fbb948fa25a1`; PR #111; CI runs `33245866511`, `33245866516`, and `33245866512`; fixed provider preflights
+- Evidence: Fresh fetch proves local HEAD equals the published branch, `origin/main` remains `d40ec929e5d70142683966e872b6f91b4a508cad`, and PR #111 is open and mergeable with every current check green. The Firebase and Vercel candidate commands were repeated for exact `98f5395` with CI run `33245866511`; both again stopped before receipt reservation or provider mutation on the same eleven missing enabled staging secret versions and unproven Commercial Change false readback. No candidate evidence artifact or working-tree change was produced.
+- Why it matters: The release boundary is current external evidence, not a stale inference from the preceding code-bearing commit.
+- Confidence: High for exact Git, GitHub, Firebase metadata/readback, and fail-before-mutation behavior.
+- Unverified gaps: Secret authorization/creation, ADC Rules access, Firebase/Vercel deployment, hosted behavior, provider outcomes, production, and human acceptance.
+
+- File/path: GitHub repository variables/branch protection; production Google Cloud project `tonicatering`
+- Evidence: Required WIF variables are absent; no workload identity pool or matching deploy/tenant service account was returned; legacy `FIREBASE_TOKEN` remains named. Branch protection requires all eight CI jobs but zero approving reviews. Release variables set `RELEASE_APPROVAL_MODE=solo-operator` with one attester/operator id.
+- Why it matters: Green CI and mergeability do not establish deploy credentials, independent review, or human UAT. The exact owner decision is whether to retain governed solo operation or add an enforceable independent reviewer boundary.
+- Confidence: High for current read-only provider and repository configuration-name evidence.
+- Unverified gaps: Human ownership, reviewed IAM design/apply, environment protection reviewers, authenticated operator identity, and acceptance execution.
+
+- File/path: GitHub Dependabot alert #139; `origin/main:package-lock.json`; candidate `package-lock.json`
+- Evidence: Alert #139 is open at high severity for development-scope `extract-zip` symlink path traversal on the default branch. `origin/main` still references `extract-zip`; the release candidate does not, its root audit is clean, and exact remote CWV passes.
+- Why it matters: Candidate remediation is real but does not close default-branch exposure until merged or separately backported.
+- Confidence: High for alert metadata and exact lockfile comparison.
+- Unverified gaps: GitHub alert closure after the remediation reaches `main`.
 
 - File/path: Release PR #111; branch `release/v0.16.0`; code-bearing candidate `e620ce80f096033abfdc420e649499f4ed92dff1`
 - Evidence: Stripe Connect onboarding run `33245272566` and infrastructure run `33245272601` completed successfully for the exact candidate; CI Quality run `33245272679` passed all eight matching main-lane jobs. The clean local candidate passes 364 test files with 3 skipped, 4,099 tests with 78 skipped, a 503-module build, 127 Truth Loop tests, and the full governed release lane.
