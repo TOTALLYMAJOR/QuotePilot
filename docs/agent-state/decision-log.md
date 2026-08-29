@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 05:07:11 CDT
+Last updated: 2026-08-29 05:23:21 CDT
 
-Checkpoint recorded: 2026-08-29T10:08:00.173Z
+Checkpoint recorded: 2026-08-29T10:24:19.799Z
 
 ## Decisions made
 
@@ -32,6 +32,7 @@ Checkpoint recorded: 2026-08-29T10:08:00.173Z
 24. Lock candidate Firebase inspection and mutation to the checksum-verified official binary plus the public Rules API through ADC, and lock Vercel preview to the Build Output API and narrow REST calls. Reject missing provider access or safe-off proof before receipt reservation and mutation; do not restore runtime CLI discovery or `npx` downloads.
 25. Preserve the all-positive production UAT contract. Do not convert safe-off blocked items into N/A, waive them because CI is green, or merge/tag/deploy while hosted and human evidence is absent. Record the current solo-operator/zero-required-review configuration as observed governance, not independent review.
 26. Isolate the default-branch `extract-zip` remediation in PR #112 so it can be reviewed and merged independently of the unqualified v0.16 product release. Exact green branch evidence does not close the default-branch alert; reviewed merge and readback do.
+27. Mark the active promotion goal strictly blocked only after the same external condition recurred across three consecutive goal turns and latest exact-CI head `8b04582` reproduced both fail-before-mutation candidate rejections. Do not merge, tag, deploy production, create secret values, provision IAM, or manufacture human acceptance to keep autonomous work moving.
 
 ## Unresolved decisions
 

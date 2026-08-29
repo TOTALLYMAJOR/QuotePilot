@@ -1,8 +1,8 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 05:07:11 CDT
+Last updated: 2026-08-29 05:23:21 CDT
 
-Checkpoint recorded: 2026-08-29T10:08:00.173Z
+Checkpoint recorded: 2026-08-29T10:24:19.799Z
 
 ## Published candidate, exact CI, and deployment boundary
 
@@ -12,8 +12,8 @@ Checkpoint recorded: 2026-08-29T10:08:00.173Z
 - Confidence: High for exact Git/PR/CI identity and local dependency/validation results.
 - Unverified gaps: Human review, merge to `main`, Dependabot alert closure, and any downstream exact-main validation.
 
-- File/path: Branch `release/v0.16.0` at `98f53951481992c114adce594568fbb948fa25a1`; PR #111; CI runs `33245866511`, `33245866516`, and `33245866512`; fixed provider preflights
-- Evidence: Fresh fetch proves local HEAD equals the published branch, `origin/main` remains `d40ec929e5d70142683966e872b6f91b4a508cad`, and PR #111 is open and mergeable with every current check green. The Firebase and Vercel candidate commands were repeated for exact `98f5395` with CI run `33245866511`; both again stopped before receipt reservation or provider mutation on the same eleven missing enabled staging secret versions and unproven Commercial Change false readback. No candidate evidence artifact or working-tree change was produced.
+- File/path: Branch `release/v0.16.0` at `8b04582c371f8ccc5a4b5010c9a9800c0e68bfe0`; PR #111; CI runs `33247137753`, `33247137681`, and `33247137700`; fixed provider preflights
+- Evidence: Fresh fetch proves local HEAD equals the published branch, `origin/main` remains `d40ec929e5d70142683966e872b6f91b4a508cad`, and PR #111 is open and mergeable with every current check green. CI Quality passed all eight required jobs plus Product Truth advisory; both Stripe source-only checks passed. The Firebase and Vercel candidate commands were repeated for exact `8b04582` with CI run `33247137753`; both again stopped before receipt reservation or provider mutation on the same eleven missing enabled staging secret versions and unproven Commercial Change false readback. No candidate evidence artifact or working-tree change was produced.
 - Why it matters: The release boundary is current external evidence, not a stale inference from the preceding code-bearing commit.
 - Confidence: High for exact Git, GitHub, Firebase metadata/readback, and fail-before-mutation behavior.
 - Unverified gaps: Secret authorization/creation, ADC Rules access, Firebase/Vercel deployment, hosted behavior, provider outcomes, production, and human acceptance.

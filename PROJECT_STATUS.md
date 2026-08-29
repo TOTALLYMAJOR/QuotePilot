@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 05:07:11 CDT
+Last updated: 2026-08-29 05:23:21 CDT
 
 ## Current Production Release
 
@@ -130,15 +130,16 @@ Last updated: 2026-08-29 05:07:11 CDT
   production and tenant legacy-token paths with distinct WIF identities, and
   checksum-locks the Firebase CLI used for mutation. These receipts do not
   establish deployment, credentials, provider behavior, or production use.
-- Evidence-only head `98f53951481992c114adce594568fbb948fa25a1`
+- Latest validated release head `8b04582c371f8ccc5a4b5010c9a9800c0e68bfe0`
   is clean, published, mergeable, and passes all eight CI Quality jobs in run
-  `33245866511` plus exact-head Stripe source-only runs `33245866516` and
-  `33245866512`. GitHub currently requires zero approving PR reviews and the
+  `33247137753` plus exact-head Stripe source-only runs `33247137681` and
+  `33247137700`. GitHub currently requires zero approving PR reviews and the
   release-attestation variables identify one solo operator. Those are observed
   repository settings, not independent review or human acceptance.
 - Governed candidate deployment was attempted for both targets at exact
-  `e620ce80` and rechecked at exact evidence head `98f5395`. Both stopped before
-  provider mutation or receipt reservation.
+  `e620ce80`, rechecked at `98f5395`, and rechecked again at latest exact-CI
+  head `8b04582`. Every attempt stopped before provider mutation or receipt
+  reservation.
   Firebase staging lacks enabled versions for all eleven candidate-required
   secret names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
   `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,

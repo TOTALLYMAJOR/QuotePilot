@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 05:07:11 CDT
+Last updated: 2026-08-29 05:23:21 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -104,10 +104,11 @@ human results remain separate.
   both are source-only dormant contracts with no credential use, provider call,
   Terraform plan/apply, export, or deployment. Exact matching CI Quality run
   `33245272679` passed all eight required jobs.
-- Evidence-only head `98f53951481992c114adce594568fbb948fa25a1`
+- Latest validated release head `8b04582c371f8ccc5a4b5010c9a9800c0e68bfe0`
   is clean, matches the published branch, and is mergeable. Exact-head CI
-  Quality run `33245866511` passed all eight required jobs; Stripe Connect
-  source-only runs `33245866516` and `33245866512` also passed.
+  Quality run `33247137753` passed all eight required jobs and the Product
+  Truth advisory; Stripe Connect source-only runs `33247137681` and
+  `33247137700` also passed.
 - Five bounded release-control commits follow the original inventory:
   Lighthouse dependency remediation (`60b0b119`), production Firebase WIF
   enforcement (`49fe2a7e`), distinct least-privilege tenant-operation WIF
@@ -129,7 +130,7 @@ human results remain separate.
   Firebase-module search, or runtime-resolved Vercel CLI. The added dependency
   graph audits at zero findings. Hosted execution remains unproven.
 - The governed Firebase candidate command for exact `e620ce80`, then again for
-  exact evidence head `98f5395`, stopped before
+  `98f5395`, and again for latest exact-CI head `8b04582`, stopped before
   mutation and before receipt reservation because staging Secret Manager has
   no enabled version for eleven required names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
   `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,
@@ -139,7 +140,7 @@ human results remain separate.
   `STRIPE_WEBHOOK_SECRET`, and `TWILIO_AUTH_TOKEN`. The tool explicitly requires
   the separately authorized staging-secret process and will not create or
   inspect values.
-- The governed Vercel preview command for both exact heads also stopped before
+- The governed Vercel preview command for all three exact heads also stopped before
   mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions
   readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
