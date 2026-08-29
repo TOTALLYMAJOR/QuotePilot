@@ -2412,7 +2412,7 @@ export function QuoteHistoryView({
           </div>
         </div>
 
-        <details className="staff-evidence-disclosure workspace-data-details">
+        {!AMBIENT_UI_ENABLED && <details className="staff-evidence-disclosure workspace-data-details">
           <summary>Workspace data details</summary>
           <p className="source-note">Source: {formatWorkspaceSource(state.source)}</p>
           <p className="source-note">
@@ -2423,7 +2423,7 @@ export function QuoteHistoryView({
               Kitchen BEO fallback is browser-local in this workspace. It has no server generation receipt, retained artifact history, or authoritative freshness status.
             </p>
           )}
-        </details>
+        </details>}
         {quoteHistoryCloseGuard.blocked && (
           <p className="warning-note" role="status">{quoteHistoryCloseGuard.message}</p>
         )}
@@ -2441,7 +2441,7 @@ export function QuoteHistoryView({
                 : `Email delivery unavailable: ${emailSetup.error || "finish provider setup in Integration Ops."}`}
           </p>
         )}
-        {state.error && <p className="error-note" role="alert">{state.error}</p>}
+        {state.error && !AMBIENT_UI_ENABLED && <p className="error-note" role="alert">{state.error}</p>}
         {state.feedback && <p className="source-note" role="status" aria-live="polite">{state.feedback}</p>}
         {focusedQuoteIsVisible && !administrationFocusActive && (
           <section

@@ -187,6 +187,33 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: firstClientName, level: 1 })).toBeVisible();
   });
 
+  test("Events turns an unavailable read into one productive recovery path", async ({ page }) => {
+    test.skip(
+      !LOCAL_REVIEW_FIXTURES_ENABLED,
+      "The unavailable Events proof uses the explicit local review environment."
+    );
+
+    await gotoWorkspace(page, "/app/events");
+    const recovery = page.locator('[data-events-state="unavailable"]');
+    await expect(recovery).toBeVisible();
+    await expect(recovery.getByRole("heading", { name: "We couldn’t load event records." })).toBeVisible();
+    await expect(recovery.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(recovery.getByRole("button", { name: "Review opportunities" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+    const readBoundary = page.locator('[data-events-evidence="collapsed"]');
+    await expect(readBoundary).toBeVisible();
+    await expect(readBoundary).not.toHaveAttribute("open", "");
+    await expect(readBoundary.getByRole("heading", { name: "Staff read context" })).toBeHidden();
+    await readBoundary.getByText("About this view", { exact: true }).click();
+    await expect(readBoundary.getByRole("heading", { name: "Staff read context" })).toBeVisible();
+    await expect(page.getByText(/Missing or insufficient permissions/i)).toHaveCount(0);
+    await expect(page.getByText("Live operations evidence not established", { exact: true })).toHaveCount(0);
+
+    await recovery.getByRole("button", { name: "Review opportunities" }).click();
+    await expect(page).toHaveURL(/\/app\/quotes$/);
+    await expect(page.getByRole("heading", { name: "Current opportunities", level: 2 })).toBeVisible();
+  });
+
   test("the production pilot matrix exposes NOW, Event Room, command, margins, and staged client changes", async ({ page }) => {
     test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
     await seedPilotQuote(page);

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 19:58:28 CDT
+Last updated: 2026-08-28 20:04:38 CDT
 
 All notable project changes are documented in this file.
 
@@ -191,6 +191,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Unified Ambient **Now**, **Opportunities**, and **Events** on one shared,
   outcome-led recovery primitive. Failed first reads now suppress raw provider
   text and duplicated evidence warnings, state what did not change, and offer
+  one primary retry plus one productive continuation. Opportunities keeps
+  source detail available behind **About this view**; Now no longer fractures
+  into implicit side-by-side columns at phone width. Events now leads with the
+  recovery instead of repeating a competing read-unavailable panel and header
+  refresh; technical read context remains available behind **About this view**.
+  Events retains its completed-empty handoff, and missing exact event links
+  still recover without silently substituting another event.
 - Corrected proposal-completeness semantics across Living Opportunity,
   Opportunities, Event Workspace, Decide cards, and deterministic Pilot.
   Customer phone is now a recommended contact enhancement rather than a
