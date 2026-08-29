@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
 import {
   RELEASE_CANDIDATE_POLICY,
+  RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
   RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
@@ -65,7 +66,7 @@ function functionsEnvironment(overrides = {}) {
   };
 }
 
-function reserveVercelCandidateReceipt(root) {
+function reserveVercelCandidateReceipt(root, uatProfile = RELEASE_CANDIDATE_UAT_PROFILE) {
   return reserveCandidateReceipt({
     root,
     target: "vercel-preview",
@@ -75,7 +76,8 @@ function reserveVercelCandidateReceipt(root) {
       name: "vercel",
       ...RELEASE_CANDIDATE_POLICY.vercel,
       target: "preview"
-    }
+    },
+    uatProfile
   });
 }
 
@@ -131,6 +133,7 @@ describe("governed release candidate deployment", () => {
     expect(candidateConfirmation("firebase-all", SHA)).toContain(`quotepilot-staging-20260804 ${SHA}`);
     expect(candidateConfirmation("vercel-preview", SHA)).toContain(`quoteflow PREVIEW ${SHA}`);
     expect(RELEASE_CANDIDATE_UAT_PROFILE).toBe("staging-safe-off");
+    expect(RELEASE_CANDIDATE_STAFFING_UAT_PROFILE).toBe("staging-staffing-authority");
   });
 
   test("checks every bound staging secret by metadata without reading or creating values", () => {
@@ -165,12 +168,19 @@ describe("governed release candidate deployment", () => {
     expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
   });
 
-  test("keeps operational staffing authority explicitly off", () => {
+  test("binds operational staffing authority to the exact candidate profile", () => {
     expect(validateCandidateFunctionsEnvironment(functionsEnvironment()))
       .toMatchObject({ OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false" });
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
     }))).toThrow(/explicitly false/i);
+    expect(validateCandidateFunctionsEnvironment(functionsEnvironment({
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+    }), RELEASE_CANDIDATE_STAFFING_UAT_PROFILE)).toMatchObject({
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+    });
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment(),
+      RELEASE_CANDIDATE_STAFFING_UAT_PROFILE)).toThrow(/explicitly true/i);
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       STRIPE_SECRET_KEY: "plaintext-fixture"
     }))).toThrow(/Secret Manager/i);
@@ -199,6 +209,27 @@ describe("governed release candidate deployment", () => {
     });
     expect(functions).toMatchObject({ functionCount: 1 });
     expect(functions.revisions[0].hash).toBe("b".repeat(40));
+
+    const staffingFunctions = validateFirebaseFunctionsReadback({
+      candidateProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
+      response: {
+        status: "success",
+        result: [{
+          id: "calculateQuotePricing",
+          region: "us-central1",
+          platform: "gcfv1",
+          project: RELEASE_CANDIDATE_POLICY.firebase.projectId,
+          state: "ACTIVE",
+          hash: "c".repeat(40),
+          environmentVariables: {
+            ...CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
+            OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+          }
+        }]
+      }
+    });
+    expect(staffingFunctions.runtimeConfig.OPERATIONAL_STAFFING_AUTHORITY_ENABLED)
+      .toBe("true");
 
     const providerDeploymentId = "sites/quotepilot-staging-20260804/versions/0123456789abcdef";
     expect(validateFirebaseHostingReadback({
@@ -248,6 +279,16 @@ describe("governed release candidate deployment", () => {
         ci: { runId: 123 },
         provider: { name: "vercel" }
       })).toThrow(/EEXIST/i);
+      const staffingReservation = reserveVercelCandidateReceipt(
+        root,
+        RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+      );
+      expect(staffingReservation.receiptPath).toContain(
+        `vercel-preview.${RELEASE_CANDIDATE_STAFFING_UAT_PROFILE}.json`
+      );
+      expect(readCandidateReceipt(staffingReservation)).toMatchObject({
+        uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+      });
       expect(() => updateCandidateReceipt(reservation, { unexpected: true }))
         .toThrow(/unknown field unexpected/i);
       for (const field of [
@@ -501,7 +542,7 @@ describe("governed release candidate deployment", () => {
     expect(source).not.toContain('PROJECT_ID = "tonicatering"');
     expect(source).toContain('VITE_AMBIENT_UI_ENABLED: "true"');
     expect(source).toContain('VITE_OPERATIONAL_STAFFING_ENABLED: "true"');
-    expect(source).toContain('uatProfile: RELEASE_CANDIDATE_UAT_PROFILE');
+    expect(source).toContain("uatProfile: candidateProfile");
     expect(source).toContain('com.mbmapps.quotepilot.release-candidate/v2');
     expect(source).not.toMatch(/"--token",\s*\.\.\.tokenArgs/);
     for (const flag of [

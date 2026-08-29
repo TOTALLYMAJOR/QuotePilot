@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 04:16:11 CDT
+Last updated: 2026-08-29 14:23:06 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added an explicit `staging-staffing-authority` release-candidate profile
+  alongside the existing `staging-safe-off` profile. Candidate CLI input,
+  Functions dotenv validation, active-revision readback, hosted manifest, and
+  reserved receipt now bind the same profile and exact staffing server-gate
+  value. Positive staffing checks become applicable only in the bounded
+  authority profile; buyer, provider, Commercial Change, and Revenue Autopilot
+  rails remain fail-closed, and tenant enablement remains a separate action.
+  Profile-qualified receipt filenames let safe-off and positive staffing
+  evidence coexist for the same immutable source SHA without overwrite.
 - Locked every release-candidate provider client to a reviewed source. Firebase
   Web config, Functions, Hosting, and secret-metadata reads now use the same
   checksum-verified official 15.24.0 binary as mutation; exact Firestore Rules

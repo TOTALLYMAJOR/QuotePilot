@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 04:16:11 CDT
+Last updated: 2026-08-29 14:23:06 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -136,17 +136,22 @@ explicit owner promotion after real-run review.
    mutation and retains failed or partial outcomes. Firebase-all verification
    binds Hosting, active Functions revisions and fail-closed runtime readback,
    and the exact Firestore release/ruleset; Vercel requires the coordinated
-   staging-Functions readback. It cannot promote an alias or enable operational
-   staffing authority. GitHub CI verification resolves authentication from
+   staging-Functions readback. It cannot promote an alias. Operational staffing
+   authority may be enabled only in the fixed staging project through the
+   explicit `staging-staffing-authority` profile; the separate tenant gate must
+   still be authorized, enabled for one disposable tenant, exercised, and rolled
+   back. GitHub CI verification resolves authentication from
    `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI; if
    none is available, the command stops before provider mutation and never
    prints credential material.
-   Each candidate manifest and receipt binds the tracked `staging-safe-off`
-   UAT profile. Run
-   `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`
+   Each candidate manifest and receipt binds exactly one tracked profile:
+   `staging-safe-off` or `staging-staffing-authority`. Run
+   `npm run release:uat:plan -- --target <profile> --candidate-profile <candidate-profile>`
    to obtain the machine-readable applicable/blocked plan. Every target item is
    classified exactly once and every blocked item carries a reason. Applicable
    is not passed; blocked is not N/A and prevents production qualification.
+   Candidate receipt filenames include both target and profile so same-SHA
+   safe-off and bounded positive evidence cannot overwrite one another.
    `npm run release:uat:items -- --target <profile>` remains the all-positive
    target contract. The exact-main attestation accepts only that complete set
    and never accepts a profile plan, blocked item, waiver, or partial result.

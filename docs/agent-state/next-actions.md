@@ -1,12 +1,12 @@
 # Next Actions
 
-Last updated: 2026-08-29 05:23:21 CDT
+Last updated: 2026-08-29 14:33:12 CDT
 
-Checkpoint recorded: 2026-08-29T10:24:19.799Z
+Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
-1. Approve and provision the production WIF pool/provider, distinct least-privilege deploy and tenant-operator service accounts, and the three repository variables; retain reviewed IAM and binding evidence without creating a service-account key.
-2. Authorize/create enabled staging versions for the eleven candidate-required secret names in the promotion report, then deploy the latest exact-CI SHA to Firebase under `staging-safe-off` and verify Hosting, Functions, rules, and every safe-off Functions environment readback.
-3. Only after Firebase readback passes, deploy the same SHA to Vercel preview, execute all applicable hosted checks, and route blocked authenticated/provider/device items to named human owners. Merge, tag, and production-promote only after complete UAT and exact-main CI.
+1. Commit and publish the release-lane-green `staging-staffing-authority` slice, then require exact remote CI for that SHA.
+2. Satisfy the existing fixed-staging secret metadata prerequisites, deploy Firebase then Vercel under the same positive profile, and obtain exact Functions/Hosting/rules/manifest readback.
+3. Qualify one disposable staging tenant and roll authority back. Before production migration apply, explicitly resolve whether the designated admin's existing `mm05366-sandbox` tenant should be archived/tombstoned or retained under another owner; then bind tenant `250`, the sales role, protected activation, rollback rehearsal, and named acceptance without a sparse settings patch.
 
 # Context Handoff Capsule
 

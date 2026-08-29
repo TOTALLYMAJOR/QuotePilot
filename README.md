@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-29 04:16:11 CDT
+Last updated: 2026-08-29 14:23:06 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -13,7 +13,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
   Firebase staging or Vercel preview only; checksum-verified Firebase binary,
-  ADC Rules readback, and direct Vercel APIs; see the launch runbook)
+  ADC Rules readback, direct Vercel APIs, and an explicit safe-off or bounded
+  staffing-authority profile; see the launch runbook)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Design system: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
@@ -1312,8 +1313,10 @@ platform-admin workflow.
 
 Primary production deployment is manual-workflow-only:
 
-- `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`
-  prints the fixed candidate's applicable and blocked checks. Applicable is not
+- `npm run release:uat:plan -- --target <profile> --candidate-profile <staging-safe-off|staging-staffing-authority>`
+  prints the selected fixed candidate's applicable and blocked checks. The
+  staffing profile enables only the global staging staffing gate and still
+  requires one separately authorized disposable tenant. Applicable is not
   passed, and blocked checks cannot be waived or supplied to the exact-main
   all-positive attestation.
 - `Deploy Firebase Production` deploys the explicitly selected `hosting`,

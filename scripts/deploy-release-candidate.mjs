@@ -9,12 +9,13 @@ import { GoogleAuth } from "google-auth-library";
 import { prepareFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
 import {
   RELEASE_CANDIDATE_POLICY,
-  RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
+  candidateFunctionsRuntimeExpected,
   candidateReceiptRelativePath,
   candidateConfirmation,
   parseDotenv,
   requireCandidateTarget,
+  requireCandidateUatProfile,
   requireFullSha,
   requireReleaseBranch,
   reserveCandidateReceipt,
@@ -34,9 +35,17 @@ const VERCEL_API = "https://api.vercel.com";
 const VERCEL_DEPLOYMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 function readArgs(argv = process.argv.slice(2)) {
-  const allowed = new Set(["--target", "--release-sha", "--ci-run-id", "--confirm"]);
+  const allowed = new Set([
+    "--target",
+    "--release-sha",
+    "--ci-run-id",
+    "--candidate-profile",
+    "--confirm"
+  ]);
   if (argv.length !== allowed.size * 2) {
-    throw new Error("Candidate deployment requires target, release SHA, CI run id, and confirmation.");
+    throw new Error(
+      "Candidate deployment requires target, release SHA, CI run id, candidate profile, and confirmation."
+    );
   }
   const values = {};
   for (let index = 0; index < argv.length; index += 2) {
@@ -48,7 +57,7 @@ function readArgs(argv = process.argv.slice(2)) {
     values[name] = String(value).trim();
   }
   if (Object.keys(values).length !== allowed.size) {
-    throw new Error("Candidate deployment requires all four exact arguments.");
+    throw new Error("Candidate deployment requires all five exact arguments.");
   }
   return values;
 }
@@ -232,7 +241,7 @@ function candidateBrowserEnvironment(firebaseCliPath) {
   };
 }
 
-function validateFunctionsEnvironmentFile() {
+function validateFunctionsEnvironmentFile(candidateProfile) {
   const projectId = RELEASE_CANDIDATE_POLICY.firebase.projectId;
   const envPath = path.join(ROOT, "functions", `.env.${projectId}`);
   if (!fs.existsSync(envPath)) {
@@ -257,19 +266,29 @@ function validateFunctionsEnvironmentFile() {
   if (ignored.status !== 0) {
     throw new Error(`Release candidate rejected: functions/.env.${projectId} must remain ignored.`);
   }
-  return validateCandidateFunctionsEnvironment(parseDotenv(fs.readFileSync(envPath, "utf8")));
+  return validateCandidateFunctionsEnvironment(
+    parseDotenv(fs.readFileSync(envPath, "utf8")),
+    candidateProfile
+  );
 }
 
-function writeCandidateManifest(outputDirectory, releaseSha, ciRunId) {
+function writeCandidateManifest(
+  outputDirectory,
+  releaseSha,
+  ciRunId,
+  candidateProfile,
+  functionsGates
+) {
   fs.mkdirSync(outputDirectory, { recursive: true });
   const manifest = {
     schema: "com.mbmapps.quotepilot.release-candidate/v2",
     sourceSha: releaseSha,
     ciRunId: Number(ciRunId),
-    uatProfile: RELEASE_CANDIDATE_UAT_PROFILE,
+    uatProfile: candidateProfile,
     ambientUiEnabled: true,
     operationalStaffingBrowserEnabled: true,
-    operationalStaffingAuthorityEnabled: false
+    operationalStaffingAuthorityEnabled:
+      functionsGates.OPERATIONAL_STAFFING_AUTHORITY_ENABLED === "true"
   };
   fs.writeFileSync(
     path.join(outputDirectory, "release-candidate.json"),
@@ -409,7 +428,7 @@ async function readFirebaseHostingAndRules({
   };
 }
 
-function readFirebaseFunctions(firebaseCliPath) {
+function readFirebaseFunctions(firebaseCliPath, candidateProfile) {
   const output = capture(firebaseCliPath, [
     "functions:list",
     "--project",
@@ -418,14 +437,20 @@ function readFirebaseFunctions(firebaseCliPath) {
     ...firebaseTokenArgs()
   ]);
   return validateFirebaseFunctionsReadback({
-    response: parseJsonOutput(output, "Firebase Functions readback")
+    response: parseJsonOutput(output, "Firebase Functions readback"),
+    candidateProfile
   });
 }
 
-async function readFirebaseProviderEvidence(providerDeploymentId, firebaseCliPath, firebaseRulesAccessToken) {
+async function readFirebaseProviderEvidence(
+  providerDeploymentId,
+  firebaseCliPath,
+  firebaseRulesAccessToken,
+  candidateProfile
+) {
   const [surfaces, functions] = await Promise.all([
     readFirebaseHostingAndRules({ providerDeploymentId, firebaseCliPath, firebaseRulesAccessToken }),
-    Promise.resolve().then(() => readFirebaseFunctions(firebaseCliPath))
+    Promise.resolve().then(() => readFirebaseFunctions(firebaseCliPath, candidateProfile))
   ]);
   return { ...surfaces, functions };
 }
@@ -439,11 +464,18 @@ async function deployFirebase({
   reservation,
   attempt,
   firebaseCliPath,
-  firebaseRulesAccessToken
+  firebaseRulesAccessToken,
+  candidateProfile
 }) {
   updateCandidateReceipt(reservation, { status: "preparing" });
   run("npm", ["run", "build"], { env: browserEnv });
-  const manifest = writeCandidateManifest(path.join(ROOT, "dist"), releaseSha, ciRunId);
+  const manifest = writeCandidateManifest(
+    path.join(ROOT, "dist"),
+    releaseSha,
+    ciRunId,
+    candidateProfile,
+    functionsGates
+  );
   const originalConfig = JSON.parse(fs.readFileSync(path.join(ROOT, "firebase.json"), "utf8"));
   const appHosting = (Array.isArray(originalConfig.hosting) ? originalConfig.hosting : [originalConfig.hosting])
     .find((entry) => entry?.target === "app");
@@ -499,7 +531,8 @@ async function deployFirebase({
   const providerSurfaces = await readFirebaseProviderEvidence(
     provider.providerDeploymentId,
     firebaseCliPath,
-    firebaseRulesAccessToken
+    firebaseRulesAccessToken,
+    candidateProfile
   );
   const functionsTree = capture("git", ["rev-parse", `${releaseSha}:functions`]);
   if (!/^[0-9a-f]{40,64}$/i.test(functionsTree)) {
@@ -563,7 +596,13 @@ export function buildVercelOutputConfig() {
   };
 }
 
-function writeVercelBuildOutput({ browserEnv, releaseSha, ciRunId }) {
+function writeVercelBuildOutput({
+  browserEnv,
+  releaseSha,
+  ciRunId,
+  candidateProfile,
+  functionsGates
+}) {
   run("npm", ["run", "build"], { env: browserEnv });
   const outputDirectory = path.join(ROOT, ".vercel", "output");
   const staticDirectory = path.join(outputDirectory, "static");
@@ -575,7 +614,13 @@ function writeVercelBuildOutput({ browserEnv, releaseSha, ciRunId }) {
     `${JSON.stringify(buildVercelOutputConfig(), null, 2)}\n`,
     { encoding: "utf8", mode: 0o644 }
   );
-  const manifest = writeCandidateManifest(staticDirectory, releaseSha, ciRunId);
+  const manifest = writeCandidateManifest(
+    staticDirectory,
+    releaseSha,
+    ciRunId,
+    candidateProfile,
+    functionsGates
+  );
   return { outputDirectory, manifest };
 }
 
@@ -754,6 +799,8 @@ async function deployVercel({
   ciRunId,
   browserEnv,
   stagingBackendEvidence,
+  candidateProfile,
+  functionsGates,
   reservation,
   attempt,
   vercelToken
@@ -761,7 +808,13 @@ async function deployVercel({
   const token = vercelToken;
   updateCandidateReceipt(reservation, { status: "preparing" });
   validateVercelLink();
-  const { outputDirectory, manifest } = writeVercelBuildOutput({ browserEnv, releaseSha, ciRunId });
+  const { outputDirectory, manifest } = writeVercelBuildOutput({
+    browserEnv,
+    releaseSha,
+    ciRunId,
+    candidateProfile,
+    functionsGates
+  });
   const files = collectVercelBuildFiles(outputDirectory);
   attempt.providerMutationAttempted = true;
   updateCandidateReceipt(reservation, {
@@ -851,6 +904,7 @@ async function main() {
   try {
     const args = readArgs();
     const target = requireCandidateTarget(args["--target"]);
+    const candidateProfile = requireCandidateUatProfile(args["--candidate-profile"]);
     const releaseSha = requireFullSha(args["--release-sha"]);
     const expectedConfirmation = candidateConfirmation(target, releaseSha);
     if (args["--confirm"] !== expectedConfirmation) {
@@ -861,8 +915,8 @@ async function main() {
     const firebaseCliPath = await prepareFirebaseToolsBinary();
     const browserEnv = candidateBrowserEnvironment(firebaseCliPath);
     const functionsGates = target === "firebase-all"
-      ? validateFunctionsEnvironmentFile()
-      : undefined;
+      ? validateFunctionsEnvironmentFile(candidateProfile)
+      : candidateFunctionsRuntimeExpected(candidateProfile);
     const secretPrerequisites = target === "firebase-all"
       ? await validateFirebaseSecretPrerequisites(firebaseCliPath)
       : undefined;
@@ -871,7 +925,7 @@ async function main() {
       : undefined;
     if (firebaseRulesAccessToken) await readFirebaseRulesReleases(firebaseRulesAccessToken);
     const stagingBackendEvidence = target === "vercel-preview"
-      ? readFirebaseFunctions(firebaseCliPath)
+      ? readFirebaseFunctions(firebaseCliPath, candidateProfile)
       : undefined;
     const vercelToken = target === "vercel-preview"
       ? String(process.env.VERCEL_TOKEN || "").trim()
@@ -885,7 +939,8 @@ async function main() {
       target,
       releaseSha,
       ci: ciEvidence,
-      provider: receiptProviderIdentity(target)
+      provider: receiptProviderIdentity(target),
+      uatProfile: candidateProfile
     });
     const context = {
       releaseSha,
@@ -898,7 +953,8 @@ async function main() {
       stagingBackendEvidence,
       vercelToken,
       reservation,
-      attempt
+      attempt,
+      candidateProfile
     };
     const evidence = target === "firebase-all"
       ? await deployFirebase(context)

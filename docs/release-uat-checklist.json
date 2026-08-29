@@ -1,6 +1,6 @@
 {
   "schema": "com.mbmapps.quotepilot.release-uat-checklist/v3",
-  "version": "2026-08-28.1",
+  "version": "2026-08-29.1",
   "maximumAttestationAgeHours": 24,
   "candidateProfiles": [
     {
@@ -106,6 +106,110 @@
         "sms.twilio-controlled-lifecycle": {
           "state": "blocked",
           "reason": "The staging-safe-off profile fixes the SMS provider to none and authorizes no Twilio provider traffic."
+        },
+        "sms.disabled-nonblocking": { "state": "applicable" }
+      }
+    },
+    {
+      "id": "staging-staffing-authority",
+      "label": "Fixed isolated staffing acceptance candidate with presentation and global staffing authority enabled for one explicitly authorized disposable tenant while buyer, outbound provider, Commercial Change, and Revenue Autopilot remain fail-closed.",
+      "itemStates": {
+        "staging.immutable-release": { "state": "applicable" },
+        "security.provider-secret-cutover": {
+          "state": "blocked",
+          "reason": "The profile reads only Secret Manager metadata, keeps provider rails disabled, and cannot prove fresh provider credentials, overlap, delivery, or revocation."
+        },
+        "auth.password-recovery": { "state": "applicable" },
+        "buyer.public-entry-turnstile": {
+          "state": "blocked",
+          "reason": "The profile fixes both buyer browser gates off and supplies no public Turnstile site key."
+        },
+        "buyer.public-initiation-controls": {
+          "state": "blocked",
+          "reason": "The profile fixes BUYER_ACCESS_ENABLED=false and cannot initiate a buyer request."
+        },
+        "buyer.hosted-invoice-lifecycle": {
+          "state": "blocked",
+          "reason": "The profile fixes BUYER_ACCESS_ENABLED=false and does not authorize Stripe buyer-provider traffic."
+        },
+        "buyer.pending-invite-activation": {
+          "state": "blocked",
+          "reason": "The profile cannot create a paid buyer order or its provider-backed invitation lifecycle."
+        },
+        "buyer.verified-activation-surface": {
+          "state": "blocked",
+          "reason": "The profile fixes both buyer browser gates off, so the positive activation surface is absent by contract."
+        },
+        "quote.save": { "state": "applicable" },
+        "quote.authoritative-create": { "state": "applicable" },
+        "quote.authoritative-edit": { "state": "applicable" },
+        "quote.terminal-guards": { "state": "applicable" },
+        "quote.legacy-bulk-purge-denied": { "state": "applicable" },
+        "quote.legacy-bulk-purge-ui-absent": { "state": "applicable" },
+        "history.open": { "state": "applicable" },
+        "operator.authenticated-workspace-journey": { "state": "applicable" },
+        "portal.decision": {
+          "state": "blocked",
+          "reason": "The email provider is fixed to none, so the profile cannot create provider-accepted delivery evidence for an active customer portal."
+        },
+        "delivery.current-issuance": {
+          "state": "blocked",
+          "reason": "The email provider is fixed to none and cannot produce provider acceptance for a current issuance."
+        },
+        "delivery.invalid-issuance": {
+          "state": "blocked",
+          "reason": "The email provider is fixed to none and cannot produce the required provider-accepted invalid-issuance outcome."
+        },
+        "delivery.link-surface-gating": {
+          "state": "blocked",
+          "reason": "The profile cannot create provider acceptance for either the current or rotated issuance needed to prove the complete link-gating lifecycle."
+        },
+        "approval.execution-audit-replay": { "state": "applicable" },
+        "contract.approved-conversion": {
+          "state": "blocked",
+          "reason": "The profile cannot establish the provider-accepted portal and immutable customer acceptance prerequisite for approved conversion."
+        },
+        "payment.deposit-scoped-dispatch": {
+          "state": "blocked",
+          "reason": "The outbound email provider is fixed to none and the profile authorizes no Stripe provider acceptance window."
+        },
+        "payment.final-balance-scoped-dispatch": {
+          "state": "blocked",
+          "reason": "The profile cannot establish provider-paid deposit, booked-contract, and outbound-provider prerequisites."
+        },
+        "payment.webhook-reconciliation": {
+          "state": "blocked",
+          "reason": "Secret metadata placeholders and STRIPE_MODE=test do not authorize signed Stripe provider-event UAT."
+        },
+        "payment.cross-rail-isolation": {
+          "state": "blocked",
+          "reason": "The profile cannot create the provider-backed deposit and final-balance events required for hosted cross-rail evidence."
+        },
+        "payment.customer-projection-privacy": {
+          "state": "blocked",
+          "reason": "The profile cannot create an accepted eligible provider link needed to prove the complete hosted customer projection."
+        },
+        "payment.customer-surface": {
+          "state": "blocked",
+          "reason": "The profile cannot create provider-backed eligible deposit and final-balance actions for the complete staff and customer surface check."
+        },
+        "staffing.disabled-authority-boundary": {
+          "state": "blocked",
+          "reason": "The profile fixes the global operational staffing server gate true for the bounded acceptance window; disabled-authority rollback requires the separately verified safe-off profile."
+        },
+        "staffing.authoritative-plan": { "state": "applicable" },
+        "staffing.authoritative-surface": { "state": "applicable" },
+        "proposal.pdf": { "state": "applicable" },
+        "integrations.status": { "state": "applicable" },
+        "sms.deployment-owned-provider": { "state": "applicable" },
+        "sms.owner-alert-surface": { "state": "applicable" },
+        "sms.pingram-signed-lifecycle": {
+          "state": "blocked",
+          "reason": "The profile fixes the SMS provider to none and binds no Pingram credential or controlled recipient window."
+        },
+        "sms.twilio-controlled-lifecycle": {
+          "state": "blocked",
+          "reason": "The profile fixes the SMS provider to none and authorizes no Twilio provider traffic."
         },
         "sms.disabled-nonblocking": { "state": "applicable" }
       }

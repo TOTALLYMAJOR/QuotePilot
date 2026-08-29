@@ -1,10 +1,53 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 05:23:21 CDT
+Last updated: 2026-08-29 14:33:12 CDT
 
-Checkpoint recorded: 2026-08-29T10:24:19.799Z
+Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
 ## Published candidate, exact CI, and deployment boundary
+
+- File/path: Google Cloud project `tonicatering`; Workload Identity pool
+  `quotepilot-github`; provider `quoteflow-main`; GitHub repository variables
+- Evidence: The active provider admits only GitHub numeric owner `7169661`,
+  numeric private repository `1167899098`, `refs/heads/main`, manual workflow
+  dispatch, and the two exact production Firebase and staffing-tenant workflow
+  refs. A mapped workflow attribute gives each workflow access only to its own
+  keyless service account. The Firebase deployer has Cloud Functions Admin,
+  Firebase Hosting Admin, Firebase Rules Admin, Datastore Index Admin, Secret
+  Manager Viewer, Service Usage Consumer, and act-as only on the existing App
+  Engine runtime service account. The staffing operator has a project custom
+  role containing only `datastore.entities.get` and
+  `datastore.entities.update`. The three required repository variables now
+  exist. No service-account key was created.
+- Why it matters: Protected production deploy and exact staffing-tenant
+  operations now have distinct short-lived identities with repository,
+  branch, event, and workflow trust fences.
+- Confidence: High for provider and IAM readback plus repository variable-name
+  readback.
+- Unverified gaps: First workflow token exchange, effective Firebase deploy
+  permission completeness, production deployment, tenant operation, rollback,
+  and legacy-secret retirement.
+
+- File/path: Firebase Auth and Firestore production readback; canonical
+  `migrate:multi-tenant` dry run for organization `250`
+- Evidence: The designated admin and sales/operator accounts both exist,
+  are verified, enabled Firebase Auth users. The final release/UAT email has no
+  Firebase Auth account and no discoverable GitHub user binding. Organization
+  `250` and its `settings/config` document do not exist. The designated admin
+  currently owns and holds admin role in `mm05366-sandbox`; the second account
+  currently has customer role with no organization. Repository variable
+  `VITE_DEFAULT_ORGANIZATION_ID` is `250`. A read-only canonical migration plan
+  would create organization `250`, one settings document, 3 event types, 41
+  menu categories, 373 menu items, 3 packages, 3 add-ons, 2 rentals, 25 quotes,
+  and 15 quote versions from the legacy global source, with no portal patches.
+- Why it matters: Tenant `250` is the intended production default, but
+  activation cannot precede complete data provisioning and an explicit choice
+  about transferring the existing sandbox owner identity; a sparse settings
+  patch would be unsafe.
+- Confidence: High for exact provider reads and dry-run counts.
+- Unverified gaps: Migration apply, owner transfer/tombstone policy for the
+  sandbox, sales-role mutation receipt, custom-claim synchronization, hosted
+  login, and human acceptance.
 
 - File/path: Branch `security/extract-zip-backport` at `204f0d2eefd72a8f2d41a6fbb4e7ec6728bd454c`; PR #112; CI runs `33246642372`, `33246642371`, and `33246642373`
 - Evidence: The branch is clean, published, open, and mergeable. The narrow backport removes `extract-zip` from the resolved development graph through the Lighthouse 13.4.1 override; local package-lock install, clean install, root audit, 4,007 unit tests, 505-module build, docs governance, environment check, and unchanged CWV gate pass. Exact-head CI Quality run `33246642372` passes all eight jobs; both Stripe source-only workflows pass. No merge, default-branch change, alert closure, product deployment, or provider mutation occurred.

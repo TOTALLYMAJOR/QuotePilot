@@ -727,7 +727,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v3"
     );
-    expect(checklist.checklist.version).toBe("2026-08-28.1");
+    expect(checklist.checklist.version).toBe("2026-08-29.1");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -853,6 +853,23 @@ describe("tracked UAT checklist", () => {
       EXPECTED_UAT_ITEM_IDS_BY_TARGET["firebase-all"]
     ));
     expect(plan.blockedItems.every((item) => item.reason.length > 0)).toBe(true);
+  });
+
+  test("exposes positive staffing checks only in the governed staffing candidate profile", () => {
+    const plan = getReleaseUatProfilePlan(
+      "firebase-all",
+      "staging-staffing-authority",
+      process.cwd()
+    );
+
+    expect(plan.candidateProfile.id).toBe("staging-staffing-authority");
+    expect(plan.applicableItemIds).toEqual(expect.arrayContaining([
+      "staffing.authoritative-plan",
+      "staffing.authoritative-surface"
+    ]));
+    expect(plan.blockedItems).toContainEqual(expect.objectContaining({
+      id: "staffing.disabled-authority-boundary"
+    }));
   });
 
   test("changes the checklist digest when only target applicability changes", () => {

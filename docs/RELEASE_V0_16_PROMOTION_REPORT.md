@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 05:23:21 CDT
+Last updated: 2026-08-29 14:33:12 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -166,19 +166,25 @@ human results remain separate.
   the alert still requires reviewed merge to `main`, not dismissal based on a
   branch result.
 
-The next executable dependency chain is fixed: provision and independently
-review the production WIF pool/provider and two least-privilege service
-accounts; bind the three repository variables; authorize the required
-non-provider staging secret placeholders; deploy the latest exact-CI SHA to Firebase under
-`staging-safe-off`; verify the Functions gate readback; deploy Vercel preview;
-then execute applicable hosted and named human UAT. Full production promotion
-remains prohibited until the blocked positive-path items are real evidence.
+The owner has now authorized the staffing operationalization path for tenant
+`250` and designated separate tenant-admin, sales/operator, and release/UAT
+roles. The next executable dependency chain is: validate and publish the new
+`staging-staffing-authority` profile; provision and review the production WIF
+pool/provider and two least-privilege service accounts; bind the three
+repository variables; satisfy the existing staging secret prerequisites;
+deploy the latest exact-CI SHA to Firebase and Vercel under the same explicit
+profile; enable one disposable staging tenant; execute positive staffing,
+denial, responsive, rollback, and named human UAT. Full production promotion
+and tenant `250` activation remain prohibited until those receipts exist.
 
 ## Candidate UAT Boundary
 
-The machine UAT planner classifies the tracked `staging-safe-off` profile as
-blocked for full production qualification, while still allowing a bounded
-candidate deployment for the applicable safe-off surface:
+The machine UAT planner classifies both tracked profiles item by item. The
+original `staging-safe-off` profile remains the disabled-authority boundary.
+The new `staging-staffing-authority` profile makes
+`staffing.authoritative-plan` and `staffing.authoritative-surface` applicable,
+but keeps the disabled-authority check and unrelated provider paths blocked
+until separately proven:
 
 - Firebase-all: 17 applicable items and 21 blocked positive-path items.
 - Vercel preview: 11 applicable items and 7 blocked positive-path items.
@@ -190,12 +196,13 @@ Applicable means eligible to test; it does not mean passed. Blocked is not
 
 1. Publish `release/v0.16.0`, open the release PR, and require the exact
    release-branch `CI Quality` run.
-2. Deploy the immutable branch SHA to the isolated Firebase staging target and
-   Vercel preview with the `staging-safe-off` profile, if provider prerequisites
-   pass.
-3. Record hosted checks for the applicable matrix and obtain named human review
-   for the authenticated operator, responsive/accessibility, and comprehension
-   journeys.
+2. Deploy the immutable branch SHA to isolated Firebase staging and Vercel
+   preview with the same explicit `staging-staffing-authority` profile after
+   provider prerequisites pass and matching Functions readback is possible.
+3. Enable one disposable staging tenant separately; record exact admin,
+   sales/operator, denied-role, cross-tenant, responsive/accessibility,
+   conflict/replay, immutable-receipt, and rollback evidence; then obtain the
+   designated release/UAT approval.
 4. Only after the complete pre-merge qualification is satisfied, merge the
    reviewed PR to `main`, wait for all eight exact-main hard gates, tag that same
    SHA `v0.16.0`, and dispatch the target-specific production workflows.
@@ -209,14 +216,14 @@ Applicable means eligible to test; it does not mean passed. Blocked is not
 
 | Decision/input | Current observed boundary | Evidence required to proceed | Unlocks |
 |---|---|---|---|
-| Production Google Cloud identity | No workload identity pool or matching deploy/tenant service account was returned; the three required GitHub variables are absent and legacy `FIREBASE_TOKEN` remains named | Reviewed WIF provider, distinct least-privilege deploy and tenant-operator identities/bindings, three variable bindings, then governed deploy plus tenant rollback/readback receipts; no service-account key | Governed production Firebase and protected tenant operations; only then safe legacy-secret retirement |
-| Staging secret prerequisites | No enabled version exists for `BUYER_ACCESS_RATE_LIMIT_SECRET`, `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`, `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, or `TWILIO_AUTH_TOKEN` | Separate secret-process authorization and enabled-version metadata for all eleven names without exposing values | Firebase `staging-safe-off` candidate attempt |
+| Production Google Cloud identity | WIF provider, distinct deploy and tenant-operator service accounts, workflow-specific trust bindings, scoped deploy roles, two-permission tenant custom role, and all three repository variables now have provider readback; no key exists | First exact workflow token exchange and governed deployment plus tenant rollback/readback receipts | Governed production Firebase and protected tenant operations; only then safe legacy-secret retirement |
+| Staging secret prerequisites | No enabled version exists for `BUYER_ACCESS_RATE_LIMIT_SECRET`, `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`, `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, or `TWILIO_AUTH_TOKEN` | Separate secret-process authorization and enabled-version metadata for all eleven names without exposing values | Firebase candidate attempt under either tracked profile |
 | Firebase candidate review | No staging deployment receipt; current Functions readback does not prove every safe-off gate | Exact-SHA verified Hosting, Functions revisions/runtime flags, Firestore release/ruleset, and hosted manifest receipt | Vercel preview precondition |
 | Vercel preview and hosted acceptance | No preview upload/deployment was attempted because the Firebase safe-off prerequisite failed | Same-SHA immutable READY preview receipt plus applicable hosted checks and authenticated operator journey | Pre-merge release decision |
-| Human review governance | PR #111 is mergeable but has no review decision; branch protection requires zero approvals; variables configure one solo attester/operator | Name the accountable release/UAT reviewer and authenticated tenant operator; either explicitly accept the governed solo-operator mode or configure an independently enforceable reviewer/attester boundary | Truthful human acceptance and merge authorization |
+| Human review governance | The owner designated tenant-admin, sales/operator, and final release/UAT roles, but their provider and GitHub account bindings are not yet proven; branch protection still requires zero approvals | Verify each identity in the relevant provider and bind the final reviewer through the selected independent-review or explicitly accepted solo-operator control | Truthful human acceptance and merge authorization |
 | Default-branch dependency remediation | Dependabot alert #139 remains open; narrow PR #112 is mergeable and exact-CI green but unreviewed/unmerged | Review PR #112 and merge it to `main`, or let the same remediation arrive through a later reviewed v0.16 merge; confirm alert closure afterward | Removes the known development-tool advisory from the current default branch without promoting unqualified product features |
 | Device/accessibility acceptance | Automated responsive/accessibility evidence exists; physical devices and assistive technology remain untested | Approve and execute the required PWA/device/AT matrix | Human UI/PWA acceptance |
-| Tenant `250` staffing | Canonical settings precondition is missing and authority stays off | Reviewed tenant-scoped provisioning/migration dry run, authorization, apply receipt, protected activation and rollback readback | One-tenant authoritative staffing qualification |
+| Tenant `250` staffing | Owner authorization and named operating roles exist; both operator accounts are verified. Organization/settings are absent. The canonical dry run proves a complete legacy-to-`250` create plan, but the intended admin currently owns `mm05366-sandbox` and the second account has a customer role | Decide the sandbox retention/tombstone outcome, then record migration apply, owner/sales role transitions, exact production deployment, protected one-field activation, rollback rehearsal, reactivation, and named human acceptance | One-tenant authoritative staffing qualification without orphaning prior tenant state |
 | Provider-backed capabilities | Buyer, email, payment, SMS, and Stripe Connect positive paths are blocked in the safe-off plan | Named Stripe, Resend/Pingram, Turnstile, and Connect evidence owners; reviewed credentials/dashboard configuration, controlled windows, provider receipts, and rollback | Capability-specific hosted/provider qualification; not blanket activation |
 | Stripe Connect | Foundation remains deploy-empty/provider-disabled | Review and authorize the exact Terraform plan digest, reconcile applied identity, observe/promote App Check, bind restricted Sandbox credential, then hosted Sandbox UAT | Consider runtime exports; no production payment authority is implied |
 | Steward | Provider runtime and model output remain unavailable | Privacy/billing/provider approval, private context/persistence, current consent, controlled silent execution, 100 actual human packet reviews, hosted rules, and acceptance | Consider private runtime activation while model output remains governed |

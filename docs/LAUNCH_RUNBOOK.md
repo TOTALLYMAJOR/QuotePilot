@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 04:16:11 CDT
+Last updated: 2026-08-29 14:23:06 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -877,14 +877,17 @@ source-acceptance list below also includes the portal backfill tool, which is a
 separate data operation and is deliberately absent from deployment-target UAT.
 
 Candidate assessment and exact-main attestation are distinct evidence stages.
-The fixed candidate declares the machine-enforced `staging-safe-off` UAT
-profile in both its hosted manifest and provider receipt. Print its exact plan
-for a production target with:
+The guarded candidate declares one machine-enforced UAT profile in both its
+hosted manifest and provider receipt. Use `staging-safe-off` for disabled-
+authority verification. Use `staging-staffing-authority` only for a separately
+authorized non-production staffing window; it turns on the global staging
+staffing gate but does not create or enable a tenant. Print the exact plan for a
+production target with:
 
 ```bash
 npm run release:uat:plan -- \
   --target <firebase-hosting|firebase-backend|firebase-all|vercel> \
-  --candidate-profile staging-safe-off
+  --candidate-profile <staging-safe-off|staging-staffing-authority>
 ```
 
 The JSON plan classifies every target-required item exactly once as
@@ -907,20 +910,24 @@ npm run release:candidate:deploy -- \
   --target firebase-all \
   --release-sha <full-release-branch-sha> \
   --ci-run-id <exact-successful-ci-run-id> \
+  --candidate-profile <staging-safe-off|staging-staffing-authority> \
   --confirm "DEPLOY CANDIDATE quotepilot-staging-20260804 <full-release-branch-sha>"
 
 npm run release:candidate:deploy -- \
   --target vercel-preview \
   --release-sha <full-release-branch-sha> \
   --ci-run-id <exact-successful-ci-run-id> \
+  --candidate-profile <staging-safe-off|staging-staffing-authority> \
   --confirm "DEPLOY CANDIDATE quoteflow PREVIEW <full-release-branch-sha>"
 ```
 
 The Firebase candidate requires a git-ignored, mode-`0600`
 `functions/.env.quotepilot-staging-20260804` whose provider/send/buyer gates are
-off, `STRIPE_MODE=test`, and the staffing, Commercial Change, Revenue Autopilot
-preparation, and Revenue Autopilot send authority gates explicitly set to
-`false`. The file must be a real regular file, use the exact staging `/app`
+off, `STRIPE_MODE=test`, and Commercial Change, Revenue Autopilot preparation,
+and Revenue Autopilot send authority gates explicitly set to `false`.
+`OPERATIONAL_STAFFING_AUTHORITY_ENABLED` must exactly match the selected
+candidate profile: `false` for `staging-safe-off`, `true` for
+`staging-staffing-authority`. The file must be a real regular file, use the exact staging `/app`
 callbacks and approved inert identities, contain no plaintext secret or
 disabled-provider residue, and contain no unreviewed variables. Before any
 Firebase mutation, the command checks metadata only—never secret values—for an

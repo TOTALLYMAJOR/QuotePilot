@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 05:23:21 CDT
+Last updated: 2026-08-29 14:33:12 CDT
 
 ## Current Production Release
 
@@ -151,9 +151,9 @@ Last updated: 2026-08-29 05:23:21 CDT
   staging `acceptQuoteProposal` Functions readback does not prove
   `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`. The required order is: authorize
   and create the required non-provider staging placeholders through the secret
-  process,
-  deploy the Firebase `staging-safe-off` candidate, verify the Functions
-  readback, then deploy Vercel preview.
+  process, deploy Firebase with one explicit tracked candidate profile, verify
+  the matching Functions readback, then deploy Vercel preview with that same
+  profile.
 - The bounded release-tooling correction makes the candidate command use
   `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI for
   CI verification. A live exact-SHA run with both token environment variables
@@ -165,6 +165,28 @@ Last updated: 2026-08-29 05:23:21 CDT
   blocked items for Firebase-all, and 11 applicable and 7 blocked items for
   Vercel preview. Applicable hosted results and named human review remain
   separate evidence classes; current production remains exact `v0.15.0`.
+- The current source slice adds `staging-staffing-authority` as a separate
+  bounded candidate profile. Its CLI input, Functions dotenv, active-revision
+  readback, hosted manifest, and receipt must all prove the global staging
+  staffing gate true; positive staffing plan and surface checks become
+  applicable while the disposable-tenant gate remains a separate authorized
+  operation. Focused candidate/evidence tests pass 275/275. This is source and
+  local evidence only; no staging, production, or tenant mutation has occurred.
+- Production keyless identity configuration is now provisioned. The WIF
+  provider is restricted to the private repository's numeric owner/repository
+  ids, protected `main`, manual dispatch, and the two exact workflow refs. The
+  deploy and tenant workflows use separate service accounts; the tenant custom
+  role has only Firestore entity read/update permissions, and no key exists.
+  The three required GitHub variables are present. First token exchange and
+  governed deployment remain unverified.
+- Tenant `250` and its settings document remain absent. The owner-designated
+  admin and sales/operator Firebase accounts are verified and enabled, but the
+  admin currently owns `mm05366-sandbox` and the second account currently has a
+  customer role. A read-only canonical migration plan confirms `250` is the
+  configured production default and would create a complete tenant from the
+  legacy source. Migration apply and role transfer are held until the sandbox
+  owner/tombstone consequence is explicitly resolved; no sparse settings patch
+  or tenant activation occurred.
 - Stripe Connect remains deploy-empty/provider-disabled; Steward remains
   providerless with model output hidden; buyer access, Commercial Change,
   Revenue Autopilot, and authoritative staffing remain fail-closed. Candidate
@@ -908,10 +930,12 @@ route evidence are complete.
     responsive accessibility, rollback, and one explicitly approved tenant
     acceptance are recorded.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
-    all-positive release checklist. Provider-backed buyer, delivery, payment,
-    contract-conversion, and authoritative-staffing items need a separately
-    reviewed immutable non-production acceptance window; blocked profile items
-    cannot be omitted or attested as passed.
+    all-positive release checklist. The separately tracked
+    `staging-staffing-authority` profile can expose positive staffing checks in
+    an immutable non-production window, but it does not create or enable a
+    tenant and does not unblock provider-backed buyer, delivery, payment, or
+    contract-conversion evidence. Blocked profile items cannot be omitted or
+    attested as passed.
 14. Stripe Connect remains deliberately unexported and unbound. Do not add a
     browser control, callable, handoff route, provider credential, or worker
     deployment until the isolated staging resources, trusted authority

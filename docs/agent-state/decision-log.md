@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 05:23:21 CDT
+Last updated: 2026-08-29 14:23:06 CDT
 
-Checkpoint recorded: 2026-08-29T10:24:19.799Z
+Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
 ## Decisions made
 
@@ -33,11 +33,14 @@ Checkpoint recorded: 2026-08-29T10:24:19.799Z
 25. Preserve the all-positive production UAT contract. Do not convert safe-off blocked items into N/A, waive them because CI is green, or merge/tag/deploy while hosted and human evidence is absent. Record the current solo-operator/zero-required-review configuration as observed governance, not independent review.
 26. Isolate the default-branch `extract-zip` remediation in PR #112 so it can be reviewed and merged independently of the unqualified v0.16 product release. Exact green branch evidence does not close the default-branch alert; reviewed merge and readback do.
 27. Mark the active promotion goal strictly blocked only after the same external condition recurred across three consecutive goal turns and latest exact-CI head `8b04582` reproduced both fail-before-mutation candidate rejections. Do not merge, tag, deploy production, create secret values, provision IAM, or manufacture human acceptance to keep autonomous work moving.
+28. Superseded on 2026-08-29: the owner explicitly authorized the staffing operationalization path for tenant `250`, including preparation and execution of WIF/IAM, governed release, canonical provisioning, protected tenant activation, and rollback when their fail-closed prerequisites pass.
+29. Bind positive non-production staffing proof to a separate `staging-staffing-authority` profile. Preserve `staging-safe-off`; require the selected profile to match CLI input, Functions dotenv, active-revision readback, hosted manifest, and receipt. A global staging gate never substitutes for the separate disposable-tenant gate.
+30. Keep the three named humans in distinct duties: tenant administration/primary staffing operation, tenant sales/operator acceptance, and release/UAT review/final approval. Do not infer a GitHub reviewer identity from an email address.
 
 ## Unresolved decisions
 
 1. Resolved: the owner approved the remote review/release path and requested promotion of every capability that can pass the governed gates.
 2. Unresolved: Whether Product Truth Observability remains advisory or becomes a required CI gate after owner comprehension and freshness calibration.
-3. Unresolved: Which named owners authorize and execute the Stripe Connect, Steward, tenant activation, hosted acceptance, production evidence, and manual accessibility gates.
+3. Partially resolved: Staffing now has owner-designated administrator, sales/operator, and release/UAT roles. Stripe Connect, Steward, provider-specific, and manual accessibility ownership remains unresolved, and provider/GitHub account bindings still require verification.
 4. Unresolved: Which production-authorized Truth Loop source bundle and evaluation instant should be evaluated first.
-5. Unresolved: Who approves and provisions the production WIF provider, deploy identity, tenant-operator identity, least-privilege bindings, and repository variables.
+5. Resolved for authorization: the product owner approved the current agent to prepare and provision the WIF provider, separate deploy and tenant-operator identities, reviewed least-privilege bindings, and repository variables. Execution and provider readback remain pending and cannot be called complete from approval alone.
