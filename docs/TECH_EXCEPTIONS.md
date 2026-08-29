@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-25 00:58:05 CDT
+Last updated: 2026-08-29 04:51:41 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -17,6 +17,38 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Verification evidence:
 
 ## Active Exceptions
+
+- Date: August 29, 2026
+- Owner: QuotePilot maintainers
+- Change: Keep the latest `@lhci/cli` 0.15.1 but override the Lighthouse copies
+  used by `@lhci/cli` and `@lhci/utils` from pinned 12.6.1 to 13.4.1. The
+  resolved graph uses Puppeteer 25.9.0 and `@puppeteer/browsers` 3.2.1 and no
+  longer installs `extract-zip`.
+- Exception type: `major-upgrade`
+- Rationale: The latest LHCI release still pins the vulnerable Lighthouse 12
+  chain. The registry-proposed forced repair downgrades LHCI to 0.12.0 and is
+  not an acceptable release-tool rollback. The narrow override removes all six
+  high-severity root development findings while retaining the tracked LHCI
+  collection, assertion, and filesystem-report contract.
+- Risk impact: LHCI 0.15.1 was released against Lighthouse 12.6.1, so
+  Lighthouse 13.4.1 is an upstream-unsupported pairing even though the public
+  autorun contract passes locally. Lighthouse 13.4.1 also requires Node 22.19
+  or newer; local validation uses Node 22.22.2, and exact remote CI must prove
+  the hosted Node 22 runner resolves a compatible patch before merge.
+- Performance impact: Audit scoring or metric implementation may shift across
+  the Lighthouse major version. QuotePilot does not relax any threshold: the
+  existing performance, LCP, CLS, and TBT assertions remain unchanged.
+- Rollback plan: Revert the two package overrides and regenerated lockfile.
+  That restores the previous LHCI graph but also restores the six known high
+  findings, so the rollback is diagnostic only and must not be promoted as a
+  production-ready candidate.
+- Exit criteria: Adopt an LHCI release that natively depends on a
+  non-vulnerable Lighthouse/Puppeteer graph, remove the overrides, and pass the
+  dependency audit plus the same local and exact-CI CWV gates.
+- Verification evidence: `npm ls` resolves Lighthouse 13.4.1, Puppeteer
+  25.9.0, and `@puppeteer/browsers` 3.2.1 with no `extract-zip`; `npm audit`
+  reports zero findings and the unchanged real local CWV gate passes. Exact
+  remote CI remains required before merge.
 
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers
