@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 19:17:34 CDT
+Last updated: 2026-08-28 19:23:58 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1653,7 +1653,7 @@ Complete every item before calling the new tenant operational:
   create a duplicate. QuotePilot supplies the sender name and time from trusted
   server context rather than accepting them from the browser. Declined quotes
   expose history as read-only.
-- Portal responses support `Accept proposal`, `Ask for changes`, and `Decline proposal`; a change request requires a customer note.
+- Portal responses support `Accept proposal`, `Ask for changes`, and `Decline proposal`; a change request requires a customer note. A pending proposal begins with no response selected and keeps notes, signature controls, and the final submit action hidden until the customer intentionally chooses one of those responses.
 - To accept, the customer selects `Accept proposal`, types their full legal
   name, checks the electronic-signature statement, and chooses
   `Sign and accept proposal`.

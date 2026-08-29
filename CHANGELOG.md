@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 19:17:34 CDT
+Last updated: 2026-08-28 19:23:58 CDT
 
 All notable project changes are documented in this file.
 
@@ -233,6 +233,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   exact planning view or quote record; direct live/replay links explain the
   unavailable capability and offer a truthful return to **Event Focus** instead
   of sending the operator into another predictable dead end.
+- Made both active and compatibility customer proposal rooms neutral by default.
+  New proposal visits no longer preselect acceptance or expose signature and
+  submission controls before the customer chooses a response; recorded prior
+  decisions still reload truthfully, and the existing exact-revision consent,
+  reconciliation, payment, and booking boundaries remain unchanged.
 - Kept shared desktop context inspectors inside the visible viewport when their
   invoking object sits near the left or right edge. Current Event-date browser
   proof found a 432px inspector beginning at x = -84.6px on a 1440px viewport,
