@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 20:07:52 CDT
+Last updated: 2026-08-28 20:11:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -39,6 +39,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   recommendation once required readiness and saved staffing are satisfied. No
   payment request, settlement, quote edit, staffing change, or provider action
   is performed by this presentation contract.
+- Added one connected Firebase arrival suite for exact Conversation, Payment,
+  and Proposal continuations plus a Conversation accessibility acceptance
+  matrix. The suite holds the governing reads, distinguishes pending from ready,
+  verifies exact focus and record identity, captures 320/640/390/1440 reflow
+  evidence, and runs axe on the resolved Messaging Station. This is local
+  connected evidence only; real zoom, screen reader, switch control, hosted,
+  production, provider, and human acceptance remain explicit stronger gates.
 - Added one fail-closed canonical browser-arrival protocol for quote-scoped
   **Payment**, **Proposal**, and general **Conversation** intent. Payment and
   Proposal target the existing Quote administration route with exact quote and
