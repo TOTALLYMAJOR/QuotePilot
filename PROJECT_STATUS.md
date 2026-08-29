@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 02:05:00 CDT
+Last updated: 2026-08-29 02:21:11 CDT
 
 ## Current Production Release
 
@@ -97,6 +97,10 @@ Last updated: 2026-08-29 02:05:00 CDT
   and create the non-provider staging placeholder through the secret process,
   deploy the Firebase `staging-safe-off` candidate, verify the Functions
   readback, then deploy Vercel preview.
+- A pending bounded release-tooling correction makes the candidate command use
+  `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI for
+  CI verification. It fails clearly when none is available and changes no
+  deployment authority, secret handling, provider target, or promotion gate.
 - The tracked `staging-safe-off` UAT plan still has 17 applicable and 21
   blocked items for Firebase-all, and 11 applicable and 7 blocked items for
   Vercel preview. Applicable hosted results and named human review remain

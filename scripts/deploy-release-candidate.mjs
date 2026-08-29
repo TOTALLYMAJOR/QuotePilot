@@ -115,6 +115,23 @@ async function fetchJson(url, { token = "", label = "Provider" } = {}) {
   }
 }
 
+export function resolveGitHubToken({
+  env = process.env,
+  readCliToken = () => capture("gh", ["auth", "token"], { env })
+} = {}) {
+  const configured = String(env.GITHUB_TOKEN || env.GH_TOKEN || "").trim();
+  if (configured) return configured;
+  try {
+    const cliToken = String(readCliToken() || "").trim();
+    if (cliToken) return cliToken;
+  } catch {
+    // Replace provider- or CLI-specific output with the bounded remediation below.
+  }
+  throw new Error(
+    "Release candidate rejected: GitHub CI verification requires GITHUB_TOKEN, GH_TOKEN, or an authenticated GitHub CLI session."
+  );
+}
+
 function validateWorkspace(releaseSha) {
   const head = requireFullSha(capture("git", ["rev-parse", "HEAD"]), "HEAD");
   if (head !== releaseSha) throw new Error("Release candidate rejected: HEAD does not match --release-sha.");
@@ -134,15 +151,14 @@ async function verifyCi(ciRunId, releaseSha, branch) {
   if (!/^[1-9][0-9]*$/.test(ciRunId)) {
     throw new Error("Release candidate rejected: CI run id must be a positive integer.");
   }
-  const token = String(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
-  const headersToken = token;
+  const token = resolveGitHubToken();
   const base = `https://api.github.com/repos/${RELEASE_CANDIDATE_POLICY.repository.fullName}`;
   const run = await fetchJson(`${base}/actions/runs/${ciRunId}`, {
-    token: headersToken,
+    token,
     label: "GitHub CI run"
   });
   const jobsResponse = await fetchJson(`${base}/actions/runs/${ciRunId}/jobs?per_page=100`, {
-    token: headersToken,
+    token,
     label: "GitHub CI jobs"
   });
   if (Number(jobsResponse.total_count) > 100) {
@@ -704,4 +720,6 @@ async function main() {
   }
 }
 
-await main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

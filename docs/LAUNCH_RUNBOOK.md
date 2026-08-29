@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-28 10:22:18 CDT
+Last updated: 2026-08-29 02:21:11 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -914,8 +914,11 @@ preview build uses an explicit exact-staging validation profile; ordinary
 readback showing the coordinated staging Functions retain every fail-closed
 runtime value before it deploys the browser preview.
 
-Use an authenticated local CLI or the provider token environment variable. The
-command never uses a production target/alias. It exclusively reserves
+GitHub CI verification resolves authentication in this order:
+`GITHUB_TOKEN`, `GH_TOKEN`, then the authenticated local GitHub CLI session.
+If none is available, the command fails with bounded remediation before any
+provider mutation; it never prints the token. The command never uses a
+production target/alias. It exclusively reserves
 `artifacts/release/candidates/<sha>/<target>.json` before provider mutation.
 Build/preflight failures remain `failed`; an attempted provider mutation that
 cannot be completely verified remains `partial`, including any deployment URL

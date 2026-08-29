@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 01:51:51 CDT
+Last updated: 2026-08-29 02:21:11 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Hardened the governed release-candidate preflight so GitHub CI verification
+  resolves authentication from `GITHUB_TOKEN`, then `GH_TOKEN`, then the
+  authenticated local GitHub CLI. If none is available, it now stops with a
+  bounded remediation before any provider mutation and never logs the token.
 - Reconciled the production-equivalent Ambient bundle exception to the exact
   assembled v0.16 candidate rather than the earlier partial-source checkpoint.
   Exact-SHA CI measured 3,928,479 aggregate bytes and the CI-equivalent local

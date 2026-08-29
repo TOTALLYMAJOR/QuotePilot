@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-28 20:34:32 CDT
+Last updated: 2026-08-29 02:21:11 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -137,7 +137,10 @@ explicit owner promotion after real-run review.
    binds Hosting, active Functions revisions and fail-closed runtime readback,
    and the exact Firestore release/ruleset; Vercel requires the coordinated
    staging-Functions readback. It cannot promote an alias or enable operational
-   staffing authority.
+   staffing authority. GitHub CI verification resolves authentication from
+   `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI; if
+   none is available, the command stops before provider mutation and never
+   prints credential material.
    Each candidate manifest and receipt binds the tracked `staging-safe-off`
    UAT profile. Run
    `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`

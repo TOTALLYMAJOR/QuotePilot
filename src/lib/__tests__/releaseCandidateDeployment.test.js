@@ -19,6 +19,7 @@ import {
   validateFirebaseRulesReadback,
   validateVercelReceipt
 } from "../../../scripts/release-candidate-policy.mjs";
+import { resolveGitHubToken } from "../../../scripts/deploy-release-candidate.mjs";
 
 const ROOT = process.cwd();
 const SCRIPT = path.join(ROOT, "scripts", "deploy-release-candidate.mjs");
@@ -78,6 +79,31 @@ function readCandidateReceipt(reservation) {
 }
 
 describe("governed release candidate deployment", () => {
+  test("uses explicit GitHub tokens before the authenticated CLI fallback", () => {
+    expect(resolveGitHubToken({
+      env: { GITHUB_TOKEN: "github-token", GH_TOKEN: "gh-token" },
+      readCliToken: () => {
+        throw new Error("CLI must not be read when GITHUB_TOKEN exists");
+      }
+    })).toBe("github-token");
+    expect(resolveGitHubToken({
+      env: { GH_TOKEN: "gh-token" },
+      readCliToken: () => {
+        throw new Error("CLI must not be read when GH_TOKEN exists");
+      }
+    })).toBe("gh-token");
+    expect(resolveGitHubToken({
+      env: {},
+      readCliToken: () => "cli-token"
+    })).toBe("cli-token");
+    expect(() => resolveGitHubToken({
+      env: {},
+      readCliToken: () => {
+        throw new Error("provider-specific authentication output");
+      }
+    })).toThrow(/GITHUB_TOKEN, GH_TOKEN, or an authenticated GitHub CLI session/i);
+  });
+
   test("accepts only exact successful release-branch CI evidence", () => {
     const fixture = ciFixture();
     expect(validateCandidateCiEvidence({ ...fixture, releaseSha: SHA, branch: BRANCH }))

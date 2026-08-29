@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 02:05:00 CDT
+Last updated: 2026-08-29 02:21:11 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -108,6 +108,11 @@ provider, tenant, physical-device, and human results remain separate.
 - The governed Vercel preview command also stopped before mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions
   readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
+- Release-candidate CI authentication is hardened in the pending repository
+  slice: the tool uses `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated
+  local GitHub CLI, and otherwise fails clearly before provider mutation. This
+  removes the misleading unauthenticated GitHub API 404 without weakening any
+  staging, secret, UAT, or production prerequisite.
 - The maximum safe promotion achieved in this pass is therefore publication
   plus exact-SHA CI qualification. No Firebase staging, Vercel preview, main,
   tag, production, tenant, Stripe, Steward, SMS, or buyer-access mutation was
