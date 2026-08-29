@@ -1,21 +1,20 @@
 name: Set Operational Staffing Tenant
-run-name: staffing-tenant/${{ inputs.organization_id }}/${{ inputs.enabled }}/${{ inputs.release_sha }}/${{ inputs.firebase_deploy_run_id }}
+run-name: staffing-tenant/v2/${{ inputs.organization_id }}/${{ inputs.enabled }}/${{ inputs.deployed_release_sha }}/${{ inputs.firebase_deploy_run_id }}/${{ github.sha }}
 
 on:
   workflow_dispatch:
     inputs:
-      release_sha:
-        description: Full deployed tagged main commit SHA
+      deployed_release_sha:
+        description: Full tagged commit SHA currently deployed by the supplied Firebase all-scope run
         required: true
         type: string
       firebase_deploy_run_id:
-        description: Successful Firebase all-scope deployment run id for release_sha
+        description: Successful Firebase all-scope deployment run id for deployed_release_sha
         required: true
         type: string
       organization_id:
-        description: Exact numeric organization id
+        description: Exact numeric organization id or approved founder-pilot organization
         required: true
-        default: "250"
         type: string
       enabled:
         description: Requested tenant authority state
@@ -37,34 +36,51 @@ concurrency:
 jobs:
   set_tenant:
     name: Verify deployment + Set Tenant
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
     permissions:
       actions: read
       contents: read
+      id-token: write
     steps:
-      - name: Checkout exact release SHA
+      - name: Checkout exact operator workflow SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.release_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify exact Firebase all-scope deployment
+      - name: Verify exact deployed staffing runtime
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ inputs.release_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}
           FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${WORKFLOW_SHA}"
+          git cat-file -e "${DEPLOYED_RELEASE_SHA}^{commit}"
+          git tag --points-at "${DEPLOYED_RELEASE_SHA}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+          git show "${DEPLOYED_RELEASE_SHA}:.github/workflows/deploy-firebase-hosting.yml" \
+            > "${RUNNER_TEMP}/deployed-firebase-workflow.yml"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const source = fs.readFileSync(process.argv[1], "utf8");
+            const serverGate = (source.match(/OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"/g) || []).length;
+            const browserGate = (source.match(/VITE_OPERATIONAL_STAFFING_ENABLED: "true"/g) || []).length;
+            if (serverGate !== 1 || browserGate !== 1) {
+              throw new Error("The deployed release workflow does not bind both staffing gates exactly once.");
+            }
+          ' "${RUNNER_TEMP}/deployed-firebase-workflow.yml"
           gh run view "${FIREBASE_DEPLOY_RUN_ID}" \
             --json conclusion,event,headSha,workflowName,displayTitle \
             > "${RUNNER_TEMP}/firebase-deploy.json"
           node --input-type=module -e '
             import fs from "node:fs";
             const evidence = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-            const release = process.env.RELEASE_SHA;
+            const release = process.env.DEPLOYED_RELEASE_SHA;
             const valid = evidence.conclusion === "success"
               && evidence.event === "workflow_dispatch"
               && evidence.headSha === release
@@ -78,9 +94,31 @@ jobs:
         with:
           node-version: 22
 
+      - name: Validate staffing tenant workload identity configuration
+        env:
+          FIREBASE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT: ${{ vars.FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "${FIREBASE_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT}"
+          [[ "${FIREBASE_WORKLOAD_IDENTITY_PROVIDER}" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[^/]+/providers/[^/]+$ ]]
+          [[ "${FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT}" =~ ^[^@[:space:]]+@tonicatering\.iam\.gserviceaccount\.com$ ]]
+
+      - name: Authenticate staffing tenant operator
+        id: google_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/datastore
+          create_credentials_file: false
+          export_environment_variables: false
+
       - name: Set and verify exact tenant field
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.google_auth.outputs.access_token }}
           ORGANIZATION_ID: ${{ inputs.organization_id }}
           REQUESTED_ENABLED: ${{ inputs.enabled }}
           TENANT_CONFIRMATION: ${{ inputs.confirmation }}
@@ -95,13 +133,15 @@ jobs:
         env:
           ORGANIZATION_ID: ${{ inputs.organization_id }}
           REQUESTED_ENABLED: ${{ inputs.enabled }}
-          RELEASE_SHA: ${{ inputs.release_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}
           FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
         run: |
           {
             echo "### Operational staffing tenant state verified"
             echo "- Organization: ${ORGANIZATION_ID}"
             echo "- Enabled: ${REQUESTED_ENABLED}"
-            echo "- Release SHA: ${RELEASE_SHA}"
+            echo "- Operator workflow SHA: ${WORKFLOW_SHA}"
+            echo "- Deployed release SHA: ${DEPLOYED_RELEASE_SHA}"
             echo "- Firebase deploy run: ${FIREBASE_DEPLOY_RUN_ID}"
           } >> "${GITHUB_STEP_SUMMARY}"

@@ -1,10 +1,12 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: August 13, 2026
+Last updated: 2026-08-29 18:27:06 CDT
 
-Status: source implementation behind independent default-off presentation,
-server, and tenant gates. This decision record does not establish deployment,
-production data, provider behavior, or human acceptance.
+Status: deployed in exact `v0.15.0` behind independent presentation, server,
+and tenant gates. The first two gates are deployed on; the selected founder
+pilot tenant remains unset pending the protected WIF operation. Deployment and
+tenant readback do not establish hosted behavior, provider outcomes, or human
+acceptance.
 
 ## Decision
 
@@ -61,10 +63,14 @@ All three gates must remain independent:
 - `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true` enables the server authority.
 - `settings.operationalStaffingAuthorityEnabled=true` enables one exact tenant.
 
-The browser cannot promote either authority gate. A visible source surface,
+The browser cannot promote any authority gate. A visible source surface,
 successful local test, or enabled presentation flag is not authority when the
-server or tenant gate is off. Production workflows do not bind these new gates
-until a separately reviewed rollout.
+server or tenant gate is off. The protected tenant operator runs from current
+`main`, independently verifies the exact tagged Firebase-all production
+runtime and both deployed global bindings, then uses a distinct
+Datastore-scoped WIF identity to patch and read back only the approved tenant
+field. Operator publication, deployed runtime, tenant activation, hosted use,
+and human acceptance remain separate evidence events.
 
 ## Roles and Tenant Scope
 

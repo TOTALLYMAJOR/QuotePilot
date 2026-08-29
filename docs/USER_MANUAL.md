@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-25 00:38:30 CDT
+Last updated: 2026-08-29 18:27:06 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -155,10 +155,13 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   gate does not turn on either of the others, deploy the source, or establish
   hosted, production-data, or human acceptance.
 - Production operators promote or roll back the tenant gate through the
-  protected **Set Operational Staffing Tenant** release workflow after an exact
-  successful Firebase all-scope deployment. The workflow changes only the named
-  tenant field and verifies readback; it does not create staffing or email
-  evidence.
+  protected **Set Operational Staffing Tenant** workflow against an exact
+  tagged release with a successful Firebase all-scope deployment. The operator
+  workflow runs from current `main` and may verify an older tagged commit
+  that is still the deployed runtime; this does not deploy the current branch.
+  It changes only the accepted named tenant field through the tenant-operator
+  WIF identity and verifies readback; it does not create staffing, invitation,
+  provider, or human-acceptance evidence.
 - In the flagged Event Workspace, open the exact quote and select `Inspect
   staffing`. The panel reads only that tenant and quote, binds commercial role
   counts and the event window to the exact active immutable quote revision,
