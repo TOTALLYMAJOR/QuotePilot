@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-25 02:06:28 CDT
+Last updated: 2026-08-29 18:27:06 CDT
 
 ## Current Production Release
 
@@ -65,19 +65,22 @@ Last updated: 2026-08-25 02:06:28 CDT
 
 ## Pending Production Completion
 
-- Tenant activation run `32425529671` verified the then-current successful `v0.14.0`
-  Firebase all-scope receipt, then failed closed before any patch because
-  `organizations/250/settings/config` does not exist. The workflow did not
-  record tenant activation.
-- Before retrying activation, run a separately reviewed tenant-scoped
-  migration/provisioning dry run to prove organization `250` exists and to
-  establish its required `settings/config` document through the canonical
-  tenant-data path. Do not bypass the protected workflow or create a sparse
-  settings document solely to force the staffing flag.
-- After the precondition is reviewed and applied, rerun **Set Operational
-  Staffing Tenant** against Firebase deployment run `32818605404`, organization
-  `250`, and `enabled=true`, then retain its verified readback before beginning
-  authenticated staff acceptance.
+- Historical tenant activation run `32425529671` verified the then-current
+  successful `v0.14.0` Firebase all-scope receipt, then failed closed before
+  any patch because `organizations/250/settings/config` does not exist. Tenant
+  `250` remains absent and will not be created for the founder pilot.
+- The owner selected existing organization `mm05366-sandbox` for the founder
+  pilot. Read-only production inspection confirms it is active, owner-bound,
+  catalog-populated, already has staffing records and a canonical settings
+  document, and currently has `operationalStaffingAuthorityEnabled` unset.
+- Branch `ops/founder-staffing-sandbox` prepares the smallest production-data
+  operation: current-main operator code verifies tagged deployed `v0.15.0`
+  SHA `bc495c8c948d440b12363d5da34209a11ff151fd`, Firebase all-scope run
+  `32818605404`, and both deployed staffing gates before the separate
+  least-privilege WIF identity may patch and read back only the sandbox tenant
+  field. No application deployment or provider activation is part of this
+  operation. Merge, workflow success, authenticated role/denial checks,
+  rollback, and explicit founder acceptance remain pending.
 - Production configuration names Resend as the email provider and pins owner
   SMS to `pingram` generation `pingram-2026-08-14-a`. Configuration does not
   prove provider acceptance, delivery,
@@ -729,13 +732,12 @@ route evidence are complete.
     Firebase removes the legacy API in March 2027.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
-12. Operational staffing code and authority are deployed in exact `v0.15.0`
-    but remain independently default-off and unavailable to tenant `250`; the
-    protected activation run failed closed because the canonical settings
-    document is absent. Do not bypass provisioning or enable its tenant gate
-    until the reviewed migration path, exact hosted admin/sales/customer denial,
-    responsive accessibility, rollback, and one explicitly approved tenant
-    acceptance are recorded.
+12. Operational staffing code and both global gates are deployed in exact
+    `v0.15.0`; the tenant gate remains unset for selected founder-pilot tenant
+    `mm05366-sandbox`. The narrow protected-operator change must merge and pass
+    exact CI before activation. After activation, exact hosted admin/sales and
+    denied-role behavior, responsive accessibility, rollback, and explicit
+    founder acceptance remain separate evidence.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
     all-positive release checklist. Provider-backed buyer, delivery, payment,
     contract-conversion, and authoritative-staffing items need a separately

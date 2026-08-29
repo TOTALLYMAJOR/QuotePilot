@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: August 9, 2026
+Last updated: 2026-08-29 18:27:06 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -346,23 +346,30 @@ activation. Before activation:
    readiness evidence. A coverage-confirmed staffing plan proves only the exact
    operator-recorded assignments and schedule-fence check in its receipt.
 
-After the exact tagged release passes main CI and the Firebase `all` deployment
-succeeds, use **Set Operational Staffing Tenant** for the one-tenant promotion.
-Supply the same release SHA, the successful Firebase deployment run id, numeric
-organization id, requested boolean state, and the exact displayed confirmation
-(`SET operational staffing true for organization 250` for the production test).
-The protected workflow accepts only an exact successful Firebase all-scope run,
-reads the current settings document, patches only
+After an exact tagged release has a successful Firebase `all` deployment, use
+**Set Operational Staffing Tenant** for the separately authorized one-tenant
+promotion. The workflow itself must run from current `main`, but the deployed
+release may be an older tagged commit when it remains the verified production
+runtime. Supply that deployed release SHA, its successful Firebase deployment
+run id, an accepted numeric organization id or the single approved founder
+pilot `mm05366-sandbox`, the requested boolean state, and the exact displayed
+confirmation (`SET operational staffing true for organization
+mm05366-sandbox` for the founder pilot). The protected workflow verifies the
+operator checkout, semantic release tag, exact successful Firebase
+all-scope run, and both staffing bindings in the deployed release workflow. It
+then uses only the tenant-operator WIF identity with Datastore scope, reads the
+current settings document, patches only
 `operationalStaffingAuthorityEnabled`, and verifies the readback. Use the same
 workflow with `false` and its matching confirmation for tenant-gate rollback.
 Its success proves only that one configuration field was verified; it does not
 prove provider delivery, staff acknowledgement, attendance, payroll, or human
 acceptance.
 
-Rollback disables the presentation and global server gates and returns the
-exact tenant setting to false. Preserve immutable records and receipts for a
-later exact read; never rewrite operational history to simulate rollback. See
-the [authority ADR](OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
+Tenant rollback returns the exact tenant setting to false without redeploying
+or rewriting immutable records. Full release rollback may separately disable
+the presentation and global server gates. Preserve immutable records and
+receipts for a later exact read; never rewrite operational history to simulate
+rollback. See the [authority ADR](OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
 
 ### Revenue Autopilot activation gate
 

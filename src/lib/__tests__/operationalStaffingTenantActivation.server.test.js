@@ -18,12 +18,28 @@ describe("operational staffing tenant activation", () => {
       "--enabled", "true",
       "--confirm", "SET operational staffing true for organization 250"
     ])).toMatchObject({ projectId: "tonicatering", organizationId: "250", enabled: true });
+    expect(parseTenantActivationArgs([
+      "--project", "tonicatering",
+      "--organization", "mm05366-sandbox",
+      "--enabled", "true",
+      "--confirm", "SET operational staffing true for organization mm05366-sandbox"
+    ])).toMatchObject({
+      projectId: "tonicatering",
+      organizationId: "mm05366-sandbox",
+      enabled: true
+    });
     expect(() => parseTenantActivationArgs([
       "--project", "other",
       "--organization", "250",
       "--enabled", "true",
       "--confirm", "SET operational staffing true for organization 250"
     ])).toThrow(/restricted/u);
+    expect(() => parseTenantActivationArgs([
+      "--project", "tonicatering",
+      "--organization", "unapproved-sandbox",
+      "--enabled", "true",
+      "--confirm", "SET operational staffing true for organization unapproved-sandbox"
+    ])).toThrow(/approved founder-pilot/u);
     expect(() => parseTenantActivationArgs([
       "--project", "tonicatering",
       "--organization", "250",
@@ -35,7 +51,6 @@ describe("operational staffing tenant activation", () => {
   test("patches only the named tenant field and verifies readback", async () => {
     const documentUrl = firestoreDocumentUrl({ projectId: "tonicatering", organizationId: "250" });
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(response({ access_token: "bounded-access-token" }))
       .mockResolvedValueOnce(response({ fields: { catalogRevision: { integerValue: "4" } } }))
       .mockResolvedValueOnce(response(tenantSettingPatch(true)))
       .mockResolvedValueOnce(response(tenantSettingPatch(true)));
@@ -44,15 +59,15 @@ describe("operational staffing tenant activation", () => {
       projectId: "tonicatering",
       organizationId: "250",
       enabled: true,
-      firebaseToken: "refresh-token",
+      accessToken: "bounded-access-token",
       fetchImpl
     });
 
     expect(result).toMatchObject({ before: false, after: true, changed: true });
-    expect(fetchImpl.mock.calls[2][0]).toBe(
+    expect(fetchImpl.mock.calls[1][0]).toBe(
       `${documentUrl}?updateMask.fieldPaths=operationalStaffingAuthorityEnabled`
     );
-    const patch = fetchImpl.mock.calls[2][1];
+    const patch = fetchImpl.mock.calls[1][1];
     expect(patch.method).toBe("PATCH");
     expect(JSON.parse(patch.body)).toEqual(tenantSettingPatch(true));
     expect(JSON.stringify(patch)).not.toContain("catalogRevision");
@@ -60,17 +75,26 @@ describe("operational staffing tenant activation", () => {
 
   test("does not rewrite a tenant already in the requested state", async () => {
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(response({ access_token: "bounded-access-token" }))
       .mockResolvedValueOnce(response(tenantSettingPatch(false)))
       .mockResolvedValueOnce(response(tenantSettingPatch(false)));
     const result = await setOperationalStaffingTenant({
       projectId: "tonicatering",
       organizationId: "250",
       enabled: false,
-      firebaseToken: "refresh-token",
+      accessToken: "bounded-access-token",
       fetchImpl
     });
     expect(result.changed).toBe(false);
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  test("requires a workload-identity access token", async () => {
+    await expect(setOperationalStaffingTenant({
+      projectId: "tonicatering",
+      organizationId: "mm05366-sandbox",
+      enabled: true,
+      accessToken: "",
+      fetchImpl: vi.fn()
+    })).rejects.toThrow(/workload-identity access token/u);
   });
 });

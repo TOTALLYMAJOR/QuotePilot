@@ -3,10 +3,8 @@
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-const FIREBASE_CLI_CLIENT_ID = "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com";
-const FIREBASE_CLI_CLIENT_SECRET = "j9iVZfS8kkCEFUPaAeJV0sAi";
-const TOKEN_ENDPOINT = "https://www.googleapis.com/oauth2/v3/token";
 const FIRESTORE_ORIGIN = "https://firestore.googleapis.com";
+const FOUNDER_PILOT_ORGANIZATION_ID = "mm05366-sandbox";
 
 function argValue(argv, name, fallback = "") {
   const index = argv.indexOf(name);
@@ -19,7 +17,11 @@ export function parseTenantActivationArgs(argv = process.argv.slice(2)) {
   const rawEnabled = argValue(argv, "--enabled").toLowerCase();
   const confirmation = argValue(argv, "--confirm");
   if (projectId !== "tonicatering") throw new Error("Tenant activation is restricted to project tonicatering.");
-  if (!/^\d{1,12}$/u.test(organizationId)) throw new Error("A numeric organization id is required.");
+  const numericOrganization = /^\d{1,12}$/u.test(organizationId);
+  const approvedFounderPilot = organizationId === FOUNDER_PILOT_ORGANIZATION_ID;
+  if (!numericOrganization && !approvedFounderPilot) {
+    throw new Error("A numeric organization id or the approved founder-pilot organization is required.");
+  }
   if (!new Set(["true", "false"]).has(rawEnabled)) throw new Error("--enabled must be true or false.");
   const enabled = rawEnabled === "true";
   const expectedConfirmation = `SET operational staffing ${rawEnabled} for organization ${organizationId}`;
@@ -51,26 +53,6 @@ async function responseJson(response, label) {
   return body;
 }
 
-async function exchangeFirebaseToken(refreshToken, fetchImpl) {
-  const body = new URLSearchParams({
-    refresh_token: refreshToken,
-    client_id: FIREBASE_CLI_CLIENT_ID,
-    client_secret: FIREBASE_CLI_CLIENT_SECRET,
-    grant_type: "refresh_token",
-    scope: "https://www.googleapis.com/auth/cloud-platform"
-  });
-  const response = await fetchImpl(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
-    signal: AbortSignal.timeout(15_000)
-  });
-  const payload = await responseJson(response, "Firebase credential exchange");
-  const accessToken = String(payload.access_token || "").trim();
-  if (!accessToken) throw new Error("Firebase credential exchange returned no access token.");
-  return accessToken;
-}
-
 function settingValue(document) {
   return document?.fields?.operationalStaffingAuthorityEnabled?.booleanValue === true;
 }
@@ -79,15 +61,14 @@ export async function setOperationalStaffingTenant({
   projectId,
   organizationId,
   enabled,
-  firebaseToken,
+  accessToken,
   fetchImpl = globalThis.fetch
 }) {
   if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
-  const refreshToken = String(firebaseToken || "").trim();
-  if (!refreshToken) throw new Error("FIREBASE_TOKEN is required.");
-  const accessToken = await exchangeFirebaseToken(refreshToken, fetchImpl);
+  const bearerToken = String(accessToken || "").trim();
+  if (!bearerToken) throw new Error("A workload-identity access token is required.");
   const documentUrl = firestoreDocumentUrl({ projectId, organizationId });
-  const headers = { authorization: `Bearer ${accessToken}` };
+  const headers = { authorization: `Bearer ${bearerToken}` };
   const beforeDocument = await responseJson(await fetchImpl(documentUrl, {
     headers,
     signal: AbortSignal.timeout(15_000)
@@ -115,10 +96,13 @@ async function main() {
   if (process.env.GITHUB_ACTIONS !== "true" || process.env.GITHUB_REF !== "refs/heads/main") {
     throw new Error("Production tenant activation is restricted to a main-branch GitHub Actions run.");
   }
+  if (String(process.env.FIREBASE_TOKEN || "").trim()) {
+    throw new Error("Production tenant activation forbids legacy FIREBASE_TOKEN authentication.");
+  }
   const options = parseTenantActivationArgs();
   const result = await setOperationalStaffingTenant({
     ...options,
-    firebaseToken: process.env.FIREBASE_TOKEN
+    accessToken: process.env.GOOGLE_OAUTH_ACCESS_TOKEN
   });
   console.log(
     `Operational staffing tenant setting verified for organization ${result.organizationId}: `

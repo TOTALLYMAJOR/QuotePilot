@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-25 02:06:28 CDT
+Last updated: 2026-08-29 18:27:06 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Prepared a narrow staffing-operations path for the already deployed
+  `v0.15.0` runtime. The protected tenant workflow now runs operator code from
+  the exact current `main` SHA while independently verifying the tagged
+  Firebase-all deployment SHA and run, including both deployed
+  staffing gates. It accepts numeric tenant ids or only the approved
+  `mm05366-sandbox`, removes the preselected tenant, authenticates through the
+  least-privilege tenant-operator WIF identity, patches only
+  `operationalStaffingAuthorityEnabled`, and verifies readback. This does not
+  deploy v0.16, activate Stripe Connect, send invitations, or claim hosted or
+  human acceptance.
 - Recorded exact `v0.15.0` production promotion: SHA
   `bc495c8c948d440b12363d5da34209a11ff151fd` passed exact-main CI run
   `32817744859`, then reached Firebase in all-scope run `32818605404` and the

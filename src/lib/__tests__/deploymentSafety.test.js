@@ -222,7 +222,18 @@ describe("direct production deployment safety", () => {
     expect(runSteps).not.toContain("${{ inputs.");
     expect(source).toMatch(/ORGANIZATION_ID:\s*\$\{\{ inputs\.organization_id \}\}/u);
     expect(source).toMatch(/TENANT_CONFIRMATION:\s*\$\{\{ inputs\.confirmation \}\}/u);
-    expect(source).toMatch(/FIREBASE_TOKEN:\s*\$\{\{ secrets\.FIREBASE_TOKEN \}\}/u);
+    expect(source).toMatch(/GOOGLE_OAUTH_ACCESS_TOKEN:\s*\$\{\{ steps\.google_auth\.outputs\.access_token \}\}/u);
+    expect(source).toContain("FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT");
+    expect(source).toContain("https://www.googleapis.com/auth/datastore");
+    expect(source).toContain("id-token: write");
+    expect(source).toContain("ref: ${{ github.sha }}");
+    expect(source).toContain("DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}");
+    expect(source).toContain('git tag --points-at "${DEPLOYED_RELEASE_SHA}"');
+    expect(source).toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
+    expect(source).toContain("VITE_OPERATIONAL_STAFFING_ENABLED");
+    expect(source).not.toContain("github.sha == inputs.deployed_release_sha");
+    expect(source).not.toContain("git merge-base --is-ancestor");
+    expect(source).not.toContain("secrets.FIREBASE_TOKEN");
   });
 
   test("keeps one canonical deploy command per production target", () => {
