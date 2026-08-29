@@ -303,14 +303,22 @@ function writeCandidateManifest(
   return manifest;
 }
 
-async function validateHostedManifest(url, expected) {
-  const manifest = await fetchJson(`${url}/release-candidate.json?sha=${expected.sourceSha}`, {
-    label: "Hosted release candidate manifest"
-  });
-  if (JSON.stringify(manifest) !== JSON.stringify(expected)) {
-    throw new Error("Release candidate rejected: hosted source/authority manifest did not match the exact candidate.");
+export async function validateHostedManifest(url, expected, {
+  fetchManifest = fetchJson,
+  wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+  attempts = 6,
+  delayMs = 2_000
+} = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const manifest = await fetchManifest(`${url}/release-candidate.json?sha=${expected.sourceSha}`, {
+      label: "Hosted release candidate manifest"
+    });
+    if (JSON.stringify(manifest) === JSON.stringify(expected)) {
+      return `${url}/release-candidate.json`;
+    }
+    if (attempt < attempts) await wait(delayMs);
   }
-  return `${url}/release-candidate.json`;
+  throw new Error("Release candidate rejected: hosted source/authority manifest did not match the exact candidate.");
 }
 
 function firebaseTokenArgs() {

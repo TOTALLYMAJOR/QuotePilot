@@ -1,6 +1,6 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 16:25:52 CDT
+Last updated: 2026-08-29 16:46:03 CDT
 
 Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
@@ -35,6 +35,12 @@ Checkpoint recorded: 2026-08-29T19:20:40.340Z
   stopped at live-channel comparison because the Hosting API represented that
   same version under the fixed project ID instead of the fixed numeric project.
   Its receipt is also `partial`; Functions and Rules readback did not complete.
+  Exact `d3e39ea` passed CI Quality run `33276172442` and both Stripe workflows,
+  deployed Hosting version `51c59ac877bdf597`, then stopped when its immediate
+  hosted-manifest read still observed the prior release. Three no-cache reads
+  seconds later returned exact `d3e39ea`, run `33276172442`, the positive
+  staffing profile, and both staffing gates true. This proves propagation lag,
+  but the receipt remains `partial` because the governed run had already ended.
 - Why it matters: The candidate process failed at explicit, independently
   repairable client/analyzer boundaries without converting partial execution
   into a successful staging claim.

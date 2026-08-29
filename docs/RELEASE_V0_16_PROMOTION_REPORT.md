@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 16:25:52 CDT
+Last updated: 2026-08-29 16:46:03 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -173,6 +173,12 @@ human results remain separate.
   `quotepilot-staging-20260804`, while the deploy result uses numeric project
   `844470813106`. The next repair normalizes only those two already-pinned
   identifiers before comparing the unchanged version id.
+- Exact `d3e39ea` and CI Quality run `33276172442` then passed that identity
+  boundary and deployed Hosting version `51c59ac877bdf597`, but the immediate
+  hosted source-manifest read observed propagation lag. Three no-cache reads
+  seconds later matched the exact SHA, CI run, positive profile, and both
+  staffing gates. The source repair retries the same strict equality for at
+  most ten seconds; it never accepts a stale or mismatched manifest.
 - The governed Vercel preview command for all three exact heads also stopped before
   mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions

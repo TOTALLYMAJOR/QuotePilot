@@ -26,6 +26,7 @@ import {
   isEnabledFirebaseSecretVersion,
   providerRequestHeaders,
   resolveGitHubToken,
+  validateHostedManifest,
   vercelDeploymentPayload
 } from "../../../scripts/deploy-release-candidate.mjs";
 
@@ -548,6 +549,29 @@ describe("governed release candidate deployment", () => {
         url: "quoteflow-candidate-mbmapps.vercel.app"
       }
     }).providerDeploymentId).toBe("dpl_candidate123");
+  });
+
+  test("retries exact hosted manifest equality across bounded propagation", async () => {
+    const expected = {
+      schema: "com.mbmapps.quotepilot.release-candidate/v2",
+      sourceSha: SHA,
+      ciRunId: 123,
+      uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+    };
+    let fetchCount = 0;
+    let waitCount = 0;
+    const manifestUrl = await validateHostedManifest("https://candidate.example", expected, {
+      fetchManifest: async () => {
+        fetchCount += 1;
+        return fetchCount === 1 ? { ...expected, sourceSha: "b".repeat(40) } : expected;
+      },
+      wait: async () => { waitCount += 1; },
+      attempts: 3,
+      delayMs: 1
+    });
+    expect(manifestUrl).toBe("https://candidate.example/release-candidate.json");
+    expect(fetchCount).toBe(2);
+    expect(waitCount).toBe(1);
   });
 
   test("builds a deterministic Vercel Build Output v3 payload without a runtime CLI", () => {
