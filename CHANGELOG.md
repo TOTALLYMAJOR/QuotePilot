@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 20:18:30 CDT
+Last updated: 2026-08-28 20:34:32 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Routed Lighthouse/Chromium transient profiles through the Linux OS temp
+  directory so local and CI Core Web Vitals runs do not leak scratch files into
+  repository or runner-specific paths. Audit URLs, thresholds, Chromium
+  selection, and performance authority are unchanged.
+- Stabilized the public Document Hero while its production web fonts load. A
+  scoped metric-compatible fallback keeps the two-line headline, three-line
+  summary, and following document frame at the same mobile coordinates before
+  Bodoni Moda and Manrope settle, eliminating the measured 54px late reflow
+  without changing the final typography or Lighthouse threshold.
 - Completed the exact Payment and Proposal continuation from Living Opportunity
   into the existing role-safe Quote administration surface. Canonical browser
   history retains the semantic object and exact quote; the destination remains

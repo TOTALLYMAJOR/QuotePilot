@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-08-28 20:34:32 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -111,8 +111,10 @@ explicit owner promotion after real-run review.
      - `lane:firebase-auth-rules` runs Firestore rules, the disposable owner-SMS
        transaction and signed-event acceptance matrix, and the Firebase browser
        smoke as one indivisible CI path.
-     - The CWV lane builds a fresh production bundle and explicitly selects the
-       installed Playwright Chromium binary before Lighthouse starts.
+     - The CWV lane builds a fresh production bundle, explicitly selects the
+       installed Playwright Chromium binary, and routes Chromium scratch
+       profiles through Linux `/tmp` before Lighthouse starts. Those transient
+       files are local runner artifacts, never repository or release evidence.
    - `Docker Build Smoke`
    - `lane:playwright-smoke`
    - Every `CI Quality` job receives only `contents: read`; checkout credentials

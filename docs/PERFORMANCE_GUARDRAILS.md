@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: August 19, 2026
+Last updated: 2026-08-28 20:34:32 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -91,7 +91,9 @@ Lighthouse CI config: `.lighthouserc.json`
 The CI lane builds a fresh production bundle, explicitly selects the
 Playwright-managed Chromium binary, and runs a local `vite preview` server on
 the strict `127.0.0.1:4173` endpoint. Readiness detection matches Vite's stable
-`Local` label so ANSI terminal formatting cannot delay the audit.
+`Local` label so ANSI terminal formatting cannot delay the audit. The runner
+sets `TMPDIR`, `TMP`, and `TEMP` to Linux `/tmp` so Chrome profiles remain OS
+scratch artifacts rather than repository or runner-workspace state.
 
 Current enforced assertions:
 - Performance category score minimum
