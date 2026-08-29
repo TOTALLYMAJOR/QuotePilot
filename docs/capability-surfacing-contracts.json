@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 55,
+  "catalogVersion": 56,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -4340,7 +4340,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 13,
+      "reviewRevision": 14,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4433,7 +4433,7 @@
         },
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "<QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>"
+          "locator": "<QuoteAdministrationBoundary"
         },
         {
           "path": "src/components/CustomerPortalView.jsx",
@@ -4506,6 +4506,7 @@
         "src/components/__tests__/ambientMoneyContext.test.jsx",
         "src/components/__tests__/ambientProposalContext.test.jsx",
         "src/components/__tests__/ambientConversationContext.test.jsx",
+        "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
         "src/components/__tests__/ambientPilotScenarioReview.test.jsx",
         "src/components/__tests__/ambientSelectionObjects.test.jsx",
         "src/components/__tests__/customerPortalAskAbout.flagOn.test.jsx",
@@ -4724,6 +4725,18 @@
         {
           "path": "e2e/ambient-intelligence-accessibility.spec.js",
           "locator": "keeps Conversation evidence ahead of repeated arrival explanation"
+        },
+        {
+          "path": "e2e/ambient-intelligence-accessibility.spec.js",
+          "locator": "keeps Payment and Proposal context handoffs keyboard-operable and exact"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
+          "locator": "opens administration on only the exact focused quote instead of returning to an ambiguous list"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
+          "locator": "accepts only an exact semantic Payment administration arrival"
         },
         {
           "path": "src/lib/__tests__/ambientConversationObject.test.js",

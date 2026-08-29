@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-28 18:39:44 CDT
+Last updated: 2026-08-28 18:51:48 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -364,6 +364,16 @@ The five rails and current next action precede the repeated arrival explanation;
 **Why this view** keeps that explanation available without repeating it later
 in the body. Dismissal restores the exact inspect trigger and changes no saved,
 message, or workflow state.
+
+Payment and Proposal continuation uses the same exact-arrival grammar. Browser
+history carries a canonical quote-scoped `Payment` or `Proposal` object and the
+destination remains **Finding Payment** or **Finding Proposal** while Quote
+History is loading. It becomes ready only after the completed read contains the
+exact quote and the open **Quote administration** summary receives focus. During
+that exact arrival, adjacent saved-quote, commercial-dependency, Decision Debt,
+and general Ambient panels stay out of the destination so the promised controls
+lead the first useful viewport. Navigation itself requests, sends, settles,
+reconciles, rotates, recovers, or changes nothing.
 
 The last completed local flag-enabled intelligent-object browser lane passes 40
 of 40 cases.

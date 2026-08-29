@@ -65,12 +65,16 @@ const AmbientOpportunitiesStream = AMBIENT_UI_ENABLED
   ? lazy(() => import("./AmbientOpportunitiesStream"))
   : null;
 
-function QuoteAdministrationBoundary({ ambient = false, children }) {
-  const [open, setOpen] = useState(false);
+function QuoteAdministrationBoundary({ ambient = false, initiallyOpen = false, children }) {
+  const [open, setOpen] = useState(Boolean(initiallyOpen));
+  useEffect(() => {
+    if (initiallyOpen) setOpen(true);
+  }, [initiallyOpen]);
   if (!ambient) return children();
   return (
     <details
       className="ambient-opportunities-administration"
+      data-quote-administration="true"
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -458,6 +462,25 @@ export function getAmbientQuoteSourceFreshness({
   };
 }
 
+export function isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId } = {}) {
+  const exactQuoteId = String(focusQuoteId || "").trim();
+  const objectType = String(arrivalContext?.object?.type || "").trim();
+  const expectedIntent = {
+    opportunity: "review_quote_controls",
+    "payment-evidence": "review_payment_controls",
+    "customer-decision-artifact": "review_proposal_controls"
+  }[objectType] || "";
+  return Boolean(
+    exactQuoteId
+    && arrivalContext?.destination === "administration"
+    && arrivalContext?.surfaceId === "quote-administration"
+    && arrivalContext?.focusConsumerState === "supported"
+    && String(arrivalContext?.object?.id || "").trim() === exactQuoteId
+    && String(arrivalContext?.focus?.quoteId || "").trim() === exactQuoteId
+    && arrivalContext?.intentId === expectedIntent
+  );
+}
+
 const fmtDate = formatQuoteHistoryDate;
 
 function canConvertToContract(quote) {
@@ -792,6 +815,7 @@ export function QuoteHistoryView({
   onOpenOpportunity,
   onOpenWorkflow,
   onOpenConversation,
+  onOpenQuoteAdministration,
   onOpenIntegrations,
   integrationsAvailable = true,
   canDeleteQuotes = false,
@@ -799,7 +823,14 @@ export function QuoteHistoryView({
   onToast
 }) {
   const embedded = presentation === "embedded";
-  const detailMode = embedded && Boolean(String(focusQuoteId || "").trim());
+  const administrationFocusActive = Boolean(
+    embedded
+    && String(focusQuoteId || "").trim()
+    && String(focusAction || "").trim() === "administration"
+  );
+  const detailMode = embedded
+    && Boolean(String(focusQuoteId || "").trim())
+    && !administrationFocusActive;
   const [state, setState] = useState({
     loading: false,
     source: "",
@@ -1115,7 +1146,7 @@ export function QuoteHistoryView({
     if (!open) return;
     const timer = setTimeout(() => load(), 0);
     return () => clearTimeout(timer);
-  }, [open, focusQuoteId, organizationId]);
+  }, [open, focusQuoteId, focusAction, organizationId]);
 
   useEffect(() => {
     const canCheck = getQuoteActionPermissions(currentUserRole).role === "admin";
@@ -1162,10 +1193,50 @@ export function QuoteHistoryView({
     if (!open || !focusQuoteId || state.loading) return;
     const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}`;
     if (focusedHandoffIdRef.current === focusKey) return;
-    if (loadedFocusQuoteIdRef.current !== focusQuoteId) return;
+    const normalizedAction = String(focusAction || "").trim();
+    const administrationArrival = normalizedAction === "administration"
+      && arrivalContext?.surfaceId === "quote-administration";
+    const exactAdministrationArrival = !administrationArrival
+      || isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId });
+    if (administrationArrival && !exactAdministrationArrival) {
+      focusedHandoffIdRef.current = focusKey;
+      onArrivalResolution?.({
+        status: "recovery",
+        reason: "The requested quote controls do not match this exact workspace record.",
+        consequence: "No alternate quote or control set was selected and no record changed.",
+        nextResolution: "Return to the originating opportunity and reopen the exact Payment or Proposal action."
+      });
+      return;
+    }
+    if (loadedFocusQuoteIdRef.current !== focusQuoteId) {
+      if (administrationArrival && state.readComplete && !state.quotes.some((quote) => quote.id === focusQuoteId)) {
+        focusedHandoffIdRef.current = focusKey;
+        onArrivalResolution?.({
+          status: "recovery",
+          reason: "The exact quote is not present in the completed Quote history read.",
+          consequence: "No alternate quote was substituted and no proposal or payment control ran.",
+          nextResolution: "Return to the originating opportunity, refresh current quote evidence, and retry."
+        });
+      }
+      return;
+    }
     const targetQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
     if (!targetQuote) return;
-    const normalizedAction = String(focusAction || "").trim();
+    if (normalizedAction === "administration") {
+      const frame = window.requestAnimationFrame(() => {
+        const administrationSummary = dialogRef.current?.querySelector(
+          '[data-quote-administration="true"] > summary'
+        );
+        if (!administrationSummary) return;
+        administrationSummary.focus({ preventScroll: true });
+        administrationSummary.scrollIntoView({ block: "start", inline: "nearest" });
+        if (administrationArrival && document.activeElement === administrationSummary) {
+          onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId });
+        }
+        focusedHandoffIdRef.current = focusKey;
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
     if (normalizedAction === "conversation") {
       const focusedConversation = resolveFocusedConversationQuote({
         focusAction: normalizedAction,
@@ -1196,7 +1267,17 @@ export function QuoteHistoryView({
       focusedHandoffIdRef.current = focusKey;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open, focusQuoteId, focusAction, state.loading, state.quotes, conversationQuote]);
+  }, [
+    open,
+    focusQuoteId,
+    focusAction,
+    state.loading,
+    state.readComplete,
+    state.quotes,
+    conversationQuote,
+    arrivalContext,
+    onArrivalResolution
+  ]);
 
   useEffect(() => {
     if (!deliveryReview) return undefined;
@@ -1244,7 +1325,10 @@ export function QuoteHistoryView({
     (eventTypes || []).map((item) => [String(item.id), item.name])
   );
 
-  const filteredQuotes = filterQuoteHistoryQuotes(state.quotes, {
+  const administrationQuotes = administrationFocusActive
+    ? state.quotes.filter((quote) => String(quote?.id || "") === String(focusQuoteId || ""))
+    : state.quotes;
+  const filteredQuotes = filterQuoteHistoryQuotes(administrationQuotes, {
     query,
     eventTypeFilter,
     statusFilter
@@ -2201,6 +2285,11 @@ export function QuoteHistoryView({
                 onBackToQuotes={onBackToQuotes}
                 onEditQuote={handleEditQuote}
                 onOpenWorkflow={onOpenWorkflow}
+                onOpenLegacyWorkspace={(context = {}) => (
+                  typeof onOpenQuoteAdministration === "function"
+                    ? onOpenQuoteAdministration(focusedQuote.id, context)
+                    : onBackToQuotes(context)
+                )}
                 onOpenConversation={(quoteId, options) => onOpenConversation
                   ? onOpenConversation(quoteId, options)
                   : setConversationQuote(focusedQuote)}
@@ -2354,7 +2443,7 @@ export function QuoteHistoryView({
         )}
         {state.error && <p className="error-note" role="alert">{state.error}</p>}
         {state.feedback && <p className="source-note" role="status" aria-live="polite">{state.feedback}</p>}
-        {focusedQuoteIsVisible && (
+        {focusedQuoteIsVisible && !administrationFocusActive && (
           <section
             className="saved-quote-handoff"
             ref={savedQuoteHandoffRef}
@@ -2558,6 +2647,7 @@ export function QuoteHistoryView({
           </section>
         )}
         {focusedQuoteIsVisible
+          && !administrationFocusActive
           && state.source === "firebase"
           && ["admin", "sales"].includes(permissions.role) && (
           <CommercialDependencyStatePanel
@@ -2568,7 +2658,7 @@ export function QuoteHistoryView({
             canReconcile
           />
         )}
-        {focusedQuoteIsVisible && state.source === "firebase" && (
+        {focusedQuoteIsVisible && !administrationFocusActive && state.source === "firebase" && (
           <QuoteDecisionDebtPanel
             organizationId={organizationId}
             quoteId={focusedQuote.id}
@@ -2577,7 +2667,7 @@ export function QuoteHistoryView({
             onReadStateChange={handleFocusedDecisionDebtRead}
           />
         )}
-        {AMBIENT_UI_ENABLED && AmbientOpportunitiesStream && (
+        {AMBIENT_UI_ENABLED && !administrationFocusActive && AmbientOpportunitiesStream && (
           <Suspense fallback={(
             <section
               className="ambient-opportunities-loading"
@@ -2606,7 +2696,10 @@ export function QuoteHistoryView({
             />
           </Suspense>
         )}
-        <QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>
+        <QuoteAdministrationBoundary
+          ambient={AMBIENT_UI_ENABLED}
+          initiallyOpen={administrationFocusActive}
+        >
           {() => (
           <>
         <div className="history-controls">

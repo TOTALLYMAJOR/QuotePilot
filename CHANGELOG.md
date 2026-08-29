@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 18:39:44 CDT
+Last updated: 2026-08-28 18:51:48 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Completed the exact Payment and Proposal continuation from Living Opportunity
+  into the existing role-safe Quote administration surface. Canonical browser
+  history retains the semantic object and exact quote; the destination remains
+  finding until a completed read contains that record and the open
+  administration disclosure receives focus. The table is filtered to that
+  quote, adjacent panels remain out of the arrival viewport, and dedicated
+  mobile Payment plus desktop Proposal checks cover keyboard focus, geometry,
+  and axe. Navigation itself requests, sends, settles, reconciles, rotates, or
+  changes nothing.
 - Preserved the exact quote-scoped communication object through the Living
   Opportunity Conversation handoff and moved its five evidence rails plus
   current next action ahead of repeated arrival explanation. The long inspector

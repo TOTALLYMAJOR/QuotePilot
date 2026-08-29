@@ -511,6 +511,31 @@ describe("AmbientLivingOpportunity", () => {
     expect(container.textContent).toContain("Payment details closed");
   });
 
+  test("hands payment review to the existing quote workspace when the host provides it", () => {
+    const onOpenLegacyWorkspace = vi.fn(() => ({ status: "pending" }));
+    mount({ onOpenLegacyWorkspace });
+
+    act(() => button("Review payments").click());
+
+    const dialog = container.querySelector('[role="dialog"]');
+    const handoff = [...dialog.querySelectorAll("button")]
+      .find((item) => item.textContent.replace(/\s+/g, " ").trim().includes("Open quote workspace"));
+    expect(handoff).not.toBeUndefined();
+    expect(handoff.dataset.ambientActionId).toBe("open-governed-payment-controls");
+
+    act(() => handoff.click());
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(onOpenLegacyWorkspace.mock.calls[0][0]).toMatchObject({
+      object: {
+        id: "money",
+        type: "commercial-evidence",
+        label: "Money"
+      },
+      reason: expect.stringContaining("deposit, balance-request, reconciliation, and settlement")
+    });
+  });
+
   test("mounts exact Proposal evidence, restores focus, and routes only to governed controls", async () => {
     const proposalQuote = Object.freeze({
       ...QUOTE,

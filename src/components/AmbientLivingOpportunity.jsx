@@ -1875,6 +1875,61 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     }
   };
 
+  const openMoneyControls = () => {
+    const action = model.actions.openMoneyControls;
+    if (!action.enabled || typeof onOpenLegacyWorkspace !== "function") return;
+    const runtimeToken = beginAction(action);
+    const nextResolution = "Choose the exact payment control needed for this quote. QuotePilot will recheck role and provider evidence first.";
+    const pendingResult = acknowledge({
+      action,
+      runtimeToken,
+      kind: "pending",
+      label: action.outcomeLabel,
+      nextResolution,
+      deferRuntime: true
+    });
+    try {
+      const navigationResult = onOpenLegacyWorkspace({
+        object: action.arrivalContract.object,
+        reason: action.arrivalContract.reason,
+        consequence: action.arrivalContract.consequence,
+        nextResolution
+      });
+      if (["cancelled", "recovery"].includes(navigationResult?.status)) {
+        acknowledge({
+          action,
+          runtimeToken,
+          kind: "recovery",
+          label: "Governed payment controls were not opened",
+          reason: navigationResult.reason || "The existing payment-control handoff was cancelled.",
+          consequence: navigationResult.consequence || "No payment, pricing, provider, or saved quote evidence changed.",
+          nextActionId: "dismiss-money-context",
+          nextResolution: navigationResult.nextResolution || "Continue reviewing the payment details or close this panel."
+        });
+        return;
+      }
+      actionRuntime.acknowledge(runtimeToken, {
+        result: pendingResult,
+        destination: {
+          surface: model.surfaceContracts.legacyOpportunityControls,
+          isEmpty: false
+        }
+      });
+    } catch (error) {
+      emitFeedback("warning");
+      acknowledge({
+        action,
+        runtimeToken,
+        kind: "recovery",
+        label: "Governed payment controls were not opened",
+        reason: error?.userMessage || "The existing role-safe payment controls could not be opened.",
+        consequence: "No payment, pricing, provider, or saved quote evidence changed.",
+        nextActionId: "dismiss-money-context",
+        nextResolution: "Continue reviewing the payment details or close this panel."
+      });
+    }
+  };
+
   const continueConversationResolution = () => {
     const action = model.actions.continueConversationResolution;
     const resolution = model.conversationObject.nextResolution;
@@ -2893,6 +2948,20 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       )}
     </div>
   );
+
+  const moneyFooter = model.actions.openMoneyControls.enabled ? (
+    <div className="ambient-context-actions">
+      <button
+        type="button"
+        className="ghost ambient-outcome-button"
+        onClick={openMoneyControls}
+        data-ambient-action-id={model.actions.openMoneyControls.id}
+      >
+        Open quote workspace
+        <ArrowRight size={17} aria-hidden="true" />
+      </button>
+    </div>
+  ) : null;
 
   const conversationFooter = model.actions.continueConversationResolution.enabled ? (
     <div className="ambient-context-actions">
@@ -4284,10 +4353,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.moneyObject.descriptor.why}
         consequence={model.moneyObject.descriptor.consequence}
+        collapseArrivalDetails
         anchorRef={moneyInspectRef}
         returnFocusRef={moneyInspectRef}
         onClose={dismissMoneyContext}
         closeActionId={model.actions.dismissMoneyContext.id}
+        footer={moneyFooter}
       >
         <AmbientMoneyContext model={model.moneyObject} />
       </ContextSurface>
@@ -4298,6 +4369,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.proposalObject.descriptor.why}
         consequence={model.proposalObject.descriptor.consequence}
+        collapseArrivalDetails
         anchorRef={proposalInspectRef}
         returnFocusRef={proposalInspectRef}
         onClose={dismissProposalContext}

@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-28 18:39:44 CDT
+Last updated: 2026-08-28 18:51:48 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -168,6 +168,16 @@ reason/consequence rows are suppressed in that compact wrapper. This changes no
 message, read-receipt, workflow, lifecycle, provider, or pricing authority.
 Direct source is `src/components/AmbientConversationContext.jsx` with its
 Living Opportunity call site and focused unit/Playwright coverage.
+
+Ambient Payment/Proposal administration source note for row 60: both
+continuations now use canonical quote-scoped browser history and preserve the
+originating object as **Payment** or **Proposal**. The destination stays pending
+through the connected Quote History read, resolves only after the exact row is
+present and **Quote administration** receives focus, and suppresses adjacent
+saved-quote, commercial-dependency, Decision Debt, and general Ambient panels
+for that exact arrival. Local responsive proof verifies exact filtering, focus,
+keyboard traversal, axe, and 390/1440 containment. No payment, proposal,
+delivery, lifecycle, pricing, provider, role, or tenant authority changes.
 
 Ambient NOW source note for row 60: when both the default-off Ambient and NOW
 presentation gates are enabled, `AmbientNowView` replaces the denser card

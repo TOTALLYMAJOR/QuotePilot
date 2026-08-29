@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 18:39:44 CDT
+Last updated: 2026-08-28 18:51:48 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1825,6 +1825,23 @@ receipts for those actions and evidence.
   path; the editorial stream does not grant a new control or role. A stale,
   incomplete, truncated, unavailable, or failed read withholds empty and
   caught-up conclusions and offers recovery instead of substituting evidence.
+- From a focused Living Opportunity, **Open quote workspace** in Payment and
+  **Open proposal controls** in Proposal retain the exact quote, open **Quote
+  administration**, and narrow the table to that record. The arrival is
+  explicitly **Finding Payment** or **Finding Proposal** while the connected
+  Quote History read is incomplete; it becomes ready only when that completed
+  read contains the exact quote and **Quote administration** receives focus.
+  During this exact arrival, adjacent saved-quote, commercial-dependency,
+  Decision Debt, and general Ambient panels stay out of the destination so the
+  promised controls lead the first useful viewport. This is navigation to
+  existing role-safe controls only. It does not request or settle money, send
+  or deliver a proposal, rotate a portal, change lifecycle state, or create
+  provider evidence. The exact opportunity stays visible; open **Why this
+  view** only when you need the longer entry reason and consequence. With a
+  keyboard, focus begins on **Close context**, moves through **Why this view**,
+  the named details region, and continuation controls, remains inside the
+  dialog, returns to the review trigger on Escape, and moves to **Quote
+  administration** after continuing.
 - For an accepted or booked Living Opportunity, **What is settled, and what is
   not** keeps customer acceptance, contract/booking, provider-confirmed
   payment, Kitchen BEO, authoritative staffing, and post-event closeout as six
@@ -1927,14 +1944,19 @@ receipts for those actions and evidence.
   final settlement. A request never becomes payment. A browser return never becomes provider
   evidence. Local settlement-shaped data stays `Local record only`. Select
   `Review payments` in the default-off Living Opportunity to open all five domains
-  with why they are shown, what they affect, the unchanged outcome, confidence, sources,
-  and next safe resolution. Closing restores focus and changes no money state.
+  with why they are shown and what they affect available under **Why this
+  view**, plus the unchanged outcome, confidence, sources, and next safe
+  resolution in the evidence body. Use **Open quote workspace** to continue with the
+  exact quote's existing administration controls. Closing restores focus and
+  either path changes no money state by itself.
 - Select `Review proposal` to review proposal completeness, the saved quote
   version, current-pricing status, exactly what the customer sees,
   portal issuance, and provider evidence without collapsing one into another.
+  **Why this view** retains the longer entry explanation without repeating it
+  above and below the current proposal state.
   The inspector describes prepare, send, rotate, and recovery paths, but performs
-  none of them. Continue only through the populated quote editor or existing
-  governed proposal controls. A provider acceptance is not delivery, a portal
+  none of them. Use **Open proposal controls** to continue with the exact quote's
+  existing governed administration surface. A provider acceptance is not delivery, a portal
   issuance is not a view, and neither is proposal acceptance, booking, or
   payment.
 - Select `Review conversation` to review what QuotePilot currently knows about

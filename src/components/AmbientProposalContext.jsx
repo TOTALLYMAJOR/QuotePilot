@@ -197,11 +197,11 @@ export default function AmbientProposalContext({ model }) {
       </section>
 
       <dl className="ambient-proposal-context__judgment">
-        <div>
+        <div data-context-arrival-duplicate="reason">
           <dt>Why this is shown</dt>
           <dd>{proposalCopy(model.descriptor.why)}</dd>
         </div>
-        <div>
+        <div data-context-arrival-duplicate="consequence">
           <dt>What it affects</dt>
           <dd>{proposalCopy(model.descriptor.consequence)}</dd>
         </div>

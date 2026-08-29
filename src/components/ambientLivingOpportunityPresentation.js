@@ -1618,6 +1618,32 @@ function buildAmbientActions({
       },
       primary: false
     }),
+    openMoneyControls: createAmbientAction({
+      ...common,
+      id: "open-governed-payment-controls",
+      outcomeLabel: "Open quote workspace",
+      purpose: "reveal_context",
+      authorityLevel: "presentation",
+      previewPolicy: "none",
+      executionTarget: {
+        kind: "route",
+        targetId: model.quoteId,
+        surfaceId: "legacy-opportunity-controls"
+      },
+      receiptType: "context",
+      reversibility: noRecovery,
+      arrivalContract: {
+        object: moneyReference,
+        reason: "Review the existing role-safe deposit, balance-request, reconciliation, and settlement controls for this exact quote.",
+        consequence: "Only the view changes. No request, collection, reconciliation, settlement, pricing, or provider evidence changes by navigation.",
+        nextResolutionIds: ["choose-exact-payment-control", "dismiss-money-context"]
+      },
+      primary: false,
+      enabled: legacyControlsAvailable,
+      disabledReason: legacyControlsAvailable
+        ? null
+        : "The quote workspace handoff is unavailable."
+    }),
     inspectConversation: createAmbientAction({
       ...common,
       ...conversationViewAvailability,

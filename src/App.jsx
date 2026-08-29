@@ -750,6 +750,30 @@ function ambientOpportunityArrivalInput(target = {}) {
   };
 }
 
+function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
+  const normalizedQuoteId = String(quoteId || "").trim();
+  const sourceObjectType = String(context?.object?.type || "").trim();
+  const proposal = sourceObjectType === "customer-decision-artifact";
+  const payment = sourceObjectType === "commercial-evidence";
+  return {
+    destination: "administration",
+    object: {
+      id: normalizedQuoteId,
+      type: proposal
+        ? "customer-decision-artifact"
+        : payment
+          ? "payment-evidence"
+          : "opportunity"
+    },
+    focus: { quoteId: normalizedQuoteId },
+    intentId: proposal
+      ? "review_proposal_controls"
+      : payment
+        ? "review_payment_controls"
+        : "review_quote_controls"
+  };
+}
+
 function ambientClientArrivalInput(target = {}) {
   const customerId = String(target?.customerId || target?.clientId || "").trim();
   return {
@@ -849,6 +873,15 @@ export default function App({
   const navigateAmbientOpportunity = useCallback((target = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientOpportunityArrivalInput(target));
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return { status: "pending", contract: handoff.contract };
+  }, [navigateWorkspace]);
+  const navigateAmbientQuoteAdministration = useCallback((quoteId, context = {}) => {
+    if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff(
+      ambientQuoteAdministrationArrivalInput(quoteId, context)
+    );
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
     navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
     return { status: "pending", contract: handoff.contract };
@@ -1080,6 +1113,21 @@ export default function App({
     : browserRoute.routeId;
   const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]
     .includes(resolvedWorkspaceRouteId);
+  const quoteAdministrationArrival = workspaceArrivalContext?.surfaceId === "quote-administration"
+    ? workspaceArrivalContext
+    : null;
+  const historyFocusQuoteId = browserRoute.params?.quoteId
+    || quoteAdministrationArrival?.focus?.quoteId
+    || historyTarget.quoteId;
+  const historyFocusAction = quoteAdministrationArrival
+    ? "administration"
+    : historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+      ? historyTarget.action
+      : "";
+  const historyFocusReason = quoteAdministrationArrival?.reasonId
+    || (historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+      ? historyTarget.reason
+      : "");
   const messagingOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.MESSAGING;
   const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
@@ -5430,6 +5478,13 @@ export default function App({
             fallbackSurfaceId="living-opportunity"
           />
         )}
+        {AMBIENT_UI_ENABLED && quoteAdministrationArrival && (
+          <WorkspaceArrivalNotice
+            context={quoteAdministrationArrival}
+            resolution={workspaceArrivalResolution}
+            fallbackSurfaceId="quote-administration"
+          />
+        )}
         <WorkspaceLazyRoute
           active={historyOpen}
           surfaceName="Quotes"
@@ -5457,10 +5512,11 @@ export default function App({
               : null}
             globalPilotReturnFocusRef={AMBIENT_UI_ENABLED ? globalPilotTriggerRef : null}
             onGlobalPilotResolution={AMBIENT_UI_ENABLED ? handleGlobalPilotResolution : undefined}
-            focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
-            focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
-            focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
+            focusQuoteId={historyFocusQuoteId}
+            focusAction={historyFocusAction}
+            focusReason={historyFocusReason}
             arrivalContext={workspaceArrivalContext?.surfaceId === "living-opportunity"
+              || workspaceArrivalContext?.surfaceId === "quote-administration"
               ? workspaceArrivalContext
               : null}
             onArrivalResolution={setWorkspaceArrivalResolution}
@@ -5490,6 +5546,18 @@ export default function App({
             onOpenWorkflow={AMBIENT_UI_ENABLED
               ? openAmbientWorkflow
               : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenQuoteAdministration={(quoteId, context = {}) => {
+              const normalizedQuoteId = String(quoteId || "").trim();
+              if (!normalizedQuoteId) {
+                return {
+                  status: "recovery",
+                  reason: "The exact quote could not be identified.",
+                  consequence: "The current opportunity remains open and unchanged.",
+                  nextResolution: "Return to Opportunities and reopen the exact quote."
+                };
+              }
+              return navigateAmbientQuoteAdministration(normalizedQuoteId, context);
+            }}
             onOpenConversation={CUSTOMER_CENTERED_WORKSPACE_ENABLED
               ? AMBIENT_UI_ENABLED
                 ? openAmbientConversation

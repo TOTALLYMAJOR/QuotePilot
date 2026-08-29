@@ -48,10 +48,10 @@ describe("Ambient Opportunities host integration", () => {
     const listReturn = quoteHistorySource.indexOf("\n  return (", detailBranch);
     const listSource = quoteHistorySource.slice(listReturn);
     const streamIndex = listSource.indexOf(
-      "{AMBIENT_UI_ENABLED && AmbientOpportunitiesStream && ("
+      "{AMBIENT_UI_ENABLED && !administrationFocusActive && AmbientOpportunitiesStream && ("
     );
     const administrationIndex = listSource.indexOf(
-      "<QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>"
+      "<QuoteAdministrationBoundary"
     );
     const controlsIndex = listSource.indexOf('className="history-controls"');
     const tableIndex = listSource.indexOf("<table>");
@@ -73,6 +73,7 @@ describe("Ambient Opportunities host integration", () => {
     expect(boundarySource).toContain("{open ? children() : null}");
     expect(listSource).toContain("quotes={state.quotes}");
     expect(listSource).toContain("readBoundary={ambientOpportunityReadBoundary}");
+    expect(listSource).toContain("initiallyOpen={administrationFocusActive}");
   });
 
   test("clears cross-organization quote and read evidence before starting the requested read", () => {
