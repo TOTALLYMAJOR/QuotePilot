@@ -25,9 +25,9 @@ release, deployment, provider, risk, and acceptance state.
   provider receipts.
 
 The chronology below records first-source and release-containment evidence.
-As of this snapshot, recorded production is `v0.7.0` (`fb0aacc`) and the
-Ambient/staffing work is included in exact deployed `v0.15.0`. Recheck
-`PROJECT_STATUS.md` before using either fact operationally.
+Its `v0.7.0` row is a historical deployment receipt, not a current-runtime
+claim. Current production is the exact deployed `v0.15.0` artifact; recheck
+`PROJECT_STATUS.md` before using that fact operationally.
 
 ## Status Legend
 - `Implemented`: shipped and wired in the app.

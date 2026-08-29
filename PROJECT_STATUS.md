@@ -1,21 +1,25 @@
 # Project Status
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-08-28 20:44:00 CDT
 
 ## Current Production Release
 
-- Annotated tag `v0.14.0` and remotely published `main` resolve to
-  `6b245aed6e9019b92c091de554caf8109fd9c99f`.
-- Exact-main CI Quality run `32418251221` passed all eight required jobs,
+- Annotated tag `v0.15.0` resolves to
+  `bc495c8c948d440b12363d5da34209a11ff151fd`.
+- Exact-main CI Quality run `32817744859` passed all eight required jobs,
   including authoritative pricing, Firebase rules/emulators, Playwright,
   performance, bundle, governance, and Docker gates.
-- Governed Vercel run `32419441612` deployed exact `v0.14.0` with
+- Governed Vercel run `32819363438` deployed exact `v0.15.0` with
   `f2f08629a784d0ff6c8af9af8139d3746d77085f` as its explicit rollback target.
-- Governed Firebase all-scope run `32419577296` deployed exact `v0.14.0` with
+- Governed Firebase all-scope run `32818605404` deployed exact `v0.15.0` with
   `87e97c113070424c6d522399116f19877a67721a` as its explicit Firebase rollback
   target. The run verified the `pingram` / `pingram-2026-08-14-a` deployment
   profile, completed the Hosting, Firestore, and default Functions mutation,
   and passed the Firebase Hosting origin probe.
+- The application artifact at `v0.15.0` is the current production runtime. A
+  later receipt-only documentation commit may place repository `main` ahead of
+  that SHA without changing runtime code or requiring another application
+  deployment.
 - These receipts prove exact source, CI, and provider workflow success only.
   They do not prove tenant activation, authenticated staff/portal acceptance,
   production-data correctness, provider delivery, recipient acknowledgement,
@@ -38,7 +42,10 @@ Last updated: 2026-08-28 17:25:14 CDT
   — processor payout settlement (`integration`, blocked behind the Connect
   stopping point), declared processor fee schedules (`business_policy`, the
   settings field does not exist), and post-event consumption (`engineering`,
-  no capture surface). Run `npm run truthloop:coverage` for the current split.
+  no capture surface). Generate the current split with the explicit source and
+  evaluation instant required by the read-only contract, for example
+  `npm run truthloop:coverage -- --source <sources.json> --evaluated-at <ISO>`;
+  the bare command intentionally refuses to infer either input.
 - Containment is explicit-scope, not rule-enforced. The reader runs on the
   Admin SDK, which bypasses Firestore rules, so its guarantees come from a
   required organization argument, reads rooted at that organization, the
@@ -62,17 +69,14 @@ Last updated: 2026-08-28 17:25:14 CDT
 ## Pending Production Completion
 
 - Product Truth Observability is implemented as a read-only source/local
-  repository/CI candidate. Its first real `status:product` digest found the
-  expected conflicting local production
-  claims (`v0.14.0` and a retained `v0.7.0` operational section), while current
-  remote main contains a later `v0.15.0` release receipt; the active branch is
-  both ahead of and behind main. The digest preserves exact HEAD, labels the
-  dirty capability-surfacing failure as worktree evidence, keeps unavailable
-  CI/hosted/provider/production/human/outcome proof `unknown`, and does not
-  select a convenient source or treat reachability as deployed identity. Ten
-  focused contracts pass, and CI wiring is advisory only. Exact CI observation,
-  owner comprehension review, freshness calibration, and any promotion to a
-  required gate remain pending human/external decisions.
+  repository/CI candidate. The branch now contains the governed `v0.15.0`
+  receipts and is reconciled to current `origin/main`; an earlier digest's
+  branch-divergence and v0.14/v0.15 contradiction are therefore historical
+  findings, not current release truth. The compiler still preserves exact HEAD,
+  keeps unavailable CI/hosted/provider/production/human/outcome proof
+  `unknown`, and does not treat reachability as deployed identity. Exact CI
+  observation, owner comprehension review, freshness calibration, and any
+  promotion to a required gate remain pending human/external decisions.
 - Steward has no remaining repository-preparable work before its reviewed
   private-runtime and human-evaluation gate. The deploy-dormant compiler,
   policy/validation controls, consent/evaluation contracts, pinned synthetic
@@ -522,25 +526,27 @@ Last updated: 2026-08-28 17:25:14 CDT
   parity, hosted roles, rollback-release evidence, timed comprehension,
   production-data acceptance, and human acceptance remain open.
 
-## Operational Health
+## Historical Operational Receipt — v0.7.0 (Superseded)
 
-- Production runtime: `v0.7.0` is live from commit
-  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, tagged `v0.7.0`.
-- Exact-main CI: run `31528176575` passed all eight required jobs.
-- Firebase: `all` deployment run `31529170963` updated Hosting, Firestore rules,
+- This retained record describes the governed August 11 deployment of commit
+  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, tagged `v0.7.0`; it was
+  superseded by the exact `v0.15.0` production release identified at the top of
+  this document and must not be read as current runtime state.
+- Exact-main CI run `31528176575` passed all eight required jobs.
+- Firebase `all` deployment run `31529170963` updated Hosting, Firestore rules,
   indexes, and Functions, then verified `https://tonicatering.web.app`.
-- Vercel: deployment run `31530050353` promoted immutable deployment
+- Vercel deployment run `31530050353` promoted immutable deployment
   `quoteflow-duqhsqfau-mbmapps.vercel.app` and rebound
   `https://quotepilot.mbmapps.com`.
-- Public reachability: `/`, `/app`, and `/app/messages` returned HTTP 200 on
+- At that time, `/`, `/app`, and `/app/messages` returned HTTP 200 on
   the production edge; `/` and `/app` also returned HTTP 200 on the Firebase
   origin.
-- Runtime inventory: Firebase lists 75 Functions. The newly deployed callable
-  `recordChangeRequestParse` reports `ACTIVE` on Node.js 22 in `us-central1`.
-- `v0.7.0` release-receipt parity: both production workflows checked out that
-  exact tagged release SHA. This documentation correction does not change the
-  deployed runtime.
-- Credential health: local Firebase CLI access to `tonicatering` and the
+- The contemporaneous Firebase inventory listed 75 Functions; the newly
+  deployed callable `recordChangeRequestParse` reported `ACTIVE` on Node.js 22
+  in `us-central1`.
+- Both contemporaneous production workflows checked out that exact tagged
+  release SHA.
+- At that checkpoint, local Firebase CLI access to `tonicatering` and the
   protected GitHub Firebase deployment credential were renewed and
   authenticated on August 10. No credential values are stored in tracked files.
 

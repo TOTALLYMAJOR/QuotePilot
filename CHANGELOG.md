@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 20:34:32 CDT
+Last updated: 2026-08-28 20:44:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reconciled the local feature stack with the current v0.15 release base while
+  preserving newer local conflict hunks and importing the non-conflicting
+  Commercial Truth Loop and project-state control plane. Canonical operational
+  status now leads with the exact v0.15 CI and dual-target deployment receipts,
+  and the documented coverage command names its required source and evaluation
+  time instead of implying that the tool may infer evidence inputs. Retained
+  v0.7 deployment evidence is now explicitly historical in both Project Status
+  and the Feature Matrix, so the observability compiler no longer treats it as
+  a competing current-production claim.
 - Routed Lighthouse/Chromium transient profiles through the Linux OS temp
   directory so local and CI Core Web Vitals runs do not leak scratch files into
   repository or runner-specific paths. Audit URLs, thresholds, Chromium
