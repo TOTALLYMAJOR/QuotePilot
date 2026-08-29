@@ -401,6 +401,7 @@ export function SalesWorkflowView({
   presentation = "embedded",
   onOpenQuoteHistory,
   onOpenCustomer,
+  onStartQuote,
   onEditQuote,
   onAttentionSummaryChange,
   focusQuoteId = "",
@@ -2217,7 +2218,7 @@ export function SalesWorkflowView({
         </section>
 
         <div
-          className="sales-workflow-layout"
+          className={`sales-workflow-layout${quoteSummaries.length === 0 && !state.loading ? " sales-workflow-layout-empty" : ""}`}
           role="tabpanel"
           id="workflow-panel-followups"
           aria-labelledby="workflow-tab-followups"
@@ -2254,7 +2255,25 @@ export function SalesWorkflowView({
             </section>
 
             <section className="workflow-detail">
-              {!selectedQuote && <p className="muted">Select a quote to manage its workflow.</p>}
+              {!selectedQuote && quoteSummaries.length === 0 && !state.loading && (
+                <div className="workflow-zero-state" data-capability-state="empty">
+                  <p className="eyebrow">No workflow yet</p>
+                  <h3>Create the first quote to begin follow-up</h3>
+                  <p>
+                    Start with the customer inquiry. QuotePilot will carry the saved quote,
+                    proposal readiness, decisions, and follow-ups into this workspace.
+                  </p>
+                  <button
+                    type="button"
+                    className="cta"
+                    onClick={() => onStartQuote?.()}
+                    disabled={typeof onStartQuote !== "function"}
+                  >
+                    Start a quote
+                  </button>
+                </div>
+              )}
+              {!selectedQuote && quoteSummaries.length > 0 && <p className="muted">Select a quote to manage its workflow.</p>}
               {selectedQuote && readiness && (
                 <>
                   <header

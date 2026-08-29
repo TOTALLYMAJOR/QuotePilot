@@ -4616,6 +4616,7 @@ function LegacyAppCore({
               navigateWorkspace(buildQuotePath(quoteId));
             }}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onStartQuote={handleGetInstantQuote}
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}

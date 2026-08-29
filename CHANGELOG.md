@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 19:23:58 CDT
+Last updated: 2026-08-28 19:30:53 CDT
 
 All notable project changes are documented in this file.
 
@@ -233,6 +233,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   exact planning view or quote record; direct live/replay links explain the
   unavailable capability and offer a truthful return to **Event Focus** instead
   of sending the operator into another predictable dead end.
+- Replaced the empty Workflow dead end in both active and compatibility graphs
+  with a customer-journey handoff. When no quote exists, Workflow now explains
+  what will appear after the first save and offers one `Start a quote` action
+  that returns directly to intake without creating or mutating a record.
 - Made both active and compatibility customer proposal rooms neutral by default.
   New proposal visits no longer preselect acceptance or expose signature and
   submission controls before the customer chooses a response; recorded prior

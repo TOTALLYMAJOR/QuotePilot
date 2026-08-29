@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 19:23:58 CDT
+Last updated: 2026-08-28 19:30:53 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -695,6 +695,10 @@ unchanged.
 
 ## Workflow
 - Open `Workflow` from the top navigation or `/app/workflow`.
+- If no quote has been saved yet, Workflow explains what will appear there and
+  offers `Start a quote`. That action returns directly to the quote intake so
+  the operator can begin with the customer inquiry instead of encountering an
+  empty management surface.
 - When active quotes need action, the navigation control shows the number of
   affected quotes. One quote counts once even when it has multiple attention
   reasons. The count loads after the main workspace becomes interactive and

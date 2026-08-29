@@ -110,7 +110,21 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/app");
-  await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /New quote/i })).toBeVisible();
+});
+
+test("empty Workflow leads directly into the first quote", async ({ page }) => {
+  await page.getByRole("button", { name: /Workflow/i }).click();
+  await expect(page.getByRole("heading", {
+    name: "Create the first quote to begin follow-up"
+  })).toBeVisible();
+  await expect(page.getByText(/QuotePilot will carry the saved quote, proposal readiness, decisions, and follow-ups/i)).toBeVisible();
+
+  await page.getByRole("button", { name: "Start a quote" }).click();
+  await expect(page.getByText("Creating this quote", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Create the first quote to begin follow-up"
+  })).toHaveCount(0);
 });
 
 test("operator workspaces load only when first opened and stay mounted after close", async ({ page }) => {
