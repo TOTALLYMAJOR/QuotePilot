@@ -27,7 +27,11 @@ test("presents the composer as the builder surface with Quote Pulse", async ({ p
   await expect(page.getByTestId("pc-pulse")).toBeVisible();
   await expect(page.getByTestId("pc-pulse-total")).toBeVisible();
   await expect(page.getByTestId("pc-watching")).toBeVisible();
-  await expect(page.getByTestId("pc-save")).toBeDisabled();
+  const saveAction = page.getByTestId("pc-save");
+  await expect(saveAction).toBeEnabled();
+  await expect(saveAction).toHaveText(/Review \d+ blockers?/i);
+  await saveAction.click();
+  await expect(page.getByTestId("pc-save-readiness")).toBeFocused();
 });
 
 test("inline guest edit shows consequences and staffing follows the house rule", async ({ page }) => {
@@ -187,7 +191,6 @@ test("recent activity records this session's changes behind its toggle", async (
   await page.getByTestId("pc-consequences").getByRole("button", { name: "Keep as quoted" }).click();
   await commitInline(page, "Event name", "Activity Gala");
 
-  await page.getByTestId("pc-activity-toggle").click();
   const log = page.getByTestId("pc-activity");
   await expect(log).toBeVisible();
   await expect(log).toContainText("Guests → 50");

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 18:51:48 CDT
+Last updated: 2026-08-28 19:17:34 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -123,6 +123,10 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   Open `Why?` to review the exact missing proposal fields, evidence bounds, and
   stable reason codes. Do not interpret an unavailable dimension as zero or as
   a negative score.
+- Customer phone is recommended contact enrichment, not a required proposal
+  field. A missing phone does not lower required proposal completeness or add a
+  readiness blocker; QuotePilot may still show it separately when it would help
+  follow-up or event-day coordination.
 - Draft, sent, or viewed quotes show `Edit quote` only when the signed-in role
   and current delivery state already permit ordinary editing. Accepted/booked
   records explain the governed-change boundary and do not present ordinary
@@ -1745,6 +1749,13 @@ experience:
   their confidence, confirm uncertain details, then add them to the editable
   form. Approximate/ranged guest counts show a draft-only price band; saved
   quotes always use the exact recorded guest count.
+- The package and service style supplied as a starting point are labeled
+  **Preset**, not complete. Experience becomes complete after you review both
+  controls or after the draft has been saved. If known requirements remain,
+  the save control reads **Review N blockers**. It opens Quote Pulse and moves
+  keyboard focus to the exact list; it does not attempt a save. Resolve the
+  named requirements, then use **Save draft** for the ordinary authoritative
+  save checks.
 - In an editable quote, the Pilot command bar previews a plain-language change
   and its fee/tax cascade before `Apply` stages it. Browser speech recognition
   may provide `Speak`; typed commands remain the availability floor.
@@ -1789,6 +1800,13 @@ receipts for those actions and evidence.
   pricing and margin, customer state, and event planning. Only proposal
   completeness may appear as a percentage; QuotePilot does not blend the four
   views into an event-readiness score.
+- Required proposal completeness and recommended contact quality remain
+  separate. A quote with every required proposal field can show **100%** while
+  also naming **1 recommended contact detail**. A missing customer phone does
+  not become a proposal gap, does not outrank staffing, and does not block the
+  descriptive prepare/send model; trusted proposal controls still apply their
+  independent saved-revision, pricing, email, portal, role, provider, and
+  idempotency checks.
 - If Opportunities cannot complete its first bounded read, it shows the same
   calm recovery grammar as Now and Events: **Try again** is primary, **Start a
   quote** remains available, and raw provider text is withheld. Expand **About
@@ -1904,6 +1922,16 @@ receipts for those actions and evidence.
   over or cover later content. Use its Event, Menu, Pricing, and Proposal
   controls to open exact populated context. The desktop summary is intentionally
   not repeated in this mobile first layer.
+- The Living Opportunity ranks recorded Workflow attention first, then missing
+  core event/proposal facts, then an applicable staffing-guide review, and then
+  optional customer-phone enrichment. For example, a missing event start time
+  continues to **Review draft** before staffing. Once core facts are present,
+  **Review staffing** may become the primary action and opens the exact saved
+  counts, house guide, connected records, and safe draft options without
+  changing the quote. Closing restores focus to the same primary action. The
+  staffing guide remains a planning prompt, not proof of availability,
+  assignment, sufficient coverage, cost, schedule fit, BEO freshness, or
+  operational readiness.
 - A focused Workflow, Approval, Messages, supported Schedule event/conflict, or
   supported Reporting action first shows **Finding** while
   QuotePilot locates the exact requested item. It may show **ready** only after
@@ -2095,6 +2123,13 @@ commercial snapshot captured at trusted quote create/edit time, so later
 catalog cost edits do not silently rewrite prior staff evidence. The client
 preview and exported proposal receive brand/logo/font/copy presentation, never
 internal cost or margin data.
+
+On a new proposal, catalog defaults are starting context rather than evidence
+that staff finished the Experience section. **Preset** means the package or
+service style still needs review. **Complete** means both were explicitly
+reviewed in this draft or the quote has a saved identity. A blocked action
+names the exact blocker count and focuses Quote Pulse; only an unblocked
+**Save draft** action invokes persistence and its normal server checks.
 
 Catalog Admin's save flow — ready, saving, a confirmed conflict
 (reconciliation), a saved-but-unconfirmed revision (uncertain), a clean

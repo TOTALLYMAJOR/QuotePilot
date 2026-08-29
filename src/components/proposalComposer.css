@@ -311,13 +311,15 @@
   font-weight: 600;
 }
 
-.pc-complete {
+.pc-section-status {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--pc-teal);
   white-space: nowrap;
 }
+
+.pc-section-status[data-state="complete"] { color: var(--pc-teal); }
+.pc-section-status[data-state="preset"] { color: var(--pc-brass-deep); }
 
 .pc-muted { color: var(--pc-muted-deep); font-size: 0.92rem; margin: 0.3rem 0; }
 .pc-error { color: var(--pc-red-deep); font-size: 0.92rem; margin: 0.3rem 0; }
@@ -1279,7 +1281,7 @@
   animation: pc-rise 180ms ease-out;
 }
 
-.pc-complete {
+.pc-section-status {
   animation: pc-settle 160ms ease-out;
 }
 

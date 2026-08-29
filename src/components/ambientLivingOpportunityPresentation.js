@@ -610,14 +610,17 @@ function buildRisk({ model, proposal, guestObject }) {
       provenance: "Loaded Workflow items"
     };
   }
-  if (!proposal.complete && proposal.gaps.length > 0) {
-    const gap = [...proposal.gaps].sort((left, right) => Number(right.points) - Number(left.points))[0];
+  const rankedProposalGaps = [...proposal.gaps]
+    .sort((left, right) => Number(right.points) - Number(left.points));
+  const primaryProposalGap = rankedProposalGaps[0];
+  if (!proposal.complete && primaryProposalGap) {
+    const gap = primaryProposalGap;
     return {
       id: `proposal-gap-${gap.id}`,
       tone: "gold",
       label: "Proposal gap",
       title: `${gap.label} needs review`,
-      detail: `This field accounts for ${gap.points} of the existing proposal-completeness model.`,
+      detail: "This required field is missing from the proposal-completeness model.",
       provenance: "proposal-readiness-v1"
     };
   }
@@ -634,6 +637,17 @@ function buildRisk({ model, proposal, guestObject }) {
       title: "Staffing may need attention",
       detail: `The staffing guide suggests ${gaps} for this service style.`,
       provenance: guestObject.currentStaffing.provenance
+    };
+  }
+  const recommendedProposalGap = proposal.recommendedGaps[0];
+  if (recommendedProposalGap) {
+    return {
+      id: `proposal-recommendation-${recommendedProposalGap.id}`,
+      tone: "gold",
+      label: "Optional detail",
+      title: `${recommendedProposalGap.label} could help`,
+      detail: "This contact detail can help with follow-up and event-day coordination, but it does not block proposal preparation or sending.",
+      provenance: "proposal-readiness-v1"
     };
   }
   return {
@@ -662,16 +676,32 @@ function buildNextAction({ model, risk, ordinaryEditAllowed }) {
       target: model.attention.target
     };
   }
+  if (risk.id === "staffing-guidance") {
+    return {
+      id: "inspect-staffing",
+      kind: "staffing",
+      category: "recommendation",
+      label: "Review staffing",
+      title: risk.title,
+      reason: risk.detail,
+      consequence: "The staffing context opens with the saved counts, static house guide, and any role-safe draft options. Opening it changes nothing.",
+      nextResolution: "Review the guide, then keep the saved counts or stage an unsaved staffing preview when allowed.",
+      target: { quoteId: model.quoteId, objectId: "staffing" }
+    };
+  }
   if (ordinaryEditAllowed) {
+    const recommendedContact = risk.id.startsWith("proposal-recommendation");
     return {
       id: "open-priced-draft",
       kind: "edit",
       category: risk.id.startsWith("proposal-gap") ? "proposal_gap" : "recommendation",
-      label: "Review draft",
+      label: recommendedContact ? "Review contact" : "Review draft",
       title: risk.title,
       reason: risk.detail,
       consequence: "The exact quote opens as an editable draft. Nothing is saved until the intentional save action succeeds.",
-      nextResolution: "Review the live price and dependencies, then save or leave the existing version unchanged.",
+      nextResolution: recommendedContact
+        ? "Add the optional contact detail if it helps the team, or leave the proposal ready without it."
+        : "Review the live price and dependencies, then save or leave the existing version unchanged.",
       target: { quoteId: model.quoteId }
     };
   }
@@ -679,11 +709,11 @@ function buildNextAction({ model, risk, ordinaryEditAllowed }) {
     id: "caught-up",
     kind: "caught_up",
     category: "none",
-    label: "No action required",
-    title: "No role-safe resolution is currently required",
+    label: "No action available here",
+    title: "No role-safe action is currently available",
     reason: "No tracked Workflow item is present and ordinary editing is unavailable.",
     consequence: "The saved quote remains unchanged.",
-    nextResolution: "Return when new evidence or an authorized action becomes available.",
+    nextResolution: "Review the evidence or return when an authorized action becomes available.",
     target: { quoteId: model.quoteId }
   };
 }
@@ -692,13 +722,18 @@ function buildPilotSentence(risk, nextAction) {
   if (risk.id === "no-tracked-risk") {
     return "No tracked Workflow blocker appears here. The proposal is ready to review when you are.";
   }
+  if (nextAction.kind === "caught_up") {
+    return `${risk.title}. This view has no role-safe action; review the evidence or return when authorized work appears.`;
+  }
   const nextStep = nextAction.kind === "edit"
     ? "Reviewing the draft"
     : nextAction.kind === "workflow"
       ? "Reviewing the exact Workflow item"
       : nextAction.kind === "conversation"
         ? "Reviewing the conversation"
-        : nextAction.label;
+        : nextAction.kind === "staffing"
+          ? "Reviewing staffing"
+          : nextAction.label;
   return `${risk.title}. ${nextStep} is the clearest available next step.`;
 }
 
@@ -852,6 +887,11 @@ function buildAmbientActions({
   legacyControlsAvailable,
   role
 }) {
+  const proposalRecommendedGaps = Array.isArray(proposalObject.readiness.recommendedGaps)
+    ? proposalObject.readiness.recommendedGaps
+    : [];
+  const proposalNeedsEditorReview = proposalObject.readiness.gaps.length > 0
+    || proposalRecommendedGaps.length > 0;
   const object = objectReference(model);
   const guestCountObject = {
     id: "guest-count",
@@ -935,6 +975,7 @@ function buildAmbientActions({
       ? null
       : staffingObject.unavailableReason
   };
+  const staffingIsPrimary = nextAction.kind === "staffing";
   const pricingPreviewAvailability = {
     enabled: Boolean(
       ordinaryEditAllowed
@@ -1355,7 +1396,7 @@ function buildAmbientActions({
           ? ["use-staffing-recommendation", "keep-current-staffing"]
           : ["keep-current-staffing", "dismiss-staffing-context"]
       },
-      primary: false
+      primary: staffingIsPrimary
     }),
     useStaffingRecommendation: createAmbientAction({
       ...common,
@@ -1744,7 +1785,7 @@ function buildAmbientActions({
         reason: proposalObject.descriptor.why,
         consequence: proposalObject.descriptor.consequence,
         nextResolutionIds: [
-          ...(proposalEditorAvailability.enabled && proposalObject.readiness.gaps.length > 0
+          ...(proposalEditorAvailability.enabled && proposalNeedsEditorReview
             ? ["review-proposal-in-editor"]
             : []),
           ...(proposalControlsAvailability.enabled ? ["open-governed-proposal-controls"] : []),
@@ -1759,7 +1800,9 @@ function buildAmbientActions({
       id: "review-proposal-in-editor",
       outcomeLabel: proposalObject.readiness.gaps.length > 0
         ? "Review proposal gaps in editor"
-        : "Review proposal in editor",
+        : proposalRecommendedGaps.length > 0
+          ? "Review recommended contact in editor"
+          : "Review proposal in editor",
       purpose: "advance",
       authorityLevel: "presentation",
       previewPolicy: "none",
@@ -1774,7 +1817,9 @@ function buildAmbientActions({
         object: proposalReference,
         reason: proposalObject.readiness.gaps.length > 0
           ? `Review the ${proposalObject.readiness.gaps.length} exact proposal completeness ${proposalObject.readiness.gaps.length === 1 ? "gap" : "gaps"} in the existing quote editor.`
-          : "Review the current proposal projection against the exact editable quote.",
+          : proposalRecommendedGaps.length > 0
+            ? `Review the ${proposalRecommendedGaps.length} recommended contact ${proposalRecommendedGaps.length === 1 ? "detail" : "details"} in the existing quote editor. These details do not block proposal preparation or sending.`
+            : "Review the current proposal projection against the exact editable quote.",
         consequence: "The existing quote editor opens on this opportunity. Nothing is repriced, saved, published, sent, rotated, or recovered by this navigation.",
         nextResolutionIds: ["review-proposal-fields", "leave-existing-version-unchanged"]
       },
@@ -2446,7 +2491,9 @@ function buildAmbientActions({
     });
   });
 
-  if (nextAction.kind !== "caught_up") {
+  if (staffingIsPrimary) {
+    actions.primary = actions.inspectStaffing;
+  } else if (nextAction.kind !== "caught_up") {
     const targetKind = nextAction.kind === "edit" ? "route" : "route";
     actions.primary = createAmbientAction({
       ...common,
@@ -2506,9 +2553,15 @@ function buildMomentumContract({ quote, model, proposal, nextAction }) {
       proposal: {
         state: proposal.complete ? "healthy" : "attention",
         summary: proposal.complete
-          ? "Required proposal fields are recorded."
-          : `${proposal.gaps.length} weighted proposal fields need review.`,
-        evidence: [{ model: "proposal-readiness-v1", gapCount: proposal.gaps.length }],
+          ? proposal.recommendedGaps.length > 0
+            ? `Required proposal fields are recorded; ${proposal.recommendedGaps.length} recommended contact ${proposal.recommendedGaps.length === 1 ? "detail remains" : "details remain"}.`
+            : "Required proposal fields are recorded."
+          : `${proposal.gaps.length} required proposal ${proposal.gaps.length === 1 ? "field needs" : "fields need"} review.`,
+        evidence: [{
+          model: "proposal-readiness-v1",
+          gapCount: proposal.gaps.length,
+          recommendedGapCount: proposal.recommendedGaps.length
+        }],
         completenessPercent: proposal.score
       },
       commercial: {

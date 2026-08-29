@@ -460,6 +460,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const guestInlineRef = useRef(null);
   const guestInspectRef = useRef(null);
   const staffingInspectRef = useRef(null);
+  const staffingContextTriggerRef = useRef(null);
   const pricingInspectRef = useRef(null);
   const moneyInspectRef = useRef(null);
   const conversationInspectRef = useRef(null);
@@ -851,9 +852,10 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
   };
 
-  const openStaffingContext = () => {
+  const openStaffingContext = (event) => {
     const action = model.actions.inspectStaffing;
     const runtimeToken = beginAction(action);
+    staffingContextTriggerRef.current = event?.currentTarget || staffingInspectRef.current;
     openExclusiveContext("staffing");
     acknowledge({
       action,
@@ -939,7 +941,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       label: "Proposal details ready",
       nextResolution: model.proposalObject.readiness.gaps.length > 0
         ? `Review ${model.proposalObject.readiness.gaps.length} proposal completeness ${model.proposalObject.readiness.gaps.length === 1 ? "gap" : "gaps"}, or continue to the existing proposal controls.`
-        : "Review what the customer sees or continue to the existing proposal controls.",
+        : model.proposalObject.readiness.recommendedGaps.length > 0
+          ? `Required proposal details are ready. Review ${model.proposalObject.readiness.recommendedGaps.length} recommended contact ${model.proposalObject.readiness.recommendedGaps.length === 1 ? "detail" : "details"}, or continue to the existing proposal controls.`
+          : "Review what the customer sees or continue to the existing proposal controls.",
       destination: {
         surface: model.surfaceContracts.proposalContext,
         isEmpty: false
@@ -1089,6 +1093,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
 
   const editArrivalContext = (action) => {
     const proposalReview = action?.id === model.actions.reviewProposalInEditor?.id;
+    const proposalHasRequiredGaps = model.proposalObject.readiness.gaps.length > 0;
     return {
       object: {
         ...action.arrivalContract.object,
@@ -1097,7 +1102,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       reason: action.arrivalContract.reason,
       consequence: action.arrivalContract.consequence,
       nextResolution: proposalReview
-        ? "Review the named proposal completeness fields and exact customer projection. Save only through the existing authoritative quote workflow, or leave the saved version unchanged."
+        ? proposalHasRequiredGaps
+          ? "Review the named proposal completeness fields and exact customer view. Save only through the existing authoritative quote workflow, or leave the saved version unchanged."
+          : "Review the recommended contact detail if it helps the team. It is optional, so you can save it intentionally or leave the proposal ready without it."
         : "Review the live price and dependencies, then save or leave the existing version unchanged."
     };
   };
@@ -1610,7 +1617,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
   };
 
-  const runNextAction = () => {
+  const runNextAction = (event) => {
     const nextAction = model.nextAction;
     if (nextAction.kind === "workflow") {
       const action = model.actions.primary;
@@ -1681,6 +1688,10 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           nextResolution: "Return to Opportunities or try the focused Workflow item again."
         });
       }
+      return;
+    }
+    if (nextAction.kind === "staffing") {
+      openStaffingContext(event);
       return;
     }
     if (nextAction.kind === "edit") {
@@ -2488,7 +2499,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       runtimeToken,
       kind: "resolved",
       label: "Proposal details closed",
-      nextResolution: "Review proposal details again, choose a completeness gap, or open the existing proposal controls."
+      nextResolution: model.proposalObject.readiness.gaps.length > 0
+        ? "Review proposal details again, choose a required completeness gap, or open the existing proposal controls."
+        : model.proposalObject.readiness.recommendedGaps.length > 0
+          ? "Review proposal details again, add the recommended contact detail if useful, or open the existing proposal controls."
+          : "Review proposal details again or open the existing proposal controls."
     });
   };
 
@@ -2916,7 +2931,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
 
   const proposalFooter = (
     <div className="ambient-context-actions">
-      {model.proposalObject.readiness.gaps.length > 0
+      {(model.proposalObject.readiness.gaps.length > 0
+        || model.proposalObject.readiness.recommendedGaps.length > 0)
         && model.actions.reviewProposalInEditor.enabled && (
           <button
             type="button"
@@ -2939,7 +2955,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           <ArrowRight size={17} aria-hidden="true" />
         </button>
       )}
-      {!(model.proposalObject.readiness.gaps.length > 0
+      {!((model.proposalObject.readiness.gaps.length > 0
+        || model.proposalObject.readiness.recommendedGaps.length > 0)
         && model.actions.reviewProposalInEditor.enabled)
         && !model.actions.openProposalControls.enabled && (
           <p className="ambient-boundary-note">
@@ -4401,8 +4418,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.staffingObject.why}
         consequence={model.staffingObject.consequence}
-        anchorRef={staffingInspectRef}
-        returnFocusRef={staffingInspectRef}
+        anchorRef={staffingContextTriggerRef}
+        returnFocusRef={staffingContextTriggerRef}
         onClose={dismissStaffingContext}
         closeActionId={model.actions.dismissStaffingContext.id}
         footer={staffingFooter}

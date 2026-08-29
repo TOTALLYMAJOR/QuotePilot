@@ -84,7 +84,7 @@ describe("AmbientProposalContext", () => {
     expect(container.textContent).toContain("Complete customer view");
     expect(container.textContent).not.toMatch(/\bprojection\b/iu);
     expect(container.textContent).toContain("Proposal completeness");
-    expect(container.textContent).toContain("No gaps");
+    expect(container.textContent).toContain("Required details ready");
     expect(container.textContent).toContain("What each status is based on");
     expect(container.textContent).toContain("What you can do next");
     expect(container.textContent).toContain("Why this is shown");

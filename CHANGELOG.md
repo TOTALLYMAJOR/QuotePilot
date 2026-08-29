@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 18:51:48 CDT
+Last updated: 2026-08-28 19:17:34 CDT
 
 All notable project changes are documented in this file.
 
@@ -184,6 +184,36 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Unified Ambient **Now**, **Opportunities**, and **Events** on one shared,
   outcome-led recovery primitive. Failed first reads now suppress raw provider
   text and duplicated evidence warnings, state what did not change, and offer
+- Corrected proposal-completeness semantics across Living Opportunity,
+  Opportunities, Event Workspace, Decide cards, and deterministic Pilot.
+  Customer phone is now a recommended contact enhancement rather than a
+  required proposal/send blocker: required completeness can reach **100%**
+  while the missing phone remains visible in a separate **Recommended contact
+  detail** treatment and an optional editor handoff. Required gaps alone block
+  the descriptive prepare/send model; the trusted controls still independently
+  recheck role, exact saved revision, authoritative pricing, customer email,
+  portal, provider configuration, and idempotency. No delivery, provider, or
+  backend authority changed.
+- Corrected the saved **Living Opportunity** next-action order so optional
+  customer-phone enrichment no longer outranks core event details or a visible
+  staffing-guide gap. Recorded Workflow attention remains first; required event
+  and proposal facts such as start time remain ahead of staffing; advisory
+  staffing review then precedes phone-only enrichment. When staffing is the
+  clearest next step, **Review staffing** opens the exact read-only staffing
+  context and returns focus to that same primary control on close. The guide
+  remains explicitly advisory and does not prove availability, assignments,
+  schedule fit, BEO freshness, cost, or operational readiness.
+- Corrected Proposal Composer completion and save-readiness language on a new
+  draft. The catalog-provided package and service style now appear as
+  **Preset** until staff explicitly review both fields or save the quote,
+  rather than claiming the Experience section is complete before any work.
+  Known save requirements change both save controls to an exact **Review N
+  blockers** action, keep that review available even when a true save is
+  disabled, open Quote Pulse, and move focus to the requirement list without
+  attempting persistence. Once the requirements are satisfied, the ordinary
+  save path and server checks remain unchanged. This is source/local browser
+  evidence only; it does not establish hosted save authority or human
+  acceptance.
   one primary retry plus one productive continuation. Opportunities keeps
   source detail available behind **About this view**; Now no longer fractures
   into implicit side-by-side columns at phone width. Events now leads with the

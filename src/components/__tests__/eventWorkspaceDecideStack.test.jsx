@@ -60,7 +60,7 @@ describe("EventWorkspaceView pilot Event Room dressing", () => {
     expect(markup).toContain('data-decide-stack="decide-stack-v1"');
     expect(markup).toContain("Staffing below the house ratio");
     expect(markup).toContain("Record the venue");
-    expect(markup).toContain('aria-label="Proposal readiness: 85%"');
+    expect(markup).toContain('aria-label="Proposal readiness: 89%"');
     expect(markup).not.toContain("<progress");
     expect(markup).toContain("Proposal completeness only");
     expect(markup).toContain("≈ +$264.00 labor at this quote&#x27;s average recorded server rate.");

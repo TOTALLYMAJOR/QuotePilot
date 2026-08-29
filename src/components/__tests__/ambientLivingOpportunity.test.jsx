@@ -263,9 +263,9 @@ describe("AmbientLivingOpportunity", () => {
     expect(surface.dataset.surfacePurpose).toContain("clarify");
     expect(surface.dataset.ambientRole).toBe("sales");
     expect(container.querySelector("h1")?.textContent).toBe("Autumn Benefit Dinner");
-    expect(container.textContent).toContain("Customer phone needs review");
+    expect(container.textContent).toContain("Event duration needs review");
     expect(container.textContent).toContain("Review draft");
-    expect(container.textContent).toContain("Customer phone needs review. Reviewing the draft is the clearest available next step.");
+    expect(container.textContent).toContain("Event duration needs review. Reviewing the draft is the clearest available next step.");
     expect(container.textContent).toContain("Proposal completeness only");
     const commercialHealth = container.querySelector('[data-momentum-domain="commercial_health"]');
     expect(commercialHealth).not.toBeNull();
@@ -284,7 +284,7 @@ describe("AmbientLivingOpportunity", () => {
     expect(remote).not.toBeNull();
     expect(remote.dataset.surfacePurpose).toContain("advance");
     expect(remote.textContent).toContain("Autumn Benefit Dinner");
-    expect(remote.textContent).toContain("Customer phone needs review");
+    expect(remote.textContent).toContain("Event duration needs review");
 
     const remoteButtons = [...remote.querySelectorAll("button")];
     expect(remoteButtons.map((item) => item.textContent.trim())).toEqual([
@@ -318,6 +318,32 @@ describe("AmbientLivingOpportunity", () => {
 
     act(() => remoteButtons[4].click());
     expect(onEditQuote).toHaveBeenCalledTimes(1);
+  });
+
+  test("opens exact staffing context from the ranked primary action and restores focus", async () => {
+    mount({
+      quote: {
+        ...QUOTE,
+        customer: { ...QUOTE.customer, phone: "" },
+        event: { ...QUOTE.event, hours: 5 }
+      }
+    });
+
+    expect(container.textContent).toContain("Staffing may need attention");
+    expect(container.textContent).toContain(
+      "Staffing may need attention. Reviewing staffing is the clearest available next step."
+    );
+    const primary = button("Review staffing");
+    expect(primary).toBeTruthy();
+
+    act(() => primary.click());
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain("Staffing suggestion");
+    expect(dialog?.textContent).toContain("2 additional servers");
+
+    act(() => dialog.querySelector('[aria-label="Close context"]').click());
+    await settle();
+    expect(document.activeElement).toBe(primary);
   });
 
   test("relays a global Pilot request into the exact populated opportunity context and restores its trigger", async () => {
@@ -653,6 +679,39 @@ describe("AmbientLivingOpportunity", () => {
       draftPatch: null
     });
     expect(QUOTE).toEqual(before);
+  });
+
+  test("presents a missing phone as recommended contact detail without proposal-blocking language", () => {
+    const onEditQuote = vi.fn(() => ({ status: "opened" }));
+    const quote = {
+      ...QUOTE,
+      customer: { ...QUOTE.customer, phone: "" },
+      event: { ...QUOTE.event, hours: 6, servers: 10, chefs: 3 }
+    };
+    mount({ quote, onEditQuote });
+
+    act(() => button("Review proposal").click());
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain("100% of the required proposal details are complete");
+    expect(dialog.textContent).toContain("Required details ready");
+    expect(dialog.textContent).toContain("Recommended contact detail");
+    expect(dialog.textContent).toContain("not required to prepare or send this proposal");
+    expect(dialog.querySelector('[data-proposal-gap="customer-phone"]')).toBeNull();
+    expect(dialog.querySelector('[data-proposal-recommendation="customer-phone"]')).not.toBeNull();
+
+    const review = button("Review recommended contact in editor");
+    expect(review).not.toBeUndefined();
+    act(() => review.click());
+
+    expect(onEditQuote).toHaveBeenCalledOnce();
+    expect(onEditQuote.mock.calls[0][1]).toMatchObject({
+      arrivalContext: {
+        reason: expect.stringContaining("recommended contact"),
+        nextResolution: expect.stringContaining("leave the proposal ready without it")
+      },
+      draftPatch: null
+    });
   });
 
   test("opens exact Conversation evidence, keeps overlays exclusive, restores focus, and routes without mutation", async () => {

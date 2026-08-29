@@ -4624,6 +4624,7 @@ export default function App({
       eventTemplates={effectiveSettings.eventTemplates || []}
       readiness={proposalReadiness}
       editingQuote={editingQuote}
+      touchedFields={touchedFields}
       quoteDirty={quoteDirty}
       saving={submitState.saving}
       saveLabel={submitState.saving

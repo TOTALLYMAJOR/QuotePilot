@@ -79,6 +79,9 @@ export default function AmbientProposalContext({ model }) {
 
   const fields = safeFields(model);
   const gaps = Array.isArray(model.readiness.gaps) ? model.readiness.gaps : [];
+  const recommendedGaps = Array.isArray(model.readiness.recommendedGaps)
+    ? model.readiness.recommendedGaps
+    : [];
   const dependencies = Array.isArray(model.descriptor.dependencies)
     ? model.descriptor.dependencies
     : [];
@@ -134,7 +137,7 @@ export default function AmbientProposalContext({ model }) {
             <h4 id="ambient-proposal-readiness-title">Proposal completeness</h4>
             <p>{model.readiness.score}% of the required proposal details are complete.</p>
           </div>
-          <strong>{gaps.length === 0 ? "No gaps" : `${gaps.length} ${gaps.length === 1 ? "gap" : "gaps"}`}</strong>
+          <strong>{gaps.length === 0 ? "Required details ready" : `${gaps.length} ${gaps.length === 1 ? "gap" : "gaps"}`}</strong>
         </div>
         {gaps.length > 0 ? (
           <ul className="ambient-proposal-context__gaps" aria-label="Proposal completeness gaps">
@@ -147,6 +150,19 @@ export default function AmbientProposalContext({ model }) {
           </ul>
         ) : (
           <p className="ambient-proposal-context__caught-up">All required proposal details are present. This does not show delivery or acceptance.</p>
+        )}
+        {recommendedGaps.length > 0 && (
+          <div className="ambient-proposal-context__recommendations">
+            <strong>Recommended contact detail</strong>
+            <ul aria-label="Recommended proposal details">
+              {recommendedGaps.map((gap) => (
+                <li key={gap.id} data-proposal-recommendation={gap.id}>
+                  <span>{gap.label}</span>
+                  <small>Helpful for follow-up and event-day contact, but not required to prepare or send this proposal.</small>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 

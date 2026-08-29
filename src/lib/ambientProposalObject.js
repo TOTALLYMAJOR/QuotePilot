@@ -275,6 +275,7 @@ function projectionEvidence(quote, savedEvidence, readiness) {
     fields,
     missingFields,
     readinessGapIds: readiness.gaps.map((gap) => gap.id),
+    recommendedGapIds: readiness.recommendedGaps.map((gap) => gap.id),
     exactCurrent: state === "available" && savedEvidence.exact,
     reason,
     boundary: "Opening this projection does not send a message, issue a portal, establish provider acceptance, or create customer viewed evidence."
@@ -604,7 +605,9 @@ export function buildAmbientProposalObject(quote = {}, {
     type: "customer-decision-artifact",
     label: "Proposal",
     summary: readiness.complete
-      ? "All required proposal details are present. The customer view and delivery details remain separate."
+      ? readiness.recommendedGaps.length > 0
+        ? `All required proposal details are present. ${readiness.recommendedGaps.length} recommended contact ${readiness.recommendedGaps.length === 1 ? "detail is" : "details are"} still available to add.`
+        : "All required proposal details are present. The customer view and delivery details remain separate."
       : `${readiness.gaps.length} required proposal ${readiness.gaps.length === 1 ? "detail needs" : "details need"} attention.`,
     inspectorSurfaceId: "proposal-context",
     dependencies: [
@@ -632,7 +635,9 @@ export function buildAmbientProposalObject(quote = {}, {
     why: "Proposal details, the customer view, customer-link status, and email delivery stay separate so one cannot stand in for another.",
     consequence: "Preparing may create a staff copy. Sending, replacing the customer link, and delivery recovery happen in their existing controls, which recheck access, quote version, current pricing, customer link, and delivery state.",
     doNothing: readiness.complete
-      ? "The saved proposal and every customer, portal, delivery, acceptance, and payment evidence domain remain unchanged."
+      ? readiness.recommendedGaps.length > 0
+        ? "The saved proposal remains unchanged and ready for governed review; the recommended contact detail remains blank."
+        : "The saved proposal and every customer, portal, delivery, acceptance, and payment evidence domain remain unchanged."
       : `The ${readiness.gaps.length} recorded completeness ${readiness.gaps.length === 1 ? "gap remains" : "gaps remain"}; nothing is repriced, published, or sent.`,
     confidence: {
       level: state === "current" ? "high" : state === "local_preview" ? "low" : state === "needs_resolution" ? "medium" : "unavailable",
@@ -657,7 +662,12 @@ export function buildAmbientProposalObject(quote = {}, {
           summary: `Resolve ${readiness.gaps[0].label.toLowerCase()} before preparing or sending the proposal.`,
           actionId: `resolve-proposal-gap-${readiness.gaps[0].id}`
         }
-      : null,
+      : readiness.recommendedGaps[0]
+        ? {
+            summary: `Add ${readiness.recommendedGaps[0].label.toLowerCase()} when it would help follow-up; it does not block preparation or sending.`,
+            actionId: `review-proposal-recommendation-${readiness.recommendedGaps[0].id}`
+          }
+        : null,
     permissions: {
       view: STAFF_ROLES.has(normalizedRole),
       simulate: false,
