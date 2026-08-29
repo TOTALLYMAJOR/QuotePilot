@@ -53,6 +53,21 @@ describe("workspace route parsing and construction", () => {
     });
   });
 
+  test("redirects client-language aliases to the canonical customer routes", () => {
+    expect(parseWorkspacePath("/app/clients/")).toMatchObject({
+      routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
+      canonicalPath: "/app/customers",
+      redirectTo: "/app/customers"
+    });
+
+    expect(parseWorkspacePath("/app/clients/customer%3A01_%28west%29")).toMatchObject({
+      routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
+      canonicalPath: "/app/customers/customer%3A01_%28west%29",
+      redirectTo: "/app/customers/customer%3A01_%28west%29",
+      params: { customerId: "customer:01_(west)" }
+    });
+  });
+
   test("builds and parses opaque customer and quote identifiers", () => {
     const customerPath = buildCustomerPath("customer:01_(west)");
     const quotePath = buildQuotePath("quote:01_(draft)");
@@ -93,11 +108,16 @@ describe("workspace route parsing and construction", () => {
       routeId: WORKSPACE_ROUTE_IDS.NOT_FOUND,
       isWorkspace: true
     });
+    expect(parseWorkspacePath("/app/clients/customer%40example.com")).toMatchObject({
+      routeId: WORKSPACE_ROUTE_IDS.NOT_FOUND,
+      isWorkspace: true
+    });
   });
 
   test("treats malformed, reserved, and extra-deep workspace paths as authenticated not-found routes", () => {
     for (const pathname of [
       "/app/customers/%E0%A4%A",
+      "/app/clients/%E0%A4%A",
       "/app/quotes/new/edit",
       "/app/quotes/a/extra",
       "/app/unknown"

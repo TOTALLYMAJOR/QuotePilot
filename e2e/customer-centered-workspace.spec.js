@@ -14,6 +14,12 @@ const PILOT_TRANSFORMATION_ENABLED = [
 ].every((name) => ["1", "true", "yes", "on"].includes(
   String(process.env[name] || "").trim().toLowerCase()
 ));
+const AMBIENT_UI_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(process.env.VITE_AMBIENT_UI_ENABLED || "").trim().toLowerCase()
+);
+const LOCAL_REVIEW_FIXTURES_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(process.env.VITE_E2E_LOCAL_REVIEW_FIXTURES || "").trim().toLowerCase()
+);
 const HOME_HEADING = /What (?:needs|deserves) your attention/;
 
 async function gotoWorkspace(page, path) {
@@ -160,6 +166,27 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
   });
 
+  test("client-language aliases replace to the canonical customer routes", async ({ page }) => {
+    test.skip(
+      !(AMBIENT_UI_ENABLED && LOCAL_REVIEW_FIXTURES_ENABLED),
+      "Exact Client alias proof needs the Ambient local review fixture."
+    );
+
+    await gotoWorkspace(page, "/app/clients");
+    await expect(page).toHaveURL(/\/app\/customers$/);
+    await expect(page.getByRole("heading", { name: "Clients", level: 1 })).toBeVisible();
+
+    const firstClientName = await page.locator("#ambient-client-directory h2").first().textContent();
+    await page.locator("#ambient-client-directory").getByRole("button", { name: "Review client" }).first().click();
+    const canonicalUrl = new URL(page.url());
+    const customerId = canonicalUrl.pathname.split("/").at(-1);
+    expect(customerId).toBeTruthy();
+
+    await gotoWorkspace(page, `/app/clients/${customerId}`);
+    await expect(page).toHaveURL(new RegExp(`/app/customers/${customerId}$`));
+    await expect(page.getByRole("heading", { name: firstClientName, level: 1 })).toBeVisible();
+  });
+
   test("the production pilot matrix exposes NOW, Event Room, command, margins, and staged client changes", async ({ page }) => {
     test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
     await seedPilotQuote(page);
@@ -232,6 +259,62 @@ test.describe("customer-centered workspace", () => {
     expect(await page.evaluate(() => (
       document.documentElement.scrollWidth <= document.documentElement.clientWidth
     ))).toBe(true);
+  });
+
+  test("mobile Clients leads with the highest-priority relationship view and preserves exact client handoff", async ({ page }) => {
+    test.skip(
+      !(AMBIENT_UI_ENABLED && LOCAL_REVIEW_FIXTURES_ENABLED),
+      "The Ambient Clients journey needs the explicit local review fixture."
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoWorkspace(page, "/app/customers");
+
+    const priority = page.locator(".ambient-clients__mobile-priority");
+    const metrics = page.locator(".ambient-clients__metrics");
+    const desktopFilters = page.locator(".ambient-clients__filters");
+    const mobileFilter = page.locator(".ambient-clients__mobile-filter select");
+    const directory = page.locator("#ambient-client-directory");
+
+    await expect(priority).toBeVisible();
+    await expect(priority).toContainText("7 clients need contact details");
+    await expect(priority).toContainText("24 clients are shown on this page");
+    await expect(metrics).toBeHidden();
+    await expect(desktopFilters).toBeHidden();
+    await expect(mobileFilter).toBeVisible();
+    await expect(mobileFilter).toHaveValue("all");
+
+    await priority.getByRole("button", { name: "Review contact gaps" }).click();
+    await expect(mobileFilter).toHaveValue("contact_gap");
+    await expect(directory).toBeFocused();
+    await expect(directory.locator("[data-client-id]")).toHaveCount(7);
+    await expect(directory.locator(".ambient-client__state")).toHaveText([
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact"
+    ]);
+
+    const selectBox = await mobileFilter.boundingBox();
+    expect(selectBox).not.toBeNull();
+    expect(selectBox.x).toBeGreaterThanOrEqual(0);
+    expect(selectBox.x + selectBox.width).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    ))).toBe(true);
+
+    const firstClientName = await directory.locator("h2").first().textContent();
+    await directory.getByRole("button", { name: "Review client" }).first().click();
+    await expect(page).toHaveURL(/\/app\/customers\/[a-z0-9-]+$/u);
+    await expect(page.getByRole("heading", { name: firstClientName, level: 1 })).toBeVisible();
+
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goBack();
+    await expect(metrics).toBeVisible();
+    await expect(priority).toBeHidden();
+    await expect(desktopFilters).toBeVisible();
   });
 
   test("explicit New quote discard and browser-exit protection remain attached to a dirty routed draft", async ({ page }) => {

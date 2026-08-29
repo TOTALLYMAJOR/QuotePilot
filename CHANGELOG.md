@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 19:38:35 CDT
+Last updated: 2026-08-28 19:54:39 CDT
 
 All notable project changes are documented in this file.
 
@@ -233,6 +233,16 @@ This changelog is backfilled from git history and will be maintained going forwa
   exact planning view or quote record; direct live/replay links explain the
   unavailable capability and offer a truthful return to **Event Focus** instead
   of sending the operator into another predictable dead end.
+- Aligned the visible **Clients** language with direct and shared-link behavior.
+  `/app/clients` and `/app/clients/<customerId>` now validate and replace to the
+  single canonical `/app/customers` list/detail routes, preserving exact opaque
+  client identity without creating a duplicate navigation or data authority.
+- Reprioritized the Ambient Clients journey for phone-width work. Mobile now
+  replaces the four-card reporting block and overflowing filter-chip row with
+  one truthful suggested view, an exact count-backed action, and a contained
+  native view selector. Selecting the suggestion focuses the bounded client
+  directory and narrows only the current page; desktop metrics, role-safe
+  client handoffs, relationship authority, and source boundaries are unchanged.
 - Compressed completed CREATE intake on desktop and mobile. Applying extracted
   inquiry facts now turns the long evidence panel into a compact `Inquiry
   added` handoff, keeps any unconfirmed-detail count visible, and offers

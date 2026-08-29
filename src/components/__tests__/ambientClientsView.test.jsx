@@ -281,6 +281,43 @@ describe("AmbientClientsView", () => {
     expect(container.textContent).toContain("Contact Gap Client");
   });
 
+  test("turns the highest-priority mobile relationship gap into one focused directory view", async () => {
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel({
+          rows: [
+            directoryRow(1),
+            directoryRow(2, {
+              identity: {
+                name: "Contact Gap Client",
+                company: "",
+                email: "contact-gap@example.com",
+                phone: ""
+              },
+              latest: { quoteNumber: "", eventName: "", eventDate: "" }
+            })
+          ]
+        })}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+
+    const priority = container.querySelector(".ambient-clients__mobile-priority");
+    expect(priority.getAttribute("data-capability-state")).toBe("attention");
+    expect(priority.textContent).toContain("1 client needs contact details");
+    expect(priority.textContent).toContain("2 clients are shown on this page");
+    expect(container.querySelector(".ambient-clients__mobile-filter select").value).toBe("all");
+
+    act(() => priority.querySelector("button").click());
+    await settleFrame();
+
+    expect(container.querySelector(".ambient-clients__mobile-filter select").value).toBe("contact_gap");
+    expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
+    expect(container.textContent).toContain("Contact Gap Client");
+    expect(container.textContent).not.toContain("Client 1");
+    expect(document.activeElement).toBe(container.querySelector("#ambient-client-directory"));
+  });
+
   test("acknowledges a client selection in context during the same activation that requests navigation", () => {
     const onOpenClient = vi.fn(() => ({ status: "pending" }));
     mount(

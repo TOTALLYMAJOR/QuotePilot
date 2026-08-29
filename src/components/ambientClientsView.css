@@ -116,6 +116,11 @@
   letter-spacing: -0.04em;
 }
 
+.ambient-clients__mobile-priority,
+.ambient-clients__mobile-filter {
+  display: none;
+}
+
 .ambient-clients__toolbar {
   display: grid;
   grid-template-columns: minmax(16rem, 1fr) auto auto auto auto;
@@ -141,6 +146,7 @@
 
 .ambient-clients__toolbar button,
 .ambient-clients__filters button,
+.ambient-clients__mobile-priority button,
 .ambient-client__primary,
 .ambient-client-overview__primary,
 .ambient-client-overview__secondary,
@@ -173,6 +179,8 @@
 .ambient-clients__toolbar button:focus-visible,
 .ambient-clients__filters button:hover,
 .ambient-clients__filters button:focus-visible,
+.ambient-clients__mobile-priority button:hover,
+.ambient-clients__mobile-priority button:focus-visible,
 .ambient-client__primary:hover,
 .ambient-client__primary:focus-visible,
 .ambient-client-overview button:hover,
@@ -684,25 +692,99 @@
   }
 
   .ambient-clients__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: none;
   }
 
-  .ambient-clients__metrics > div:nth-child(3) {
-    border-left: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
+  .ambient-clients__mobile-priority {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.9rem;
+    align-items: center;
+    padding: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.08);
   }
 
-  .ambient-clients__metrics > div:nth-child(4) {
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
+  .ambient-clients__mobile-priority > div {
+    display: grid;
+    min-width: 0;
+    gap: 0.25rem;
+  }
+
+  .ambient-clients__mobile-priority strong,
+  .ambient-clients__mobile-priority span {
+    display: block;
+  }
+
+  .ambient-clients__mobile-priority strong {
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+
+  .ambient-clients__mobile-priority span {
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.76rem;
+    line-height: 1.4;
+  }
+
+  .ambient-clients__mobile-priority button {
+    border-color: #c79435;
+    background: var(--client-gold);
+    color: #151617;
+    white-space: nowrap;
   }
 
   .ambient-clients__toolbar {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr 1fr;
   }
 
   .ambient-clients__search,
   .ambient-clients__toolbar .ambient-clients__start {
     grid-column: 1 / -1;
+  }
+
+  .ambient-clients__toolbar .ambient-clients__start {
+    border-color: rgba(255, 255, 255, 0.24);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .ambient-clients__filters {
+    display: none;
+  }
+
+  .ambient-clients__mobile-filter {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .ambient-clients__mobile-filter select {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--client-ink);
+    padding: 0 2.25rem 0 0.75rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 750;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .ambient-clients__mobile-filter select:focus-visible {
+    outline: 2px solid var(--client-gold);
+    outline-offset: 2px;
   }
 
   .ambient-clients__directory,
@@ -736,6 +818,11 @@
   .ambient-client__state {
     grid-row: 1;
     justify-self: end;
+    max-width: 8rem;
+    overflow: visible;
+    text-align: right;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .ambient-client__primary {
@@ -780,12 +867,12 @@
 }
 
 @media (max-width: 460px) {
-  .ambient-clients__toolbar {
-    grid-template-columns: 1fr 1fr;
+  .ambient-clients__mobile-priority {
+    grid-template-columns: 1fr;
   }
 
-  .ambient-clients__toolbar .ambient-clients__refresh {
-    grid-column: 1 / -1;
+  .ambient-clients__mobile-priority button {
+    width: 100%;
   }
 
   .ambient-client__identity {

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 19:38:35 CDT
+Last updated: 2026-08-28 19:54:39 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -261,12 +261,21 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   directory. Search uses normalized customer name or email prefixes; page
   controls keep the read bounded. Routes use an opaque customer ID, never an
   email address.
+- The client-language convenience routes `/app/clients` and
+  `/app/clients/<customerId>` replace themselves with the corresponding
+  canonical `/app/customers` route. They do not create a second directory,
+  duplicate customer state, or relax opaque-ID validation.
 - In the Ambient Clients view, use the compact command header to inspect only
   this page's **Clients shown**, **With linked work**, **Upcoming events**, and **Contact details to add**
   counts. The filters narrow the current bounded page; they do not rank a
   relationship, search older pages, or infer engagement. Each dense row keeps
   identity, the latest recorded link, contact data, one relationship state,
   and one **Review client** action aligned.
+- On a phone, QuotePilot replaces those four desktop metric cards with one
+  **Suggested next view** based only on the current page. Select its action to
+  focus the bounded directory on contact gaps, upcoming events, or all clients;
+  use **View clients** to choose another exact page filter. This changes no
+  customer, quote, conversation, booking, payment, or provider evidence.
 - Select a customer name or `Open 360` to open
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
