@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 02:21:11 CDT
+Last updated: 2026-08-29 02:34:41 CDT
 
 ## Current Production Release
 
@@ -81,12 +81,12 @@ Last updated: 2026-08-29 02:21:11 CDT
   passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
   auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
   Lighthouse/CWV pass.
-- Release PR #111 publishes `release/v0.16.0`. Exact candidate parent
-  `55d37faa1cb266137f156037626c3266f71035f2` passed CI Quality run
-  `33239568701`, including all eight required jobs, the exact Ambient
+- Release PR #111 publishes `release/v0.16.0`. Exact candidate
+  `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run
+  `33240762183`, including all eight required jobs, the exact Ambient
   zero-dead-click journey, both bundle graphs, the production flag matrix, and
   the advisory Product Truth Digest. Exact-SHA Stripe Connect source-only runs
-  `33239568718` and `33239568653` also passed without credentials, exports,
+  `33240762176` and `33240762182` also passed without credentials, exports,
   provider calls, plan, apply, or deploy.
 - Governed candidate deployment was attempted for both targets and stopped
   before provider mutation or receipt reservation. Firebase staging lacks an
@@ -97,10 +97,13 @@ Last updated: 2026-08-29 02:21:11 CDT
   and create the non-provider staging placeholder through the secret process,
   deploy the Firebase `staging-safe-off` candidate, verify the Functions
   readback, then deploy Vercel preview.
-- A pending bounded release-tooling correction makes the candidate command use
+- The bounded release-tooling correction makes the candidate command use
   `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI for
-  CI verification. It fails clearly when none is available and changes no
-  deployment authority, secret handling, provider target, or promotion gate.
+  CI verification. A live exact-SHA run with both token environment variables
+  explicitly unset verified CI through the CLI and reached the real missing
+  staging-secret prerequisite. It stopped before receipt reservation or
+  provider mutation and changes no deployment authority, secret handling,
+  provider target, or promotion gate.
 - The tracked `staging-safe-off` UAT plan still has 17 applicable and 21
   blocked items for Firebase-all, and 11 applicable and 7 blocked items for
   Vercel preview. Applicable hosted results and named human review remain

@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 02:05:00 CDT
+Last updated: 2026-08-29 02:34:41 CDT
 
-Checkpoint recorded: 2026-08-29T07:05:00Z
+Checkpoint recorded: 2026-08-29T07:34:41Z
 
 ## Decisions made
 
@@ -25,6 +25,7 @@ Checkpoint recorded: 2026-08-29T07:05:00Z
 17. Reconcile the Ambient temporary exception to the larger literal exact-candidate measurement, 3,928,552 bytes, after exact-SHA CI exposed that the earlier ceiling described only a partial source checkpoint. Preserve the 391,901-byte largest-chunk ceiling and add no discretionary aggregate headroom.
 18. Do not bypass the candidate prerequisite checker. An absent staging invitation-token placeholder and an unproven Commercial Change false readback are real deployment blockers, not permission to use direct provider CLIs.
 19. Stop the autonomous promotion at the published/green-CI boundary. Creating a Secret Manager value requires separate authorization, and production promotion remains gated by complete positive-path hosted/human evidence.
+20. Treat an authenticated local GitHub CLI session as valid read-only CI proof input after explicit token variables, but never as broader provider or deployment authority. Preserve the candidate's independent secret, staging, UAT, and production gates.
 
 ## Unresolved decisions
 

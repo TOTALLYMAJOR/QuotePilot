@@ -1,8 +1,8 @@
 # Open Questions
 
-Last updated: 2026-08-29 02:05:00 CDT
+Last updated: 2026-08-29 02:34:41 CDT
 
-Checkpoint recorded: 2026-08-29T07:05:00Z
+Checkpoint recorded: 2026-08-29T07:34:41Z
 
 1. Who is the named release-PR and hosted-UAT reviewer, and which authorized tenant/operator account will execute the authenticated journey?
 2. Who authorizes and executes creation of the non-provider staging `STAFF_INVITATION_TOKEN_SECRET` placeholder, and who verifies only that an enabled version exists without exposing its value?

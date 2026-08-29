@@ -1,20 +1,20 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 02:05:00 CDT
+Last updated: 2026-08-29 02:34:41 CDT
 
-Checkpoint recorded: 2026-08-29T07:05:00Z
+Checkpoint recorded: 2026-08-29T07:34:41Z
 
 ## Published candidate, exact CI, and deployment boundary
 
-- File/path: Release PR #111; branch `release/v0.16.0`; CI runs `33239568701`, `33239568718`, and `33239568653`
-- Evidence: Exact parent `55d37faa1cb266137f156037626c3266f71035f2` is clean and published. CI Quality passed all eight jobs. The dedicated Ambient route-handoff journey passed 1 of 1; the production flag matrix passed 2 of 2; compatibility measured 3,210,757 / 384,998 bytes in the production-profile job and Ambient measured 3,928,479 / 388,269 against ceilings 3,213,578 / 391,901 and 3,928,552 / 391,901. Stripe Connect onboarding and infrastructure source-only workflows passed without provider action.
+- File/path: Release PR #111; branch `release/v0.16.0`; CI runs `33240762183`, `33240762176`, and `33240762182`
+- Evidence: Exact candidate `7f6d40bec472a82ce6e0b9ead063410a23ca154b` is clean and published. CI Quality passed all eight jobs. The dedicated Ambient route-handoff journey and production flag matrix passed; both bundle graphs, Firebase auth/rules, authoritative pricing, Core Web Vitals, Docker, and Product Truth Digest passed. Stripe Connect onboarding and infrastructure source-only workflows passed without provider action.
 - Why it matters: The assembled product candidate has immutable remote source/CI proof and the prior Ambient test and budget drift are repaired without weakening dormant capability boundaries.
 - Confidence: High for exact Git and CI evidence.
 - Unverified gaps: Hosted candidates, production, tenant/provider behavior, physical devices, human acceptance, use, and outcomes remain separate.
 
-- File/path: `scripts/deploy-release-candidate.mjs`; governed Firebase candidate attempt
-- Evidence: The first invocation without a GitHub token stopped at the read-only CI lookup with HTTP 404. Re-running with the existing authenticated CLI token cleared CI verification, then stopped before receipt reservation or provider mutation because staging Secret Manager has no enabled `STAFF_INVITATION_TOKEN_SECRET`. The command explicitly refuses to create or inspect secret values.
-- Why it matters: Firebase staging is not deployable until a separately authorized, non-provider placeholder exists; no deployment or secret mutation occurred.
+- File/path: `scripts/deploy-release-candidate.mjs`; governed Firebase candidate attempt at `7f6d40bec472a82ce6e0b9ead063410a23ca154b`
+- Evidence: The repository now resolves GitHub CI authentication from `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI. Unit coverage asserts the order and bounded failure. A live candidate command with both token environment variables explicitly unset verified exact CI run `33240762183` through the CLI, then stopped before receipt reservation or provider mutation because staging Secret Manager has no enabled `STAFF_INVITATION_TOKEN_SECRET`. The command explicitly refuses to create or inspect secret values.
+- Why it matters: The false unauthenticated GitHub API 404 is removed, while Firebase staging remains fail-closed until a separately authorized non-provider placeholder exists; no deployment or secret mutation occurred.
 - Confidence: High; failure happened in the prerequisite sequence before reservation and mutation.
 - Unverified gaps: Secret creation authorization, enabled-version receipt, Firebase candidate deploy, Functions/rules/Hosting readback, and hosted UAT.
 

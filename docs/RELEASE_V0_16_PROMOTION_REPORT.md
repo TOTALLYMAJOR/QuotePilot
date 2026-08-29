@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 02:21:11 CDT
+Last updated: 2026-08-29 02:34:41 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -94,12 +94,12 @@ provider, tenant, physical-device, and human results remain separate.
 ## Promotion Execution Status
 
 - Release branch `release/v0.16.0` is published in PR #111. Exact candidate
-  parent `55d37faa1cb266137f156037626c3266f71035f2` passed CI Quality run
-  `33239568701`: all eight required jobs passed, including the repaired Ambient
+  `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run
+  `33240762183`: all eight required jobs passed, including the repaired Ambient
   release journey, both bundle graphs, Firebase auth/rules, authoritative
   pricing, Core Web Vitals, Docker, and Product Truth Digest.
-- Exact-SHA Stripe Connect onboarding run `33239568718` and infrastructure run
-  `33239568653` passed their source-only dormant contracts. They performed no
+- Exact-SHA Stripe Connect onboarding run `33240762176` and infrastructure run
+  `33240762182` passed their source-only dormant contracts. They performed no
   credential use, provider call, Terraform plan/apply, export, or deployment.
 - The governed Firebase candidate command stopped before mutation and before
   receipt reservation because staging Secret Manager has no enabled
@@ -108,11 +108,14 @@ provider, tenant, physical-device, and human results remain separate.
 - The governed Vercel preview command also stopped before mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions
   readback does not prove `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`.
-- Release-candidate CI authentication is hardened in the pending repository
-  slice: the tool uses `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated
-  local GitHub CLI, and otherwise fails clearly before provider mutation. This
-  removes the misleading unauthenticated GitHub API 404 without weakening any
-  staging, secret, UAT, or production prerequisite.
+- Release-candidate CI authentication is hardened: the tool uses
+  `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI, and
+  otherwise fails clearly before provider mutation. An exact-SHA Firebase
+  candidate run with both token environment variables explicitly unset used
+  the CLI successfully, verified CI, then stopped before receipt reservation
+  or provider mutation on the same missing staging secret. This removes the
+  misleading unauthenticated GitHub API 404 without weakening any staging,
+  secret, UAT, or production prerequisite.
 - The maximum safe promotion achieved in this pass is therefore publication
   plus exact-SHA CI qualification. No Firebase staging, Vercel preview, main,
   tag, production, tenant, Stripe, Steward, SMS, or buyer-access mutation was
