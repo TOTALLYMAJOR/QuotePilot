@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 18:27:06 CDT
+Last updated: 2026-08-29 18:56:00 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -160,7 +160,9 @@ git push origin v<major>.<minor>.<patch>
     state-and-organization confirmation, and retain verified readback. The
     workflow must prove the semantic tag, exact deploy run, and both
     staffing bindings before its distinct least-privilege WIF identity changes
-    the one tenant field. The reversible data mutation is separate from both
+    the one tenant field. Its Firestore PATCH must carry
+    `currentDocument.exists=true`, preserving update-only authority and failing
+    closed if the canonical settings document is absent. The reversible data mutation is separate from both
     application deployment and operator-workflow publication. Workflow inputs
     must be mapped through step environment variables and never interpolated
     directly into executable shell bodies that can access provider credentials.

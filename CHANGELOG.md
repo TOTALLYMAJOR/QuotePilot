@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 18:27:06 CDT
+Last updated: 2026-08-29 18:56:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -28,6 +28,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   where no receipt exists.
 
 ### Fixed
+- Forced the protected operational-staffing tenant PATCH to require an
+  existing settings document. The operator workflow can now exercise only its
+  `datastore.entities.update` authority and cannot silently turn the bounded
+  field update into a document create; focused tests pin the Firestore
+  `currentDocument.exists=true` precondition.
 - Declared the Steward workbench's `prop-types` runtime dependency explicitly,
   so clean installs and exact-SHA CI resolve the component instead of relying
   on an unrelated local dependency tree.
