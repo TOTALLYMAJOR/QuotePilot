@@ -1,6 +1,6 @@
 # Decision Log
 
-Last updated: 2026-08-29 14:23:06 CDT
+Last updated: 2026-08-29 15:28:21 CDT
 
 Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
@@ -36,6 +36,10 @@ Checkpoint recorded: 2026-08-29T19:20:40.340Z
 28. Superseded on 2026-08-29: the owner explicitly authorized the staffing operationalization path for tenant `250`, including preparation and execution of WIF/IAM, governed release, canonical provisioning, protected tenant activation, and rollback when their fail-closed prerequisites pass.
 29. Bind positive non-production staffing proof to a separate `staging-staffing-authority` profile. Preserve `staging-safe-off`; require the selected profile to match CLI input, Functions dotenv, active-revision readback, hosted manifest, and receipt. A global staging gate never substitutes for the separate disposable-tenant gate.
 30. Keep the three named humans in distinct duties: tenant administration/primary staffing operation, tenant sales/operator acceptance, and release/UAT review/final approval. Do not infer a GitHub reviewer identity from an email address.
+31. Preserve the first successful WIF/IAM and repository-variable readbacks, but retain the legacy Firebase token until an exact protected workflow proves token exchange and deployment; configuration is not execution evidence.
+32. Treat each failed candidate attempt according to its actual boundary. Preflight failures are not provider mutation; a reserved `partial` receipt after a Firebase call is not a completed deployment and must not be retried under the same immutable receipt identity.
+33. Keep the pinned Firebase Functions graph compatible with the checksum-pinned Firebase analyzer and defer optional Kitchen BEO renderer loading until invocation. Require `--force` explicitly for the repository's tracked retry-enabled event functions instead of depending on an interactive acknowledgement.
+34. Record Cloud Scheduler API enablement caused by Firebase preflight even though the command used `--dry-run`; dry-run is not a universal no-provider-mutation guarantee.
 
 ## Unresolved decisions
 
@@ -43,4 +47,4 @@ Checkpoint recorded: 2026-08-29T19:20:40.340Z
 2. Unresolved: Whether Product Truth Observability remains advisory or becomes a required CI gate after owner comprehension and freshness calibration.
 3. Partially resolved: Staffing now has owner-designated administrator, sales/operator, and release/UAT roles. Stripe Connect, Steward, provider-specific, and manual accessibility ownership remains unresolved, and provider/GitHub account bindings still require verification.
 4. Unresolved: Which production-authorized Truth Loop source bundle and evaluation instant should be evaluated first.
-5. Resolved for authorization: the product owner approved the current agent to prepare and provision the WIF provider, separate deploy and tenant-operator identities, reviewed least-privilege bindings, and repository variables. Execution and provider readback remain pending and cannot be called complete from approval alone.
+5. Resolved for provisioning: the approved WIF provider, separate deploy and tenant-operator identities, least-privilege bindings, and repository variables now have provider readback and no service-account keys. First exact workflow token exchange, effective deployment proof, tenant-operation receipt, and safe legacy-secret retirement remain unresolved execution evidence.

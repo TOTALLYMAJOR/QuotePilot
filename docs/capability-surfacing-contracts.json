@@ -2823,7 +2823,7 @@
     },
     {
       "id": "trusted-kitchen-beo-authority",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -2902,8 +2902,8 @@
           "locator": "## Trusted Kitchen BEO generation and artifact freshness"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were reviewed together.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "The existing quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were verified unchanged. The server PDF renderer now loads only after the existing authorization and input-validation boundary; exports, role authority, UI states, receipt semantics, and recovery behavior are unchanged.",
       "stateEvidence": [
         {
           "state": "loading",

@@ -1,10 +1,60 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 14:33:12 CDT
+Last updated: 2026-08-29 15:42:14 CDT
 
 Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
 ## Published candidate, exact CI, and deployment boundary
+
+- File/path: Branch `release/v0.16.0` through exact
+  `5a0c55ec4efea279f14387a4d68265b3bc8ebcfb`; CI Quality runs
+  `33271755281`, `33272292112`, and `33272856057`; governed
+  `staging-staffing-authority` candidate attempts
+- Evidence: Each published staffing-control correction passed all eight exact
+  CI Quality jobs and both matching Stripe source-only workflows. The first
+  candidate attempt stopped before receipt reservation because Firebase
+  15.24.0 reports enabled secret versions with a structured `secret` field.
+  The second stopped before reservation because user ADC Rules requests lacked
+  an explicit staging quota-project header. The third passed preflight,
+  reserved its profile-qualified receipt, and reached Firebase, but Functions
+  manifest analysis returned HTTP 400 before deployment because Firebase Admin
+  14 resolved `jwks-rsa` 4 / ESM-only `jose` 6. That receipt is `partial`, with
+  provider mutation attempted and completion unproven; it is not deployment or
+  hosted evidence.
+- Why it matters: The candidate process failed at explicit, independently
+  repairable client/analyzer boundaries without converting partial execution
+  into a successful staging claim.
+- Confidence: High for exact Git/CI identities, command failures, and receipt
+  status.
+- Unverified gaps: A fresh exact-SHA governed candidate receipt, Functions,
+  Hosting and Rules readback, Vercel preview, hosted UAT, and human acceptance.
+
+- File/path: Staging project `quotepilot-staging-20260804`; ignored staging
+  Functions dotenv; Secret Manager metadata; checksum-pinned Firebase 15.24.0
+  Functions dry run; current dependency/analyzer compatibility slice
+- Evidence: The staging Functions gate now selects the explicit
+  `staging-staffing-authority` profile while payment, buyer, email, SMS,
+  Commercial Change, and Revenue Autopilot authorities remain disabled. A
+  random staging-only version was created for `STAFF_INVITATION_TOKEN_SECRET`
+  and for the three previously unenumerated bound SMS secrets
+  `PINGRAM_API_KEY`, `PINGRAM_WEBHOOK_SECRET`, and
+  `SMS_CONTACT_DIGEST_SECRET`; no value was printed or committed. The current
+  Functions graph pins Firebase Admin 13.6.0 with `jwks-rsa` 3 / `jose` 4,
+  audits at zero findings, and defers `jspdf` loading until an authorized BEO
+  render. The verified Firebase binary completed `functions:default`
+  `--dry-run --force` and produced the complete manifest. During preflight,
+  Firebase enabled Cloud Scheduler API in staging; no function, Hosting, or
+  Rules deployment was established by the dry run. The complete release lane,
+  release-manager high-risk emulator profile, and Lighthouse/CWV gate also
+  pass with this dependency graph; the build contains 503 modules, the unit
+  suite reports 364 files passed / 3 skipped and 4,102 tests passed / 78
+  skipped, and Truth Loop reports 127 passes.
+- Why it matters: The candidate is analyzable without weakening runtime gates
+  or treating placeholder staging credentials as provider activation.
+- Confidence: High for local dependency resolution, audit, secret metadata,
+  dry-run completion, and the observed staging API enablement.
+- Unverified gaps: Exact-SHA CI, real candidate deployment/readback, disposable
+  staging tenant data, hosted behavior, and human acceptance.
 
 - File/path: Google Cloud project `tonicatering`; Workload Identity pool
   `quotepilot-github`; provider `quoteflow-main`; GitHub repository variables

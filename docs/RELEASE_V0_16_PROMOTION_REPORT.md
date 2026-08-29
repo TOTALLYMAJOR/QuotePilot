@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 14:33:12 CDT
+Last updated: 2026-08-29 15:28:21 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -17,8 +17,10 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
   `origin/main`. The 74-commit figures above are the original unpublished
   product-stack baseline; later commits on the release branch are bounded
   release-control hardening and do not rewrite that inventory.
-- Current code-bearing candidate: exact
-  `e620ce80f096033abfdc420e649499f4ed92dff1`, published in PR #111.
+- Current published candidate head: exact
+  `5a0c55ec4efea279f14387a4d68265b3bc8ebcfb`, published in PR #111.
+  A local Functions-analyzer compatibility slice remains uncommitted and must
+  pass full validation and exact-SHA CI before another provider attempt.
 - Current production and rollback baseline: exact `v0.15.0`; target-specific
   provider receipts in `PROJECT_STATUS.md` remain authoritative until a newer
   promotion passes post-deploy verification.
@@ -65,7 +67,7 @@ correctness, use, or human acceptance.
 | Stripe Connect | Include source, keep `functions-connect` exports empty and provider access disabled | Requires reviewed Terraform plan/digest, separately authorized apply, deployed identity reconciliation, App Check observation/enforcement, restricted Sandbox credential, hosted negative/replay UAT, and human acceptance. |
 | Steward | Include validation/compiler/workbench foundation, keep provider runtime and model output unavailable | Requires provider/credential and privacy/billing review, canonical private reads/persistence, current consent, controlled silent execution, 100 actual human reviews, hosted rules proof, and acceptance. |
 | Buyer onboarding/access | Keep server gate and public CTA off in the safe candidate | Dedicated restricted Stripe test key, exact test webhook, Turnstile/provider checks, bounded acceptance window, and close plan remain external. |
-| Operational staffing authority | Keep candidate backend authority off; presentation may be inspected without claiming activation | Tenant `250` lacks the canonical settings document; provisioning/migration review and protected activation receipt are required. |
+| Operational staffing authority | Preserve `staging-safe-off`; use the separate positive profile only for isolated staffing qualification | Disposable staging tenant evidence, hosted UAT, final human approval, production deployment, canonical tenant `250` provisioning, sandbox disposition, and protected activation/rollback receipts remain required. |
 | Commercial Change and Revenue Autopilot | Keep authority/send gates off | Authenticated/provider evidence and named rollback remain incomplete. |
 | SMS delivery | Preserve deployed configuration boundaries; do not infer delivery | Credential/endpoint registration, controlled send, provider lifecycle, opt-out, carrier, and recipient evidence remain separate. |
 | Attendance persistence | Promote the read-only context only | Terminology/channel research and authority/migration decisions are unresolved. |
@@ -104,6 +106,10 @@ human results remain separate.
   both are source-only dormant contracts with no credential use, provider call,
   Terraform plan/apply, export, or deployment. Exact matching CI Quality run
   `33245272679` passed all eight required jobs.
+- Positive staffing control is published through exact `5a0c55e`. CI Quality
+  runs `33271755281`, `33272292112`, and `33272856057` each passed all eight
+  jobs for their corresponding immutable heads; both Stripe source-only
+  workflows also passed for each head.
 - Latest validated release head `8b04582c371f8ccc5a4b5010c9a9800c0e68bfe0`
   is clean, matches the published branch, and is mergeable. Exact-head CI
   Quality run `33247137753` passed all eight required jobs and the Product
@@ -129,17 +135,27 @@ human results remain separate.
   upload/deploy/readback. The candidate command contains no `npx`, local/global
   Firebase-module search, or runtime-resolved Vercel CLI. The added dependency
   graph audits at zero findings. Hosted execution remains unproven.
-- The governed Firebase candidate command for exact `e620ce80`, then again for
-  `98f5395`, and again for latest exact-CI head `8b04582`, stopped before
-  mutation and before receipt reservation because staging Secret Manager has
-  no enabled version for eleven required names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
-  `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,
-  `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`,
-  `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`,
-  `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, and `TWILIO_AUTH_TOKEN`. The tool explicitly requires
-  the separately authorized staging-secret process and will not create or
-  inspect values.
+- The owner-authorized staging prerequisite pass created enabled staging-only
+  versions for the four names that remained absent or were newly discovered as
+  bound Functions secrets: `STAFF_INVITATION_TOKEN_SECRET`, `PINGRAM_API_KEY`,
+  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET`. Values were random,
+  were not printed or committed, and do not activate SMS or another provider;
+  all corresponding runtime authorities remain off.
+- Three later positive-profile candidate attempts failed at distinct boundaries.
+  Exact `178e1bf` and `50c044f` stopped before receipt reservation on Firebase
+  secret-response parsing and Rules quota-project handling, respectively.
+  Exact `5a0c55e` passed preflight and reserved a receipt, then Firebase Functions
+  analysis failed before deployment on an Admin/JWKS ESM incompatibility. Its
+  receipt is correctly `partial`; no completed Functions, Hosting, or Rules
+  deployment is claimed.
+- The local repair pins Firebase Admin 13.6.0, defers `jspdf` loading until BEO
+  rendering, enumerates all bound secret metadata, and passes `--force` for the
+  tracked retry-enabled event functions. The checksum-pinned Firebase 15.24.0
+  Functions dry run now completes with a full manifest and a zero-finding
+  Functions audit. The full local release lane, high-risk emulator profile, and
+  Lighthouse/CWV gate also pass with this repair. Firebase enabled Cloud
+  Scheduler API in staging during this preflight; no code deployment was
+  established by the dry run.
 - The governed Vercel preview command for all three exact heads also stopped before
   mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions
@@ -217,8 +233,8 @@ Applicable means eligible to test; it does not mean passed. Blocked is not
 | Decision/input | Current observed boundary | Evidence required to proceed | Unlocks |
 |---|---|---|---|
 | Production Google Cloud identity | WIF provider, distinct deploy and tenant-operator service accounts, workflow-specific trust bindings, scoped deploy roles, two-permission tenant custom role, and all three repository variables now have provider readback; no key exists | First exact workflow token exchange and governed deployment plus tenant rollback/readback receipts | Governed production Firebase and protected tenant operations; only then safe legacy-secret retirement |
-| Staging secret prerequisites | No enabled version exists for `BUYER_ACCESS_RATE_LIMIT_SECRET`, `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`, `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, or `TWILIO_AUTH_TOKEN` | Separate secret-process authorization and enabled-version metadata for all eleven names without exposing values | Firebase candidate attempt under either tracked profile |
-| Firebase candidate review | No staging deployment receipt; current Functions readback does not prove every safe-off gate | Exact-SHA verified Hosting, Functions revisions/runtime flags, Firestore release/ruleset, and hosted manifest receipt | Vercel preview precondition |
+| Staging secret prerequisites | Enabled-version metadata now exists for every bound name enumerated by the candidate, including four random staging-only placeholders; unrelated authorities remain off | Fresh exact-SHA preflight must re-read all metadata without exposing values | Firebase candidate attempt under the selected tracked profile |
+| Firebase candidate review | Two attempts failed before reservation; exact `5a0c55e` produced a partial receipt after Functions analysis failed. The local analyzer dry run is now green, but no completed staging deployment receipt exists | Full local validation, publish a new immutable SHA, exact-head CI, then verified Hosting, Functions revisions/runtime flags, Firestore release/ruleset, and hosted manifest receipt | Vercel preview precondition |
 | Vercel preview and hosted acceptance | No preview upload/deployment was attempted because the Firebase safe-off prerequisite failed | Same-SHA immutable READY preview receipt plus applicable hosted checks and authenticated operator journey | Pre-merge release decision |
 | Human review governance | The owner designated tenant-admin, sales/operator, and final release/UAT roles, but their provider and GitHub account bindings are not yet proven; branch protection still requires zero approvals | Verify each identity in the relevant provider and bind the final reviewer through the selected independent-review or explicitly accepted solo-operator control | Truthful human acceptance and merge authorization |
 | Default-branch dependency remediation | Dependabot alert #139 remains open; narrow PR #112 is mergeable and exact-CI green but unreviewed/unmerged | Review PR #112 and merge it to `main`, or let the same remediation arrive through a later reviewed v0.16 merge; confirm alert closure afterward | Removes the known development-tool advisory from the current default branch without promoting unqualified product features |

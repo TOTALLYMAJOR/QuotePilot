@@ -519,6 +519,7 @@ async function deployFirebase({
       "--project",
       RELEASE_CANDIDATE_POLICY.firebase.projectId,
       "--non-interactive",
+      "--force",
       "--message",
       `QuotePilot candidate ${releaseSha}`,
       ...firebaseTokenArgs(),

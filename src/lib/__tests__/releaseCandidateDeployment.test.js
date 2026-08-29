@@ -152,8 +152,11 @@ describe("governed release candidate deployment", () => {
 
   test("checks every bound staging secret by metadata without reading or creating values", () => {
     expect(CANDIDATE_REQUIRED_SECRET_METADATA).toEqual(expect.arrayContaining([
+      "PINGRAM_API_KEY",
+      "PINGRAM_WEBHOOK_SECRET",
       "RESEND_WEBHOOK_SECRET",
       "REVENUE_AUTOPILOT_TOKEN_SECRET",
+      "SMS_CONTACT_DIGEST_SECRET",
       "STRIPE_SECRET_KEY",
       "TWILIO_AUTH_TOKEN"
     ]));
@@ -199,6 +202,7 @@ describe("governed release candidate deployment", () => {
     expect(firebaseMutation).toContain("capture(firebaseCliPath");
     expect(firebaseMutation).not.toContain('capture("npx"');
     expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
+    expect(firebaseMutation).toContain('"--force"');
   });
 
   test("binds operational staffing authority to the exact candidate profile", () => {

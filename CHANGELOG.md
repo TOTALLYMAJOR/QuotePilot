@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 15:12:30 CDT
+Last updated: 2026-08-29 15:42:14 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Restored checksum-pinned Firebase Functions manifest discovery by pinning the
+  supported Firebase Admin 13.6.0 line (`jwks-rsa` 3 / `jose` 4), keeping the
+  Functions dependency audit at zero, and loading `jspdf` only when the
+  authorized Kitchen BEO renderer is invoked. The standalone Firebase 15.24.0
+  analyzer now produces the full function manifest without its packaged Node
+  runtime trying to load ESM-only auth code or an unused Windows-1252 decoder.
+  Candidate deployment also carries Firebase's explicit `--force`
+  acknowledgement for the tracked retry-enabled event functions. The full
+  release lane, high-risk emulator profile, and Lighthouse/CWV gate pass with
+  the repaired graph.
 - Corrected the staging secret-metadata gate for the pinned Firebase CLI
   15.24.0 response shape, where each enabled version carries a structured
   `secret.name` instead of a resource-name string. The validator still accepts

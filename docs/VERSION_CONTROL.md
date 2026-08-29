@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 15:12:30 CDT
+Last updated: 2026-08-29 15:42:14 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -91,6 +91,12 @@ explicit owner promotion after real-run review.
      project as `x-goog-user-project` when using user ADC. Do not mutate the
      operator's global ADC quota-project setting to compensate for a missing
      request header.
+   - Before publishing a Firebase candidate, run checksum-pinned Functions
+     manifest discovery in dry-run mode. Keep discovery free of eager optional
+     renderer loads, retain an audited dependency graph compatible with the
+     pinned analyzer, and pass the explicit retry-policy acknowledgement for
+     tracked retry-enabled event functions. Firebase may enable a required API
+     during preflight even under `--dry-run`; record that provider mutation.
    - If GitHub does not enqueue the normal `pull_request` run, manually
      dispatch `CI Quality` against the exact published PR head and retain that
      run as the CI evidence. Do not substitute a run from another commit.
