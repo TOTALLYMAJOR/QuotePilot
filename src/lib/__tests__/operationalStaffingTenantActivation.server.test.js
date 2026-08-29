@@ -35,7 +35,6 @@ describe("operational staffing tenant activation", () => {
   test("patches only the named tenant field and verifies readback", async () => {
     const documentUrl = firestoreDocumentUrl({ projectId: "tonicatering", organizationId: "250" });
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(response({ access_token: "bounded-access-token" }))
       .mockResolvedValueOnce(response({ fields: { catalogRevision: { integerValue: "4" } } }))
       .mockResolvedValueOnce(response(tenantSettingPatch(true)))
       .mockResolvedValueOnce(response(tenantSettingPatch(true)));
@@ -44,15 +43,15 @@ describe("operational staffing tenant activation", () => {
       projectId: "tonicatering",
       organizationId: "250",
       enabled: true,
-      firebaseToken: "refresh-token",
+      accessToken: "bounded-access-token",
       fetchImpl
     });
 
     expect(result).toMatchObject({ before: false, after: true, changed: true });
-    expect(fetchImpl.mock.calls[2][0]).toBe(
+    expect(fetchImpl.mock.calls[1][0]).toBe(
       `${documentUrl}?updateMask.fieldPaths=operationalStaffingAuthorityEnabled`
     );
-    const patch = fetchImpl.mock.calls[2][1];
+    const patch = fetchImpl.mock.calls[1][1];
     expect(patch.method).toBe("PATCH");
     expect(JSON.parse(patch.body)).toEqual(tenantSettingPatch(true));
     expect(JSON.stringify(patch)).not.toContain("catalogRevision");
@@ -60,17 +59,28 @@ describe("operational staffing tenant activation", () => {
 
   test("does not rewrite a tenant already in the requested state", async () => {
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(response({ access_token: "bounded-access-token" }))
       .mockResolvedValueOnce(response(tenantSettingPatch(false)))
       .mockResolvedValueOnce(response(tenantSettingPatch(false)));
     const result = await setOperationalStaffingTenant({
       projectId: "tonicatering",
       organizationId: "250",
       enabled: false,
-      firebaseToken: "refresh-token",
+      accessToken: "bounded-access-token",
       fetchImpl
     });
     expect(result.changed).toBe(false);
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects a missing workload-identity access token before provider reads", async () => {
+    const fetchImpl = vi.fn();
+    await expect(setOperationalStaffingTenant({
+      projectId: "tonicatering",
+      organizationId: "250",
+      enabled: false,
+      accessToken: "",
+      fetchImpl
+    })).rejects.toThrow(/workload-identity access token/u);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

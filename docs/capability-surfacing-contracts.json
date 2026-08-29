@@ -14,6 +14,7 @@
       ],
       "summary": "Operations Audit gives same-tenant organization admins a bounded projection of immutable quote-approval and organization-role-change receipts while labeling delivery reconciliation and catalog confirmation as legacy server projections rather than immutable evidence.",
       "backendPaths": [
+        ".github/workflows/set-operational-staffing-tenant.yml",
         "firestore.rules",
         "functions/index.js",
         "functions/operationsAudit.js",
@@ -5414,7 +5415,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -5431,6 +5432,7 @@
         "functions/staffDirectoryAuthority.js",
         "functions/staffInvitationAuthority.js",
         "scripts/operational-staffing-emulator-acceptance.mjs",
+        "scripts/set-operational-staffing-tenant.mjs",
         "src/lib/defaultEmailApp.js",
         "src/lib/operationalStaffingClient.js",
         "src/lib/proposalExport.js",
@@ -5507,6 +5509,7 @@
         "src/lib/__tests__/operationalStaffingClient.test.js",
         "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
         "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
+        "src/lib/__tests__/operationalStaffingTenantActivation.server.test.js",
         "src/lib/__tests__/staffBriefingSheet.test.js",
         "src/lib/__tests__/staffDirectoryClient.localFixture.test.js",
         "src/lib/__tests__/staffDirectoryAuthority.server.test.js",
@@ -5600,7 +5603,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 3 replaces the Staff route's profile-demo composition with a compact command header, dense photo roster, assignment-first detail, readiness/evidence rail, collapsed full-record editor, and separate mobile roster/detail states while preserving every existing role and mutation boundary. A photo-rich local_fixture is available only under the explicit local authentication bypass for review and performs no Firebase or provider write. The independently gated Event Workspace staffing context, administrator-only Staff route, and public exact-token response route remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read and mutation states. The nine callable exports and one signed webhook remain source-only and default-off behind separate global, tenant, presentation, provider, sender-approval, and secret boundaries.",
+      "surfaceReviewNote": "Revision 4 preserves the revision 3 Staff route composition and every existing role and mutation boundary while adding the protected tenant-gate operator to the reviewed delivery contract. A photo-rich local_fixture remains available only under the explicit local authentication bypass for review and performs no Firebase or provider write. The independently gated Event Workspace staffing context, administrator-only Staff route, public exact-token response route, and protected tenant-gate operator remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read and mutation states. The tenant-gate operator now accepts only a short-lived WIF Datastore token from its distinct service account and still changes only the named tenant field with readback. The nine callable exports and one signed webhook remain source-only and default-off behind separate global, tenant, presentation, provider, sender-approval, and secret boundaries.",
       "stateEvidence": [
         {
           "state": "loading",

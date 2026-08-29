@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-29 03:07:28 CDT
+Last updated: 2026-08-29 03:22:47 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -646,6 +646,9 @@ before deployment. Its Firebase CLI authentication is short-lived GitHub OIDC
 through Google Cloud Workload Identity Federation; the workflow requires the
 fixed-project provider and deployer identity named by
 `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and `FIREBASE_DEPLOY_SERVICE_ACCOUNT`.
+The separate protected staffing tenant-gate workflow uses
+`FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT` and passes one short-lived
+Datastore-scoped access token only to its exact read/patch/readback step.
 Application provider credentials remain in Firebase Secret Manager and are
 never written to Functions dotenv files, artifacts, or logs. The approved
 sender identity in configuration does not prove the Resend domain is verified

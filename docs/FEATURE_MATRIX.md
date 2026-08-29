@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-29 01:03:25 CDT
+Last updated: 2026-08-29 03:22:47 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -20,6 +20,10 @@ release, deployment, provider, risk, and acceptance state.
 - **Hosted/provider evidence:** the exact hosted role/data path or external
   provider outcome was observed. Public route reachability, configuration, and
   request acceptance remain narrower facts than end-to-end delivery or payment.
+- **Protected operational controls:** row 59's tenant gate remains a separate
+  operator mutation after deployment. Its source now requires a distinct
+  workload-identity service account and short-lived Datastore token; that is an
+  authentication boundary, not tenant activation or staffing acceptance proof.
 - **Human acceptance:** a named person completed and accepted the intended
   workflow. This is never inferred from source, tests, CI, deployment, or
   provider receipts.

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 03:07:28 CDT
+Last updated: 2026-08-29 03:22:47 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -270,10 +270,12 @@ replace their safety conditions.
 
 - Provision and independently review the production Google Cloud workload
   identity pool/provider, least-privilege Firebase deploy service account, and
-  repository variables `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
-  `FIREBASE_DEPLOY_SERVICE_ACCOUNT`; then prove one governed deployment before
-  revoking the legacy `FIREBASE_TOKEN` secret. Repository source now accepts
-  only ephemeral external-account ADC and never accepts a service-account key.
+  repository variables `FIREBASE_WORKLOAD_IDENTITY_PROVIDER`,
+  `FIREBASE_DEPLOY_SERVICE_ACCOUNT`, and
+  `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT`; then prove one governed deploy
+  and one authorized tenant-gate rollback/readback before revoking the legacy
+  `FIREBASE_TOKEN` secret. Repository source now accepts only ephemeral WIF
+  credentials and never accepts a service-account key.
 - Add an independently enforceable review/UAT control when repository ownership
   permits it. Preserve the current solo-operator allowlist until that stronger
   control exists; do not imply independent review in the meantime.

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 03:07:28 CDT
+Last updated: 2026-08-29 03:22:47 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,13 +9,20 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Completed the repository-side Firebase token retirement path for the separate
+  operational-staffing tenant mutation. Its protected workflow now uses the
+  same reviewed workload-identity provider with a distinct tenant-operator
+  service account, requests only a short-lived Datastore-scoped access token,
+  creates no credentials file, and passes that token only to the exact
+  read/patch/readback step. The mutation client no longer embeds or invokes the
+  Firebase CLI OAuth refresh exchange and rejects the legacy token path.
 - Migrated the governed Firebase production deployment source from the legacy
   `FIREBASE_TOKEN` secret to GitHub OIDC and Google Cloud Workload Identity
   Federation. The workflow pins the authentication action by commit, validates
   the provider and fixed-project deployer identity, exports the short-lived ADC
   file only to the final Firebase mutation step, and the deploy command rejects
   token authentication or non-external-account credential files. The external
-  Google Cloud provider, service account, IAM grant, and two GitHub variables
+  Google Cloud provider, service accounts, IAM grants, and three GitHub variables
   remain deliberately unprovisioned and must be reviewed before dispatch.
 - Replaced the vulnerable Lighthouse 12/Puppeteer/`extract-zip` development
   chain under the latest `@lhci/cli` with a narrowly pinned Lighthouse 13.4.1

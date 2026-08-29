@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 03:07:28 CDT
+Last updated: 2026-08-29 03:22:47 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -92,6 +92,9 @@ Set repository or environment variables used by the deploy workflows:
   Google Cloud provider resource name for the GitHub-bound production pool
 - `FIREBASE_DEPLOY_SERVICE_ACCOUNT`: GitHub variable containing the reviewed
   least-privilege deployer identity in the fixed `tonicatering` project
+- `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT`: GitHub variable containing the
+  separate reviewed identity used only for the protected staffing tenant-gate
+  read/patch/readback workflow
 - `VERCEL_TOKEN`: GitHub secret scoped only to the final Vercel deploy step
 - `AUTH_PLATFORM_ADMIN_EMAILS`: GitHub secret used only to materialize the
   ignored Functions runtime configuration during an authorized backend deploy
@@ -102,10 +105,11 @@ dotenv artifacts, or logs.
 
 Firebase production uses GitHub OIDC through Google Cloud Workload Identity
 Federation. Do not create or upload a service-account key. The production
-workflow fails closed until the provider, service account, repository binding,
-least-privilege IAM roles, and both variables above are independently reviewed.
-After one governed deployment succeeds, remove the legacy `FIREBASE_TOKEN`
-secret; its presence does not authorize or satisfy the current workflow.
+workflows fail closed until the provider, both service accounts, repository
+bindings, least-privilege IAM roles, and all three variables above are
+independently reviewed. After one governed deployment and an authorized tenant
+gate rollback/readback succeed, remove the legacy `FIREBASE_TOKEN` secret; its
+presence does not authorize or satisfy either current workflow.
 
 Configure the external release controls before the first promotion:
 

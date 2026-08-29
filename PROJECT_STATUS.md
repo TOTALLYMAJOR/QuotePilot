@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 03:07:28 CDT
+Last updated: 2026-08-29 03:22:47 CDT
 
 ## Current Production Release
 
@@ -93,10 +93,14 @@ Last updated: 2026-08-29 03:07:28 CDT
   authentication action and accepts only GitHub workload-identity ADC for the
   fixed `tonicatering` project; its deploy command rejects `FIREBASE_TOKEN`,
   static service-account JSON, missing credentials, and credentials outside the
-  checkout. No Google Cloud workload identity pool or deploy service account is
+  checkout. The protected tenant-gate workflow also uses WIF, but with a
+  distinct service account and one short-lived Datastore-scoped token passed
+  only to its exact read/patch/readback client. No Google Cloud workload
+  identity pool, deploy service account, or tenant-operator service account is
   currently present in the production project, and repository variables
   `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
-  `FIREBASE_DEPLOY_SERVICE_ACCOUNT` are not configured. This is source/local
+  `FIREBASE_DEPLOY_SERVICE_ACCOUNT` and
+  `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT` are not configured. This is source/local
   preparation only, not cloud IAM proof or deployment readiness.
 - Release PR #111 publishes `release/v0.16.0`. Exact candidate
   `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run

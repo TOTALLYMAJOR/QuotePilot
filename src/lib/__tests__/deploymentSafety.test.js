@@ -241,7 +241,14 @@ describe("direct production deployment safety", () => {
     expect(runSteps).not.toContain("${{ inputs.");
     expect(source).toMatch(/ORGANIZATION_ID:\s*\$\{\{ inputs\.organization_id \}\}/u);
     expect(source).toMatch(/TENANT_CONFIRMATION:\s*\$\{\{ inputs\.confirmation \}\}/u);
-    expect(source).toMatch(/FIREBASE_TOKEN:\s*\$\{\{ secrets\.FIREBASE_TOKEN \}\}/u);
+    expect(source).toMatch(/id-token:\s*write/u);
+    expect(source).toMatch(/google-github-actions\/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093/u);
+    expect(source).toMatch(/service_account:\s*\$\{\{ vars\.FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT \}\}/u);
+    expect(source).toMatch(/GOOGLE_OAUTH_ACCESS_TOKEN:\s*\$\{\{ steps\.google_auth\.outputs\.access_token \}\}/u);
+    expect(source).toMatch(/access_token_scopes:\s*https:\/\/www\.googleapis\.com\/auth\/datastore/u);
+    expect(source).toMatch(/create_credentials_file:\s*false/u);
+    expect(source).toMatch(/export_environment_variables:\s*false/u);
+    expect(source).not.toContain("secrets.FIREBASE_TOKEN");
   });
 
   test("keeps one canonical deploy command per production target", () => {

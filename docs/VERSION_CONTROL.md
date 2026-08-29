@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 03:07:28 CDT
+Last updated: 2026-08-29 03:22:47 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -182,7 +182,10 @@ git push origin v<major>.<minor>.<patch>
     dispatch `Set Operational Staffing Tenant` only after the matching
     Firebase `all` deployment succeeds. Bind the exact release SHA and deploy
     run id, use the exact state-and-organization confirmation, and retain the
-    verified readback. The reversible field mutation is a separate production
+    verified readback. The workflow uses the reviewed workload-identity
+    provider with the separate `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT` and
+    exposes its short-lived Datastore token only to the mutation step. The
+    reversible field mutation is a separate production
     action and is not implied by deployment. Workflow dispatch values must be
     mapped through step environment variables and never interpolated directly
     into executable shell bodies that can access provider credentials.
