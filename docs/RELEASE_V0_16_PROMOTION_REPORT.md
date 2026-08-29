@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 16:05:36 CDT
+Last updated: 2026-08-29 16:25:52 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -166,6 +166,13 @@ human results remain separate.
   manifest and provider readback. The current repair admits only those two
   exact fixed-project resource forms; it does not broaden the allowed project,
   site, or version boundary.
+- Exact `bb4a99e` and CI Quality run `33275291013` proved that deploy-result
+  correction, verified the hosted source manifest, and persisted Hosting
+  deployment id `554998a5eec25402`. Its receipt remains `partial` because the
+  live-channel API represents the same fixed-site version under project ID
+  `quotepilot-staging-20260804`, while the deploy result uses numeric project
+  `844470813106`. The next repair normalizes only those two already-pinned
+  identifiers before comparing the unchanged version id.
 - The governed Vercel preview command for all three exact heads also stopped before
   mutation and receipt
   reservation because the current staging `acceptQuoteProposal` Functions

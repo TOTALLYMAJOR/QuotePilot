@@ -349,9 +349,12 @@ export function validateFirebaseFunctionsReadback({
 
 export function validateFirebaseHostingReadback({ channel, providerDeploymentId }) {
   const projectId = RELEASE_CANDIDATE_POLICY.firebase.projectId;
+  const projectNumber = RELEASE_CANDIDATE_POLICY.firebase.projectNumber;
   const siteId = RELEASE_CANDIDATE_POLICY.firebase.siteId;
   const expectedChannel = `projects/${projectId}/sites/${siteId}/channels/live`;
-  const expectedVersionSuffix = String(providerDeploymentId || "").replace(/^sites\//, `projects/${projectId}/sites/`);
+  const expectedVersionSuffix = String(providerDeploymentId || "")
+    .replace(/^sites\//, `projects/${projectId}/sites/`)
+    .replace(`projects/${projectNumber}/sites/`, `projects/${projectId}/sites/`);
   if (
     channel?.name !== expectedChannel
     || channel?.release?.type !== "DEPLOY"

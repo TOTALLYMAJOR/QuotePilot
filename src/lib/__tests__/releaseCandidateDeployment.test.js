@@ -284,6 +284,21 @@ describe("governed release candidate deployment", () => {
         }
       }
     }).version).toContain("0123456789abcdef");
+    expect(validateFirebaseHostingReadback({
+      providerDeploymentId: "projects/844470813106/sites/quotepilot-staging-20260804/versions/0123456789abcdef",
+      channel: {
+        name: "projects/quotepilot-staging-20260804/sites/quotepilot-staging-20260804/channels/live",
+        release: {
+          name: "projects/quotepilot-staging-20260804/sites/quotepilot-staging-20260804/channels/live/releases/123",
+          type: "DEPLOY",
+          releaseTime: "2026-08-12T00:00:00Z",
+          version: {
+            name: "projects/quotepilot-staging-20260804/sites/quotepilot-staging-20260804/versions/0123456789abcdef",
+            status: "FINALIZED"
+          }
+        }
+      }
+    }).version).toContain("0123456789abcdef");
 
     const rulesSource = "rules_version = '2';\nservice cloud.firestore { match /databases/{database}/documents {} }\n";
     const rules = validateFirebaseRulesReadback({

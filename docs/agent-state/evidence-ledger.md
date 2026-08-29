@@ -1,14 +1,15 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 16:05:36 CDT
+Last updated: 2026-08-29 16:25:52 CDT
 
 Checkpoint recorded: 2026-08-29T19:20:40.340Z
 
 ## Published candidate, exact CI, and deployment boundary
 
 - File/path: Branch `release/v0.16.0` through exact
-  `815c38fe156c096c810472fd88159f3a1f5347eb`; CI Quality runs
-  `33271755281`, `33272292112`, `33272856057`, and `33274213339`; governed
+  `bb4a99e31dc8821240b53affeefc617630acecc3`; CI Quality runs
+  `33271755281`, `33272292112`, `33272856057`, `33274213339`, and
+  `33275291013`; governed
   `staging-staffing-authority` candidate attempts
 - Evidence: Each published staffing-control correction passed all eight exact
   CI Quality jobs and both matching Stripe source-only workflows. The first
@@ -28,6 +29,12 @@ Checkpoint recorded: 2026-08-29T19:20:40.340Z
   the version as a numeric-project resource while the validator admitted only
   the shorter site resource. Post-deployment manifest and provider readback did
   not run, so this is observed provider deployment, not a verified candidate.
+  Exact `bb4a99e` then passed all eight CI jobs and both Stripe source-only
+  workflows, accepted the numeric deploy result, verified the hosted source
+  manifest, and persisted provider deployment id `554998a5eec25402`. It
+  stopped at live-channel comparison because the Hosting API represented that
+  same version under the fixed project ID instead of the fixed numeric project.
+  Its receipt is also `partial`; Functions and Rules readback did not complete.
 - Why it matters: The candidate process failed at explicit, independently
   repairable client/analyzer boundaries without converting partial execution
   into a successful staging claim.

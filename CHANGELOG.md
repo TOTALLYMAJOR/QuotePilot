@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 16:05:36 CDT
+Last updated: 2026-08-29 16:25:52 CDT
 
 All notable project changes are documented in this file.
 
@@ -17,6 +17,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   after a real staging operation deployed 95 Functions with zero errors and
   released Rules and Hosting, but does not retroactively mark that partial
   receipt verified.
+- Normalized the fixed staging numeric project in the immutable Hosting deploy
+  id to the fixed staging project ID before live-channel comparison. The site,
+  channel, version id, finalized state, and release resource must still match
+  exactly; no arbitrary project alias is accepted.
 - Restored checksum-pinned Firebase Functions manifest discovery by pinning the
   supported Firebase Admin 13.6.0 line (`jwks-rsa` 3 / `jose` 4), keeping the
   Functions dependency audit at zero, and loading `jspdf` only when the

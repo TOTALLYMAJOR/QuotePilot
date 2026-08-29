@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 16:05:36 CDT
+Last updated: 2026-08-29 16:25:52 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -101,6 +101,8 @@ explicit owner promotion after real-run review.
      It may use either `sites/<fixed-site>/versions/<id>` or
      `projects/<fixed-project-number>/sites/<fixed-site>/versions/<id>`; reject
      every other project, site, or empty version before provider readback.
+     Normalize only the pinned numeric project to the pinned project ID when the
+     live-channel API returns the same immutable version under project-ID form.
    - If GitHub does not enqueue the normal `pull_request` run, manually
      dispatch `CI Quality` against the exact published PR head and retain that
      run as the CI evidence. Do not substitute a run from another commit.
