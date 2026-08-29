@@ -314,6 +314,14 @@ function firebaseTokenArgs() {
     : [];
 }
 
+export function isEnabledFirebaseSecretVersion(version, expectedName) {
+  const secret = version?.secret;
+  const observedName = typeof secret === "string"
+    ? secret.split("/").at(-1)
+    : secret?.name;
+  return observedName === expectedName && version?.state === "ENABLED";
+}
+
 async function validateFirebaseSecretPrerequisites(firebaseCliPath) {
   const project = RELEASE_CANDIDATE_POLICY.firebase.projectId;
   const results = CANDIDATE_REQUIRED_SECRET_METADATA.map((name) => {
@@ -335,10 +343,7 @@ async function validateFirebaseSecretPrerequisites(firebaseCliPath) {
       : [];
     return {
       name,
-      available: versions.some((version) => (
-        String(version?.secret || "").endsWith(`/secrets/${name}`)
-        && version?.state === "ENABLED"
-      ))
+      available: versions.some((version) => isEnabledFirebaseSecretVersion(version, name))
     };
   });
   const missing = results.filter((result) => !result.available).map((result) => result.name);

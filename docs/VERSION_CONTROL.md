@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 14:23:06 CDT
+Last updated: 2026-08-29 14:59:30 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -82,6 +82,11 @@ explicit owner promotion after real-run review.
 1. Create `release/<version>` from `main`.
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
+   - Candidate secret preflight must accept the pinned Firebase CLI's structured
+     `secret.name` metadata shape, require an enabled version for every exact
+     bound name, and remain metadata-only. A parser mismatch is a fail-closed
+     source defect; fix, republish, and rerun exact-SHA CI rather than bypassing
+     the gate.
    - If GitHub does not enqueue the normal `pull_request` run, manually
      dispatch `CI Quality` against the exact published PR head and retain that
      run as the CI evidence. Do not substitute a run from another commit.

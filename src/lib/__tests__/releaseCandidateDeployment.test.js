@@ -23,6 +23,7 @@ import {
 import {
   buildVercelOutputConfig,
   collectVercelBuildFiles,
+  isEnabledFirebaseSecretVersion,
   resolveGitHubToken,
   vercelDeploymentPayload
 } from "../../../scripts/deploy-release-candidate.mjs";
@@ -148,6 +149,25 @@ describe("governed release candidate deployment", () => {
     expect(source).toContain('version?.state === "ENABLED"');
     expect(source).not.toContain("accessSecretVersion(");
     expect(source).not.toContain("createSecret(");
+  });
+
+  test("accepts the pinned Firebase CLI secret metadata shape and rejects disabled versions", () => {
+    expect(isEnabledFirebaseSecretVersion({
+      secret: {
+        projectId: "844470813106",
+        name: "STAFF_INVITATION_TOKEN_SECRET"
+      },
+      versionId: "1",
+      state: "ENABLED"
+    }, "STAFF_INVITATION_TOKEN_SECRET")).toBe(true);
+    expect(isEnabledFirebaseSecretVersion({
+      secret: "projects/844470813106/secrets/STAFF_INVITATION_TOKEN_SECRET",
+      state: "ENABLED"
+    }, "STAFF_INVITATION_TOKEN_SECRET")).toBe(true);
+    expect(isEnabledFirebaseSecretVersion({
+      secret: { name: "STAFF_INVITATION_TOKEN_SECRET" },
+      state: "DISABLED"
+    }, "STAFF_INVITATION_TOKEN_SECRET")).toBe(false);
   });
 
   test("prepares the checksum-verified Firebase binary before receipt reservation and mutation", () => {

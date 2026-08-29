@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 14:23:06 CDT
+Last updated: 2026-08-29 14:59:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Corrected the staging secret-metadata gate for the pinned Firebase CLI
+  15.24.0 response shape, where each enabled version carries a structured
+  `secret.name` instead of a resource-name string. The validator still accepts
+  the documented resource-name form, still requires an exact enabled secret
+  name, and never reads secret values. A provider preflight exposed the mismatch
+  and failed before receipt reservation or staging mutation.
 - Added an explicit `staging-staffing-authority` release-candidate profile
   alongside the existing `staging-safe-off` profile. Candidate CLI input,
   Functions dotenv validation, active-revision readback, hosted manifest, and
@@ -47,8 +53,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   the provider and fixed-project deployer identity, exports the short-lived ADC
   file only to the final Firebase mutation step, and the deploy command rejects
   token authentication or non-external-account credential files. The external
-  Google Cloud provider, service accounts, IAM grants, and three GitHub variables
-  remain deliberately unprovisioned and must be reviewed before dispatch.
+  Google Cloud provider, separate service accounts, least-privilege IAM grants,
+  and three GitHub variables are now provisioned and provider-read back; the
+  first exact-main token exchange remains a deployment-time proof gate.
 - Replaced the vulnerable Lighthouse 12/Puppeteer/`extract-zip` development
   chain under the latest `@lhci/cli` with a narrowly pinned Lighthouse 13.4.1
   override. The real Core Web Vitals gate passes unchanged, `extract-zip` is no
