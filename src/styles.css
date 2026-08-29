@@ -12314,6 +12314,42 @@ hr {
   margin-bottom: var(--space-4);
 }
 
+.create-intake-panel-applied {
+  padding-block: clamp(1rem, 3vw, 1.35rem);
+}
+
+.create-intake-applied-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.create-intake-applied-summary .eyebrow,
+.create-intake-applied-summary h2,
+.create-intake-applied-summary p {
+  margin: 0;
+}
+
+.create-intake-applied-summary h2 {
+  margin-top: 0.2rem;
+  color: var(--tone-ink-1);
+  font-family: var(--font-editorial);
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+  font-weight: 600;
+}
+
+.create-intake-applied-summary p:not(.eyebrow) {
+  max-width: 62ch;
+  margin-top: 0.3rem;
+  color: var(--tone-ink-2);
+  line-height: 1.5;
+}
+
+.create-intake-applied-summary .ghost {
+  flex: 0 0 auto;
+}
+
 .create-intake-sub {
   color: var(--tone-ink-2);
   max-width: 40rem;
@@ -12423,6 +12459,17 @@ hr {
 .create-intake-apply small {
   color: var(--tone-ink-3);
   max-width: 24rem;
+}
+
+@media (max-width: 640px) {
+  .create-intake-applied-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .create-intake-applied-summary .ghost {
+    width: 100%;
+  }
 }
 
 /* ===== Pilot band pricing strip (draft preview only) ===== */

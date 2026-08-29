@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-28 19:30:53 CDT
+Last updated: 2026-08-28 19:38:35 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1752,7 +1752,9 @@ experience:
 - On `New quote`, describe the event in CREATE, review the details found and
   their confidence, confirm uncertain details, then add them to the editable
   form. Approximate/ranged guest counts show a draft-only price band; saved
-  quotes always use the exact recorded guest count.
+  quotes always use the exact recorded guest count. A pristine route leads
+  with this intake; the draft command bar appears only after draft work exists
+  or when you explicitly open **Pilot**.
 - The package and service style supplied as a starting point are labeled
   **Preset**, not complete. Experience becomes complete after you review both
   controls or after the draft has been saved. If known requirements remain,
@@ -2085,6 +2087,14 @@ or use an internal `auto` route that tries the configured cheaper-first
 provider:model order and may retry once when the first attempt is
 unreadable or unavailable; this routing detail never changes the review-
 only boundary.
+
+After `Add details to the draft`, CREATE compresses the completed reading into
+an `Inquiry added` handoff so the proposal becomes the next visible task,
+especially on mobile. `Review intake` restores the source note, extracted
+facts, confirmations, and notes without applying them again. The collapsed
+state changes no saved quote, price, proposal revision, or provider evidence.
+Keyboard focus moves to the visible `Inquiry added` heading after applying and
+returns to the source field when `Review intake` is selected.
 
 ## Memory assist in CREATE
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { INTENT_EXTRACTION_MODEL, extractIntentDraft } from "./intentExtraction";
 import { deriveGuestBand } from "./pricingBand";
 import DecisionCard from "./DecisionCard";
@@ -71,7 +71,11 @@ export default function CreateIntake({
       : null
   ));
   const [appliedAt, setAppliedAt] = useState("");
+  const [collapsedAfterApply, setCollapsedAfterApply] = useState(false);
   const [confirmedIds, setConfirmedIds] = useState([]);
+  const appliedSummaryRef = useRef(null);
+  const inputRef = useRef(null);
+  const reviewFocusPendingRef = useRef(false);
   // Event-shape memory read states: loading/empty/partial/success land
   // from one fetch attempt; error offers a retry, and a retry that also
   // fails becomes "recovery" ("still unreachable, safe to try again") —
@@ -106,6 +110,7 @@ export default function CreateIntake({
 
   const structure = () => {
     setAppliedAt("");
+    setCollapsedAfterApply(false);
     setConfirmedIds([]);
     setMemory({ phase: "ready" });
     setMemoryApplied(false);
@@ -138,6 +143,7 @@ export default function CreateIntake({
     const payload = buildApplyPayload(result);
     onApplyDraft?.(payload.draft, payload);
     setAppliedAt("all");
+    setCollapsedAfterApply(true);
   };
 
   const confirmFact = (fact) => {
@@ -147,6 +153,59 @@ export default function CreateIntake({
   };
 
   const hasDraft = Boolean(result && Object.keys(result.draft).length);
+  const appliedFactCount = result?.facts?.length || 0;
+  const pendingConfirmationCount = result?.needsConfirmation?.filter((fact) => (
+    !confirmedIds.includes(fact.id)
+  )).length || 0;
+
+  useEffect(() => {
+    if (appliedAt !== "all") return;
+    if (collapsedAfterApply) {
+      appliedSummaryRef.current?.focus();
+      return;
+    }
+    if (reviewFocusPendingRef.current) {
+      reviewFocusPendingRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [appliedAt, collapsedAfterApply]);
+
+  if (appliedAt === "all" && collapsedAfterApply) {
+    return (
+      <section
+        className="panel create-intake-panel create-intake-panel-applied"
+        aria-labelledby="create-intake-title"
+        data-create-intake={INTENT_EXTRACTION_MODEL}
+        data-create-intake-state="applied"
+      >
+        <div className="create-intake-applied-summary" aria-live="polite">
+          <div>
+            <p className="eyebrow">Inquiry added</p>
+            <h2 id="create-intake-title" ref={appliedSummaryRef} tabIndex={-1}>
+              {appliedFactCount} detail{appliedFactCount === 1 ? " is" : "s are"} in this draft
+            </h2>
+            <p>
+              Continue in the proposal below. Every value remains editable, and saving
+              still uses the trusted pricing path.
+              {pendingConfirmationCount > 0
+                ? ` ${pendingConfirmationCount} possible detail${pendingConfirmationCount === 1 ? " still needs" : "s still need"} your review.`
+                : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              reviewFocusPendingRef.current = true;
+              setCollapsedAfterApply(false);
+            }}
+          >
+            Review intake
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -167,6 +226,7 @@ export default function CreateIntake({
       </div>
 
       <textarea
+        ref={inputRef}
         className="create-intake-input"
         rows={4}
         value={text}
@@ -179,8 +239,13 @@ export default function CreateIntake({
           Structure it
         </button>
         {result && !result.empty && (
-          <button type="button" className="ghost" onClick={() => { setResult(null); setAppliedAt(""); setConfirmedIds([]); }}>
+          <button type="button" className="ghost" onClick={() => { setResult(null); setAppliedAt(""); setCollapsedAfterApply(false); setConfirmedIds([]); }}>
             Clear reading
+          </button>
+        )}
+        {appliedAt === "all" && (
+          <button type="button" className="ghost" onClick={() => setCollapsedAfterApply(true)}>
+            Collapse intake
           </button>
         )}
         {typeof onModelParse === "function" && (

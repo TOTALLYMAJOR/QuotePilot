@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 19:30:53 CDT
+Last updated: 2026-08-28 19:38:35 CDT
 
 All notable project changes are documented in this file.
 
@@ -233,6 +233,18 @@ This changelog is backfilled from git history and will be maintained going forwa
   exact planning view or quote record; direct live/replay links explain the
   unavailable capability and offer a truthful return to **Event Focus** instead
   of sending the operator into another predictable dead end.
+- Compressed completed CREATE intake on desktop and mobile. Applying extracted
+  inquiry facts now turns the long evidence panel into a compact `Inquiry
+  added` handoff, keeps any unconfirmed-detail count visible, and offers
+  `Review intake` without reapplying or changing save/pricing authority.
+- Reprioritized the pristine **New quote** route around the actual CREATE task.
+  The draft-change command bar no longer competes with the empty intake; it
+  appears after draft work exists or when staff explicitly invoke **Pilot**.
+  At phone width the intake field and **Structure it** action now fit in the
+  first viewport. Applying a reading moves focus to the visible **Inquiry
+  added** heading, and **Review intake** returns focus to the source field.
+  Nothing is saved, priced authoritatively, sent, or inferred by these
+  presentation and focus changes.
 - Replaced the empty Workflow dead end in both active and compatibility graphs
   with a customer-journey handoff. When no quote exists, Workflow now explains
   what will appear after the first save and offers one `Start a quote` action

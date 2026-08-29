@@ -1678,6 +1678,7 @@ export default function App({
   // return to a pristine new-quote route. New drafts only — an edit session
   // always has its saved canonical revision — and cleared on save/discard.
   const [draftRecoveryOffer, setDraftRecoveryOffer] = useState(null);
+  const [draftRecoveryResumed, setDraftRecoveryResumed] = useState(false);
   const draftRecoveryStorageKey = draftRecoveryKey({ organizationId: authSession.organizationId });
 
   useEffect(() => {
@@ -1706,6 +1707,7 @@ export default function App({
     if (!draftRecoveryOffer) return;
     setForm({ ...INITIAL_FORM, ...draftRecoveryOffer.form });
     setQuoteDirty(true);
+    setDraftRecoveryResumed(true);
     setDraftRecoveryOffer(null);
   };
 
@@ -3732,6 +3734,7 @@ export default function App({
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote(EMPTY_EDITING_QUOTE);
+    setDraftRecoveryResumed(false);
     setAmbientDraftIntentReview(null);
     setAmbientDraftCatalogContext(null);
     setAmbientDraftReviewResolution("");
@@ -5134,7 +5137,15 @@ export default function App({
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
-        {PILOT_COMMAND_ENABLED && PilotCommandBar && pilotCommandSurfaceOpen && (
+        {PILOT_COMMAND_ENABLED
+          && PilotCommandBar
+          && pilotCommandSurfaceOpen
+          && (
+            Boolean(editingQuote.id)
+            || Object.keys(touchedFields).length > 0
+            || draftRecoveryResumed
+            || globalPilotRequest?.target === "draft_command"
+          ) && (
           <RecoverableErrorBoundary
             key={`pilot-command-${authSession.organizationId || "no-org"}-${quoteEditRouteId || "new"}`}
             active={pilotCommandSurfaceOpen}

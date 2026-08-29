@@ -1215,6 +1215,7 @@ function LegacyAppCore({
   // return to a pristine new-quote route. New drafts only — an edit session
   // always has its saved canonical revision — and cleared on save/discard.
   const [draftRecoveryOffer, setDraftRecoveryOffer] = useState(null);
+  const [draftRecoveryResumed, setDraftRecoveryResumed] = useState(false);
   const draftRecoveryStorageKey = draftRecoveryKey({ organizationId: authSession.organizationId });
 
   useEffect(() => {
@@ -1243,6 +1244,7 @@ function LegacyAppCore({
     if (!draftRecoveryOffer) return;
     setForm({ ...INITIAL_FORM, ...draftRecoveryOffer.form });
     setQuoteDirty(true);
+    setDraftRecoveryResumed(true);
     setDraftRecoveryOffer(null);
   };
 
@@ -2901,6 +2903,7 @@ function LegacyAppCore({
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote(EMPTY_EDITING_QUOTE);
+    setDraftRecoveryResumed(false);
     resetChangeImpactPreview();
     setQuoteDirty(false);
     setForm({
@@ -4169,6 +4172,10 @@ function LegacyAppCore({
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
         {PILOT_COMMAND_ENABLED && (
+          Boolean(editingQuote.id)
+          || Object.keys(touchedFields).length > 0
+          || draftRecoveryResumed
+        ) && (
           <PilotCommandBar
             form={form}
             catalog={catalog}

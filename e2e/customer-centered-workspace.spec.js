@@ -193,19 +193,45 @@ test.describe("customer-centered workspace", () => {
 
   test("the production CREATE intake applies bounded facts and shows a draft-only pricing band", async ({ page }) => {
     test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
+    await page.setViewportSize({ width: 390, height: 844 });
     await gotoWorkspace(page, "/app/quotes/new");
 
     const intake = page.locator('[data-create-intake="intent-extraction-v1"]');
     await expect(intake.getByRole("heading", { name: "What are you planning?" })).toBeVisible();
+    await expect(page.locator(".pilot-command")).toHaveCount(0);
     await intake.getByRole("textbox", { name: "Describe the event in your own words" }).fill(
       "Corporate dinner for about 80 guests on September 12, 2027 at The Foundry, plated, 4 hours, pilot@example.test."
     );
     await intake.getByRole("button", { name: "Structure it" }).click();
     await intake.getByRole("button", { name: /Add \d+ details? to the draft/ }).click();
 
+    await expect(intake).toHaveAttribute("data-create-intake-state", "applied");
+    const appliedHeading = intake.getByRole("heading", { name: /details? (?:is|are) in this draft/ });
+    await expect(appliedHeading).toBeVisible();
+    await expect(appliedHeading).toBeFocused();
+    await expect(intake.getByRole("heading", { name: "What are you planning?" })).toHaveCount(0);
+    await expect(page.locator(".pilot-command")).toBeVisible();
+    await expect(intake.getByRole("button", { name: "Review intake" })).toBeVisible();
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    ))).toBe(true);
+
     await expect(page.getByRole("spinbutton", { name: /Guests \(max 400\)/i })).toHaveValue("80");
+
+    await intake.getByRole("button", { name: "Review intake" }).click();
+    await expect(intake.getByRole("heading", { name: "What are you planning?" })).toBeVisible();
+    await expect(intake.getByRole("button", { name: "Added - review below" })).toBeDisabled();
+    await expect(intake.getByRole("textbox", { name: "Describe the event in your own words" })).toBeFocused();
+
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await intake.getByRole("button", { name: "Collapse intake" }).click();
+    await expect(appliedHeading).toBeVisible();
+    await expect(appliedHeading).toBeFocused();
     await expect(page.locator('[data-pricing-band="pricing-band-v1"]')).toBeVisible();
     await expect(page.getByText("Saving always prices the exact recorded count.", { exact: false })).toBeVisible();
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    ))).toBe(true);
   });
 
   test("explicit New quote discard and browser-exit protection remain attached to a dirty routed draft", async ({ page }) => {
