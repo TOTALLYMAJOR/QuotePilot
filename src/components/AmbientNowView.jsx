@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
 import StaffEvidenceRail from "./StaffEvidenceRail";
+import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import {
   buildMoneyRows,
@@ -262,6 +263,7 @@ export default function AmbientNowView({
   const dayLabel = day.toLocaleDateString(undefined, { weekday: "long" });
   const dateLabel = day.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const trulyCaughtUp = briefing.caughtUp.eligible && moneyRows.length === 0;
+  const unavailable = briefing.state === "unavailable";
 
   const announce = (result, label) => {
     setAcknowledgement({ result, label });
@@ -322,6 +324,38 @@ export default function AmbientNowView({
     onRefresh?.({ force: true });
   };
 
+  const startQuote = () => {
+    const action = createAmbientAction({
+      id: "start-new-quote",
+      outcomeLabel: "Start a quote",
+      purpose: "advance",
+      roles: [normalizeRole(currentUserRole)],
+      authorityLevel: "presentation",
+      previewPolicy: "none",
+      executionTarget: { kind: "route", targetId: "new-quote", surfaceId: "quote-create" },
+      receiptType: "none",
+      reversibility: { kind: "none" },
+      arrivalContract: {
+        object: {
+          id: organizationId || "current-organization",
+          type: "organization",
+          label: organizationName || "Current organization"
+        },
+        reason: "The user chose to begin a new quote.",
+        consequence: "A new editable quote flow opens; no customer proposal is sent.",
+        nextResolutionIds: ["complete-new-quote-draft"]
+      },
+      primary: false,
+      enabled: typeof onNewQuote === "function",
+      ...(typeof onNewQuote !== "function" ? { disabledReason: "Quote creation is unavailable in this context." } : {})
+    });
+    if (!action.enabled) return;
+    announce(resultFor(action, "pending", {
+      nextResolution: "Add the event details needed for a priced draft."
+    }), "Opening a new editable quote. Nothing has been sent.");
+    onNewQuote?.();
+  };
+
   return (
     <section
       className="now-surface ambient-now ambient-purpose-surface"
@@ -342,7 +376,7 @@ export default function AmbientNowView({
             A short list of what needs attention today.
           </p>
         </div>
-        <div className="right-actions">
+        {!unavailable && <div className="right-actions">
           <button
             type="button"
             className="ghost"
@@ -356,41 +390,11 @@ export default function AmbientNowView({
             type="button"
             className="cta"
             data-ambient-action-id="start-new-quote"
-            onClick={() => {
-              const action = createAmbientAction({
-                id: "start-new-quote",
-                outcomeLabel: "Start a quote",
-                purpose: "advance",
-                roles: [normalizeRole(currentUserRole)],
-                authorityLevel: "presentation",
-                previewPolicy: "none",
-                executionTarget: { kind: "route", targetId: "new-quote", surfaceId: "quote-create" },
-                receiptType: "none",
-                reversibility: { kind: "none" },
-                arrivalContract: {
-                  object: {
-                    id: organizationId || "current-organization",
-                    type: "organization",
-                    label: organizationName || "Current organization"
-                  },
-                  reason: "The user chose to begin a new quote.",
-                  consequence: "A new editable quote flow opens; no customer proposal is sent.",
-                  nextResolutionIds: ["complete-new-quote-draft"]
-                },
-                primary: false,
-                enabled: typeof onNewQuote === "function",
-                ...(typeof onNewQuote !== "function" ? { disabledReason: "Quote creation is unavailable in this context." } : {})
-              });
-              if (!action.enabled) return;
-              announce(resultFor(action, "pending", {
-                nextResolution: "Add the event details needed for a priced draft."
-              }), "Opening a new editable quote. Nothing has been sent.");
-              onNewQuote?.();
-            }}
+            onClick={startQuote}
           >
             Start a quote
           </button>
-        </div>
+        </div>}
       </header>
 
       {acknowledgement && (
@@ -406,7 +410,26 @@ export default function AmbientNowView({
         </div>
       )}
 
-      <section className="ambient-now__priorities" aria-labelledby="ambient-now-priorities-title">
+      {unavailable && (
+        <WorkspaceRecoveryState
+          className="ambient-now__recovery"
+          data-now-state="unavailable"
+          eyebrow="Today’s view is unavailable"
+          title="We couldn’t load today’s priorities."
+          description="Try again when you’re ready. No quote, customer, or workflow record changed, and you can still start a new quote."
+          titleId="ambient-now-unavailable-title"
+          actionGroupLabel="Today view recovery actions"
+        >
+          <button type="button" className="cta" onClick={refresh} disabled={state.loading}>
+            {state.loading ? "Trying again..." : "Try again"}
+          </button>
+          {typeof onNewQuote === "function" && (
+            <button type="button" className="ghost" onClick={startQuote}>Start a quote</button>
+          )}
+        </WorkspaceRecoveryState>
+      )}
+
+      {!unavailable && <section className="ambient-now__priorities" aria-labelledby="ambient-now-priorities-title">
         <div className="ambient-now__section-heading">
           <div>
             <p className="eyebrow">What matters now</p>
@@ -463,9 +486,9 @@ export default function AmbientNowView({
             </div>
           </div>
         )}
-      </section>
+      </section>}
 
-      <StaffEvidenceRail
+      {!unavailable && <StaffEvidenceRail
         presentation="compact"
         title="About this view"
         organizationName={organizationName}
@@ -479,16 +502,10 @@ export default function AmbientNowView({
         truncated={state.truncated}
         truncationKnown={state.truncationKnown}
         reads={state.reads}
-      />
+      />}
 
-      {state.error && (
-        <p className="ambient-now__error" role="alert">
-          One part of this workspace view could not refresh. Review the information details above, then try again.
-        </p>
-      )}
-
-      <QuietProgress receipts={briefing.quietProgress.items} />
-      <Horizon upcomingEvents={upcomingEvents} moneyRows={moneyRows} />
+      {!unavailable && <QuietProgress receipts={briefing.quietProgress.items} />}
+      {!unavailable && <Horizon upcomingEvents={upcomingEvents} moneyRows={moneyRows} />}
     </section>
   );
 }

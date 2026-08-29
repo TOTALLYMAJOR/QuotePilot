@@ -406,6 +406,154 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     expect(JSON.stringify(observations)).not.toContain("Maya Bennett");
   });
 
+  test("keeps Payment and Proposal context handoffs keyboard-operable and exact", async ({ page }) => {
+    await page.addInitScript(() => {
+      const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
+      if (!quotes[0]) return;
+      quotes.push({
+        ...quotes[0],
+        id: "ambient-a11y-other",
+        quoteNumber: "Q-AMBIENT-A11Y-OTHER",
+        customer: {
+          ...quotes[0].customer,
+          name: "Other Customer",
+          email: "other@example.test"
+        },
+        event: {
+          ...quotes[0].event,
+          name: "Other Event"
+        }
+      });
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify(quotes));
+    });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    const journeys = [
+      {
+        viewport: { width: 390, height: 844 },
+        triggerName: "Review payments",
+        dialogName: "Payments and balance",
+        detailsRegionName: "Payments and balance details",
+        handoffName: "Open quote workspace"
+      },
+      {
+        viewport: { width: 1440, height: 1000 },
+        triggerName: "Review proposal",
+        dialogName: "Proposal details",
+        detailsRegionName: "Proposal details",
+        handoffName: "Open proposal controls"
+      }
+    ];
+
+    for (const journey of journeys) {
+      await page.setViewportSize(journey.viewport);
+      const surface = await openAmbientOpportunity(page);
+      const trigger = surface.getByRole("button", { name: journey.triggerName });
+
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: journey.dialogName });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Close context" })).toBeFocused();
+
+      const detailsRegion = dialog.getByRole("region", {
+        name: journey.detailsRegionName
+      });
+      const arrivalDetails = dialog.locator("details.ambient-context-surface__arrival-details");
+      const arrivalDisclosure = arrivalDetails.getByText("Why this view", { exact: true });
+      await page.keyboard.press("Tab");
+      await expect(arrivalDisclosure).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(arrivalDetails).toHaveAttribute("open", "");
+      await page.keyboard.press("Tab");
+      await expect(detailsRegion).toBeFocused();
+
+      const accessibility = await new AxeBuilder({ page })
+        .include('[role="dialog"]')
+        .analyze();
+      expect(accessibility.violations).toEqual([]);
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
+      const footerButtonNames = await dialog.locator(".ambient-context-surface__footer button")
+        .allTextContents();
+      const handoffIndex = footerButtonNames.findIndex((name) => name.trim() === journey.handoffName);
+      expect(handoffIndex).toBeGreaterThanOrEqual(0);
+      for (let tabIndex = 0; tabIndex < 3 + handoffIndex; tabIndex += 1) {
+        await page.keyboard.press("Tab");
+      }
+      const handoff = dialog.getByRole("button", { name: journey.handoffName });
+      await expect(handoff).toBeFocused();
+      await page.keyboard.press("Enter");
+
+      await expect(page).toHaveURL(/\/app\/quotes$/u);
+      const administration = page.locator("summary", { hasText: "Quote administration" });
+      await expect(administration).toBeFocused();
+      await expect(page.getByText("Showing 1 of 2 quotes", { exact: true })).toBeVisible();
+      await expect(page.locator('tr[data-quote-id="ambient-a11y"]')).toBeVisible();
+      await expect(page.locator('tr[data-quote-id="ambient-a11y-other"]')).toHaveCount(0);
+    }
+  });
+
+  test("keeps Conversation evidence ahead of repeated arrival explanation", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 1000 }
+    ]) {
+      await page.setViewportSize(viewport);
+      const surface = await openAmbientOpportunity(page);
+      const trigger = surface.getByRole("button", { name: "Review conversation" });
+
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Conversation details" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Close context" })).toBeFocused();
+
+      const arrivalDetails = dialog.locator("details.ambient-context-surface__arrival-details");
+      const arrivalDisclosure = arrivalDetails.getByText("Why this view", { exact: true });
+      const detailsRegion = dialog.getByRole("region", { name: "Conversation details" });
+      await expect(arrivalDetails).not.toHaveAttribute("open", "");
+      await expect(detailsRegion.locator('[data-context-arrival-duplicate="reason"]')).toBeHidden();
+      await expect(detailsRegion.locator('[data-context-arrival-duplicate="consequence"]')).toBeHidden();
+      await expect(detailsRegion.getByRole("heading", { name: "Recorded conversation activity" }))
+        .toBeVisible();
+
+      const geometry = await detailsRegion.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        top: element.getBoundingClientRect().top,
+        bottom: element.getBoundingClientRect().bottom
+      }));
+      expect(geometry.clientHeight).toBeGreaterThanOrEqual(viewport.width === 390 ? 420 : 360);
+      expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+      expect(geometry.top).toBeGreaterThanOrEqual(0);
+      expect(geometry.bottom).toBeLessThanOrEqual(viewport.height);
+
+      await page.keyboard.press("Tab");
+      await expect(arrivalDisclosure).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(arrivalDetails).toHaveAttribute("open", "");
+      await page.keyboard.press("Tab");
+      await expect(detailsRegion).toBeFocused();
+
+      const accessibility = await new AxeBuilder({ page })
+        .include('[role="dialog"]')
+        .analyze();
+      expect(accessibility.violations).toEqual([]);
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+    }
+  });
+
   test("retains explicit controls and focus visibility in forced-colors mode", async ({ page }) => {
     await page.emulateMedia({ forcedColors: "active" });
     await page.setViewportSize({ width: 768, height: 900 });

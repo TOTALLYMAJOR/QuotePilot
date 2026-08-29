@@ -584,7 +584,14 @@ function followUpEvidence(quote, scope, todayISO) {
   const dueDateRaw = text(followUp.dueDate, 10);
   const dueDate = validDate(dueDateRaw);
   const completed = followUp.completed === true || new Set(["won", "lost"]).has(stage);
-  const hasRecord = Boolean(stage || dueDateRaw || text(followUp.note, 500) || followUp.completed === true);
+  const hasRecord = Boolean(
+    dueDateRaw
+    || text(followUp.note, 500)
+    || followUp.completed === true
+    || text(followUp.updatedAtISO, 40)
+    || text(followUp.updatedByEmail, 320)
+    || (stage && stage !== "new")
+  );
   if (!hasRecord) {
     return {
       id: "follow-up",

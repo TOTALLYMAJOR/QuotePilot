@@ -56,6 +56,7 @@ describe("Ambient Money intelligent object", () => {
     expect(stage(model, "deposit-request").state).toBe("not_requested");
     expect(stage(model, "deposit-settlement").state).toBe("not_settled");
     expect(stage(model, "balance-request").amountCents).toBe(700000);
+    expect(model.nextResolution).toBe("Open the quote workspace to review deposit-request eligibility.");
     expect(model.descriptor.dependencies).toHaveLength(4);
     expect(model.descriptor.doNothing).toMatch(/Nothing is requested, collected, reconciled, or repriced/iu);
     expect(model.descriptor.doNothing).toMatch(/deposit policy: recorded/iu);

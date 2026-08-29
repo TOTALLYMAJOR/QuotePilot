@@ -152,6 +152,7 @@ export function AmbientClientsDirectory({
   headingRef = null
 }) {
   const acknowledgementRef = useRef(null);
+  const directoryRef = useRef(null);
   const [acknowledgement, setAcknowledgement] = useState(null);
   const [directoryFilter, setDirectoryFilter] = useState("all");
   const rows = directoryRows(model);
@@ -165,6 +166,31 @@ export function AmbientClientsDirectory({
     calendarDateKey(clientLatest(row).eventDate) >= calendarDateKey()
   )).length;
   const contactGapCount = rows.filter((row) => clientDirectoryState(row).key === "contact_gap").length;
+  const priorityFilter = contactGapCount > 0
+    ? "contact_gap"
+    : upcomingCount > 0
+      ? "upcoming"
+      : "all";
+  const priorityCount = priorityFilter === "contact_gap"
+    ? contactGapCount
+    : priorityFilter === "upcoming"
+      ? upcomingCount
+      : rows.length;
+  const priorityHeading = priorityFilter === "contact_gap"
+    ? `${priorityCount} client${priorityCount === 1 ? " needs" : "s need"} contact details`
+    : priorityFilter === "upcoming"
+      ? `${priorityCount} upcoming event${priorityCount === 1 ? " is" : "s are"} ready to review`
+      : `${priorityCount} client relationship${priorityCount === 1 ? " is" : "s are"} ready to review`;
+  const priorityCopy = priorityFilter === "contact_gap"
+    ? "Complete the contact path before the next follow-up."
+    : priorityFilter === "upcoming"
+      ? "Open the relationships with the nearest recorded events."
+      : "Choose a client to see the relationship context and next step.";
+  const priorityActionLabel = priorityFilter === "contact_gap"
+    ? "Review contact gaps"
+    : priorityFilter === "upcoming"
+      ? "Review upcoming events"
+      : "Review clients";
   const visibleRows = rows.filter((row) => {
     if (directoryFilter === "all") return true;
     const rowState = clientDirectoryState(row);
@@ -177,6 +203,11 @@ export function AmbientClientsDirectory({
   const announce = (result, message) => {
     setAcknowledgement({ result, message });
     scheduleFrame(() => acknowledgementRef.current?.focus());
+  };
+
+  const showDirectoryFilter = (nextFilter) => {
+    setDirectoryFilter(nextFilter);
+    scheduleFrame(() => directoryRef.current?.focus());
   };
 
   const refreshAction = useMemo(() => createAmbientAction({
@@ -303,6 +334,27 @@ export function AmbientClientsDirectory({
             </dl>
           </div>
 
+          {rows.length > 0 && (
+            <section
+              className="ambient-clients__mobile-priority"
+              aria-labelledby="ambient-clients-priority-title"
+              data-capability-state={priorityFilter === "contact_gap" ? "attention" : "ready"}
+            >
+              <div>
+                <p className="ambient-clients__label">Suggested next view</p>
+                <strong id="ambient-clients-priority-title">{priorityHeading}</strong>
+                <span>{priorityCopy} {formatWorkspaceInteger(rows.length)} clients are shown on this page.</span>
+              </div>
+              <button
+                type="button"
+                aria-controls="ambient-client-directory"
+                onClick={() => showDirectoryFilter(priorityFilter)}
+              >
+                {priorityActionLabel}
+              </button>
+            </section>
+          )}
+
           <form className="ambient-clients__toolbar" role="search" onSubmit={onApplySearch}>
             <label className="ambient-clients__search">
               <span className="visually-hidden">Find a client by name or email</span>
@@ -339,13 +391,28 @@ export function AmbientClientsDirectory({
           </form>
 
           {rows.length > 0 ? (
-            <div className="ambient-clients__filters" role="group" aria-label="Client directory filters">
-              <span>Filter</span>
-              <button type="button" className={directoryFilter === "all" ? "is-selected" : ""} onClick={() => setDirectoryFilter("all")}>All</button>
-              <button type="button" className={directoryFilter === "linked" ? "is-selected" : ""} onClick={() => setDirectoryFilter("linked")}>With linked work</button>
-              <button type="button" className={directoryFilter === "upcoming" ? "is-selected" : ""} onClick={() => setDirectoryFilter("upcoming")}>Upcoming events</button>
-              <button type="button" className={directoryFilter === "contact_gap" ? "is-selected" : ""} onClick={() => setDirectoryFilter("contact_gap")}>Contact to add</button>
-            </div>
+            <>
+              <div className="ambient-clients__filters" role="group" aria-label="Client directory filters">
+                <span>Filter</span>
+                <button type="button" className={directoryFilter === "all" ? "is-selected" : ""} onClick={() => showDirectoryFilter("all")}>All</button>
+                <button type="button" className={directoryFilter === "linked" ? "is-selected" : ""} onClick={() => showDirectoryFilter("linked")}>With linked work</button>
+                <button type="button" className={directoryFilter === "upcoming" ? "is-selected" : ""} onClick={() => showDirectoryFilter("upcoming")}>Upcoming events</button>
+                <button type="button" className={directoryFilter === "contact_gap" ? "is-selected" : ""} onClick={() => showDirectoryFilter("contact_gap")}>Contact to add</button>
+              </div>
+              <label className="ambient-clients__mobile-filter">
+                <span>View clients</span>
+                <select
+                  aria-controls="ambient-client-directory"
+                  value={directoryFilter}
+                  onChange={(event) => showDirectoryFilter(event.target.value)}
+                >
+                  <option value="all">All clients ({formatWorkspaceInteger(rows.length)})</option>
+                  <option value="linked">With linked work ({formatWorkspaceInteger(linkedCount)})</option>
+                  <option value="upcoming">Upcoming events ({formatWorkspaceInteger(upcomingCount)})</option>
+                  <option value="contact_gap">Contact to add ({formatWorkspaceInteger(contactGapCount)})</option>
+                </select>
+              </label>
+            </>
           ) : null}
         </header>
 
@@ -401,7 +468,13 @@ export function AmbientClientsDirectory({
         )}
 
         {rows.length > 0 && (
-          <section className="ambient-clients__directory" aria-label="Client directory">
+          <section
+            ref={directoryRef}
+            id="ambient-client-directory"
+            className="ambient-clients__directory"
+            aria-label="Client directory"
+            tabIndex={-1}
+          >
             <div className="ambient-clients__columns" aria-hidden="true">
               <span>Client</span><span>Relationship</span><span>Contact</span><span>Status</span><span>Action</span>
             </div>

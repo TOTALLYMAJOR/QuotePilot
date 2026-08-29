@@ -1,6 +1,14 @@
 const STORAGE_KEY = "quoteWizard.sessionDiagnostics";
 const MAX_EVENTS = 200;
 const APP_NAME = "firebase-quote-wizard";
+const REDACTED = "[redacted]";
+const SENSITIVE_KEY_PATTERN = /(email|phone|token|secret|password|authorization|cookie|api[_-]?key|apikey|private[_-]?key|card|ssn|(^|[_-])uid([_-]|$))/i;
+const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const PHONE_PATTERN = /(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g;
+const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi;
+const TOKENISH_PATTERN = /\b(?:sk|pk|rk|whsec|pat|ghp|AIza|ya29|xox[baprs])[_-]?[A-Za-z0-9._~+/=-]{12,}/g;
+const URL_QUERY_HASH_PATTERN = /\bhttps?:\/\/[^\s"'<>]+/gi;
+const HASH_PATTERN = /^hash:[a-z0-9]+$/i;
 
 let initialized = false;
 let handlersBound = false;
@@ -42,28 +50,70 @@ function buildEventId() {
   return `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
-function safeText(value, fallback = "", maxLength = 500) {
+function hashText(value) {
+  const text = String(value ?? "");
+  if (!text) return "";
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `hash:${(hash >>> 0).toString(36)}`;
+}
+
+function stableHashText(value) {
   const text = String(value ?? "").trim();
+  if (!text) return "";
+  return HASH_PATTERN.test(text) ? text : hashText(text);
+}
+
+function stripUrlQueryAndHash(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text, canUseWindow() ? window.location.origin : "http://localhost");
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return text.split(/[?#]/)[0];
+  }
+}
+
+function redactSensitiveText(value) {
+  return String(value ?? "")
+    .replace(URL_QUERY_HASH_PATTERN, (match) => stripUrlQueryAndHash(match))
+    .replace(EMAIL_PATTERN, "[redacted-email]")
+    .replace(PHONE_PATTERN, "[redacted-phone]")
+    .replace(BEARER_PATTERN, "Bearer [redacted-token]")
+    .replace(TOKENISH_PATTERN, "[redacted-token]");
+}
+
+function safeText(value, fallback = "", maxLength = 500) {
+  const text = redactSensitiveText(value).trim();
   if (!text) return fallback;
   if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength)}…`;
+  return `${text.slice(0, maxLength)}...`;
+}
+
+function safeContextValue(key, value) {
+  if (value === null || value === undefined) return value;
+  if (SENSITIVE_KEY_PATTERN.test(String(key || ""))) {
+    return value ? REDACTED : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return safeText(value, "", 500);
+  try {
+    return safeText(JSON.stringify(value), "", 700);
+  } catch {
+    return safeText(String(value), "", 500);
+  }
 }
 
 function sanitizeContext(input) {
   if (!input || typeof input !== "object") return {};
   const entries = Object.entries(input).slice(0, 30);
   return Object.fromEntries(
-    entries.map(([key, value]) => {
-      if (value === null || value === undefined) return [key, value];
-      if (typeof value === "number" || typeof value === "boolean") return [key, value];
-      if (typeof value === "string") return [key, safeText(value, "", 500)];
-      if (value instanceof Date) return [key, value.toISOString()];
-      try {
-        return [key, safeText(JSON.stringify(value), "", 700)];
-      } catch {
-        return [key, safeText(String(value), "", 500)];
-      }
-    })
+    entries.map(([key, value]) => [key, safeContextValue(key, value)])
   );
 }
 
@@ -73,14 +123,14 @@ function normalizeError(input) {
     return {
       name: safeText(input.name, "Error", 120),
       message: safeText(input.message, "Unknown error", 600),
-      stack: safeText(input.stack, "", 4000)
+      stack: input.stack ? stableHashText(input.stack) : ""
     };
   }
   if (typeof input === "object" && (Object.prototype.hasOwnProperty.call(input, "message") || Object.prototype.hasOwnProperty.call(input, "name"))) {
     return {
       name: safeText(input.name, "Error", 120),
       message: safeText(input.message, "Unknown error", 600),
-      stack: safeText(input.stack, "", 4000)
+      stack: input.stack ? stableHashText(input.stack) : ""
     };
   }
   if (typeof input === "string") {
@@ -113,6 +163,40 @@ function viewportInfo() {
   };
 }
 
+function safeLocationHref() {
+  if (!canUseWindow()) return "";
+  return stripUrlQueryAndHash(window.location.href);
+}
+
+function safePathname() {
+  if (!canUseWindow()) return "";
+  return safeText(window.location.pathname, "", 250);
+}
+
+function safeReferrer() {
+  if (!canUseWindow() || typeof document === "undefined") return "";
+  return stripUrlQueryAndHash(document.referrer || "");
+}
+
+function normalizeUserContext(input = {}) {
+  const email = String(input.email || "").trim().toLowerCase();
+  const emailHash = String(input.emailHash || "").trim();
+  const uid = String(input.uid || "").trim();
+  const hasRedactedEmail = email === REDACTED;
+  const nextEmailHash = HASH_PATTERN.test(emailHash)
+    ? emailHash
+    : email && !hasRedactedEmail
+      ? hashText(email)
+      : "";
+  return {
+    uid: uid ? stableHashText(uid) : "",
+    email: email || emailHash ? REDACTED : "",
+    emailHash: nextEmailHash,
+    role: safeText(input.role, "", 40).toLowerCase(),
+    authenticated: Boolean(input.authenticated)
+  };
+}
+
 function buildSession() {
   const timestamp = nowISO();
   const timezone = (() => {
@@ -128,19 +212,14 @@ function buildSession() {
     appVersion: "",
     startedAtISO: timestamp,
     lastUpdatedAtISO: timestamp,
-    pageUrl: canUseWindow() ? window.location.href : "",
-    path: canUseWindow() ? window.location.pathname : "",
-    referrer: canUseWindow() ? document.referrer || "" : "",
+    pageUrl: safeLocationHref(),
+    path: safePathname(),
+    referrer: safeReferrer(),
     userAgent: typeof navigator !== "undefined" ? safeText(navigator.userAgent, "", 350) : "",
     language: typeof navigator !== "undefined" ? safeText(navigator.language, "", 120) : "",
     timezone,
     viewport: viewportInfo(),
-    user: {
-      uid: "",
-      email: "",
-      role: "",
-      authenticated: false
-    }
+    user: normalizeUserContext()
   };
 }
 
@@ -175,14 +254,14 @@ function normalizeState(input) {
   return {
     session: {
       ...session,
+      pageUrl: stripUrlQueryAndHash(session.pageUrl),
+      path: safeText(session.path, "", 250),
+      referrer: stripUrlQueryAndHash(session.referrer),
       viewport: {
         ...(fallback.session.viewport || {}),
         ...((session.viewport && typeof session.viewport === "object") ? session.viewport : {})
       },
-      user: {
-        ...(fallback.session.user || {}),
-        ...((session.user && typeof session.user === "object") ? session.user : {})
-      }
+      user: normalizeUserContext(session.user)
     },
     events
   };
@@ -226,8 +305,8 @@ function pushEvent({
     session: {
       ...state.session,
       lastUpdatedAtISO: entry.atISO,
-      pageUrl: canUseWindow() ? window.location.href : state.session.pageUrl,
-      path: canUseWindow() ? window.location.pathname : state.session.path,
+      pageUrl: canUseWindow() ? safeLocationHref() : state.session.pageUrl,
+      path: canUseWindow() ? safePathname() : state.session.path,
       viewport: viewportInfo()
     },
     events: [entry, ...state.events].slice(0, MAX_EVENTS)
@@ -307,10 +386,7 @@ export function setDiagnosticsUserContext({
     session: {
       ...state.session,
       user: {
-        uid: safeText(uid, "", 120),
-        email: safeText(email, "", 200).toLowerCase(),
-        role: safeText(role, "", 40).toLowerCase(),
-        authenticated: Boolean(authenticated)
+        ...normalizeUserContext({ uid, email, role, authenticated })
       },
       lastUpdatedAtISO: nowISO()
     }

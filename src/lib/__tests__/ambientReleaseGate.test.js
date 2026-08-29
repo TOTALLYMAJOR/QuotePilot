@@ -58,6 +58,22 @@ function fixture(overrides = {}) {
 `,
     orchestration: "npm run check:ambient-release-gate\n",
     deploy: "env:\n  VITE_AMBIENT_UI_ENABLED: \"true\"\n  VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"\n",
+    workPlan: Array.from(
+      { length: 50 },
+      (_, index) => `- **AIUI-${String(index + 1).padStart(2, "0")} [EVOLVE]** Contract.`
+    ).join("\n"),
+    uatChecklist: JSON.stringify({
+      candidateProfiles: [{
+        id: "staging-safe-off",
+        itemStates: {
+          "operator.authenticated-workspace-journey": { state: "applicable" }
+        }
+      }],
+      items: [{
+        id: "operator.authenticated-workspace-journey",
+        targets: ["firebase-hosting", "firebase-all", "vercel"]
+      }]
+    }),
     ...overrides
   };
 
@@ -67,6 +83,8 @@ function fixture(overrides = {}) {
   write(root, ".github/workflows/deploy-vercel-production.yml", sources.deploy);
   write(root, "e2e/ambient-intelligence-accessibility.spec.js", sources.spec);
   write(root, "scripts/orchestration-lanes.sh", sources.orchestration);
+  write(root, "docs/AMBIENT_INTELLIGENCE_WORK_PLAN.md", sources.workPlan);
+  write(root, "docs/release-uat-checklist.json", sources.uatChecklist);
   return root;
 }
 
@@ -80,7 +98,10 @@ describe("Ambient zero-dead-click release gate", () => {
   test("accepts the protected browser, policy, production-flag, and authority boundaries", () => {
     expect(assertAmbientReleaseGate({ root: fixture() })).toEqual({
       browserCommand: AMBIENT_RELEASE_GATE_SCRIPT,
+      materialItemCount: 50,
+      operatorUatItemId: "operator.authenticated-workspace-journey",
       productionWorkflowCount: 2,
+      retirementGateCount: 4,
       acknowledgementDeadlineMs: 250,
       requiredDeadClickRate: 0
     });
@@ -129,6 +150,53 @@ describe("Ambient zero-dead-click release gate", () => {
 
     expect(() => assertAmbientReleaseGate({ root })).toThrow(
       "must exercise the promoted staffing presentation"
+    );
+  });
+
+  test("fails closed when the canonical 50-item inventory is incomplete", () => {
+    const root = fixture({
+      workPlan: Array.from(
+        { length: 49 },
+        (_, index) => `- **AIUI-${String(index + 1).padStart(2, "0")} [EVOLVE]** Contract.`
+      ).join("\n")
+    });
+
+    expect(() => assertAmbientReleaseGate({ root })).toThrow(
+      "must retain exactly one definition for AIUI-01 through AIUI-50"
+    );
+  });
+
+  test("fails closed when authenticated operator UAT is no longer browser-applicable", () => {
+    const root = fixture({
+      uatChecklist: JSON.stringify({
+        candidateProfiles: [{
+          id: "staging-safe-off",
+          itemStates: {
+            "operator.authenticated-workspace-journey": { state: "blocked" }
+          }
+        }],
+        items: [{
+          id: "operator.authenticated-workspace-journey",
+          targets: ["firebase-backend", "firebase-all"]
+        }]
+      })
+    });
+
+    expect(() => assertAmbientReleaseGate({ root })).toThrow(
+      /browser-target authenticated operator UAT item.*safe-off candidate.*applicable/is
+    );
+  });
+
+  test("fails closed when AIUI-48 removal is authorized before every external gate", () => {
+    const assessRetirement = (inputs = {}) => ({
+      removalAuthorized: Object.values(inputs).filter(Boolean).length >= 3
+    });
+
+    expect(() => assertAmbientReleaseGate({
+      root: fixture(),
+      assessRetirement
+    })).toThrow(
+      "AIUI-48 removal must remain blocked until parity, rollback, release acceptance, and promotion approval all pass"
     );
   });
 });

@@ -218,6 +218,32 @@
   line-height: 1.45;
 }
 
+.ambient-proposal-context__recommendations {
+  display: grid;
+  gap: 0.48rem;
+  padding: 0.68rem 0.75rem;
+  border-left: 3px solid var(--ambient-gold-local, var(--ambient-gold, #9b6b18));
+  background: color-mix(in srgb, var(--ambient-gold-local, var(--ambient-gold, #9b6b18)) 8%, transparent);
+}
+
+.ambient-proposal-context__recommendations > strong,
+.ambient-proposal-context__recommendations span {
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.ambient-proposal-context__recommendations ul,
+.ambient-proposal-context__recommendations li {
+  display: grid;
+  gap: 0.17rem;
+}
+
+.ambient-proposal-context__recommendations small {
+  color: var(--ambient-muted, var(--muted, #66706d));
+  font-size: 0.68rem;
+  line-height: 1.42;
+}
+
 .ambient-proposal-context__evidence-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -373,6 +399,7 @@
   .ambient-proposal-context__state,
   .ambient-proposal-context__gaps li,
   .ambient-proposal-context__caught-up,
+  .ambient-proposal-context__recommendations,
   .ambient-proposal-context__judgment,
   .ambient-proposal-context--unavailable {
     border: 1px solid CanvasText;

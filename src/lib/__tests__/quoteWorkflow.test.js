@@ -279,8 +279,10 @@ describe("quote workflow helpers", () => {
   test("scores proposal readiness and identifies actionable gaps", () => {
     const ready = buildProposalReadiness(completeForm(), { total: 9200 });
     expect(ready.score).toBe(100);
+    expect(ready.coverageScore).toBe(100);
     expect(ready.status.id).toBe("ready");
     expect(ready.gaps).toEqual([]);
+    expect(ready.recommendedGaps).toEqual([]);
 
     const incomplete = buildProposalReadiness({
       ...completeForm(),
@@ -288,11 +290,26 @@ describe("quote workflow helpers", () => {
       venue: "",
       menuItems: []
     }, { total: 9200 });
-    expect(incomplete.score).toBe(70);
+    expect(incomplete.score).toBe(68);
     expect(incomplete.gaps.map((item) => item.id)).toEqual([
       "customer-email",
       "venue",
       "menu"
+    ]);
+
+    const phoneRecommended = buildProposalReadiness({
+      ...completeForm(),
+      phone: ""
+    }, { total: 9200 });
+    expect(phoneRecommended).toMatchObject({
+      score: 100,
+      coverageScore: 95,
+      complete: true,
+      status: { id: "ready", label: "Ready to send" }
+    });
+    expect(phoneRecommended.gaps).toEqual([]);
+    expect(phoneRecommended.recommendedGaps.map((item) => item.id)).toEqual([
+      "customer-phone"
     ]);
   });
 

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-25 02:06:28 CDT
+Last updated: 2026-08-29 01:12:39 CDT
 
 ## Current Production Release
 
@@ -42,7 +42,10 @@ Last updated: 2026-08-25 02:06:28 CDT
   — processor payout settlement (`integration`, blocked behind the Connect
   stopping point), declared processor fee schedules (`business_policy`, the
   settings field does not exist), and post-event consumption (`engineering`,
-  no capture surface). Run `npm run truthloop:coverage` for the current split.
+  no capture surface). Generate the current split with the explicit source and
+  evaluation instant required by the read-only contract, for example
+  `npm run truthloop:coverage -- --source <sources.json> --evaluated-at <ISO>`;
+  the bare command intentionally refuses to infer either input.
 - Containment is explicit-scope, not rule-enforced. The reader runs on the
   Admin SDK, which bypasses Firestore rules, so its guarantees come from a
   required organization argument, reads rooted at that organization, the
@@ -65,7 +68,83 @@ Last updated: 2026-08-25 02:06:28 CDT
 
 ## Pending Production Completion
 
-- Tenant activation run `32425529671` verified the then-current successful `v0.14.0`
+### v0.16.0 bounded promotion in progress
+
+- The owner authorized remote publication and governed deployment pursuit for
+  the current 74-commit candidate. Against `origin/main`, baseline
+  `303eec5237d143fc11398e23f24e86fcb28c2655` changes 180 files with 12,313
+  insertions and 1,030 deletions (net +11,283). The capability and holdback
+  inventory is recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md`.
+- The local high-risk release profile plus Core Web Vitals passes after the
+  documentation gate correctly required timestamp reconciliation: 4,091 unit
+  tests pass with 78 skipped, 127 Truth Loop tests pass, the 503-module build
+  passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
+  auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
+  Lighthouse/CWV pass.
+- This is not a deployment claim. The tracked `staging-safe-off` UAT plan has
+  17 applicable and 21 blocked items for Firebase-all, and 11 applicable and 7
+  blocked items for Vercel preview. A published exact release SHA, remote CI,
+  immutable staging/preview receipts, applicable hosted results, and named
+  human review are the next evidence classes.
+- Stripe Connect remains deploy-empty/provider-disabled; Steward remains
+  providerless with model output hidden; buyer access, Commercial Change,
+  Revenue Autopilot, and authoritative staffing remain fail-closed. Candidate
+  deployment may inspect their safe unavailable/presentation states but cannot
+  activate them or convert their external gates into production qualification.
+
+- Product Truth Observability is implemented as a read-only source/local
+  repository/CI candidate. The branch now contains the governed `v0.15.0`
+  receipts and is reconciled to current `origin/main`; an earlier digest's
+  branch-divergence and v0.14/v0.15 contradiction are therefore historical
+  findings, not current release truth. The compiler still preserves exact HEAD,
+  keeps unavailable CI/hosted/provider/production/human/outcome proof
+  `unknown`, and does not treat reachability as deployed identity. Exact CI
+  observation, owner comprehension review, freshness calibration, and any
+  promotion to a required gate remain pending human/external decisions.
+- Steward has no remaining repository-preparable work before its reviewed
+  private-runtime and human-evaluation gate. The deploy-dormant compiler,
+  policy/validation controls, consent/evaluation contracts, pinned synthetic
+  corpus, hidden-output workbench, disabled handoff, and manual recovery route
+  pass 84 focused tests, the secret scan, and three responsive browser checks.
+  A reviewed provider transport and credential, canonical context reads,
+  private persistence, billing/privacy approval, consenting silent execution,
+  100 actual human packet reviews, hosted rules evidence, deployment, and human
+  acceptance remain external. Model output stays unavailable to users.
+- Stripe Connect has no remaining repository-preparable foundation gap before
+  its cloud/provider gate. The reviewed Accounts v2 model remains full Stripe
+  Dashboard access, Stripe fee collection, Stripe negative-balance liability,
+  and direct charges with no QuotePilot application fee. Foundation,
+  infrastructure, and onboarding checks pass, and the read-only live staging
+  preflight currently confirms the exact project, Web app, and protected
+  `connect-control` database. Runtime exports stay empty and provider access
+  stays disabled until a human reviews and authorizes the saved Terraform plan,
+  reconciles applied identities, observes then promotes App Check, binds the
+  restricted Sandbox credential, and accepts hosted negative/replay UAT.
+- The optional bounded security-audit slice is repository-complete in the
+  current source candidate. Operations Audit has an explicit two-action
+  immutable taxonomy for final quote-approval executions and organization role
+  changes, a bounded privacy-safe DTO, replay and foreign-tenant filtering,
+  source-truncation state, and an explicit indefinite server-retention/no-clear
+  policy. Delivery and catalog rows remain legacy observations; provider
+  outcomes remain separate.
+  Deployment, authenticated hosted admin/tenant denial checks, production-data
+  review, and human acceptance remain open.
+- The PWA safe recovery shell is repository-complete in the current source
+  candidate. Its install manifest has stable identity and 192/512 maskable
+  icons; the service worker owns only its namespaced shell cache, allowlists
+  public build/brand assets, preserves unrelated caches, and serves an explicit
+  reconnect page instead of cached authenticated routes. Six unit contracts,
+  four responsive axe/browser checks, and a real minified-preview service-worker
+  fallback pass locally. The hosted app still serves the prior scaffold;
+  deployment, hosted installation/relaunch, and physical-device acceptance
+  remain open.
+- The tracked release-UAT contract now includes the stable
+  `operator.authenticated-workspace-journey` item for Hosting, Firebase-all,
+  and Vercel targets. It binds the required authenticated route/task matrix to
+  the exact SHA, immutable deployment, target, organization, role, and evidence
+  level. Repository validation does not complete the real staff session,
+  hosted data checks, denied-role/cross-tenant observations, or human acceptance.
+- Tenant activation run `32425529671` verified the exact successful `v0.14.0`
   Firebase all-scope receipt, then failed closed before any patch because
   `organizations/250/settings/config` does not exist. The workflow did not
   record tenant activation.
@@ -75,19 +154,13 @@ Last updated: 2026-08-25 02:06:28 CDT
   tenant-data path. Do not bypass the protected workflow or create a sparse
   settings document solely to force the staffing flag.
 - After the precondition is reviewed and applied, rerun **Set Operational
-  Staffing Tenant** against Firebase deployment run `32818605404`, organization
+  Staffing Tenant** against Firebase deployment run `32419577296`, organization
   `250`, and `enabled=true`, then retain its verified readback before beginning
   authenticated staff acceptance.
-- Production configuration names Resend as the email provider and pins owner
-  SMS to `pingram` generation `pingram-2026-08-14-a`. Configuration does not
-  prove provider acceptance, delivery,
-  staff acknowledgement, attendance, payroll, or human acceptance.
-- The deployed release includes the Ambient workspace, authoritative
-  operational staffing, Staff workspace and private records, briefing output,
-  manual staff invitations with independently tracked delivery and
-  acknowledgement states, hardened dormant owner-SMS provider support, and the
-  lighter quote-builder decisions. Tenant availability remains unavailable
-  until the protected activation precondition and workflow complete.
+- Production configuration names Resend as the email provider and binds the
+  reviewed Pingram deployment profile. Configuration and deployment do not
+  prove provider delivery, staff acknowledgement, attendance, payroll, tenant
+  activation, or human acceptance.
 
 ## Engineering Checkpoint Detail
 
@@ -281,9 +354,15 @@ Last updated: 2026-08-25 02:06:28 CDT
   the replacement graph. Local mode-specific `.env` flags and explicit release
   shell overrides resolve consistently. The compatibility boundary retains
   portal-token isolation, unsaved quote/Catalog recovery, and privacy-bounded
-  analytics, and passes the existing bundle ceiling without increasing it.
-  This is local source/build qualification only; no hosted candidate or
-  production runtime changed.
+  analytics. A clean committed candidate initially exceeded its unchanged
+  temporary ceiling by 5,600 bytes; eligible function-to-arrow minification now
+  reduces total JavaScript by 21,682 bytes to 3,197,496 bytes and the largest
+  chunk to 384,998 bytes. The full unit suite and a minified local-preview lazy-
+  route smoke pass with zero page errors. The temporary exception remains
+  active: standard-budget retirement still requires reviewed graph optimization
+  or baseline policy, browser/CWV evidence, and both build profiles. This is
+  local source/build qualification only; no hosted candidate or production
+  runtime changed.
 - The `v0.7.0` deployment receipts do not establish authenticated hosted-role
   behavior, production-data correctness, downstream provider acceptance,
   recipient evidence, or human acceptance.
@@ -321,6 +400,12 @@ Last updated: 2026-08-25 02:06:28 CDT
   payment steps, and limits quiet progress to timestamp-backed internal
   workflow receipts. All 50 remain partial against their complete acceptance
   contracts.
+  The quick Ambient release policy now also verifies that all 50 canonical
+  work-item definitions remain present, the authenticated operator UAT item is
+  browser-applicable under the fixed safe-off profile, and AIUI-48 cannot
+  authorize legacy removal before parity, exact rollback, release acceptance,
+  and explicit promotion approval all pass. This closes a repository policy
+  gap only; no item is formally closed and no external gate is reported passed.
   The exact CI-equivalent production Ambient build passes locally with 3,714,204 total
   JavaScript bytes and a 391,901-byte largest chunk, inside the existing
   temporary ceiling without recalibration. Its selected graph excludes the
@@ -465,25 +550,27 @@ Last updated: 2026-08-25 02:06:28 CDT
   parity, hosted roles, rollback-release evidence, timed comprehension,
   production-data acceptance, and human acceptance remain open.
 
-## Operational Health
+## Historical Operational Receipt — v0.7.0 (Superseded)
 
-- Production runtime: `v0.7.0` is live from commit
-  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, tagged `v0.7.0`.
-- Exact-main CI: run `31528176575` passed all eight required jobs.
-- Firebase: `all` deployment run `31529170963` updated Hosting, Firestore rules,
+- This retained record describes the governed August 11 deployment of commit
+  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, tagged `v0.7.0`; it was
+  superseded by the exact `v0.15.0` production release identified at the top of
+  this document and must not be read as current runtime state.
+- Exact-main CI run `31528176575` passed all eight required jobs.
+- Firebase `all` deployment run `31529170963` updated Hosting, Firestore rules,
   indexes, and Functions, then verified `https://tonicatering.web.app`.
-- Vercel: deployment run `31530050353` promoted immutable deployment
+- Vercel deployment run `31530050353` promoted immutable deployment
   `quoteflow-duqhsqfau-mbmapps.vercel.app` and rebound
   `https://quotepilot.mbmapps.com`.
-- Public reachability: `/`, `/app`, and `/app/messages` returned HTTP 200 on
+- At that time, `/`, `/app`, and `/app/messages` returned HTTP 200 on
   the production edge; `/` and `/app` also returned HTTP 200 on the Firebase
   origin.
-- Runtime inventory: Firebase lists 75 Functions. The newly deployed callable
-  `recordChangeRequestParse` reports `ACTIVE` on Node.js 22 in `us-central1`.
-- `v0.7.0` release-receipt parity: both production workflows checked out that
-  exact tagged release SHA. This documentation correction does not change the
-  deployed runtime.
-- Credential health: local Firebase CLI access to `tonicatering` and the
+- The contemporaneous Firebase inventory listed 75 Functions; the newly
+  deployed callable `recordChangeRequestParse` reported `ACTIVE` on Node.js 22
+  in `us-central1`.
+- Both contemporaneous production workflows checked out that exact tagged
+  release SHA.
+- At that checkpoint, local Firebase CLI access to `tonicatering` and the
   protected GitHub Firebase deployment credential were renewed and
   authenticated on August 10. No credential values are stored in tracked files.
 
@@ -579,7 +666,7 @@ route evidence are complete.
   payout readiness, and deterministic security review. This is source/local
   evidence only and made no provider or cloud request.
 
-- The QuotePilot Package Workspace slice passes 45 of 45 focused package
+- The QuotePilot Package Workspace source slice passes 45 of 45 focused package
   model, pricing parity, catalog save-state, static presentation, staged
   selector, activation, dependency-review, switch, and revert suites. A fresh
   local real-route browser audit passes at 390, 768, and 1440 pixels with zero
@@ -587,9 +674,9 @@ route evidence are complete.
   pixels, correct mobile/desktop navigation modes, full-viewport mobile selector
   focus, Escape cancellation/focus restoration, Apply staging, dirty package
   switching, activation blocking, and non-mutating dependency review. The local
-  production build and environment check also pass. Exact `v0.15.0` carries
-  this UI, but these local checks do not establish authenticated hosted
-  admin/sales behavior, production-data correctness, or human acceptance.
+  production build and environment check also pass. This is source/local
+  evidence only; authenticated hosted admin/sales behavior, production-data
+  correctness, deployment, and human acceptance remain open.
 
 - The Ambient zero-dead-click release contract now runs as a dedicated step in
   the protected Playwright CI lane with the production presentation flags and
@@ -600,11 +687,10 @@ route evidence are complete.
   3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. The reconciled `v0.15.0` source measured 3,221,176 /
-  387,248 bytes for compatibility and 3,905,603 / 387,248 for the explicit
-  Ambient production graph. Those exact local measurements are the temporary
-  ceilings, and exact-SHA CI run `32817744859` confirmed the governed bundle
-  profiles. Both keep the
+  build steps. The current combined source candidate measures 3,206,553 /
+  387,248 bytes for compatibility and 3,887,673 / 387,248 for Ambient. The
+  temporary ceilings are 3,213,578 and 3,887,976 aggregate bytes respectively,
+  retaining only the previously observed per-profile CI offsets; both keep the
   391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
@@ -720,13 +806,16 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. Exact `v0.15.0` uses named per-graph temporary ceilings: 3,221,176
-   bytes for compatibility and 3,905,603 bytes for Ambient. Both are exact
-   explicit local production-flag measurements confirmed by exact-main CI run
-   `32817744859`. Optimization or reviewed clean-main recalibration is required before the
+9. The combined workspace candidate uses named per-graph temporary ceilings:
+   3,213,578 bytes for compatibility and 3,887,976 bytes for Ambient, each
+   retaining only its previously observed runner offset above the measured
+   candidate. Exact-SHA CI confirmation is still required before merge, and
+   optimization or reviewed clean-main recalibration is required before the
    exception can close.
-10. `functions.config()` compatibility remains in source and must migrate before
-    Firebase removes the legacy API in March 2027.
+10. The sole `functions.config()` compatibility read is removed in the current
+    source candidate. Production still runs the prior deployed revision, so an
+    exact coordinated backend release and runtime readback remain required
+    before the March 2027 platform removal can be called operationally closed.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
 12. Operational staffing code and authority are deployed in exact `v0.15.0`
@@ -784,6 +873,11 @@ route evidence are complete.
     reviews; private runtime, provider-backed pilot, model-output UI,
     persistence, deployment, production behavior, and human acceptance remain
     absent.
+    The tracked review-receipt negative test now constructs its clearly
+    synthetic Stripe credential shape at runtime. The exact secret-rejection
+    assertion still passes 14/14, the repository secret scan and complete
+    `lane:quick` pass, and the release lane now advances to the independently
+    known capability-surfacing debt. No scanner rule or Steward policy changed.
     The authorized staff Quote Workspace now includes the bounded Desk status
     panel. Its live state is provider-unavailable, renders no model prose,
     labels no changes made, disables Steward handoff, and routes only to the
@@ -797,7 +891,13 @@ route evidence are complete.
     Puppeteer/`extract-zip` chain; npm's available remediation is a breaking
     Lighthouse CI downgrade and must not be forced without a reviewed tooling
     migration.
-
+17. Cloud runner handoff is now documented as a source/process contract in the
+    orchestration blueprint and runbook. Hosted agents should bootstrap with
+    `npm ci`, `npm run check:env`, a bounded `plan:task --json` packet, emitted
+    validations, and a matching `--phase complete` packet. This improves
+    repeatability only; it does not prove a configured cloud provider account,
+    injected secrets, hosted deployment, production behavior, or human
+    acceptance.
 ## Current Focus
 
 1. Complete an authenticated production operator pass for quote create/save/
@@ -816,8 +916,11 @@ route evidence are complete.
    opt-out-hold proof, and one controlled UAT plan.
 6. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
    denial matrix.
-7. Complete the bundle-exception closure path and continue `functions.config()`
-   migration planning.
+7. Review the remaining bundle-exception retirement path—graph optimization or
+   clean-main baseline policy—then run both build profiles, browser, and CWV
+   gates. Separately include the environment-only Functions configuration
+   candidate in an exact coordinated backend release and verify runtime readback
+   before closing that migration operationally.
 8. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any
    all-positive attestation or production-intent merge.
@@ -837,6 +940,11 @@ route evidence are complete.
     after their pure privacy, memory, no-secret, and adversarial contracts pass;
     keep provider, billing, deployment, production, and autonomous authority
     outside that authorization.
+11. On the exact deployed PWA candidate, install and relaunch from supported
+    desktop and mobile devices, verify offline navigation reaches the truthful
+    reconnect state, reconnect successfully, and record the browser/OS/build
+    identity. Do not interpret installation as authenticated offline-data or
+    queued-mutation support.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

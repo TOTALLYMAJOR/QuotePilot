@@ -70,10 +70,16 @@ afterEach(() => {
 
 describe("exact quote Decision Debt surface", () => {
   test("reads only the exact tenant/quote scope and renders an empty authoritative result", async () => {
-    mocks.getDecisionDebtSnapshot.mockResolvedValue(result());
+    const readResult = result();
+    const onReadStateChange = vi.fn();
+    mocks.getDecisionDebtSnapshot.mockResolvedValue(readResult);
     await act(async () => {
       root.render(
-        <QuoteDecisionDebtPanel organizationId="org-a" quoteId="quote-a" />
+        <QuoteDecisionDebtPanel
+          organizationId="org-a"
+          quoteId="quote-a"
+          onReadStateChange={onReadStateChange}
+        />
       );
     });
 
@@ -89,6 +95,14 @@ describe("exact quote Decision Debt surface", () => {
     expect(container.textContent).toContain("No quote decisions need review right now");
     expect(container.querySelector('[data-decision-debt-policy]')).toBeFalsy();
     expect(container.querySelector('[data-capability-action="configure-decision-debt-policy"]')).toBeFalsy();
+    expect(onReadStateChange).toHaveBeenLastCalledWith({
+      organizationId: "org-a",
+      quoteId: "quote-a",
+      loading: false,
+      stale: false,
+      error: "",
+      result: readResult
+    });
   });
 
   test("fails closed without a connected scope and never invokes the callable", async () => {

@@ -128,6 +128,10 @@ describe("AmbientConversationContext", () => {
     expect(container.textContent).toContain("Confidence and source");
     expect(container.textContent).toContain("How current this is");
     expect(container.textContent).toContain("What this connects to");
+    expect(container.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this is shown");
+    expect(container.querySelector('[data-context-arrival-duplicate="consequence"]')?.textContent)
+      .toContain("What it affects");
     expect(container.querySelectorAll("[data-conversation-resolution]")).toHaveLength(4);
     expect(container.querySelector('[data-conversation-resolution="review-latest-customer-reply"]')?.dataset.resolutionAvailability)
       .toBe("available");

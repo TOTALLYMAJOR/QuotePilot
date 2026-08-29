@@ -216,14 +216,17 @@ export function deriveEventIntelligence(quote = {}, {
       score: proposal.score,
       statusLabel: proposal.complete ? "Required fields recorded" : proposal.status.label,
       detail: proposal.complete
-        ? "All weighted proposal fields in the existing readiness model are recorded. This is not operational event readiness."
-        : `${proposal.gaps.length} weighted proposal field${proposal.gaps.length === 1 ? "" : "s"} need review. This is not operational event readiness.`,
+        ? proposal.recommendedGaps.length > 0
+          ? `All required proposal fields are recorded; ${proposal.recommendedGaps.length} recommended contact ${proposal.recommendedGaps.length === 1 ? "detail remains" : "details remain"}. This is not operational event readiness.`
+          : "All required proposal fields in the existing readiness model are recorded. This is not operational event readiness."
+        : `${proposal.gaps.length} required proposal field${proposal.gaps.length === 1 ? "" : "s"} need review. This is not operational event readiness.`,
       gaps: proposal.gaps.map((gap) => ({ id: gap.id, label: gap.label, points: gap.points })),
       reasonCodes: readinessReasonCodes,
       evidence: {
         model: "proposal-readiness-v1",
-        criteriaCount: proposal.criteria.length,
-        recordedCriteriaCount: proposal.criteria.filter((item) => item.passed).length
+        criteriaCount: proposal.requiredCriteria.length,
+        recordedCriteriaCount: proposal.requiredCriteria.filter((item) => item.passed).length,
+        recommendedGapCount: proposal.recommendedGaps.length
       }
     },
     flexibility: {

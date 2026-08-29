@@ -307,7 +307,7 @@ function nextResolution(stages) {
   if (deposit.state === "not_settled" && request.state === "provider_request_recorded") {
     return "Wait for or reconcile the verified deposit provider result.";
   }
-  if (deposit.state === "not_settled") return "Review deposit-request eligibility in the governed workflow.";
+  if (deposit.state === "not_settled") return "Open the quote workspace to review deposit-request eligibility.";
   if (balanceRequest.state === "unavailable" || settlement.state === "unavailable") {
     return "Reconcile the exact final-balance amount and provider evidence.";
   }

@@ -206,6 +206,31 @@
   text-transform: uppercase;
 }
 
+.ambient-context-surface__arrival-details summary {
+  width: fit-content;
+  min-height: 2.75rem;
+  padding: 0.72rem 0.35rem 0.72rem 0;
+  color: var(--ink, #17202a);
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.ambient-context-surface__arrival-details summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ambient-focus, #356a9b) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.ambient-context-surface__arrival-details > div {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.1rem 0 0.35rem;
+}
+
+.ambient-context-surface--arrival-disclosure [data-context-arrival-duplicate] {
+  display: none;
+}
+
 .ambient-context-surface__body {
   flex: 1 1 auto;
   min-height: 0;
@@ -636,5 +661,9 @@
     border-color: CanvasText;
     color: CanvasText;
     background: Canvas;
+  }
+
+  .ambient-context-surface__arrival-details summary:focus-visible {
+    outline-color: CanvasText;
   }
 }

@@ -1,7 +1,5 @@
 # QuotePilot Steward Competitive Research
 
-Last updated: 2026-08-20 14:47:39 CDT
-
 Status: Evidence snapshot for product design
 Date: August 15, 2026
 Scope: Publicly described catering, venue, proposal, and client-workflow products

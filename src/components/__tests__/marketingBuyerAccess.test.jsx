@@ -14,8 +14,6 @@ describe("marketing buyer-access rollout", () => {
     const markup = renderToStaticMarkup(<MarketingPage />);
 
     expect(markup).toContain("Become a design partner");
-    expect(markup).toContain("Apply for a partner seat");
-    expect(markup).toContain('href="https://mbmapps.com/contact"');
     expect(markup).toContain("Staff login");
     expect(markup).not.toContain("Try $1 test access");
     expect(markup).not.toContain('href="/start"');

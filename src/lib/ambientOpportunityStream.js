@@ -374,7 +374,7 @@ function primaryIntent({ quoteId, identity, proposal, workflow, capabilities }) 
     severity: hasProposalGap ? "attention" : "info",
     object,
     reason: hasProposalGap
-      ? `${proposal.gaps.length} weighted proposal field${proposal.gaps.length === 1 ? "" : "s"} need review.`
+      ? `${proposal.gaps.length} required proposal field${proposal.gaps.length === 1 ? "" : "s"} need review.`
       : "There isn’t a due follow-up or an unfinished proposal detail in this record.",
     consequence: "The exact opportunity opens for review. No quote, customer, payment, booking, or provider state changes through navigation.",
     purpose: hasProposalGap ? "resolve" : "reveal_context",
@@ -394,6 +394,7 @@ function opportunityProjection(quote, options) {
   const identity = identityFor(quote, quoteId);
   const facts = statusFacts(quote);
   const proposal = buildProposalReadiness(quote);
+  const recommendedProposalGapCount = proposal.recommendedGaps.length;
   const workflow = workflowEvidence(quote, options);
   const intent = primaryIntent({
     quoteId,
@@ -407,12 +408,15 @@ function opportunityProjection(quote, options) {
       proposal: {
         state: proposal.complete ? "healthy" : "attention",
         summary: proposal.complete
-          ? "All weighted proposal fields are recorded."
-          : `${proposal.gaps.length} weighted proposal fields need review.`,
+          ? recommendedProposalGapCount > 0
+            ? `All required proposal fields are recorded; ${recommendedProposalGapCount} recommended contact ${recommendedProposalGapCount === 1 ? "detail remains" : "details remain"}.`
+            : "All required proposal fields are recorded."
+          : `${proposal.gaps.length} required proposal ${proposal.gaps.length === 1 ? "field needs" : "fields need"} review.`,
         evidence: [{
           model: "proposal-readiness-v1",
-          criteriaCount: proposal.criteria.length,
-          recordedCriteriaCount: proposal.criteria.filter((criterion) => criterion.passed).length
+          criteriaCount: proposal.requiredCriteria.length,
+          recordedCriteriaCount: proposal.requiredCriteria.filter((criterion) => criterion.passed).length,
+          recommendedGapCount: recommendedProposalGapCount
         }],
         completenessPercent: proposal.score
       },

@@ -19,7 +19,10 @@ vi.mock("../../lib/menuService", async () => ({
   getEventTypes: mocks.getEventTypes
 }));
 
-import { QuoteHistoryView } from "../QuoteHistoryModal";
+import {
+  isExactQuoteAdministrationArrival,
+  QuoteHistoryView
+} from "../QuoteHistoryModal";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -115,5 +118,86 @@ describe("QuoteHistoryView event workspace integration", () => {
     expect(onOpenSchedule).toHaveBeenCalledOnce();
     expect(onOpenCustomer).toHaveBeenCalledWith(QUOTE.customerId);
     expect(onBackToQuotes).toHaveBeenCalledOnce();
+  });
+
+  test("opens administration on only the exact focused quote instead of returning to an ambiguous list", async () => {
+    const otherQuote = {
+      ...QUOTE,
+      id: "quote-other",
+      quoteNumber: "Q-OTHER"
+    };
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "local",
+      quotes: [otherQuote, QUOTE]
+    });
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={QUOTE.id}
+          currentUserRole="sales"
+          onClose={() => {}}
+          onBackToQuotes={() => {}}
+          onEditQuote={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(".event-workspace")).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={QUOTE.id}
+          focusAction="administration"
+          currentUserRole="sales"
+          onClose={() => {}}
+          onBackToQuotes={() => {}}
+          onEditQuote={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(".event-workspace")).toBeNull();
+    expect(container.querySelector("table")).not.toBeNull();
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+    expect(container.querySelector('tr[data-quote-id="quote-other"]')).toBeNull();
+    expect(container.textContent).toContain("Showing 1 of 2 quotes");
+  });
+
+  test("accepts only an exact semantic Payment administration arrival", () => {
+    const arrivalContext = {
+      destination: "administration",
+      surfaceId: "quote-administration",
+      focusConsumerState: "supported",
+      object: { id: QUOTE.id, type: "payment-evidence", label: "Payment" },
+      intentId: "review_payment_controls",
+      focus: { quoteId: QUOTE.id }
+    };
+
+    expect(isExactQuoteAdministrationArrival({
+      arrivalContext,
+      focusQuoteId: QUOTE.id
+    })).toBe(true);
+    expect(isExactQuoteAdministrationArrival({
+      arrivalContext: {
+        ...arrivalContext,
+        object: { ...arrivalContext.object, id: "quote-other" }
+      },
+      focusQuoteId: QUOTE.id
+    })).toBe(false);
+    expect(isExactQuoteAdministrationArrival({
+      arrivalContext: {
+        ...arrivalContext,
+        intentId: "review_proposal_controls"
+      },
+      focusQuoteId: QUOTE.id
+    })).toBe(false);
   });
 });

@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+export TMPDIR="/tmp"
+export TMP="/tmp"
+export TEMP="/tmp"
+
 if [[ -z "${LHCI_COLLECT__CHROME_PATH:-}" ]]; then
   playwright_chrome="$(node -e "const { chromium } = require('playwright'); process.stdout.write(chromium.executablePath())")"
   if [[ ! -x "$playwright_chrome" ]]; then

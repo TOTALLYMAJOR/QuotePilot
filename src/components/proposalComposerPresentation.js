@@ -499,6 +499,27 @@ export function buildSectionCompleteness({ form = {}, totals = {}, catalog = {} 
   };
 }
 
+export function buildExperienceSectionStatus({
+  complete = false,
+  saved = false,
+  packageReviewed = false,
+  styleReviewed = false
+} = {}) {
+  if (!complete) return null;
+  if (saved || (packageReviewed && styleReviewed)) {
+    return {
+      id: "complete",
+      label: "✓ Complete",
+      ariaLabel: "Experience section complete"
+    };
+  }
+  return {
+    id: "preset",
+    label: "Preset",
+    ariaLabel: "Experience uses a preset; review the package and service style"
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Header.
 

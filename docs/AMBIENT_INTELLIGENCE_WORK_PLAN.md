@@ -1,6 +1,6 @@
 # QuotePilot Ambient Intelligence Work Plan
 
-Last updated: August 13, 2026
+Last updated: 2026-08-28 10:28:54 CDT
 
 Status: approved product direction and open implementation plan. The Pilot Slice
 Alpha source implementation is included with this document behind a default-off
@@ -200,7 +200,12 @@ is complete. AIUI-50 now binds the exact zero-dead-click Alpha proof into the
 protected Playwright lane under production-equivalent Ambient presentation
 flags, while a fast `lane:quick` policy check prevents the browser command,
 zero-rate assertion, required presentation flags, production workflow binding,
-or independent staffing-authority boundary from silently disappearing. Preview
+or independent staffing-authority boundary from silently disappearing. The
+same policy now also requires exactly one canonical definition for AIUI-01
+through AIUI-50, the browser-target authenticated operator UAT item and its
+safe-off applicability, and AIUI-48's fail-closed parity, rollback, accepted-
+release, and promotion gates. This is repository contract coverage, not
+evidence that any of those external gates passed. Preview
 deployment, authenticated staff and portal acceptance, first-minute/timing
 review, explicit promotion approval, and an exact rollback artifact remain
 open, so the item is material rather than closed. AIUI-01 now has a

@@ -1,81 +1,96 @@
 # Dev Tasks
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-29 01:03:25 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
 
-## P1 - Commercial Truth Loop Follow-Through (post-merge sequencing)
+## Capability-to-Backlog Execution Map
 
-The supply chain merged to `main` in PR #103 as
-`authoritative source → producer/exporter → canonical bundle → reconciler →
-verdict + reason` (walkthrough: `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`
-§ How it works). It runs on exporter-generated fixtures only. The items below
-are ordered; the coverage report (`npm run truthloop:coverage`) names each gap
-and its constraint class.
+This map is the execution index for the detailed open work below. Capability
+state comes from [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md); operational
+and production proof comes from [`PROJECT_STATUS.md`](PROJECT_STATUS.md). A
+source implementation, local test, provider acknowledgement, deployment, and
+human acceptance are separate evidence levels.
 
-### Slice A — Firestore reader — DONE
+Execution rules:
 
-Shipped: `evidence/src/firestoreReader.mjs`, wired as
-`npm run truthloop:export -- --firestore --organization <id>`, with 19 always-on
-unit tests and the `npm run test:truthloop-export:emulator` disposable `demo-*`
-lane. Remaining follow-on for this slice:
+- Work in dependency order, but skip a blocked slice and take the next `ready`
+  slice. Never weaken an authority or proof boundary to make a task appear
+  unblocked.
+- Before implementation, give the slice an exact planner task and file set.
+  One slice owns one independently reviewable commit. Do not push.
+- A slice may be committed only when its files or hunks have proven ownership,
+  required checks pass, canonical docs are synchronized, and residual risks are
+  explicit. Mixed-ownership worktree changes are a blocker to that commit, not
+  permission to include them.
+- `human/external` means repository work cannot produce the missing evidence.
+  Prepare the immutable checklist or harness, then stop before the external or
+  human action and continue with another `ready` slice.
 
-- Run it against a real tenant once, under separate authorization, and record
-  what the first real coverage report says. Until then the chain has only
-  emulator evidence.
-- Decide whether the reader should ever be promoted from an operator script to
-  a scheduled callable. It owns no callable export today, which is why it
-  stays `developer_infrastructure` in
-  `docs/capability-surfacing-contracts.json`.
+Release checkpoint: the owner authorized publication and governed deployment
+pursuit for the 74-commit v0.16.0 candidate on 2026-08-29. This authorizes the
+release workflow, not bypassing it. The local high-risk plus CWV profile passes;
+full production qualification remains blocked by the positive-path items in the
+tracked UAT plan. `docs/RELEASE_V0_16_PROMOTION_REPORT.md` owns the point-in-time
+candidate inventory and human-input checklist. Source-only commits remain
+separate from release publication, and dormant gates remain off.
 
-### Slice B — Decision gates before the first real run (owner decisions, not code)
+| Order | Task ID and outcome | Capability truth | Dependencies | Acceptance criteria | Current boundary |
+|---:|---|---|---|---|---|
+| 0 | `QP-OBS-018` — Product Truth Digest and drift control | Cross-cutting source/release/capability/evidence observability; no new product authority | Accepted ADR/design; deterministic source adapters; current contradiction fixtures; existing task evidence, capability, release, and canonical-doc contracts | `status:product` answers live/candidate/proof/drift/owner-decision questions; `check:product-drift` detects conflicting release identity, branch divergence, evidence gaps, and capability-gate failures; every finding cites exact sources; unavailable evidence stays `unknown`; no generated digest becomes authority | Repository implementation and advisory CI wiring are complete locally. The clean reconciled candidate resolves exact v0.15 production identity with no product-truth drift. Exact CI observation, owner comprehension review, freshness calibration, and any required-gate promotion remain human/external. Hosted/provider/production/human evidence remains independently sourced. |
+| 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | Complete locally: the clean committed candidate passes the capability-surfacing gate; remote CI observation remains `human/external` |
+| 2 | `QP-PERF-002` — close temporary bundle exceptions | Rows 29, 60, 62, 64 and the performance guardrail | Clean-main/candidate measurements; exact graph profile; accepted optimization or reviewed baseline recalibration | Compatibility and Ambient graphs pass the standard budget without a no-headroom exception; build, browser/CWV, and docs gates pass; no route, accessibility, or authority regression | Minifier slice restores 21.7 KB of headroom under the unchanged exception; full exception retirement remains a reviewed graph-optimization or baseline decision |
+| 3 | `QP-CONFIG-003` — remove remaining `functions.config()` compatibility | Runtime/deployment capabilities using Firebase Functions | Source migration complete; exact coordinated backend release; runtime readback; March 2027 deadline | No production runtime depends on `functions.config()`; local fallback and secret boundaries remain intact; function tests, env materialization, build, emulator lanes, and deployment docs pass | Source candidate complete; deployment/runtime proof is `human/external` |
+| 4 | `QP-ACCEPT-004` — exact authenticated staff/operator acceptance | Rows 5, 8, 18, 27, 29–30, 34–45, 47–60, 63, 68–72 as applicable to the candidate | Immutable exact SHA and flag profile; real QuotePilot staff session; canonical tenant data; rollback artifact | Named route/task matrix proves create, save, exact readback/version, export, Workflow, Event Workspace, Customer 360, Messaging, BEO, Decision Debt, payments, staffing boundaries, and role denials; every result is tied to the SHA and evidence level | Machine contract prepared as `operator.authenticated-workspace-journey`; execution remains `human/external` |
+| 5 | `QP-TENANT-005` — disposable tenant lifecycle and isolation proof | Rows 1, 18, 25–26, 30 | Exact provisioning candidate; verified disposable owner; cleanup/tombstone plan; hosted auth | Plan/create/activate/defaults/starter review/pricing/quote/portal/cross-tenant denial/cleanup all produce exact receipts; no foreign-tenant or expired-token disclosure; cleanup is verified | `human/external` production coordination |
+| 6 | `QP-BUYER-006` — bounded buyer-access test window | Row 26 plus quote/payment isolation in row 8 | Dedicated restricted Stripe test key; exact webhook events; existing Turnstile verification; rollback/close plan | Test-mode invoice creation, idempotency, rate limits, signed lifecycle, paid preparation, invitation/activation, eligible repair, negative paths, and quote-rail isolation pass; gate is closed afterward unless launch is separately approved | `human/external` credential and provider dashboard actions |
+| 7 | `QP-DELIVERY-007` — quote-email provider-to-recipient evidence chain | Row 8 delivery authority and row 63 Operations Audit | Approved sender; exact Resend webhook/signing configuration; controlled recipient; current valid portal issuance | One exact attempt keeps provider acceptance, delivered/bounced reconciliation, portal validity, and recipient inbox/view as separate receipts; invalid/expired issuance fails closed or requires rotation | `human/external` provider and recipient evidence |
+| 8 | `QP-AUTO-008` — Revenue Autopilot preparation-only promotion | Rows 37 and 46 | Authenticated admin acceptance; `QP-DELIVERY-007` webhook evidence; named rollback; sends remain off | Policy, controls, materialization, operations projection, and unread-reply acknowledgement pass hosted checks; preparation gate is on, send gate is off, and no recovered-revenue claim is made | `human/external` hosted/provider gate promotion |
+| 9 | `QP-STAFF-009` — one-tenant authoritative staffing qualification | Row 59 and Commercial Change/Workflow dependencies | Repaired tenant settings precondition; exact all-scope deployment; admin/sales/customer/cross-tenant role matrix; rollback | Profile, availability, assignment, reconciliation, conflict, immutable receipts, responsive accessibility, and denials pass; exactly one approved tenant is enabled; acknowledgement is not attendance/payroll/readiness | `human/external`; tenant mutation requires reviewed authorization |
+| 10 | `QP-SMS-010` — one governed owner-SMS provider path | Row 67 | Choose Pingram or Twilio; credentials in Secret Manager; sender/A2P/consent; exact origin/generation; signed webhook; rollback | One controlled owner-only UAT separates request acceptance, indeterminate dispatch, carrier delivery/failure, opt-out hold, and recipient receipt; STOP/unsubscribe blocks all providers; no automatic retry of claimed/indeterminate sends | `human/external` compliance, provider, and recipient evidence |
+| 11 | `QP-CONNECT-011` — isolated Stripe Connect Sandbox foundation | Rows 65–66 | Reviewed cloud plan/digest; separate state; exact database/IAM/egress identities; authority publisher; App Check observation then enforcement | Applied resources match the secret-free manifest; edge cannot read the Stripe key; worker-only provider access, replay/quarantine, authority drift, and withheld-link paths pass; only then may exports be considered; Hosted Sandbox UAT is the stopping gate | `human/external` cloud apply and provider UAT; exports remain empty |
+| 12 | `QP-AMBIENT-012` — qualify and promote the Ambient candidate | Rows 60, 64 and related source/local rows 61, 68–72 | `QP-GOV-001`; `QP-PERF-002`; immutable candidate; exact flag/rollback profile; authenticated roles | All 50 material items satisfy their complete acceptance contracts at 390/768/1440, keyboard/AT boundaries, connected data, first-minute comprehension, role denial, rollback, and explicit promotion approval; AIUI-48 deletion waits for parity and accepted release | Repository quick gate binds the 50-item inventory, operator UAT, and fail-closed retirement contract; full qualification/promotion remains `human/external`, and exception retirement remains under `QP-PERF-002` |
+| 13 | `QP-PACKAGE-013` — Package Workspace hosted acceptance | Row 70 | Immutable candidate; admin and sales fixtures; catalog revision-conflict fixture; rollback | Hosted admin access, sales denial/availability, production-data review, revision recovery, responsive accessibility, and moderated operator acceptance pass without changing pricing, selected-at-zero, managed-menu, or missing-cost behavior | `human/external`; local proof is already complete |
+| 14 | `QP-STEWARD-014` — consenting silent Difficult Question Desk pilot | Row 71 | Reviewed private runtime/provider transport; canonical context reads; private persistence; consent; kill/rollback; billing/privacy review | No model output is user-visible; exact packet validation and tenant/revision fences hold; 100 actual human packet reviews are recorded separately from the pinned corpus; promotion thresholds cannot self-authorize | Secret-scan preflight blocker repaired without weakening policy; Phase 1 private runtime and 100 reviews remain `human/external`; later product phases remain backlog |
+| 15 | `QP-ATTEND-015` — attendance persistence and confirmation bridge | Row 60 attendance source note; attendance ADR Slice B onward | Direct terminology/channel research; accepted migration and authority plan; unchanged exact `event.guests`; existing Commercial Change receipts | Versioned planning/confirmation evidence persists with source/actor/time; legacy reads remain valid; differing confirmed counts remain proposed until exact-revision apply; BEO/closeout freshness stays separate; portal, rules, role, tenant, and browser acceptance pass | `blocked on product/human decisions`; read-only Slice A/C is complete locally |
+| 16 | `QP-PWA-016` — qualify the installable safe recovery shell | Row 62 | Repository manifest, cache namespace, asset allowlist, navigation fallback, responsive recovery, and production-preview proof complete; exact deployment and supported test devices remain | On the exact hosted candidate, supported desktop/mobile browsers install and relaunch; offline navigation reaches the truthful recovery page; reconnect succeeds; no authenticated data or trusted mutation is represented as offline-capable | Repository slice complete; exact deployment, hosted install/relaunch, and physical-device acceptance are `human/external` |
+| 17 | `QP-AUDIT-017` — complete optional cross-surface security/audit depth | Row 21 plus row 63 Operations Audit | Bounded taxonomy, retention/privacy boundary, server receipt authority, tenant/role visibility, and legacy-event compatibility are implemented locally | Final quote approvals and organization role changes have server-owned, tenant-scoped, role-stamped immutable receipt projections; Operations Audit exposes only bounded safe fields; replay, failed execution, foreign-tenant rejection, retention, truncation, and export/clear policy tests pass | Repository slice complete; deployment, authenticated hosted role/tenant denial, production-data review, and human acceptance are `human/external`; provider-derived outcomes remain separately evidenced |
 
-- **Travel/margin policy.** `margin_category_omission` will fire on every
-  record carrying delivery revenue; an all-flagged first report reads as noise
-  and burns trust. Either (a) bring travel into the margin model with a travel
-  cost basis, or (b) add an operator-declared, timestamped exclusion the rule
-  treats as explained — declared policy explaining an observation, the same
-  pattern as the fee schedule. Decide before Slice A ships or accept the noise
-  knowingly.
-- **Processor fee rate.** Record the declared rate (whole basis points + whole
-  cents, declaring actor, timestamp) as a decision now; it is one sentence of
-  policy. Defer the settings surface to Slice E — the declaration unlocks
-  nothing until payout evidence exists, since `processor_fee_discrepancy`
-  requires both.
-- **Overrun tolerances.** Decide per-organization labor/purchasing tolerances
-  rather than shipping the package defaults (10% and a $25.00 floor) as if
-  they were policy.
+`QP-OBS-018` is the implemented source/local cross-cutting control before
+additional provider promotion work. Its deterministic commands and advisory CI
+job now exist. Observe the first exact CI digest, review owner comprehension and
+false positives, calibrate freshness, and require a separate owner decision
+before enforcement.
 
-### Slice C — Post-event consumption capture (`engineering`)
-
-- A staff-facing surface and schema for actual labor and purchasing per
-  delivered event. Full capability treatment required (frontend entry point,
-  UI-state tests, Feature Matrix, User Manual). Until it ships, every
-  delivered event blocks `operational_overrun` and
-  `estimated_versus_realized_contribution` with `evidence_missing`.
-
-### Slice D — Operator surface for findings
-
-- Bind the reconciliation report and its machine-readable reason codes
-  (`reasonCode`, `blockedSection`, `blockedBy`) to a role-safe staff surface
-  through `docs/capability-surfacing-contracts.json` before any finding is
-  shown in the product. Until then the tier stays headless developer
-  infrastructure and findings never reach a customer.
-- Schedule and retain bundles so a finding stays reproducible weeks later, and
-  decide the retention boundary for provenance that names customer-facing
-  fields.
-
-### Slice E — Processor payout settlement (`integration`; Connect-gated)
-
-- Blocked behind the stopping point in `docs/STRIPE_CONNECT_PROGRAM.md`. Do
-  not build a settlement store, unblock the payout producer, or pass any
-  settlement source before that program authorizes it — the producer refuses
-  unauthorized sources by design, and that refusal must stay. When authorized:
-  settlement store (gross, net, payout reference keyed by provider reference),
-  the `settings.processorFeeSchedule` field and owner declaration surface from
-  Slice B, then the fee rule reconciles end to end.
+The repository-preparable slices for `QP-GOV-001`, `QP-CONFIG-003`,
+`QP-ACCEPT-004`, `QP-AMBIENT-012`, and the current `QP-PERF-002` headroom
+repair are complete. Tasks `QP-ACCEPT-004` through `QP-CONNECT-011` may proceed
+only when their named external evidence is available. Full `QP-PERF-002`
+exception retirement requires reviewed graph ownership or baseline policy;
+Ambient promotion, Package acceptance, Steward pilot execution, and attendance
+authority likewise remain behind their explicit human/external decisions.
+`QP-AUDIT-017` and `QP-PWA-016` are repository-complete and retain only their
+exact deployment, hosted-role/data, device, or human gates. The explicitly
+partial matrix rows now remain `QP-CONNECT-011` and `QP-STEWARD-014`, with
+their higher-risk infrastructure, provider, privacy, and human gates.
+The `QP-CONNECT-011` dormant repository foundation is also complete: its three
+source checks pass and the read-only live staging inventory preflight is
+`READY`. It remains partial because the saved-plan review/authorization,
+Terraform apply, identity/manifest reconciliation, App Check observation and
+promotion, restricted provider credential, exports, and hosted Sandbox UAT are
+human/external work. Do not manufacture another source slice across that gate.
+The `QP-STEWARD-014` deploy-dormant compiler, consent/evaluation contract,
+unavailable-state UI, security fixtures, and manual fallback are likewise
+repository-complete before the private-runtime gate. Eight focused files pass
+84 tests, the secret scan passes, and three responsive browser checks pass.
+Provider/credential and privacy/billing review, canonical context reads,
+private persistence, consenting silent execution, 100 actual human reviews,
+hosted rules evidence, deployment, and acceptance are human/external. Do not
+expose model output or create a runtime adapter merely to remove `Partial`.
+The remaining sections retain the detailed task contracts; this table does not
+replace their safety conditions.
 
 ## P0 - Production Acceptance
 
@@ -217,8 +232,10 @@ lane. Remaining follow-on for this slice:
   Kitchen BEO freshness, and Decision Debt. Enable the global enforcement gate
   only with an explicitly named tenant and rollback record; never bulk-enable
   all tenants.
-- Keep production `NOTIFICATIONS_SMS_PROVIDER=none` while qualifying exactly
-  one owner-SMS provider. For the Pingram path, create `PINGRAM_API_KEY`,
+- Exact `v0.15.0` selected `NOTIFICATIONS_SMS_PROVIDER=pingram` with generation
+  `pingram-2026-08-14-a`, but the owner-SMS rail remains operationally off and
+  unaccepted. Do not run another provider attempt or enable automatic alerts
+  while qualifying the one selected provider. Create `PINGRAM_API_KEY`,
   `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` only in Firebase
   Secret Manager; choose one exact approved US/CA/EU origin and a new lowercase
   `PINGRAM_CONFIGURATION_GENERATION`; verify the
@@ -257,7 +274,9 @@ lane. Remaining follow-on for this slice:
   mutation step.
 - Rehearse an immutable staging/UAT pass and rejected invalid-evidence deploy
   without mutating production.
-- Migrate remaining `functions.config()` compatibility before March 2027.
+- Deploy the environment-only Functions configuration candidate through an
+  exact coordinated backend release and verify runtime readback before March
+  2027. Source no longer reads `functions.config()`; deployment remains open.
 
 ## P1 - Ambient Intelligence Interface Program
 
@@ -484,8 +503,10 @@ acceptance, and explicitly deferred product work remains listed here.
 
 ## P1 - Performance and Accessibility
 
-- Close the temporary no-headroom bundle exception through route/chunk
-  optimization or a reviewed clean-main baseline recalibration. Re-run bundle,
+- The compatibility build now retains 21.7 KB of headroom under the unchanged
+  temporary exception through tested function-to-arrow minification. Close the
+  exception itself only through reviewed route/chunk graph optimization or a
+  reviewed clean-main baseline recalibration; rerun both graph profiles,
   browser, and CWV gates before removing it.
 - Continue mobile-density, wrapping, overflow, keyboard/focus, reduced-motion,
   and screen-reader acceptance across the routed workspace.

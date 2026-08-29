@@ -6306,6 +6306,57 @@ hr {
   grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
 }
 
+.sales-workflow-layout-empty {
+  min-height: 420px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sales-workflow-layout-empty .workflow-quote-list {
+  display: none;
+}
+
+.sales-workflow-layout-empty .workflow-detail {
+  display: grid;
+  place-items: center;
+  max-height: none;
+  padding: 1.5rem;
+}
+
+.workflow-zero-state {
+  width: min(100%, 620px);
+  border: 1px solid var(--tone-gold-1);
+  border-radius: var(--radius-lg);
+  background: var(--tone-cream-1);
+  padding: clamp(1.35rem, 4vw, 2.25rem);
+  box-shadow: var(--shadow-elevated);
+}
+
+.workflow-zero-state .eyebrow,
+.workflow-zero-state h3,
+.workflow-zero-state p {
+  margin: 0;
+}
+
+.workflow-zero-state h3 {
+  margin-top: var(--space-1);
+  color: var(--tone-ink-1);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 4vw, 2.15rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.workflow-zero-state > p:not(.eyebrow) {
+  max-width: 52ch;
+  margin-top: var(--space-3);
+  color: var(--tone-ink-3);
+  line-height: 1.6;
+}
+
+.workflow-zero-state .cta {
+  margin-top: var(--space-4);
+}
+
 .workflow-quote-list {
   min-width: 0;
   max-height: 62vh;
@@ -12263,6 +12314,42 @@ hr {
   margin-bottom: var(--space-4);
 }
 
+.create-intake-panel-applied {
+  padding-block: clamp(1rem, 3vw, 1.35rem);
+}
+
+.create-intake-applied-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.create-intake-applied-summary .eyebrow,
+.create-intake-applied-summary h2,
+.create-intake-applied-summary p {
+  margin: 0;
+}
+
+.create-intake-applied-summary h2 {
+  margin-top: 0.2rem;
+  color: var(--tone-ink-1);
+  font-family: var(--font-editorial);
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+  font-weight: 600;
+}
+
+.create-intake-applied-summary p:not(.eyebrow) {
+  max-width: 62ch;
+  margin-top: 0.3rem;
+  color: var(--tone-ink-2);
+  line-height: 1.5;
+}
+
+.create-intake-applied-summary .ghost {
+  flex: 0 0 auto;
+}
+
 .create-intake-sub {
   color: var(--tone-ink-2);
   max-width: 40rem;
@@ -12372,6 +12459,17 @@ hr {
 .create-intake-apply small {
   color: var(--tone-ink-3);
   max-width: 24rem;
+}
+
+@media (max-width: 640px) {
+  .create-intake-applied-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .create-intake-applied-summary .ghost {
+    width: 100%;
+  }
 }
 
 /* ===== Pilot band pricing strip (draft preview only) ===== */
@@ -13273,7 +13371,44 @@ hr {
 
 .live-ops-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
+}
+
+.live-ops-panel > .staff-evidence-rail {
+  grid-column: 1;
+}
+
+.live-ops-evidence-disclosure {
+  border-block: 1px solid var(--tone-cream-3);
+}
+
+.live-ops-evidence-disclosure > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  color: var(--tone-ink-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.live-ops-evidence-disclosure > summary strong {
+  color: var(--tone-ink-3);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: right;
+}
+
+.live-ops-evidence-disclosure > summary:hover,
+.live-ops-evidence-disclosure > summary:focus-visible {
+  color: var(--tone-gold-3);
+}
+
+.live-ops-evidence-disclosure__body {
+  padding: var(--space-3) 0;
 }
 
 .live-ops-authority {

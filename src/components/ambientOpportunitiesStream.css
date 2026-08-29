@@ -341,34 +341,52 @@
 }
 
 .ambient-opportunities__boundary {
-  display: grid;
-  grid-template-columns: minmax(10rem, 0.55fr) minmax(0, 1.45fr);
-  gap: clamp(1rem, 4vw, 3.5rem);
-  padding: clamp(1rem, 2.5vw, 1.6rem);
+  border-block: 1px solid color-mix(in srgb, var(--tone-ink-1, #262421) 13%, transparent);
+}
+
+.ambient-opportunities__boundary > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.65rem 0;
+  color: var(--tone-ink-2, #514d47);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ambient-opportunities__boundary > summary strong {
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: right;
+}
+
+.ambient-opportunities__boundary > summary:hover,
+.ambient-opportunities__boundary > summary:focus-visible {
+  color: color-mix(in srgb, var(--ambient-teal, #237f78) 78%, #111);
+}
+
+.ambient-opportunities__boundary-body {
+  padding: clamp(0.9rem, 2.5vw, 1.35rem);
   background: color-mix(in srgb, var(--ambient-lavender, #8c79b7) 8%, transparent);
 }
 
-.ambient-opportunities__boundary h3 {
-  margin: 0.25rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.2rem, 2vw, 1.65rem);
-  font-weight: 500;
-}
-
-.ambient-opportunities__boundary p,
-.ambient-opportunities__boundary ul {
+.ambient-opportunities__boundary-body p,
+.ambient-opportunities__boundary-body ul {
   margin: 0;
   color: var(--tone-ink-2, #514d47);
   font-size: 0.82rem;
   line-height: 1.55;
 }
 
-.ambient-opportunities__boundary p + p,
-.ambient-opportunities__boundary p + ul {
+.ambient-opportunities__boundary-body p + p,
+.ambient-opportunities__boundary-body p + ul {
   margin-top: 0.5rem;
 }
 
-.ambient-opportunities__boundary ul {
+.ambient-opportunities__boundary-body ul {
   padding-left: 1.1rem;
 }
 
@@ -451,9 +469,18 @@
 
   .ambient-opportunity__momentum,
   .ambient-opportunity__recorded-state dl,
-  .ambient-opportunity__next,
-  .ambient-opportunities__boundary {
+  .ambient-opportunity__next {
     grid-template-columns: 1fr;
+  }
+
+  .ambient-opportunities__boundary > summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .ambient-opportunities__boundary > summary strong {
+    text-align: left;
   }
 
   .ambient-opportunity__momentum-fact + .ambient-opportunity__momentum-fact {

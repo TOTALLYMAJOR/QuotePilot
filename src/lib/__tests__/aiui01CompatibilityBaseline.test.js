@@ -211,7 +211,7 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
     }
   });
 
-  test("records the current Event Workspace compatibility gaps instead of claiming Ambient parity", () => {
+  test("records the current Event Workspace gaps while preserving the exact administration handoff", () => {
     expect(AIUI01_EVENT_WORKSPACE_PARITY.map(({ id }) => id)).toEqual([
       "back-to-quotes",
       "ordinary-edit",
@@ -240,7 +240,9 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
       historySource.indexOf("<AmbientLivingOpportunityRoute"),
       historySource.indexOf("</Suspense>", historySource.indexOf("<AmbientLivingOpportunityRoute"))
     );
-    expect(ambientHostCall).not.toContain("onOpenLegacyWorkspace=");
+    expect(ambientHostCall).toContain("onOpenLegacyWorkspace={(context = {}) => (");
+    expect(ambientHostCall).toContain("onOpenQuoteAdministration(focusedQuote.id, context)");
+    expect(ambientHostCall).not.toContain("onEditQuote(focusedQuote.id, context)");
   });
 
   test("keeps browser-local evidence separate from Firebase and portal-token authority", () => {

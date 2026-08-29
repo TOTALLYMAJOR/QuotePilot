@@ -762,23 +762,35 @@ export function buildProposalReadiness(source = {}, totalsOverride = null) {
   const menuNames = Array.isArray(selection.menuItemNames) ? selection.menuItemNames : [];
 
   const criteria = [
-    { id: "customer-name", label: "Customer name", points: 10, passed: Boolean(text(customer.name)) },
-    { id: "customer-email", label: "Valid customer email", points: 10, passed: hasEmail(customer.email) },
-    { id: "customer-phone", label: "Customer phone", points: 5, passed: Boolean(text(customer.phone)) },
-    { id: "event-name", label: "Event name", points: 5, passed: Boolean(text(event.name)) },
-    { id: "event-date", label: "Event date", points: 10, passed: Boolean(text(event.date)) },
-    { id: "event-time", label: "Event time", points: 5, passed: Boolean(text(event.time)) },
-    { id: "venue", label: "Venue", points: 10, passed: Boolean(text(event.venue)) },
-    { id: "guest-count", label: "Guest count", points: 10, passed: number(event.guests) > 0 },
-    { id: "duration", label: "Event duration", points: 5, passed: number(event.hours) > 0 },
-    { id: "package", label: "Package selected", points: 10, passed: Boolean(text(selection.packageId || selection.packageName)) },
-    { id: "menu", label: "Menu selected", points: 10, passed: menuItems.length > 0 || menuNames.length > 0 },
-    { id: "total", label: "Calculated total", points: 10, passed: number(totals.total) > 0 }
+    { id: "customer-name", label: "Customer name", points: 10, required: true, passed: Boolean(text(customer.name)) },
+    { id: "customer-email", label: "Valid customer email", points: 10, required: true, passed: hasEmail(customer.email) },
+    { id: "customer-phone", label: "Customer phone", points: 5, required: false, passed: Boolean(text(customer.phone)) },
+    { id: "event-name", label: "Event name", points: 5, required: true, passed: Boolean(text(event.name)) },
+    { id: "event-date", label: "Event date", points: 10, required: true, passed: Boolean(text(event.date)) },
+    { id: "event-time", label: "Event time", points: 5, required: true, passed: Boolean(text(event.time)) },
+    { id: "venue", label: "Venue", points: 10, required: true, passed: Boolean(text(event.venue)) },
+    { id: "guest-count", label: "Guest count", points: 10, required: true, passed: number(event.guests) > 0 },
+    { id: "duration", label: "Event duration", points: 5, required: true, passed: number(event.hours) > 0 },
+    { id: "package", label: "Package selected", points: 10, required: true, passed: Boolean(text(selection.packageId || selection.packageName)) },
+    { id: "menu", label: "Menu selected", points: 10, required: true, passed: menuItems.length > 0 || menuNames.length > 0 },
+    { id: "total", label: "Calculated total", points: 10, required: true, passed: number(totals.total) > 0 }
   ];
 
-  const score = criteria.reduce((sum, item) => sum + (item.passed ? item.points : 0), 0);
-  const gaps = criteria.filter((item) => !item.passed);
-  const status = score === 100
+  const requiredCriteria = criteria.filter((item) => item.required);
+  const recommendedCriteria = criteria.filter((item) => !item.required);
+  const requiredPoints = requiredCriteria.reduce((sum, item) => sum + item.points, 0);
+  const recordedRequiredPoints = requiredCriteria.reduce(
+    (sum, item) => sum + (item.passed ? item.points : 0),
+    0
+  );
+  const score = requiredPoints > 0
+    ? Math.round((recordedRequiredPoints / requiredPoints) * 100)
+    : 0;
+  const coverageScore = criteria.reduce((sum, item) => sum + (item.passed ? item.points : 0), 0);
+  const gaps = requiredCriteria.filter((item) => !item.passed);
+  const recommendedGaps = recommendedCriteria.filter((item) => !item.passed);
+  const complete = gaps.length === 0;
+  const status = complete
     ? { id: "ready", label: "Ready to send" }
     : score >= 80
       ? { id: "review", label: "Final review" }
@@ -786,10 +798,14 @@ export function buildProposalReadiness(source = {}, totalsOverride = null) {
 
   return {
     score,
+    coverageScore,
     status,
     criteria,
+    requiredCriteria,
+    recommendedCriteria,
     gaps,
-    complete: score === 100
+    recommendedGaps,
+    complete
   };
 }
 

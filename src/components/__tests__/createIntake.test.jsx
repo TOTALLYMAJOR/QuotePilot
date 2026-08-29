@@ -1,7 +1,12 @@
+// @vitest-environment jsdom
 import React from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import CreateIntake from "../CreateIntake";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const NOW = new Date("2026-08-10T09:00:00");
 const STYLES = ["Buffet", "Plated", "Stations", "Drop-off"];
@@ -52,5 +57,45 @@ describe("CreateIntake", () => {
     expect(markup).toContain("Nothing structured could be read");
     expect(markup).toContain("nothing was changed");
     expect(markup).not.toContain("Apply ");
+  });
+
+  test("collapses an applied reading into a reversible draft handoff", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onApplyDraft = vi.fn();
+
+    act(() => {
+      root.render(
+        <CreateIntake
+          eventTypes={EVENT_TYPES}
+          styles={STYLES}
+          nowDate={NOW}
+          onApplyDraft={onApplyDraft}
+          initialText="Corporate dinner for 80 people on September 12, plated."
+          autoStructure
+        />
+      );
+    });
+    const apply = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Add "));
+    act(() => apply.click());
+
+    expect(onApplyDraft).toHaveBeenCalledOnce();
+    expect(container.innerHTML).toContain('data-create-intake-state="applied"');
+    expect(container.textContent).toContain("details are in this draft");
+    expect(container.textContent).not.toContain("Read from your note");
+    expect(document.activeElement).toBe(container.querySelector("#create-intake-title"));
+
+    const review = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Review intake");
+    act(() => review.click());
+    expect(container.textContent).toContain("Read from your note");
+    expect(container.textContent).toContain("Added - review below");
+    expect(onApplyDraft).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(container.querySelector("textarea"));
+
+    act(() => root.unmount());
+    container.remove();
   });
 });

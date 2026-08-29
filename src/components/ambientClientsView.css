@@ -116,6 +116,11 @@
   letter-spacing: -0.04em;
 }
 
+.ambient-clients__mobile-priority,
+.ambient-clients__mobile-filter {
+  display: none;
+}
+
 .ambient-clients__toolbar {
   display: grid;
   grid-template-columns: minmax(16rem, 1fr) auto auto auto auto;
@@ -141,6 +146,7 @@
 
 .ambient-clients__toolbar button,
 .ambient-clients__filters button,
+.ambient-clients__mobile-priority button,
 .ambient-client__primary,
 .ambient-client-overview__primary,
 .ambient-client-overview__secondary,
@@ -173,6 +179,8 @@
 .ambient-clients__toolbar button:focus-visible,
 .ambient-clients__filters button:hover,
 .ambient-clients__filters button:focus-visible,
+.ambient-clients__mobile-priority button:hover,
+.ambient-clients__mobile-priority button:focus-visible,
 .ambient-client__primary:hover,
 .ambient-client__primary:focus-visible,
 .ambient-client-overview button:hover,
@@ -278,9 +286,7 @@
 .ambient-clients__columns,
 .ambient-client {
   display: grid;
-  /* Status holds a chip now, and its longest label ("Quote or event on file")
-     needs ~9rem on one line; the old 7.5rem let it spill into the action. */
-  grid-template-columns: minmax(13rem, 1.1fr) minmax(13rem, 1.2fr) minmax(12rem, 1fr) minmax(11rem, 0.55fr) auto;
+  grid-template-columns: minmax(13rem, 1.1fr) minmax(13rem, 1.2fr) minmax(12rem, 1fr) minmax(7.5rem, 0.55fr) auto;
   gap: 1rem;
   align-items: center;
 }
@@ -313,22 +319,8 @@
   border-bottom: 0;
 }
 
-/* The row is a target, so hover says so with a gold edge rather than a tint
-   change alone, which was almost invisible against the surface. */
-.ambient-client {
-  box-shadow: inset 3px 0 0 transparent;
-  transition: background 0.14s ease, box-shadow 0.14s ease;
-}
-
 .ambient-client:hover {
   background: #f7f3eb;
-  box-shadow: inset 3px 0 0 var(--client-gold);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ambient-client {
-    transition: none;
-  }
 }
 
 .ambient-client > * {
@@ -342,20 +334,17 @@
   align-items: center;
 }
 
-/* Initials carry the brand's warm accent instead of flat grey, which is what
-   made the directory read as unfinished at a glance. */
 .ambient-client__avatar {
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid color-mix(in srgb, var(--client-gold) 34%, var(--client-border));
+  border: 1px solid #cbc2b4;
   border-radius: 50%;
-  background: var(--client-gold-soft);
-  color: #6d4c12;
+  background: #e8e2d7;
+  color: #3a3b3b;
   font-size: 0.72rem;
   font-weight: 850;
-  letter-spacing: 0.02em;
 }
 
 .ambient-client h2,
@@ -387,53 +376,19 @@
   font-size: 0.82rem;
 }
 
-/* Relationship state reads as a chip, not bare colored text, so status is
-   legible by shape as well as hue. Chip colors are contrast-checked against
-   their own tints (>= 4.5:1) because axe runs contrast checks on /app. */
-/* inline-block (not flex) so the long labels this column carries — for example
-   "Quote or event on file" — still truncate with an ellipsis inside the chip
-   instead of overflowing into the action button. */
 .ambient-client__state {
   justify-self: start;
-  display: inline-block;
-  /* Percentage max-width does not constrain a fit-content grid item here, so
-     the cap scales with the viewport the way the status track itself does.
-     Longer labels ellipsize instead of spilling over the action button. */
-  max-width: clamp(6.5rem, 12vw, 11rem);
-  padding: 0.24rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--client-muted);
-  color: #4a4e4b;
-  font-size: 0.7rem;
+  color: var(--client-copy);
+  font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ambient-client__state::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 0.35rem;
-  border-radius: 50%;
-  background: currentColor;
-  vertical-align: 0.08em;
 }
 
 .ambient-client__state[data-tone="good"] {
-  border-color: color-mix(in srgb, var(--client-teal) 28%, transparent);
-  background: var(--client-teal-soft);
-  color: #1f5d54;
+  color: var(--client-teal);
 }
 
 .ambient-client__state[data-tone="warning"] {
-  border-color: color-mix(in srgb, var(--client-danger) 30%, transparent);
-  background: #f7e6e3;
-  color: #8f3d36;
+  color: var(--client-danger);
 }
 
 .ambient-client__primary {
@@ -711,17 +666,14 @@
   margin-top: 0.75rem;
 }
 
-/* Raised from 1080px: with status carrying a chip, the five-column row is
-   already cramped in the 1080-1140 range, so the roomier four-column layout
-   takes over before the chip and the action can touch. */
-@media (max-width: 1140px) {
+@media (max-width: 1080px) {
   .ambient-clients__command-topline {
     grid-template-columns: 1fr;
   }
 
   .ambient-clients__columns,
   .ambient-client {
-    grid-template-columns: minmax(12rem, 1fr) minmax(13rem, 1.15fr) minmax(9rem, 0.6fr) auto;
+    grid-template-columns: minmax(12rem, 1fr) minmax(13rem, 1.15fr) minmax(7rem, 0.6fr) auto;
   }
 
   .ambient-clients__columns span:nth-child(3),
@@ -740,25 +692,99 @@
   }
 
   .ambient-clients__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: none;
   }
 
-  .ambient-clients__metrics > div:nth-child(3) {
-    border-left: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
+  .ambient-clients__mobile-priority {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.9rem;
+    align-items: center;
+    padding: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.08);
   }
 
-  .ambient-clients__metrics > div:nth-child(4) {
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
+  .ambient-clients__mobile-priority > div {
+    display: grid;
+    min-width: 0;
+    gap: 0.25rem;
+  }
+
+  .ambient-clients__mobile-priority strong,
+  .ambient-clients__mobile-priority span {
+    display: block;
+  }
+
+  .ambient-clients__mobile-priority strong {
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+
+  .ambient-clients__mobile-priority span {
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.76rem;
+    line-height: 1.4;
+  }
+
+  .ambient-clients__mobile-priority button {
+    border-color: #c79435;
+    background: var(--client-gold);
+    color: #151617;
+    white-space: nowrap;
   }
 
   .ambient-clients__toolbar {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr 1fr;
   }
 
   .ambient-clients__search,
   .ambient-clients__toolbar .ambient-clients__start {
     grid-column: 1 / -1;
+  }
+
+  .ambient-clients__toolbar .ambient-clients__start {
+    border-color: rgba(255, 255, 255, 0.24);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .ambient-clients__filters {
+    display: none;
+  }
+
+  .ambient-clients__mobile-filter {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .ambient-clients__mobile-filter select {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--client-ink);
+    padding: 0 2.25rem 0 0.75rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 750;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .ambient-clients__mobile-filter select:focus-visible {
+    outline: 2px solid var(--client-gold);
+    outline-offset: 2px;
   }
 
   .ambient-clients__directory,
@@ -792,6 +818,11 @@
   .ambient-client__state {
     grid-row: 1;
     justify-self: end;
+    max-width: 8rem;
+    overflow: visible;
+    text-align: right;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .ambient-client__primary {
@@ -836,12 +867,12 @@
 }
 
 @media (max-width: 460px) {
-  .ambient-clients__toolbar {
-    grid-template-columns: 1fr 1fr;
+  .ambient-clients__mobile-priority {
+    grid-template-columns: 1fr;
   }
 
-  .ambient-clients__toolbar .ambient-clients__refresh {
-    grid-column: 1 / -1;
+  .ambient-clients__mobile-priority button {
+    width: 100%;
   }
 
   .ambient-client__identity {

@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import "./stewardWorkbench.css";
 
 const STATE_CONTENT = Object.freeze({
@@ -91,10 +90,6 @@ function BoundaryIcon({ state }) {
   );
 }
 
-BoundaryIcon.propTypes = {
-  state: PropTypes.oneOf(Object.keys(STATE_CONTENT)).isRequired
-};
-
 export default function StewardWorkbench({
   state = "provider_unavailable",
   quoteNumber = "Current quote",
@@ -159,11 +154,5 @@ export default function StewardWorkbench({
     </section>
   );
 }
-
-StewardWorkbench.propTypes = {
-  state: PropTypes.oneOf(Object.keys(STATE_CONTENT)),
-  quoteNumber: PropTypes.string,
-  onOpenManualComposer: PropTypes.func.isRequired
-};
 
 export { STATE_CONTENT as STEWARD_WORKBENCH_STATES };

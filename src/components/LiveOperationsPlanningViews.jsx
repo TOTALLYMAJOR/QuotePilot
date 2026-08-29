@@ -1,5 +1,6 @@
 import StatusChip from "./StatusChip";
 import StaffEvidenceRail from "./StaffEvidenceRail";
+import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
 import {
@@ -24,7 +25,7 @@ function findEvent(quotes = [], quoteId = "") {
   return acceptedEvents(quotes).find((quote) => String(quote?.id || "") === id) || null;
 }
 
-function EvidenceRail({ snapshot, organizationName, organizationId }) {
+function EvidenceRail({ snapshot, organizationName, organizationId, presentation = "standard" }) {
   return (
     <StaffEvidenceRail
       organizationName={organizationName}
@@ -38,19 +39,110 @@ function EvidenceRail({ snapshot, organizationName, organizationId }) {
       truncated={snapshot?.truncated}
       truncationKnown={snapshot?.truncationKnown}
       reads={snapshot?.reads}
+      presentation={presentation}
     />
+  );
+}
+
+function EventReadBoundary({
+  snapshot,
+  organizationName,
+  organizationId,
+  summary = "About this view",
+  status = "Source not confirmed"
+}) {
+  return (
+    <details
+      className="live-ops-evidence-disclosure"
+      data-events-evidence="collapsed"
+    >
+      <summary>
+        <span>{summary}</span>
+        <strong>{status}</strong>
+      </summary>
+      <div className="live-ops-evidence-disclosure__body">
+        <EvidenceRail
+          snapshot={snapshot}
+          organizationName={organizationName}
+          organizationId={organizationId}
+          presentation="compact"
+        />
+      </div>
+    </details>
   );
 }
 
 function LiveAuthorityNotice({ compact = false }) {
   return (
     <div className={compact ? "live-ops-authority live-ops-authority-compact" : "live-ops-authority"}>
-      <strong>Live operations evidence not established</strong>
+      <strong>Planning view only</strong>
       <span>
-        This surface reads accepted/booked planning records only. Current phase, pulse,
-        issues, labor actuals, and replay require the server-owned event authority gate.
+        Event details are available. Live phase, issues, labor actuals, and replay stay
+        unavailable until live operations are enabled.
       </span>
     </div>
+  );
+}
+
+function EventPlanningRecovery({
+  kind,
+  loading = false,
+  onRefresh,
+  onOpenEvents,
+  onOpenOpportunities,
+  onStartOpportunity
+}) {
+  const copy = kind === "unavailable"
+    ? {
+        eyebrow: "Events unavailable",
+        heading: "We couldn’t load event records.",
+        body: "Try again when you’re ready. No event status changed, and you can keep moving work forward from Opportunities."
+      }
+    : kind === "not_found"
+      ? {
+          eyebrow: "Event not found",
+          heading: "This event isn’t in the current view.",
+          body: "The event may be outside the bounded read or unavailable. QuotePilot did not open another event in its place."
+        }
+      : {
+          eyebrow: "No accepted events yet",
+          heading: "Nothing is ready for event planning yet.",
+          body: "Accepted or booked opportunities appear here. Continue the next opportunity or start a new quote; this view does not change lifecycle status."
+        };
+
+  return (
+    <WorkspaceRecoveryState
+      className="live-ops-recovery"
+      data-events-state={kind}
+      eyebrow={copy.eyebrow}
+      title={copy.heading}
+      description={copy.body}
+      titleId={`live-ops-${kind}-heading`}
+      actionGroupLabel="Event recovery actions"
+    >
+      {kind === "unavailable" && (
+        <button
+          type="button"
+          className="cta"
+          onClick={() => onRefresh?.({ force: true })}
+          disabled={loading}
+        >
+          {loading ? "Trying again..." : "Try again"}
+        </button>
+      )}
+      {kind === "not_found" && (
+        <button type="button" className="cta" onClick={onOpenEvents}>Back to Events</button>
+      )}
+      {kind === "empty" && (
+        <button type="button" className="cta" onClick={onOpenOpportunities}>Review opportunities</button>
+      )}
+      {kind !== "empty" && (
+        <button type="button" className="ghost" onClick={onOpenOpportunities}>Review opportunities</button>
+      )}
+      {kind === "empty" && (
+        <button type="button" className="ghost" onClick={onStartOpportunity}>Start a quote</button>
+      )}
+    </WorkspaceRecoveryState>
   );
 }
 
@@ -65,12 +157,26 @@ export function EventPlanningView({
   onOpenQuote,
   onOpenLive,
   onOpenReplay,
-  onOpenOperations
+  onOpenOperations,
+  onOpenEvents,
+  onOpenOpportunities,
+  onStartOpportunity
 }) {
   const headingRef = useWorkspaceRouteHeadingFocus(true);
   const state = snapshot || { loading: true, error: "", quotes: [] };
   const events = acceptedEvents(state.quotes);
   const selected = routeMode === "list" ? null : findEvent(state.quotes, quoteId);
+  const expectsSelection = routeMode !== "list";
+  const selectionMissing = expectsSelection && !selected;
+  const hasEvents = events.length > 0;
+  const showUnavailableRecovery = !state.loading && Boolean(state.error) && !hasEvents;
+  const hasBoundedReadCaveat = hasEvents && Boolean(
+    state.error
+    || state.partial
+    || state.stale
+    || state.truncated
+    || state.truncationKnown === false
+  );
   const unavailableMode = routeMode === "live" || routeMode === "replay";
   const heading = routeMode === "live"
     ? "Control Room"
@@ -96,38 +202,88 @@ export function EventPlanningView({
             </h2>
           </div>
           <div className="right-actions">
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => onRefresh?.({ force: true })}
-              disabled={state.loading}
-            >
-              {state.loading ? "Refreshing..." : "Refresh"}
-            </button>
+            {!showUnavailableRecovery && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => onRefresh?.({ force: true })}
+                disabled={state.loading}
+              >
+                {state.loading ? "Refreshing..." : "Refresh"}
+              </button>
+            )}
             <button type="button" className="ghost" onClick={onOpenOperations}>Operations</button>
           </div>
         </div>
 
-        <EvidenceRail snapshot={state} organizationName={organizationName} organizationId={organizationId} />
-        {state.error && <p className="error-note" role="alert">{state.error}</p>}
-        <LiveAuthorityNotice />
+        {!showUnavailableRecovery && !hasBoundedReadCaveat && (
+          <EvidenceRail snapshot={state} organizationName={organizationName} organizationId={organizationId} />
+        )}
 
-        {state.loading && !events.length && (
+        {hasBoundedReadCaveat && (
+          <EventReadBoundary
+            snapshot={state}
+            organizationName={organizationName}
+            organizationId={organizationId}
+            summary="Some data may be out of date"
+            status="Event records available"
+          />
+        )}
+
+        {state.loading && !hasEvents && (
           <p className="source-note" role="status">Loading accepted and booked event records...</p>
         )}
 
-        {!state.loading && !events.length && !state.error && (
-          <p className="source-note">
-            No accepted or booked events appear in this bounded snapshot. Earlier commercial work remains in Opportunities.
-          </p>
+        {showUnavailableRecovery && (
+          <EventPlanningRecovery
+            kind="unavailable"
+            loading={state.loading}
+            onRefresh={onRefresh}
+            onOpenOpportunities={onOpenOpportunities}
+          />
         )}
+
+        {showUnavailableRecovery && (
+          <EventReadBoundary
+            snapshot={state}
+            organizationName={organizationName}
+            organizationId={organizationId}
+          />
+        )}
+
+        {!state.loading && !state.error && selectionMissing && (
+          <EventPlanningRecovery
+            kind="not_found"
+            onOpenEvents={onOpenEvents}
+            onOpenOpportunities={onOpenOpportunities}
+          />
+        )}
+
+        {!state.loading && !state.error && !expectsSelection && !hasEvents && (
+          <EventPlanningRecovery
+            kind="empty"
+            onOpenOpportunities={onOpenOpportunities}
+            onStartOpportunity={onStartOpportunity}
+          />
+        )}
+
+        {!selected && !expectsSelection && hasEvents && <LiveAuthorityNotice />}
 
         {selected && (
           <div className="live-ops-focus-grid">
+            <section className="live-ops-focus-card" aria-label="Event basics">
+              <h3>Event basics</h3>
+              <dl className="live-ops-facts">
+                <div><dt>Date</dt><dd>{formatWorkspaceDate(selected.event?.date)}</dd></div>
+                <div><dt>Guests</dt><dd>{formatWorkspaceInteger(selected.event?.guests, { emptyLabel: "Guest count not set" })}</dd></div>
+                <div><dt>Venue</dt><dd>{formatWorkspaceText(selected.event?.venue, { emptyLabel: "Venue not set" })}</dd></div>
+                <div><dt>Customer</dt><dd>{formatWorkspaceText(selected.customer?.name || selected.customer?.email, { emptyLabel: "Customer not set" })}</dd></div>
+              </dl>
+            </section>
             <section className="live-ops-focus-card" aria-label="Planning status">
-              <h3>Planning signal</h3>
+              <h3>Planning status</h3>
               <p className="source-note">
-                Scheduled time may indicate planned work, but it does not change official event state.
+                {classifyQuoteStatus(selected.status).label} is the recorded opportunity state. The scheduled date does not by itself confirm operational readiness.
               </p>
               <LiveAuthorityNotice compact />
               {unavailableMode && (
@@ -138,19 +294,10 @@ export function EventPlanningView({
                 </p>
               )}
             </section>
-            <section className="live-ops-focus-card" aria-label="Event basics">
-              <h3>Event basics</h3>
-              <dl className="live-ops-facts">
-                <div><dt>Date</dt><dd>{formatWorkspaceDate(selected.event?.date)}</dd></div>
-                <div><dt>Guests</dt><dd>{formatWorkspaceInteger(selected.event?.guests, { emptyLabel: "Guest count not set" })}</dd></div>
-                <div><dt>Venue</dt><dd>{formatWorkspaceText(selected.event?.venue, { emptyLabel: "Venue not set" })}</dd></div>
-                <div><dt>Customer</dt><dd>{formatWorkspaceText(selected.customer?.name || selected.customer?.email, { emptyLabel: "Customer not set" })}</dd></div>
-              </dl>
-            </section>
           </div>
         )}
 
-        {!selected && events.length > 0 && (
+        {!expectsSelection && hasEvents && (
           <ul className="command-center-list live-ops-event-list" aria-label="Accepted and booked events">
             {events.map((quote) => {
               const { family, label } = classifyQuoteStatus(quote.status);
@@ -171,7 +318,6 @@ export function EventPlanningView({
                   </div>
                   <div className="right-actions">
                     <button type="button" className="ghost" onClick={() => onOpenQuote?.(quote.id)}>Quote</button>
-                    <button type="button" className="ghost" onClick={() => onOpenLive?.(quote.id)}>Control Room</button>
                     <button type="button" className="cta" onClick={() => onOpenEvent?.(quote.id)}>Event Focus</button>
                   </div>
                 </li>
@@ -183,8 +329,9 @@ export function EventPlanningView({
         {selected && (
           <div className="live-ops-actions">
             <button type="button" className="ghost" onClick={() => onOpenQuote?.(selected.id)}>Open quote record</button>
-            <button type="button" className="ghost" onClick={() => onOpenLive?.(selected.id)}>Control Room</button>
-            <button type="button" className="ghost" onClick={() => onOpenReplay?.(selected.id)}>Replay</button>
+            {unavailableMode && (
+              <button type="button" className="ghost" onClick={() => onOpenEvent?.(selected.id)}>Back to Event Focus</button>
+            )}
           </div>
         )}
       </section>

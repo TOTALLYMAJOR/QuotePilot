@@ -5,6 +5,7 @@ import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import CatalogReadNotice from "./components/CatalogReadNotice";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
@@ -717,11 +718,16 @@ function ambientWorkflowArrivalInput(target = {}, options = {}) {
 function ambientConversationArrivalInput(quoteId, options = {}) {
   const normalizedQuoteId = String(quoteId || "").trim();
   const messageId = String(options?.arrivalContext?.target?.messageId || "").trim();
+  const requestedObject = options?.arrivalContext?.object || {};
+  const exactConversationObject = requestedObject.type === "customer-communication-evidence"
+    && String(requestedObject.id || "").trim() === normalizedQuoteId;
   return {
     destination: "messages",
     object: messageId
       ? { id: messageId, type: "customer-communication-evidence" }
-      : { id: normalizedQuoteId, type: "opportunity" },
+      : exactConversationObject
+        ? { id: normalizedQuoteId, type: "customer-communication-evidence" }
+        : { id: normalizedQuoteId, type: "opportunity" },
     focus: messageId
       ? { quoteId: normalizedQuoteId, messageId }
       : { quoteId: normalizedQuoteId },
@@ -741,6 +747,30 @@ function ambientOpportunityArrivalInput(target = {}) {
     intentId: actionId.startsWith("review-opportunity-proposal:")
       ? "review_proposal_gap"
       : "review_opportunity"
+  };
+}
+
+function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
+  const normalizedQuoteId = String(quoteId || "").trim();
+  const sourceObjectType = String(context?.object?.type || "").trim();
+  const proposal = sourceObjectType === "customer-decision-artifact";
+  const payment = sourceObjectType === "commercial-evidence";
+  return {
+    destination: "administration",
+    object: {
+      id: normalizedQuoteId,
+      type: proposal
+        ? "customer-decision-artifact"
+        : payment
+          ? "payment-evidence"
+          : "opportunity"
+    },
+    focus: { quoteId: normalizedQuoteId },
+    intentId: proposal
+      ? "review_proposal_controls"
+      : payment
+        ? "review_payment_controls"
+        : "review_quote_controls"
   };
 }
 
@@ -843,6 +873,15 @@ export default function App({
   const navigateAmbientOpportunity = useCallback((target = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientOpportunityArrivalInput(target));
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return { status: "pending", contract: handoff.contract };
+  }, [navigateWorkspace]);
+  const navigateAmbientQuoteAdministration = useCallback((quoteId, context = {}) => {
+    if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff(
+      ambientQuoteAdministrationArrivalInput(quoteId, context)
+    );
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
     navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
     return { status: "pending", contract: handoff.contract };
@@ -1074,6 +1113,21 @@ export default function App({
     : browserRoute.routeId;
   const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]
     .includes(resolvedWorkspaceRouteId);
+  const quoteAdministrationArrival = workspaceArrivalContext?.surfaceId === "quote-administration"
+    ? workspaceArrivalContext
+    : null;
+  const historyFocusQuoteId = browserRoute.params?.quoteId
+    || quoteAdministrationArrival?.focus?.quoteId
+    || historyTarget.quoteId;
+  const historyFocusAction = quoteAdministrationArrival
+    ? "administration"
+    : historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+      ? historyTarget.action
+      : "";
+  const historyFocusReason = quoteAdministrationArrival?.reasonId
+    || (historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+      ? historyTarget.reason
+      : "");
   const messagingOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.MESSAGING;
   const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
@@ -1624,6 +1678,7 @@ export default function App({
   // return to a pristine new-quote route. New drafts only — an edit session
   // always has its saved canonical revision — and cleared on save/discard.
   const [draftRecoveryOffer, setDraftRecoveryOffer] = useState(null);
+  const [draftRecoveryResumed, setDraftRecoveryResumed] = useState(false);
   const draftRecoveryStorageKey = draftRecoveryKey({ organizationId: authSession.organizationId });
 
   useEffect(() => {
@@ -1652,6 +1707,7 @@ export default function App({
     if (!draftRecoveryOffer) return;
     setForm({ ...INITIAL_FORM, ...draftRecoveryOffer.form });
     setQuoteDirty(true);
+    setDraftRecoveryResumed(true);
     setDraftRecoveryOffer(null);
   };
 
@@ -3678,6 +3734,7 @@ export default function App({
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote(EMPTY_EDITING_QUOTE);
+    setDraftRecoveryResumed(false);
     setAmbientDraftIntentReview(null);
     setAmbientDraftCatalogContext(null);
     setAmbientDraftReviewResolution("");
@@ -4027,13 +4084,14 @@ export default function App({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Your Catalog Connection Needs Attention</h1>
-          <p className="muted">
-            Firebase catalog access is required in this environment.
-          </p>
-          <p className="source-note">{catalog.error || "Configure Firebase credentials and reload."}</p>
+          <CatalogReadNotice
+            canContinue={false}
+            loading={catalog.loading}
+            onRetry={catalog.reload}
+            headingLevel={1}
+            titleId="catalog-blocked-title"
+          />
           <div className="auth-actions">
-            <button type="button" className="cta" onClick={catalog.reload}>Retry Catalog</button>
             <button type="button" className="ghost" onClick={() => window.location.reload()}>Reload Workspace</button>
             <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
@@ -4386,7 +4444,6 @@ export default function App({
           Editing quote {editingQuote.quoteNumber}. Saving updates this quote (with version history) and keeps labor rates locked by snapshot.
         </p>
       )}
-      {catalog.error && <p className="error-note">{catalog.error}</p>}
       {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
       {availabilityBlock && (
         <article className="warning-note availability-recovery" role="alert">
@@ -4424,6 +4481,16 @@ export default function App({
       {submitState.message && <p className="source-note">{submitState.message}</p>}
     </>
   );
+
+  const catalogReadNotice = catalog.error ? (
+    <CatalogReadNotice
+      canContinue
+      loading={catalog.loading}
+      onRetry={catalog.reload}
+      headingLevel={2}
+      titleId="quote-builder-catalog-read-title"
+    />
+  ) : null;
 
   // "What will this change affect?" — the server-checked impact preview for a
   // saved quote being edited. Shared so it renders identically in the
@@ -4560,6 +4627,7 @@ export default function App({
       eventTemplates={effectiveSettings.eventTemplates || []}
       readiness={proposalReadiness}
       editingQuote={editingQuote}
+      touchedFields={touchedFields}
       quoteDirty={quoteDirty}
       saving={submitState.saving}
       saveLabel={submitState.saving
@@ -4869,6 +4937,9 @@ export default function App({
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
             onOpenOperations={() => navigateWorkspace(WORKSPACE_PATHS.operations)}
+            onOpenEvents={() => navigateWorkspace(WORKSPACE_PATHS.events)}
+            onOpenOpportunities={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
+            onStartOpportunity={handleGetInstantQuote}
           />
         </WorkspaceLazyRoute>
       )}
@@ -5066,7 +5137,15 @@ export default function App({
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
-        {PILOT_COMMAND_ENABLED && PilotCommandBar && pilotCommandSurfaceOpen && (
+        {PILOT_COMMAND_ENABLED
+          && PilotCommandBar
+          && pilotCommandSurfaceOpen
+          && (
+            Boolean(editingQuote.id)
+            || Object.keys(touchedFields).length > 0
+            || draftRecoveryResumed
+            || globalPilotRequest?.target === "draft_command"
+          ) && (
           <RecoverableErrorBoundary
             key={`pilot-command-${authSession.organizationId || "no-org"}-${quoteEditRouteId || "new"}`}
             active={pilotCommandSurfaceOpen}
@@ -5154,6 +5233,7 @@ export default function App({
                 }
           />
         )}
+        {catalogReadNotice}
         {proposalComposerSurface}
         {!proposalComposerActive && (
         <>
@@ -5410,6 +5490,13 @@ export default function App({
             fallbackSurfaceId="living-opportunity"
           />
         )}
+        {AMBIENT_UI_ENABLED && quoteAdministrationArrival && (
+          <WorkspaceArrivalNotice
+            context={quoteAdministrationArrival}
+            resolution={workspaceArrivalResolution}
+            fallbackSurfaceId="quote-administration"
+          />
+        )}
         <WorkspaceLazyRoute
           active={historyOpen}
           surfaceName="Quotes"
@@ -5437,10 +5524,11 @@ export default function App({
               : null}
             globalPilotReturnFocusRef={AMBIENT_UI_ENABLED ? globalPilotTriggerRef : null}
             onGlobalPilotResolution={AMBIENT_UI_ENABLED ? handleGlobalPilotResolution : undefined}
-            focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
-            focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
-            focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
+            focusQuoteId={historyFocusQuoteId}
+            focusAction={historyFocusAction}
+            focusReason={historyFocusReason}
             arrivalContext={workspaceArrivalContext?.surfaceId === "living-opportunity"
+              || workspaceArrivalContext?.surfaceId === "quote-administration"
               ? workspaceArrivalContext
               : null}
             onArrivalResolution={setWorkspaceArrivalResolution}
@@ -5470,6 +5558,18 @@ export default function App({
             onOpenWorkflow={AMBIENT_UI_ENABLED
               ? openAmbientWorkflow
               : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenQuoteAdministration={(quoteId, context = {}) => {
+              const normalizedQuoteId = String(quoteId || "").trim();
+              if (!normalizedQuoteId) {
+                return {
+                  status: "recovery",
+                  reason: "The exact quote could not be identified.",
+                  consequence: "The current opportunity remains open and unchanged.",
+                  nextResolution: "Return to Opportunities and reopen the exact quote."
+                };
+              }
+              return navigateAmbientQuoteAdministration(normalizedQuoteId, context);
+            }}
             onOpenConversation={CUSTOMER_CENTERED_WORKSPACE_ENABLED
               ? AMBIENT_UI_ENABLED
                 ? openAmbientConversation
@@ -5528,6 +5628,7 @@ export default function App({
               navigateWorkspace(buildQuotePath(quoteId));
             }}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onStartQuote={handleGetInstantQuote}
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}

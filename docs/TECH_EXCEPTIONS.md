@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-25 00:58:05 CDT
+Last updated: August 19, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -21,9 +21,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. The reconciled Steward and control-plane
-  candidate now measures 3,221,176 compatibility bytes and 3,905,603 Ambient
-  bytes with the largest chunk unchanged at 387,248 bytes. The Proposal Composer quote-builder
+  production-equivalent Ambient graphs. The Proposal Composer quote-builder
   candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
@@ -31,9 +29,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   bytes, largest chunk unchanged) recalibrate compatibility to an absolute
   ceiling of 2,964,327 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
-  temporarily capped at 3,905,603 aggregate bytes and the same 391,901-byte
-  largest-chunk ceiling. The prior local combined candidate measured 3,887,673
-  Ambient bytes; the active ceiling is the exact protected-Playwright graph.
+  temporarily capped at 3,827,245 aggregate bytes and the same 391,901-byte
+  largest-chunk ceiling (measured 3,750,363 local Ambient bytes is under that
+  standing ceiling).
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -84,21 +82,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   The catalog onboarding recovery hotfix adds 1,025 Ambient aggregate bytes in
   CI (`3,827,245 / 391,901`) for the hosted setup, manual, import, and bypass
   paths; the largest chunk remains unchanged.
-  The Document-hero landing remount (self-revising BEO hero, Plans rate card,
-  and design-partner chapter) adds 12,245 Ambient aggregate bytes in CI
-  (`3,839,490 / 387,248`); the Ambient ceiling recalibrates to `3,853,000`
-  with the largest chunk unchanged. Compatibility is unaffected (measured
-  2,936,683, under its standing 2,964,327 ceiling).
-  The prior combined source candidate, including the Package Workspace,
+  The current combined source candidate, including the Package Workspace,
   proposal presentation, read-only quote-workspace concept, and adjacent
-  workspace changes, measures 3,206,553 / 387,248 bytes for local compatibility
-  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The temporary
-  ceilings were therefore 3,215,097 and 3,899,524 aggregate bytes respectively,
-  pinned to the exact protected-Playwright production-flag graphs. The current
-  reconciliation adds the bounded Steward Desk implementation, state control
-  plane, and their governance contracts. Explicit production-flag builds now
-  measure 3,221,176 compatibility bytes and 3,905,603 Ambient bytes, which are
-  the new exact temporary ceilings pending exact-SHA CI confirmation.
+  workspace changes, measures 3,206,553 / 387,248 bytes for compatibility and
+  3,887,673 / 387,248 bytes for Ambient. The temporary ceilings are therefore
+  3,213,578 and 3,887,976 aggregate bytes respectively, retaining only the
+  already observed 7,025-byte compatibility and 303-byte Ambient CI offsets.
   The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
   recalibration, not a claim that the Package Workspace alone caused the
   increase and not general growth headroom.

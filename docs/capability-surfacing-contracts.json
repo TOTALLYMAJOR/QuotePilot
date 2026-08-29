@@ -1,7 +1,238 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 53,
+  "catalogVersion": 56,
   "contracts": [
+    {
+      "id": "bounded-security-operations-audit",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "organization_admins",
+        "platform_operators"
+      ],
+      "summary": "Operations Audit gives same-tenant organization admins a bounded projection of immutable quote-approval and organization-role-change receipts while labeling delivery reconciliation and catalog confirmation as legacy server projections rather than immutable evidence.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/operationsAudit.js",
+        "functions/organizationRoleAuthority.js",
+        "src/lib/commerceOps.js",
+        "src/lib/operationsAuditPresentation.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getOperationsAuditSnapshot"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getOperationsAuditSnapshot"
+      ],
+      "frontendPaths": [
+        "src/components/IntegrationOpsModal.jsx",
+        "src/lib/operationsAuditPresentation.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/IntegrationOpsModal.jsx",
+          "locator": "data-capability-id=\"bounded-security-audit\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/operationsAudit.server.test.js",
+        "src/lib/__tests__/operationsAuditPresentation.test.js",
+        "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/operationsAudit.server.test.js",
+          "locator": "deduplicates replayed receipts, drops cross-tenant rows, retains failed executions, and bounds projection"
+        },
+        {
+          "path": "src/lib/__tests__/operationsAudit.server.test.js",
+          "locator": "summarizes delivery retry/review states, sync trend, roles, and server actions"
+        },
+        {
+          "path": "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+          "locator": "requires authentication within five minutes"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "organization role authority receipts are private and immutable in browsers"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Bounded cross-surface security audit"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Operations Audit"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The existing admin-only Operations Audit now separates immutable receipt evidence from legacy server observations, projects role-change receipts without UID, recent-auth, App Check, or raw receipt fields, reports source truncation, and exposes no browser export or clear control. Role-authority receipts remain indefinite server records because no receipt-clear workflow is implemented.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "Operations Audit performs a fresh callable read on open and refresh and does not retain a cached snapshot after failure, so it never presents a stale-data variant."
+        }
+      },
+      "safeOutcome": "An authenticated same-tenant admin can distinguish immutable role-change and quote-approval receipts from bounded legacy delivery and catalog observations. Replayed role receipts collapse to one row, foreign-tenant rows fail the defense-in-depth filter, failed approval executions remain visible, raw security metadata stays private, the table caps at 50 rows from bounded server samples, and retention is explicitly indefinite with no browser export or implemented clear workflow."
+    },
+    {
+      "id": "privacy-bounded-session-diagnostics",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "staff",
+        "operators",
+        "developers"
+      ],
+      "summary": "Session diagnostics provide app-local runtime route, session, and error observability for staff troubleshooting while stripping URL query/hash values, redacting sensitive context, and hashing stable identifiers before export.",
+      "backendPaths": [
+        "src/lib/sessionDiagnostics.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/DiagnosticsModal.jsx",
+        "src/main.jsx"
+      ],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/sessionDiagnostics.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/sessionDiagnostics.test.js",
+          "locator": "records errors with redacted context and user session details"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/ORCHESTRATION_RUNBOOK.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Privacy-bounded session diagnostics"
+        },
+        {
+          "path": "docs/ORCHESTRATION_RUNBOOK.md",
+          "locator": "## Runtime Diagnostics"
+        }
+      ],
+      "headlessReason": "The diagnostics library is operational infrastructure for troubleshooting and handoff rather than a customer workflow or authority-changing callable.",
+      "safeOutcome": "Staff can export bounded local browser diagnostics for triage without storing raw emails, phone numbers, tokens, user identifiers, URL query/hash values, or stack traces."
+    },
+    {
+      "id": "product-truth-observability",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "repository_owners",
+        "release_operators",
+        "developers"
+      ],
+      "summary": "A deterministic read-only compiler reconciles Git identity and divergence, canonical production claims, capability inventory and gate output, development-evidence coverage, and optional bounded reachability into a source-linked text or JSON digest with separate status and fail-closed gate exit policies.",
+      "backendPaths": [
+        "scripts/product-truth-observability.mjs",
+        "scripts/summarize-development-evidence.mjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/productTruthObservability.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "emits blocking release drift and nonblocking dirty divergence"
+        },
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "status and gate emit the same digest semantics with different exit policy"
+        },
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "malformed required input exits 2 with the exact locator"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/ORCHESTRATION_RUNBOOK.md",
+        "docs/adr/ADR-0002-product-truth-observability.md",
+        "docs/design/product-truth-observability-design.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Product Truth Observability"
+        },
+        {
+          "path": "docs/ORCHESTRATION_RUNBOOK.md",
+          "locator": "## Product Truth Reconciliation"
+        },
+        {
+          "path": "docs/adr/ADR-0002-product-truth-observability.md",
+          "locator": "Adopt a generated, read-only Product Truth Digest"
+        },
+        {
+          "path": "docs/design/product-truth-observability-design.md",
+          "locator": "### Digest Contract"
+        }
+      ],
+      "headlessReason": "The command is repository and release-process observability. It reads existing authorities, emits an ignored or ephemeral projection, and has no customer, application-runtime, provider, deployment, data, pricing, role, or mutation authority.",
+      "safeOutcome": "Repository owners can see independent production claims, exact candidate identity, proof-class coverage, blocking drift, and bounded next decisions without the digest selecting a convenient source, persisting secrets or customer data, or promoting local, reachability, CI, provider, production, or human evidence into another class."
+    },
     {
       "id": "steward-private-validation-foundation",
       "reviewRevision": 5,
@@ -3883,7 +4114,7 @@
       "audiences": [
         "staff"
       ],
-      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it \u2014 INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
+      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it — INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
       "backendPaths": [
         "functions/index.js",
         "functions/intentParserCore.cjs",
@@ -4109,7 +4340,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 12,
+      "reviewRevision": 14,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4202,7 +4433,7 @@
         },
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "<QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>"
+          "locator": "<QuoteAdministrationBoundary"
         },
         {
           "path": "src/components/CustomerPortalView.jsx",
@@ -4254,6 +4485,7 @@
         }
       ],
       "testPaths": [
+        "e2e/ambient-intelligence-accessibility.spec.js",
         "e2e/ambient-opportunities-stream.spec.js",
         "e2e/ambient-library.spec.js",
         "e2e/ambient-intelligence-object-verification.spec.js",
@@ -4274,6 +4506,7 @@
         "src/components/__tests__/ambientMoneyContext.test.jsx",
         "src/components/__tests__/ambientProposalContext.test.jsx",
         "src/components/__tests__/ambientConversationContext.test.jsx",
+        "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
         "src/components/__tests__/ambientPilotScenarioReview.test.jsx",
         "src/components/__tests__/ambientSelectionObjects.test.jsx",
         "src/components/__tests__/customerPortalAskAbout.flagOn.test.jsx",
@@ -4490,6 +4723,30 @@
           "locator": "renders a populated content-first context with five visibly separate evidence rails"
         },
         {
+          "path": "e2e/ambient-intelligence-accessibility.spec.js",
+          "locator": "keeps Conversation evidence ahead of repeated arrival explanation"
+        },
+        {
+          "path": "e2e/ambient-intelligence-accessibility.spec.js",
+          "locator": "keeps Payment and Proposal context handoffs keyboard-operable and exact"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
+          "locator": "opens administration on only the exact focused quote instead of returning to an ambiguous list"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
+          "locator": "accepts only an exact semantic Payment administration arrival"
+        },
+        {
+          "path": "src/lib/__tests__/ambientConversationObject.test.js",
+          "locator": "does not turn the quote-store default follow-up shell into scheduled work"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceArrivalContract.test.js",
+          "locator": "preserves an exact quote-scoped Conversation object on a general thread arrival"
+        },
+        {
           "path": "src/lib/__tests__/pilotCommandPolicy.test.js",
           "locator": "defines all eight classes while limiting v1 execution to the four bounded classes"
         },
@@ -4583,10 +4840,15 @@
         }
       ],
       "documentationPaths": [
+        "docs/DESIGN_SYSTEM.md",
         "docs/FEATURE_MATRIX.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "For a general Conversation handoff, the canonical object is the exact quote ID"
+        },
         {
           "path": "docs/FEATURE_MATRIX.md",
           "locator": "purpose-bearing editorial grammar, accepted/booked receipt domains, and equivalent mobile manipulation"

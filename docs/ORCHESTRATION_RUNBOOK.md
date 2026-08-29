@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-28 17:25:14 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -42,6 +42,34 @@ For a UI-classified plan, confirm `dependencies.requiredSkills` contains
 product language differ, the repository documents govern QuotePilot-specific
 behavior and the conflict must be reported rather than silently blended.
 
+## Product Truth Reconciliation (Source/Local Active, CI Advisory)
+
+The accepted observability architecture is recorded in
+`docs/adr/ADR-0002-product-truth-observability.md`; implementation and rollout
+live in the linked design and work plan. Use:
+
+```bash
+npm run status:product
+npm run check:product-drift
+```
+
+Use `status:product` at the start of meaningful work to
+answer what is live, what is only a candidate, what evidence exists, what has
+drifted, and which decisions need an owner. Use `check:product-drift` before PR
+publication and release preparation. The status command may successfully
+render a report that contains drift; the gate command is the fail-closed policy
+surface.
+
+Use `--json` for machine consumers, `--snapshot
+.cache/product-truth/<name>.json` for an ignored local snapshot, and
+`--probe-reachability` only when bounded HTTP reachability is useful. A
+successful HTTP probe remains reachability evidence only.
+
+CI adoption is advisory. The workflow publishes text/JSON evidence and observes
+the gate without making its result required. A separate owner decision must
+promote the gate after exact CI summaries establish acceptable false-positive,
+availability, freshness, and comprehension behavior.
+
 Preflight:
 ```bash
 npm run lane:quick
@@ -72,6 +100,143 @@ Release readiness with CWV:
 ```bash
 npm run lane:release:cwv
 ```
+
+## Cloud Runner Bootstrap
+Use this path for hosted agents, remote dev containers, Codespaces-style
+workspaces, and any external runner that receives a QuotePilot task handoff.
+It is optimized for speed by making the runner read and validate only the
+bounded task surface first.
+
+1. Checkout and install:
+```bash
+git status --short
+npm ci
+```
+
+2. Confirm browser-safe environment shape before broad work:
+```bash
+npm run check:env
+```
+
+If Firebase web app values are not already injected by the runner, create a
+local ignored file from the authenticated Firebase project config:
+```bash
+npm run env:local:firebase -- --project tonicatering
+```
+
+This command is create-only by default. Do not paste or invent Firebase,
+Stripe, Resend, Twilio, Pingram, Turnstile, OpenAI, Anthropic, or other
+provider secrets in a handoff, prompt, PR body, repository file, or browser
+`VITE_*` variable. Missing secrets are an environment blocker, not a reason to
+weaken a gate.
+
+3. Generate the machine-readable task packet:
+```bash
+mkdir -p .cache/task-plans
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+npm run plan:task -- --task "<bounded work>" \
+  --files <comma-separated-owned-paths> \
+  --json > ".cache/task-plans/${STAMP}--plan.json"
+```
+
+The runner must consume the selected model, reasoning effort, read-first files,
+required skills, documentation obligations, validations, and task graph before
+implementation. If the emitted profile is `frontier`, stop and confirm the
+task really has authority, payment, migration, provider, production, security,
+or deployment scope before changing files.
+
+4. Run the cheapest relevant checks before expanding:
+```bash
+npm run lane:quick
+npm run test:unit
+```
+
+Then run every validation emitted by the task packet. For ordinary process,
+documentation, UI, and core changes, the minimum closeout remains:
+```bash
+npm run check:env
+npm run build
+npm run check:docs:governance
+```
+
+5. Finish with a completion packet:
+```bash
+npm run plan:task -- --task "<bounded work>" \
+  --files <same-comma-separated-owned-paths> \
+  --phase complete \
+  --json
+```
+
+The handoff must include the exact `lifecycle.recordedAt`, changed files,
+commands run, command outcomes, skipped validations with reasons, and residual
+risks. Local, CI, hosted, provider, production, and human-acceptance evidence
+must remain separate.
+
+For meaningful tasks, create an optional ignored evidence record after local
+verification:
+```bash
+npm run evidence:task -- \
+  --task "<bounded work>" \
+  --phase complete \
+  --planner-recorded-at "<plan:task complete recordedAt>" \
+  --files <same-comma-separated-owned-paths> \
+  --validation "npm run check:env | passed" \
+  --validation "npm run build | passed" \
+  --local-proof "Local validation completed on this checkout" \
+  --residual-risk "CI, hosted, provider, production, and human acceptance are separate"
+```
+
+The record is written under `.cache/development-evidence/` and follows
+`docs/DEVELOPMENT_EVIDENCE_COMPILER.md`. It supports learning and handoff only;
+it does not prove CI, hosted, provider, production, or human acceptance.
+
+Summarize local development-system observability:
+```bash
+npm run evidence:index
+npm run evidence:index -- --json
+```
+
+Use the index to find repeated residual risks, failed validations, missing
+planner timestamps, and repeated next actions. Do not promote a pattern to a
+new gate, skill, or planner rule until the evidence shows the friction is
+structural rather than a one-off task artifact.
+
+## Runtime Diagnostics
+The app-local `/app/diagnostics` surface and `src/lib/sessionDiagnostics.js`
+capture bounded route, session, and error events for staff troubleshooting.
+Treat exported diagnostics as local browser evidence only. They are useful for
+triage and handoff, but do not prove CI, hosted behavior, provider outcomes,
+production deployment, or human acceptance without separate artifacts.
+
+Diagnostic payloads must remain privacy-bounded: URL query/hash fragments,
+email addresses, phone numbers, token-like values, sensitive context keys, raw
+user identifiers, and raw stack traces must not be persisted in exported
+session diagnostics.
+
+## Handoff Packet
+Use this structure when passing work between local agents, cloud agents, and
+human reviewers:
+
+```text
+Task:
+Branch/SHA:
+Planner recordedAt:
+Planner profile/risk/model:
+Owned files:
+Required skills loaded:
+Validation run:
+Validation skipped:
+Changed files:
+Evidence:
+Residual risks:
+Next owner action:
+```
+
+Evidence claims must name their source. `npm run build` is source/build
+evidence; a green CI run is CI evidence; a deployment workflow receipt is
+provider workflow evidence; authenticated staff or customer behavior requires
+its own exact hosted-role proof; human acceptance requires an explicit human
+decision.
 
 ## Skill Entry Points
 Maintainer checks:
@@ -117,6 +282,9 @@ Auth/rules/store high-risk:
 - Provide lane evidence and note any advisory failures.
 - Include residual risk statement.
 - Include rollback path/SHA for high-risk or release-intent changes.
+- Attach or link the exact Product Truth Digest and resolve or explicitly
+  disposition blocking drift before requesting merge. During the advisory
+  period, record findings without treating the CI check as a required gate.
 
 ## Migration Dry-Run Evidence Standard (P0 Execution)
 Required command pattern:

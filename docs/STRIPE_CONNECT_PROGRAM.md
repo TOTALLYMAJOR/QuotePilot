@@ -1,6 +1,6 @@
 # Stripe Connect Program
 
-Last updated: August 14, 2026
+Last updated: 2026-08-28 13:03:27 CDT
 
 ## Purpose and stopping point
 
@@ -197,6 +197,26 @@ operation.
   so the adapter cannot be instantiated from the current manifest. Callable and
   HTTP bindings remain absent until the applied infrastructure and App Check
   gates pass.
+
+## Completion-boundary reassessment
+
+The repository-preparable foundation is complete before the cloud/provider
+gate. The fixed Accounts v2 configuration remains internally consistent:
+connected caterers receive full Stripe Dashboard access, Stripe collects fees
+and owns negative-balance liability, payments use direct charges, and
+QuotePilot takes no application fee. The foundation, infrastructure, and
+onboarding checks pass. The read-only live staging preflight also confirms the
+exact Firebase project, single Web app, and protected `connect-control`
+database inventory.
+
+That preflight is not an applied Terraform plan, IAM/egress reconciliation,
+App Check registration or enforcement, restricted Stripe credential, provider
+binding, deployment, or hosted acceptance. Those actions require a human to
+review a saved cloud plan, authorize its exact digest, reconcile applied
+identities into the secret-free manifest, observe App Check before promotion,
+and approve the Sandbox runtime/UAT window. `functions-connect/index.js` must
+remain export-empty until those gates pass; source work must not simulate their
+evidence.
 
 No connected account, App Check enforcement or callable token consumption,
 applied Terraform resource, credential, callable/HTTP export, Stripe call,

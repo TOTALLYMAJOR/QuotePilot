@@ -1044,7 +1044,7 @@ function resolvePersistedPricingSnapshot({
   ownerEmail = "",
   reason = ""
 } = {}) {
-  const buildClientPreview = () => buildPricingSnapshotFromClientTotals({
+  const fallbackPricing = buildPricingSnapshotFromClientTotals({
     form,
     totals,
     settings,
@@ -1062,16 +1062,15 @@ function resolvePersistedPricingSnapshot({
   });
 
   if (!pricingSnapshot || typeof pricingSnapshot !== "object") {
-    return buildClientPreview();
+    return fallbackPricing;
   }
 
   const normalized = normalizePricingOutput(pricingSnapshot);
   if (normalized.commercialSnapshot) return normalized;
 
-  const clientPreview = buildClientPreview();
   return {
     ...normalized,
-    commercialSnapshot: clientPreview.commercialSnapshot
+    commercialSnapshot: fallbackPricing.commercialSnapshot
   };
 }
 

@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: August 9, 2026
+Last updated: 2026-08-28 10:22:18 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -1017,6 +1017,14 @@ does not satisfy these hosted items.
      quote-only or portal-only expiry fails, and `Reopen` restores an eligible
      expired record as a draft with a new portal issuance,
    - quote history row appears and opens,
+   - the stable `operator.authenticated-workspace-journey` matrix records one
+     result per named route/task for the exact release SHA, immutable deployment
+     id, target, organization, authenticated user role, and evidence level. It
+     covers create, save, exact readback/version, export, Workflow, Event
+     Workspace, Customer 360, Messaging Station, Kitchen BEO, Decision Debt,
+     Schedule, Reporting, Operations Audit, payment, and Staffing boundaries;
+     denied-role and cross-tenant attempts fail closed. Source, local automated,
+     provider, and human observations remain separate evidence rows,
    - provider acceptance for the exact current valid issuance records `sent`
      and activates that portal, while acceptance for an invalid or expired
      issuance is retained as `requires_rotation` with the portal inactive,

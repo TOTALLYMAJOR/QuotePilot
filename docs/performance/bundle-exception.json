@@ -10,13 +10,13 @@
   "profiles": {
     "compatibility": {
       "maxMetrics": {
-        "totalJsBytes": 3221176,
+        "totalJsBytes": 3213578,
         "largestJsChunkBytes": 391901
       }
     },
     "ambient-production": {
       "maxMetrics": {
-        "totalJsBytes": 3905603,
+        "totalJsBytes": 3887976,
         "largestJsChunkBytes": 391901
       }
     }

@@ -147,11 +147,10 @@ describe("Pilot deterministic query commands", () => {
     expect(first).toMatchObject({
       state: "attention",
       title: "Proposal gaps",
-      summary: "4 fields are missing from the deterministic proposal-completeness contract."
+      summary: "3 fields are missing from the deterministic proposal-completeness contract."
     });
     expect(first.facts.map((fact) => fact.label)).toEqual([
       "Valid customer email",
-      "Customer phone",
       "Event date",
       "Menu selected"
     ]);

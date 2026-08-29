@@ -263,9 +263,9 @@ describe("AmbientLivingOpportunity", () => {
     expect(surface.dataset.surfacePurpose).toContain("clarify");
     expect(surface.dataset.ambientRole).toBe("sales");
     expect(container.querySelector("h1")?.textContent).toBe("Autumn Benefit Dinner");
-    expect(container.textContent).toContain("Customer phone needs review");
+    expect(container.textContent).toContain("Event duration needs review");
     expect(container.textContent).toContain("Review draft");
-    expect(container.textContent).toContain("Customer phone needs review. Reviewing the draft is the clearest available next step.");
+    expect(container.textContent).toContain("Event duration needs review. Reviewing the draft is the clearest available next step.");
     expect(container.textContent).toContain("Proposal completeness only");
     const commercialHealth = container.querySelector('[data-momentum-domain="commercial_health"]');
     expect(commercialHealth).not.toBeNull();
@@ -284,7 +284,7 @@ describe("AmbientLivingOpportunity", () => {
     expect(remote).not.toBeNull();
     expect(remote.dataset.surfacePurpose).toContain("advance");
     expect(remote.textContent).toContain("Autumn Benefit Dinner");
-    expect(remote.textContent).toContain("Customer phone needs review");
+    expect(remote.textContent).toContain("Event duration needs review");
 
     const remoteButtons = [...remote.querySelectorAll("button")];
     expect(remoteButtons.map((item) => item.textContent.trim())).toEqual([
@@ -302,12 +302,22 @@ describe("AmbientLivingOpportunity", () => {
     expect(container.textContent).toContain("Event details shown");
 
     act(() => remoteButtons[1].click());
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Menu details");
+    const menuDialog = container.querySelector('[role="dialog"]');
+    expect(menuDialog?.textContent).toContain("Menu details");
+    expect(menuDialog?.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(menuDialog?.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this matters");
     act(() => container.querySelector('[aria-label="Close context"]').click());
     await settle();
 
     act(() => remoteButtons[2].click());
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Pricing details");
+    const pricingDialog = container.querySelector('[role="dialog"]');
+    expect(pricingDialog?.textContent).toContain("Pricing details");
+    expect(pricingDialog?.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(pricingDialog?.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this is here");
     act(() => container.querySelector('[aria-label="Close context"]').click());
     await settle();
 
@@ -318,6 +328,32 @@ describe("AmbientLivingOpportunity", () => {
 
     act(() => remoteButtons[4].click());
     expect(onEditQuote).toHaveBeenCalledTimes(1);
+  });
+
+  test("opens exact staffing context from the ranked primary action and restores focus", async () => {
+    mount({
+      quote: {
+        ...QUOTE,
+        customer: { ...QUOTE.customer, phone: "" },
+        event: { ...QUOTE.event, hours: 5 }
+      }
+    });
+
+    expect(container.textContent).toContain("Staffing may need attention");
+    expect(container.textContent).toContain(
+      "Staffing may need attention. Reviewing staffing is the clearest available next step."
+    );
+    const primary = button("Review staffing");
+    expect(primary).toBeTruthy();
+
+    act(() => primary.click());
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain("Staffing suggestion");
+    expect(dialog?.textContent).toContain("2 additional servers");
+
+    act(() => dialog.querySelector('[aria-label="Close context"]').click());
+    await settle();
+    expect(document.activeElement).toBe(primary);
   });
 
   test("relays a global Pilot request into the exact populated opportunity context and restores its trigger", async () => {
@@ -380,7 +416,108 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("Why this recommendation");
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.textContent).toContain("Saved priced count");
+    expect(dialog.textContent).toContain("Separate attendance evidence not recorded");
+    expect(dialog.textContent).toContain("does not confirm attendance");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this recommendation");
     expect(container.textContent).toContain("Guest count context opened");
+  });
+
+  test("shows planning and exact final-count timing evidence and opens only its exact Workflow task", () => {
+    const onOpenWorkflow = vi.fn(() => ({ status: "pending" }));
+    const quote = Object.freeze({
+      ...QUOTE,
+      event: Object.freeze({
+        ...QUOTE.event,
+        attendance: Object.freeze({
+          schemaVersion: 1,
+          planning: Object.freeze({
+            kind: "approximate",
+            value: 120,
+            min: 100,
+            max: 140,
+            sourceType: "customer_inquiry",
+            sourceReferenceId: "inquiry-001",
+            observedAtISO: "2026-08-11T11:45:00.000Z",
+            recordedByUid: "staff-alpha"
+          }),
+          confirmation: Object.freeze({
+            state: "requested",
+            requestedAtISO: "2026-09-01T15:00:00.000Z",
+            dueDate: "2026-09-12",
+            submittedCount: null,
+            sourceType: "",
+            sourceReferenceId: "",
+            submittedAtISO: "",
+            submittedByRole: "",
+            appliedRevisionId: "",
+            commercialChangeReceiptId: ""
+          }),
+          commercialBasis: Object.freeze({
+            source: "planning",
+            sourceReferenceId: "inquiry-001",
+            appliedRevisionId: ""
+          })
+        })
+      })
+    });
+    const decisionDebtSnapshot = Object.freeze({
+      snapshot: Object.freeze({
+        items: Object.freeze([Object.freeze({
+          id: "debt-final-count-001",
+          decisionType: "guest_count",
+          resolutionState: "open",
+          lockDate: "2026-09-12",
+          daysUntilLock: 4
+        })])
+      })
+    });
+
+    mount({ quote, decisionDebtSnapshot, onOpenWorkflow });
+    act(() => button("See connections").click());
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Saved priced count");
+    expect(dialog.textContent).toContain("Planning estimate: about 120 guests (100–140)");
+    expect(dialog.textContent).toContain("Customer inquiry · Aug 11, 2026");
+    expect(dialog.textContent).toContain("Final count due Sep 12, 2026");
+    expect(dialog.textContent).toContain("4 days remain until the final guest-count lock date");
+    expect(dialog.querySelector('[data-attendance-dimension="commercial-basis"]')).toBeTruthy();
+    expect(dialog.querySelector('[data-attendance-dimension="best-evidence"]')).toBeTruthy();
+    expect(dialog.querySelector('[data-attendance-dimension="decision-timing"]')).toBeTruthy();
+
+    act(() => button("Review final-count task").click());
+
+    expect(onOpenWorkflow).toHaveBeenCalledWith({
+      quoteId: "quote-alpha",
+      attentionType: "decision_debt",
+      requestId: "debt-final-count-001"
+    }, expect.objectContaining({
+      arrivalContext: expect.objectContaining({ surfaceId: "workflow" })
+    }));
+  });
+
+  test("keeps the exact priced count visible when added attendance evidence is malformed", () => {
+    mount({
+      quote: {
+        ...QUOTE,
+        event: {
+          ...QUOTE.event,
+          attendance: { schemaVersion: 99 }
+        }
+      }
+    });
+
+    act(() => button("See connections").click());
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Saved priced count");
+    expect(dialog.textContent).toContain("120 guests");
+    expect(dialog.textContent).toContain("Attendance evidence needs review");
+    expect(dialog.textContent).not.toContain("Final count applied");
   });
 
   test("opens populated five-domain Money evidence and restores its exact trigger", async () => {
@@ -408,6 +545,31 @@ describe("AmbientLivingOpportunity", () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
     expect(container.textContent).toContain("Payment details closed");
+  });
+
+  test("hands payment review to the existing quote workspace when the host provides it", () => {
+    const onOpenLegacyWorkspace = vi.fn(() => ({ status: "pending" }));
+    mount({ onOpenLegacyWorkspace });
+
+    act(() => button("Review payments").click());
+
+    const dialog = container.querySelector('[role="dialog"]');
+    const handoff = [...dialog.querySelectorAll("button")]
+      .find((item) => item.textContent.replace(/\s+/g, " ").trim().includes("Open quote workspace"));
+    expect(handoff).not.toBeUndefined();
+    expect(handoff.dataset.ambientActionId).toBe("open-governed-payment-controls");
+
+    act(() => handoff.click());
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(onOpenLegacyWorkspace.mock.calls[0][0]).toMatchObject({
+      object: {
+        id: "money",
+        type: "commercial-evidence",
+        label: "Money"
+      },
+      reason: expect.stringContaining("deposit, balance-request, reconciliation, and settlement")
+    });
   });
 
   test("mounts exact Proposal evidence, restores focus, and routes only to governed controls", async () => {
@@ -529,6 +691,39 @@ describe("AmbientLivingOpportunity", () => {
     expect(QUOTE).toEqual(before);
   });
 
+  test("presents a missing phone as recommended contact detail without proposal-blocking language", () => {
+    const onEditQuote = vi.fn(() => ({ status: "opened" }));
+    const quote = {
+      ...QUOTE,
+      customer: { ...QUOTE.customer, phone: "" },
+      event: { ...QUOTE.event, hours: 6, servers: 10, chefs: 3 }
+    };
+    mount({ quote, onEditQuote });
+
+    act(() => button("Review proposal").click());
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain("100% of the required proposal details are complete");
+    expect(dialog.textContent).toContain("Required details ready");
+    expect(dialog.textContent).toContain("Recommended contact detail");
+    expect(dialog.textContent).toContain("not required to prepare or send this proposal");
+    expect(dialog.querySelector('[data-proposal-gap="customer-phone"]')).toBeNull();
+    expect(dialog.querySelector('[data-proposal-recommendation="customer-phone"]')).not.toBeNull();
+
+    const review = button("Review recommended contact in editor");
+    expect(review).not.toBeUndefined();
+    act(() => review.click());
+
+    expect(onEditQuote).toHaveBeenCalledOnce();
+    expect(onEditQuote.mock.calls[0][1]).toMatchObject({
+      arrivalContext: {
+        reason: expect.stringContaining("recommended contact"),
+        nextResolution: expect.stringContaining("leave the proposal ready without it")
+      },
+      draftPatch: null
+    });
+  });
+
   test("opens exact Conversation evidence, keeps overlays exclusive, restores focus, and routes without mutation", async () => {
     const conversationQuote = {
       ...QUOTE,
@@ -602,7 +797,7 @@ describe("AmbientLivingOpportunity", () => {
       arrivalContext: {
         surfaceId: "conversation",
         object: {
-          id: "conversation",
+          id: "quote-alpha",
           type: "customer-communication-evidence",
           label: "Conversation"
         },
@@ -665,7 +860,7 @@ describe("AmbientLivingOpportunity", () => {
       arrivalContext: {
         surfaceId: "workflow",
         object: {
-          id: "conversation",
+          id: "quote-alpha",
           type: "customer-communication-evidence",
           label: "Conversation"
         },
@@ -779,6 +974,10 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
     expect(dialog.textContent).toContain("Sources:");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this matters");
 
     act(() => container.querySelector('[aria-label="Close context"]').click());
     act(() => button("Review menu").click());
@@ -790,6 +989,10 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
     expect(dialog.textContent).toContain("Sources:");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this matters");
   });
 
   test("explores a reversible selection scenario with exact context and undo without mutating the quote", async () => {
@@ -813,6 +1016,8 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("If you do nothing");
     expect(dialog.textContent).toContain("Confidence: high");
     expect(dialog.textContent).toContain("Sources:");
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
     expect(container.textContent).toContain("Selection details ready");
 
     const rentalCard = dialog.querySelector('[data-selection-kind="rental"]');
@@ -1161,6 +1366,10 @@ describe("AmbientLivingOpportunity", () => {
 
     act(() => button("Review staffing").click());
     const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    expect(dialog.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this recommendation");
     expect(dialog.textContent).toContain("Staffing suggestion");
     expect(dialog.textContent).toContain("8 servers · 3 chefs · 0 bartenders");
     expect(dialog.textContent).toContain("10 servers · 3 chefs · 0 bartenders");

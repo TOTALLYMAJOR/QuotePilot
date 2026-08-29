@@ -196,4 +196,31 @@ describe("AmbientNowView", () => {
     expect(css).not.toMatch(/\bz-index\s*:/u);
     expect(css).toMatch(/min-height:\s*44px/u);
   });
+
+  test("replaces an unavailable read with one safe productive recovery", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientNowView
+        {...baseProps}
+        snapshot={snapshot({
+          error: "Missing or insufficient permissions.",
+          loadedAt: 0,
+          reads: {
+            attention: { status: "error" },
+            history: { status: "error" },
+            unreadReplies: { status: "error" }
+          },
+          truncationKnown: false
+        })}
+      />
+    );
+
+    expect(markup).toContain('data-now-state="unavailable"');
+    expect(markup).toContain("We couldn’t load today’s priorities");
+    expect(markup).toContain("No quote, customer, or workflow record changed");
+    expect(markup).toContain("Try again");
+    expect(markup).toContain("Start a quote");
+    expect(markup).not.toContain("Missing or insufficient permissions");
+    expect(markup).not.toContain("This view cannot call you caught up yet");
+    expect(markup).not.toContain("About this view");
+  });
 });

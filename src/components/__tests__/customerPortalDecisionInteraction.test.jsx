@@ -6,6 +6,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   PortalDecisionMutationState,
   buildPortalDecisionAttempt,
+  getPortalDecisionDraft,
   reconcilePortalDecisionSnapshot
 } from "../CustomerPortalView";
 
@@ -44,6 +45,16 @@ function findElement(node, predicate) {
 }
 
 describe("customer portal decision reconciliation", () => {
+  test("starts an undecided proposal without implying customer consent", () => {
+    expect(getPortalDecisionDraft(quote())).toBe("");
+    expect(getPortalDecisionDraft(quote({
+      portalDecision: { decision: "accepted" }
+    }))).toBe("accepted");
+    expect(getPortalDecisionDraft(quote({
+      portalDecision: { decision: "unsupported" }
+    }))).toBe("");
+  });
+
   test("freezes the exact reviewed issuance and normalized signature input", () => {
     const attempt = acceptanceAttempt();
 
@@ -193,6 +204,8 @@ describe("customer portal decision presentation", () => {
     expect(componentSource).toContain("decisionFeedbackRef.current");
     expect(componentSource).toContain('tabIndex={phase === "ready" ? undefined : -1}');
     expect(componentSource).toContain("reconcilePortalDecisionSnapshot(attempt, refreshed)");
+    expect(componentSource).toContain('useState("")');
+    expect(componentSource).toContain("Nothing is selected or submitted for you.");
     expect(componentSource).not.toMatch(/localStorage\.(?:setItem|getItem).*decision/i);
     expect(styleSource).toContain("@media (prefers-reduced-motion: reduce)");
     expect(styleSource).toContain(".portal-decision-state");

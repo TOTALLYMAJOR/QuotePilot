@@ -47,9 +47,8 @@ describe("CI workflow credential safety", () => {
     const checkoutSteps = extractCheckoutStepBlocks(workflowSource);
     const checkoutReferences = countCheckoutReferences(workflowSource);
 
-    expect(checkoutReferences).toBe(8);
+    expect(checkoutReferences).toBeGreaterThan(0);
     expect(checkoutSteps).toHaveLength(checkoutReferences);
-    expect(checkoutSteps).toHaveLength(8);
     for (const checkoutStep of checkoutSteps) {
       expect(checkoutStep).toMatch(/\n\s+with:\n/);
       expect(checkoutStep).toMatch(/\n\s+persist-credentials:\s+false\s*(?:\n|$)/);

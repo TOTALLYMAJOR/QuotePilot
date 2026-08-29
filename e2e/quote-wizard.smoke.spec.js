@@ -110,7 +110,21 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/app");
-  await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /New quote/i })).toBeVisible();
+});
+
+test("empty Workflow leads directly into the first quote", async ({ page }) => {
+  await page.getByRole("button", { name: /Workflow/i }).click();
+  await expect(page.getByRole("heading", {
+    name: "Create the first quote to begin follow-up"
+  })).toBeVisible();
+  await expect(page.getByText(/QuotePilot will carry the saved quote, proposal readiness, decisions, and follow-ups/i)).toBeVisible();
+
+  await page.getByRole("button", { name: "Start a quote" }).click();
+  await expect(page.getByText("Creating this quote", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Create the first quote to begin follow-up"
+  })).toHaveCount(0);
 });
 
 test("operator workspaces load only when first opened and stay mounted after close", async ({ page }) => {
@@ -1040,7 +1054,16 @@ test("portal acceptance requires typed consent and shows the signed revision rec
   await page.getByPlaceholder("Paste your quote key").fill(portalKey);
   await page.getByRole("button", { name: "Open Proposal" }).click();
 
-  const signButton = page.getByRole("button", { name: "Sign and Accept Proposal" });
+  const decisionGroup = page.getByRole("group", { name: "Proposal decision" });
+  const signButton = page.getByRole("button", { name: /Sign and accept proposal/i });
+  await expect(page.getByText(
+    "Choose the response that matches what you want to do. Nothing is selected or submitted for you.",
+    { exact: true }
+  )).toBeVisible();
+  await expect(signButton).toHaveCount(0);
+  await expect(page.getByLabel("Full legal name")).toHaveCount(0);
+
+  await decisionGroup.getByRole("button", { name: /Accept(?: proposal)?/i }).click();
   const signerName = page.getByLabel("Full legal name");
   const signatureConsent = page.getByLabel(
     /consent to use my typed name as my electronic signature/i

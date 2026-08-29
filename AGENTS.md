@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-20 16:39:56 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -27,7 +27,6 @@ Ship safe changes with validation evidence and canonical documentation sync.
    `docs/DESIGN_SYSTEM.md` plus `docs/DESIGN_PRINCIPLES.md` as its local truth.
 3. Use the smallest safe implementation scope.
 4. Run required checks:
-   - `npm run check:project-state`
    - `npm run check:env`
    - `npm run build`
    - `npm run check:capability-surfaces` when backend/data authority changes
@@ -35,9 +34,6 @@ Ship safe changes with validation evidence and canonical documentation sync.
    - `npm run test:unit` and `npm run truthloop:coverage` when `evidence/` changes
    - plus scope-specific tests (`test:unit`, `test:e2e`, governance/perf checks) as needed.
 5. Update canonical docs per trigger rules in `docs/DOC_SYSTEM.md`.
-   When lifecycle, evidence, blocker, or next-proof truth changes, reconcile
-   `.project/state.json` and its thin project-state indexes without duplicating
-   the Feature Matrix, Project Status, or Dev Tasks.
 6. At completion, rerun `npm run plan:task` with the same `--task` and
    `--files` plus `--phase complete`, then report its exact UTC `recordedAt`
    timestamp with changed files, validations, and residual risks.

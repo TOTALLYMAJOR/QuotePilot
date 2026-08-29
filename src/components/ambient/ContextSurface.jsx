@@ -7,6 +7,7 @@ const FOCUSABLE_SELECTOR = [
   "input:not([disabled])",
   "select:not([disabled])",
   "textarea:not([disabled])",
+  "summary",
   "[tabindex]:not([tabindex='-1'])"
 ].join(",");
 
@@ -14,6 +15,13 @@ function hasContent(content) {
   return Children.toArray(content).some((child) => (
     typeof child !== "string" || child.trim().length > 0
   ));
+}
+
+function buildDetailsRegionLabel(title) {
+  const normalizedTitle = String(title || "").trim();
+  return /\bdetails$/iu.test(normalizedTitle)
+    ? normalizedTitle
+    : `${normalizedTitle} details`;
 }
 
 function scheduleFrame(callback) {
@@ -44,6 +52,7 @@ export default function ContextSurface({
   description = null,
   reason = null,
   consequence = null,
+  collapseArrivalDetails = false,
   footer = null,
   closeLabel = "Close context",
   closeActionId = null,
@@ -126,18 +135,21 @@ export default function ContextSurface({
         return;
       }
       const rect = anchor.getBoundingClientRect();
-      const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
-      const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
-      const dialogHeight = dialogRef.current?.getBoundingClientRect?.().height || 0;
+      const viewportWidth = document.documentElement?.clientWidth || window.innerWidth || 0;
+      const viewportHeight = document.documentElement?.clientHeight || window.innerHeight || 0;
+      const dialogRect = dialogRef.current?.getBoundingClientRect?.();
+      const dialogHeight = dialogRect?.height || 0;
+      const dialogWidth = dialogRect?.width || Math.min(432, Math.max(0, viewportWidth - 32));
       const preferredTop = rect.bottom + 12;
       const maximumTop = Math.max(16, viewportHeight - dialogHeight - 16);
+      const maximumHorizontalOffset = Math.max(16, viewportWidth - dialogWidth - 16);
       const nextStyle = {
         "--ambient-context-anchor-top": `${Math.max(16, Math.min(preferredTop, maximumTop))}px`
       };
       if (align === "start") {
-        nextStyle["--ambient-context-anchor-left"] = `${Math.max(16, rect.left)}px`;
+        nextStyle["--ambient-context-anchor-left"] = `${Math.max(16, Math.min(rect.left, maximumHorizontalOffset))}px`;
       } else {
-        nextStyle["--ambient-context-anchor-right"] = `${Math.max(16, viewportWidth - rect.right)}px`;
+        nextStyle["--ambient-context-anchor-right"] = `${Math.max(16, Math.min(viewportWidth - rect.right, maximumHorizontalOffset))}px`;
       }
       setAnchorStyle(nextStyle);
     }
@@ -158,11 +170,14 @@ export default function ContextSurface({
 
   if (!renderable) return null;
 
-  const describedBy = description || reason || consequence ? contextId : undefined;
+  const describedBy = description || (!collapseArrivalDetails && (reason || consequence))
+    ? contextId
+    : undefined;
   const overlayClassName = [
     "ambient-context-surface",
     "ambient-context-surface--desktop-anchored",
     "ambient-context-surface--mobile-sheet",
+    collapseArrivalDetails && "ambient-context-surface--arrival-disclosure",
     `ambient-context-surface--align-${align === "start" ? "start" : "end"}`,
     className
   ].filter(Boolean).join(" ");
@@ -201,18 +216,35 @@ export default function ContextSurface({
         {(description || reason || consequence) && (
           <div id={contextId} className="ambient-context-surface__arrival">
             {description && <p className="ambient-context-surface__description">{description}</p>}
-            {reason && (
-              <p><strong>Why this is here</strong><span>{reason}</span></p>
-            )}
-            {consequence && (
-              <p><strong>What this affects</strong><span>{consequence}</span></p>
+            {collapseArrivalDetails && (reason || consequence) ? (
+              <details className="ambient-context-surface__arrival-details">
+                <summary>Why this view</summary>
+                <div>
+                  {reason && (
+                    <p><strong>Why this is here</strong><span>{reason}</span></p>
+                  )}
+                  {consequence && (
+                    <p><strong>What this affects</strong><span>{consequence}</span></p>
+                  )}
+                </div>
+              </details>
+            ) : (
+              <>
+                {reason && (
+                  <p><strong>Why this is here</strong><span>{reason}</span></p>
+                )}
+                {consequence && (
+                  <p><strong>What this affects</strong><span>{consequence}</span></p>
+                )}
+              </>
             )}
           </div>
         )}
         <div
           className="ambient-context-surface__body"
+          role="region"
           tabIndex={0}
-          aria-label={`${title} details`}
+          aria-label={buildDetailsRegionLabel(title)}
         >
           {resolvedContent}
         </div>

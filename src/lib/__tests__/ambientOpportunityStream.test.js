@@ -132,6 +132,33 @@ describe("buildAmbientOpportunityStream", () => {
     expect(Object.keys(row.momentum).join(" ")).not.toMatch(/score|percent|readiness/iu);
   });
 
+  test("keeps proposal momentum healthy when only recommended phone enrichment is missing", () => {
+    const row = build({
+      quotes: [completeQuote({
+        customer: {
+          ...completeQuote().customer,
+          phone: ""
+        }
+      })]
+    }).rows[0];
+
+    expect(row.momentum.domains.proposal).toMatchObject({
+      state: "healthy",
+      completenessPercent: 100,
+      summary: "All required proposal fields are recorded; 1 recommended contact detail remains."
+    });
+    expect(row.momentum.domains.proposal.evidence).toEqual([{
+      model: "proposal-readiness-v1",
+      criteriaCount: 11,
+      recordedCriteriaCount: 11,
+      recommendedGapCount: 1
+    }]);
+    expect(row.primaryAction).toMatchObject({
+      id: "open-opportunity:quote-ambient-1",
+      outcomeLabel: "Open opportunity"
+    });
+  });
+
   test("fails closed for unknown recorded states instead of applying fallback semantics", () => {
     const row = build({
       quotes: [completeQuote({

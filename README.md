@@ -1,9 +1,8 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-28 17:25:14 CDT
 
-Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
-with a read-only Python reconciliation tier for commercial evidence.
+Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
 - Canonical project state: [PROJECT_STATE.md](PROJECT_STATE.md)
@@ -30,8 +29,9 @@ with a read-only Python reconciliation tier for commercial evidence.
 - Authoritative operational staffing ADR: [docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md](docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md)
 - Orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
 - Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
-- Commercial Truth Loop ADR: [docs/COMMERCIAL_TRUTH_LOOP_ADR.md](docs/COMMERCIAL_TRUTH_LOOP_ADR.md)
-- Commercial Truth Loop design: [docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md)
+- Repository operating-system audit: [docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md](docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md)
+- Development evidence compiler: [docs/DEVELOPMENT_EVIDENCE_COMPILER.md](docs/DEVELOPMENT_EVIDENCE_COMPILER.md)
+- Product Truth Observability: [ADR](docs/adr/ADR-0002-product-truth-observability.md), [design](docs/design/product-truth-observability-design.md), [work plan](docs/plans/20260828-feature-product-truth-observability.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
 
 The project-state control plane reconciles these existing authorities without
@@ -688,6 +688,15 @@ performs the actual model switch. The policy is owned by
 `lifecycle.recordedAt` timestamp. UI plans additionally require the
 `design-language` skill and the repository's canonical design system and
 principles before implementation.
+
+For cloud or hosted-agent work, use the bootstrap and handoff packet in
+[`docs/ORCHESTRATION_RUNBOOK.md`](docs/ORCHESTRATION_RUNBOOK.md#cloud-runner-bootstrap).
+The expected flow is `npm ci`, `npm run check:env`, a bounded
+`plan:task --json` packet saved under ignored `.cache/task-plans/`, the emitted
+validation list, and a matching `--phase complete` packet. Environment
+injection may make the run faster, but provider secrets stay out of tracked
+files and evidence claims must keep local, CI, hosted/provider, production, and
+human acceptance separate.
 
 `test:rebook-quote:emulator` is a disposable `demo-*` Auth, Firestore, and
 Functions lane for the exact-version rebook callable. It verifies same-tenant

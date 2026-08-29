@@ -27,6 +27,7 @@ const MAX_SERIALIZED_STATE_LENGTH = 4096;
 const DESTINATIONS = /* @__PURE__ */ Object.freeze([
   "client",
   "opportunity",
+  "administration",
   "workflow",
   "approval",
   "messages",
@@ -54,12 +55,14 @@ const OBJECT_TYPE_LABELS = /* @__PURE__ */ Object.freeze({
   approval: "Approval",
   "customer-workflow-evidence": "Customer workflow evidence",
   "staff-workflow-evidence": "Staff workflow evidence",
-  "customer-communication-evidence": "Conversation evidence",
+  "customer-communication-evidence": "Conversation",
   "schedule-item": "Schedule item",
   "event-logistics-evidence": "Event logistics evidence",
   "operational-evidence": "Operational evidence",
   "report-signal": "Reporting signal",
   "commercial-evidence": "Commercial evidence",
+  "payment-evidence": "Payment",
+  "customer-decision-artifact": "Proposal",
   "intelligent-object": "Intelligent object",
   "organization-library": "Organization Library",
   "library-section": "Library section",
@@ -69,6 +72,11 @@ const OBJECT_TYPE_LABELS = /* @__PURE__ */ Object.freeze({
 const DESTINATION_OBJECT_TYPES = /* @__PURE__ */ (() => Object.freeze({
   client: Object.freeze(["client"]),
   opportunity: Object.freeze(["opportunity"]),
+  administration: Object.freeze([
+    "opportunity",
+    "payment-evidence",
+    "customer-decision-artifact"
+  ]),
   workflow: Object.freeze([
     "opportunity",
     "workflow-item",
@@ -134,6 +142,35 @@ const INTENTS = /* @__PURE__ */ (() => Object.freeze({
       consequence: "The proposal gap remains open; navigation does not stage, save, or send anything.",
       resolutionId: "review_proposal_gap_in_opportunity",
       resolution: "Review the proposal evidence and choose an available resolution for the gap."
+    })
+  }),
+  administration: Object.freeze({
+    review_quote_controls: Object.freeze({
+      reasonId: "exact_quote_controls_selected",
+      reason: "The exact quote controls were selected for review.",
+      consequenceId: "quote_controls_remain_unchanged",
+      consequence: "Opening Quote administration changes no quote, pricing, proposal, payment, delivery, booking, or provider evidence.",
+      resolutionId: "review_exact_quote_controls",
+      resolution: "Review the exact role-safe quote controls and choose an available action.",
+      objectTypes: Object.freeze(["opportunity"])
+    }),
+    review_payment_controls: Object.freeze({
+      reasonId: "exact_payment_controls_selected",
+      reason: "The exact opportunity payment controls were selected for review.",
+      consequenceId: "payment_evidence_remains_unchanged",
+      consequence: "Opening Quote administration does not request, collect, reconcile, or settle anything and changes no pricing or payment evidence.",
+      resolutionId: "review_exact_payment_controls",
+      resolution: "Review the exact quote's payment controls; any available action must recheck current role and provider evidence.",
+      objectTypes: Object.freeze(["payment-evidence"])
+    }),
+    review_proposal_controls: Object.freeze({
+      reasonId: "exact_proposal_controls_selected",
+      reason: "The exact opportunity proposal controls were selected for review.",
+      consequenceId: "proposal_evidence_remains_unchanged",
+      consequence: "Opening Quote administration does not prepare, send, replace, retry, or recover anything and changes no proposal or delivery evidence.",
+      resolutionId: "review_exact_proposal_controls",
+      resolution: "Review the exact quote's proposal controls; any available action must recheck current role, revision, pricing, link, and delivery evidence.",
+      objectTypes: Object.freeze(["customer-decision-artifact"])
     })
   }),
   workflow: Object.freeze({
@@ -338,6 +375,12 @@ const DESTINATION_CONFIG = /* @__PURE__ */ (() => Object.freeze({
     focusTransport: "state_only",
     focusConsumerState: "supported"
   }),
+  administration: Object.freeze({
+    routeId: WORKSPACE_ROUTE_IDS.QUOTE_LIST,
+    surfaceId: "quote-administration",
+    focusTransport: "state_only",
+    focusConsumerState: "supported"
+  }),
   workflow: Object.freeze({
     routeId: WORKSPACE_ROUTE_IDS.WORKFLOW,
     surfaceId: "workflow",
@@ -504,7 +547,7 @@ function normalizeFocus(value, destination, intent) {
     const input = exactRecord(value, ["customerId"]);
     return { customerId: opaqueId(input.customerId) };
   }
-  if (destination === "opportunity") {
+  if (destination === "opportunity" || destination === "administration") {
     const input = exactRecord(value, ["quoteId"]);
     return { quoteId: opaqueId(input.quoteId) };
   }
@@ -569,6 +612,13 @@ function validateObjectFocusRelationship(destination, object, focus) {
     if (!focus.quoteId || object.id !== focus.quoteId) fail("unsupported_combination");
   }
   if (
+    destination === "administration"
+    && ["payment-evidence", "customer-decision-artifact"].includes(object.type)
+    && object.id !== focus.quoteId
+  ) {
+    fail("unsupported_combination");
+  }
+  if (
     ["workflow-item", "approval", "customer-workflow-evidence", "staff-workflow-evidence"].includes(object.type)
     && ["workflow", "approval"].includes(destination)
     && object.id !== focus.requestId
@@ -616,6 +666,7 @@ function validateObjectFocusRelationship(destination, object, focus) {
 function buildPath(destination, focus) {
   if (destination === "client") return buildCustomerPath(focus.customerId);
   if (destination === "opportunity") return buildQuotePath(focus.quoteId);
+  if (destination === "administration") return WORKSPACE_PATHS.quotes;
   if (destination === "workflow" || destination === "approval") {
     return buildWorkflowPath(focus);
   }

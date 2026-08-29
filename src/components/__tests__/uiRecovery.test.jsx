@@ -129,6 +129,18 @@ describe("recoverable lazy surfaces", () => {
     expect(recoverySource).not.toMatch(/\{\s*(?:error|this\.state\.error)\.(?:message|stack)/);
   });
 
+  test("keeps Ambient Opportunities recovery ahead of legacy Quote History diagnostics", () => {
+    const historySource = readSource("../QuoteHistoryModal.jsx");
+
+    expect(historySource).toContain(
+      '{!AMBIENT_UI_ENABLED && <details className="staff-evidence-disclosure workspace-data-details">'
+    );
+    expect(historySource).toContain(
+      '{state.error && !AMBIENT_UI_ENABLED && <p className="error-note" role="alert">{state.error}</p>}'
+    );
+    expect(historySource).toContain("<AmbientOpportunitiesStream");
+  });
+
   test("requires explicit discard confirmation before a tool recovery reload loses quote work", () => {
     const confirmDiscard = vi.fn().mockReturnValue(false);
     expect(confirmRecoveryReload({
