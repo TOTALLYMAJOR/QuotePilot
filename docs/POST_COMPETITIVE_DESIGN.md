@@ -1,5 +1,7 @@
 # After Quoting: The QuotePilot Transformation Engine
 
+Last updated: 2026-08-28 05:25:12 CDT
+
 Status: Approved design direction — experience blueprint, pre-implementation
 Date: August 10, 2026
 Owner: QuotePilot maintainers
@@ -153,7 +155,11 @@ until it exists.
    costs to your catalog to unlock them." It never fabricates a margin.
 2. **Uncertainty-typed facts.** Guest count today is one integer. The engine
    needs values that can be *exact*, *approximate*, *ranged*, or *unknown with
-   a likely default* — with confidence propagating into money (§4.2).
+   a likely default* — with confidence propagating into money (§4.2). The
+   accepted phased boundary that preserves the exact commercial pricing basis
+   while adding planning, confirmation, and post-event evidence is now defined
+   in `docs/ATTENDANCE_STATE_ADR.md`; current implemented capability remains
+   narrower and is tracked in `docs/FEATURE_MATRIX.md`.
 3. **Structured change requests.** Today a customer's "can we swap salmon for
    chicken?" is freeform text (an acknowledged gap in `DEV_TASKS.md`). The
    engine needs the request parsed into a governed, priceable change bound to

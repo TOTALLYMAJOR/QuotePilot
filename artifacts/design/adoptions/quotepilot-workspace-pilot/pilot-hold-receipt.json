@@ -5,7 +5,7 @@
   "adoptionReportId": "DAR-B405674E9544B51F",
   "adoptionReportSha256": "1590ee941c279aa604811095ff858247f95e1c1f395d2a4f29be8561a19c4521",
   "repository": {
-    "root": "/home/administrator/projects_new/quoteflow",
+    "root": "<repo-root>",
     "branch": "feature/landing-document-hero",
     "head": "c0b213f",
     "workingTreeWasDirtyBeforePilot": true

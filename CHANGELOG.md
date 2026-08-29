@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-28 20:11:00 CDT
+Last updated: 2026-08-28 20:18:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -65,9 +65,16 @@ This changelog is backfilled from git history and will be maintained going forwa
   Refresh-in-progress and retained-after-error snapshots stay stale; a missing
   observation stays unknown. This strengthens evidence labeling only and adds
   no message, read-receipt, workflow, quote, or provider authority.
-- Implemented Product Truth Observability as a source/local candidate. The read-only `status:product` digest reconciles Git, canonical release claims, capability validation, development-evidence coverage, and optional reachability without becoming another authority; `check:product-drift` fails closed for blocking contradictions and malformed required inputs. Eleven focused compiler/CLI contracts pass. CI now publishes an advisory text/JSON digest and observes the gate without making it required; exact CI observation, freshness calibration, owner comprehension, and any enforcement promotion remain human/external.
-- Added the repository operating-system audit and Development Evidence Compiler. `npm run evidence:task` writes ignored local JSON records that keep source, local, CI, hosted, provider, production, human, and outcome evidence separate; `npm run evidence:index` summarizes validation outcomes, proof coverage, repeated risks, and next actions without replacing `plan:task --phase complete` or release authority.
-
+- Implemented the Product Truth Observability architecture and executable work
+  plan as a source/local candidate. The read-only digest reconciles Git, canonical
+  documentation, capability, task-evidence, release, hosted/provider,
+  production, human, and outcome sources without becoming another authority.
+  `status:product` remains report-successful when drift exists;
+  `check:product-drift` fails closed for blocking contradictions and malformed
+  required inputs. Ten focused compiler/CLI contracts pass. CI now publishes an
+  advisory text/JSON digest and observes the gate without making it required;
+  enforcement still requires separate owner promotion. No provider,
+  deployment, production-data, or application runtime mutation was added.
 - Reassessed the deploy-dormant Steward foundation at its Phase 1 safety gate.
   Eight focused test files pass 84 tests, the repository secret scan passes,
   and three responsive real-route checks keep model prose hidden, Steward
@@ -173,6 +180,18 @@ This changelog is backfilled from git history and will be maintained going forwa
   implementation slices. This documentation introduces no persistence,
   pricing, staffing, proposal, BEO, payment, reservation, role, tenant, or
   provider capability by itself.
+- Added an exact Conversation-arrival accessibility acceptance matrix and
+  connected Firebase regression for 200% and 400% responsive reflow proxies.
+  The resolved Messaging Station is now checked at 640px and 320px for page
+  and key-surface horizontal overflow, composer availability, and axe
+  violations, with screenshots retained for visual review. The matrix keeps
+  these local automated checks separate from real browser zoom, screen-reader,
+  switch-control, hosted, production, and human acceptance.
+- Added an executable Package Workspace acceptance matrix that maps each MVP
+  criterion to source authority, expected UI surface, minimum local proof, and
+  still-open hosted-role, production-data, assistive-technology, or human
+  gates. The matrix creates no runtime or readiness authority and keeps the
+  deferred comparison and eligibility contracts explicit.
 
 ### Fixed
 - Replaced a literal Stripe-secret-shaped value in the Steward Difficult
@@ -191,27 +210,111 @@ This changelog is backfilled from git history and will be maintained going forwa
   view**, and suppress only the duplicate lower-body rationale. No guest count,
   pricing, staffing, package, menu, event, draft, save, reservation,
   availability, role, tenant, or provider authority changed.
-- Replaced raw catalog/provider errors in the quote-builder journey with a
-  scoped recovery notice near the start of the draft. Staff can keep outlining
-  event and client details while QuotePilot names the package, menu, and pricing
-  limits, confirms that the failed read saved and repriced nothing, and offers
-  one **Try catalog again** action. The fully blocked catalog gate uses the same
-  safe language in both active application graphs without exposing Firebase
-  error text or weakening catalog and pricing authority.
-- Kept the CI checkout credential-safety contract cardinality-independent after
-  Product Truth Observability added an advisory job. The test still requires
-  every checkout step to disable persisted credentials, but no longer fails
-  merely because another equally protected checkout is added.
-- Unified Ambient **Now**, **Opportunities**, and **Events** on one shared,
-  outcome-led recovery primitive. Failed first reads now suppress raw provider
-  text and duplicated evidence warnings, state what did not change, and offer
-  one primary retry plus one productive continuation. Opportunities keeps
-  source detail available behind **About this view**; Now no longer fractures
-  into implicit side-by-side columns at phone width. Events now leads with the
-  recovery instead of repeating a competing read-unavailable panel and header
-  refresh; technical read context remains available behind **About this view**.
-  Events retains its completed-empty handoff, and missing exact event links
-  still recover without silently substituting another event.
+- Kept shared desktop context inspectors inside the visible viewport when their
+  invoking object sits near the left or right edge. Current Event-date browser
+  proof found a 432px inspector beginning at x = -84.6px on a 1440px viewport,
+  clipping its title, arrival context, saved value, dependencies, and footer.
+  The shared anchor calculation now clamps both start- and end-aligned offsets
+  to a 16px viewport inset while preserving mobile bottom-sheet behavior,
+  focus restoration, and the invoking-object relationship. No event, draft,
+  save, reservation, availability, role, tenant, or provider authority changed.
+- Hardened the shared `ContextSurface` accessibility contract. Its scroll body
+  is now a named focusable region without duplicated `details` wording, and an
+  opt-in native **Why this view** disclosure participates in the modal focus
+  trap while preserving the exact opportunity and outcome controls. The shared
+  primitive changes presentation and focus only; it grants no quote, event,
+  payment, proposal, message, role, tenant, or provider authority.
+- Reduced the Selection inspector's first-viewport scroll burden after current
+  390px and 1440px route measurements confirmed that expanded arrival
+  methodology consumed most of the usable evidence region before the first
+  saved quantity-aware object. The exact opportunity stays visible while the
+  reason and consequence remain available behind native **Why this view**.
+  The complete add-on, rental, bar, and service evidence; reversible unsaved
+  previews; dependencies; counterfactuals; confidence; provenance; and
+  advisory boundary remain available. No selection, catalog, pricing,
+  scenario, draft, save, reservation, staffing, role, tenant, or provider
+  authority changed.
+- Reduced the Package inspector's first-viewport scroll burden after current
+  390px and 1440px route measurements confirmed that repeated arrival
+  methodology cut off recorded inclusions on mobile and deferred dependency
+  context. The exact opportunity remains visible, while the repeated reason
+  and consequence move behind native **Why this view** and the duplicate
+  lower-body rationale is suppressed only in the compact context. Saved
+  package identity, catalog-match state, recorded menu/add-on/rental
+  inclusions, replacement choices, dependencies, counterfactual, provenance,
+  advisory boundary, and draft-only review handoff remain available. No
+  package, menu, catalog, pricing, availability, draft, save, role, tenant, or
+  provider authority changed.
+- Reduced the Menu inspector's first-viewport scroll burden after current
+  390px and 1440px route measurements confirmed that repeated arrival
+  methodology cut off the saved order and pushed dependency context below the
+  usable viewport. The exact opportunity remains visible, while the repeated
+  reason and consequence move behind native **Why this view** and the duplicate
+  lower-body rationale is suppressed only in the compact context. Saved item
+  identity, order, quantities, package-inclusion labels, catalog-match state,
+  dependencies, counterfactual, provenance, advisory boundary, and any
+  draft-only replacement or reorder controls remain available. No menu,
+  catalog, package, pricing, availability, draft, save, role, tenant, or
+  provider authority changed.
+- Reduced the Staffing inspector's first-viewport scroll burden after current
+  390px and 1440px route measurements confirmed the same repeated-arrival
+  defect. The exact opportunity remains visible, while the repeated staffing
+  rationale and consequence move behind native **Why this view** and the
+  duplicate lower-body rationale is suppressed only in the compact context.
+  The saved staffing state, house-guide comparison, dependencies, explicit
+  counterfactual, provenance, advisory boundary, and persistent Use/Keep
+  outcomes remain available. No staffing recommendation, pricing, availability,
+  assignment, schedule, BEO, role, tenant, or operational authority changed.
+- Reduced the Pricing inspector's first-viewport scroll burden using the same
+  measured progressive-disclosure contract already established for other long
+  evidence surfaces. The exact opportunity remains visible, while the repeated
+  reason and consequence move behind native **Why this view** and the duplicate
+  lower-body reason is suppressed only in this compact context. At 390px the
+  usable evidence region increased from 324px to 473px; at 1440px it increased
+  from 288px to 422px, with the saved total and complete quote-amount breakdown
+  visible without horizontal overflow. Pricing calculations, previews, saved
+  quote authority, cost visibility, roles, tenants, and provider boundaries are
+  unchanged.
+- Repaired the connected Payment and Proposal administration arrivals. Both
+  handoffs now use a canonical quote-scoped browser-history contract instead
+  of transient route state, preserve the originating semantic object as
+  **Payment** or **Proposal**, and render **Finding …** until a completed Quote
+  History read contains the exact quote and **Quote administration** receives
+  focus. The focused destination suppresses the adjacent saved-quote,
+  commercial-dependency, Decision Debt, and general Ambient panels so the
+  promised controls occupy the first useful viewport. A connected Firebase
+  emulator regression holds the exact read for five seconds at 390px, verifies
+  pending versus ready state, exact-row filtering, focus, and horizontal
+  containment, then captures the resolved 1440px destination. Back now returns
+  to the exact Living Opportunity without leaking administration state;
+  Forward and Reload restore the canonical Payment or Proposal arrival and
+  exact one-row destination. No payment,
+  proposal, delivery, lifecycle, role, tenant, pricing, or provider authority
+  changed.
+- Repaired the connected Living Opportunity-to-Messages arrival. A successful,
+  completed quote-history read now supplies a bounded fresh observation while
+  refresh-in-progress and retained-after-error snapshots remain stale or
+  unknown. The quote-store's untouched default `followUp.stage = "new"` shell
+  no longer masquerades as scheduled work and steal the Conversation action;
+  genuinely recorded follow-ups retain their priority. General Conversation
+  arrivals now preserve a quote-scoped communication object through the
+  canonical history-state contract, render **Finding Conversation** until the
+  exact callable body load completes, and become **Conversation ready** only
+  after the exact event heading is focused. A connected Firebase emulator test
+  holds every matching body request to cover duplicate in-flight reads at
+  390px and verifies the resolved 1440px layout without changing message-send,
+  read, delivery, workflow, provider, role, or tenant authority.
+- Reduced Payment, Proposal, and Conversation inspector scroll burden without weakening their
+  evidence boundaries. The exact opportunity remains visible, while repeated
+  entry reason/consequence copy now sits behind a native **Why this view**
+  disclosure and its duplicate lower-body rows are visually suppressed only in
+  that compact context. The current payment stages, proposal/customer state,
+  five conversation evidence rails, and persistent next actions therefore
+  receive more of the first viewport at 390 and 1440 pixels. Conversation's
+  usable evidence region increased from 370px to 473px on mobile and from 315px
+  to 430px on desktop. The disclosure is keyboard-operable, participates in the
+  dialog focus trap, and leaves message, payment, delivery, pricing, proposal,
+  workflow, and provider authority unchanged.
 - Corrected proposal-completeness semantics across Living Opportunity,
   Opportunities, Event Workspace, Decide cards, and deterministic Pilot.
   Customer phone is now a recommended contact enhancement rather than a
@@ -242,6 +345,39 @@ This changelog is backfilled from git history and will be maintained going forwa
   save path and server checks remain unchanged. This is source/local browser
   evidence only; it does not establish hosted save authority or human
   acceptance.
+- Repaired accepted-opportunity Payment and Proposal handoffs. Their inspectors
+  now continue to the existing role-safe **Quote administration** surface with
+  the exact quote retained, the administration disclosure opened, and the
+  table narrowed to that record instead of dropping staff into an ambiguous
+  general Opportunities list. The same-quote detail-to-administration
+  transition reloads correctly, and the general Ambient stream stays out of
+  the focused arrival so asynchronous content cannot move the promised
+  controls away. The accepted opportunity also no longer pairs a staffing
+  concern with the contradictory **No action required** label. These changes
+  navigate and clarify only; they do not request payment, send a proposal,
+  change lifecycle state, or establish provider evidence.
+- Strengthened the same Payment and Proposal handoffs for keyboard and
+  assistive-technology use. Their focus-contained context dialogs now expose
+  the scrollable details as named regions, retain visible focus on the close,
+  details, and continuation controls, restore focus on Escape, and move focus
+  to the exact open **Quote administration** disclosure after continuation.
+  Focused component and real-route browser checks cover the mobile Payment and
+  desktop Proposal paths without claiming full assistive-technology, hosted,
+  or human acceptance.
+- Replaced raw catalog/provider errors in the quote-builder journey with a
+  scoped recovery notice near the start of the draft. Staff can keep outlining
+  event and client details while QuotePilot names the package, menu, and pricing
+  limits, confirms that the failed read saved and repriced nothing, and offers
+  one **Try catalog again** action. The fully blocked catalog gate uses the same
+  safe language in both active application graphs without exposing Firebase
+  error text or weakening catalog and pricing authority.
+- Kept the CI checkout credential-safety contract cardinality-independent after
+  Product Truth Observability added an advisory job. The test still requires
+  every checkout step to disable persisted credentials, but no longer fails
+  merely because another equally protected checkout is added.
+- Unified Ambient **Now**, **Opportunities**, and **Events** on one shared,
+  outcome-led recovery primitive. Failed first reads now suppress raw provider
+  text and duplicated evidence warnings, state what did not change, and offer
   one primary retry plus one productive continuation. Opportunities keeps
   source detail available behind **About this view**; Now no longer fractures
   into implicit side-by-side columns at phone width. Events now leads with the
@@ -292,20 +428,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   submission controls before the customer chooses a response; recorded prior
   decisions still reload truthfully, and the existing exact-revision consent,
   reconciliation, payment, and booking boundaries remain unchanged.
-- Kept shared desktop context inspectors inside the visible viewport when their
-  invoking object sits near the left or right edge. Current Event-date browser
-  proof found a 432px inspector beginning at x = -84.6px on a 1440px viewport,
-  clipping its title, arrival context, saved value, dependencies, and footer.
-  The shared anchor calculation now clamps both start- and end-aligned offsets
-  to a 16px viewport inset while preserving mobile bottom-sheet behavior,
-  focus restoration, and the invoking-object relationship. No event, draft,
-  save, reservation, availability, role, tenant, or provider authority changed.
-- Hardened the shared `ContextSurface` accessibility contract. Its scroll body
-  is now a named focusable region without duplicated `details` wording, and an
-  opt-in native **Why this view** disclosure participates in the modal focus
-  trap while preserving the exact opportunity and outcome controls. The shared
-  primitive changes presentation and focus only; it grants no quote, event,
-  payment, proposal, message, role, tenant, or provider authority.
+- Hardened session diagnostics into a privacy-bounded runtime observability
+  path. Browser diagnostics now strip query/hash fragments from URLs, redact
+  email/phone/token-like values, hash user identifiers and stack traces, keep
+  redaction stable across repeated reads, and record a route-resolution event
+  without treating local diagnostic capture as hosted or production proof.
 - Preserved a supplied normalized pricing snapshot when local quote persistence
   attaches newly required private commercial-cost evidence. The enrichment no
   longer replaces the snapshot's exact totals or authority label; focused and
@@ -325,25 +452,29 @@ This changelog is backfilled from git history and will be maintained going forwa
   actions fully inside the visible viewport.
 
 ### Added
-- Added the first source/local attendance architecture slice: a pure
-  `attendance-state-v1` compatibility normalizer with exhaustive legacy,
-  planning-range, final-count due, source-backed response, changed-count review,
-  receipt-backed apply, actual-attendance, malformed-envelope, and immutability
-  tests. It keeps `event.guests` as the exact commercial basis, rejects evidence
-  that cannot support its claimed state, requires applied source and revision
-  evidence to match the quote's exact current revision, returns a frozen read
-  model, and performs no I/O. It remains unconnected to a committed user surface
-  or attendance persistence. No capability or authority delta is claimed.
-- Added an accepted, phased attendance-state architecture and mixed-evidence
-  role journey for the gap between CREATE's draft-only uncertain guest counts,
-  the exact saved `event.guests` commercial basis, Decision Debt's **Final
-  guest count** timing, Commercial Change receipts, Kitchen BEO freshness, and
-  post-event actual attendance. The decision keeps the current exact pricing
-  input unchanged, requires source-backed confirmation and reviewed true-up,
-  places actual attendance under closeout authority, and defines six bounded
-  implementation slices. This documentation introduces no persistence,
-  pricing, staffing, proposal, BEO, payment, reservation, role, tenant, or
-  provider capability by itself.
+- Added the adapted repository operating-system audit and Development Evidence
+  Compiler. The new `npm run evidence:task` command writes ignored local
+  development-evidence JSON records that separate source, local, CI, hosted,
+  provider, production, human, and outcome proof without replacing
+  `plan:task --phase complete` or creating release authority.
+- Added `npm run evidence:index`, a read-only local observability command that
+  summarizes ignored development-evidence records, repeated residual risks,
+  validation outcomes, proof-class coverage, missing planner/human decision
+  fields, and next-action trends before new process is promoted.
+- Added a QuietPilot architecture adoption report that compares repo topology,
+  proof-boundary governance, route/API inventory, task outcome contracts, and
+  package-boundary patterns against QuoteFlow. The report recommends adopting
+  selected governance and contract practices while preserving QuoteFlow's
+  Firebase/Vite authority and no-orphan-capability gate. Related design
+  adoption receipts now use portable repository placeholders instead of
+  workstation-specific absolute paths; their recorded statuses and hashes are
+  otherwise unchanged.
+- Added the cloud runner bootstrap and handoff contract to the orchestration
+  blueprint/runbook and linked it from setup docs. Hosted agents now have a
+  single expected path for `npm ci`, env verification, machine-readable
+  planner packets, emitted validations, completion timestamps, evidence
+  separation, and residual-risk handoff without weakening quality gates or
+  committing provider secrets.
 - Added a discoverable read-only Difficult Question Desk panel to the authorized
   staff Quote Workspace. Its live state truthfully reports that Steward is not
   connected to a reviewed runtime/provider, renders no model prose, labels that

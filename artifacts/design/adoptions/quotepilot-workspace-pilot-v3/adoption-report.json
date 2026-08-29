@@ -97,7 +97,7 @@
   },
   "authorities": {
     "duplicateAuthorities": [],
-    "root": "/home/administrator/projects_new/quoteflow",
+    "root": "<repo-root>",
     "sources": [
       {
         "authorityClass": "repository-governance",
@@ -11930,11 +11930,11 @@
     "status": "HEALTHY"
   },
   "errors": [
-    "governance receipt 1: no governed review-policy root contains /home/administrator/projects_new/quoteflow/artifacts/design/baseline-decisions/quotepilot-hold-2026-08-21.json"
+    "governance receipt 1: no governed review-policy root contains <repo-root>/artifacts/design/baseline-decisions/quotepilot-hold-2026-08-21.json"
   ],
   "governanceConstraints": {
     "errors": [
-      "governance receipt 1: no governed review-policy root contains /home/administrator/projects_new/quoteflow/artifacts/design/baseline-decisions/quotepilot-hold-2026-08-21.json"
+      "governance receipt 1: no governed review-policy root contains <repo-root>/artifacts/design/baseline-decisions/quotepilot-hold-2026-08-21.json"
     ],
     "receipts": [],
     "required": true,
@@ -12107,7 +12107,7 @@
   "memoryRequired": true,
   "profile": "quotepilot",
   "repairPerformed": false,
-  "repositoryRoot": "/home/administrator/projects_new/quoteflow",
+  "repositoryRoot": "<repo-root>",
   "schemaVersion": 1,
   "sources": [
     {
