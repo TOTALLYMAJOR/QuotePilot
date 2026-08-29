@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 02:21:11 CDT
+Last updated: 2026-08-29 02:49:23 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Replaced the vulnerable Lighthouse 12/Puppeteer/`extract-zip` development
+  chain under the latest `@lhci/cli` with a narrowly pinned Lighthouse 13.4.1
+  override. The real Core Web Vitals gate passes unchanged, `extract-zip` is no
+  longer installed, and the complete root dependency audit reports zero known
+  vulnerabilities instead of six high-severity findings.
 - Hardened the governed release-candidate preflight so GitHub CI verification
   resolves authentication from `GITHUB_TOKEN`, then `GH_TOKEN`, then the
   authenticated local GitHub CLI. If none is available, it now stops with a

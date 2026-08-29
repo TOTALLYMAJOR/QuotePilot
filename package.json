@@ -97,6 +97,12 @@
     "vitest": "^4.0.18"
   },
   "overrides": {
+    "@lhci/cli": {
+      "lighthouse": "13.4.1"
+    },
+    "@lhci/utils": {
+      "lighthouse": "13.4.1"
+    },
     "tmp": "^0.2.6",
     "uuid": "^11.1.1"
   }

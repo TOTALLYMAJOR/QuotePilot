@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-29 01:51:51 CDT
+Last updated: 2026-08-29 02:49:23 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -98,6 +98,14 @@ the strict `127.0.0.1:4173` endpoint. Readiness detection matches Vite's stable
 `Local` label so ANSI terminal formatting cannot delay the audit. The runner
 sets `TMPDIR`, `TMP`, and `TEMP` to Linux `/tmp` so Chrome profiles remain OS
 scratch artifacts rather than repository or runner-workspace state.
+
+The latest `@lhci/cli` release still pins vulnerable Lighthouse 12.6.1. The
+root dependency policy therefore overrides only the Lighthouse copies used by
+`@lhci/cli` and `@lhci/utils` to 13.4.1. This selects Puppeteer 25.9.0 and
+removes the vulnerable `extract-zip` chain while preserving the existing LHCI
+configuration and thresholds. Treat this as a reviewed major-tool
+compatibility exception until LHCI publishes a release with a non-vulnerable
+Lighthouse dependency; exact local and CI CWV gates remain mandatory.
 
 Current enforced assertions:
 - Performance category score minimum

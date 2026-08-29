@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 02:34:41 CDT
+Last updated: 2026-08-29 02:49:23 CDT
 
 ## Current Production Release
 
@@ -76,11 +76,19 @@ Last updated: 2026-08-29 02:34:41 CDT
   insertions and 1,030 deletions (net +11,283). The capability and holdback
   inventory is recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md`.
 - The local high-risk release profile plus Core Web Vitals passes after the
-  documentation gate correctly required timestamp reconciliation: 4,091 unit
+  documentation gate correctly required timestamp reconciliation: 4,092 unit
   tests pass with 78 skipped, 127 Truth Loop tests pass, the 503-module build
   passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
   auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
   Lighthouse/CWV pass.
+- The six high-severity root development-tool findings are resolved without
+  the breaking `@lhci/cli` downgrade proposed by `npm audit fix --force`.
+  Because `@lhci/cli` 0.15.1 remains the latest release and pins vulnerable
+  Lighthouse 12.6.1, the root lock now narrowly overrides its Lighthouse copy
+  to 13.4.1. That selects Puppeteer 25.9.0, removes `extract-zip`, passes the
+  unchanged real CWV gate, and leaves `npm audit` at zero findings. The major
+  tool-compatibility boundary is recorded in `docs/TECH_EXCEPTIONS.md` and
+  still requires exact remote CI before release use.
 - Release PR #111 publishes `release/v0.16.0`. Exact candidate
   `7f6d40bec472a82ce6e0b9ead063410a23ca154b` passed CI Quality run
   `33240762183`, including all eight required jobs, the exact Ambient

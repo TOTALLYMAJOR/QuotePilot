@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 02:05:00 CDT
+Last updated: 2026-08-29 02:49:23 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -268,11 +268,6 @@ replace their safety conditions.
 
 ## P0 - Release and Security Controls
 
-- Resolve the six remaining high-severity development-tool audit findings in
-  the current Lighthouse CI/Puppeteer/`extract-zip` chain through a reviewed
-  upstream upgrade or replacement. Root-app, default-Functions, and Connect-
-  Functions production-only audits are clean. Do not use `npm audit fix
-  --force`: its current proposal is a breaking Lighthouse CI downgrade.
 - Migrate the Firebase production workflow from deprecated `FIREBASE_TOKEN`
   authentication to Application Default Credentials or GitHub workload identity
   federation without committing a service-account key.
