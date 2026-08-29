@@ -11,6 +11,10 @@ Each major topic has one source of truth. Other docs should link to that source 
 - `PROJECT_STATUS.md`: current operational state only (health, active risks, next actions).
 - `DEV_TASKS.md`: prioritized backlog only (open work, grouped by priority).
 - `CHANGELOG.md`: historical record of shipped/merged changes.
+- `PROJECT_STATE.md`: human-readable reconciliation entry point and the single
+  next proof event; it links to, rather than replaces, the authorities above.
+- `.project/state.json`: machine-readable lifecycle, evidence, dependency,
+  blocker, and proof-event ledger for representative cross-functional cohorts.
 
 ## Update Triggers
 - Code or behavior changes: update `CHANGELOG.md`.
@@ -38,7 +42,7 @@ it.
 
 | Change Type | Trigger Examples | Required Canonical Doc Update |
 |---|---|---|
-| code | `src/`, `functions/`, `e2e/`, runtime behavior files | `CHANGELOG.md` |
+| code | `src/`, `functions/`, `e2e/`, `truthloop/`, `evidence/`, runtime behavior files | `CHANGELOG.md` |
 | backend capability | `functions/`, rules/indexes, data/provider clients, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
 | process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
@@ -85,6 +89,9 @@ as separate claims.
 | Current delivery health and risk posture | `PROJECT_STATUS.md` | Includes what is working now and current blockers. |
 | Priority backlog and sequencing | `DEV_TASKS.md` | Open items only; no progress narrative. |
 | Historical shipped changes | `CHANGELOG.md` | Immutable history by date/version/merge period. |
+| Cross-source state reconciliation and single next proof event | `PROJECT_STATE.md` and `.project/state.json` | Thin human and machine views. They must reference the canonical capability, operational, backlog, and history sources rather than copying them. |
+| Claim/evidence verdicts and executive reconciliation | `docs/project/PROOF.md` and `docs/project/EXECUTIVE_STATE.md` | Missing evidence is `UNVERIFIED`; no evidence class substitutes for another. |
+| Decision, exploration, capability, and blocker compatibility indexes | `docs/project/` | Index-only views. Feature Matrix, ADRs, Project Status, and Dev Tasks retain authority. |
 | Feature inventory, function served, and implementation cohorts | `docs/FEATURE_MATRIX.md` | Current source mapping plus a Git-grounded chronology index. Detailed change history remains in `CHANGELOG.md`; operational/deployment truth remains in `PROJECT_STATUS.md`. |
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
@@ -103,12 +110,23 @@ as separate claims.
 | Bounded acceptance evidence matrices | `docs/acceptance/` | Criterion-to-proof ladders for named journeys or workspaces. They must label source, local automated, local connected, hosted, production, assistive-technology, and human evidence separately and may not replace capability or operational truth. |
 | Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | The clean-main baseline lives in `docs/performance/bundle-budget.json`; any active temporary absolute ceilings live separately in `docs/performance/bundle-exception.json` and must match that baseline exactly. |
 | Backend-to-interface capability contracts | `docs/capability-surfacing-contracts.json` | Machine-checked structural traceability; current release evidence remains in `PROJECT_STATUS.md`. |
+| Commercial Truth Loop rule/evidence contract shared by both tiers | `docs/truthloop-evidence-contract.json` | Machine-checked single definition of rules, required evidence, availability states, and reason codes. The JavaScript exporter and the Python reconciler both read it; a cross-tier test fails if either drifts from it. |
+| Commercial Truth Loop reconciliation tier | `docs/COMMERCIAL_TRUTH_LOOP_ADR.md` | Authority boundary and binding decisions for the read-only Python tier. Rule catalog, evidence-bundle contract, and metrics live in `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`; package usage lives in `truthloop/README.md`; operational truth remains in `PROJECT_STATUS.md`. |
 | Stripe Connect architecture and staged program | `docs/STRIPE_CONNECT_PROGRAM.md` | Fixed commercial model, isolation boundaries, delivery sequence, and Sandbox stopping gate; operational truth remains in `PROJECT_STATUS.md`. |
 
 ## Redundancy Rules
 - Do not duplicate full status snapshots across multiple docs.
 - Do not duplicate command inventories when one canonical location exists.
 - Prefer links to canonical docs instead of copied sections.
+
+## Project-State Drift Gate
+
+`npm run check:project-state` validates the machine ledger, portfolio record,
+repository evidence paths, lifecycle vocabulary, verification freshness,
+dependency and blocker references, and exactly one next proof event. It also
+checks that compatibility indexes point back to their existing authorities.
+The check runs in `lane:quick`. A pass proves control-plane consistency only,
+not runtime, provider, production, human, usage, or commercial behavior.
 
 ## Security Scan Note
 Documentation secret scanning blocks real token-like values and allows explicit placeholder values such as `<your_secret_here>`.

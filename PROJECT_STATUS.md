@@ -21,6 +21,44 @@ Last updated: 2026-08-28 17:25:14 CDT
   production-data correctness, provider delivery, recipient acknowledgement,
   or human acceptance.
 
+## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
+
+- The chain is complete in source: `authoritative Firestore -> reader ->
+  exporter -> canonical bundle -> reconciler -> verdict + reason`. The reader
+  (`evidence/src/firestoreReader.mjs`) landed with 19 always-on unit tests and
+  a disposable `demo-*` emulator lane
+  (`npm run test:truthloop-export:emulator`) that exercises the whole chain
+  against a real Firestore.
+- **It has never run against production data.** The emulator lane is local
+  evidence only: not hosted verification, not provider evidence, not a
+  production data path, and not human acceptance. Running it against a real
+  tenant is a separate, separately authorized step.
+- **No record can reach `fullyReconciled` yet**, and the coverage report says
+  so: 8 of 11 rules can reach a verdict. Three sections still have no producer
+  — processor payout settlement (`integration`, blocked behind the Connect
+  stopping point), declared processor fee schedules (`business_policy`, the
+  settings field does not exist), and post-event consumption (`engineering`,
+  no capture surface). Run `npm run truthloop:coverage` for the current split.
+- Containment is explicit-scope, not rule-enforced. The reader runs on the
+  Admin SDK, which bypasses Firestore rules, so its guarantees come from a
+  required organization argument, reads rooted at that organization, the
+  absence of any `collectionGroup` query, an abort on any cross-tenant
+  document, and a field allowlist that withholds portal keys, buyer tokens,
+  and provider secrets. Those properties are asserted by tests and by the
+  emulator lane against a populated second tenant; they are not enforced by
+  Firestore itself.
+- Active risk: the loop's narratives read as authoritative. Findings carry
+  `authority: "observation_only"` and must not be presented to a customer or
+  used as a repricing, approval, or accounting authority. The kill criteria in
+  `docs/COMMERCIAL_TRUTH_LOOP_ADR.md` are the disable trigger.
+- Active risk: the payout producer remains one authorized settlement source
+  away from emitting provider evidence. It refuses any source not explicitly
+  marked authorized and production passes none, but that is a code guarantee
+  until the Connect program proceeds.
+- Known noise before a first real run: `margin_category_omission` will fire on
+  every record carrying delivery/travel revenue. That is correct but
+  undecided — see the travel/margin decision in `DEV_TASKS.md`.
+
 ## Pending Production Completion
 
 - Product Truth Observability is implemented as a read-only source/local
@@ -100,7 +138,8 @@ Last updated: 2026-08-28 17:25:14 CDT
 
 - The owner authorized exact-candidate publication and coordinated Firebase
   and Vercel production deployment for live testing after the required gates.
-  Vercel is complete; Firebase remains pending as recorded above. Provider
+  Exact `v0.15.0` reached both production targets; tenant activation remains
+  pending on the fail-closed provisioning precondition recorded above. Provider
   acceptance, signed delivery evidence, recipient acknowledgement, and human
   acceptance remain separate post-deployment tests.
 - The Stripe Connect program has begun with a source-only organization
@@ -256,12 +295,14 @@ Last updated: 2026-08-28 17:25:14 CDT
   request, connected account, Account Link, deployment, hosted result, or human
   acceptance exists.
 
-- Current `main` is tagged `v0.8.1` at
+### Historical v0.8.1 checkpoint
+
+- At that checkpoint, `main` was tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
   presentation in both production workflow build environments. The live
   deployment receipts below still identify `v0.7.0`, so this source state is
   not evidence that `v0.8.1` was deployed or accepted.
-- The work after `v0.7.0` is the proposed `v0.8.1` source candidate. This
+- The work after `v0.7.0` was the proposed `v0.8.1` source candidate. That
   source snapshot does not itself establish a published candidate head, release
   tag, exact-candidate CI run, governed deployment receipt, or production
   acceptance; each requires its separate Git, CI, provider, or human evidence.
@@ -548,7 +589,7 @@ Authenticated hosted use and human acceptance remain separate for the listed
 staff capabilities even where source, local/emulator, CI, deployment, and public
 route evidence are complete.
 
-### Implemented in source, not deployed
+### Deployed configuration without provider acceptance
 
 - The owner-SMS rail now has a deployment-owned
   `NOTIFICATIONS_SMS_PROVIDER=none|twilio|pingram` choice, a provider-neutral
@@ -560,14 +601,14 @@ route evidence are complete.
   provider selection, with no browser or callable clear path; provider
   acceptance is not delivery, and claimed or indeterminate attempts are not
   automatically resent.
-- No Pingram Functions deployment, endpoint registration, provider call, or
-  live SMS has occurred. Production remains
-  `NOTIFICATIONS_SMS_PROVIDER=none`. Promotion requires `PINGRAM_API_KEY`,
-  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` in Firebase Secret
-  Manager, one exact approved US/CA/EU Pingram origin, a new lowercase
-  `PINGRAM_CONFIGURATION_GENERATION`, a server-owned E.164
-  owner destination, explicit consent, sender/A2P approval, exact
-  signed-webhook registration, and controlled hosted/provider UAT.
+- Exact `v0.15.0` deployed the Pingram-capable Functions and selected
+  `NOTIFICATIONS_SMS_PROVIDER=pingram` with generation
+  `pingram-2026-08-14-a`. The deployment receipt does not establish endpoint
+  registration, a provider-accepted call, carrier delivery, live SMS, or
+  recipient-device receipt. Controlled hosted/provider UAT still requires the
+  bound secrets, approved origin and sender/compliance posture, server-owned
+  E.164 destination, explicit consent, signed-webhook registration, and exact
+  evidence separation.
 
 ### Deployed but intentionally dormant
 
@@ -577,7 +618,7 @@ route evidence are complete.
 | Commercial Change enforcement | global `false`; all five observed tenant gates off | Simulation and evidence review remain usable. Enforcement requires authenticated admin-role acceptance and a separately authorized exact tenant gate. |
 | Revenue Autopilot preparation | `REVENUE_AUTOPILOT_ENABLED=false`; no observed tenant policies | The complete local authority matrix passes, but an authenticated hosted admin acceptance is still required before the global preparation-only gate is promoted. |
 | Revenue Autopilot outbound sends | `REVENUE_AUTOPILOT_SENDS_ENABLED=false` | The restricted Resend key can send but cannot independently verify webhook registration. Signed provider webhook, delivery/bounce/complaint, and recipient evidence remain open. |
-| SMS | `NOTIFICATIONS_SMS_PROVIDER=none` | Current production is off. Twilio still lacks approved US A2P registration, and the Pingram source slice has not been deployed or provider-tested. No provider may be selected until its sender/compliance, consent, secret, endpoint, and controlled-UAT gates pass. |
+| SMS | `NOTIFICATIONS_SMS_PROVIDER=pingram`; generation `pingram-2026-08-14-a` | The bounded Pingram rail is deployed, but endpoint registration, provider acceptance, carrier delivery, opt-out handling in production, recipient-device receipt, and human acceptance remain unverified. |
 | CRM synchronization | disabled | No reviewed server-authorized connector with provider acceptance is deployed. |
 
 ## Current Validation Evidence
@@ -634,7 +675,8 @@ route evidence are complete.
   immutable-revision derivation, DST/time/count validation, idempotent replay,
   revision conflicts, overlap exclusion, half-open adjacency, atomic rollback,
   and non-mutation of quote, portal, payment, booking, and BEO evidence. This is
-  local/emulator evidence only; the feature is not deployed or tenant-enabled.
+  local/emulator evidence only. Exact `v0.15.0` deployed the default-off
+  authority, but it is not tenant-enabled for organization `250`.
 - The local default-off Ambient slice has focused contract/component proof. Its
   AIUI-19 Clients slice passes 15 of 15 client-model tests and 8 of 8 component
   tests (23 of 23 combined), 18 of 18 legacy Customer Directory/Customer 360
@@ -746,10 +788,13 @@ route evidence are complete.
     before the March 2027 platform removal can be called operationally closed.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
-12. Operational staffing is source-only and independently default-off. Do not
-    bind or promote its presentation, server, or tenant gates until exact hosted
-    admin/sales/customer denial, responsive accessibility, rollback, and one
-    explicitly approved tenant acceptance are recorded.
+12. Operational staffing code and authority are deployed in exact `v0.15.0`
+    but remain independently default-off and unavailable to tenant `250`; the
+    protected activation run failed closed because the canonical settings
+    document is absent. Do not bypass provisioning or enable its tenant gate
+    until the reviewed migration path, exact hosted admin/sales/customer denial,
+    responsive accessibility, rollback, and one explicitly approved tenant
+    acceptance are recorded.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
     all-positive release checklist. Provider-backed buyer, delivery, payment,
     contract-conversion, and authoritative-staffing items need a separately

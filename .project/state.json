@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "lastReconciled": "2026-08-25",
+  "reconciliationHead": "bc495c8c948d440b12363d5da34209a11ff151fd",
+  "project": {
+    "id": "quote-pilot",
+    "name": "QuotePilot by MBMApps",
+    "repository": "https://github.com/TOTALLYMAJOR/quoteflow",
+    "primaryPurpose": "Turn catering demand into governed quotes, customer decisions, payments, and event operations without blurring evidence boundaries.",
+    "archetype": "commercial_saas",
+    "primaryActors": ["catering owner", "administrator", "sales operator", "event operator", "customer"],
+    "economicBuyer": "catering business owner or operating administrator",
+    "stage": "v0.15.0 deployed to both governed production targets with incomplete production acceptance"
+  },
+  "canonicalSources": {
+    "capabilities": "docs/FEATURE_MATRIX.md",
+    "operationalState": "PROJECT_STATUS.md",
+    "backlog": "DEV_TASKS.md",
+    "history": "CHANGELOG.md",
+    "userTasks": "docs/USER_MANUAL.md",
+    "documentationPolicy": "docs/DOC_SYSTEM.md",
+    "capabilityTraceability": "docs/capability-surfacing-contracts.json"
+  },
+  "goals": [
+    {"id": "goal-technical", "kind": "technical", "statement": "Keep pricing, tenancy, identity, and provider effects server-authoritative and fail closed."},
+    {"id": "goal-user", "kind": "user", "statement": "Let an operator move one event from inquiry through quote, decision, payment, and operational handoff with explicit state."},
+    {"id": "goal-operational", "kind": "operational", "statement": "Make release, provider, and acceptance evidence independently inspectable."},
+    {"id": "goal-commercial", "kind": "commercial", "statement": "Establish repeatable buyer activation, real usage, and revenue evidence; current proof is UNVERIFIED."}
+  ],
+  "capabilities": [
+    {
+      "id": "cap-authoritative-pricing",
+      "name": "Tenant catalog and authoritative pricing",
+      "description": "Tenant-scoped catalog, deterministic calculation, and server-owned quote totals.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "HIGH",
+      "evidence": [{"type": "source_register", "path": "docs/FEATURE_MATRIX.md", "status": "RECORDED", "verifiedAt": "2026-08-21", "note": "Feature inventory and production history identify deployed pricing authority."}],
+      "dependencies": ["int-firebase"],
+      "blockers": [],
+      "last_verified": "2026-08-21",
+      "owner_or_authority": "Firebase Functions and tenant catalog authority"
+    },
+    {
+      "id": "cap-quote-lifecycle",
+      "name": "Quote creation, revision, and readback",
+      "description": "Create, save, version, reopen, and export a tenant quote against an exact authoritative revision.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "HIGH",
+      "evidence": [{"type": "operational_record", "path": "PROJECT_STATUS.md", "status": "RECORDED", "verifiedAt": "2026-08-21", "note": "Production history records the quote system while the newest authenticated acceptance pass remains open."}],
+      "dependencies": ["cap-authoritative-pricing", "int-firebase"],
+      "blockers": ["block-authenticated-production-acceptance"],
+      "last_verified": "2026-08-21",
+      "owner_or_authority": "trusted quote callables and Firestore revision contracts"
+    },
+    {
+      "id": "cap-proposal-decision",
+      "name": "Proposal delivery and customer decision",
+      "description": "Revision-bound proposal output, exact portal issuance, and server-owned acceptance evidence.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "MEDIUM",
+      "evidence": [{"type": "source_register", "path": "docs/FEATURE_MATRIX.md", "status": "RECORDED", "verifiedAt": "2026-08-21", "note": "Source and prior deployment evidence exist; exact provider and recipient acceptance remain separate."}],
+      "dependencies": ["cap-quote-lifecycle", "int-resend"],
+      "blockers": ["block-authenticated-production-acceptance", "block-provider-acceptance"],
+      "last_verified": "2026-08-21",
+      "owner_or_authority": "proposal acceptance and delivery evidence callables"
+    },
+    {
+      "id": "cap-payment-rails",
+      "name": "Deposit and final-balance payment rails",
+      "description": "Separate Stripe checkout and webhook evidence for deposit and final balance.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "MEDIUM",
+      "evidence": [{"type": "operational_record", "path": "PROJECT_STATUS.md", "status": "RECORDED", "verifiedAt": "2026-08-21", "note": "Deployed rails are documented; coordinated hosted provider acceptance remains open."}],
+      "dependencies": ["int-stripe"],
+      "blockers": ["block-provider-acceptance"],
+      "last_verified": "2026-08-21",
+      "owner_or_authority": "Stripe webhook callables and server payment projections"
+    },
+    {
+      "id": "cap-event-operations",
+      "name": "Event workspace and BEO operations",
+      "description": "Role-safe event views, operational artifacts, and stale-after-revision behavior.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "MEDIUM",
+      "evidence": [{"type": "decision_record", "path": "docs/EVENT_WORKSPACE_ADR.md", "status": "ACCEPTED", "verifiedAt": "2026-08-21", "note": "Architecture and deployed cohorts exist; hosted canonical-data acceptance remains open."}],
+      "dependencies": ["cap-quote-lifecycle"],
+      "blockers": ["block-authenticated-production-acceptance"],
+      "last_verified": "2026-08-21",
+      "owner_or_authority": "event workspace selectors and BEO callables"
+    },
+    {
+      "id": "cap-operational-staffing",
+      "name": "Operational staffing authority",
+      "description": "Tenant-scoped staffing profiles, plans, assignments, invitations, and evidence-separated acknowledgements.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "HIGH",
+      "evidence": [{"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "DEPLOYED_DEFAULT_OFF", "verifiedAt": "2026-08-25", "note": "Exact v0.15.0 deployed the staffing authority; tenant 250 activation remains blocked because its required settings document is absent."}],
+      "dependencies": ["int-firebase", "int-resend"],
+      "blockers": ["block-tenant-250-provisioning"],
+      "last_verified": "2026-08-25",
+      "owner_or_authority": "operational staffing Firebase Functions"
+    },
+    {
+      "id": "cap-ambient-workspace",
+      "name": "Ambient workspace presentation",
+      "description": "Role-safe operational presentation, exact arrivals, and bounded Pilot interaction over existing authority.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "MEDIUM",
+      "evidence": [{"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "VERCEL_AND_FIREBASE_DEPLOYED", "verifiedAt": "2026-08-25", "note": "Exact v0.15.0 is recorded at Vercel and Firebase; authenticated and human acceptance are not."}],
+      "dependencies": ["cap-quote-lifecycle", "int-vercel"],
+      "blockers": ["block-authenticated-production-acceptance"],
+      "last_verified": "2026-08-25",
+      "owner_or_authority": "React workspace routes and existing server authorities"
+    },
+    {
+      "id": "cap-buyer-onboarding",
+      "name": "Buyer onboarding and paid workspace preparation",
+      "description": "Test-mode gated buyer invoice lifecycle and exact-email workspace activation contracts.",
+      "lifecycle_state": "TESTED",
+      "confidence": "MEDIUM",
+      "evidence": [{"type": "backlog_record", "path": "DEV_TASKS.md", "status": "HOSTED_ACCEPTANCE_PENDING", "verifiedAt": "2026-08-21", "note": "Local contracts exist; safe hosted acceptance is blocked on restricted credentials and provider checks."}],
+      "dependencies": ["int-stripe", "int-turnstile", "int-firebase"],
+      "blockers": ["block-buyer-safety"],
+      "last_verified": "2026-08-21",
+      "owner_or_authority": "buyer access Firebase Functions"
+    },
+    {
+      "id": "cap-stripe-connect",
+      "name": "Stripe Connect isolated control plane",
+      "description": "Source-only owner authority, receipt bridge, isolated infrastructure, and Sandbox adapter foundation.",
+      "lifecycle_state": "TESTED",
+      "confidence": "HIGH",
+      "evidence": [{"type": "program_record", "path": "docs/STRIPE_CONNECT_PROGRAM.md", "status": "SOURCE_ONLY", "verifiedAt": "2026-08-21", "note": "The isolated foundation is tested but unexported, uninstantiated, and provider disabled."}],
+      "dependencies": ["int-stripe", "int-firebase"],
+      "blockers": ["block-connect-hosted-sandbox"],
+      "last_verified": "2026-08-21",
+      "owner_or_authority": "separate connect codebase and provider-disabled staging program"
+    },
+    {
+      "id": "cap-steward",
+      "name": "Steward bounded decision compiler",
+      "description": "Private, policy-bounded, non-authoritative decision packet and shadow-evaluation foundation.",
+      "lifecycle_state": "TESTED",
+      "confidence": "HIGH",
+      "evidence": [{"type": "decision_record", "path": "docs/STEWARD_ADR.md", "status": "SOURCE_ONLY", "verifiedAt": "2026-08-25", "note": "Exact v0.15.0 carries the unavailable-state UI, while the compiler remains unimported, unexported, and without provider runtime or production authority."}],
+      "dependencies": [],
+      "blockers": ["block-steward-pilot-proof"],
+      "last_verified": "2026-08-25",
+      "owner_or_authority": "private Steward validation and consent contracts"
+    },
+    {
+      "id": "cap-project-state-control-plane",
+      "name": "Canonical state and evidence control plane",
+      "description": "Machine-readable lifecycle ledger, proof register, executive reconciliation, and deterministic drift check.",
+      "lifecycle_state": "TESTED",
+      "confidence": "HIGH",
+      "evidence": [
+        {"type": "source", "path": "scripts/check-project-state.mjs", "status": "IMPLEMENTED", "verifiedAt": "2026-08-24", "note": "Deterministic lifecycle, reference, freshness, and next-proof validation."},
+        {"type": "test", "path": "src/lib/__tests__/projectStateControlPlane.test.js", "status": "PASSED", "verifiedAt": "2026-08-24", "note": "Focused validator tests are required before this state may remain TESTED."}
+      ],
+      "dependencies": [],
+      "blockers": [],
+      "last_verified": "2026-08-24",
+      "owner_or_authority": "repository documentation governance"
+    }
+  ],
+  "journeys": [
+    {
+      "id": "journey-quote-to-operations",
+      "name": "Catering inquiry to operational handoff",
+      "actors": ["sales operator", "customer", "event operator"],
+      "steps": ["qualify demand", "create authoritative quote", "save exact revision", "issue proposal", "record customer decision", "collect payment evidence", "produce BEO and staffing handoff"],
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "MEDIUM",
+      "blockers": ["block-tenant-250-provisioning", "block-authenticated-production-acceptance", "block-provider-acceptance"]
+    },
+    {
+      "id": "journey-buyer-activation",
+      "name": "Buyer purchase to tenant activation",
+      "actors": ["economic buyer", "platform administrator"],
+      "steps": ["request access", "complete test invoice", "prepare workspace", "verify exact email", "activate owner", "configure pricing", "create first quote"],
+      "lifecycle_state": "TESTED",
+      "confidence": "LOW",
+      "blockers": ["block-buyer-safety", "block-commercial-evidence"]
+    }
+  ],
+  "decisions": [
+    {"id": "decision-server-authority", "status": "ACCEPTED", "statement": "Browser state never establishes pricing, tenancy, provider acceptance, settlement, or operational readiness.", "evidence": "docs/DOC_SYSTEM.md"},
+    {"id": "decision-exact-revision", "status": "ACCEPTED", "statement": "Commercial changes and customer decisions bind to exact saved revisions and immutable receipts.", "evidence": "docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md"},
+    {"id": "decision-ambient-arrival", "status": "ACCEPTED", "statement": "Ambient exact arrival uses a bounded semantic URL/history hybrid with destination focus proof.", "evidence": "docs/AMBIENT_WORKSPACE_ARRIVAL_ADR.md"},
+    {"id": "decision-connect-isolation", "status": "ACCEPTED", "statement": "Stripe Connect remains isolated, provider disabled, and unexported until its infrastructure and hosted evidence gates pass.", "evidence": "docs/STRIPE_CONNECT_PROGRAM.md"},
+    {"id": "decision-proof-boundaries", "status": "ACCEPTED", "statement": "Source, local tests, CI, deployment, provider outcomes, recipient behavior, human acceptance, and commercial proof are separate claims.", "evidence": "PROJECT_STATUS.md"}
+  ],
+  "integrations": [
+    {"id": "int-firebase", "name": "Firebase Auth, Firestore, Functions, and Hosting", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["tenant 250 provisioning and staffing activation", "authenticated human acceptance"]},
+    {"id": "int-vercel", "name": "Vercel public production edge", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["authenticated human acceptance"]},
+    {"id": "int-stripe", "name": "Stripe payments and isolated Connect program", "state": "PARTIAL", "evidence": "docs/STRIPE_CONNECT_PROGRAM.md", "unknowns": ["coordinated hosted rail acceptance", "Connect Sandbox runtime"]},
+    {"id": "int-resend", "name": "Resend email", "state": "CONFIGURED", "evidence": "PROJECT_STATUS.md", "unknowns": ["exact current provider acceptance", "delivery or bounce", "recipient receipt"]},
+    {"id": "int-turnstile", "name": "Cloudflare Turnstile", "state": "IMPLEMENTED", "evidence": "DEV_TASKS.md", "unknowns": ["both approved production hostname checks"]}
+  ],
+  "risks": [
+    {"id": "risk-acceptance-drift", "severity": "HIGH", "statement": "Exact v0.15.0 deployment can be mistaken for tenant availability, provider outcomes, recipient behavior, human acceptance, or commercial proof.", "mitigation": "Keep the exact deployment receipts separate and leave each missing downstream evidence class UNVERIFIED."},
+    {"id": "risk-proof-inflation", "severity": "HIGH", "statement": "Large source and test coverage can be mistaken for provider, production, human, or commercial proof.", "mitigation": "Keep evidence types explicit and fail unverified claims closed."},
+    {"id": "risk-program-sprawl", "severity": "MEDIUM", "statement": "Many gated source programs increase reconciliation and adoption cost.", "mitigation": "Fund work through one observable next proof event and retire or defer programs that do not reduce its uncertainty."}
+  ],
+  "blockers": [
+    {"id": "block-tenant-250-provisioning", "priority": "P0", "status": "OPEN", "statement": "Tenant 250 lacks organizations/250/settings/config, so the protected staffing activation workflow failed closed without mutation.", "source": "PROJECT_STATUS.md"},
+    {"id": "block-authenticated-production-acceptance", "priority": "P0", "status": "OPEN", "statement": "No current authenticated end-to-end production staff acceptance receipt exists.", "source": "DEV_TASKS.md"},
+    {"id": "block-provider-acceptance", "priority": "P0", "status": "OPEN", "statement": "Exact email and coordinated payment provider acceptance remain unverified.", "source": "DEV_TASKS.md"},
+    {"id": "block-buyer-safety", "priority": "P0", "status": "OPEN", "statement": "Buyer access needs a dedicated restricted test key, webhook checks, Turnstile checks, and bounded hosted acceptance.", "source": "DEV_TASKS.md"},
+    {"id": "block-connect-hosted-sandbox", "priority": "P1", "status": "OPEN", "statement": "Connect lacks an approved applied staging foundation, trusted runtime binding, and hosted Sandbox proof.", "source": "DEV_TASKS.md"},
+    {"id": "block-steward-pilot-proof", "priority": "P1", "status": "OPEN", "statement": "Steward lacks a reviewed provider transport and consenting silent-pilot human comparison evidence.", "source": "docs/STEWARD_ADR.md"},
+    {"id": "block-commercial-evidence", "priority": "P2", "status": "OPEN", "statement": "Paid customers, recurring usage, revenue, retention, and buyer acceptance are UNVERIFIED in repository evidence.", "source": "docs/project/PROOF.md"}
+  ],
+  "proofEvents": [
+    {
+      "id": "proof-current-production-journey",
+      "isNext": true,
+      "title": "Exact v0.15.0 authenticated quote-to-operations production journey",
+      "hypothesis": "After reviewed tenant provisioning and protected staffing activation, one authorized operator can complete the primary quote-to-operations journey on exact v0.15.0 without authority or evidence gaps.",
+      "preconditions": ["run an approved tenant-250 provisioning migration and activate staffing only after verified readback"],
+      "observableEvent": "One authorized tenant-250 operator creates and saves an exact quote revision, reopens it, issues the current proposal, records a customer decision, and generates the revision-bound BEO while role and cross-tenant denials remain intact.",
+      "acceptanceCriteria": ["exact release SHA and Firebase deployment receipt", "authenticated role-safe journey receipts", "exact saved revision readback", "cross-tenant and invalid portal paths fail closed", "provider and recipient outcomes remain separately labeled when absent"],
+      "evidenceDestination": "PROJECT_STATUS.md",
+      "reducesUncertaintyFor": ["cap-quote-lifecycle", "cap-proposal-decision", "cap-event-operations", "cap-operational-staffing", "cap-ambient-workspace"]
+    }
+  ],
+  "commercialEvidence": [
+    {"id": "commercial-buyer", "claim": "The economic buyer and buying trigger are validated.", "verdict": "UNVERIFIED", "evidence": [], "note": "The repository names likely users and workflows, not completed buyer research or purchase evidence."},
+    {"id": "commercial-paid-customers", "claim": "QuotePilot has paying customers.", "verdict": "UNVERIFIED", "evidence": [], "note": "No billing or customer ledger is present in repository evidence."},
+    {"id": "commercial-revenue", "claim": "QuotePilot has recurring revenue.", "verdict": "UNVERIFIED", "evidence": [], "note": "No revenue receipt or reconciled metric is present."},
+    {"id": "commercial-usage", "claim": "Operators repeatedly complete the primary journey in production.", "verdict": "UNVERIFIED", "evidence": [], "note": "No production usage or retention evidence is present."},
+    {"id": "commercial-outcome", "claim": "QuotePilot measurably improves conversion, speed, margin, or operational quality.", "verdict": "UNVERIFIED", "evidence": [], "note": "No before-and-after customer outcome evidence is present."}
+  ],
+  "nextActions": [
+    {"id": "action-next-proof", "priority": 1, "action": "Complete the single next proof event after approved tenant provisioning and protected staffing activation on exact v0.15.0.", "owner": "release owner and authorized tenant operator"},
+    {"id": "action-provider-receipts", "priority": 2, "action": "Capture provider acceptance only through exact provider receipts; do not infer delivery or recipient behavior.", "owner": "operations owner"},
+    {"id": "action-commercial-proof", "priority": 3, "action": "Collect buyer, paid-customer, usage, revenue, retention, and outcome evidence or leave each claim UNVERIFIED.", "owner": "product owner"}
+  ]
+}

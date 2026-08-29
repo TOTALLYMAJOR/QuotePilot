@@ -20,6 +20,12 @@
     "lane:release": "bash ./scripts/orchestration-lanes.sh lane:release",
     "lane:release:cwv": "bash ./scripts/orchestration-lanes.sh lane:release --with-cwv",
     "test:unit": "vitest run",
+    "test:truthloop": "bash ./scripts/run-truthloop.sh test",
+    "test:truthloop-export:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-truthloop-export emulators:exec --only firestore \"node scripts/truthloop-export-emulator-acceptance.mjs\"",
+    "truthloop:reconcile": "bash ./scripts/run-truthloop.sh reconcile",
+    "truthloop:rules": "bash ./scripts/run-truthloop.sh rules",
+    "truthloop:export": "node ./scripts/reconciliation-evidence-export.mjs",
+    "truthloop:coverage": "node ./scripts/reconciliation-evidence-export.mjs --coverage",
     "test:unit:watch": "vitest",
     "test:rules:firestore": "npx firebase-tools --config firebase.e2e.json --project demo-quote-wizard-rules emulators:exec --only firestore \"vitest run src/rules/__tests__/firestore.rules.test.js\"",
     "test:owner-sms:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-owner-sms emulators:exec --only firestore \"node scripts/owner-sms-emulator-acceptance.mjs\"",
@@ -53,6 +59,7 @@
     "test:operational-staffing:emulator": "OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true AUTH_PLATFORM_ADMIN_EMAILS=staffing-platform@local.test STAFF_INVITATION_TOKEN_SECRET=local-staff-invitation-token-secret-32-bytes-minimum npx firebase-tools --config firebase.e2e.json --project demo-operational-staffing emulators:exec --only auth,firestore,functions \"node scripts/operational-staffing-emulator-acceptance.mjs\"",
     "test:customer-centered-authority:emulator": "node ./scripts/run-customer-centered-authority-emulator.mjs",
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
+    "check:project-state": "node ./scripts/check-project-state.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
     "check:capability-surfaces": "node ./scripts/check-capability-surfacing.mjs",
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
@@ -73,6 +80,7 @@
   "dependencies": {
     "firebase": "^11.0.0",
     "jspdf": "^4.2.0",
+    "prop-types": "^15.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

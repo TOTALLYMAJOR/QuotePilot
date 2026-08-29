@@ -5,6 +5,8 @@ Last updated: 2026-08-28 17:25:14 CDT
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
+- Canonical project state: [PROJECT_STATE.md](PROJECT_STATE.md)
+- Executive state: [docs/project/EXECUTIVE_STATE.md](docs/project/EXECUTIVE_STATE.md)
 - Live app: https://quotepilot.mbmapps.com
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
@@ -31,6 +33,10 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Development evidence compiler: [docs/DEVELOPMENT_EVIDENCE_COMPILER.md](docs/DEVELOPMENT_EVIDENCE_COMPILER.md)
 - Product Truth Observability: [ADR](docs/adr/ADR-0002-product-truth-observability.md), [design](docs/design/product-truth-observability-design.md), [work plan](docs/plans/20260828-feature-product-truth-observability.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
+
+The project-state control plane reconciles these existing authorities without
+replacing them. Run `npm run check:project-state` to validate lifecycle values,
+evidence paths, freshness, blocker references, and the single next proof event.
 
 ## Application Routes
 - `/`: hospitality-first public QuotePilot marketing page.
@@ -172,6 +178,8 @@ Tenant safety mode:
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
 - Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
+- Reconciliation tier: Python 3.11+ (`truthloop/`), standard library only, read-only,
+  no credentials and no write path; see `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
 - Firebase Hosting origin/fallback: `https://tonicatering.web.app`
 - Local runtime options: VS Code Dev Container (recommended), Node (`npm run dev`), or Docker Compose (`web-dev` / `web`)
@@ -180,6 +188,7 @@ Tenant safety mode:
 ### Prerequisites
 - Node.js 22+
 - npm
+- Python 3.11+ (for the Commercial Truth Loop; no packages to install)
 
 ### Install + Validate
 ```bash
@@ -646,6 +655,7 @@ releases do not receive that acknowledgement.
 npm run check:env
 npm run test:unit
 npm run test:rules:firestore
+npm run test:truthloop-export:emulator
 npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
 npm run test:operational-staffing:emulator
@@ -655,6 +665,7 @@ npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run test:e2e:firebase:starter-onboarding
 npm run build
+npm run test:truthloop
 npm run check:secrets
 npm run check:workflows
 npm run check:ambient-release-gate
@@ -694,6 +705,21 @@ writes, immutable accepted-version provenance, collision refusal, and the
 mandatory staff-review transition. Passing it is emulator evidence only, not a
 Functions deployment, hosted staff acceptance, customer delivery, booking,
 payment, or revenue result.
+
+`test:truthloop` runs the Commercial Truth Loop reconciler's unit tests. The
+package is standard-library-only, so the gate needs no virtualenv, no package
+install, and no network access; `scripts/run-truthloop.sh` selects the newest
+available Python 3.11+ interpreter and fails closed if none is present. The lane
+runs inside the existing `lane:core` job and adds no new required CI status
+context. It runs **last** in that lane deliberately: `lane:core` executes under
+`set -e`, so an absent Python toolchain running earlier would suppress the
+build, documentation-governance, and bundle gates above it and leave a
+contributor with no results at all. Running it last costs nothing — the suite
+takes under a second — and keeps a missing interpreter from reading as a broken
+build. Passing it is local reconciliation-logic evidence only: it is not an
+evidence exporter, a staff surface, hosted verification, provider evidence, a
+production deployment, or human acceptance. No commercial record is reconciled
+in production until the TypeScript evidence exporter ships.
 
 `check:workflows` downloads only the platform-specific official actionlint
 v1.7.12 archive, verifies its repository-pinned SHA-256, and checks every
@@ -735,6 +761,69 @@ classified headless security/operational/infrastructure work still requires
 tests and a safe outcome. A headless contract cannot own a callable export. The
 gate proves structural traceability, not semantic completeness, hosted/provider
 behavior, production promotion, visual acceptance, or human acceptance.
+
+## Commercial Evidence Export
+
+The Commercial Truth Loop reconciler consumes an evidence bundle rather than
+reading Firestore itself. `scripts/reconciliation-evidence-export.mjs` produces
+that bundle from already-read authoritative documents and reports what it could
+not produce. The end-to-end walkthrough lives in
+[docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md § How it works](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md#how-it-works).
+
+```bash
+# Read one tenant straight from Firestore
+npm run truthloop:export -- --firestore --organization <organizationId> \
+  --evaluated-at 2026-08-21T14:00:00.000Z --out bundle.json
+
+# Or project already-read documents supplied as JSON
+npm run truthloop:export -- --source <sources.json> \
+  --evaluated-at 2026-08-21T14:00:00.000Z --out bundle.json
+
+npm run truthloop:coverage -- --firestore --organization <organizationId> \
+  --evaluated-at 2026-08-21T14:00:00.000Z
+npm run truthloop:reconcile bundle.json
+```
+
+The exporter is read-only: it opens no write path and reads no clock
+(`--evaluated-at` is required so the same source state always produces the same
+bytes, verified by a recorded `recordsDigestSha256`).
+
+`--firestore` requires `--organization`; there is no all-tenant read. Every
+read is rooted at `organizations/{id}` with no `collectionGroup` query, and any
+document whose `organizationId` does not match aborts the run rather than being
+skipped — silently filtering it would hide a real data-integrity bug. Each
+document is projected through an explicit field allowlist
+(`evidence/src/firestoreReader.mjs`), so portal keys, buyer tokens, and
+provider webhook secrets cannot reach a bundle even if the projection changes.
+The Admin SDK bypasses Firestore rules, so this is explicit-scope and allowlist
+containment, not rule-enforced containment. `npm run
+test:truthloop-export:emulator` proves these properties against a real
+disposable Firestore with a populated second tenant; passing it is emulator
+evidence only, not hosted, provider, production, or human acceptance.
+
+Every evidence section carries provenance — source object, source field,
+revision, source schema version, observed timestamp, and exporter version —
+including sections carrying no value, because which source was consulted and
+came up empty is itself evidence. Absence is never collapsed into null: a
+section is classified `available`, `missing`, `not_applicable`,
+`not_yet_available`, `blocked_by_integration`, `contradictory`, or
+`schema_drift`, and only `available` and `not_applicable` let a rule reach a
+verdict. A source declaring an unknown schema version is refused rather than
+read with current-shape assumptions.
+
+`truthloop:coverage` reports, per rule, how much required evidence is producible
+today and classifies each blocker as `engineering`, `integration`, or
+`business_policy`. Three sections have no producer: processor payout settlement
+is blocked behind the Stripe Connect stopping point in
+`docs/STRIPE_CONNECT_PROGRAM.md`, no organization has declared a processor fee
+schedule, and no post-event consumption capture surface exists. Until those
+land, 8 of 11 rules can reach a verdict and no record can reach
+`fullyReconciled`.
+
+Passing these commands is local export and reconciliation-logic evidence only.
+The exporter has no Firestore reader, so it is not a production data path, an
+operator surface, hosted verification, provider evidence, a deployment, or human
+acceptance.
 
 ## Orchestration Lanes
 ```bash

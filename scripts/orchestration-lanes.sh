@@ -12,8 +12,8 @@ usage() {
 Usage: orchestration-lanes.sh <lane> [--with-cwv]
 
 Lanes:
-  lane:quick               check:env + check:secrets + check:workflows
-  lane:core                capability surfacing + test:unit + build + docs governance + bundle budget
+  lane:quick               project state + env + secrets + release/config/workflow checks
+  lane:core                capability surfacing + test:unit + build + docs governance + bundle budget + truthloop
   lane:firebase-auth-rules test:rules:firestore + test:owner-sms:emulator + test:e2e:firebase
   lane:authoritative-pricing
                            test:e2e:firebase:authoritative
@@ -61,6 +61,7 @@ fi
 case "$lane" in
   lane:quick)
     echo "==> lane:quick"
+    npm run check:project-state
     npm run check:env
     npm run check:secrets
     npm run check:ambient-release-gate
@@ -74,6 +75,12 @@ case "$lane" in
     npm run build
     npm run check:docs:governance
     npm run check:perf:bundle
+    # Last on purpose. The lane runs under `set -e`, so a missing Python
+    # toolchain here would otherwise suppress every JavaScript gate above it
+    # and leave a contributor with no results at all. Running it last costs
+    # nothing (the suite takes under a second) and keeps a toolchain problem
+    # from masquerading as a broken build.
+    npm run test:truthloop
     ;;
   lane:firebase-auth-rules)
     echo "==> lane:firebase-auth-rules"

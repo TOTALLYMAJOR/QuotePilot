@@ -2333,7 +2333,7 @@
         }
       ],
       "surfaceReview": "verified_existing",
-      "surfaceReviewNote": "Revision 1 reviewed the quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, and presentation states as changed. Revision 2 is a backend-only additive change to functions/pricingEngine.js with no UI, state, or export change: the addon/rental normalizers additionally preserve the strictly-boolean portalDecidable mark, and calculateQuotePricingAuthoritative additionally returns the exact addons/rentals collections from the same authoritative catalog read, so the trusted quote-write flows can compute the decision-room decidableOptionsProjection without a second, possibly-divergent catalog read. Pricing math reads none of the new fields — verified_existing.",
+      "surfaceReviewNote": "Revision 1 reviewed the quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, and presentation states as changed. Revision 2 is a backend-only additive change to functions/pricingEngine.js with no UI, state, or export change: the addon/rental normalizers additionally preserve the strictly-boolean portalDecidable mark, and calculateQuotePricingAuthoritative additionally returns the exact addons/rentals collections from the same authoritative catalog read, so the trusted quote-write flows can compute the decision-room decidableOptionsProjection without a second, possibly-divergent catalog read. Pricing math reads none of the new fields \u2014 verified_existing.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -2405,7 +2405,7 @@
       "entryPointLocators": [
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "Local BEO — no receipt"
+          "locator": "Local BEO \u2014 no receipt"
         }
       ],
       "testPaths": [
@@ -3627,7 +3627,7 @@
       "audiences": [
         "staff"
       ],
-      "summary": "With the flag-gated client-request panel, staff record which deterministically parsed proposals were staged from one exact customer change request through a callable-only, create-only, replay-stable attestation that the server binds to the exact stored request identity and message hash, the acting staff member, and the quote revision at record time; the record never replies to the customer, mutates the quote, portal, or versions, and browser writes are rules-denied. A second, later callable performs the record's only permitted follow-up mutation: a bounded, write-once link from the record to the quote version that resulted from actually saving the staged edits, completing the intent-to-version audit trail. Linking is fired best-effort right after a save that already fully succeeded on its own; it never blocks, never surfaces its own failure, and never overwrites an existing link to a different version — only idempotent replay of the same one.",
+      "summary": "With the flag-gated client-request panel, staff record which deterministically parsed proposals were staged from one exact customer change request through a callable-only, create-only, replay-stable attestation that the server binds to the exact stored request identity and message hash, the acting staff member, and the quote revision at record time; the record never replies to the customer, mutates the quote, portal, or versions, and browser writes are rules-denied. A second, later callable performs the record's only permitted follow-up mutation: a bounded, write-once link from the record to the quote version that resulted from actually saving the staged edits, completing the intent-to-version audit trail. Linking is fired best-effort right after a save that already fully succeeded on its own; it never blocks, never surfaces its own failure, and never overwrites an existing link to a different version \u2014 only idempotent replay of the same one.",
       "backendPaths": [
         "firestore.rules",
         "functions/changeRequestRecord.js",
@@ -3910,7 +3910,7 @@
         },
         {
           "path": "src/data/__tests__/mockCatalog.costFields.test.js",
-          "locator": "a stored Minor-cents null survives as null, not 0 — the bug fromMinorUnits alone would reintroduce"
+          "locator": "a stored Minor-cents null survives as null, not 0 \u2014 the bug fromMinorUnits alone would reintroduce"
         },
         {
           "path": "src/hooks/__tests__/useCatalogData.observation.test.jsx",
@@ -4231,7 +4231,7 @@
       "audiences": [
         "staff"
       ],
-      "summary": "Flag-gated CREATE memory assist (docs/POST_COMPETITIVE_DESIGN.md §4.10; owner-decided scope 2026-08-11): once structuring a note yields both an event type and a guest count, loadEventShapeMemory reads the tenant's own already-scoped booking history, keeps only accepted/booked quotes at the exact event type and a fixed guest band, and reports the median servers/chefs/bartenders and half-hour-rounded duration plus any rental in a strict majority of matches. No AI and no cross-tenant signal — getQuoteHistory is already tenant-scoped server-side, this module only aggregates what it returns. Below a minimum sample of 3, the honest outcome is 'not enough history yet', never a guess from one or two data points. Applying is narrow and explicit: only servers/chefs/bartenders/hours are written to the draft; rentals are informational text only, never auto-applied, so an existing rental selection is never silently overwritten.",
+      "summary": "Flag-gated CREATE memory assist (docs/POST_COMPETITIVE_DESIGN.md \u00a74.10; owner-decided scope 2026-08-11): once structuring a note yields both an event type and a guest count, loadEventShapeMemory reads the tenant's own already-scoped booking history, keeps only accepted/booked quotes at the exact event type and a fixed guest band, and reports the median servers/chefs/bartenders and half-hour-rounded duration plus any rental in a strict majority of matches. No AI and no cross-tenant signal \u2014 getQuoteHistory is already tenant-scoped server-side, this module only aggregates what it returns. Below a minimum sample of 3, the honest outcome is 'not enough history yet', never a guess from one or two data points. Applying is narrow and explicit: only servers/chefs/bartenders/hours are written to the draft; rentals are informational text only, never auto-applied, so an existing rental selection is never silently overwritten.",
       "backendPaths": [
         "src/lib/eventShapeMemory.js",
         "src/lib/quoteStore.js"
@@ -4292,7 +4292,7 @@
       "safeOutcome": "Disabled (the shipped default and not bound in any deployment workflow), CREATE is byte-identical to today. Enabled, staff only ever see a suggestion once real tenant history clears the minimum sample; applying touches only staffing and hours, rentals stay a read-only mention, and an unreachable history read offers retry before escalating to a clearly-labeled recovery state rather than blocking the deterministic reading above it.",
       "affectedBackendExports": [],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "New surface. No backend export is added or changed — loadEventShapeMemory calls the existing getQuoteHistory read with an added eventTypeId filter it already supported, so there is nothing for affectedBackendExports to list. The pure aggregate (src/lib/eventShapeMemory.js) and its CREATE render block (loading/empty/partial/success/error/recovery, each with a literal data-capability-state marker) shipped together in one revision. stale is excepted: every fetch is a fresh read with nothing cached, matching the precedent already accepted for model-assisted-intent-parse.",
+      "surfaceReviewNote": "New surface. No backend export is added or changed \u2014 loadEventShapeMemory calls the existing getQuoteHistory read with an added eventTypeId filter it already supported, so there is nothing for affectedBackendExports to list. The pure aggregate (src/lib/eventShapeMemory.js) and its CREATE render block (loading/empty/partial/success/error/recovery, each with a literal data-capability-state marker) shipped together in one revision. stale is excepted: every fetch is a fresh read with nothing cached, matching the precedent already accepted for model-assisted-intent-parse.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -5134,7 +5134,7 @@
         }
       ],
       "headlessReason": "The checkpoint changes dormant private authority, command transport, worker execution, post-provider completion, handoff, limiter, and provider-adapter boundaries only. Revision 10 keeps the command-derived qpcmd value as the sole provider idempotency identity while the repository reserves only generation, authority digest, and recovery deadline; requires exact App Check on cached status plus consumed replay protection for provider refresh; rechecks current owner authority with a fresh clock on every account-binding transaction attempt; stores a returned provider identity and occurrence only in private quarantine evidence when post-create validation, authority, or binding checks fail; canonically reconstructs identity-backed quarantine only while its private account claim remains intact; and rechecks authority, state, local attempt expiry, provider expiry, and post-receipt clock after Account Link creation before disclosure. Authority or state drift durably becomes provider_withheld. A receipt-persistence interruption withholds the URL and keeps the consumed attempt blocked until its local expiry rather than claiming a receipt that did not commit. The modules remain uninstantiated and unexported; authority publication, callable, HTTP, App Check enforcement/consumption, provider calls, plan, apply, deployment, and production bindings remain absent. It intentionally exposes no Connect user surface until applied isolated infrastructure and hosted Sandbox evidence are available.",
-      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-only, production-absent, client-denied, apply-disabled, redacted, current-authority-bound, transactionally limited, command-isolated, lease-governed, uniquely bound, POST-only, one-use, and separately reviewable. The edge has no Stripe call path. A returned account identity cannot become a usable binding after authority drift and is retained only in private quarantine evidence; an interrupted quarantine receipt cannot trigger another provider create; and a created Account Link cannot reach application JavaScript unless the post-provider authority/state receipt commits. Stale authority, conflicting replay, platform/mode drift, deterministic provider-contract failure, provider_withheld, or exhausted worker attempts can produce only a blocked, quarantined, recoverable, withheld, or dead-letter outcome—not provider success."
+      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-only, production-absent, client-denied, apply-disabled, redacted, current-authority-bound, transactionally limited, command-isolated, lease-governed, uniquely bound, POST-only, one-use, and separately reviewable. The edge has no Stripe call path. A returned account identity cannot become a usable binding after authority drift and is retained only in private quarantine evidence; an interrupted quarantine receipt cannot trigger another provider create; and a created Account Link cannot reach application JavaScript unless the post-provider authority/state receipt commits. Stale authority, conflicting replay, platform/mode drift, deterministic provider-contract failure, provider_withheld, or exhausted worker attempts can produce only a blocked, quarantined, recoverable, withheld, or dead-letter outcome\u2014not provider success."
     },
     {
       "id": "organization-owner-authority",
@@ -5644,12 +5644,12 @@
           "locator": "marks a definitive rejection as error and exposes an explicit recovery reset",
           "assertionLocator": "data-capability-state=\"recovery\""
         },
-      {
-        "state": "ready",
-        "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
-        "locator": "marks current mutation controls ready before a command",
-        "assertionLocator": "data-capability-state=\"ready\""
-      },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks current mutation controls ready before a command",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
         {
           "state": "submitting",
           "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
@@ -5832,6 +5832,96 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "Admins can select no provider only through the trusted deployment, see non-secret local runtime-field completeness without treating it as credential proof, queue one bounded same-tenant diagnostic with one stable request identity, and read server-owned provider evidence without treating request acceptance as delivery. The worker fails closed when its bound secret is unavailable. Automatic Pingram alerts require a signed delivered diagnostic for the current generation; callback-before-binding is reprocessed; opt-out signals create an indefinite v1 hold on all owner SMS sends across provider selection with no browser or callable clear path; claimed or indeterminate work is never automatically resent; versioned recipient HMACs are organization-scoped. Stripe ingress receives no SMS sending credential, Pingram ingress receives only its signing secret, and browser principals cannot read or forge outbox commands, attempts, bindings, controls, rate limits, or webhook inbox receipts."
+    },
+    {
+      "id": "commercial-evidence-exporter",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "operator",
+        "release operators"
+      ],
+      "summary": "The Commercial Truth Loop evidence exporter is a read-only operator tool that reads tenant-scoped authoritative QuotePilot documents from Firestore, projects them through a field allowlist into a canonical reconciliation bundle, stamps provenance on every section, and reports which evidence it cannot produce and why.",
+      "backendPaths": [
+        "scripts/reconciliation-evidence-export.mjs",
+        "evidence/src/exporterCore.mjs",
+        "evidence/src/availability.mjs",
+        "evidence/src/provenance.mjs",
+        "evidence/src/canonical.mjs",
+        "evidence/src/schemaDrift.mjs",
+        "evidence/src/coverage.mjs",
+        "evidence/src/producers/index.mjs",
+        "evidence/src/producers/payoutProducer.mjs",
+        "evidence/src/producers/feeScheduleProducer.mjs",
+        "evidence/src/producers/consumptionProducer.mjs",
+        "scripts/truthloop-export-emulator-acceptance.mjs",
+        "evidence/src/firestoreReader.mjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/commercialEvidenceExporter.test.js",
+        "src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js",
+        "src/lib/__tests__/commercialEvidenceReader.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/commercialEvidenceExporter.test.js",
+          "locator": "carries provenance on every section, including sections with no value"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceExporter.test.js",
+          "locator": "keeps the payout producer inert behind the Connect stopping point"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceExporter.test.js",
+          "locator": "produces byte-identical output for the same source state"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js",
+          "locator": "refuses an unknown proposal snapshot schema instead of reading it"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js",
+          "locator": "turns a throwing producer into a missing envelope, not a crash"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceReader.test.js",
+          "locator": "aborts on a document that belongs to another tenant"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceReader.test.js",
+          "locator": "does not carry the portal key or buyer token out of Firestore"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidenceReader.test.js",
+          "locator": "requires an explicit organization \u2014 there is no all-tenant read"
+        }
+      ],
+      "documentationPaths": [
+        "README.md",
+        "docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md",
+        "docs/FEATURE_MATRIX.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "README.md",
+          "locator": "## Commercial Evidence Export"
+        },
+        {
+          "path": "docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md",
+          "locator": "## Evidence supply chain"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Commercial Truth Loop evidence exporter:"
+        }
+      ],
+      "headlessReason": "The exporter and its Firestore reader are an explicitly invoked read-only operator tool that writes files, not application state. They own no callable export, expose no customer or staff surface, and grant no tenant, role, pricing, staffing, provider, or production authority. Reads are rooted at one named organization with no collectionGroup query.",
+      "safeOutcome": "Operators receive a tenant-scoped canonical evidence bundle and a coverage report naming every section the exporter could not produce and why, without creating quote, payment, booking, delivery, provider, or production evidence. The reader performs no writes, requires an explicit organization, refuses any cross-tenant document, and withholds portal keys, buyer tokens, and provider secrets through an explicit field allowlist."
     }
   ]
 }

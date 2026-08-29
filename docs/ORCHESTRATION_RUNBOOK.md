@@ -75,6 +75,11 @@ Preflight:
 npm run lane:quick
 ```
 
+The preflight includes `npm run check:project-state`. Run that command alone
+while iterating on lifecycle, proof, blocker, or executive-state records. Its
+success means the repository control plane is internally consistent; it does
+not establish deployment, provider, human, usage, or commercial evidence.
+
 Core:
 ```bash
 npm run lane:core

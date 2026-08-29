@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "projectId": "quote-pilot",
+  "name": "QuotePilot by MBMApps",
+  "repository": "https://github.com/TOTALLYMAJOR/quoteflow",
+  "purpose": "Govern catering quotes, customer decisions, payments, and operational handoff.",
+  "authorityDomain": "tenant-scoped catering commercial and event operations",
+  "canonicalStatePath": ".project/state.json",
+  "primaryContracts": [
+    "server-authoritative pricing and revision contracts",
+    "tenant and role isolation",
+    "exact portal issuance and customer-decision evidence",
+    "provider and human evidence separation"
+  ],
+  "upstreamSystems": ["Firebase", "Vercel", "Stripe", "Resend", "Cloudflare Turnstile"],
+  "downstreamSystems": [],
+  "portfolioStatus": "ACTIVE_COMMERCIAL_PROOF_UNVERIFIED",
+  "lastReconciled": "2026-08-25"
+}

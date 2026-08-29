@@ -86,6 +86,7 @@ is the authoritative time included in the final task report.
 
 ## Lane Taxonomy
 - `lane:quick`
+  - `npm run check:project-state`
   - `npm run check:env`
   - `npm run check:secrets`
   - `npm run check:workflows`
