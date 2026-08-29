@@ -24,6 +24,7 @@ import {
   buildVercelOutputConfig,
   collectVercelBuildFiles,
   isEnabledFirebaseSecretVersion,
+  providerRequestHeaders,
   resolveGitHubToken,
   vercelDeploymentPayload
 } from "../../../scripts/deploy-release-candidate.mjs";
@@ -110,6 +111,18 @@ describe("governed release candidate deployment", () => {
         throw new Error("provider-specific authentication output");
       }
     })).toThrow(/GITHUB_TOKEN, GH_TOKEN, or an authenticated GitHub CLI session/i);
+  });
+
+  test("binds Firebase Rules user-ADC requests to the fixed staging quota project", () => {
+    expect(providerRequestHeaders({
+      token: "opaque-token",
+      quotaProject: RELEASE_CANDIDATE_POLICY.firebase.projectId
+    })).toMatchObject({
+      Authorization: "Bearer opaque-token",
+      "x-goog-user-project": "quotepilot-staging-20260804"
+    });
+    expect(providerRequestHeaders({ token: "vercel-token" }))
+      .not.toHaveProperty("x-goog-user-project");
   });
 
   test("accepts only exact successful release-branch CI evidence", () => {

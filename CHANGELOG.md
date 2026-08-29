@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 14:59:30 CDT
+Last updated: 2026-08-29 15:12:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -15,6 +15,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   the documented resource-name form, still requires an exact enabled secret
   name, and never reads secret values. A provider preflight exposed the mismatch
   and failed before receipt reservation or staging mutation.
+- Bound Firebase Rules REST readback to the fixed staging project through
+  `x-goog-user-project` when user ADC supplies the access token. This preserves
+  the existing credential file and makes release/ruleset preflight use the same
+  explicit quota project as the governed staging candidate; the missing header
+  was observed as a fail-closed 403 before receipt reservation or mutation.
 - Added an explicit `staging-staffing-authority` release-candidate profile
   alongside the existing `staging-safe-off` profile. Candidate CLI input,
   Functions dotenv validation, active-revision readback, hosted manifest, and

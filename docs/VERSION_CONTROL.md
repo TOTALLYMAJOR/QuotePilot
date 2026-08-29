@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 14:59:30 CDT
+Last updated: 2026-08-29 15:12:30 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -87,6 +87,10 @@ explicit owner promotion after real-run review.
      bound name, and remain metadata-only. A parser mismatch is a fail-closed
      source defect; fix, republish, and rerun exact-SHA CI rather than bypassing
      the gate.
+   - Firebase Rules release and ruleset readback must send the fixed staging
+     project as `x-goog-user-project` when using user ADC. Do not mutate the
+     operator's global ADC quota-project setting to compensate for a missing
+     request header.
    - If GitHub does not enqueue the normal `pull_request` run, manually
      dispatch `CI Quality` against the exact published PR head and retain that
      run as the CI evidence. Do not substitute a run from another commit.

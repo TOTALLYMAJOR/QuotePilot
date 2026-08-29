@@ -105,16 +105,21 @@ function parseJsonOutput(output, label) {
   }
 }
 
-async function fetchJson(url, { token = "", label = "Provider" } = {}) {
+export function providerRequestHeaders({ token = "", quotaProject = "" } = {}) {
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(quotaProject ? { "x-goog-user-project": quotaProject } : {}),
+    "User-Agent": "QuotePilot-release-candidate"
+  };
+}
+
+async function fetchJson(url, { token = "", quotaProject = "", label = "Provider" } = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        "User-Agent": "QuotePilot-release-candidate"
-      },
+      headers: providerRequestHeaders({ token, quotaProject }),
       signal: controller.signal
     });
     if (!response.ok) throw new Error(`${label} request failed with HTTP ${response.status}.`);
@@ -376,7 +381,7 @@ async function readFirebaseRulesReleases(accessToken) {
   const project = RELEASE_CANDIDATE_POLICY.firebase.projectId;
   const releasesResponse = await fetchJson(
     `https://firebaserules.googleapis.com/v1/projects/${project}/releases?pageSize=100`,
-    { token: accessToken, label: "Firebase Rules releases" }
+    { token: accessToken, quotaProject: project, label: "Firebase Rules releases" }
   );
   if (releasesResponse.nextPageToken) {
     throw new Error("Release candidate rejected: Firebase Rules release evidence exceeds one complete provider page.");
@@ -394,8 +399,9 @@ async function readFirebaseRules(accessToken) {
     release?.name === `projects/${project}/releases/cloud.firestore`
   ));
   const ruleset = firestoreRelease?.rulesetName
-    ? await fetchJson(`https://firebaserules.googleapis.com/v1/${firestoreRelease.rulesetName}`, {
+      ? await fetchJson(`https://firebaserules.googleapis.com/v1/${firestoreRelease.rulesetName}`, {
         token: accessToken,
+        quotaProject: project,
         label: "Firebase Rules ruleset"
       })
     : undefined;
