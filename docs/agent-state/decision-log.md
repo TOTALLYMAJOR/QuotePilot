@@ -1,8 +1,8 @@
 # Decision Log
 
-Last updated: 2026-08-29 16:46:03 CDT
+Last updated: 2026-08-29 17:54:25 CDT
 
-Checkpoint recorded: 2026-08-29T19:20:40.340Z
+Checkpoint recorded: 2026-08-29T22:56:50.000Z
 
 ## Decisions made
 
@@ -40,11 +40,12 @@ Checkpoint recorded: 2026-08-29T19:20:40.340Z
 32. Treat each failed candidate attempt according to its actual boundary. Preflight failures are not provider mutation; a reserved `partial` receipt after a Firebase call is not a completed deployment and must not be retried under the same immutable receipt identity.
 33. Keep the pinned Firebase Functions graph compatible with the checksum-pinned Firebase analyzer and defer optional Kitchen BEO renderer loading until invocation. Require `--force` explicitly for the repository's tracked retry-enabled event functions instead of depending on an interactive acknowledgement.
 34. Record Cloud Scheduler API enablement caused by Firebase preflight even though the command used `--dry-run`; dry-run is not a universal no-provider-mutation guarantee.
+35. Supersede the fictional multi-person staffing model: one founder owns the supplied accounts, selects existing `mm05366-sandbox` as the v0.16 founder-pilot tenant, and approves the governed release/activation path. Preserve the accounts as role-test identities, not independent human review. Admit only numeric tenant IDs or that exact sandbox in the protected operator; do not create tenant `250`, enable providers, or infer owner acceptance from deployment.
 
 ## Unresolved decisions
 
 1. Resolved: the owner approved the remote review/release path and requested promotion of every capability that can pass the governed gates.
 2. Unresolved: Whether Product Truth Observability remains advisory or becomes a required CI gate after owner comprehension and freshness calibration.
-3. Partially resolved: Staffing now has owner-designated administrator, sales/operator, and release/UAT roles. Stripe Connect, Steward, provider-specific, and manual accessibility ownership remains unresolved, and provider/GitHub account bindings still require verification.
+3. Resolved for the founder pilot: one founder assumes administrator, sales/operator, release/UAT, and final-approval duties using separate role-test identities. Independent review, later customer staffing, Stripe Connect, Steward, provider-specific, and manual accessibility ownership remain unresolved.
 4. Unresolved: Which production-authorized Truth Loop source bundle and evaluation instant should be evaluated first.
 5. Resolved for provisioning: the approved WIF provider, separate deploy and tenant-operator identities, least-privilege bindings, and repository variables now have provider readback and no service-account keys. First exact workflow token exchange, effective deployment proof, tenant-operation receipt, and safe legacy-secret retirement remain unresolved execution evidence.

@@ -1,23 +1,19 @@
 # Next Actions
 
-Last updated: 2026-08-29 14:33:12 CDT
+Last updated: 2026-08-29 18:17:20 CDT
 
-Checkpoint recorded: 2026-08-29T19:20:40.340Z
+Checkpoint recorded: 2026-08-29T23:17:20.000Z
 
-1. Commit and publish the release-lane-green `staging-staffing-authority` slice, then require exact remote CI for that SHA.
-2. Satisfy the existing fixed-staging secret metadata prerequisites, deploy Firebase then Vercel under the same positive profile, and obtain exact Functions/Hosting/rules/manifest readback.
-3. Qualify one disposable staging tenant and roll authority back. Before production migration apply, explicitly resolve whether the designated admin's existing `mm05366-sandbox` tenant should be archived/tombstoned or retained under another owner; then bind tenant `250`, the sales role, protected activation, rollback rehearsal, and named acceptance without a sparse settings patch.
+1. Commit only the locally release-green founder-pilot identifier slice, publish it to PR #111, and require exact-head CI.
+2. Resolve all 20 blocked mandatory `firebase-all` UAT items with real hosted/provider evidence. Do not dispatch the all-positive attestation, merge PR #111, tag v0.16.0, or deploy production while any item remains blocked.
+3. After the exact Firebase all-scope receipt succeeds, dispatch **Set Operational Staffing Tenant** for `mm05366-sandbox`, verify readback, execute the bounded live staffing/denial checks available to the founder, prove rollback to false, and leave the tenant enabled only after explicit owner acceptance.
 
 # Context Handoff Capsule
 
-- Mission: Promote the 74 unpublished commits as the largest safe bounded v0.16.0 release candidate and leave only exact human/provider gates.
-- Branch/SHA: `release/v0.16.0` at validated release head `8b04582c371f8ccc5a4b5010c9a9800c0e68bfe0` before this documentation checkpoint; code-bearing candidate `e620ce80f096033abfdc420e649499f4ed92dff1`; published in PR #111.
-- Scope: Release docs/commit, release branch/PR/CI, fixed staging and preview candidate deployment, read-only verification, and conditional governed production promotion. No bypass, secret disclosure, unauthorized Terraform/provider/tenant mutation, or false evidence promotion.
-- Evidence used: Git identity/tree equality; `PROJECT_STATE.md`; `PROJECT_STATUS.md`; `docs/FEATURE_MATRIX.md`; `CHANGELOG.md`; Connect and Steward program docs; Product Truth Observability output; exact-candidate release, browser, CWV, connected-arrival, and Truth Loop results.
-- Work completed: All product slices and reconciliation are committed; original 74-commit LOC/capability inventory complete; PR #111 published; exact candidate CI and Stripe source-only workflows recorded; Lighthouse dependency findings remediated; narrow default-branch security backport PR #112 published with exact green CI; production and tenant legacy-token paths replaced with distinct WIF contracts; Firebase mutation checksum-locked; candidate Firebase/Vercel clients locked; governed candidate deploy attempts reached their fail-closed pre-mutation boundary.
-- Files changed: Release work includes the promotion report, canonical status/backlog/performance records, release-gate test repair, and `docs/agent-state/*`; see branch history for exact slices.
-- Commands run: Required task planner; Git identity and exact remote checks; high-risk/CWV release validation; focused/full Vitest and Playwright; bundle, project-state, environment, secret, workflow, capability, docs, Stripe-isolation and Ambient gates; CI observation; both governed `release:candidate:deploy` targets.
-- Validation results: Code-bearing candidate `e620ce80` passes the full local release lane with 4,099 tests passed/78 skipped. Latest validated head `8b04582` passes all eight CI Quality jobs plus Product Truth advisory in run `33247137753`; exact Stripe source-only runs `33247137681`/`33247137700` are green. Backport `204f0d2e` passes local dependency/security/release checks, all eight CI Quality jobs in run `33246642372`, and Stripe source-only runs `33246642371`/`33246642373`. Governed Firebase/Vercel attempts repeated for `8b04582` stopped before receipt reservation and mutation on eleven absent enabled staging secret versions and the unproven safe-off Functions readback. Current production remains v0.15.
-- Risks/unknowns: Human review/merge of security PR #112 and default-branch alert closure; production WIF resources/variables and independent review; legacy token retirement; authorization and enabled versions for eleven staging secret names; Firebase safe-off deployment/readback; Vercel preview; full hosted UAT; provider evidence; physical-device/accessibility review; human acceptance. Branch protection currently requires zero approvals and release variables configure one solo attester/operator. Stripe Connect, Steward, buyer access, authoritative staffing, Commercial Change, and Revenue Autopilot remain dormant.
-- Next 3 actions: provision/review WIF; authorize the required staging secret versions and deploy/verify Firebase safe-off; deploy Vercel preview and execute applicable hosted/human UAT.
-- Resume prompt: Continue the active v0.16.0 promotion from `docs/agent-state/*`. Verify the latest branch SHA is clean, published, and exact-CI green. Do not proceed to production until WIF identities/variables are reviewed and proven. Do not proceed to Firebase candidate deployment until the separately authorized enabled staging versions exist for every required secret name in the promotion report. Use only tracked deploy commands; require safe-off Functions readback before Vercel preview. Do not bypass blocked UAT or enable dormant capabilities.
+- Mission: Governed v0.16 founder-pilot release and sandbox-only staffing activation.
+- Branch/published base: `release/v0.16.0` / `17582da99ae9ace1ec6fb11fe224336faaf75410`; PR #111 is open and mergeable.
+- Current local slice: tenant-operator input accepts numeric IDs or exactly `mm05366-sandbox`, rejects arbitrary slugs, and has no workflow default.
+- Evidence: The complete local high-risk/CWV release lane passes; exact base CI and verified isolated-staging Firebase receipt are recorded in `PROJECT_STATUS.md` and the evidence ledger.
+- Release blocker: The canonical Firebase-all UAT plan reports 18 applicable and 20 blocked mandatory items. Approval is authority to execute, not a positive result for unperformed hosted/provider checks.
+- Boundaries: Production still runs v0.15; no production deploy, sandbox tenant activation, provider send, recipient acknowledgement, or human acceptance has yet been claimed.
+- Resume rule: Preserve exact source/CI/deploy/tenant/human evidence boundaries and use only the protected workflows.

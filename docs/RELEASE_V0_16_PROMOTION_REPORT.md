@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 16:46:03 CDT
+Last updated: 2026-08-29 18:17:20 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -18,9 +18,13 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
   product-stack baseline; later commits on the release branch are bounded
   release-control hardening and do not rewrite that inventory.
 - Current published candidate head: exact
-  `5a0c55ec4efea279f14387a4d68265b3bc8ebcfb`, published in PR #111.
-  A local Functions-analyzer compatibility slice remains uncommitted and must
-  pass full validation and exact-SHA CI before another provider attempt.
+  `17582da99ae9ace1ec6fb11fe224336faaf75410`, published in PR #111. It passed
+  all eight CI jobs in run `33276960899`, both exact-SHA Stripe source-only
+  workflows, and the governed Firebase `staging-staffing-authority` deployment
+  with verified Hosting, Functions, Rules, manifest, and runtime-gate readback.
+  The founder-pilot tenant-identifier change is the next bounded release delta;
+  it passes the complete local high-risk/CWV release lane and still requires a
+  published exact-SHA CI result.
 - Current production and rollback baseline: exact `v0.15.0`; target-specific
   provider receipts in `PROJECT_STATUS.md` remain authoritative until a newer
   promotion passes post-deploy verification.
@@ -67,7 +71,7 @@ correctness, use, or human acceptance.
 | Stripe Connect | Include source, keep `functions-connect` exports empty and provider access disabled | Requires reviewed Terraform plan/digest, separately authorized apply, deployed identity reconciliation, App Check observation/enforcement, restricted Sandbox credential, hosted negative/replay UAT, and human acceptance. |
 | Steward | Include validation/compiler/workbench foundation, keep provider runtime and model output unavailable | Requires provider/credential and privacy/billing review, canonical private reads/persistence, current consent, controlled silent execution, 100 actual human reviews, hosted rules proof, and acceptance. |
 | Buyer onboarding/access | Keep server gate and public CTA off in the safe candidate | Dedicated restricted Stripe test key, exact test webhook, Turnstile/provider checks, bounded acceptance window, and close plan remain external. |
-| Operational staffing authority | Preserve `staging-safe-off`; use the separate positive profile only for isolated staffing qualification | Disposable staging tenant evidence, hosted UAT, final human approval, production deployment, canonical tenant `250` provisioning, sandbox disposition, and protected activation/rollback receipts remain required. |
+| Operational staffing authority | Preserve `staging-safe-off`; use the separate positive profile only for isolated staffing qualification | Exact `mm05366-sandbox` tenant-gate readback, authenticated hosted UAT, final human approval, production deployment, and protected activation/rollback receipts remain required; tenant `250` will not be created for this founder pilot. |
 | Commercial Change and Revenue Autopilot | Keep authority/send gates off | Authenticated/provider evidence and named rollback remain incomplete. |
 | SMS delivery | Preserve deployed configuration boundaries; do not infer delivery | Credential/endpoint registration, controlled send, provider lifecycle, opt-out, carrier, and recipient evidence remain separate. |
 | Attendance persistence | Promote the read-only context only | Terminology/channel research and authority/migration decisions are unresolved. |

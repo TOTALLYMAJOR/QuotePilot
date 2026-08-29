@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 14:23:06 CDT
+Last updated: 2026-08-29 17:54:25 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -368,9 +368,12 @@ activation. Before activation:
 
 After the exact tagged release passes main CI and the Firebase `all` deployment
 succeeds, use **Set Operational Staffing Tenant** for the one-tenant promotion.
-Supply the same release SHA, the successful Firebase deployment run id, numeric
-organization id, requested boolean state, and the exact displayed confirmation
-(`SET operational staffing true for organization 250` for the production test).
+Supply the same release SHA, the successful Firebase deployment run id, the
+exact organization id, requested boolean state, and the exact displayed
+confirmation. The input has no preselected tenant and accepts a bounded numeric
+id or only the approved founder-pilot id `mm05366-sandbox`; its enable
+confirmation is `SET operational staffing true for organization
+mm05366-sandbox`.
 The protected workflow accepts only an exact successful Firebase all-scope run,
 reads the current settings document, patches only
 `operationalStaffingAuthorityEnabled`, and verifies the readback. Use the same

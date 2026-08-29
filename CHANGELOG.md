@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 16:46:03 CDT
+Last updated: 2026-08-29 17:54:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Narrowed the protected operational-staffing tenant operator to accept either
+  the existing bounded numeric organization identifiers or the single approved
+  founder-pilot organization `mm05366-sandbox`. Arbitrary slugs remain
+  rejected, the workflow no longer preselects a tenant, and exact project,
+  deployed-SHA, Firebase-all receipt, WIF identity, typed confirmation,
+  one-field patch, readback, and rollback requirements remain unchanged.
 - Added a bounded hosted-manifest propagation retry: six exact-equality reads
   over at most ten seconds. A stale manifest may be retried, but the candidate
   still fails closed unless source SHA, CI run, profile, and authority gates all

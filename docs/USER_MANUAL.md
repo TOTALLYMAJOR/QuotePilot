@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-29 03:22:47 CDT
+Last updated: 2026-08-29 17:54:25 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -156,13 +156,14 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Authoritative operational staffing
 
-- This source-only capability is independently default-off. It appears only
+- This independently gated capability appears only
   when the presentation gate `VITE_OPERATIONAL_STAFFING_ENABLED` is enabled,
   and server reads or commands still fail closed unless both the global
   `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` gate and the exact tenant's
   `operationalStaffingAuthorityEnabled` setting are enabled. Turning on one
-  gate does not turn on either of the others, deploy the source, or establish
-  hosted, production-data, or human acceptance.
+  gate does not turn on either of the others or establish hosted,
+  production-data, or human acceptance. A verified isolated-staging deployment
+  exists; production v0.16 and the founder-pilot tenant gate remain separate.
 - Production operators promote or roll back the tenant gate through the
   protected **Set Operational Staffing Tenant** release workflow after an exact
   successful Firebase all-scope deployment. The workflow changes only the named
@@ -170,6 +171,9 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   workload-identity provider and distinct tenant-operator service account; it
   does not use a Firebase refresh token, create a service-account key, or create
   staffing or email evidence.
+  The organization input has no default and accepts bounded numeric identifiers
+  or the single approved founder-pilot identifier `mm05366-sandbox`; arbitrary
+  slugs fail closed.
 - In the flagged Event Workspace, open the exact quote and select `Inspect
   staffing`. The panel reads only that tenant and quote, binds commercial role
   counts and the event window to the exact active immutable quote revision,

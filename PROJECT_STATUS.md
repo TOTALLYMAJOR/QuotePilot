@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 14:33:12 CDT
+Last updated: 2026-08-29 18:17:20 CDT
 
 ## Current Production Release
 
@@ -103,13 +103,11 @@ Last updated: 2026-08-29 14:33:12 CDT
   static service-account JSON, missing credentials, and credentials outside the
   checkout. The protected tenant-gate workflow also uses WIF, but with a
   distinct service account and one short-lived Datastore-scoped token passed
-  only to its exact read/patch/readback client. No Google Cloud workload
-  identity pool, deploy service account, or tenant-operator service account is
-  currently present in the production project, and repository variables
-  `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
-  `FIREBASE_DEPLOY_SERVICE_ACCOUNT` and
-  `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT` are not configured. This is source/local
-  preparation only, not cloud IAM proof or deployment readiness.
+  only to its exact read/patch/readback client. The production WIF provider,
+  distinct deploy and tenant-operator service accounts, least-privilege
+  bindings, and all three repository variables are now provisioned with no
+  service-account key. First production workflow token exchange and governed
+  production deployment remain unverified.
 - Firebase production and staging-candidate mutation now execute only the
   official v15.24.0 Linux CLI artifact after verifying SHA-256
   `bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`.
@@ -120,27 +118,24 @@ Last updated: 2026-08-29 14:33:12 CDT
   public Rules API. Vercel preview uses a locally built Build Output API v3
   artifact plus narrow REST upload/deploy/readback requests. No candidate path
   searches local/global/npm-cache Firebase modules or runtime-downloads a
-  Vercel CLI. This provider-client lock is source/local evidence; it has not
-  produced a staging or preview receipt.
-- Release PR #111 publishes `release/v0.16.0`. Current code-bearing candidate
-  `e620ce80f096033abfdc420e649499f4ed92dff1` passed all eight jobs in matching
-  CI Quality run `33245272679` and has successful exact-SHA Stripe Connect runs
-  `33245272566` and `33245272601`. The release-branch hardening after the
-  original 74-commit inventory remediates Lighthouse audit findings, replaces
-  production and tenant legacy-token paths with distinct WIF identities, and
-  checksum-locks the Firebase CLI used for mutation. These receipts do not
-  establish deployment, credentials, provider behavior, or production use.
-- Latest validated release head `8b04582c371f8ccc5a4b5010c9a9800c0e68bfe0`
-  is clean, published, mergeable, and passes all eight CI Quality jobs in run
-  `33247137753` plus exact-head Stripe source-only runs `33247137681` and
-  `33247137700`. GitHub currently requires zero approving PR reviews and the
-  release-attestation variables identify one solo operator. Those are observed
-  repository settings, not independent review or human acceptance.
-- Governed candidate deployment was attempted for both targets at exact
+  Vercel CLI. That lock has now produced a verified Firebase staging receipt;
+  Vercel preview remains unverified.
+- Release PR #111 publishes `release/v0.16.0`. Exact candidate
+  `17582da99ae9ace1ec6fb11fe224336faaf75410` is clean, published, mergeable,
+  and passed all eight jobs in CI Quality run `33276960899` plus exact-SHA
+  Stripe source-only runs `33276960898` and `33276960940`.
+- The governed `staging-staffing-authority` Firebase-all receipt for exact
+  `17582da99ae9ace1ec6fb11fe224336faaf75410` is verified. It binds staging
+  project `quotepilot-staging-20260804`, Hosting version
+  `503080e914239d13`, 95 Functions, Firestore Rules hashes, the positive global
+  staffing server and browser gates, and the safe-off unrelated authorities.
+  It does not enable a tenant, prove authenticated staffing behavior, or count
+  as Vercel, production, provider-delivery, or human-acceptance evidence.
+- Earlier governed candidate deployment was attempted for both targets at exact
   `e620ce80`, rechecked at `98f5395`, and rechecked again at latest exact-CI
   head `8b04582`. Every attempt stopped before provider mutation or receipt
   reservation.
-  Firebase staging lacks enabled versions for all eleven candidate-required
+  Those attempts found that Firebase staging lacked enabled versions for all eleven candidate-required
   secret names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
   `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,
   `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`,
@@ -159,19 +154,25 @@ Last updated: 2026-08-29 14:33:12 CDT
   CI verification. A live exact-SHA run with both token environment variables
   explicitly unset verified CI through the CLI and reached the real missing
   staging-secret prerequisite. It stopped before receipt reservation or
-  provider mutation and changes no deployment authority, secret handling,
-  provider target, or promotion gate.
+  provider mutation and changed no deployment authority, secret handling,
+  provider target, or promotion gate. The later verified Firebase-all receipt
+  above proves that the staging metadata and deployment prerequisites were
+  subsequently satisfied without exposing secret values.
 - The tracked `staging-safe-off` UAT plan still has 17 applicable and 21
   blocked items for Firebase-all, and 11 applicable and 7 blocked items for
   Vercel preview. Applicable hosted results and named human review remain
   separate evidence classes; current production remains exact `v0.15.0`.
-- The current source slice adds `staging-staffing-authority` as a separate
-  bounded candidate profile. Its CLI input, Functions dotenv, active-revision
-  readback, hosted manifest, and receipt must all prove the global staging
-  staffing gate true; positive staffing plan and surface checks become
-  applicable while the disposable-tenant gate remains a separate authorized
-  operation. Focused candidate/evidence tests pass 275/275. This is source and
-  local evidence only; no staging, production, or tenant mutation has occurred.
+- The `staging-staffing-authority` profile remains separate from
+  `staging-safe-off`. Its verified receipt proves the selected profile and
+  global staging gates; the exact-tenant gate and positive authenticated
+  journey remain separate operations and evidence classes.
+- The current `firebase-all` `staging-staffing-authority` UAT plan is blocked:
+  18 items are applicable and 20 mandatory release-wide items remain blocked.
+  The blocked set covers provider-secret cutover, buyer, portal/delivery,
+  contract, payment, disabled-staffing rollback, and provider-backed SMS
+  evidence. Founder approval authorizes execution but is not evidence that
+  those hosted/provider checks passed, so PR #111 cannot yet be merged under
+  the canonical production-triggering release policy.
 - Production keyless identity configuration is now provisioned. The WIF
   provider is restricted to the private repository's numeric owner/repository
   ids, protected `main`, manual dispatch, and the two exact workflow refs. The
@@ -179,14 +180,14 @@ Last updated: 2026-08-29 14:33:12 CDT
   role has only Firestore entity read/update permissions, and no key exists.
   The three required GitHub variables are present. First token exchange and
   governed deployment remain unverified.
-- Tenant `250` and its settings document remain absent. The owner-designated
-  admin and sales/operator Firebase accounts are verified and enabled, but the
-  admin currently owns `mm05366-sandbox` and the second account currently has a
-  customer role. A read-only canonical migration plan confirms `250` is the
-  configured production default and would create a complete tenant from the
-  legacy source. Migration apply and role transfer are held until the sandbox
-  owner/tombstone consequence is explicitly resolved; no sparse settings patch
-  or tenant activation occurred.
+- The owner selected existing organization `mm05366-sandbox` as the bounded
+  founder-pilot tenant instead of creating tenant `250`. It is active,
+  owner-bound, catalog-populated, and already contains staffing records; its
+  `operationalStaffingAuthorityEnabled` setting is currently unset. Tenant
+  `250` remains absent. One person owns the designated email accounts, so they
+  are role-test identities rather than independent staff or reviewers. The
+  protected operator now admits only numeric IDs or the exact approved founder
+  sandbox and has not yet changed the production tenant setting.
 - Stripe Connect remains deploy-empty/provider-disabled; Steward remains
   providerless with model output hidden; buyer access, Commercial Change,
   Revenue Autopilot, and authoritative staffing remain fail-closed. Candidate

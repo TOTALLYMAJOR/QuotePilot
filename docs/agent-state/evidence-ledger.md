@@ -1,10 +1,25 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 16:46:03 CDT
+Last updated: 2026-08-29 17:54:25 CDT
 
-Checkpoint recorded: 2026-08-29T19:20:40.340Z
+Checkpoint recorded: 2026-08-29T22:56:50.000Z
 
 ## Published candidate, exact CI, and deployment boundary
+
+- File/path: Exact `17582da99ae9ace1ec6fb11fe224336faaf75410`; CI
+  Quality run `33276960899`; Stripe source-only runs `33276960898` and
+  `33276960940`; profile-qualified Firebase candidate receipt
+- Evidence: All eight CI jobs and both Stripe source-only workflows passed. The
+  governed `staging-staffing-authority` Firebase-all receipt is `verified` and
+  binds project `quotepilot-staging-20260804`, Hosting version
+  `503080e914239d13`, 95 Functions, matching Firestore Rules hashes, exact
+  positive staffing global browser/server gates, and safe-off unrelated
+  authorities.
+- Why it matters: The isolated Firebase candidate is now deployment-verified;
+  earlier partial receipts no longer describe the latest candidate boundary.
+- Confidence: High for exact source, CI, staging deployment, and readback.
+- Unverified gaps: Vercel preview, authenticated positive/denied staffing UAT,
+  production v0.16, exact production tenant activation, and human acceptance.
 
 - File/path: Branch `release/v0.16.0` through exact
   `bb4a99e31dc8821240b53affeefc617630acecc3`; CI Quality runs

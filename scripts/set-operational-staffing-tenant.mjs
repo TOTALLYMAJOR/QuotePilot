@@ -4,6 +4,7 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 const FIRESTORE_ORIGIN = "https://firestore.googleapis.com";
+const FOUNDER_PILOT_ORGANIZATION_ID = "mm05366-sandbox";
 
 function argValue(argv, name, fallback = "") {
   const index = argv.indexOf(name);
@@ -16,7 +17,11 @@ export function parseTenantActivationArgs(argv = process.argv.slice(2)) {
   const rawEnabled = argValue(argv, "--enabled").toLowerCase();
   const confirmation = argValue(argv, "--confirm");
   if (projectId !== "tonicatering") throw new Error("Tenant activation is restricted to project tonicatering.");
-  if (!/^\d{1,12}$/u.test(organizationId)) throw new Error("A numeric organization id is required.");
+  const numericOrganization = /^\d{1,12}$/u.test(organizationId);
+  const approvedFounderPilot = organizationId === FOUNDER_PILOT_ORGANIZATION_ID;
+  if (!numericOrganization && !approvedFounderPilot) {
+    throw new Error("A numeric organization id or the approved founder-pilot organization is required.");
+  }
   if (!new Set(["true", "false"]).has(rawEnabled)) throw new Error("--enabled must be true or false.");
   const enabled = rawEnabled === "true";
   const expectedConfirmation = `SET operational staffing ${rawEnabled} for organization ${organizationId}`;

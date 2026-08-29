@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 16:46:03 CDT
+Last updated: 2026-08-29 17:54:25 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -219,6 +219,9 @@ git push origin v<major>.<minor>.<patch>
     action and is not implied by deployment. Workflow dispatch values must be
     mapped through step environment variables and never interpolated directly
     into executable shell bodies that can access provider credentials.
+    The organization input has no default. It accepts the existing bounded
+    numeric identifier form or the one approved founder-pilot identifier
+    `mm05366-sandbox`; arbitrary slugs remain invalid.
 
 If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific deployment runs. Allowed deployment profiles

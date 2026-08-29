@@ -1,6 +1,6 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: August 13, 2026
+Last updated: 2026-08-29 17:54:25 CDT
 
 Status: source implementation behind independent default-off presentation,
 server, and tenant gates. This decision record does not establish deployment,
@@ -65,6 +65,13 @@ The browser cannot promote either authority gate. A visible source surface,
 successful local test, or enabled presentation flag is not authority when the
 server or tenant gate is off. Production workflows do not bind these new gates
 until a separately reviewed rollout.
+
+The protected tenant operator never selects a tenant implicitly. It accepts the
+existing bounded numeric identifier form or the single approved founder-pilot
+organization `mm05366-sandbox`, requires the exact typed state-and-organization
+confirmation, and still patches only the tenant gate with provider readback.
+This exception does not authorize arbitrary slugs, create a tenant, or change
+role, staffing, invitation, provider, or acceptance evidence.
 
 ## Roles and Tenant Scope
 

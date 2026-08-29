@@ -13,9 +13,8 @@ on:
         required: true
         type: string
       organization_id:
-        description: Exact numeric organization id
+        description: Exact numeric organization id or approved founder-pilot organization
         required: true
-        default: "250"
         type: string
       enabled:
         description: Requested tenant authority state

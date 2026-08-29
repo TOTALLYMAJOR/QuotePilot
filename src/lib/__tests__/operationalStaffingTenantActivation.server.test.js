@@ -18,12 +18,28 @@ describe("operational staffing tenant activation", () => {
       "--enabled", "true",
       "--confirm", "SET operational staffing true for organization 250"
     ])).toMatchObject({ projectId: "tonicatering", organizationId: "250", enabled: true });
+    expect(parseTenantActivationArgs([
+      "--project", "tonicatering",
+      "--organization", "mm05366-sandbox",
+      "--enabled", "true",
+      "--confirm", "SET operational staffing true for organization mm05366-sandbox"
+    ])).toMatchObject({
+      projectId: "tonicatering",
+      organizationId: "mm05366-sandbox",
+      enabled: true
+    });
     expect(() => parseTenantActivationArgs([
       "--project", "other",
       "--organization", "250",
       "--enabled", "true",
       "--confirm", "SET operational staffing true for organization 250"
     ])).toThrow(/restricted/u);
+    expect(() => parseTenantActivationArgs([
+      "--project", "tonicatering",
+      "--organization", "unapproved-sandbox",
+      "--enabled", "true",
+      "--confirm", "SET operational staffing true for organization unapproved-sandbox"
+    ])).toThrow(/approved founder-pilot/u);
     expect(() => parseTenantActivationArgs([
       "--project", "tonicatering",
       "--organization", "250",
