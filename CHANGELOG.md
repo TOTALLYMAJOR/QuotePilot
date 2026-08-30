@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-30 13:37:25 CDT
+Last updated: 2026-08-30 14:53:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Bound both fixed non-production candidate profiles to the single verified
+  `flightcontrol@quietpilot.us` platform operator after the previous staging
+  Gmail identity became unable to receive mail. Candidate dotenv validation,
+  active Functions revision readback, and the immutable receipt runtime
+  projection now reject the prior identity, additional operators, and
+  unreviewed substitutions. This is staging-only release authority; it does
+  not grant tenant membership by itself, change production authorization, or
+  replace the receipted customer-provisioning and owner-binding path.
 - Added a QuotePilot-owned `/app/auth/action` handler for Firebase email
   verification after the staging operator repeatedly reached Firebase's
   generic invalid-page-mode screen. The route validates the exact current

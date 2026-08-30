@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-30 00:00:16 CDT
+Last updated: 2026-08-30 14:53:30 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -168,7 +168,12 @@ explicit owner promotion after real-run review.
    authority may be enabled only in the fixed staging project through the
    explicit `staging-staffing-authority` profile; the separate tenant gate must
    still be authorized, enabled for one disposable tenant, exercised, and rolled
-   back. GitHub CI verification resolves authentication from
+   back. Both candidate profiles bind the staging platform-operator allowlist
+   to the single verified `flightcontrol@quietpilot.us` identity. Candidate
+   dotenv validation and active Functions readback reject an unavailable,
+   additional, or substituted operator before the receipt can become verified.
+   This staging identity does not change production platform administration.
+   GitHub CI verification resolves authentication from
    `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI; if
    none is available, the command stops before provider mutation and never
    prints credential material.

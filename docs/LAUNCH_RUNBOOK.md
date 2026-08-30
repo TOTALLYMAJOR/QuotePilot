@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-30 12:28:27 CDT
+Last updated: 2026-08-30 14:53:30 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -941,7 +941,11 @@ off, `STRIPE_MODE=test`, and Commercial Change, Revenue Autopilot preparation,
 and Revenue Autopilot send authority gates explicitly set to `false`.
 `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` must exactly match the selected
 candidate profile: `false` for `staging-safe-off`, `true` for
-`staging-staffing-authority`. The file must be a real regular file, use the exact staging `/app`
+`staging-staffing-authority`. `AUTH_PLATFORM_ADMIN_EMAILS` must be exactly
+`flightcontrol@quietpilot.us` for either fixed staging candidate profile; the
+policy and active-revision readback reject the unavailable legacy Gmail
+operator or any additional staging platform administrator. The file must be a
+real regular file, use the exact staging `/app`
 callbacks and approved inert identities, contain no plaintext secret or
 disabled-provider residue, and contain no unreviewed variables. Before any
 Firebase mutation, the command checks metadata only—never secret values—for an

@@ -35,6 +35,7 @@ export const RELEASE_CANDIDATE_UAT_PROFILES = Object.freeze([
 const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
   APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`,
   APP_BASE_DOMAIN: "mbmapps.com",
+  AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
   NOTIFICATIONS_EMAIL_PROVIDER: "none",
   EMAIL_FROM_NAME: "QuotePilot by MBMApps",
   EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us",
@@ -110,8 +111,7 @@ const CANDIDATE_FUNCTIONS_DISABLED_RESIDUE = Object.freeze([
 ]);
 
 const CANDIDATE_FUNCTIONS_ALLOWED_KEYS = new Set([
-  ...Object.keys(CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED),
-  "AUTH_PLATFORM_ADMIN_EMAILS"
+  ...Object.keys(CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED)
 ]);
 
 function reject(message) {

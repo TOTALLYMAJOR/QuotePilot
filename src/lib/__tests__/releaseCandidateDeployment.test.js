@@ -65,7 +65,6 @@ function ciFixture(overrides = {}) {
 function functionsEnvironment(overrides = {}) {
   return {
     ...CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
-    AUTH_PLATFORM_ADMIN_EMAILS: "candidate-admin@mbmapps.com",
     ...overrides
   };
 }
@@ -227,7 +226,14 @@ describe("governed release candidate deployment", () => {
 
   test("binds operational staffing authority to the exact candidate profile", () => {
     expect(validateCandidateFunctionsEnvironment(functionsEnvironment()))
-      .toMatchObject({ OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false" });
+      .toMatchObject({
+        AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
+        OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
+        platformAdminCount: 1
+      });
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      AUTH_PLATFORM_ADMIN_EMAILS: "mm05366@gmail.com"
+    }))).toThrow(/AUTH_PLATFORM_ADMIN_EMAILS.*flightcontrol@quietpilot\.us/i);
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
     }))).toThrow(/explicitly false/i);
