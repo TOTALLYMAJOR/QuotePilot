@@ -67,6 +67,26 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await fillRequiredQuoteFields(page);
   await advanceToSave(page);
 
+  const workspace = page.getByTestId("quote-workspace");
+  await expect(workspace).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/quotes\/[^/?#]+$/);
+  await expect(workspace.getByRole("heading", { name: /Sales Role Review/ })).toBeVisible();
+  await expect(workspace.getByText("Saved workspace", { exact: true })).toBeVisible();
+  await expect(workspace.getByText("72 guests", { exact: true })).toBeVisible();
+  const workspaceContainment = await workspace.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      viewportWidth: document.documentElement.clientWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      left: rect.left,
+      right: rect.right
+    };
+  });
+  expect(workspaceContainment.documentWidth).toBeLessThanOrEqual(workspaceContainment.viewportWidth);
+  expect(workspaceContainment.left).toBeGreaterThanOrEqual(-1);
+  expect(workspaceContainment.right).toBeLessThanOrEqual(workspaceContainment.viewportWidth + 1);
+
+  await workspace.getByRole("button", { name: "Back to opportunities" }).click();
   const historyHeading = page.getByRole("heading", { name: "Quotes" });
   await expect(historyHeading).toBeVisible();
 
@@ -74,18 +94,6 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog).toContainText("Sales can prepare proposal artifacts");
-  const handoff = dialog.locator(".saved-quote-handoff");
-  await expect(handoff).toContainText(/Saved as a draft/i);
-  await expect(handoff).toContainText(/has not been sent/i);
-  await expect(handoff).toBeFocused();
-  await expect(handoff).toHaveAttribute("aria-describedby", "saved-quote-handoff-description");
-  await expect(handoff.getByRole("button", { name: "Download draft PDF" })).toBeVisible();
-  await expect(handoff.getByRole("button", { name: "Copy customer portal link" })).toHaveCount(0);
-  await expect(handoff.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
-  await expect(handoff.getByRole("button", { name: "Set up email in Integrations" })).toHaveCount(0);
-  await expect(handoff).toContainText(/Customer portal sharing requires an active delivered status/i);
-  await expect(handoff.getByRole("button", { name: "Request approval to send" })).toHaveCount(0);
-  await expect(handoff).toContainText(/Use Copy Email or Download PDF for an admin handoff/i);
 
   const row = dialog.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
@@ -116,24 +124,14 @@ test("sales quote history preserves proposal actions and hides payment and booki
 
   const containment = await dialog.locator(".history-card").evaluate((card) => {
     const cardRect = card.getBoundingClientRect();
-    const handoffRect = card.querySelector(".saved-quote-handoff")?.getBoundingClientRect();
-    const actionRect = card.querySelector(".saved-quote-handoff-actions button")?.getBoundingClientRect();
     return {
       viewportWidth: document.documentElement.clientWidth,
       documentWidth: document.documentElement.scrollWidth,
       cardLeft: cardRect.left,
-      cardRight: cardRect.right,
-      handoffLeft: handoffRect?.left ?? -1,
-      handoffRight: handoffRect?.right ?? -1,
-      actionLeft: actionRect?.left ?? -1,
-      actionRight: actionRect?.right ?? -1
+      cardRight: cardRect.right
     };
   });
   expect(containment.documentWidth).toBeLessThanOrEqual(containment.viewportWidth);
   expect(containment.cardLeft).toBeGreaterThanOrEqual(-1);
   expect(containment.cardRight).toBeLessThanOrEqual(containment.viewportWidth + 1);
-  expect(containment.handoffLeft).toBeGreaterThanOrEqual(-1);
-  expect(containment.handoffRight).toBeLessThanOrEqual(containment.viewportWidth + 1);
-  expect(containment.actionLeft).toBeGreaterThanOrEqual(-1);
-  expect(containment.actionRight).toBeLessThanOrEqual(containment.viewportWidth + 1);
 });

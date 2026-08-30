@@ -75,15 +75,36 @@ async function advanceToSaveButton(page, saveButtonLabel) {
   throw new Error(`Unable to reach save button: ${saveButtonLabel}`);
 }
 
+async function expectSavedQuoteWorkspace(page, { eventName } = {}) {
+  const workspace = page.getByTestId("quote-workspace");
+  await expect(workspace).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/quotes\/[^/?#]+$/);
+  await expect(workspace.getByText("Saved workspace", { exact: true })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Back to opportunities" })).toBeVisible();
+  if (eventName) {
+    await expect(workspace.getByRole("heading", { name: new RegExp(eventName) })).toBeVisible();
+  }
+  const url = new URL(page.url());
+  return decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) || "");
+}
+
+async function openQuoteHistoryFromWorkspace(page) {
+  const workspace = page.getByTestId("quote-workspace");
+  await workspace.getByRole("button", { name: "Back to opportunities" }).click();
+  const history = page.getByRole("dialog", { name: "Quotes" });
+  await expect(history).toBeVisible();
+  return history;
+}
+
 async function createQuoteToHistory(page, { guests = 72, eventName, venue, date } = {}) {
   await fillRequiredQuoteFields(page, { guests, eventName, venue, date });
   await advanceToSaveButton(page, "Save draft");
-  const history = page.getByRole("dialog", { name: "Quotes" });
-  const handoff = history.locator(".saved-quote-handoff");
-  await expect(handoff).toContainText(/Saved as a draft/i);
-  await expect(handoff).toBeFocused();
+  const quoteId = await expectSavedQuoteWorkspace(page, { eventName });
+  const history = await openQuoteHistoryFromWorkspace(page);
   const historyHeading = history.getByRole("heading", { name: "Quotes" });
   await expect(historyHeading).toBeVisible();
+  await expect(history.locator(`tr[data-quote-id="${quoteId}"]`)).toBeVisible();
+  return quoteId;
 }
 
 function quoteRows(page) {
@@ -674,7 +695,7 @@ test("good better best scenarios can be compared and applied", async ({ page }) 
   await expect(page.getByLabel("Package tier")).toHaveValue("deluxe");
 });
 
-test("draft save handoff targets the exact new quote and stays truthful across saves", async ({ page }) => {
+test("draft saves land on the exact canonical workspace and stay truthful across saves", async ({ page }) => {
   await fillRequiredQuoteFields(page, { guests: 60, eventName: "E2E Quote A", venue: "Hall A" });
   await page.getByRole("button", { name: /^Next:/ }).click();
 
@@ -692,23 +713,21 @@ test("draft save handoff targets the exact new quote and stays truthful across s
 
   await advanceToSaveButton(page, "Save draft");
 
-  const history = page.getByRole("dialog", { name: "Quotes" });
-  const firstHandoff = history.locator(".saved-quote-handoff");
-  await expect(firstHandoff).toContainText(/Saved as a draft/i);
-  await expect(firstHandoff).toContainText(/has not been sent/i);
-  await expect(firstHandoff).toBeFocused();
+  const firstQuoteId = await expectSavedQuoteWorkspace(page, { eventName: "E2E Quote A" });
+  const firstWorkspace = page.getByTestId("quote-workspace");
+  await expect(firstWorkspace.getByText("Draft", { exact: true }).first()).toBeVisible();
+  await expect(firstWorkspace.getByText("110 guests", { exact: true })).toBeVisible();
   await expect(page.locator(".portal-link-row")).toHaveCount(0);
-  const firstQuoteId = await firstHandoff.getAttribute("data-quote-id");
   expect(firstQuoteId).toBeTruthy();
+  const history = await openQuoteHistoryFromWorkspace(page);
   const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
   }).first();
   await expect(firstQuoteRow).toContainText("E2E Staff");
   await expect(firstQuoteRow).toContainText("110");
-  await expect(history.locator("tr.history-row-target")).toHaveAttribute("data-quote-id", firstQuoteId);
+  await expect(history.locator(`tr[data-quote-id="${firstQuoteId}"]`)).toBeVisible();
 
   await history.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("button", { name: "Save draft" })).toBeFocused();
   await page.getByRole("button", { name: "New Quote" }).click();
   await fillRequiredQuoteFields(page, {
     guests: 61,
@@ -718,34 +737,31 @@ test("draft save handoff targets the exact new quote and stays truthful across s
   });
   await advanceToSaveButton(page, "Save draft");
 
-  const secondHandoff = page.getByRole("dialog", { name: "Quotes" }).locator(".saved-quote-handoff");
-  await expect(secondHandoff).toBeFocused();
-  const secondQuoteId = await secondHandoff.getAttribute("data-quote-id");
+  const secondQuoteId = await expectSavedQuoteWorkspace(page, { eventName: "E2E Quote B" });
+  await expect(page.getByTestId("quote-workspace").getByText("61 guests", { exact: true })).toBeVisible();
   expect(secondQuoteId).toBeTruthy();
   expect(secondQuoteId).not.toBe(firstQuoteId);
-  const secondTargetRow = page.getByRole("dialog", { name: "Quotes" })
-    .locator("tr.history-row-target");
-  await expect(secondTargetRow).toHaveAttribute("data-quote-id", secondQuoteId);
+  const secondHistory = await openQuoteHistoryFromWorkspace(page);
+  const secondTargetRow = secondHistory.locator(`tr[data-quote-id="${secondQuoteId}"]`);
   await expect(secondTargetRow).toContainText("61");
 
-  const customerSearch = page.getByRole("dialog", { name: "Quotes" })
+  const customerSearch = secondHistory
     .getByPlaceholder("Search customer, quote #, or event");
   await customerSearch.fill("No Matching Customer");
-  await expect(secondHandoff).toHaveCount(0);
+  await expect(secondTargetRow).toHaveCount(0);
   await expect(customerSearch).toBeFocused();
   await customerSearch.fill("");
-  await expect(secondHandoff).toHaveAttribute("data-quote-id", secondQuoteId);
+  await expect(secondHistory.locator(`tr[data-quote-id="${secondQuoteId}"]`)).toBeVisible();
   await expect(customerSearch).toBeFocused();
 });
 
 test("unresolved quote delivery locks conflicting mutations but keeps read-only artifacts", async ({ page }) => {
-  await createQuoteToHistory(page, {
+  const quoteId = await createQuoteToHistory(page, {
     guests: 58,
     eventName: "Unresolved Delivery",
     venue: "Safety Hall"
   });
   const history = page.getByRole("dialog", { name: "Quotes" });
-  const quoteId = await history.locator(".saved-quote-handoff").getAttribute("data-quote-id");
   expect(quoteId).toBeTruthy();
   await history.getByRole("button", { name: "Close" }).click();
 
@@ -1382,20 +1398,16 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("95");
   await advanceToSaveButton(page, "Save Changes");
 
-  const history = page.getByRole("dialog", { name: "Quotes" });
-  const handoff = history.locator(".saved-quote-handoff");
-  await expect(handoff).toHaveAttribute("data-quote-id", originalQuoteId);
-  await expect(handoff.locator(".eyebrow")).toHaveText("Draft updated");
-  await expect(handoff).toContainText(/Changes are saved/i);
-  await expect(handoff).toBeFocused();
-  await expect(history.locator("tr.history-row-target")).toHaveAttribute("data-quote-id", originalQuoteId);
+  const updatedQuoteId = await expectSavedQuoteWorkspace(page);
+  expect(updatedQuoteId).toBe(originalQuoteId);
+  await expect(page.getByTestId("quote-workspace").getByText("95 guests", { exact: true })).toBeVisible();
+  const history = await openQuoteHistoryFromWorkspace(page);
+  await expect(history.locator(`tr[data-quote-id="${originalQuoteId}"]`)).toBeVisible();
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("95");
 
   await setQuoteStatus(quoteRows.first(), "sent");
-  await expect(handoff.locator(".eyebrow")).toHaveText("Quote sent");
-  await expect(handoff).toContainText("Current quote status is sent.");
-  await expect(handoff).not.toContainText(/did not send|has not been sent/i);
+  await expect(quoteRows.first().locator("select").first()).toHaveValue("sent");
 });
 
 test("Catalog Admin menu browsing never mutates the clean quote being edited", async ({ page }) => {

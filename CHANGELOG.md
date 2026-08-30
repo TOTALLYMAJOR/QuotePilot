@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 21:20:35 CDT
+Last updated: 2026-08-29 22:34:55 CDT
 
 All notable project changes are documented in this file.
 
@@ -18,9 +18,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   and Staff into contextual Operations access. Editing, messaging, Proposal,
   Payment, lifecycle, delivery, and recovery continue through their existing
   trusted routes; explicit Quote administration and governed arrival paths
-  bypass the presentation without weakening authority. Historical workspace
-  routes remain compatibility aliases and hosted tenant-250/owner acceptance
-  remains a separate release gate.
+  bypass the presentation without weakening authority. Approved Workflow
+  execution handoffs now retain their exact quote and action while opening the
+  administration surface in both the Ambient and safe-off runtime graphs.
+  Historical workspace routes remain compatibility aliases and hosted tenant-
+  250/owner acceptance remains a separate release gate.
 - Reconciled the verified founder-pilot staffing activation from current
   `main` into the v0.16 release candidate. Protected run `33282940451`
   established the existing `v0.15.0` tenant-gate readback for

@@ -4620,7 +4620,8 @@ function LegacyAppCore({
                   : `Execute approved ${actionLabel}`,
                 returnFocus: "workflow"
               });
-              navigateWorkspace(buildQuotePath(quoteId));
+              const quotePath = buildQuotePath(quoteId);
+              navigateWorkspace(action ? `${quotePath}?view=administration` : quotePath);
             }}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onStartQuote={handleGetInstantQuote}
