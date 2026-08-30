@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 18:56:00 CDT
+Last updated: 2026-08-29 19:18:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Activated the already deployed operational-staffing authority for founder
+  pilot tenant `mm05366-sandbox`. Protected run `33282940451`, executed from
+  exact-main operator SHA `8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`,
+  verified tagged `v0.15.0`, Firebase all-scope run `32818605404`, and both
+  deployed global gates before recording and reading back `false -> true` for
+  the single tenant field. This is a tenant-activation receipt, not hosted or
+  human acceptance, a new application deployment, or Stripe Connect progress.
 - Prepared a narrow staffing-operations path for the already deployed
   `v0.15.0` runtime. The protected tenant workflow now runs operator code from
   the exact current `main` SHA while independently verifying the tagged

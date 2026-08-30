@@ -1,12 +1,12 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: 2026-08-29 18:27:06 CDT
+Last updated: 2026-08-29 19:18:00 CDT
 
 Status: deployed in exact `v0.15.0` behind independent presentation, server,
-and tenant gates. The first two gates are deployed on; the selected founder
-pilot tenant remains unset pending the protected WIF operation. Deployment and
-tenant readback do not establish hosted behavior, provider outcomes, or human
-acceptance.
+and tenant gates. The first two gates are deployed on; protected workflow run
+`33282940451` verified the selected founder-pilot tenant false-to-true change
+with readback. Deployment and tenant readback do not establish hosted behavior,
+provider outcomes, or human acceptance.
 
 ## Decision
 
@@ -69,7 +69,11 @@ server or tenant gate is off. The protected tenant operator runs from current
 `main`, independently verifies the exact tagged Firebase-all production
 runtime and both deployed global bindings, then uses a distinct
 Datastore-scoped WIF identity to patch and read back only the approved tenant
-field. Operator publication, deployed runtime, tenant activation, hosted use,
+field. The PATCH requires `currentDocument.exists=true`, so the custom identity
+cannot convert the update into a document create. Run `33282940451` verified
+that bounded operation for `mm05366-sandbox` from exact operator SHA
+`8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`, anchored to the exact `v0.15.0`
+Firebase-all receipt. Operator publication, deployed runtime, tenant activation, hosted use,
 and human acceptance remain separate evidence events.
 
 ## Roles and Tenant Scope
