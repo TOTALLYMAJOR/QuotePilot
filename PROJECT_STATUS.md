@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 18:27:06 CDT
+Last updated: 2026-08-29 19:18:00 CDT
 
 ## Current Production Release
 
@@ -20,8 +20,9 @@ Last updated: 2026-08-29 18:27:06 CDT
   later receipt-only documentation commit may place repository `main` ahead of
   that SHA without changing runtime code or requiring another application
   deployment.
-- These receipts prove exact source, CI, and provider workflow success only.
-  They do not prove tenant activation, authenticated staff/portal acceptance,
+- These deployment receipts prove exact source, CI, and provider workflow
+  success only. Tenant activation has its own receipt below; neither class of
+  receipt proves authenticated staff/portal acceptance,
   production-data correctness, provider delivery, recipient acknowledgement,
   or human acceptance.
 
@@ -63,24 +64,24 @@ Last updated: 2026-08-29 18:27:06 CDT
   every record carrying delivery/travel revenue. That is correct but
   undecided — see the travel/margin decision in `DEV_TASKS.md`.
 
-## Pending Production Completion
+## Production Completion and Pending Acceptance
 
 - Historical tenant activation run `32425529671` verified the then-current
   successful `v0.14.0` Firebase all-scope receipt, then failed closed before
   any patch because `organizations/250/settings/config` does not exist. Tenant
   `250` remains absent and will not be created for the founder pilot.
 - The owner selected existing organization `mm05366-sandbox` for the founder
-  pilot. Read-only production inspection confirms it is active, owner-bound,
-  catalog-populated, already has staffing records and a canonical settings
-  document, and currently has `operationalStaffingAuthorityEnabled` unset.
-- Branch `ops/founder-staffing-sandbox` prepares the smallest production-data
-  operation: current-main operator code verifies tagged deployed `v0.15.0`
-  SHA `bc495c8c948d440b12363d5da34209a11ff151fd`, Firebase all-scope run
-  `32818605404`, and both deployed staffing gates before the separate
-  least-privilege WIF identity may patch and read back only the sandbox tenant
-  field. No application deployment or provider activation is part of this
-  operation. Merge, workflow success, authenticated role/denial checks,
-  rollback, and explicit founder acceptance remain pending.
+  pilot. Protected workflow run `33282940451` used exact operator `main` SHA
+  `8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`, verified tagged deployed
+  `v0.15.0` SHA `bc495c8c948d440b12363d5da34209a11ff151fd`, Firebase all-scope run
+  `32818605404`, and both deployed staffing gates, then verified
+  `operationalStaffingAuthorityEnabled: false -> true (changed)` for that one
+  tenant. The distinct WIF identity retained only `datastore.entities.get` and
+  `datastore.entities.update`; the PATCH requires the existing canonical
+  settings document. No application deployment, invitation, or provider
+  activation was part of this operation. Authenticated role/denial checks,
+  hosted responsive/accessibility acceptance, rollback exercise, and explicit
+  founder acceptance remain pending.
 - Production configuration names Resend as the email provider and pins owner
   SMS to `pingram` generation `pingram-2026-08-14-a`. Configuration does not
   prove provider acceptance, delivery,
@@ -89,15 +90,16 @@ Last updated: 2026-08-29 18:27:06 CDT
   operational staffing, Staff workspace and private records, briefing output,
   manual staff invitations with independently tracked delivery and
   acknowledgement states, hardened dormant owner-SMS provider support, and the
-  lighter quote-builder decisions. Tenant availability remains unavailable
-  until the protected activation precondition and workflow complete.
+  lighter quote-builder decisions. The founder-pilot tenant gate is now on;
+  actual hosted usability remains unaccepted until the role-safe human checks
+  above complete.
 
 ## Engineering Checkpoint Detail
 
 - The owner authorized exact-candidate publication and coordinated Firebase
   and Vercel production deployment for live testing after the required gates.
-  Exact `v0.15.0` reached both production targets; tenant activation remains
-  pending on the fail-closed provisioning precondition recorded above. Provider
+  Exact `v0.15.0` reached both production targets and the founder-pilot tenant
+  activation now has the separate verified receipt recorded above. Provider
   acceptance, signed delivery evidence, recipient acknowledgement, and human
   acceptance remain separate post-deployment tests.
 - The Stripe Connect program has begun with a source-only organization
@@ -733,11 +735,11 @@ route evidence are complete.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
 12. Operational staffing code and both global gates are deployed in exact
-    `v0.15.0`; the tenant gate remains unset for selected founder-pilot tenant
-    `mm05366-sandbox`. The narrow protected-operator change must merge and pass
-    exact CI before activation. After activation, exact hosted admin/sales and
-    denied-role behavior, responsive accessibility, rollback, and explicit
-    founder acceptance remain separate evidence.
+    `v0.15.0`; protected run `33282940451` independently activated and verified
+    the tenant gate for selected founder-pilot tenant `mm05366-sandbox` from
+    exact-main operator SHA `8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`.
+    Exact hosted admin/sales and denied-role behavior, responsive accessibility,
+    rollback, and explicit founder acceptance remain separate evidence.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
     all-positive release checklist. Provider-backed buyer, delivery, payment,
     contract-conversion, and authoritative-staffing items need a separately
