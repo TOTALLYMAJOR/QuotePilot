@@ -27,6 +27,7 @@ import {
   providerRequestHeaders,
   resolveGitHubToken,
   validateHostedManifest,
+  vercelAutomationBypassToken,
   vercelDeploymentPayload
 } from "../../../scripts/deploy-release-candidate.mjs";
 
@@ -124,6 +125,24 @@ describe("governed release candidate deployment", () => {
     });
     expect(providerRequestHeaders({ token: "vercel-token" }))
       .not.toHaveProperty("x-goog-user-project");
+    expect(providerRequestHeaders({ protectionBypass: "opaque-bypass-secret" }))
+      .toMatchObject({ "x-vercel-protection-bypass": "opaque-bypass-secret" });
+  });
+
+  test("binds protected preview reads to one existing automation bypass", () => {
+    const secret = "vcp_opaque_existing_automation_secret";
+    expect(vercelAutomationBypassToken({
+      protectionBypass: {
+        [secret]: { scope: "automation-bypass" }
+      }
+    })).toBe(secret);
+    expect(() => vercelAutomationBypassToken({ protectionBypass: {} }))
+      .toThrow(/exactly one automation protection bypass/i);
+    expect(() => vercelAutomationBypassToken({
+      protectionBypass: {
+        [secret]: { scope: "email-invite" }
+      }
+    })).toThrow(/exactly one automation protection bypass/i);
   });
 
   test("accepts only exact successful release-branch CI evidence", () => {

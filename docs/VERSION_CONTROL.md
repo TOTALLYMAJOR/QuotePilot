@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 23:40:09 CDT
+Last updated: 2026-08-30 00:00:16 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -240,8 +240,12 @@ Candidate provider clients are fixed as part of this contract: all Firebase CLI
 operations use the checksum-verified official v15.24.0 binary, Rules content
 readback uses exact `google-auth-library` 10.5.0 ADC against the public API, and
 Vercel preview uses a deterministic Build Output API v3 artifact plus narrow
-REST upload/deploy/readback. Both Rules and Vercel project access are proven by
-read-only preflight before receipt reservation or provider mutation. Runtime
+REST upload/deploy/readback. Protected preview manifest reads use exactly one
+existing automation-bypass credential returned by the fixed project preflight;
+the credential remains memory-only and is never persisted in receipts or logs.
+Missing or ambiguous bypass configuration stops before reservation. Both Rules
+and Vercel project access are proven by read-only preflight before receipt
+reservation or provider mutation. Runtime
 `npx`, provider-client discovery, and Git-triggered Vercel deployment are not
 valid release paths.
 

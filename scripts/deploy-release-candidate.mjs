@@ -105,21 +105,31 @@ function parseJsonOutput(output, label) {
   }
 }
 
-export function providerRequestHeaders({ token = "", quotaProject = "" } = {}) {
+export function providerRequestHeaders({
+  token = "",
+  quotaProject = "",
+  protectionBypass = ""
+} = {}) {
   return {
     Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(quotaProject ? { "x-goog-user-project": quotaProject } : {}),
+    ...(protectionBypass ? { "x-vercel-protection-bypass": protectionBypass } : {}),
     "User-Agent": "QuotePilot-release-candidate"
   };
 }
 
-async function fetchJson(url, { token = "", quotaProject = "", label = "Provider" } = {}) {
+async function fetchJson(url, {
+  token = "",
+  quotaProject = "",
+  protectionBypass = "",
+  label = "Provider"
+} = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const response = await fetch(url, {
-      headers: providerRequestHeaders({ token, quotaProject }),
+      headers: providerRequestHeaders({ token, quotaProject, protectionBypass }),
       signal: controller.signal
     });
     if (!response.ok) throw new Error(`${label} request failed with HTTP ${response.status}.`);
@@ -305,12 +315,14 @@ function writeCandidateManifest(
 
 export async function validateHostedManifest(url, expected, {
   fetchManifest = fetchJson,
+  fetchOptions = {},
   wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
   attempts = 31,
   delayMs = 2_000
 } = {}) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const manifest = await fetchManifest(`${url}/release-candidate.json?sha=${expected.sourceSha}`, {
+      ...fetchOptions,
       label: "Hosted release candidate manifest"
     });
     if (JSON.stringify(manifest) === JSON.stringify(expected)) {
@@ -800,6 +812,21 @@ async function waitForVercelDeployment(deployment, token) {
   return current;
 }
 
+export function vercelAutomationBypassToken(project) {
+  const protectionBypass = project?.protectionBypass;
+  if (!protectionBypass || typeof protectionBypass !== "object" || Array.isArray(protectionBypass)) {
+    throw new Error("Release candidate rejected: fixed Vercel preview project has no protection bypass settings.");
+  }
+  const matching = Object.entries(protectionBypass).filter(([secret, metadata]) => (
+    String(secret).trim().length >= 20
+    && metadata?.scope === "automation-bypass"
+  ));
+  if (matching.length !== 1) {
+    throw new Error("Release candidate rejected: fixed Vercel preview project must expose exactly one automation protection bypass.");
+  }
+  return matching[0][0];
+}
+
 async function validateVercelProjectAccess(token) {
   const teamId = encodeURIComponent(RELEASE_CANDIDATE_POLICY.vercel.orgId);
   const projectId = encodeURIComponent(RELEASE_CANDIDATE_POLICY.vercel.projectId);
@@ -812,6 +839,7 @@ async function validateVercelProjectAccess(token) {
   ) {
     throw new Error("Release candidate rejected: Vercel token does not resolve the fixed preview project.");
   }
+  return vercelAutomationBypassToken(project);
 }
 
 async function deployVercel({
@@ -823,7 +851,8 @@ async function deployVercel({
   functionsGates,
   reservation,
   attempt,
-  vercelToken
+  vercelToken,
+  vercelProtectionBypass
 }) {
   const token = vercelToken;
   updateCandidateReceipt(reservation, { status: "preparing" });
@@ -867,7 +896,9 @@ async function deployVercel({
       deploymentUrl: provider.url
     }
   });
-  const manifestUrl = await validateHostedManifest(provider.url, manifest);
+  const manifestUrl = await validateHostedManifest(provider.url, manifest, {
+    fetchOptions: { protectionBypass: vercelProtectionBypass }
+  });
   return {
     provider: {
       name: "vercel",
@@ -950,9 +981,10 @@ async function main() {
     const vercelToken = target === "vercel-preview"
       ? String(process.env.VERCEL_TOKEN || "").trim()
       : undefined;
+    let vercelProtectionBypass;
     if (target === "vercel-preview") {
       validateVercelLink();
-      await validateVercelProjectAccess(vercelToken);
+      vercelProtectionBypass = await validateVercelProjectAccess(vercelToken);
     }
     reservation = reserveCandidateReceipt({
       root: ROOT,
@@ -972,6 +1004,7 @@ async function main() {
       firebaseRulesAccessToken,
       stagingBackendEvidence,
       vercelToken,
+      vercelProtectionBypass,
       reservation,
       attempt,
       candidateProfile

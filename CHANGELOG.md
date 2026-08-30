@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 23:38:59 CDT
+Last updated: 2026-08-30 00:00:16 CDT
 
 All notable project changes are documented in this file.
 
@@ -53,6 +53,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   manifest may be retried, but the candidate still fails closed unless source
   SHA, CI run, profile, and authority gates all match exactly; the earlier
   candidate remains a truthful partial receipt and is not retried.
+- Bound protected Vercel manifest verification to the fixed project's single
+  existing automation-bypass credential obtained during read-only project
+  preflight. The credential remains memory-only, is sent only as the standard
+  protection-bypass header, and is never written to the candidate receipt or
+  logs. Missing or ambiguous bypass settings stop before receipt reservation;
+  the earlier HTTP-401 preview receipt remains a truthful partial outcome.
 - Accepted the checksum-pinned Firebase 15.24.0 Hosting deployment result's
   numeric-project resource form in addition to its shorter site form. Both
   representations remain bound to staging project number `844470813106`, site
