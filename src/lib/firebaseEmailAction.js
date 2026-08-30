@@ -2,12 +2,12 @@ import { validateFirebaseEmailActionContinueUrl } from "./firebaseEmailActionPol
 
 export const FIREBASE_EMAIL_ACTION_PATH = "/app/auth/action";
 
-const fail = (kind, message) => Object.assign(new Error(message), { kind });
+const fail = (kind) => Object.assign(new Error(), { kind });
 
 function verifyProject(action) {
   const key = String(import.meta.env.VITE_FIREBASE_API_KEY || "").trim();
   if (!key || action.apiKey !== key) {
-    throw fail(key ? "malformed" : "configuration", "Email verification is unavailable.");
+    throw fail(key ? "malformed" : "configuration");
   }
 }
 
@@ -29,7 +29,7 @@ export function parseFirebaseEmailVerificationAction(input) {
     action.continueUrl = validateFirebaseEmailActionContinueUrl(returnTo);
     return action;
   } catch {
-    throw fail("malformed", "This verification link is incomplete.");
+    throw fail("malformed");
   }
 }
 
@@ -42,12 +42,12 @@ async function callFirebase(action, operation) {
       body: JSON.stringify({ oobCode: action.oobCode })
     });
   } catch {
-    throw fail("uncertain", "Firebase did not return a result.");
+    throw fail("uncertain");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const uncertain = response.status === 429 || response.status >= 500;
-    throw fail(uncertain ? "uncertain" : "invalid", uncertain ? "Firebase did not return a result." : "This link is no longer valid.");
+    throw fail(uncertain ? "uncertain" : "invalid");
   }
   return payload;
 }
@@ -55,9 +55,9 @@ async function callFirebase(action, operation) {
 export async function completeFirebaseEmailVerification(action, onChecked) {
   verifyProject(action);
   const check = await callFirebase(action, "resetPassword");
-  if (check?.requestType !== "VERIFY_EMAIL") throw fail("malformed", "This code cannot verify an email.");
+  if (check?.requestType !== "VERIFY_EMAIL") throw fail("malformed");
   onChecked?.();
   const receipt = await callFirebase(action, "update");
-  if (receipt?.emailVerified !== true) throw fail("uncertain", "Firebase did not confirm verification.");
+  if (receipt?.emailVerified !== true) throw fail("uncertain");
   return { continueUrl: action.continueUrl };
 }

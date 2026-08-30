@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-30 12:28:27 CDT
+Last updated: 2026-08-30 13:07:08 CDT
 
 All notable project changes are documented in this file.
 
@@ -18,6 +18,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   **Verify email** so automatic inbox/link previews cannot complete the action.
   Submitting, provider uncertainty, Firebase receipt reconciliation,
   definite invalid/expired failure, and malformed-link recovery remain distinct.
+  The state surface keeps only the essential headings and actions so the clean
+  CI build stays within the existing bundle ceiling without a new exception.
   Focused source tests and a browser route contract are local evidence only;
   staging Hosting deployment, staging Auth callback binding, a newly delivered
   message, exact-account verification, tenant role binding, and human acceptance
