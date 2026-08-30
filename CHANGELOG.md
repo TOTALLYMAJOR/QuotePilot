@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 23:04:31 CDT
+Last updated: 2026-08-29 23:20:05 CDT
 
 All notable project changes are documented in this file.
 
@@ -27,6 +27,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   Ambient-only interaction verification now enters the retained Living
   Opportunity through its governed state-only arrival contract instead of
   treating the ordinary exact-quote URL as a competing canonical surface.
+  The production pilot flag matrix uses that same governed entry when it
+  verifies the retained Event Room and Decide Stack, while direct exact-quote
+  navigation continues to verify the canonical connected workspace elsewhere.
   Historical workspace routes remain compatibility aliases and hosted tenant-
   250/owner acceptance remains a separate release gate.
 - Reconciled the verified founder-pilot staffing activation from current

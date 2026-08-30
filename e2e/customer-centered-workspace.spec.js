@@ -33,6 +33,22 @@ async function gotoWorkspace(page, path) {
   }
 }
 
+async function gotoGovernedOpportunity(page, quoteId) {
+  await gotoWorkspace(page, "/app");
+  await page.evaluate(async (exactQuoteId) => {
+    const { createWorkspaceArrivalHandoff } = await import("/src/lib/workspaceArrivalContract.js");
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "opportunity",
+      object: { id: exactQuoteId, type: "opportunity" },
+      focus: { quoteId: exactQuoteId },
+      intentId: "review_opportunity"
+    });
+    if (!handoff.ok) throw new Error(`Pilot opportunity handoff failed: ${handoff.recovery.code}`);
+    window.history.pushState(handoff.navigation.state, "", handoff.navigation.path);
+    window.dispatchEvent(new Event("quotepilot:locationchange"));
+  }, quoteId);
+}
+
 async function fillRequiredQuoteFields(page) {
   const eventType = page.getByLabel(/Event type/i);
   await expect(eventType).toBeVisible();
@@ -222,7 +238,7 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: "What to review today" })).toBeVisible();
     await expect(page.locator(".now-surface")).toBeVisible();
 
-    await gotoWorkspace(page, "/app/quotes/pilot-release-quote");
+    await gotoGovernedOpportunity(page, "pilot-release-quote");
     await expect(page.getByRole("heading", { name: "Pilot Release Dinner" })).toBeVisible();
     await expect(page.locator('[data-decide-stack="decide-stack-v1"]')).toBeVisible();
     await expect(page.getByRole("img", { name: /Proposal readiness:/ })).toBeVisible();
