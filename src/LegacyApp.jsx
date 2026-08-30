@@ -4567,8 +4567,8 @@ function LegacyAppCore({
             currentUserRole={authSession.role}
             tenantTimeZone={tenantTimeZone}
             focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
-            focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
-            focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
+            focusAction={historyTarget.action}
+            focusReason={historyTarget.reason}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
@@ -4620,8 +4620,7 @@ function LegacyAppCore({
                   : `Execute approved ${actionLabel}`,
                 returnFocus: "workflow"
               });
-              const quotePath = buildQuotePath(quoteId);
-              navigateWorkspace(action ? `${quotePath}?view=administration` : quotePath);
+              navigateWorkspace(WORKSPACE_PATHS.quotes);
             }}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onStartQuote={handleGetInstantQuote}

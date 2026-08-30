@@ -321,12 +321,12 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
                 ? "Quote unavailable"
                 : "No saved quote"}</span>
             <p>{snapshot.loading
-              ? "Reading the latest tenant-scoped quote without changing it."
+              ? "Reading the saved quote."
               : snapshot.error
-                ? "QuotePilot could not read this tenant's quote history. No data was changed."
+                ? "Quote history could not be read. No data changed."
                 : exactQuoteUnavailable
-                  ? "The requested quote is not present in the bounded saved history. No different quote was opened."
-                : "Create or save a quote first, then return here to open its workspace."}</p>
+                  ? "The requested quote was not found. No alternate quote opened."
+                : "Save a quote, then open its workspace."}</p>
             <button type="button" onClick={snapshot.error ? () => snapshot.refresh({ force: true }) : returnToQuotes}>
               {snapshot.error ? "Retry" : "Open opportunities"}
             </button>
@@ -411,7 +411,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
         <div className="qwc-concept-card">
           <span>Current opportunity</span>
           <strong>{quoteNumber}</strong>
-          <p>Saved tenant data with editing, delivery, and lifecycle safeguards preserved.</p>
+          <p>Saved tenant quote.</p>
           <button type="button" onClick={returnToQuotes}>
             All opportunities
             <ConceptIcon name="back" size={17} />
@@ -443,7 +443,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
             </div>
             <p><ConceptIcon name="check" size={16} /> {savedAtValue
               ? `Saved ${formatActivityTime(savedAtValue)}`
-              : "Loaded from saved quote history"}</p>
+              : "Quote loaded"}</p>
           </div>
 
           <div className="qwc-header-actions" aria-label="Quote actions">
@@ -494,7 +494,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
 
         <div className="qwc-preview-boundary">
           <span>Saved workspace</span>
-          <p>Showing the latest saved tenant record. Readiness measures completeness; approval remains an explicit staff action.</p>
+          <p>Latest saved tenant record. Completeness does not grant approval.</p>
           <button type="button" onClick={() => snapshot.refresh({ force: true })}>Refresh data</button>
         </div>
 

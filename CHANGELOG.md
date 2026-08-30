@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 22:48:28 CDT
+Last updated: 2026-08-29 23:04:31 CDT
 
 All notable project changes are documented in this file.
 
@@ -20,7 +20,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   trusted routes; explicit Quote administration and governed arrival paths
   bypass the presentation without weakening authority. Approved Workflow
   execution handoffs now retain their exact quote and action while opening the
-  administration surface in both the Ambient and safe-off runtime graphs.
+  Opportunities administration surface in both the Ambient and safe-off
+  runtime graphs, including exact governed-control focus. Repeated workspace
+  boundary copy was tightened without changing its read-only or approval
+  semantics, keeping the Ambient production bundle inside its existing budget.
   Ambient-only interaction verification now enters the retained Living
   Opportunity through its governed state-only arrival contract instead of
   treating the ordinary exact-quote URL as a competing canonical surface.

@@ -5625,8 +5625,7 @@ export default function App({
                   : `Execute approved ${actionLabel}`,
                 returnFocus: "workflow"
               });
-              const quotePath = buildQuotePath(quoteId);
-              navigateWorkspace(action ? `${quotePath}?view=administration` : quotePath);
+              navigateWorkspace(WORKSPACE_PATHS.quotes);
             }}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onStartQuote={handleGetInstantQuote}

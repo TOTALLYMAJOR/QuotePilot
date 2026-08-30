@@ -103,7 +103,7 @@ describe("QuoteWorkspaceConceptPage", () => {
     mount({ onExit });
 
     expect(container.textContent).toContain("No saved quote");
-    expect(container.textContent).toContain("Create or save a quote first");
+    expect(container.textContent).toContain("Save a quote, then open its workspace");
     act(() => container.querySelector("button").click());
     expect(onExit).toHaveBeenCalledTimes(1);
   });
@@ -113,7 +113,7 @@ describe("QuoteWorkspaceConceptPage", () => {
     mount();
 
     expect(container.textContent).toContain("Quote unavailable");
-    expect(container.textContent).toContain("No data was changed");
+    expect(container.textContent).toContain("No data changed");
     act(() => container.querySelector("button").click());
     expect(snapshot.refresh).toHaveBeenCalledWith({ force: true });
   });
@@ -124,7 +124,7 @@ describe("QuoteWorkspaceConceptPage", () => {
     mount();
 
     expect(container.textContent).toContain("Quote unavailable");
-    expect(container.textContent).toContain("No different quote was opened");
+    expect(container.textContent).toContain("No alternate quote opened");
     expect(container.textContent).not.toContain("Morgan wedding");
   });
 
@@ -145,7 +145,7 @@ describe("QuoteWorkspaceConceptPage", () => {
     expect(container.textContent).toContain("Morgan wedding");
     expect(container.textContent).toContain("$19,475.00");
     expect(container.textContent).toContain("Saved workspace");
-    expect(container.textContent).toContain("Readiness measures completeness");
+    expect(container.textContent).toContain("Completeness does not grant approval");
     expect(Array.from(container.querySelectorAll('.qwc-primary-nav a')).map((link) => link.textContent.trim()))
       .toEqual(["Now", "Opportunities", "Clients", "Library"]);
     expect(Array.from(container.querySelectorAll('.qwc-operations-nav a')).map((link) => link.textContent.trim()))
