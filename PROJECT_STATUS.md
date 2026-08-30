@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 21:20:35 CDT
+Last updated: 2026-08-30 12:28:27 CDT
 
 ## Current Production Release
 
@@ -70,6 +70,21 @@ Last updated: 2026-08-29 21:20:35 CDT
 ## Production Completion and Pending Acceptance
 
 ### v0.16.0 bounded promotion in progress
+
+- Repeated staging verification for `flightcontrol@quietpilot.us` reached
+  Firebase's generic invalid-page-mode screen. Read-only Auth configuration
+  inspection found the correct default callback and `%LINK%` template, and a
+  disposable staging identity proved a newly generated five-parameter
+  `verifyEmail` link works end to end through the reserved Firebase handler;
+  that probe identity was then deleted. The candidate now contains a
+  QuotePilot-owned `/app/auth/action` repair that validates the exact action
+  project/type/code/continuation, strips the code from the visible URL, requires
+  a deliberate click, and separates provider uncertainty from receipt and
+  failure. The focused auth and recovery suites pass locally. This is not yet hosted:
+  a new exact-SHA candidate must pass release validation and deploy before the
+  staging Auth callback is rebound and a fresh message is requested. The real
+  account remains unverified and unbound to a tenant; no administrator override
+  is permitted. Production Auth and Stripe Connect remain unchanged.
 
 - The owner authorized remote publication and governed deployment pursuit for
   the current 74-commit candidate. Against `origin/main`, baseline

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 56,
+  "catalogVersion": 57,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -394,7 +394,7 @@
     },
     {
       "id": "firebase-email-action-return-policy",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
@@ -404,7 +404,8 @@
       ],
       "summary": "Firebase verification and password-reset continue URLs are restricted to the canonical QuotePilot production /app URL, the one fixed isolated staging /app URL used for governed candidate acceptance, or loopback development.",
       "backendPaths": [
-        "src/lib/authClient.js"
+        "src/lib/authClient.js",
+        "src/lib/firebaseEmailActionPolicy.js"
       ],
       "backendExports": [],
       "frontendPaths": [],
@@ -432,6 +433,108 @@
       ],
       "headlessReason": "The exact-host allowlist is a private security boundary for the existing authentication surface. It neither exposes a new control nor grants tenant, role, Firestore, pricing, staffing, provider, or production authority.",
       "safeOutcome": "Email actions can return only to an exact reviewed QuotePilot /app origin, while arbitrary previews, lookalike domains, credentials, alternate paths, queries, and fragments fail closed."
+    },
+    {
+      "id": "firebase-email-verification-handler",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "unverified staff users",
+        "release operators"
+      ],
+      "summary": "QuotePilot owns a deliberate-confirmation Firebase email-verification route that validates the exact project, action type, one-time code, and approved return location before applying the code, then distinguishes provider uncertainty, reconciliation, receipt, definite failure, and recovery without exposing the code.",
+      "backendPaths": [
+        "src/lib/firebaseEmailAction.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/FirebaseEmailActionPage.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/FirebaseEmailActionPage.jsx",
+          "locator": "data-capability-id=\"firebase-email-verification-handler\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/firebaseEmailAction.test.js",
+        "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+        "e2e/firebase-email-action.smoke.spec.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "does not apply a verification code until the person chooses Verify email"
+        },
+        {
+          "path": "e2e/firebase-email-action.smoke.spec.js",
+          "locator": "staging email action route requires a deliberate verification action"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "deliberate one-time verification confirmation"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "Secure email verification"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The handler reuses the canonical restrained authentication card and brand lockup, requires an explicit 44-pixel-class button instead of an automatic mutation, removes the code from the address bar, and gives each provider boundary a truthful next step.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the ready state before the user authorizes the mutation",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the submitting state while Firebase applies the code",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the uncertain state without claiming verification",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders reconciliation while waiting for the Firebase receipt",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the receipt state only after Firebase acceptance",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the error state for a definitively unusable code",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the recovery state for a malformed action link",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "A person who received the exact staging verification message can deliberately apply its one-time Firebase code, see a truthful provider-backed result, and return to QuotePilot without a link preview auto-verifying the account or exposing the code in the visible URL."
     },
     {
       "id": "customer-directory-and-360",

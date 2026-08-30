@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 19:47:18 CDT
+Last updated: 2026-08-30 12:28:27 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -20,6 +20,16 @@ post-launch evidence.
    registration can still return an existing-email error; retain separate abuse
    controls and registration hardening as required by the production threat
    model.
+6. For the isolated v0.16 staging candidate only, bind the verification-email
+   callback to
+   `https://quotepilot-staging-20260804.web.app/app/auth/action` only after the
+   exact candidate Hosting deployment serves that route. Confirm a newly
+   generated link carries `apiKey`, `mode=verifyEmail`, `oobCode`, and the exact
+   approved `/app` `continueUrl` without recording their values. Exercise the
+   route with a disposable identity, require a deliberate **Verify email**
+   action, then delete the probe. Production keeps its existing callback until
+   an independently reviewed production handler deployment and rollback plan;
+   do not treat staging callback configuration as production readiness.
 
 ## 2) Configure Local Environment
 1. Copy `.env.example` to `.env`.

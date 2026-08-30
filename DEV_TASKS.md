@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-29 21:20:35 CDT
+Last updated: 2026-08-30 12:28:27 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -101,6 +101,14 @@ The remaining sections retain the detailed task contracts; this table does not
 replace their safety conditions.
 
 ## P0 - Production Acceptance
+
+- Complete `QP-AUTH-019`: qualify and deploy the QuotePilot-owned staging
+  `/app/auth/action` handler, bind only the staging Firebase verification
+  callback to that exact hosted route, request a fresh message from the signed-in
+  `flightcontrol@quietpilot.us` account, and record provider verification plus
+  owner acceptance before tenant membership is bound. Never mark the Auth user
+  verified administratively, expose the one-time code, reuse an old message, or
+  change production Auth configuration as part of the staging repair.
 
 - Through the separately authorized staging secret process, create and enable
   non-provider staging versions for all eleven candidate-required secret names

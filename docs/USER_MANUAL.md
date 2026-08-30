@@ -1,11 +1,20 @@
 # User Manual
 
-Last updated: 2026-08-29 21:20:35 CDT
+Last updated: 2026-08-30 12:28:27 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Access and Roles
+- **Secure email verification:** open only the newest verification message for
+  the exact account. The staging candidate opens `/app/auth/action`, removes
+  the one-time code from the visible address, and waits for you to choose
+  **Verify email**; merely opening or previewing the link does not verify the
+  account. A receipt means Firebase accepted the action. An uncertain result
+  means QuotePilot could not prove whether the provider applied it; return to
+  sign in for account truth or request a new message. An expired, used, malformed, wrong-project,
+  or wrong-return link is rejected and directs you back to `/app` to request a
+  new message. Do not copy or share the verification URL.
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.
 - Admin access is required for Catalog Admin configuration and the default-off
   Ambient Library that presents the same guarded catalog authority.
