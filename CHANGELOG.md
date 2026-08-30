@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 22:34:55 CDT
+Last updated: 2026-08-29 22:48:28 CDT
 
 All notable project changes are documented in this file.
 
@@ -21,6 +21,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   bypass the presentation without weakening authority. Approved Workflow
   execution handoffs now retain their exact quote and action while opening the
   administration surface in both the Ambient and safe-off runtime graphs.
+  Ambient-only interaction verification now enters the retained Living
+  Opportunity through its governed state-only arrival contract instead of
+  treating the ordinary exact-quote URL as a competing canonical surface.
   Historical workspace routes remain compatibility aliases and hosted tenant-
   250/owner acceptance remains a separate release gate.
 - Reconciled the verified founder-pilot staffing activation from current

@@ -72,7 +72,19 @@ async function seedAmbientOpportunity(page) {
 }
 
 async function openAmbientOpportunity(page) {
-  await page.goto("/app/quotes/ambient-a11y");
+  await page.goto("/app");
+  await page.evaluate(async () => {
+    const { createWorkspaceArrivalHandoff } = await import("/src/lib/workspaceArrivalContract.js");
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "opportunity",
+      object: { id: "ambient-a11y", type: "opportunity" },
+      focus: { quoteId: "ambient-a11y" },
+      intentId: "review_opportunity"
+    });
+    if (!handoff.ok) throw new Error(`Ambient opportunity handoff failed: ${handoff.recovery.code}`);
+    window.history.pushState(handoff.navigation.state, "", handoff.navigation.path);
+    window.dispatchEvent(new Event("quotepilot:locationchange"));
+  });
   const surface = page.locator(".ambient-living-opportunity");
   await expect(surface).toBeVisible({ timeout: LAZY_SURFACE_TIMEOUT_MS });
   await expect(surface).toHaveAttribute("data-ambient-model", "pilot-slice-alpha-v1");
