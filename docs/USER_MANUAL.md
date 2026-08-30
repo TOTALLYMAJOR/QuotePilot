@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-29 17:54:25 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -163,14 +163,18 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   `operationalStaffingAuthorityEnabled` setting are enabled. Turning on one
   gate does not turn on either of the others or establish hosted,
   production-data, or human acceptance. A verified isolated-staging deployment
-  exists; production v0.16 and the founder-pilot tenant gate remain separate.
+  exists, and protected run `33282940451` separately enabled the already
+  deployed v0.15 authority for `mm05366-sandbox`; production v0.16 and hosted
+  human acceptance remain separate.
 - Production operators promote or roll back the tenant gate through the
-  protected **Set Operational Staffing Tenant** release workflow after an exact
-  successful Firebase all-scope deployment. The workflow changes only the named
-  tenant field and verifies readback. It authenticates through the reviewed
-  workload-identity provider and distinct tenant-operator service account; it
-  does not use a Firebase refresh token, create a service-account key, or create
-  staffing or email evidence.
+  protected **Set Operational Staffing Tenant** workflow after an exact tagged
+  Firebase all-scope deployment. The operator workflow runs from current
+  `main` while independently verifying the deployed tagged SHA, successful
+  deploy run, and both staffing bindings. It changes only the existing named
+  tenant field, requires an update-only precondition, and verifies readback
+  through the distinct tenant-operator workload identity. It does not deploy
+  the current branch or create staffing, invitation, provider, or human
+  evidence.
   The organization input has no default and accepts bounded numeric identifiers
   or the single approved founder-pilot identifier `mm05366-sandbox`; arbitrary
   slugs fail closed.

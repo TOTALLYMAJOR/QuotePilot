@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 17:54:25 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -208,20 +208,20 @@ git push origin v<major>.<minor>.<patch>
     provider acceptance/READY evidence and update the
     target-specific last-known-good receipt only after post-launch verification
     succeeds.
-11. When a reviewed release requires the operational-staffing tenant gate,
-    dispatch `Set Operational Staffing Tenant` only after the matching
-    Firebase `all` deployment succeeds. Bind the exact release SHA and deploy
-    run id, use the exact state-and-organization confirmation, and retain the
-    verified readback. The workflow uses the reviewed workload-identity
-    provider with the separate `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT` and
-    exposes its short-lived Datastore token only to the mutation step. The
-    reversible field mutation is a separate production
-    action and is not implied by deployment. Workflow dispatch values must be
-    mapped through step environment variables and never interpolated directly
-    into executable shell bodies that can access provider credentials.
-    The organization input has no default. It accepts the existing bounded
-    numeric identifier form or the one approved founder-pilot identifier
-    `mm05366-sandbox`; arbitrary slugs remain invalid.
+11. When a reviewed deployed release requires the operational-staffing tenant
+    gate, dispatch `Set Operational Staffing Tenant` from current `main` only
+    after the deployed tagged commit's matching Firebase `all` run succeeds.
+    Bind the deployed release SHA and run id, use the exact
+    state-and-organization confirmation, and retain verified readback. The
+    workflow proves the semantic tag, exact deploy run, and both staffing
+    bindings before its distinct least-privilege WIF identity changes the one
+    existing tenant field. The PATCH carries `currentDocument.exists=true`, so
+    the operator cannot convert its update into document creation. This
+    reversible data mutation is separate from application deployment and
+    operator-workflow publication. Workflow inputs remain mapped through step
+    environment variables rather than interpolated into credential-bearing
+    shell bodies. The organization input has no default and accepts only the
+    existing bounded numeric form or `mm05366-sandbox`.
 
 If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific deployment runs. Allowed deployment profiles

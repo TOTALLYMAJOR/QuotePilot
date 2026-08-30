@@ -253,6 +253,13 @@ describe("direct production deployment safety", () => {
     expect(source).toMatch(/access_token_scopes:\s*https:\/\/www\.googleapis\.com\/auth\/datastore/u);
     expect(source).toMatch(/create_credentials_file:\s*false/u);
     expect(source).toMatch(/export_environment_variables:\s*false/u);
+    expect(source).toContain("ref: ${{ github.sha }}");
+    expect(source).toContain("DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}");
+    expect(source).toContain('git tag --points-at "${DEPLOYED_RELEASE_SHA}"');
+    expect(source).toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
+    expect(source).toContain("VITE_OPERATIONAL_STAFFING_ENABLED");
+    expect(source).not.toContain("github.sha == inputs.deployed_release_sha");
+    expect(source).not.toContain("git merge-base --is-ancestor");
     expect(source).not.toContain("secrets.FIREBASE_TOKEN");
   });
 

@@ -1,10 +1,12 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: 2026-08-29 17:54:25 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
-Status: source implementation behind independent default-off presentation,
-server, and tenant gates. This decision record does not establish deployment,
-production data, provider behavior, or human acceptance.
+Status: deployed in exact `v0.15.0` behind independent presentation, server,
+and tenant gates. The first two gates are deployed on; protected workflow run
+`33282940451` verified the selected founder-pilot tenant false-to-true change
+with readback. Deployment and tenant readback do not establish hosted behavior,
+provider outcomes, or human acceptance.
 
 ## Decision
 
@@ -61,10 +63,18 @@ All three gates must remain independent:
 - `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true` enables the server authority.
 - `settings.operationalStaffingAuthorityEnabled=true` enables one exact tenant.
 
-The browser cannot promote either authority gate. A visible source surface,
+The browser cannot promote any authority gate. A visible source surface,
 successful local test, or enabled presentation flag is not authority when the
-server or tenant gate is off. Production workflows do not bind these new gates
-until a separately reviewed rollout.
+server or tenant gate is off. The protected tenant operator runs from current
+`main`, independently verifies the exact tagged Firebase-all production
+runtime and both deployed global bindings, then uses a distinct
+Datastore-scoped WIF identity to patch and read back only the approved tenant
+field. The PATCH requires `currentDocument.exists=true`, so the custom identity
+cannot convert the update into a document create. Run `33282940451` verified
+that bounded operation for `mm05366-sandbox` from exact operator SHA
+`8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`, anchored to the exact `v0.15.0`
+Firebase-all receipt. Operator publication, deployed runtime, tenant activation, hosted use,
+and human acceptance remain separate evidence events.
 
 The protected tenant operator never selects a tenant implicitly. It accepts the
 existing bounded numeric identifier form or the single approved founder-pilot

@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 18:17:20 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -17,14 +17,14 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
   `origin/main`. The 74-commit figures above are the original unpublished
   product-stack baseline; later commits on the release branch are bounded
   release-control hardening and do not rewrite that inventory.
-- Current published candidate head: exact
-  `17582da99ae9ace1ec6fb11fe224336faaf75410`, published in PR #111. It passed
-  all eight CI jobs in run `33276960899`, both exact-SHA Stripe source-only
-  workflows, and the governed Firebase `staging-staffing-authority` deployment
-  with verified Hosting, Functions, Rules, manifest, and runtime-gate readback.
-  The founder-pilot tenant-identifier change is the next bounded release delta;
-  it passes the complete local high-risk/CWV release lane and still requires a
-  published exact-SHA CI result.
+- Pre-reconciliation published head
+  `ed228c1e84218eabaa8b859378d84f5e2339c17b` passed all eight CI jobs in run
+  `33280654199`. The verified Firebase `staging-staffing-authority` deployment
+  remains bound to earlier exact head `17582da99ae9ace1ec6fb11fe224336faaf75410`.
+  Current `main` then added the protected founder-pilot activation and receipt
+  commits. PR #111 is being reconciled with those commits and requires a fresh
+  exact-head CI result plus a new same-SHA candidate deployment before hosted
+  UI judgment.
 - Current production and rollback baseline: exact `v0.15.0`; target-specific
   provider receipts in `PROJECT_STATUS.md` remain authoritative until a newer
   promotion passes post-deploy verification.
@@ -71,7 +71,7 @@ correctness, use, or human acceptance.
 | Stripe Connect | Include source, keep `functions-connect` exports empty and provider access disabled | Requires reviewed Terraform plan/digest, separately authorized apply, deployed identity reconciliation, App Check observation/enforcement, restricted Sandbox credential, hosted negative/replay UAT, and human acceptance. |
 | Steward | Include validation/compiler/workbench foundation, keep provider runtime and model output unavailable | Requires provider/credential and privacy/billing review, canonical private reads/persistence, current consent, controlled silent execution, 100 actual human reviews, hosted rules proof, and acceptance. |
 | Buyer onboarding/access | Keep server gate and public CTA off in the safe candidate | Dedicated restricted Stripe test key, exact test webhook, Turnstile/provider checks, bounded acceptance window, and close plan remain external. |
-| Operational staffing authority | Preserve `staging-safe-off`; use the separate positive profile only for isolated staffing qualification | Exact `mm05366-sandbox` tenant-gate readback, authenticated hosted UAT, final human approval, production deployment, and protected activation/rollback receipts remain required; tenant `250` will not be created for this founder pilot. |
+| Operational staffing authority | Preserve `staging-safe-off`; use the separate positive profile only for isolated staffing qualification | Production v0.15 tenant activation is verified for `mm05366-sandbox`; v0.16 still requires same-SHA candidate dispatch, authenticated hosted UAT, rollback rehearsal, production deployment, and final founder judgment. Tenant `250` will not be created. |
 | Commercial Change and Revenue Autopilot | Keep authority/send gates off | Authenticated/provider evidence and named rollback remain incomplete. |
 | SMS delivery | Preserve deployed configuration boundaries; do not infer delivery | Credential/endpoint registration, controlled send, provider lifecycle, opt-out, carrier, and recipient evidence remain separate. |
 | Attendance persistence | Promote the read-only context only | Terminology/channel research and authority/migration decisions are unresolved. |
@@ -195,11 +195,12 @@ human results remain separate.
   or provider mutation on the same missing staging secret. This removes the
   misleading unauthenticated GitHub API 404 without weakening any staging,
   secret, UAT, or production prerequisite.
-- The maximum safe promotion achieved in this pass is therefore publication,
-  exact-SHA CI qualification, and source-complete release hardening. No
-  Firebase staging, Vercel preview, main, tag, production, tenant, Stripe,
-  Steward, SMS, or buyer-access mutation was performed. Current production and
-  rollback authority remain exact `v0.15.0`.
+- The maximum safe promotion now includes a verified Firebase positive-profile
+  staging deployment at exact `17582da`, production v0.15 staffing activation
+  for `mm05366-sandbox`, and green pre-reconciliation release head `ed228c1`.
+  Vercel preview, v0.16 merge/tag/production, hosted human acceptance, Stripe,
+  Steward, SMS, and buyer-access activation remain unproven or intentionally
+  dormant.
 - Default-branch Dependabot alert #139 remains open for development-only
   `extract-zip` path traversal. The candidate removes that dependency and
   audits clean. A separate narrow backport is published as PR #112 at exact
@@ -209,16 +210,14 @@ human results remain separate.
   the alert still requires reviewed merge to `main`, not dismissal based on a
   branch result.
 
-The owner has now authorized the staffing operationalization path for tenant
-`250` and designated separate tenant-admin, sales/operator, and release/UAT
-roles. The next executable dependency chain is: validate and publish the new
-`staging-staffing-authority` profile; provision and review the production WIF
-pool/provider and two least-privilege service accounts; bind the three
-repository variables; satisfy the existing staging secret prerequisites;
-deploy the latest exact-CI SHA to Firebase and Vercel under the same explicit
-profile; enable one disposable staging tenant; execute positive staffing,
-denial, responsive, rollback, and named human UAT. Full production promotion
-and tenant `250` activation remain prohibited until those receipts exist.
+The owner has authorized the fastest governed v0.16 march and prefers to judge
+the UI after dispatch. The next executable dependency chain is therefore:
+publish the main-reconciled release head; require exact-head CI; redeploy that
+same SHA to isolated Firebase and Vercel preview under the explicit staffing
+profile; execute the available hosted operator and denial checks; then merge,
+tag, and promote only after the remaining all-positive release gates have real
+evidence. This approval authorizes execution but does not manufacture provider,
+hosted, accessibility, or human outcomes.
 
 ## Candidate UAT Boundary
 
@@ -261,12 +260,12 @@ Applicable means eligible to test; it does not mean passed. Blocked is not
 |---|---|---|---|
 | Production Google Cloud identity | WIF provider, distinct deploy and tenant-operator service accounts, workflow-specific trust bindings, scoped deploy roles, two-permission tenant custom role, and all three repository variables now have provider readback; no key exists | First exact workflow token exchange and governed deployment plus tenant rollback/readback receipts | Governed production Firebase and protected tenant operations; only then safe legacy-secret retirement |
 | Staging secret prerequisites | Enabled-version metadata now exists for every bound name enumerated by the candidate, including four random staging-only placeholders; unrelated authorities remain off | Fresh exact-SHA preflight must re-read all metadata without exposing values | Firebase candidate attempt under the selected tracked profile |
-| Firebase candidate review | Two attempts failed before reservation; exact `5a0c55e` produced a partial receipt after Functions analysis failed. The local analyzer dry run is now green, but no completed staging deployment receipt exists | Full local validation, publish a new immutable SHA, exact-head CI, then verified Hosting, Functions revisions/runtime flags, Firestore release/ruleset, and hosted manifest receipt | Vercel preview precondition |
+| Firebase candidate review | Exact `17582da` has a verified positive-profile Firebase-all receipt; the main-reconciled head does not | Fresh exact-head CI, then verified Hosting, Functions revisions/runtime flags, Firestore release/ruleset, and hosted manifest receipt for the reconciled SHA | Same-SHA Vercel preview precondition |
 | Vercel preview and hosted acceptance | No preview upload/deployment was attempted because the Firebase safe-off prerequisite failed | Same-SHA immutable READY preview receipt plus applicable hosted checks and authenticated operator journey | Pre-merge release decision |
 | Human review governance | The owner designated tenant-admin, sales/operator, and final release/UAT roles, but their provider and GitHub account bindings are not yet proven; branch protection still requires zero approvals | Verify each identity in the relevant provider and bind the final reviewer through the selected independent-review or explicitly accepted solo-operator control | Truthful human acceptance and merge authorization |
 | Default-branch dependency remediation | Dependabot alert #139 remains open; narrow PR #112 is mergeable and exact-CI green but unreviewed/unmerged | Review PR #112 and merge it to `main`, or let the same remediation arrive through a later reviewed v0.16 merge; confirm alert closure afterward | Removes the known development-tool advisory from the current default branch without promoting unqualified product features |
 | Device/accessibility acceptance | Automated responsive/accessibility evidence exists; physical devices and assistive technology remain untested | Approve and execute the required PWA/device/AT matrix | Human UI/PWA acceptance |
-| Tenant `250` staffing | Owner authorization and named operating roles exist; both operator accounts are verified. Organization/settings are absent. The canonical dry run proves a complete legacy-to-`250` create plan, but the intended admin currently owns `mm05366-sandbox` and the second account has a customer role | Decide the sandbox retention/tombstone outcome, then record migration apply, owner/sales role transitions, exact production deployment, protected one-field activation, rollback rehearsal, reactivation, and named human acceptance | One-tenant authoritative staffing qualification without orphaning prior tenant state |
+| Founder-pilot staffing | Protected run `33282940451` verified production v0.15 tenant activation for `mm05366-sandbox`; tenant `250` is not being created | Dispatch the reconciled v0.16 candidate, execute hosted admin/sales/denial and accessibility checks, rehearse rollback, then record the founder's UI judgment | Production v0.16 staffing qualification without inventing an additional tenant |
 | Provider-backed capabilities | Buyer, email, payment, SMS, and Stripe Connect positive paths are blocked in the safe-off plan | Named Stripe, Resend/Pingram, Turnstile, and Connect evidence owners; reviewed credentials/dashboard configuration, controlled windows, provider receipts, and rollback | Capability-specific hosted/provider qualification; not blanket activation |
 | Stripe Connect | Foundation remains deploy-empty/provider-disabled | Review and authorize the exact Terraform plan digest, reconcile applied identity, observe/promote App Check, bind restricted Sandbox credential, then hosted Sandbox UAT | Consider runtime exports; no production payment authority is implied |
 | Steward | Provider runtime and model output remain unavailable | Privacy/billing/provider approval, private context/persistence, current consent, controlled silent execution, 100 actual human packet reviews, hosted rules, and acceptance | Consider private runtime activation while model output remains governed |

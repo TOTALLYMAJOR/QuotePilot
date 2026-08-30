@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 17:54:25 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -382,10 +382,11 @@ Its success proves only that one configuration field was verified; it does not
 prove provider delivery, staff acknowledgement, attendance, payroll, or human
 acceptance.
 
-Rollback disables the presentation and global server gates and returns the
-exact tenant setting to false. Preserve immutable records and receipts for a
-later exact read; never rewrite operational history to simulate rollback. See
-the [authority ADR](OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
+Tenant rollback returns the exact tenant setting to false without redeploying
+or rewriting immutable records. Full release rollback may separately disable
+the presentation and global server gates. Preserve immutable records and
+receipts for a later exact read; never rewrite operational history to simulate
+rollback. See the [authority ADR](OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
 
 ### Revenue Autopilot activation gate
 

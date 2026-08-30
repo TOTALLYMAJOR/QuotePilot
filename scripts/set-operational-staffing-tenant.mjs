@@ -75,7 +75,8 @@ export async function setOperationalStaffingTenant({
   }), "Firestore settings read");
   const before = settingValue(beforeDocument);
   if (before !== enabled) {
-    const patchUrl = `${documentUrl}?updateMask.fieldPaths=operationalStaffingAuthorityEnabled`;
+    const patchUrl = `${documentUrl}?updateMask.fieldPaths=operationalStaffingAuthorityEnabled`
+      + "&currentDocument.exists=true";
     await responseJson(await fetchImpl(patchUrl, {
       method: "PATCH",
       headers: { ...headers, "content-type": "application/json" },

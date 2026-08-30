@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 18:17:20 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 ## Current Production Release
 
@@ -20,8 +20,9 @@ Last updated: 2026-08-29 18:17:20 CDT
   later receipt-only documentation commit may place repository `main` ahead of
   that SHA without changing runtime code or requiring another application
   deployment.
-- These receipts prove exact source, CI, and provider workflow success only.
-  They do not prove tenant activation, authenticated staff/portal acceptance,
+- These deployment receipts prove exact source, CI, and provider workflow
+  success only. Tenant activation has its own receipt below; neither class of
+  receipt proves authenticated staff/portal acceptance,
   production-data correctness, provider delivery, recipient acknowledgement,
   or human acceptance.
 
@@ -66,7 +67,7 @@ Last updated: 2026-08-29 18:17:20 CDT
   every record carrying delivery/travel revenue. That is correct but
   undecided — see the travel/margin decision in `DEV_TASKS.md`.
 
-## Pending Production Completion
+## Production Completion and Pending Acceptance
 
 ### v0.16.0 bounded promotion in progress
 
@@ -120,10 +121,12 @@ Last updated: 2026-08-29 18:17:20 CDT
   searches local/global/npm-cache Firebase modules or runtime-downloads a
   Vercel CLI. That lock has now produced a verified Firebase staging receipt;
   Vercel preview remains unverified.
-- Release PR #111 publishes `release/v0.16.0`. Exact candidate
-  `17582da99ae9ace1ec6fb11fe224336faaf75410` is clean, published, mergeable,
-  and passed all eight jobs in CI Quality run `33276960899` plus exact-SHA
-  Stripe source-only runs `33276960898` and `33276960940`.
+- Release PR #111 publishes `release/v0.16.0`. Pre-reconciliation exact head
+  `ed228c1e84218eabaa8b859378d84f5e2339c17b` passed all eight jobs in CI
+  Quality run `33280654199`. Current `main` then added three verified staffing
+  activation and receipt commits, making the PR conflicting; the release
+  candidate is being reconciled with those exact commits and must obtain fresh
+  exact-head CI before another candidate deployment.
 - The governed `staging-staffing-authority` Firebase-all receipt for exact
   `17582da99ae9ace1ec6fb11fe224336faaf75410` is verified. It binds staging
   project `quotepilot-staging-20260804`, Hosting version
@@ -181,13 +184,13 @@ Last updated: 2026-08-29 18:17:20 CDT
   The three required GitHub variables are present. First token exchange and
   governed deployment remain unverified.
 - The owner selected existing organization `mm05366-sandbox` as the bounded
-  founder-pilot tenant instead of creating tenant `250`. It is active,
-  owner-bound, catalog-populated, and already contains staffing records; its
-  `operationalStaffingAuthorityEnabled` setting is currently unset. Tenant
-  `250` remains absent. One person owns the designated email accounts, so they
-  are role-test identities rather than independent staff or reviewers. The
-  protected operator now admits only numeric IDs or the exact approved founder
-  sandbox and has not yet changed the production tenant setting.
+  founder-pilot tenant instead of creating tenant `250`. Protected run
+  `33282940451` verified its `operationalStaffingAuthorityEnabled` transition
+  from false to true against the exact tagged v0.15 Firebase-all deployment.
+  Tenant `250` remains absent. One person owns the designated email accounts,
+  so they are role-test identities rather than independent staff or reviewers.
+  Hosted use, role-path behavior, accessibility, rollback rehearsal, and
+  founder acceptance remain separate evidence.
 - Stripe Connect remains deploy-empty/provider-disabled; Steward remains
   providerless with model output hidden; buyer access, Commercial Change,
   Revenue Autopilot, and authoritative staffing remain fail-closed. Candidate
@@ -246,19 +249,11 @@ Last updated: 2026-08-29 18:17:20 CDT
   the exact SHA, immutable deployment, target, organization, role, and evidence
   level. Repository validation does not complete the real staff session,
   hosted data checks, denied-role/cross-tenant observations, or human acceptance.
-- Tenant activation run `32425529671` verified the exact successful `v0.14.0`
-  Firebase all-scope receipt, then failed closed before any patch because
-  `organizations/250/settings/config` does not exist. The workflow did not
-  record tenant activation.
-- Before retrying activation, run a separately reviewed tenant-scoped
-  migration/provisioning dry run to prove organization `250` exists and to
-  establish its required `settings/config` document through the canonical
-  tenant-data path. Do not bypass the protected workflow or create a sparse
-  settings document solely to force the staffing flag.
-- After the precondition is reviewed and applied, rerun **Set Operational
-  Staffing Tenant** against Firebase deployment run `32419577296`, organization
-  `250`, and `enabled=true`, then retain its verified readback before beginning
-  authenticated staff acceptance.
+- Historical tenant-250 activation run `32425529671` failed closed because the
+  settings document did not exist. The founder subsequently selected existing
+  tenant `mm05366-sandbox`; protected run `33282940451` verified the bounded
+  false-to-true update and readback. No tenant was created or migrated, and the
+  successful activation does not establish hosted staffing usability.
 - Production configuration names Resend as the email provider and binds the
   reviewed Pingram deployment profile. Configuration and deployment do not
   prove provider delivery, staff acknowledgement, attendance, payroll, tenant
@@ -268,8 +263,8 @@ Last updated: 2026-08-29 18:17:20 CDT
 
 - The owner authorized exact-candidate publication and coordinated Firebase
   and Vercel production deployment for live testing after the required gates.
-  Exact `v0.15.0` reached both production targets; tenant activation remains
-  pending on the fail-closed provisioning precondition recorded above. Provider
+  Exact `v0.15.0` reached both production targets and the founder-pilot tenant
+  activation now has the separate verified receipt recorded above. Provider
   acceptance, signed delivery evidence, recipient acknowledgement, and human
   acceptance remain separate post-deployment tests.
 - The Stripe Connect program has begun with a source-only organization
@@ -923,13 +918,12 @@ route evidence are complete.
     before the March 2027 platform removal can be called operationally closed.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
-12. Operational staffing code and authority are deployed in exact `v0.15.0`
-    but remain independently default-off and unavailable to tenant `250`; the
-    protected activation run failed closed because the canonical settings
-    document is absent. Do not bypass provisioning or enable its tenant gate
-    until the reviewed migration path, exact hosted admin/sales/customer denial,
-    responsive accessibility, rollback, and one explicitly approved tenant
-    acceptance are recorded.
+12. Operational staffing code and both global gates are deployed in exact
+    `v0.15.0`; protected run `33282940451` independently activated and verified
+    the tenant gate for selected founder-pilot tenant `mm05366-sandbox` from
+    exact-main operator SHA `8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`.
+    Exact hosted admin/sales and denied-role behavior, responsive accessibility,
+    rollback, and explicit founder acceptance remain separate evidence.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
     all-positive release checklist. The separately tracked
     `staging-staffing-authority` profile can expose positive staffing checks in

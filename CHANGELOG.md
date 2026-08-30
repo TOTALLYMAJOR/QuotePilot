@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 17:54:25 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reconciled the verified founder-pilot staffing activation from current
+  `main` into the v0.16 release candidate. Protected run `33282940451`
+  established the existing `v0.15.0` tenant-gate readback for
+  `mm05366-sandbox`; the operator workflow now remains independently runnable
+  from current `main` while verifying the exact tagged Firebase-all runtime,
+  both deployed staffing gates, and an update-only
+  `currentDocument.exists=true` tenant patch. This reconciliation does not
+  deploy v0.16, activate another capability, or claim hosted UI or human
+  acceptance.
 - Narrowed the protected operational-staffing tenant operator to accept either
   the existing bounded numeric organization identifiers or the single approved
   founder-pilot organization `mm05366-sandbox`. Arbitrary slugs remain

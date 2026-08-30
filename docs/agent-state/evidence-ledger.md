@@ -1,8 +1,16 @@
 # Evidence Ledger
 
-Last updated: 2026-08-29 17:54:25 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
-Checkpoint recorded: 2026-08-29T22:56:50.000Z
+Checkpoint recorded: 2026-08-30T00:47:18.000Z
+
+## Founder-pilot production staffing activation and v0.16 reconciliation
+
+- File/path: Main SHAs `8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125` and `9f33d9283ff4fc7c36b5e3160a3b158d552bdbe1`; protected run `33282940451`; release PR #111.
+- Evidence level: production tenant readback plus repository reconciliation in progress.
+- Evidence: The protected workflow verified the exact tagged v0.15 Firebase-all deployment and both deployed staffing gates, then read back `operationalStaffingAuthorityEnabled: false -> true` for existing tenant `mm05366-sandbox`. Current main records that receipt. The v0.16 branch is reconciling those commits before a fresh exact-head CI and candidate dispatch.
+- Why it matters: The founder can judge the reconciled v0.16 UI against the already-authorized tenant without creating tenant `250` or confusing application deployment with tenant activation.
+- Unverified gaps: Reconciled-head CI, same-SHA Firebase/Vercel candidate receipts, hosted role/accessibility behavior, rollback rehearsal, v0.16 production deployment, and founder acceptance.
 
 ## Published candidate, exact CI, and deployment boundary
 

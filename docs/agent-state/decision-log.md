@@ -1,6 +1,6 @@
 # Decision Log
 
-Last updated: 2026-08-29 17:54:25 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 Checkpoint recorded: 2026-08-29T22:56:50.000Z
 
@@ -41,6 +41,7 @@ Checkpoint recorded: 2026-08-29T22:56:50.000Z
 33. Keep the pinned Firebase Functions graph compatible with the checksum-pinned Firebase analyzer and defer optional Kitchen BEO renderer loading until invocation. Require `--force` explicitly for the repository's tracked retry-enabled event functions instead of depending on an interactive acknowledgement.
 34. Record Cloud Scheduler API enablement caused by Firebase preflight even though the command used `--dry-run`; dry-run is not a universal no-provider-mutation guarantee.
 35. Supersede the fictional multi-person staffing model: one founder owns the supplied accounts, selects existing `mm05366-sandbox` as the v0.16 founder-pilot tenant, and approves the governed release/activation path. Preserve the accounts as role-test identities, not independent human review. Admit only numeric tenant IDs or that exact sandbox in the protected operator; do not create tenant `250`, enable providers, or infer owner acceptance from deployment.
+36. Treat the founder's sweeping approval as authority to execute every governed, reversible v0.16 qualification and deployment step that existing credentials and receipts permit. Preserve mandatory fail-closed evidence checks: approval does not convert provider, hosted, accessibility, or human outcomes into passes. Dispatch the candidate UI as early as the same-SHA Firebase/Vercel sequence permits so remaining judgment is based on the real surface.
 
 ## Unresolved decisions
 
