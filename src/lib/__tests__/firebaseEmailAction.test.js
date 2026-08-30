@@ -31,18 +31,11 @@ function actionUrl(overrides = {}) {
 describe("Firebase email verification action", () => {
   beforeEach(() => {
     mocks.auth.currentUser = null;
-    mocks.fetch.mockReset();
-    mocks.fetch
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: vi.fn().mockResolvedValue({ requestType: "VERIFY_EMAIL", email: "owner@example.com" })
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: vi.fn().mockResolvedValue({ email: "owner@example.com", emailVerified: true })
-      });
+    mocks.fetch.mockReset().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ emailVerified: true })
+    });
     vi.stubGlobal("fetch", mocks.fetch);
     vi.stubEnv("VITE_FIREBASE_API_KEY", "staging-api-key");
   });
@@ -71,21 +64,13 @@ describe("Firebase email verification action", () => {
     }))).toThrow();
   });
 
-  test("checks the operation before applying the one-time code", async () => {
+  test("uses Firebase's verify-email endpoint and requires its verified receipt", async () => {
     const action = parseFirebaseEmailVerificationAction(actionUrl());
     await expect(completeFirebaseEmailVerification(action)).resolves.toEqual({
       continueUrl: "https://quotepilot-staging-20260804.web.app/app"
     });
-    expect(mocks.fetch).toHaveBeenNthCalledWith(
-      1,
-      "https://identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=staging-api-key",
-      expect.objectContaining({ body: JSON.stringify({ oobCode: "one-time-code" }) })
-    );
-    expect(mocks.fetch).toHaveBeenNthCalledWith(
-      2,
-      "https://identitytoolkit.googleapis.com/v1/accounts:update?key=staging-api-key",
-      expect.objectContaining({ body: JSON.stringify({ oobCode: "one-time-code" }) })
-    );
+    expect(mocks.fetch).toHaveBeenCalledOnce();
+    expect(mocks.fetch).toHaveBeenCalledWith(expect.stringContaining("accounts:update"), expect.any(Object));
   });
 
   test("rejects a different Firebase project key before checking the code", async () => {
@@ -95,8 +80,7 @@ describe("Firebase email verification action", () => {
   });
 
   test("preserves an interrupted provider response as uncertain", async () => {
-    mocks.fetch.mockReset();
-    mocks.fetch.mockRejectedValueOnce(new TypeError("network unavailable"));
+    mocks.fetch.mockReset().mockRejectedValueOnce(new TypeError("network unavailable"));
     const action = parseFirebaseEmailVerificationAction(actionUrl());
     await expect(completeFirebaseEmailVerification(action)).rejects.toMatchObject({ kind: "uncertain" });
   });

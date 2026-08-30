@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-30 13:07:08 CDT
+Last updated: 2026-08-30 13:37:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -12,10 +12,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Added a QuotePilot-owned `/app/auth/action` handler for Firebase email
   verification after the staging operator repeatedly reached Firebase's
   generic invalid-page-mode screen. The route validates the exact current
-  Firebase API key, `verifyEmail` operation, one-time code, and approved
-  production/staging/loopback `/app` continuation before mutation; removes the
-  code from the visible URL; and requires the recipient to deliberately choose
-  **Verify email** so automatic inbox/link previews cannot complete the action.
+  Firebase API key, local `verifyEmail` mode, one-time code presence, and
+  approved production/staging/loopback `/app` continuation before mutation;
+  sends that code only to Firebase's verify-email endpoint, requires a verified
+  provider receipt, removes the code from the visible URL, and requires the
+  recipient to deliberately choose **Verify email** so automatic inbox/link
+  previews cannot complete the action.
   Submitting, provider uncertainty, Firebase receipt reconciliation,
   definite invalid/expired failure, and malformed-link recovery remain distinct.
   The state surface keeps only the essential headings and actions so the clean
@@ -24,6 +26,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   staging Hosting deployment, staging Auth callback binding, a newly delivered
   message, exact-account verification, tenant role binding, and human acceptance
   remain separate. Production Auth configuration and Stripe Connect are unchanged.
+- Reconciled the existing temporary Ambient bundle profile to the exact
+  verification-handler graph: aggregate emitted JavaScript increases by 2,262
+  bytes to 3,930,814 while the largest chunk remains 1,207 bytes below its
+  unchanged 391,901-byte ceiling. The compatibility graph remains below its
+  existing ceiling. This is a measured update to the named temporary exception,
+  not a new exception or evidence that the handler loads into every route.
 - Promoted the approved connected dinner-table Quote Workspace from an
   isolated evaluation path to the canonical authenticated admin/sales exact-
   quote experience at `/app/quotes/:quoteId`. The source candidate preserves

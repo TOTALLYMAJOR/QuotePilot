@@ -444,13 +444,14 @@
         "unverified staff users",
         "release operators"
       ],
-      "summary": "QuotePilot owns a deliberate-confirmation Firebase email-verification route that validates the exact project, action type, one-time code, and approved return location before applying the code, then distinguishes provider uncertainty, reconciliation, receipt, definite failure, and recovery without exposing the code.",
+      "summary": "QuotePilot owns a deliberate-confirmation Firebase email-verification route that validates the exact local project, mode, one-time-code presence, and approved return location before sending the code only to Firebase's verify-email endpoint, requires a verified provider receipt, and distinguishes provider uncertainty, reconciliation, receipt, definite failure, and recovery without exposing the code.",
       "backendPaths": [
         "src/lib/firebaseEmailAction.js"
       ],
       "backendExports": [],
       "frontendPaths": [
-        "src/components/FirebaseEmailActionPage.jsx"
+        "src/components/FirebaseEmailActionPage.jsx",
+        "src/components/WorkspaceRoute.jsx"
       ],
       "entryPointLocators": [
         {

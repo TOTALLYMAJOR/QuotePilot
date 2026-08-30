@@ -2205,11 +2205,13 @@ hr {
 }
 
 .auth-product-brand {
+  display: block;
   width: fit-content;
   margin-bottom: 1rem;
   padding: 0.62rem 0.72rem;
   border-radius: 12px;
   background: #0e0d0b;
+  color: #f2f1ee;
 }
 
 .auth-product-brand .product-brand-copy strong {

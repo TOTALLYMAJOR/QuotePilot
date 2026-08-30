@@ -10,6 +10,7 @@ import { useAuthSession } from "../hooks/useAuthSession";
 import { useTenantContext } from "../hooks/useTenantContext";
 import { WORKSPACE_PATHS, WORKSPACE_ROUTE_IDS } from "../lib/workspaceRoutes";
 import { buildWorkspaceRouteScopeKey } from "../lib/workspaceScope";
+import { mountFirebaseEmailActionPage } from "./FirebaseEmailActionPage";
 
 const QUOTE_WORKSPACE_CONCEPT_PATH = "/app/quote-workspace-concept";
 const QUOTE_WORKSPACE_PATH = "/app/quote-workspace";
@@ -112,7 +113,7 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   );
 }
 
-export default function WorkspaceRoute() {
+function AuthenticatedWorkspaceRoute() {
   const tenantContext = useTenantContext();
   const authSession = useAuthSession({ tenantContext });
 
@@ -121,4 +122,13 @@ export default function WorkspaceRoute() {
       <ScopedWorkspaceRoute tenantContext={tenantContext} authSession={authSession} />
     </WorkspaceNavigationProvider>
   );
+}
+
+export default function WorkspaceRoute() {
+  const actionRoot = useCallback((node) => {
+    if (node && !node.firstChild) mountFirebaseEmailActionPage(node);
+  }, []);
+  return window.location.pathname === "/app/auth/action"
+    ? <div ref={actionRoot} />
+    : <AuthenticatedWorkspaceRoute />;
 }

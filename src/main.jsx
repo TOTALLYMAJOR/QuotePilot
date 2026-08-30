@@ -28,10 +28,6 @@ const StaffInvitationResponsePage = createRecoverableLazy(
   () => import("./components/StaffInvitationResponsePage"),
   "StaffInvitationResponsePage"
 );
-const FirebaseEmailActionPage = createRecoverableLazy(
-  () => import("./components/FirebaseEmailActionPage"),
-  "FirebaseEmailActionPage"
-);
 const WorkspaceRoute = createRecoverableLazy(
   () => import("./components/WorkspaceRoute"),
   "WorkspaceRoute"
@@ -76,15 +72,10 @@ const isStaffInvitationRoute = !isPortalRoute
   && !isRevenueAutopilotUnsubscribeRoute
   && normalizedPath === "/staffing/respond"
   && Boolean(String(searchParams.get("staffing") || "").trim());
-const isFirebaseEmailActionRoute = !isPortalRoute
-  && !isRevenueAutopilotUnsubscribeRoute
-  && normalizedPath === "/app/auth/action";
 const isMarketingRoute = normalizedPath === "/" && !isPortalRoute;
 const isSystemMarketingRoute = normalizedPath === "/system" && !isPortalRoute;
 const isBuyerAccessRoute = normalizedPath === "/start" && !isPortalRoute;
-const routeKind = isFirebaseEmailActionRoute
-  ? "firebase-email-action"
-  : isStaffInvitationRoute
+const routeKind = isStaffInvitationRoute
   ? "staff-invitation"
   : isRevenueAutopilotUnsubscribeRoute
     ? "revenue-autopilot-unsubscribe"
@@ -110,13 +101,7 @@ recordDiagnosticEvent({
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {isFirebaseEmailActionRoute ? (
-      <LazyPublicRoute
-        surfaceName="Firebase email verification"
-        loadingMessage="Loading secure email verification…"
-        component={FirebaseEmailActionPage}
-      />
-    ) : isStaffInvitationRoute ? (
+    {isStaffInvitationRoute ? (
       <LazyPublicRoute
         surfaceName="Staff assignment invitation"
         loadingMessage="Loading staff assignment…"

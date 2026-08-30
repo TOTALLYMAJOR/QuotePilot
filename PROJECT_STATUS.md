@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-30 12:28:27 CDT
+Last updated: 2026-08-30 13:37:25 CDT
 
 ## Current Production Release
 
@@ -77,14 +77,20 @@ Last updated: 2026-08-30 12:28:27 CDT
   disposable staging identity proved a newly generated five-parameter
   `verifyEmail` link works end to end through the reserved Firebase handler;
   that probe identity was then deleted. The candidate now contains a
-  QuotePilot-owned `/app/auth/action` repair that validates the exact action
-  project/type/code/continuation, strips the code from the visible URL, requires
-  a deliberate click, and separates provider uncertainty from receipt and
-  failure. The focused auth and recovery suites pass locally. This is not yet hosted:
+  QuotePilot-owned `/app/auth/action` repair that validates the exact local
+  project/mode/code-presence/continuation policy, strips the code from the
+  visible URL, requires a deliberate click, sends the code only to Firebase's
+  verify-email endpoint, and treats only a verified provider receipt as
+  success. The focused auth and recovery suites pass locally. This is not yet hosted:
   a new exact-SHA candidate must pass release validation and deploy before the
   staging Auth callback is rebound and a fresh message is requested. The real
   account remains unverified and unbound to a tenant; no administrator override
   is permitted. Production Auth and Stripe Connect remain unchanged.
+  Both CI-shaped production graphs build locally. Compatibility emits 3,213,133
+  JavaScript bytes under its existing 3,213,578-byte ceiling. Ambient emits
+  3,930,814 bytes after the isolated handler is included; the existing named
+  temporary exception records that exact aggregate while its largest-chunk
+  ceiling remains unchanged.
 
 - The owner authorized remote publication and governed deployment pursuit for
   the current 74-commit candidate. Against `origin/main`, baseline
