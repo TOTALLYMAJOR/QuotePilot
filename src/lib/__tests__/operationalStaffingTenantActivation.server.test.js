@@ -65,7 +65,7 @@ describe("operational staffing tenant activation", () => {
 
     expect(result).toMatchObject({ before: false, after: true, changed: true });
     expect(fetchImpl.mock.calls[1][0]).toBe(
-      `${documentUrl}?updateMask.fieldPaths=operationalStaffingAuthorityEnabled`
+      `${documentUrl}?updateMask.fieldPaths=operationalStaffingAuthorityEnabled&currentDocument.exists=true`
     );
     const patch = fetchImpl.mock.calls[1][1];
     expect(patch.method).toBe("PATCH");
