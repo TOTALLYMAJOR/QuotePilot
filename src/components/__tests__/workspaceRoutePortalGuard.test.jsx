@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   appProps: null,
-  navigation: null
+  navigation: null,
+  workspaceProps: null
 }));
 
 vi.mock("quotepilot-active-app", () => ({
@@ -29,7 +30,10 @@ vi.mock("../../context/WorkspaceNavigationContext", () => ({
 }));
 
 vi.mock("../QuoteWorkspaceConceptPage", () => ({
-  default: () => <div data-testid="quote-workspace-concept-mock" />
+  default: (props) => {
+    mocks.workspaceProps = props;
+    return <div data-testid="quote-workspace-mock" />;
+  }
 }));
 
 import { ScopedWorkspaceRoute } from "../WorkspaceRoute";
@@ -68,6 +72,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   mocks.appProps = null;
+  mocks.workspaceProps = null;
   mocks.navigation = workspaceNavigation();
 });
 
@@ -138,13 +143,13 @@ describe("workspace customer-portal transition guard", () => {
   });
 });
 
-describe("quote workspace concept authority", () => {
+describe("canonical quote workspace authority", () => {
   test("keeps the normal authenticated app boundary while auth is unresolved", () => {
     window.history.replaceState({}, "", "/app/quote-workspace");
     renderRoute({ ...authSession, user: null, role: "" });
 
     expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
   });
 
   test("denies non-staff principals without mounting the quote workspace", () => {
@@ -153,15 +158,69 @@ describe("quote workspace concept authority", () => {
 
     expect(container.querySelector('[data-testid="quote-workspace-role-boundary"]')).not.toBeNull();
     expect(container.textContent).toContain("Staff access required");
-    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
   });
 
-  test("loads the concept only for an authenticated staff role", async () => {
+  test("keeps the former concept path as an authenticated compatibility alias", async () => {
     window.history.replaceState({}, "", "/app/quote-workspace-concept");
     renderRoute();
     await act(async () => Promise.resolve());
 
-    expect(container.querySelector('[data-testid="quote-workspace-concept-mock"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-mock"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
+  });
+
+  test("promotes an exact quote route to the canonical workspace and preserves identity", async () => {
+    window.history.replaceState({}, "", "/app/quotes/quote-101");
+    mocks.navigation = {
+      route: { surface: "workspace", routeId: "quote-detail", params: { quoteId: "quote-101" } },
+      location: { pathname: "/app/quotes/quote-101", search: "", hash: "", state: null },
+      replace: vi.fn()
+    };
+
+    renderRoute();
+    await act(async () => Promise.resolve());
+
+    expect(container.querySelector('[data-testid="quote-workspace-mock"]')).not.toBeNull();
+    expect(mocks.workspaceProps.quoteId).toBe("quote-101");
+    expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
+  });
+
+  test("preserves the explicit quote-administration fallback", () => {
+    window.history.replaceState({}, "", "/app/quotes/quote-101?view=administration");
+    mocks.navigation = {
+      route: { surface: "workspace", routeId: "quote-detail", params: { quoteId: "quote-101" } },
+      location: {
+        pathname: "/app/quotes/quote-101",
+        search: "?view=administration",
+        hash: "",
+        state: null
+      },
+      replace: vi.fn()
+    };
+
+    renderRoute();
+
+    expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
+  });
+
+  test("preserves exact governed administration arrivals", () => {
+    window.history.replaceState({}, "", "/app/quotes/quote-101");
+    mocks.navigation = {
+      route: { surface: "workspace", routeId: "quote-detail", params: { quoteId: "quote-101" } },
+      location: {
+        pathname: "/app/quotes/quote-101",
+        search: "",
+        hash: "",
+        state: { ambientArrival: { surfaceId: "quote-administration" } }
+      },
+      replace: vi.fn()
+    };
+
+    renderRoute();
+
+    expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
   });
 });

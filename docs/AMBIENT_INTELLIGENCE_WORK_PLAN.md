@@ -1,12 +1,23 @@
 # QuotePilot Ambient Intelligence Work Plan
 
-Last updated: 2026-08-28 10:28:54 CDT
+Last updated: 2026-08-29 21:20:35 CDT
 
 Status: approved product direction and open implementation plan. The Pilot Slice
 Alpha source implementation is included with this document behind a default-off
 presentation gate; the broader 50-item program remains open. Local tests and
 browser review establish only local implementation evidence, not deployment,
 provider acceptance, production-data acceptance, or human acceptance.
+
+Canonical-adoption checkpoint: the owner approved the connected dinner-table
+Quote Workspace as the product's primary exact-quote presentation. The source
+candidate now routes `/app/quotes/:quoteId` to that connected workspace,
+reduces persistent Ambient orientation to **Now**, **Opportunities**,
+**Clients**, and role-safe **Library**, and moves Events and Staff into
+contextual Operations access. Existing pricing, tenant, quote-edit,
+conversation, proposal, payment, lifecycle, delivery, and recovery authority
+remains unchanged behind explicit exact-object continuations. Compatibility
+aliases and the prior administration presentation remain rollback paths until
+hosted responsive and owner acceptance are recorded.
 
 Production checkpoint: the annotated `v0.7.0` tag resolves to
 `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`; governed Firebase and Vercel

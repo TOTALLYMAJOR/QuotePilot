@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 19:47:18 CDT
+Last updated: 2026-08-29 21:20:35 CDT
 
 ## Current Production Release
 
@@ -300,13 +300,17 @@ Last updated: 2026-08-29 19:47:18 CDT
   fail-closed selected-line margin calculation as staff-only Quote Pulse
   context. PDF export uses the saved font scale and letterhead fallback.
   Costs and margin remain absent from customer preview/export/portal artifacts.
-- A current source-only connected quote-workspace evaluation is available at
-  authenticated admin/sales-only `/app/quote-workspace` and
-  `/app/quote-workspace-concept`.
-  It reads the tenant's saved quote history, presents bounded completeness and
-  save-health evidence, and hands edits or communication back to the existing
-  authoritative quote routes. It performs no quote/provider mutation and has
-  no hosted-role, production-data, deployment, or human-acceptance evidence.
+- The approved connected dinner-table Quote Workspace is now the source/local
+  canonical exact-quote presentation at authenticated admin/sales-only
+  `/app/quotes/:quoteId`; `/app/quote-workspace` and
+  `/app/quote-workspace-concept` remain compatibility aliases. It reads the
+  exact tenant saved quote without substitution, consolidates persistent
+  orientation to Now, Opportunities, Clients, and role-safe Library, presents
+  bounded completeness and save-health evidence, and preserves trusted edit,
+  message, Proposal, Payment, lifecycle, delivery, and recovery continuation.
+  It performs no quote/provider mutation. Candidate deployment, connected
+  tenant-250 responsive review, and owner acceptance remain unverified until
+  the exact published SHA completes those gates.
 - A ninth source-only checkpoint materially implements the QuotePilot Package
   Workspace on the existing `Library -> Packages` route without changing the
   package persistence contract or quote-pricing authority. Catalog Admin now

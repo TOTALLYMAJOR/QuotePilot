@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-29 14:23:06 CDT
+Last updated: 2026-08-29 21:20:35 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -62,9 +62,15 @@ evidence paths, freshness, blocker references, and the single next proof event.
   controls preserved under disclosure. This presentation adds no data or role
   authority.
 - `/app/quotes`, `/app/quotes/new`, `/app/quotes/:quoteId`, and
-  `/app/quotes/:quoteId/edit`: routed quote administration, sticky-mounted
-  builder, event-first quote record, and trusted edit entry points. The event
-  record composes existing quote/Workflow evidence plus the existing
+  `/app/quotes/:quoteId/edit`: routed Opportunities, sticky-mounted builder,
+  canonical connected Quote Workspace, and trusted edit entry points. The
+  exact quote route now leads with the approved dinner-table workspace over
+  saved tenant data, consolidated **Now**, **Opportunities**, **Clients**, and
+  role-safe **Library** orientation, visible completeness/save-health evidence,
+  and explicit handoffs to the unchanged editing, messaging, proposal,
+  payment, lifecycle, delivery, and recovery authorities. The explicit
+  `?view=administration` continuation and governed administration arrivals
+  retain the prior full control surface. The workspace composes existing quote/Workflow evidence plus the existing
   proposal-readiness selector through one deterministic presentation contract;
   it labels that result as proposal completeness and does not create an
   event-wide readiness or data-authority contract. An independently default-off
@@ -73,11 +79,10 @@ evidence paths, freshness, blocker references, and the single next proof event.
   server, and exact-tenant gates and does not change quoted labor, pricing,
   booking, BEO, portal, payment, attendance, payroll, or readiness evidence.
 - `/app/quote-workspace` and `/app/quote-workspace-concept`: authenticated
-  admin/sales-only, read-only visual evaluation routes for the generated desktop/mobile
-  quote-workspace direction. They read the tenant's saved quote history,
-  perform no quote/provider mutation, and hand every edit or communication
-  action to the unchanged authoritative quote routes. `/app/quotes` remains
-  the immediate fallback during review.
+  admin/sales-only compatibility aliases for the canonical connected Quote
+  Workspace. Existing bookmarks continue to work, but new exact-quote
+  navigation uses `/app/quotes/:quoteId`; neither alias grants mutation or
+  provider authority.
 - `/app/messages`: temporary-flagged staff Event Messaging Station. Each
   conversation remains segregated by its canonical quote/event, the inbox
   watches up to 50 same-tenant quote documents ordered by their body-free

@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const CAPTURE_PROOF = ["1", "true", "yes", "on"].includes(
@@ -8,6 +9,7 @@ const PROOF_DIRECTORY = "output/playwright/steward-workbench";
 const QUOTE_ID = "steward-workbench-proof-quote";
 const VIEWPORTS = [
   { label: "desktop", width: 1440, height: 1000 },
+  { label: "tablet", width: 768, height: 900 },
   { label: "mobile", width: 390, height: 844 }
 ];
 
@@ -15,14 +17,16 @@ const QUOTE = {
   id: QUOTE_ID,
   organizationId: "e2e-org",
   quoteNumber: "QP-STW-101",
-  eventName: "Steward Review Dinner",
-  customerName: "Review Customer",
-  venue: "Garden Hall",
-  eventDate: "2026-10-18",
-  eventTime: "6:00 PM",
-  guestCount: 120,
+  event: {
+    name: "Steward Review Dinner",
+    venue: "Garden Hall",
+    date: "2026-10-18",
+    time: "6:00 PM",
+    guests: 120
+  },
+  customer: { name: "Review Customer" },
   status: "Draft",
-  total: 14850,
+  totals: { subtotal: 12000, serviceFee: 1800, tax: 1050, total: 14850, deposit: 4455 },
   updatedAtISO: "2026-08-21T05:50:00.000Z",
   menuItems: [{
     id: "seasonal-supper",
@@ -51,7 +55,7 @@ test.beforeEach(async ({ page }) => {
 for (const viewport of VIEWPORTS) {
   test(`keeps Steward truthful and bounded at ${viewport.label} width`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`/app/quote-workspace?quoteId=${QUOTE_ID}`);
+    await page.goto(`/app/quotes/${QUOTE_ID}`);
 
     const workbench = page.locator('[data-capability-id="steward-difficult-question-workbench"]');
     await expect(workbench).toBeVisible();
@@ -82,6 +86,25 @@ for (const viewport of VIEWPORTS) {
     expect(geometry.width).toBeGreaterThan(250);
     expect(geometry.documentOverflow).toBeLessThanOrEqual(1);
     expect(geometry.buttons.every((button) => button.width >= 44 && button.height >= 44)).toBe(true);
+    const accessibility = await new AxeBuilder({ page })
+      .include('[data-testid="quote-workspace"]')
+      .analyze();
+    expect(accessibility.violations).toEqual([]);
+
+    if (viewport.width <= 720) {
+      const remote = page.locator('.qwc-mobile-actions');
+      const eventOverview = page.locator('.qwc-event-overview');
+      await expect(remote).toBeVisible();
+      const mobileComposition = await Promise.all([
+        remote.evaluate((element) => ({
+          position: getComputedStyle(element).position,
+          bottom: element.getBoundingClientRect().bottom
+        })),
+        eventOverview.evaluate((element) => element.getBoundingClientRect().top)
+      ]);
+      expect(mobileComposition[0].position).toBe("static");
+      expect(mobileComposition[0].bottom).toBeLessThanOrEqual(mobileComposition[1] + 1);
+    }
 
     if (CAPTURE_PROOF) {
       mkdirSync(PROOF_DIRECTORY, { recursive: true });
@@ -95,7 +118,7 @@ for (const viewport of VIEWPORTS) {
 
 test("keeps the ordinary message workflow available", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`/app/quote-workspace?quoteId=${QUOTE_ID}`);
+  await page.goto(`/app/quotes/${QUOTE_ID}`);
   const workbench = page.locator('[data-capability-id="steward-difficult-question-workbench"]');
 
   await workbench.getByRole("button", { name: "Open manual message" }).click();

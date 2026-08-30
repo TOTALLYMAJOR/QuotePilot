@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-29 19:47:18 CDT
+Last updated: 2026-08-29 21:20:35 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Promoted the approved connected dinner-table Quote Workspace from an
+  isolated evaluation path to the canonical authenticated admin/sales exact-
+  quote experience at `/app/quotes/:quoteId`. The source candidate preserves
+  exact quote identity, renders the recorded quote number on mobile instead of
+  a fixed tenant label, reduces persistent orientation to **Now**,
+  **Opportunities**, **Clients**, and role-safe **Library**, and moves Events
+  and Staff into contextual Operations access. Editing, messaging, Proposal,
+  Payment, lifecycle, delivery, and recovery continue through their existing
+  trusted routes; explicit Quote administration and governed arrival paths
+  bypass the presentation without weakening authority. Historical workspace
+  routes remain compatibility aliases and hosted tenant-250/owner acceptance
+  remains a separate release gate.
 - Reconciled the verified founder-pilot staffing activation from current
   `main` into the v0.16 release candidate. Protected run `33282940451`
   established the existing `v0.15.0` tenant-gate readback for

@@ -136,6 +136,14 @@ export default function WorkspaceShell({
       ],
       [
         ambientOrientation && operations,
+        actions.onEvents,
+        "Events",
+        false,
+        false,
+        { capability: "live-operations-planning" }
+      ],
+      [
+        ambientOrientation && operations,
         actions.onMessages,
         "Messages",
         false,
@@ -152,10 +160,12 @@ export default function WorkspaceShell({
       ],
       [operations && capabilities.eventSchedule !== false, actions.onSchedule, "Event Schedule", true],
       [
-        operations && isAdmin && capabilities.staffDirectory !== false && !ambientOrientation,
+        operations && isAdmin && capabilities.staffDirectory !== false,
         actions.onStaff,
         "Staff",
-        true
+        true,
+        false,
+        { capability: "staff-directory" }
       ],
       [operations && capabilities.reportingDashboard !== false, actions.onReporting, "Reporting Dashboard", true],
       [operations && capabilities.integrationsOps !== false, actions.onIntegrations, "Integrations Ops", true],
@@ -260,16 +270,6 @@ export default function WorkspaceShell({
                     "opportunities"
                   )}
                   {navButton(
-                    "Events",
-                    "events",
-                    actions.onEvents,
-                    undefined,
-                    "live-operations-planning",
-                    true,
-                    true,
-                    "events"
-                  )}
-                  {navButton(
                     "Clients",
                     "customers",
                     actions.onCustomers,
@@ -278,16 +278,6 @@ export default function WorkspaceShell({
                     true,
                     true,
                     "clients"
-                  )}
-                  {isAdmin && capabilities.staffDirectory !== false && navButton(
-                    "Staff",
-                    "staff",
-                    actions.onStaff,
-                    undefined,
-                    "staff-directory",
-                    true,
-                    true,
-                    "staff"
                   )}
                   {isAdmin && navButton(
                     "Library",

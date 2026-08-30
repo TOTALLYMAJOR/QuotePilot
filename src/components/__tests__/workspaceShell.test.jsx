@@ -191,7 +191,7 @@ describe("WorkspaceShell", () => {
     expect(shell.classList.contains("app-shell-ambient-navigation")).toBe(true);
     expect(shell.dataset.ambientNavigation).toBe("orientation");
     expect(orientation.map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Events", "Clients", "Staff", "Library"]);
+      .toEqual(["Now", "Opportunities", "Clients", "Library"]);
     expect(orientation.every((button) => button.classList.contains("ambient-orientation-action"))).toBe(true);
     expect(buttonsByText(container, "Home")).toHaveLength(0);
     expect(buttonsByText(container, "Customers")).toHaveLength(0);
@@ -201,9 +201,7 @@ describe("WorkspaceShell", () => {
 
     const now = buttonsByText(container, "Now")[0];
     const opportunities = buttonsByText(container, "Opportunities")[0];
-    const events = buttonsByText(container, "Events")[0];
     const clients = buttonsByText(container, "Clients")[0];
-    const staff = buttonsByText(container, "Staff")[0];
     const library = buttonsByText(container, "Library")[0];
     const search = container.querySelector('button[aria-label="Search"]');
     const newQuote = buttonsByText(container, "New quote")[0];
@@ -221,18 +219,14 @@ describe("WorkspaceShell", () => {
 
     act(() => now.click());
     act(() => opportunities.click());
-    act(() => events.click());
     act(() => clients.click());
-    act(() => staff.click());
     act(() => library.click());
     act(() => search.click());
     act(() => newQuote.click());
     act(() => pilot.click());
     expect(props.actions.onHome).toHaveBeenCalledTimes(1);
     expect(props.actions.onQuotes).toHaveBeenCalledTimes(1);
-    expect(props.actions.onEvents).toHaveBeenCalledTimes(1);
     expect(props.actions.onCustomers).toHaveBeenCalledTimes(1);
-    expect(props.actions.onStaff).toHaveBeenCalledTimes(1);
     expect(props.actions.onCatalog).toHaveBeenCalledTimes(1);
     expect(props.actions.onSearch).toHaveBeenCalledWith(search);
     expect(props.actions.onNewQuote).toHaveBeenCalledTimes(1);
@@ -256,13 +250,6 @@ describe("WorkspaceShell", () => {
     expect(library.classList.contains("nav-view-active")).toBe(true);
     expect(library.getAttribute("aria-current")).toBe("page");
 
-    render({
-      ambientNavigation: true,
-      model: model(WORKSPACE_ROUTE_IDS.EVENT_LIVE, true, true)
-    });
-    const events = buttonsByText(container, "Events")[0];
-    expect(events.classList.contains("nav-view-active")).toBe(true);
-    expect(events.getAttribute("aria-current")).toBe("page");
   });
 
   test("keeps Library absent for sales while retaining role-safe ambient orientation", () => {
@@ -275,12 +262,12 @@ describe("WorkspaceShell", () => {
 
     expect(Array.from(container.querySelectorAll("[data-ambient-orientation]"))
       .map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Events", "Clients"]);
+      .toEqual(["Now", "Opportunities", "Clients"]);
     expect(buttonsByText(container, "Library")).toHaveLength(0);
     expect(buttonsByText(container, "Catalog Admin")).toHaveLength(0);
   });
 
-  test("retains Messages and Workflow in ambient Operations and More menus", () => {
+  test("retains contextual Events, Staff, Messages, and Workflow in ambient Operations and More menus", () => {
     const onOpenChange = vi.fn();
     const props = render({
       ambientNavigation: true,
@@ -290,27 +277,37 @@ describe("WorkspaceShell", () => {
     const operations = container.querySelector('[role="menu"][aria-label="Operations"]');
     const clearDeck = buttonsByText(operations, "Clear the Deck")[0];
     const switchboard = buttonsByText(operations, "Operations switchboard")[0];
+    const events = buttonsByText(operations, "Events")[0];
     const messages = buttonsByText(operations, "Messages")[0];
     const workflow = operations.querySelector('button[aria-label="Workflow, 2 quotes need attention"]');
+    const staff = buttonsByText(operations, "Staff")[0];
     expect(clearDeck.dataset.capabilityEntry).toBe("live-operations-planning");
     expect(switchboard.dataset.capabilityEntry).toBe("live-operations-planning");
+    expect(events.dataset.capabilityEntry).toBe("live-operations-planning");
     expect(messages.dataset.capabilityEntry).toBe("event-messaging-station");
+    expect(staff).not.toBeNull();
     expect(workflow.querySelector(".workflow-attention-badge").textContent).toBe("2");
     expect(buttonsByText(operations, "Catalog Admin")).toHaveLength(0);
 
     act(() => clearDeck.click());
     act(() => switchboard.click());
+    act(() => events.click());
     act(() => messages.click());
     act(() => workflow.click());
-    expect(onOpenChange).toHaveBeenCalledTimes(4);
+    act(() => staff.click());
+    expect(onOpenChange).toHaveBeenCalledTimes(6);
     expect(onOpenChange).toHaveBeenNthCalledWith(1, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(2, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(3, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(4, "");
+    expect(onOpenChange).toHaveBeenNthCalledWith(5, "");
+    expect(onOpenChange).toHaveBeenNthCalledWith(6, "");
     expect(props.actions.onClearDeck).toHaveBeenCalledTimes(1);
     expect(props.actions.onOperations).toHaveBeenCalledTimes(1);
+    expect(props.actions.onEvents).toHaveBeenCalledTimes(1);
     expect(props.actions.onMessages).toHaveBeenCalledTimes(1);
     expect(props.actions.onWorkflow).toHaveBeenCalledTimes(1);
+    expect(props.actions.onStaff).toHaveBeenCalledTimes(1);
 
     render({
       ambientNavigation: true,

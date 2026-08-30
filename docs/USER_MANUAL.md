@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-29 19:47:18 CDT
+Last updated: 2026-08-29 21:20:35 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2170,6 +2170,30 @@ success (receipt), a validation error, and a reload-required recovery when
 even reconciliation could not complete — is pre-existing behavior, now
 literally marked for automated coverage; recording a cost uses the exact
 same save path as every other catalog field.
+
+## Canonical Quote Workspace
+
+Open **Opportunities**, then open an exact saved quote. QuotePilot uses the
+connected Quote Workspace at `/app/quotes/:quoteId` as the primary quote view.
+The top of the workspace keeps the quote number, event, saved timestamp,
+lifecycle label, event image, recorded event facts, and completeness review
+together. Menu items, quote totals, margin evidence when available, recent
+activity, and Activity & Save Health remain on the same exact saved quote.
+
+The workspace rail keeps only **Now**, **Opportunities**, **Clients**, and
+administrator-only **Library** as persistent orientation. Use **New quote** for
+a new draft and **Operations** for deeper operational work. Event, staffing,
+proposal, payment, and conversation work remains contextual to the selected
+record instead of becoming additional permanent navigation.
+
+The workspace does not itself save, approve, send, price, charge, or change a
+quote's lifecycle. Use **Edit quote**, the Menu/Services/Pricing tabs, or the
+editing controls to enter the trusted quote editor. Use **Send message** for
+the exact quote conversation. **Preview** and **Review & send** open the full
+role-safe Quote administration continuation, where existing proposal,
+delivery, payment, booking, artifact, and recovery checks remain authoritative.
+The former `/app/quote-workspace` and `/app/quote-workspace-concept` addresses
+remain compatibility aliases for existing bookmarks.
 
 ## Difficult Question Desk preview
 

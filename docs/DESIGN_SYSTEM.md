@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-28 19:58:28 CDT
+Last updated: 2026-08-29 21:20:35 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -117,6 +117,24 @@ is moving. One global **Pilot** trigger now resolves to the active Living
 Opportunity explanation, the already-mounted draft command field, or one
 populated opportunity-choice recovery. Complete interpreted-destination parity
 remains open AIUI-16 scope.
+
+The connected Quote Workspace is the canonical exact-quote presentation at
+`/app/quotes/:quoteId`. Its open editorial composition, event-table image,
+quote identity, saved-state evidence, object tabs, commercial summary, and
+Activity & Save Health drawer replace the competing event-record presentation
+for ordinary exact-quote arrival. Its rail follows the same light orientation:
+**Now**, **Opportunities**, **Clients**, and role-safe **Library** are primary;
+**New quote** and **Operations** are utilities, while Event, Staffing,
+Proposal, Payment, Conversation, and other deep work begins from the selected
+object. The historical `/app/quote-workspace` and
+`/app/quote-workspace-concept` paths are compatibility aliases only.
+
+Canonical presentation does not absorb mutation authority. Editing routes to
+the trusted quote editor, conversation routes to the exact quote-scoped thread,
+and proposal/payment/lifecycle/delivery/recovery controls remain in the full
+Quote administration surface through an explicit continuation or a governed
+exact-arrival handoff. That continuation is rollback and authority
+preservation, not a second primary quote design.
 
 At 390px, the Living Opportunity begins with one in-flow remote, not a floating
 or sticky layer. It must answer identity, state, what matters, and next action

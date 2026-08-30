@@ -14,18 +14,15 @@ import "./quoteWorkspaceConcept.css";
 const CURRENT_QUOTES_PATH = "/app/quotes";
 
 const NAVIGATION_ITEMS = Object.freeze([
-  { label: "Home", href: "/app", icon: "home" },
-  { label: "Quotes", href: CURRENT_QUOTES_PATH, icon: "document", active: true },
-  { label: "Customers", href: "/app/customers", icon: "users" },
-  { label: "Catalog", href: "/app/catalog", icon: "catalog" },
-  { label: "Templates", href: "/app/catalog", icon: "template" },
-  { label: "Reports", href: "/app/reporting", icon: "report" }
+  { label: "Now", href: "/app", icon: "home" },
+  { label: "Opportunities", href: CURRENT_QUOTES_PATH, icon: "document", active: true },
+  { label: "Clients", href: "/app/customers", icon: "users" },
+  { label: "Library", href: "/app/catalog", icon: "catalog", adminOnly: true }
 ]);
 
 const OPERATIONS_ITEMS = Object.freeze([
-  { label: "Activity", href: "/app/workflow", icon: "activity" },
-  { label: "Settings", href: "/app/integrations", icon: "settings" },
-  { label: "Integrations", href: "/app/integrations", icon: "integrations" }
+  { label: "New quote", href: "/app/quotes/new", icon: "plus" },
+  { label: "Operations", href: "/app/operations", icon: "activity" }
 ]);
 
 const TABS = Object.freeze(["Event", "Menu", "Services", "Pricing", "Proposal", "Activity"]);
@@ -250,6 +247,7 @@ function NavigationGroup({ items }) {
       key={item.label}
       className={`qwc-nav-link${item.active ? " qwc-nav-link-active" : ""}`}
       href={item.href}
+      aria-label={item.label}
       aria-current={item.active ? "page" : undefined}
     >
       <ConceptIcon name={item.icon} />
@@ -258,7 +256,7 @@ function NavigationGroup({ items }) {
   ));
 }
 
-export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, onExit }) {
+export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, quoteId: exactQuoteId = "", onExit }) {
   const email = String(authSession?.user?.email || "").trim();
   const initials = email
     ? email.split("@")[0].split(/[._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
@@ -279,10 +277,9 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
     ),
     organizationId
   });
-  const requestedQuoteId = useMemo(
-    () => text(new URLSearchParams(window.location.search).get("quoteId")),
-    []
-  );
+  const requestedQuoteId = useMemo(() => (
+    text(exactQuoteId) || text(new URLSearchParams(window.location.search).get("quoteId"))
+  ), [exactQuoteId]);
   const selectedQuote = useMemo(() => {
     const quotes = Array.isArray(snapshot.quotes) ? snapshot.quotes : [];
     if (requestedQuoteId) {
@@ -314,7 +311,7 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
   if (!selectedQuote) {
     const exactQuoteUnavailable = Boolean(requestedQuoteId && !snapshot.loading && !snapshot.error);
     return (
-      <div className="qwc-shell" data-testid="quote-workspace-concept">
+      <div className="qwc-shell" data-testid="quote-workspace">
         <main className="qwc-workspace" style={{ gridColumn: "1 / -1", maxWidth: 760, margin: "0 auto", paddingTop: 72 }}>
           <ProductBrandLockup className="qwc-brand" />
           <div className="qwc-preview-boundary">
@@ -329,9 +326,9 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
                 ? "QuotePilot could not read this tenant's quote history. No data was changed."
                 : exactQuoteUnavailable
                   ? "The requested quote is not present in the bounded saved history. No different quote was opened."
-                : "Create or save a quote first, then return here to use the new workspace."}</p>
+                : "Create or save a quote first, then return here to open its workspace."}</p>
             <button type="button" onClick={snapshot.error ? () => snapshot.refresh({ force: true }) : returnToQuotes}>
-              {snapshot.error ? "Retry" : "Open current Quotes"}
+              {snapshot.error ? "Retry" : "Open opportunities"}
             </button>
           </div>
         </main>
@@ -392,27 +389,31 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
   const attentionItems = completenessChecks.filter((check) => !check.complete).map((check) => check.message);
   const readiness = Math.round((completenessChecks.filter((check) => check.complete).length / completenessChecks.length) * 100);
   const detailPath = quoteId ? buildQuotePath(quoteId) : CURRENT_QUOTES_PATH;
+  const administrationPath = quoteId ? `${detailPath}?view=administration` : CURRENT_QUOTES_PATH;
   const editPath = quoteId ? buildQuoteEditPath(quoteId) : CURRENT_QUOTES_PATH;
   const messagePath = quoteId ? buildMessagingPath({ quoteId }) : CURRENT_QUOTES_PATH;
   const go = (path) => window.location.assign(path);
-  const tabPath = (tab) => ["Menu", "Services", "Pricing"].includes(tab) ? editPath : detailPath;
+  const tabPath = (tab) => ["Menu", "Services", "Pricing"].includes(tab) ? editPath : administrationPath;
+  const navigationItems = NAVIGATION_ITEMS.filter((item) => (
+    !item.adminOnly || authSession?.role === "admin" || tenantContext?.role === "admin"
+  ));
 
   return (
-    <div className="qwc-shell" data-testid="quote-workspace-concept">
-      <aside className="qwc-sidebar" aria-label="QuotePilot concept navigation">
+    <div className="qwc-shell" data-testid="quote-workspace">
+      <aside className="qwc-sidebar" aria-label="QuotePilot workspace navigation">
         <ProductBrandLockup className="qwc-brand" />
         <nav className="qwc-primary-nav" aria-label="Primary">
-          <NavigationGroup items={NAVIGATION_ITEMS} />
+          <NavigationGroup items={navigationItems} />
         </nav>
         <nav className="qwc-operations-nav" aria-label="Operations">
           <NavigationGroup items={OPERATIONS_ITEMS} />
         </nav>
         <div className="qwc-concept-card">
-          <span>Connected workspace</span>
+          <span>Current opportunity</span>
           <strong>{quoteNumber}</strong>
-          <p>Live tenant data with edits handed back to QuotePilot's existing authority.</p>
+          <p>Saved tenant data with editing, delivery, and lifecycle safeguards preserved.</p>
           <button type="button" onClick={returnToQuotes}>
-            Return to current Quotes
+            All opportunities
             <ConceptIcon name="back" size={17} />
           </button>
         </div>
@@ -428,12 +429,16 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
       <main className="qwc-workspace">
         <header className="qwc-header">
           <div className="qwc-title-block">
-            <button type="button" className="qwc-back" onClick={returnToQuotes}>
+            <button type="button" className="qwc-back" onClick={returnToQuotes} aria-label="Back to opportunities">
               <ConceptIcon name="back" size={18} />
-              <span>Back to quotes</span>
+              <span>Back to opportunities</span>
             </button>
             <div className="qwc-title-line">
-              <h1>{quoteNumber} <span aria-hidden="true">-</span> {eventName}</h1>
+              <h1>
+                <span className="qwc-title-quote">{quoteNumber}</span>
+                <span className="qwc-title-divider" aria-hidden="true"> · </span>
+                <span className="qwc-title-event">{eventName}</span>
+              </h1>
               <span className="qwc-status">{text(statusValue)}</span>
             </div>
             <p><ConceptIcon name="check" size={16} /> {savedAtValue
@@ -441,14 +446,14 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
               : "Loaded from saved quote history"}</p>
           </div>
 
-          <div className="qwc-header-actions" aria-label="Concept actions">
-            <button type="button" className="qwc-button qwc-button-quiet" onClick={() => go(detailPath)}>
+          <div className="qwc-header-actions" aria-label="Quote actions">
+            <button type="button" className="qwc-button qwc-button-quiet" onClick={() => go(administrationPath)}>
               <ConceptIcon name="eye" size={18} /> Preview
             </button>
             <button type="button" className="qwc-button qwc-button-quiet" onClick={() => go(messagePath)}>
               <ConceptIcon name="message" size={18} /> Send message
             </button>
-            <button type="button" className="qwc-button qwc-button-primary" onClick={() => go(detailPath)}>
+            <button type="button" className="qwc-button qwc-button-primary" onClick={() => go(administrationPath)}>
               <ConceptIcon name="send" size={18} /> Review &amp; send
             </button>
             <button type="button" className="qwc-icon-button" aria-label="Edit quote" onClick={() => go(editPath)}>
@@ -488,9 +493,15 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
         </nav>
 
         <div className="qwc-preview-boundary">
-          <span>Connected preview</span>
-          <p>Showing saved tenant data. Readiness is completeness, not approval; all changes continue in the authoritative quote workspace.</p>
+          <span>Saved workspace</span>
+          <p>Showing the latest saved tenant record. Readiness measures completeness; approval remains an explicit staff action.</p>
           <button type="button" onClick={() => snapshot.refresh({ force: true })}>Refresh data</button>
+        </div>
+
+        <div className="qwc-mobile-actions" aria-label="Mobile quote actions">
+          <div><span>Total</span><strong>{formatMoney(totalValue)}</strong></div>
+          <div><span>Deposit{Number.isFinite(depositPercent) ? ` (${depositPercent.toFixed(0)}%)` : ""}</span><strong>{formatMoney(deposit)}</strong></div>
+          <button type="button" onClick={() => go(administrationPath)}><ConceptIcon name="eye" /> Preview quote</button>
         </div>
 
         {snapshot.error && (
@@ -667,11 +678,6 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
         onOpenEditor={() => go(editPath)}
       />
 
-      <div className="qwc-mobile-actions" aria-label="Mobile quote actions">
-        <div><span>Total</span><strong>{formatMoney(totalValue)}</strong></div>
-        <div><span>Deposit{Number.isFinite(depositPercent) ? ` (${depositPercent.toFixed(0)}%)` : ""}</span><strong>{formatMoney(deposit)}</strong></div>
-        <button type="button" onClick={() => go(detailPath)}><ConceptIcon name="eye" /> Preview quote</button>
-      </div>
     </div>
   );
 }

@@ -36,6 +36,7 @@ import {
 } from "../lib/quoteStore";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { navigateBrowser } from "../hooks/useBrowserLocation";
+import { buildQuotePath } from "../lib/workspaceRoutes";
 import {
   buildQuoteHistoryController,
   getQuoteActionPermissions
@@ -88,16 +89,11 @@ function QuoteAdministrationBoundary({ ambient = false, initiallyOpen = false, c
   );
 }
 
-// The quote workspace is an isolated route with no navigation entry of its own,
-// so the Quotes list is where staff reach it. Navigation stays context-free via
-// navigateBrowser so this view keeps rendering outside a navigation provider.
-const QUOTE_WORKSPACE_PATH = "/app/quote-workspace";
-
 function openQuoteWorkspace(quoteId) {
   const requested = String(quoteId || "").trim();
   const destination = requested
-    ? `${QUOTE_WORKSPACE_PATH}?quoteId=${encodeURIComponent(requested)}`
-    : QUOTE_WORKSPACE_PATH;
+    ? buildQuotePath(requested)
+    : "/app/quotes";
   navigateBrowser(destination, { preserveSearch: false, preserveHash: false });
 }
 
