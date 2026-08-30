@@ -306,7 +306,7 @@ function writeCandidateManifest(
 export async function validateHostedManifest(url, expected, {
   fetchManifest = fetchJson,
   wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
-  attempts = 6,
+  attempts = 31,
   delayMs = 2_000
 } = {}) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {

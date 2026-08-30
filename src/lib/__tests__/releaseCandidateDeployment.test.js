@@ -574,6 +574,27 @@ describe("governed release candidate deployment", () => {
     expect(waitCount).toBe(1);
   });
 
+  test("allows the default bounded window to absorb a one-minute Hosting propagation lag", async () => {
+    const expected = {
+      schema: "com.mbmapps.quotepilot.release-candidate/v2",
+      sourceSha: SHA,
+      ciRunId: 123,
+      uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+    };
+    let fetchCount = 0;
+    let waitCount = 0;
+    const manifestUrl = await validateHostedManifest("https://candidate.example", expected, {
+      fetchManifest: async () => {
+        fetchCount += 1;
+        return fetchCount === 31 ? expected : { ...expected, sourceSha: "b".repeat(40) };
+      },
+      wait: async () => { waitCount += 1; }
+    });
+    expect(manifestUrl).toBe("https://candidate.example/release-candidate.json");
+    expect(fetchCount).toBe(31);
+    expect(waitCount).toBe(30);
+  });
+
   test("builds a deterministic Vercel Build Output v3 payload without a runtime CLI", () => {
     expect(buildVercelOutputConfig()).toEqual({
       version: 3,

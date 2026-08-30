@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 19:47:18 CDT
+Last updated: 2026-08-29 23:40:09 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -156,7 +156,12 @@ explicit owner promotion after real-run review.
    to the isolated Firebase staging identity or the `quoteflow` Vercel preview
    project, requires a SHA-bound confirmation, and records a hosted source/gate
    manifest plus provider deployment id. The receipt path is reserved before
-   mutation and retains failed or partial outcomes. Firebase-all verification
+   mutation and retains failed or partial outcomes. Hosted manifest equality is
+   retried every two seconds for at most one minute to absorb bounded provider
+   propagation; source SHA, CI run, profile, and authority values must still
+   match exactly. A partial provider-mutation receipt is immutable and is not
+   retried; a corrected attempt requires a newly published, newly qualified
+   source SHA. Firebase-all verification
    binds Hosting, active Functions revisions and fail-closed runtime readback,
    and the exact Firestore release/ruleset; Vercel requires the coordinated
    staging-Functions readback. It cannot promote an alias. Operational staffing
