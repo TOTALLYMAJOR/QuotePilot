@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-30 23:42:36 CDT
+Last updated: 2026-08-31 09:17:34 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Closed the final interaction and evidence-language drifts against the
+  approved v0.16 contract:
+  the standard workspace utility trigger now exposes the exact accessible name
+  **Workspace and tools**, while an exact ready relationship rebooking path now
+  uses the outcome-named **Start a rebook** action. Workspace identity remains
+  visible inside the modal, and neither change adds navigation, persistence, or
+  authority. The reconciled contract now explicitly supersedes unsupported
+  freeform Client relationship-memory prose, treats the role-safe Operations
+  directory as a legitimate secondary capability inventory, and separates
+  locally proven Quick Updates semantics from hosted persistence/readback. The
+  v0.16 browser fixture now declares a non-expired quote validity boundary so
+  the acceptance gate cannot silently change behavior as wall-clock time moves.
 - Integrated the approved v0.16 Calm Four staff-workspace candidate onto the
   current release line. **Now**, **Opportunities**, **Clients**, and role-safe
   **Library** remain the only persistent primary destinations; **New quote** is

@@ -47,19 +47,19 @@ function persistedEffects(overrides = {}) {
       currency: "USD",
       authoritativeTotal: {
         before: 8400,
-        proposedAfter: 8750,
-        changed: true
+        proposedAfter: 8400,
+        changed: false
       },
       depositRequirement: {
         before: 2100,
-        proposedAfter: 2187.5,
-        changed: true
+        proposedAfter: 2100,
+        changed: false
       }
     },
     staffing: {
       before: { servers: 8, chefs: 3, bartenders: 2 },
-      after: { servers: 10, chefs: 3, bartenders: 2 },
-      changed: true
+      after: { servers: 8, chefs: 3, bartenders: 2 },
+      changed: false
     },
     status: { before: "draft", after: "draft", changed: false },
     version: {
@@ -320,9 +320,10 @@ describe("QuickUpdatesPanel", () => {
     expect(document.body.textContent).toContain("Service style before");
     expect(document.body.textContent).toContain("Plated dinner");
     expect(document.body.textContent).toContain("Service style after");
-    expect(document.body.textContent).toContain("$8,400.00 → $8,750.00");
-    expect(document.body.textContent).toContain("$2,100.00 → $2,187.50");
-    expect(document.body.textContent).toContain("8 servers · 3 chefs · 2 bartenders → 10 servers · 3 chefs · 2 bartenders");
+    expect(document.body.textContent).toContain("$8,400.00 → $8,400.00");
+    expect(document.body.textContent).toContain("$2,100.00 → $2,100.00");
+    expect(document.body.textContent).toContain("8 servers · 3 chefs · 2 bartenders — unchanged by the trusted edit plan");
+    expect(document.body.textContent).not.toContain("Staffing and pricing will recalculate after save");
     expect(document.body.textContent).toContain("1 (version-alpha) → 2 (version-beta)");
     expect(document.body.textContent).toContain("It does not publish or deliver a proposal");
     expect(props.onSaveQuickUpdate).not.toHaveBeenCalled();

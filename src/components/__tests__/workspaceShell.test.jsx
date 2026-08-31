@@ -369,9 +369,7 @@ describe("WorkspaceShell", () => {
     const onOpenChange = vi.fn();
     const props = render({ ambientNavigation: true, menu: { openId: "", onOpenChange } });
     const trigger = props.triggerRefs.more.current;
-    expect(trigger.getAttribute("aria-label")).toBe(
-      "Workspace and tools. Current workspace: Smith Hospitality"
-    );
+    expect(trigger.getAttribute("aria-label")).toBe("Workspace and tools");
     expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
 

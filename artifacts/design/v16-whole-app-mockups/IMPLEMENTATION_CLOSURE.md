@@ -1,9 +1,10 @@
 # QuotePilot v0.16 Design Closure Contract
 
-Status: the visual direction is approved and locked. This package closes the
-remaining interaction and information-architecture questions before production
-implementation begins. It is not a new creative round, an implementation, or a
-deployment record.
+Status: the visual direction is approved and locked. This package closed the
+remaining interaction and information-architecture questions before Phase 1
+implementation. The authority reconciliations recorded below supersede only
+illustrative mockup claims that the repository's real domain cannot support;
+they do not reopen the visual direction. This contract is not deployment proof.
 
 ## 1. Three product layers
 
@@ -23,7 +24,7 @@ using this product vocabulary consistently:
 
 | Object | Meaning in v0.16 | User-facing behavior |
 | --- | --- | --- |
-| Client | The durable person or organization relationship. | Holds relationship memory across current and past work. |
+| Client | The durable tenant-scoped person or organization record. | Shows recorded identity and contact details plus exact linked current or past work; it does not infer preference memory. |
 | Opportunity | The commercial work container, from inquiry through close. | Appears in the Opportunities index and owns the contextual workspace. |
 | Event | The operational occasion described inside an opportunity: date, venue, guest count, menu, staffing, and schedule. | It is part of the opportunity workspace, not a fifth global destination. v0.16 assumes one operational event per opportunity. |
 | Quote | The price-bearing draft or saved version associated with the opportunity. | `New quote` opens the opportunity-creation composer. Merely opening it creates no saved record; persistence remains explicit. |
@@ -96,6 +97,15 @@ uses the existing sign-out/sign-in path to change authorized principals.
 Multi-organization membership and active-organization selection remain a
 separate future authority design, not a presentation shortcut.
 
+`Operations` names the existing role-safe directory of secondary operational
+capabilities, not one exhaustive button or the limited inventory pictured in
+`07a-mobile-utilities-sheet.png`. Its entries may include legitimate existing
+capabilities such as Events, Messages, Workflow, Pilot, Event Schedule, or
+Clear the Deck when their established role and feature gates permit them. They
+remain inside the modal secondary layer and never become additional persistent
+primary navigation. The simplified screenshot inventory is illustrative, not
+an instruction to remove supported operational capability.
+
 `New quote` remains a separate primary action. The utility sheet is a modal
 surface with a labelled title, at least 44px targets, focus containment, Escape
 and mobile-back dismissal, and exact focus restoration to its trigger. The Calm
@@ -126,13 +136,27 @@ The review screen says:
 
 - Before: `Plated dinner · three courses`
 - After: `Buffet · three courses`
-- Effect: `Staffing and pricing will recalculate after save.`
+- Effect: saved pricing, deposit, and recorded staffing stay unchanged unless
+  the existing Commercial Change authority returns a different exact effect.
 - Safety: `No changes have been saved.`
 - Actions: `Back to edit` and `Save menu change`
+
+This authority correction supersedes the illustrative effect sentence in
+`03b-desktop-quick-updates-review-save.png`; the approved presentation,
+interaction sequence, and visual composition remain unchanged. Service style
+does not create a new staffing or pricing rule.
 
 `Open full Library` carries the exact opportunity and requested section as
 context. It does not assume that a query-string deep link already exists, and
 it must preserve current role authority.
+
+Phase 1 local evidence can prove draft protection, the review-state component
+contract, local-fallback refusal and handoff, dismissal recovery, and browser
+interaction semantics. It cannot prove authoritative hosted persistence or
+readback. A **Saved** receipt remains valid only after the existing Firebase
+authority returns the exact write receipt and authoritative rereads described
+by the product domain; exercising that path against a hosted candidate is a
+Phase 2 hosted/manual requirement.
 
 ## 6. Unsaved-change dismissal
 
@@ -162,8 +186,18 @@ desktop: eyebrow, editorial headline, short explanation, hospitality image,
 `About this view` disclosure. Step 2 is `Add the event details`.
 
 Populated Clients uses `WHAT NEEDS ATTENTION` in place of `TRUTHFUL STATE`.
-Relationship memory and current/recent event context remain distinct. Search and
-filtering appear only when records exist.
+The authoritative v0.16 model supports tenant-scoped client identity, recorded
+contact details, exact current/recent linked event context, bounded current
+status/attention, Client 360 handoff, and exact rebooking records. It does not
+provide trustworthy freeform preference memory such as the prose pictured in
+`05-desktop-clients-populated.png` and
+`10-mobile-clients-populated-fixed.png`. Those screenshots' **RELATIONSHIP
+MEMORY** prose and unsupported attention examples are superseded by the shipped
+**Recorded contact details** and **Current status** presentation. The approved
+hierarchy and visual composition remain locked; no preference is generated,
+inferred, or presented as fact. A future relationship-memory capability would
+require source labels and an authoritative correction path in Client 360.
+Search and filtering appear only when records exist.
 
 ## 8. Task-specific action language
 
@@ -175,7 +209,7 @@ Mobile does not collapse actions into generic `Review`, `Open`, `Continue`, or
 | Final guest count is due | `Review final count` |
 | Staffing needs review | `Review staffing` |
 | Client relationship needs attention | `Review client` |
-| Rebooking from relationship memory | `Start a rebook` |
+| Exact ready rebooking record | `Start a rebook` |
 | Open a named active opportunity | `Open Rivera Wedding` |
 | Staged Menu change | `Review menu change` |
 | Confirm that change | `Save menu change` |
@@ -197,4 +231,4 @@ architecture only. It must preserve:
 - responsive, keyboard, focus, and accessibility behavior;
 - both build-selected application graphs.
 
-No source implementation or deployment is represented by this closure package.
+This closure contract does not itself prove source implementation or deployment.

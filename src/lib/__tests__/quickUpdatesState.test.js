@@ -44,13 +44,13 @@ function persistedEffects(overrides = {}) {
     }],
     pricing: {
       currency: "USD",
-      authoritativeTotal: { before: 8400, proposedAfter: 8750, changed: true },
-      depositRequirement: { before: 2100, proposedAfter: 2187.5, changed: true }
+      authoritativeTotal: { before: 8400, proposedAfter: 8400, changed: false },
+      depositRequirement: { before: 2100, proposedAfter: 2100, changed: false }
     },
     staffing: {
       before: { servers: 8, chefs: 3, bartenders: 2 },
-      after: { servers: 10, chefs: 3, bartenders: 2 },
-      changed: true
+      after: { servers: 8, chefs: 3, bartenders: 2 },
+      changed: false
     },
     status: { before: "draft", after: "draft", changed: false },
     version: {

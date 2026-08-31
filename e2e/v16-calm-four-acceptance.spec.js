@@ -35,6 +35,7 @@ const RIVERA_QUOTE = Object.freeze({
   latestVersionNumber: 3,
   createdAtISO: "2026-08-01T14:00:00.000Z",
   updatedAtISO: "2026-08-20T15:30:00.000Z",
+  expiresAtISO: "2099-12-31T00:00:00.000Z",
   customer: {
     name: "Avery & Jordan Rivera",
     email: "rivera@example.test",
@@ -360,7 +361,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(page.getByRole("menu", { name: "Operations" })).toContainText("Operations");
     await header.getByRole("button", { name: "Operations", exact: true }).click();
     const desktopToolsTrigger = header.getByRole("button", {
-      name: /Workspace and tools\. Current workspace:/u
+      name: "Workspace and tools",
+      exact: true
     });
     await desktopToolsTrigger.click();
     const desktopTools = page.getByRole("dialog", { name: "Workspace & tools" });
@@ -388,7 +390,27 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(primary.getByRole("button")).toHaveCount(4);
     await expectNoHorizontalOverflow(page);
     await captureV16Proof(page, "13-mobile-now.png");
-    const toolsTrigger = page.getByRole("button", { name: /Workspace and tools\. Current workspace:/u });
+    const mobileDestinations = [
+      ["Now", /\/app$/u],
+      ["Opportunities", /\/app\/quotes$/u],
+      ["Clients", /\/app\/customers$/u],
+      ["Library", /\/app\/catalog$/u]
+    ];
+    for (const [label, expectedPath] of mobileDestinations) {
+      await primary.getByRole("button", { name: label, exact: true }).click();
+      await expect(page).toHaveURL(expectedPath);
+      await expect(header.getByRole("button", {
+        name: "Workspace and tools",
+        exact: true
+      })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+    }
+    await primary.getByRole("button", { name: "Now", exact: true }).click();
+    await expect(page).toHaveURL(/\/app$/u);
+    const toolsTrigger = header.getByRole("button", {
+      name: "Workspace and tools",
+      exact: true
+    });
     await expect(toolsTrigger).toBeVisible();
     await toolsTrigger.click();
     const tools = page.getByRole("dialog", { name: "Workspace & tools" });

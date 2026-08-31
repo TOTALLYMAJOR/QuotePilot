@@ -490,7 +490,7 @@ export default function WorkspaceShell({
                   // the temporary menu item has unmounted.
                   assignRef(triggerRefs.pilot, node);
                 }}
-                aria-label={`Workspace and tools. Current workspace: ${workspaceName}`}
+                aria-label="Workspace and tools"
                 aria-haspopup="dialog"
                 aria-controls="workspace-tools-dialog"
                 aria-expanded={workspaceToolsOpen}

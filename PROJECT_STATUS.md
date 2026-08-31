@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-30 23:42:36 CDT
+Last updated: 2026-08-31 09:17:34 CDT
 
 ## Current Production Release
 
@@ -29,7 +29,8 @@ Last updated: 2026-08-30 23:42:36 CDT
 ## v0.16 Calm Four Candidate Integration
 
 - The approved whole-application Calm Four source change is integrated onto the
-  current `release/v0.16.0` source line pending exact-head revalidation:
+  `integration/v016-calm-four` source line and has completed its Phase 1 local
+  functional gate:
   **Now**, **Opportunities**,
   **Clients**, and role-safe **Library** are the only persistent primary
   destinations; **New quote** remains an action; Search, Operations,
@@ -43,18 +44,20 @@ Last updated: 2026-08-30 23:42:36 CDT
   requires the exact write receipt followed by authoritative quote and
   opportunity-list rereads. The connected Quote Workspace remains on its two
   compatibility aliases and as the Ambient-off rollback presentation.
-- The pre-integration Phase 1 branch passed the ten-scenario browser gate
-  **10/10**, the representative responsive/accessibility cohort **24/24**, the
-  full unit suite with **4,069 passed and 78 intentionally skipped** across
-  **358 passed and 3 skipped files**, all **76** Firestore rules tests, and all
-  **127** Truth Loop tests. Side-by-side visual QA recorded no actionable P0,
-  P1, or P2 finding.
-- Those measurements qualify only the preserved Phase 1 source branch. The
-  integrated exact release head must rerun its focused, full release,
-  responsive/accessibility, bundle, and exact-head CI gates before candidate
-  promotion. No new v0.16 Firebase/Vercel deployment, production-data exercise,
-  authenticated hosted UAT, provider outcome, production release, or founder
-  acceptance is claimed by this integration record.
+- The integrated Phase 1 candidate passed the ten-scenario browser gate
+  **10/10**, the responsive/accessibility cohort **26/26** at 390, 768, and
+  1440 pixels, the full unit suite with **4,194 passed and 78 intentionally
+  skipped** across **369 passed and 3 skipped files**, all **76** Firestore
+  rules tests, all **127** Truth Loop tests, both selected build graphs, and
+  the local release/governance checks. Side-by-side visual QA recorded no
+  actionable P0, P1, or P2 finding.
+- These measurements qualify the exact integrated Phase 1 source candidate.
+  The immutable commit containing this record is identified in the ignored
+  evidence packet generated after commit. Local proof does not establish
+  authoritative hosted Quick Updates persistence/readback. No v0.16
+  Firebase/Vercel deployment, production-data exercise, authenticated hosted
+  UAT, provider outcome, production release, or founder acceptance is claimed
+  by this integration record.
 
 ## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 

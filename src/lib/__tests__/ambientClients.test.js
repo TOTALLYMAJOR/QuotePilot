@@ -287,9 +287,10 @@ describe("buildAmbientClientRelationship", () => {
       id: "anniversary-entry-1",
       exactSource: true,
       state: "ready_for_staff_review",
-      sourceVersionId: "v0002"
+      sourceVersionId: "v0002",
+      action: { outcomeLabel: "Start a rebook" }
     });
-    expect(result.primaryAction.outcomeLabel).toBe("Review repeat-event option");
+    expect(result.primaryAction.outcomeLabel).toBe("Start a rebook");
     expect(result.primaryTarget).toEqual({
       kind: "rebook",
       entryId: "anniversary-entry-1",
