@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 17:57:32 CDT
+Last updated: 2026-08-31 18:45:45 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Fixed the administrator integration-audit workflow so a successful internal
+  quote log write no longer attempts an unrelated customer-portal snapshot
+  mirror. Integration activity is not customer-facing proposal state; the
+  browser write was correctly denied by portal rules after the authoritative
+  audit record had already persisted, which made the UI report a false failure.
+  The audit log, immutable quote version, tenant/admin gates, and portal write
+  protections remain unchanged.
 - Fixed authenticated operational quote updates that first create an immutable
   version snapshot, including sales follow-up plans and administrator
   integration activity. Firebase versioning now snapshots the canonical quote

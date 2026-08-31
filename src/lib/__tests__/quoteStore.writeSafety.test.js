@@ -87,6 +87,7 @@ import {
   getQuoteById,
   getQuoteHistory,
   getWorkflowAttentionSnapshot,
+  recordQuoteIntegrationSync,
   requestQuoteApproval,
   reopenQuote,
   resolveQuoteApprovalRequest,
@@ -711,6 +712,69 @@ describe("quoteStore Firebase write safety", () => {
     expect(versionPayload.snapshot.ownerEmail).toBe("original.owner@example.com");
     expect(versionPayload.snapshot.payment).toEqual({ depositStatus: "unpaid" });
     expect(versionPayload.snapshot.payment).not.toHaveProperty("finalBalance");
+  });
+
+  test("recordQuoteIntegrationSync persists the internal audit log without mirroring it to the customer portal", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    const canonicalQuote = {
+      quoteNumber: "Q-1",
+      organizationId: "org-one",
+      portalKey: "0123456789abcdef0123456789abcdef",
+      status: "draft",
+      createdAtISO: "2026-03-27T12:00:00.000Z",
+      updatedAtISO: "2026-03-27T12:00:00.000Z",
+      ownerUid: "current-admin",
+      ownerEmail: "current.admin@example.com",
+      customer: { name: "Client", email: "client@example.com" },
+      event: { name: "Event", date: "2026-05-01", venue: "Venue", guests: 50, hours: 4 },
+      selection: { menuItems: [] },
+      totals: { total: 1000, deposit: 300 },
+      pricing: { authority: "server_authoritative", grandTotal: 1000 },
+      payment: { depositStatus: "unpaid" },
+      booking: { confirmationStatus: "pending" },
+      lifecycle: { draftAtISO: "2026-03-27T12:00:00.000Z" },
+      integrations: { logs: [], providers: {}, retention: 50 },
+      latestVersionNumber: 0
+    };
+    mockState.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => canonicalQuote
+    });
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => canonicalQuote
+      }),
+      set: mockState.transactionSet,
+      update: mockState.transactionUpdate
+    }));
+
+    await expect(recordQuoteIntegrationSync({
+      quoteId: "quote-1",
+      provider: "webhook",
+      state: "skipped",
+      message: "Audit-only staging fixture.",
+      actorEmail: "current.admin@example.com",
+      payloadRef: "uat-audit-only"
+    })).resolves.toMatchObject({
+      ok: true,
+      storage: "firebase",
+      entry: {
+        provider: "webhook",
+        state: "skipped",
+        actorEmail: "current.admin@example.com"
+      }
+    });
+
+    expect(mockState.updateDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        integrations: expect.objectContaining({
+          logs: [expect.objectContaining({ payloadRef: "uat-audit-only" })]
+        })
+      })
+    );
+    expect(mockState.setDoc).not.toHaveBeenCalled();
   });
 
   test("portal rotation delegates identity and timestamps to the admin-only callable", async () => {

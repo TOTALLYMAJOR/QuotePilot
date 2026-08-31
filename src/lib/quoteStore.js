@@ -2205,7 +2205,6 @@ export async function recordQuoteIntegrationSync({
       },
       updatedAtISO: entry.occurredAtISO
     });
-    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
     return { ok: true, storage: "firebase", entry };
   }
 

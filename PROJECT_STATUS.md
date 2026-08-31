@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-31 17:57:32 CDT
+Last updated: 2026-08-31 18:40:59 CDT
 
 ## Current Production Release
 
@@ -58,16 +58,16 @@ Last updated: 2026-08-31 17:57:32 CDT
   candidate after a sales follow-up save and an administrator integration
   activity record both received Firestore `PERMISSION_DENIED`; production
   authorization therefore remains closed.
-- The bounded replacement repair keeps the deployed Firestore rules intact and
-  changes client versioning to snapshot the canonical transaction document.
-  This removes the observed mismatch where hydration added an empty
-  `payment.finalBalance` object to a legacy three-field payment record before
-  the rule's exact immutable-payment comparison. Focused write-safety tests,
-  all 76 Firestore rules tests, the 4,194-test unit suite, environment,
-  capability-surfacing, and production build gates pass locally. A new
-  immutable candidate, non-production deployment, and hosted readback of both
-  repaired operations are still required; no production, provider-outcome, or
-  founder-acceptance claim is made.
+- Candidate `4f6b9bbe01d71fd2ea231460d9ece0de910f3836` was deployed to isolated
+  Firebase staging after exact-SHA CI passed. Hosted sales follow-up now passes
+  and survives an independent reread. The same candidate also persists the
+  administrator integration version and audit record, but then reports a false
+  failure because that internal-only event unnecessarily invokes the
+  customer-portal snapshot mirror, which correctly denies the unrelated write.
+  The next bounded replacement removes only that mirror call; a focused
+  regression, full local qualification, a new immutable candidate, staging
+  deployment, and hosted readback remain required. No production,
+  provider-outcome, or founder-acceptance claim is made.
 
 ## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 
