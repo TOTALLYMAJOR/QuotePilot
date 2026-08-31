@@ -663,26 +663,36 @@ describe("quoteStore Firebase write safety", () => {
 
   test("saveQuoteVersion binds immutable version authorship to the authenticated actor", async () => {
     mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    const canonicalQuote = {
+      quoteNumber: "Q-1",
+      organizationId: "org-one",
+      status: "draft",
+      createdAtISO: "2026-03-27T12:00:00.000Z",
+      updatedAtISO: "2026-03-27T12:00:00.000Z",
+      ownerUid: "original-owner",
+      ownerEmail: "original.owner@example.com",
+      customer: { name: "Client", email: "client@example.com" },
+      event: { name: "Event", date: "2026-05-01", venue: "Venue", guests: 50, hours: 4 },
+      selection: { menuItems: [] },
+      totals: { total: 1000, deposit: 300 },
+      pricing: { authority: "server_authoritative", grandTotal: 1000 },
+      payment: { depositStatus: "unpaid" },
+      booking: { confirmationStatus: "pending" },
+      lifecycle: { draftAtISO: "2026-03-27T12:00:00.000Z" },
+      latestVersionNumber: 0
+    };
     mockState.getDoc.mockResolvedValue({
       exists: () => true,
-      data: () => ({
-        quoteNumber: "Q-1",
-        organizationId: "org-one",
-        status: "draft",
-        createdAtISO: "2026-03-27T12:00:00.000Z",
-        updatedAtISO: "2026-03-27T12:00:00.000Z",
-        ownerUid: "original-owner",
-        ownerEmail: "original.owner@example.com",
-        customer: { name: "Client", email: "client@example.com" },
-        event: { name: "Event", date: "2026-05-01", venue: "Venue", guests: 50, hours: 4 },
-        selection: { menuItems: [] },
-        totals: { total: 1000, deposit: 300 },
-        pricing: { authority: "server_authoritative", grandTotal: 1000 },
-        payment: { depositStatus: "unpaid" },
-        booking: { confirmationStatus: "pending" },
-        lifecycle: { draftAtISO: "2026-03-27T12:00:00.000Z" }
-      })
+      data: () => canonicalQuote
     });
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => canonicalQuote
+      }),
+      set: mockState.transactionSet,
+      update: mockState.transactionUpdate
+    }));
 
     await expect(saveQuoteVersion("quote-1")).resolves.toMatchObject({
       ok: true,
@@ -699,6 +709,8 @@ describe("quoteStore Firebase write safety", () => {
     });
     expect(versionPayload.snapshot.ownerUid).toBe("original-owner");
     expect(versionPayload.snapshot.ownerEmail).toBe("original.owner@example.com");
+    expect(versionPayload.snapshot.payment).toEqual({ depositStatus: "unpaid" });
+    expect(versionPayload.snapshot.payment).not.toHaveProperty("finalBalance");
   });
 
   test("portal rotation delegates identity and timestamps to the admin-only callable", async () => {

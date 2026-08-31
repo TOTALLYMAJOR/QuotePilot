@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-31 09:17:34 CDT
+Last updated: 2026-08-31 17:57:32 CDT
 
 ## Current Production Release
 
@@ -51,13 +51,23 @@ Last updated: 2026-08-31 09:17:34 CDT
   rules tests, all **127** Truth Loop tests, both selected build graphs, and
   the local release/governance checks. Side-by-side visual QA recorded no
   actionable P0, P1, or P2 finding.
-- These measurements qualify the exact integrated Phase 1 source candidate.
-  The immutable commit containing this record is identified in the ignored
-  evidence packet generated after commit. Local proof does not establish
-  authoritative hosted Quick Updates persistence/readback. No v0.16
-  Firebase/Vercel deployment, production-data exercise, authenticated hosted
-  UAT, provider outcome, production release, or founder acceptance is claimed
-  by this integration record.
+- Phase 2A deployed candidate
+  `49c51b42fd595f75295ef9b6848778ce0f6e619e` to the isolated Firebase staging
+  path and immutable Vercel Preview, then completed the hosted automated
+  qualification boundary. Final operator acceptance subsequently rejected that
+  candidate after a sales follow-up save and an administrator integration
+  activity record both received Firestore `PERMISSION_DENIED`; production
+  authorization therefore remains closed.
+- The bounded replacement repair keeps the deployed Firestore rules intact and
+  changes client versioning to snapshot the canonical transaction document.
+  This removes the observed mismatch where hydration added an empty
+  `payment.finalBalance` object to a legacy three-field payment record before
+  the rule's exact immutable-payment comparison. Focused write-safety tests,
+  all 76 Firestore rules tests, the 4,194-test unit suite, environment,
+  capability-surfacing, and production build gates pass locally. A new
+  immutable candidate, non-production deployment, and hosted readback of both
+  repaired operations are still required; no production, provider-outcome, or
+  founder-acceptance claim is made.
 
 ## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 

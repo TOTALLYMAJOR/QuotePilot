@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 09:17:34 CDT
+Last updated: 2026-08-31 17:57:32 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Fixed authenticated operational quote updates that first create an immutable
+  version snapshot, including sales follow-up plans and administrator
+  integration activity. Firebase versioning now snapshots the canonical quote
+  document read inside the transaction instead of a client-hydrated projection,
+  so legacy payment records do not gain an empty `finalBalance` field and fail
+  the existing exact payment-evidence rule. Payment, role, tenant, portal,
+  version-authorship, and immutable-history protections remain unchanged.
 - Closed the final interaction and evidence-language drifts against the
   approved v0.16 contract:
   the standard workspace utility trigger now exposes the exact accessible name

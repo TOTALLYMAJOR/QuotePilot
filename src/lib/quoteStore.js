@@ -1723,7 +1723,7 @@ export async function saveQuoteVersion(
 ) {
   const quote = await readQuoteById(quoteId);
   const timestamp = isoNow();
-  const snapshot = JSON.parse(JSON.stringify(quote));
+  const localSnapshot = JSON.parse(JSON.stringify(quote));
   const organizationCandidate = organizationId !== undefined ? organizationId : quote.organizationId;
   const resolvedOrganizationId = firebaseReady
     ? requireWriteOrganizationId(organizationCandidate, "saveQuoteVersion")
@@ -1748,6 +1748,10 @@ export async function saveQuoteVersion(
         throw new Error("Quote not found.");
       }
       const data = quoteSnap.data() || {};
+      const snapshot = {
+        ...data,
+        id: quote.id
+      };
       const nextVersionNumber = toVersionNumber(data.latestVersionNumber, 0) + 1;
       const versionId = buildQuoteVersionId(nextVersionNumber);
       const versionMeta = normalizeVersionMetadata({
@@ -1768,14 +1772,14 @@ export async function saveQuoteVersion(
         versionId,
         quoteId: quote.id,
         organizationId: writeOrganizationId,
-        ...(String(quote.customerId || "").trim()
-          ? { customerId: String(quote.customerId).trim() }
+        ...(String(data.customerId || "").trim()
+          ? { customerId: String(data.customerId).trim() }
           : {}),
         versionNumber: versionMeta.versionNumber,
         createdAtISO: timestamp,
         reason: versionMeta.reason,
         createdBy: versionMeta.createdBy,
-        status: normalizeStatus(quote.status),
+        status: normalizeStatus(data.status),
         pricing: resolveQuotePricingSnapshot(snapshot),
         snapshot
       });
@@ -1841,8 +1845,8 @@ export async function saveQuoteVersion(
     ...(String(quote.customerId || "").trim()
       ? { customerId: String(quote.customerId).trim() }
       : {}),
-    snapshot,
-    pricing: resolveQuotePricingSnapshot(snapshot),
+    snapshot: localSnapshot,
+    pricing: resolveQuotePricingSnapshot(localSnapshot),
     timestamp
   });
   localStorage.setItem(LOCAL_QUOTE_HISTORY_KEY, JSON.stringify(history));
