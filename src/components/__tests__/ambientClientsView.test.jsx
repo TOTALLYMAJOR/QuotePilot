@@ -193,23 +193,119 @@ describe("AmbientClientsView", () => {
     );
     const parsedLoading = document.createElement("div");
     parsedLoading.innerHTML = loading;
+    const parsedEmpty = document.createElement("div");
+    parsedEmpty.innerHTML = empty;
+    const parsedSuccess = document.createElement("div");
+    parsedSuccess.innerHTML = success;
 
     expect(loading).toContain('data-ambient-clients-state="loading"');
     expect(loading).toContain("Gathering your clients");
-    expect(loading).toContain("Freshening up…");
     expect(loading).not.toContain("Your first client story starts here");
-    expect(parsedLoading.querySelector('[data-ambient-action-id="refresh-clients"]').disabled).toBe(true);
-    expect(parsedLoading.querySelector('[data-ambient-action-id="start-client-opportunity"]').disabled).toBe(true);
+    expect(parsedLoading.querySelector('[data-ambient-action-id="refresh-clients"]')).toBeNull();
+    expect(parsedLoading.querySelector('[data-ambient-action-id="start-client-opportunity"]')).toBeNull();
 
     expect(empty).toContain('data-ambient-clients-state="empty"');
     expect(empty).toContain("Your first client story starts here");
     expect(empty).toContain("Start an opportunity");
+    expect(empty).toContain("Add the event details");
+    expect(parsedEmpty.querySelector(".ambient-clients__hospitality-image")).not.toBeNull();
+    expect(parsedEmpty.querySelector(".ambient-clients__metrics")).toBeNull();
+    expect(parsedEmpty.querySelector('[role="search"]')).toBeNull();
+    expect(parsedEmpty.querySelector('[data-ambient-action-id="refresh-clients"]')).toBeNull();
+    expect(parsedEmpty.querySelector(".ambient-clients__breadcrumb").textContent).toContain("Relationships");
+    expect(parsedEmpty.textContent).not.toContain("New relationships");
 
     expect(success).toContain('data-ambient-clients-state="success"');
+    expect(success).toContain("Relationships, in context.");
     expect(success).toContain("Client 1");
     expect(success).toContain("Event 1");
     expect(success).toContain("Firestore client records");
+    expect(parsedSuccess.querySelector('[role="search"]')).not.toBeNull();
+    expect(parsedSuccess.querySelector(".ambient-clients__featured")?.dataset.featuredSource)
+      .toBe("recorded-event-date");
+    expect(parsedSuccess.querySelector(".ambient-clients__featured-image")).not.toBeNull();
+    expect(parsedSuccess.querySelector(".ambient-clients__filter-empty")).toBeNull();
+    expect(parsedSuccess.textContent).toMatch(/recorded contact details/iu);
+    expect(parsedSuccess.textContent).not.toMatch(/relationship memory|relationships, remembered/iu);
     expect(`${loading}${empty}${success}`).not.toMatch(/bounded read|completed client read/iu);
+  });
+
+  test("lets an exact caller-declared client override recorded event-date presentation order", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientClientsDirectory
+        model={directoryModel({
+          featuredCustomerId: "client-2",
+          rows: [
+            directoryRow(1, { identity: { name: "Aardvark Client", email: "a@example.com", phone: "512-555-0101" } }),
+            directoryRow(2, { identity: { name: "Rivera Client", email: "r@example.com", phone: "512-555-0102" } })
+          ]
+        })}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+    const parsed = document.createElement("div");
+    parsed.innerHTML = markup;
+    const featured = parsed.querySelector(".ambient-clients__featured");
+
+    expect(featured?.dataset.clientId).toBe("client-2");
+    expect(featured?.dataset.featuredSource).toBe("caller-declared");
+    expect(featured?.textContent).toContain("Rivera Client");
+    expect(featured?.textContent).not.toContain("Aardvark Client");
+    expect(parsed.querySelector('.ambient-clients__relationship-row[data-client-id="client-1"]')).not.toBeNull();
+    expect(featured?.textContent).toContain("Recorded contact details");
+    expect(featured?.textContent).toContain("Current status");
+  });
+
+  test("leads with the nearest recorded upcoming relationship without inventing attention or memory", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientClientsDirectory
+        model={directoryModel({
+          rows: [
+            directoryRow(1, {
+              identity: { name: "Later Client", email: "later@example.com", phone: "512-555-0101" },
+              latest: { quoteNumber: "QP-LATER", eventName: "Later Dinner", eventDate: "2099-09-20" }
+            }),
+            directoryRow(2, {
+              identity: { name: "Current Client", email: "current@example.com", phone: "512-555-0102" },
+              latest: { quoteNumber: "QP-CURRENT", eventName: "Current Dinner", eventDate: "2099-06-12" }
+            }),
+            directoryRow(3, {
+              identity: { name: "Past Client", email: "past@example.com", phone: "512-555-0103" },
+              latest: { quoteNumber: "QP-PAST", eventName: "Past Dinner", eventDate: "2000-01-02" }
+            })
+          ]
+        })}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+    const parsed = document.createElement("div");
+    parsed.innerHTML = markup;
+    const featured = parsed.querySelector(".ambient-clients__featured");
+
+    expect(featured?.dataset.clientId).toBe("client-2");
+    expect(featured?.dataset.featuredSource).toBe("recorded-event-date");
+    expect(featured?.textContent).toContain("Current Client");
+    expect(featured?.textContent).toContain("Current Dinner");
+    expect(featured?.textContent).toContain("Recorded contact details");
+    expect(featured?.textContent).toContain("Based on the recorded event and contact details");
+    expect(featured?.textContent).not.toMatch(/relationship memory|needs attention/iu);
+    expect(parsed.querySelectorAll(".ambient-clients__relationship-row")).toHaveLength(2);
+  });
+
+  test("keeps undated client records as peer rows instead of fabricating a current relationship", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientClientsDirectory
+        model={directoryModel({
+          rows: [directoryRow(1, { latest: {} }), directoryRow(2, { latest: {} })]
+        })}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+    const parsed = document.createElement("div");
+    parsed.innerHTML = markup;
+
+    expect(parsed.querySelector(".ambient-clients__featured")).toBeNull();
+    expect(parsed.querySelectorAll(".ambient-clients__relationship-row")).toHaveLength(2);
   });
 
   test("renders exactly one outcome-named primary action for every populated client row", () => {
@@ -233,7 +329,7 @@ describe("AmbientClientsView", () => {
     }
   });
 
-  test("renders operational metrics and filters the bounded page without inventing relationship evidence", () => {
+  test("introduces search and relationship filters only for a populated bounded page", () => {
     mount(
       <AmbientClientsDirectory
         model={directoryModel({
@@ -254,34 +350,32 @@ describe("AmbientClientsView", () => {
       />
     );
 
-    const metrics = Object.fromEntries([...container.querySelectorAll(".ambient-clients__metrics > div")]
-      .map((metric) => [metric.querySelector("dt").textContent, metric.querySelector("dd").textContent]));
-    expect(metrics).toEqual({
-      "Clients shown": "2",
-      "With linked work": "1",
-      "Upcoming events": "2",
-      "Contact details to add": "1"
-    });
+    expect(container.querySelector(".ambient-clients__metrics")).toBeNull();
+    expect(container.querySelector('[role="search"]')).not.toBeNull();
+    expect(container.querySelector(".ambient-clients__filter-select select")).not.toBeNull();
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
-    expect(container.textContent).toContain("Add contact");
-    expect(container.textContent).toContain("No opportunity yet");
+    expect(container.textContent).toContain("Contact details to add");
+    expect(container.textContent).toContain("No linked opportunity in this view");
 
-    act(() => Array.from(container.querySelectorAll(".ambient-clients__filters button"))
-      .find((button) => button.textContent === "Contact to add")
-      .click());
+    const select = container.querySelector(".ambient-clients__filter-select select");
+    act(() => {
+      select.value = "contact_gap";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
     expect(container.textContent).toContain("Contact Gap Client");
     expect(container.textContent).not.toContain("Client 1");
 
-    act(() => Array.from(container.querySelectorAll(".ambient-clients__filters button"))
-      .find((button) => button.textContent === "Upcoming events")
-      .click());
+    act(() => {
+      select.value = "upcoming";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
     expect(container.textContent).toContain("Client 1");
     expect(container.textContent).toContain("Contact Gap Client");
   });
 
-  test("turns the highest-priority mobile relationship gap into one focused directory view", async () => {
+  test("keeps populated relationship filtering available without a separate mobile dashboard block", async () => {
     mount(
       <AmbientClientsDirectory
         model={directoryModel({
@@ -302,20 +396,20 @@ describe("AmbientClientsView", () => {
       />
     );
 
-    const priority = container.querySelector(".ambient-clients__mobile-priority");
-    expect(priority.getAttribute("data-capability-state")).toBe("attention");
-    expect(priority.textContent).toContain("1 client needs contact details");
-    expect(priority.textContent).toContain("2 clients are shown on this page");
-    expect(container.querySelector(".ambient-clients__mobile-filter select").value).toBe("all");
+    expect(container.querySelector(".ambient-clients__mobile-priority")).toBeNull();
+    expect(container.querySelector(".ambient-clients__mobile-filter")).toBeNull();
 
-    act(() => priority.querySelector("button").click());
-    await settleFrame();
+    const filter = container.querySelector(".ambient-clients__filter-select select");
+    expect(filter.value).toBe("all");
+    act(() => {
+      filter.value = "contact_gap";
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
-    expect(container.querySelector(".ambient-clients__mobile-filter select").value).toBe("contact_gap");
+    expect(filter.value).toBe("contact_gap");
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
     expect(container.textContent).toContain("Contact Gap Client");
     expect(container.textContent).not.toContain("Client 1");
-    expect(document.activeElement).toBe(container.querySelector("#ambient-client-directory"));
   });
 
   test("acknowledges a client selection in context during the same activation that requests navigation", () => {

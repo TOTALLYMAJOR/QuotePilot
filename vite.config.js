@@ -75,6 +75,9 @@ export default defineConfig(({ mode }) => {
   const activeLegacyHome = environmentFlagEnabled(buildEnvironment.VITE_PILOT_NOW_ENABLED)
     ? fileURLToPath(new URL("./src/components/LegacyNowView.jsx", import.meta.url))
     : activeCommandCenterHome;
+  const activeCommercialPersistedEffects = ambientGraphEnabled
+    ? fileURLToPath(new URL("./src/lib/commercialChangePersistedEffectsEnabled.js", import.meta.url))
+    : fileURLToPath(new URL("./src/lib/commercialChangePersistedEffectsDisabled.js", import.meta.url));
   return ({
   envDir: ".",
   publicDir: "public",
@@ -99,7 +102,8 @@ export default defineConfig(({ mode }) => {
       "quotepilot-active-quote-history": activeQuoteHistoryRoute,
       "quotepilot-active-reporting": activeReportingRoute,
       "quotepilot-active-workflow": activeWorkflowRoute,
-      "quotepilot-active-legacy-home": activeLegacyHome
+      "quotepilot-active-legacy-home": activeLegacyHome,
+      "quotepilot-active-commercial-persisted-effects": activeCommercialPersistedEffects
     }
   },
   optimizeDeps: {

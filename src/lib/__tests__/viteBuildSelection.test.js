@@ -46,6 +46,8 @@ describe("Vite build-selected compatibility graph", () => {
     const config = createViteConfig({ mode: "production" });
 
     expect(selectedFile(config, "quotepilot-active-app")).toMatch(/\/src\/App\.jsx$/);
+    expect(selectedFile(config, "quotepilot-active-commercial-persisted-effects"))
+      .toMatch(/\/src\/lib\/commercialChangePersistedEffectsEnabled\.js$/);
     expect(selectedFile(config, "quotepilot-active-legacy-home"))
       .toMatch(/\/src\/components\/LegacyNowView\.jsx$/);
   });
@@ -61,6 +63,8 @@ describe("Vite build-selected compatibility graph", () => {
     const config = createViteConfig({ mode: "production" });
 
     expect(selectedFile(config, "quotepilot-active-app")).toMatch(/\/src\/LegacyApp\.jsx$/);
+    expect(selectedFile(config, "quotepilot-active-commercial-persisted-effects"))
+      .toMatch(/\/src\/lib\/commercialChangePersistedEffectsDisabled\.js$/);
     expect(selectedFile(config, "quotepilot-active-legacy-home"))
       .toMatch(/\/src\/components\/LegacyCommandCenterHome\.jsx$/);
   });
@@ -73,5 +77,7 @@ describe("Vite build-selected compatibility graph", () => {
       .toMatch(/\/src\/components\/WorkspaceShell\.jsx$/);
     expect(selectedFile(config, "quotepilot-active-conversation-panel"))
       .toMatch(/\/src\/components\/QuoteConversationPanel\.jsx$/);
+    expect(selectedFile(config, "quotepilot-active-commercial-persisted-effects"))
+      .toMatch(/\/src\/lib\/commercialChangePersistedEffectsEnabled\.js$/);
   });
 });

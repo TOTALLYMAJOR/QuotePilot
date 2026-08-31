@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-29 03:33:19 CDT
+Last updated: 2026-08-31 00:29:03 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -66,7 +66,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
   temporarily capped at 3,827,245 aggregate bytes and the same 391,901-byte
   largest-chunk ceiling (measured 3,750,363 local Ambient bytes is under that
-  standing ceiling).
+  standing ceiling). The approved v0.16 Calm Four and Quick Updates candidate
+  advances the current Ambient aggregate ceiling to 4,017,992 bytes while
+  retaining the 391,901-byte largest-chunk ceiling; compatibility retains the
+  Calm Four source candidate's already reviewed 3,221,176 / 391,901-byte
+  ceilings.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -150,6 +154,20 @@ Use this log when a change intentionally departs from stable-first policy or req
   jobs passed. A fresh CI-equivalent local Ambient build established the larger
   literal ceiling above. A subsequent exact-SHA CI pass, hosted timing, and
   human acceptance remain open.
+  The v0.16 candidate then measured 3,214,012 / 385,130 bytes for compatibility
+  and 4,017,689 / 385,130 bytes for the exact production-equivalent Ambient
+  graph. The new global destinations, contextual Quick Updates behavior,
+  responsive surfaces, dismissal/review/save semantics, and their preserved
+  authority adapters account for the approved aggregate change. A reviewed
+  lazy customer-portal boundary keeps that surface out of the initial Ambient
+  workspace chunk and reduces the largest emitted application chunk; Firebase
+  is the 385,130-byte largest asset, below the unchanged 391,901-byte ceiling.
+  Removing approximately 87 KB instead would require dropping approved v0.16
+  behavior or an existing capability, so the Ambient aggregate exception is
+  recalibrated to 4,017,992 bytes: the literal local candidate plus only the
+  previously established 303-byte Ambient runner offset. It provides no
+  discretionary source-growth allowance. Exact-SHA CI, hosted timing, and
+  authenticated human acceptance remain separate gates.
 
 ## Superseded Exceptions
 

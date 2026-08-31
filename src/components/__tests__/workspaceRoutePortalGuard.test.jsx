@@ -79,6 +79,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -184,6 +185,21 @@ describe("canonical quote workspace authority", () => {
     expect(container.querySelector('[data-testid="quote-workspace-mock"]')).not.toBeNull();
     expect(mocks.workspaceProps.quoteId).toBe("quote-101");
     expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
+  });
+
+  test("keeps an exact quote route in the approved Ambient opportunity workspace", () => {
+    vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "true");
+    window.history.replaceState({}, "", "/app/quotes/quote-101");
+    mocks.navigation = {
+      route: { surface: "workspace", routeId: "quote-detail", params: { quoteId: "quote-101" } },
+      location: { pathname: "/app/quotes/quote-101", search: "", hash: "", state: null },
+      replace: vi.fn()
+    };
+
+    renderRoute();
+
+    expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
   });
 
   test("preserves the explicit quote-administration fallback", () => {

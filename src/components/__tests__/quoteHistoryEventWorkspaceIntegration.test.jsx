@@ -55,6 +55,16 @@ async function settle() {
   });
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function byText(label) {
   return [...container.querySelectorAll("button")]
     .find((item) => item.textContent.replace(/\s+/g, " ").trim().includes(label));
@@ -199,5 +209,149 @@ describe("QuoteHistoryView event workspace integration", () => {
       },
       focusQuoteId: QUOTE.id
     })).toBe(false);
+  });
+
+  test("keeps same-organization index rows mounted while Back refreshes authoritative history", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId={QUOTE.id}
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    expect(container.querySelector(`.event-workspace[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+
+    const pendingRefresh = deferred();
+    mocks.getQuoteHistory.mockReturnValueOnce(pendingRefresh.promise);
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId=""
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+    pendingRefresh.resolve({
+      source: "local",
+      quotes: [{ ...QUOTE, quoteNumber: "Q-1616-REFRESHED" }]
+    });
+    await settle();
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)?.textContent)
+      .toContain("Q-1616-REFRESHED");
+  });
+
+  test("preserves same-organization index filters across opportunity detail and Back", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId=""
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const search = container.querySelector('input[placeholder="Search customer, quote #, or event"]');
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(search, "Maya");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(search.value).toBe("Maya");
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId={QUOTE.id}
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    expect(container.querySelector(`.event-workspace[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId=""
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector('input[placeholder="Search customer, quote #, or event"]')?.value)
+      .toBe("Maya");
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+  });
+
+  test("clears prior-organization rows immediately when the tenant changes", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+
+    const pendingTenantRead = deferred();
+    mocks.getQuoteHistory.mockReturnValueOnce(pendingTenantRead.promise);
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-b"
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).toBeNull();
+    pendingTenantRead.resolve({
+      source: "local",
+      quotes: [{
+        ...QUOTE,
+        id: "quote-other-tenant",
+        quoteNumber: "Q-OTHER-TENANT",
+        customerId: "customer-other-tenant",
+        event: { ...QUOTE.event, name: "Other Tenant Event" }
+      }]
+    });
+    await settle();
+    expect(container.querySelector('tr[data-quote-id="quote-other-tenant"]')?.textContent)
+      .toContain("Q-OTHER-TENANT");
   });
 });

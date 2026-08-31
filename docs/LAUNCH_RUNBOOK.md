@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-30 14:53:30 CDT
+Last updated: 2026-08-30 22:36:53 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -976,7 +976,8 @@ GitHub CI verification resolves authentication in this order:
 If none is available, the command fails with bounded remediation before any
 provider mutation; it never prints the token. The command never uses a
 production target/alias. It exclusively reserves
-`artifacts/release/candidates/<sha>/<target>.json` before provider mutation.
+`artifacts/release/candidates/<sha>/<target>.<uatProfile>.json` before provider
+mutation.
 Build/preflight failures remain `failed`; an attempted provider mutation that
 cannot be completely verified remains `partial`, including any deployment URL
 or id already returned. A `verified` Firebase-all receipt binds the Hosting
@@ -987,7 +988,8 @@ candidate evidence, not deployment approval, production mutation,
 provider-business acceptance, or human UAT.
 
 The tracked all-positive item list remains available with
-`npm run release:uat:items -- --target <profile>`. Production qualification
+`npm run release:uat:items -- --target <target> --sms-provider <none|twilio|pingram>`.
+Production qualification
 still requires every printed target item to pass exactly once. The exact-main
 `Release UAT Attestation` accepts only that complete positive set; it accepts no
 candidate profile, blocked item, N/A marker, or partial plan. If the safe-off

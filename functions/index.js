@@ -12426,6 +12426,8 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
 });
 
 const COMMERCIAL_CHANGE_POLICY_VERSION = "commercial-change-policy-v1";
+const COMMERCIAL_CHANGE_PERSISTED_EFFECTS_VERSION =
+  "commercial-change-persisted-effects-v1";
 const COMMERCIAL_CHANGE_INVALIDATION_LIMIT = 64;
 const COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION = 1;
 const COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED =
@@ -12650,6 +12652,117 @@ function projectCommercialChangeSimulation(receipt, evaluatedImpact) {
   };
 }
 
+function projectCommercialChangePersistedEffects({
+  receipt,
+  quote,
+  documents
+} = {}) {
+  const factDiffs = Array.isArray(receipt?.factDiffs) ? receipt.factDiffs : [];
+  const requestedDelta = factDiffs.map((item) => ({
+    nodeId: normalizeText(item?.nodeId),
+    fieldPath: normalizeText(item?.nodeId) === "fact.event.service_style"
+      ? "event.style"
+      : normalizeText(item?.nodeId),
+    before: item?.before ?? null,
+    after: item?.proposedAfter ?? null
+  }));
+  const staffingDiff = factDiffs.find((item) => (
+    normalizeText(item?.nodeId) === "fact.staffing.counts"
+  ));
+  const staffingCount = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+  };
+  const projectStaffing = (event = {}) => ({
+    servers: staffingCount(event?.servers),
+    chefs: staffingCount(event?.chefs),
+    bartenders: staffingCount(event?.bartenders)
+  });
+  const beforeStatus = normalizeText(quote?.status).toLowerCase() || "draft";
+  const afterStatus = normalizeText(documents?.quotePatch?.status).toLowerCase();
+  const beforeRevisionId = normalizeText(
+    quote?.activeVersionId || quote?.versionMeta?.versionId
+  );
+  const afterRevisionId = normalizeText(documents?.version?.versionId);
+  const beforeVersionNumber = Number(
+    quote?.latestVersionNumber || quote?.versionMeta?.versionNumber || 0
+  );
+  const afterVersionNumber = Number(documents?.version?.versionNumber || 0);
+  const beforeDraftAtISO = normalizeText(quote?.lifecycle?.draftAtISO);
+  const afterDraftAtISO = normalizeText(documents?.quotePatch?.lifecycle?.draftAtISO);
+  const workflowEvidencePreserved = commercialDependencyGraphCore.canonicalSerialize(
+    quote?.workflow || {}
+  ) === commercialDependencyGraphCore.canonicalSerialize(
+    documents?.quotePatch?.workflow || {}
+  );
+
+  return {
+    schemaVersion: COMMERCIAL_CHANGE_PERSISTED_EFFECTS_VERSION,
+    authority: "server_authoritative",
+    source: "trusted_quote_edit_material_projection",
+    identity: {
+      organizationId: normalizeOrganizationId(receipt?.organizationId),
+      quoteId: normalizeText(receipt?.quoteId),
+      baseRevisionId: beforeRevisionId,
+      projectedRevisionId: afterRevisionId
+    },
+    requestedDelta,
+    pricing: receipt?.commercialValues || {},
+    staffing: {
+      before: staffingDiff?.before
+        ?? projectStaffing(quote?.event),
+      after: staffingDiff?.proposedAfter
+        ?? projectStaffing(documents?.quotePatch?.event),
+      changed: Boolean(staffingDiff)
+    },
+    status: {
+      before: beforeStatus,
+      after: afterStatus,
+      changed: beforeStatus !== afterStatus
+    },
+    version: {
+      beforeRevisionId,
+      afterRevisionId,
+      beforeVersionNumber,
+      afterVersionNumber,
+      createsImmutableVersion: true
+    },
+    proposal: {
+      statusBefore: beforeStatus,
+      statusAfter: afterStatus,
+      workflowEvidencePreserved,
+      customerDeliveryTriggered: false,
+      publicationTriggered: false
+    },
+    portal: {
+      activeRevisionIdBefore: beforeRevisionId,
+      activeRevisionIdAfter: normalizeText(documents?.result?.activeVersionId),
+      projectionRefreshed: true,
+      accessIdentityRetained: normalizeText(quote?.portalKey)
+        === normalizeText(documents?.result?.portalKey),
+      issuanceRecordedAtSave: true,
+      expiryRecalculatedAtSave: true,
+      customerDeliveryTriggered: false
+    },
+    lifecycle: {
+      draftAtPreserved: Boolean(beforeDraftAtISO && beforeDraftAtISO === afterDraftAtISO),
+      draftAtAssignedIfMissing: !beforeDraftAtISO && Boolean(afterDraftAtISO),
+      editedAtRecordedAtSave: true,
+      terminalDecisionEvidencePreserved: true
+    },
+    dependencies: {
+      authorizationRequired: receipt?.authorizationRequired === true,
+      impact: receipt?.impact || {
+        rootNodeIds: [],
+        dependentNodes: [],
+        counts: { total: 0, review: 0, stale: 0 }
+      }
+    },
+    boundary: "This is the exact enumerated material persisted-effects projection for review. Time-based values are assigned at save and are not projected as exact timestamps. Review creates no write, delivery, publication, acceptance, booking, charge, payout, or completed dependent work."
+  };
+}
+
 function projectCommercialChangeApproval(raw = null) {
   if (!raw || typeof raw !== "object") return null;
   const state = normalizeText(raw.state).toLowerCase();
@@ -12748,9 +12861,10 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
     });
     const refs = commercialChangeRefs(organizationId, quoteId);
     const result = await db.runTransaction(async (tx) => {
-      const [quoteSnap, settingsSnap] = await Promise.all([
+      const [quoteSnap, settingsSnap, organizationSnap] = await Promise.all([
         tx.get(refs.quoteRef),
-        tx.get(refs.settingsRef)
+        tx.get(refs.settingsRef),
+        tx.get(refs.organizationRef)
       ]);
       if (!quoteSnap.exists) {
         throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
@@ -12777,6 +12891,20 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         proposedPricing: pricingResult.pricing
       });
       const evaluatedImpact = evaluateCommercialChangeImpact(preview);
+      const projectedEditDocuments = buildTrustedQuoteEditDocuments({
+        quoteId,
+        quote,
+        staff,
+        form: sanitized.form,
+        pricing: pricingResult.pricing,
+        catalogSource: pricingResult.catalogSource,
+        catalog: pricingResult.catalog,
+        settings: {
+          ...(settingsSnap.data() || {}),
+          organizationName: normalizeText(organizationSnap.data()?.name)
+        },
+        nowISO
+      });
       const proposed = commercialChangeAuthority.simulate({
         request: { requestId, organizationId, quoteId, expectedActiveVersionId },
         canonicalQuote: quote,
@@ -12817,6 +12945,11 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       return {
         planned,
         evaluatedImpact,
+        persistedEffects: projectCommercialChangePersistedEffects({
+          receipt: planned.receipt,
+          quote,
+          documents: projectedEditDocuments
+        }),
         enforcement: commercialChangeEnforcementState(settingsSnap.data() || {})
       };
     });
@@ -12831,7 +12964,8 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       simulation: projectCommercialChangeSimulation(
         result.planned.receipt,
         result.evaluatedImpact
-      )
+      ),
+      persistedEffects: result.persistedEffects
     };
   } catch (error) {
     return throwCommercialChangeFailure(error, "simulateCommercialQuoteChange", {
@@ -14591,8 +14725,10 @@ async function updateTrustedQuoteDraftInternal({
   quoteId,
   staff,
   form,
-  commercialChangeAuthorityInput = null
+  commercialChangeAuthorityInput = null,
+  expectedActiveVersionId = ""
 }) {
+  const expectedRevisionId = normalizeText(expectedActiveVersionId);
   const sanitized = sanitizeQuoteCreationRequest({
     organizationId,
     form
@@ -14667,6 +14803,17 @@ async function updateTrustedQuoteDraftInternal({
         "Quote is outside your organization."
       );
     }
+    if (expectedRevisionId) {
+      const currentRevisionId = normalizeText(
+        quote.activeVersionId || quote.versionMeta?.versionId
+      );
+      if (!currentRevisionId || currentRevisionId !== expectedRevisionId) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "This quote changed after the draft was opened. Reload the current saved version before applying the update."
+        );
+      }
+    }
     assertQuoteEditNotDispatching({ ...quote, id: quoteId }, nowISO);
     assertNoInProgressPaymentDispatch(quote, "editing the quote");
 
@@ -14698,6 +14845,70 @@ async function updateTrustedQuoteDraftInternal({
       dependencyStateRef: null,
       priorInvalidationDocs: []
     };
+    if (
+      enforcement.authorityState === "dormant"
+      && commercialChangeAuthorityInput
+    ) {
+      const envelope = normalizeCommercialChangeApplyEnvelope(
+        commercialChangeAuthorityInput
+      );
+      if (envelope.authorizationReceiptId) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Dormant Commercial Change review must not consume an authorization receipt."
+        );
+      }
+      const refs = commercialChangeRefs(organizationId, quoteId);
+      const simulationSnap = await tx.get(
+        refs.simulationsRef.doc(envelope.simulationReceiptId)
+      );
+      if (!simulationSnap.exists) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "The exact persisted commercial change simulation is required."
+        );
+      }
+      const existingSimulation = simulationSnap.data()?.receipt;
+      const validatedSimulation = commercialChangeAuthority.validateSimulationReceipt(
+        existingSimulation
+      );
+      if (
+        validatedSimulation.simulatedBy?.uid !== staff.uid
+        && staff.role !== "admin"
+      ) {
+        throw new CommercialChangeAuthorityError(
+          "permission-denied",
+          "Only the simulation requester or an administrator may save this reviewed change."
+        );
+      }
+      const canonicalQuote = { id: quoteId, ...quote };
+      const trustedContext = commercialChangeTrustedContext({
+        staff,
+        nowISO,
+        catalogAuthority: pricingResult.catalogAuthority
+      });
+      assertCommercialChangeSimulationCurrent({
+        simulationReceipt: existingSimulation,
+        organizationId,
+        quoteId,
+        quote: canonicalQuote,
+        catalogAuthority: pricingResult.catalogAuthority,
+        nowISO
+      });
+      commercialChangeAuthority.simulate({
+        request: {
+          requestId: validatedSimulation.requestId,
+          organizationId,
+          quoteId,
+          expectedActiveVersionId: validatedSimulation.baseRevisionId
+        },
+        canonicalQuote,
+        proposedForm: sanitized.form,
+        proposedPricing: pricingResult.pricing,
+        trustedContext,
+        existingReceipt: existingSimulation
+      });
+    }
     if (enforcement.authorityState === "enforced") {
       const canonicalQuote = { id: quoteId, ...quote };
       const preview = buildCommercialChangeImpactPreviewSnapshots({
@@ -15520,7 +15731,8 @@ exports.updateQuoteDraft = functions.region(REGION).https.onCall(async (data, co
       quoteId,
       staff,
       form: data?.form,
-      commercialChangeAuthorityInput: data?.commercialChangeAuthority
+      commercialChangeAuthorityInput: data?.commercialChangeAuthority,
+      expectedActiveVersionId: data?.expectedActiveVersionId
     });
   } catch (err) {
     if (err instanceof functions.https.HttpsError) {

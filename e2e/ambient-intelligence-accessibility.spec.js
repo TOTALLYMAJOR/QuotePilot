@@ -126,7 +126,7 @@ test.describe("Ambient Intelligence accessibility contract", () => {
       await expect(surface.locator(".ambient-now-priority")).toHaveCount(1);
       expect(await surface.locator(".ambient-now-priority").count()).toBeLessThanOrEqual(3);
       await expect(surface.locator('[data-staff-evidence-presentation="compact"]')).toBeVisible();
-      await expect(surface).toContainText("This view is partial; source details follow below.");
+      await expect(surface).toContainText("This view needs a little more context");
 
       const undersizedTargets = await surface.locator("button:visible, summary:visible").evaluateAll((controls) => (
         controls.map((control) => {
@@ -167,30 +167,41 @@ test.describe("Ambient Intelligence accessibility contract", () => {
       await expect(surface.getByRole("heading", { name: "Autumn Benefit Dinner" })).toBeVisible();
       await expect(surface.locator('[data-glance="state"]')).toContainText("Draft");
       await expect(surface.locator('[data-glance="risk"]')).toContainText("Staffing may need attention");
-      await expect(surface.locator('[data-glance="next"]')).toContainText("Review draft");
+      await expect(surface.locator('[data-glance="next"]')).toContainText("Review staffing");
 
       const comprehensionLayer = viewport.width <= 620
         ? surface.getByRole("region", { name: "Opportunity quick actions" })
-        : surface.locator(".ambient-opportunity-glance");
+        : surface.locator(".ambient-opportunity-hero");
       await expect(comprehensionLayer).toBeVisible();
       if (viewport.width <= 620) {
         await expect(comprehensionLayer.getByRole("heading", { name: "Autumn Benefit Dinner" })).toBeVisible();
         await expect(comprehensionLayer).toContainText(/State\s*Draft/u);
         await expect(comprehensionLayer).toContainText(/What matters\s*Staffing may need attention/u);
-        await expect(comprehensionLayer).toContainText(/Next\s*Staffing may need attention/u);
+        const nextAction = comprehensionLayer.locator(".ambient-mobile-remote__next");
+        await expect(nextAction.getByRole("heading", { name: "Ready except one thing." })).toBeVisible();
+        await expect(nextAction).toContainText("Staffing may need attention");
+        await expect(nextAction.getByRole("button", { name: "Review staffing" })).toBeVisible();
         await expect(surface.locator(".ambient-opportunity-hero")).toBeHidden();
         await expect(surface.locator(".ambient-opportunity-glance")).toBeHidden();
       }
 
-      const topLayer = await comprehensionLayer.evaluate((layer) => {
+      const topLayer = await comprehensionLayer.evaluate((layer, mobile) => {
         const root = layer.closest(".ambient-living-opportunity");
         const rootRect = root.getBoundingClientRect();
-        const layerRect = layer.getBoundingClientRect();
+        const boundary = mobile
+          ? layer.querySelector(".ambient-mobile-remote__next")
+          : layer;
+        const boundaryRect = boundary.getBoundingClientRect();
         return {
-          height: layerRect.bottom - rootRect.top,
+          // The approved mobile workspace is a progressive editorial page. Its
+          // object rows may scroll, but the next decision must begin in the
+          // first viewport. Desktop keeps the complete hero as its top layer.
+          height: mobile
+            ? boundaryRect.top - rootRect.top
+            : boundaryRect.bottom - rootRect.top,
           viewportHeight: window.innerHeight
         };
-      });
+      }, viewport.width <= 620);
       expect(topLayer.height).toBeLessThanOrEqual(topLayer.viewportHeight);
 
       const undersizedTargets = await surface.locator("button:visible").evaluateAll((buttons) => (
@@ -330,7 +341,9 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     const surface = await openAmbientOpportunity(page);
 
-    const inspect = surface.getByRole("button", { name: "Review staffing" });
+    const inspect = surface
+      .getByRole("region", { name: "Opportunity quick actions" })
+      .getByRole("button", { name: "Review staffing", exact: true });
     await inspect.click();
     const dialog = page.getByRole("dialog", { name: "Staffing suggestion" });
     await expect(dialog).toBeVisible();
@@ -396,7 +409,9 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     await page.getByRole("button", { name: "Close context" }).click();
     await expect(page.getByRole("dialog", { name: "Why this recommendation appears" })).toHaveCount(0);
 
-    const primaryAction = surface.locator('[data-glance="next"] button[data-ambient-action-id]');
+    const primaryAction = surface
+      .locator(".ambient-opportunity-total")
+      .getByRole("button", { name: "Review staffing", exact: true });
     await expect(primaryAction).toHaveAccessibleName("Review staffing");
     await primaryAction.click();
     const staffingDialog = page.getByRole("dialog", { name: "Staffing suggestion" });
@@ -466,7 +481,7 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     for (const journey of journeys) {
       await page.setViewportSize(journey.viewport);
       const surface = await openAmbientOpportunity(page);
-      const trigger = surface.getByRole("button", { name: journey.triggerName });
+      const trigger = surface.getByRole("button", { name: journey.triggerName, exact: true });
 
       await trigger.focus();
       await page.keyboard.press("Enter");

@@ -1,3 +1,18 @@
+.ambient-opportunities-host {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ambient-opportunities.ambient-purpose-surface {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .ambient-opportunities {
   display: grid;
   gap: clamp(1.4rem, 3vw, 2.8rem);
@@ -19,10 +34,10 @@
 }
 
 .ambient-opportunities__masthead h2 {
-  max-width: 15ch;
+  max-width: 24ch;
   margin: 0.18rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(2.15rem, 5vw, 4.5rem);
+  font-family: var(--font-editorial);
+  font-size: clamp(2.15rem, 4vw, 3.45rem);
   font-weight: 500;
   letter-spacing: -0.045em;
   line-height: 1;
@@ -65,11 +80,11 @@
 }
 
 .ambient-opportunity__primary-action {
-  min-width: min(100%, 11rem);
-  padding: 0.7rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--ambient-teal, #237f78) 36%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ambient-teal, #237f78) 8%, transparent);
+  min-width: 0;
+  padding: 0.55rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .ambient-opportunities__refresh:hover,
@@ -114,7 +129,7 @@
 .ambient-opportunities__state h3 {
   max-width: 32rem;
   margin: 0.3rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-editorial);
   font-size: clamp(1.35rem, 3vw, 2.25rem);
   font-weight: 500;
 }
@@ -123,6 +138,40 @@
   max-width: 42rem;
   color: var(--tone-ink-2, #514d47);
   line-height: 1.55;
+}
+
+.ambient-opportunities__groups {
+  display: grid;
+  gap: clamp(1rem, 2vw, 1.65rem);
+}
+
+.ambient-opportunities__group {
+  min-width: 0;
+}
+
+.ambient-opportunities__group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 36px;
+  padding: 0 0 0.4rem;
+}
+
+.ambient-opportunities__group-heading h3 {
+  margin: 0;
+  color: var(--tone-gold-3, #9b661d);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.ambient-opportunities__group-heading span {
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.78rem;
+  font-weight: 760;
 }
 
 .ambient-opportunities__list {
@@ -141,9 +190,12 @@
 
 .ambient-opportunity > article {
   display: grid;
-  gap: clamp(1rem, 2vw, 1.5rem);
+  grid-template-columns: 2.4rem minmax(14rem, 1.1fr) minmax(16rem, 1fr);
+  column-gap: clamp(1rem, 2.4vw, 2rem);
+  row-gap: 0.45rem;
+  align-items: center;
   min-width: 0;
-  padding: clamp(1.35rem, 3vw, 2.35rem) 0;
+  padding: clamp(0.72rem, 1.4vw, 1rem) 0;
 }
 
 .ambient-opportunity[data-needs-attention="true"] > article {
@@ -151,7 +203,20 @@
   padding-left: clamp(0.85rem, 2vw, 1.35rem);
 }
 
+.ambient-opportunity__index {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: start;
+  padding-top: 0.18rem;
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
 .ambient-opportunity__identity {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   justify-content: space-between;
   gap: 1.25rem;
@@ -165,8 +230,8 @@
 .ambient-opportunity__identity h3 {
   margin: 0.25rem 0 0;
   overflow-wrap: anywhere;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.45rem, 3vw, 2.45rem);
+  font-family: var(--font-editorial);
+  font-size: clamp(1.12rem, 1.55vw, 1.42rem);
   font-weight: 500;
   letter-spacing: -0.025em;
 }
@@ -177,10 +242,12 @@
 }
 
 .ambient-opportunity__event-line {
+  grid-column: 2;
+  grid-row: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: -0.65rem 0 0;
+  margin: 0;
   color: var(--tone-ink-3, #706b63);
   font-size: 0.86rem;
 }
@@ -245,22 +312,26 @@
   color: var(--tone-danger, #a63535);
 }
 
-.ambient-opportunity__recorded-state {
-  max-width: 52rem;
+.ambient-opportunity__details {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 0;
+  border-top: 0;
 }
 
-.ambient-opportunity__recorded-state summary {
+.ambient-opportunity__details > summary {
   display: inline-flex;
   gap: 0.65rem;
   align-items: center;
   min-height: 44px;
   color: var(--tone-ink-2, #514d47);
+  font-size: 0.74rem;
   font-weight: 700;
   cursor: pointer;
 }
 
-.ambient-opportunity__recorded-state summary:hover,
-.ambient-opportunity__recorded-state summary:focus-visible {
+.ambient-opportunity__details > summary:hover,
+.ambient-opportunity__details > summary:focus-visible {
   color: color-mix(in srgb, var(--ambient-teal, #237f78) 78%, #111);
   text-decoration: underline;
   text-underline-offset: 0.25rem;
@@ -273,8 +344,17 @@
   font-weight: 720;
 }
 
-.ambient-opportunity__recorded-state[open] .ambient-opportunity__recorded-cue::before {
+.ambient-opportunity__details[open] .ambient-opportunity__recorded-cue::before {
   content: "Close ↑";
+}
+
+.ambient-opportunity__details > .ambient-opportunity__momentum {
+  margin-top: 0.5rem;
+}
+
+.ambient-opportunity__recorded-state {
+  max-width: 52rem;
+  margin-top: 1rem;
 }
 
 .ambient-opportunity__recorded-state dl {
@@ -297,9 +377,11 @@
 }
 
 .ambient-opportunity__next {
+  grid-column: 3;
+  grid-row: 1 / span 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1.2rem;
+  gap: 0.9rem;
   align-items: center;
   padding-top: 0.2rem;
 }
@@ -309,16 +391,22 @@
   font-size: 1.05rem;
 }
 
+.ambient-opportunity__next .ambient-opportunity__reference,
+.ambient-opportunity__next h4 {
+  display: none;
+}
+
 .ambient-opportunity__next > div > p:last-child,
 .ambient-opportunity__disabled-reason {
   max-width: 50rem;
   margin: 0.3rem 0 0;
   color: var(--tone-ink-2, #514d47);
-  font-size: 0.86rem;
-  line-height: 1.5;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .ambient-opportunity__disabled-reason {
+  grid-column: 3;
   color: var(--tone-danger, #a63535);
 }
 
@@ -415,6 +503,25 @@
 }
 
 @media (max-width: 900px) {
+  .ambient-opportunity > article {
+    grid-template-columns: 2.2rem minmax(0, 1fr);
+  }
+
+  .ambient-opportunity__identity,
+  .ambient-opportunity__event-line {
+    grid-column: 2;
+  }
+
+  .ambient-opportunity__next,
+  .ambient-opportunity__disabled-reason,
+  .ambient-opportunity__details {
+    grid-column: 1 / -1;
+  }
+
+  .ambient-opportunity__next {
+    grid-row: auto;
+  }
+
   .ambient-opportunity__momentum {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -437,7 +544,7 @@
 
   .ambient-opportunities__masthead {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
     align-items: center;
     padding-bottom: 0.7rem;
@@ -450,6 +557,12 @@
 
   .ambient-opportunity__identity {
     display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.6rem;
+  }
+
+  .ambient-opportunity__identity .ambient-opportunity__reference {
+    display: none;
   }
 
   .ambient-opportunity__identity > .status-chip {
@@ -463,13 +576,8 @@
     font-size: clamp(1.45rem, 7vw, 2rem);
   }
 
-  .ambient-opportunities__refresh {
-    justify-self: end;
-  }
-
   .ambient-opportunity__momentum,
-  .ambient-opportunity__recorded-state dl,
-  .ambient-opportunity__next {
+  .ambient-opportunity__recorded-state dl {
     grid-template-columns: 1fr;
   }
 
@@ -483,37 +591,52 @@
     text-align: left;
   }
 
+  .ambient-opportunity__next {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    margin-left: 2.75rem;
+  }
+
   .ambient-opportunity__momentum-fact + .ambient-opportunity__momentum-fact {
     border-left: 0;
     border-top: 1px solid color-mix(in srgb, var(--tone-ink-1, #262421) 10%, transparent);
   }
 
   .ambient-opportunity__primary-action {
-    width: 100%;
+    width: auto;
+    justify-self: start;
+    padding: 0.55rem 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
-  .ambient-opportunity__identity {
-    order: 1;
+  .ambient-opportunity > article {
+    column-gap: 0.75rem;
+    row-gap: 0.25rem;
+    padding-block: 0.72rem;
+  }
+
+  .ambient-opportunity[data-needs-attention="true"] > article {
+    padding-left: 0.7rem;
+  }
+
+  .ambient-opportunity__identity h3 {
+    margin-top: 0;
+    font-size: clamp(1.1rem, 5.4vw, 1.32rem);
   }
 
   .ambient-opportunity__event-line {
-    order: 2;
+    gap: 0.35rem;
+    font-size: 0.8rem;
   }
 
-  .ambient-opportunity__next {
-    order: 3;
+  .ambient-opportunity__details {
+    margin: 0 0 0 2.75rem;
   }
 
-  .ambient-opportunity__disabled-reason {
-    order: 4;
-  }
-
-  .ambient-opportunity__momentum {
-    order: 5;
-  }
-
-  .ambient-opportunity__recorded-state {
-    order: 6;
+  .ambient-opportunity__next > div > p:last-child {
+    font-size: 0.78rem;
   }
 
   .ambient-opportunities__caught-up {

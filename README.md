@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-29 21:20:35 CDT
+Last updated: 2026-08-30 23:48:44 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -679,6 +679,7 @@ npm run test:truthloop-export:emulator
 npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
 npm run test:operational-staffing:emulator
+npm run test:customer-centered-authority:emulator
 npm run test:e2e
 npm run test:e2e:ambient-release-gate
 npm run test:e2e:firebase
@@ -695,6 +696,14 @@ npm run check:capability-surfaces
 npm run check:perf:bundle
 npm run check:perf:cwv
 ```
+
+`test:customer-centered-authority:emulator` is the reproducible Firebase
+Functions/Firestore trace for customer-centered mutation authority, including
+Quick Updates. It proves that an exact simulation receipt is bound to tenant,
+quote revision, catalog digest, policy, and requested form; drift produces zero
+write; and a successful save is confirmed through the authoritative persisted
+quote/version consequences. It is local emulator evidence, not hosted Firebase,
+provider, production, or human acceptance.
 
 `plan:task` classifies a bounded task before broad repository reading. It emits
 the recommended runner model/reasoning effort, relevant dependency reads,

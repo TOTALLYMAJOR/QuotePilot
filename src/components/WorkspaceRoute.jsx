@@ -17,6 +17,10 @@ const QUOTE_WORKSPACE_PATH = "/app/quote-workspace";
 const QUOTE_WORKSPACE_ROLES = new Set(["admin", "sales"]);
 const QuoteWorkspacePage = lazy(() => import("./QuoteWorkspaceConceptPage"));
 
+function envEnabled(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
 export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   const { location, route, replace } = useWorkspaceNavigation();
   const previousAuthenticatedUidRef = useRef("");
@@ -30,15 +34,20 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   const compatibilityWorkspaceRequested = normalizedPath === QUOTE_WORKSPACE_PATH
     || normalizedPath === QUOTE_WORKSPACE_CONCEPT_PATH;
   const exactQuoteWorkspaceRequested = route.routeId === WORKSPACE_ROUTE_IDS.QUOTE_DETAIL;
-  // An explicit arrival handoff carries its own governed destination and
-  // recovery semantics. Keep every such arrival in the authoritative app;
-  // the canonical presentation owns only direct exact-quote navigation.
+  const ambientOpportunityRequested = envEnabled(import.meta.env.VITE_AMBIENT_UI_ENABLED)
+    && exactQuoteWorkspaceRequested;
+  // The approved Ambient Opportunity owns ordinary exact-quote navigation
+  // when that build-selected presentation is enabled. Explicit arrivals and
+  // administration continue through the authoritative app; the connected
+  // Quote Workspace remains a compatibility alias and rollback presentation.
   const existingAppOwnsArrival = Boolean(location?.state?.ambientArrival);
   const administrationRequested = searchParams.get("view") === "administration";
   const quoteWorkspaceRequested = !portalToken
     && !administrationRequested
     && !existingAppOwnsArrival
-    && (compatibilityWorkspaceRequested || exactQuoteWorkspaceRequested);
+    && (compatibilityWorkspaceRequested || (
+      exactQuoteWorkspaceRequested && !ambientOpportunityRequested
+    ));
   const requestedQuoteId = exactQuoteWorkspaceRequested
     ? String(route.params?.quoteId || "").trim()
     : String(searchParams.get("quoteId") || "").trim();

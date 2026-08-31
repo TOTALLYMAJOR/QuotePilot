@@ -274,6 +274,85 @@ describe("AmbientLivingOpportunity", () => {
     expect(commercialHealth.textContent).not.toContain("$8,400.00");
     expect(container.textContent).not.toContain("More actions");
     expect(container.textContent).not.toMatch(/72% readiness/i);
+    const desktopHero = container.querySelector(".ambient-v16-opportunity__desktop");
+    expect(desktopHero.querySelector('img[src="/images/quote-workspace-wedding-table-v1.webp"]')).not.toBeNull();
+    expect(desktopHero.textContent).toContain("Sep 19 · Event");
+    expect(desktopHero.textContent).toContain("The Foundry Hall");
+    expect(desktopHero.textContent).toContain("120 guests");
+    expect(container.querySelector(".ambient-v16-opportunity__event-summary")?.textContent)
+      .toContain("Plated · 2 saved items");
+  });
+
+  test("keeps the primary CTA task-specific when authoritative staffing state is the next concern", () => {
+    mount({
+      quote: {
+        ...QUOTE,
+        customer: { ...QUOTE.customer, phone: "205-555-0123" },
+        event: { ...QUOTE.event, hours: 6 }
+      }
+    });
+
+    const mobile = container.querySelector(".ambient-v16-opportunity__mobile");
+    expect(mobile.textContent).toContain("Staffing may need attention");
+    const nextAction = mobile.querySelector(".ambient-mobile-remote__next button");
+    expect(nextAction?.dataset.ambientActionId).toBe("inspect-staffing");
+    expect(nextAction?.textContent).toContain("Review staffing");
+  });
+
+  test("opens the role-safe Quick Updates host without mutating the selected opportunity", async () => {
+    const onPreviewQuickUpdate = vi.fn();
+    const onSaveQuickUpdate = vi.fn();
+    const before = structuredClone(QUOTE);
+    mount({
+      serviceStyles: ["Buffet", "Plated", "Stations", "Drop-off"],
+      onPreviewQuickUpdate,
+      onSaveQuickUpdate
+    });
+
+    const trigger = button("Quick Updates");
+    expect(trigger).not.toBeUndefined();
+    expect(trigger.dataset.ambientActionId).toBe("open-quick-updates");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.getAttribute("aria-controls")).toBeTruthy();
+    act(() => trigger.click());
+    await settle();
+
+    const dialog = document.querySelector('.qup-drawer[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog.id).toBe(trigger.getAttribute("aria-controls"));
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(container.getAttribute("aria-hidden")).toBe("true");
+    expect(container.hasAttribute("inert")).toBe(true);
+    expect(dialog.textContent).toContain("Autumn Benefit Dinner");
+    expect(dialog.textContent).toContain("Service style");
+    expect(dialog.textContent).not.toContain("Courses");
+    expect(onPreviewQuickUpdate).not.toHaveBeenCalled();
+    expect(onSaveQuickUpdate).not.toHaveBeenCalled();
+    expect(QUOTE).toEqual(before);
+
+    act(() => dialog.querySelector('[aria-label="Close Quick Updates"]').click());
+    await settle();
+    expect(document.querySelector('.qup-drawer[role="dialog"]')).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(container.hasAttribute("aria-hidden")).toBe(false);
+    expect(container.hasAttribute("inert")).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  test("hides Quick Updates when a saved opportunity has no authoritative version identity", () => {
+    mount({
+      quote: {
+        ...QUOTE,
+        activeVersionId: "",
+        versionMeta: null,
+        updatedAtISO: "2026-08-30T20:00:00.000Z"
+      },
+      serviceStyles: ["Buffet", "Plated", "Stations", "Drop-off"],
+      onPreviewQuickUpdate: vi.fn(),
+      onSaveQuickUpdate: vi.fn()
+    });
+
+    expect(button("Quick Updates")).toBeUndefined();
   });
 
   test("provides an in-flow mobile remote with exact object and next-action controls", async () => {
@@ -285,23 +364,31 @@ describe("AmbientLivingOpportunity", () => {
     expect(remote.dataset.surfacePurpose).toContain("advance");
     expect(remote.textContent).toContain("Autumn Benefit Dinner");
     expect(remote.textContent).toContain("Event duration needs review");
+    expect(remote.querySelector('img[src="/images/quote-workspace-wedding-table-v1.webp"]')).not.toBeNull();
+    expect(remote.textContent).toContain("The Foundry Hall");
+    expect(remote.textContent).toContain("120 guests");
+    expect(remote.textContent).toContain("6:00 PM");
+    expect(remote.textContent).toContain("Plated · 2 saved items");
+    expect(remote.textContent).toContain("8 servers · 3 chefs");
 
     const remoteButtons = [...remote.querySelectorAll("button")];
-    expect(remoteButtons.map((item) => item.textContent.trim())).toEqual([
-      "Event",
-      "Menu",
-      "Pricing",
-      "Proposal",
-      "Review draft"
-    ]);
     expect(remoteButtons.every((item) => item.disabled || Boolean(item.dataset.ambientActionId))).toBe(true);
+    const eventButton = remote.querySelector('[aria-label="Event"]');
+    const menuButton = remote.querySelector('[data-ambient-action-id="inspect-menu"]');
+    const staffingButton = remote.querySelector('[data-ambient-action-id="inspect-staffing"]');
+    const pricingButton = remote.querySelector('[data-ambient-action-id="inspect-pricing"]');
+    const proposalButton = remote.querySelector('[data-ambient-action-id="inspect-proposal"]');
+    const nextButton = remote.querySelector('[data-ambient-action-id="open-priced-draft"]');
+    expect([eventButton, menuButton, staffingButton, pricingButton, proposalButton, nextButton]
+      .every(Boolean)).toBe(true);
+    expect(nextButton.textContent).toContain("Review draft");
 
-    act(() => remoteButtons[0].click());
+    act(() => eventButton.click());
     expect(container.querySelector('#ambient-mobile-event-details')).not.toBeNull();
     expect(container.querySelector('#ambient-operational-facts')).toBeNull();
     expect(container.textContent).toContain("Event details shown");
 
-    act(() => remoteButtons[1].click());
+    act(() => menuButton.click());
     const menuDialog = container.querySelector('[role="dialog"]');
     expect(menuDialog?.textContent).toContain("Menu details");
     expect(menuDialog?.closest(".ambient-context-surface")?.classList)
@@ -311,7 +398,15 @@ describe("AmbientLivingOpportunity", () => {
     act(() => container.querySelector('[aria-label="Close context"]').click());
     await settle();
 
-    act(() => remoteButtons[2].click());
+    act(() => staffingButton.click());
+    const staffingDialog = container.querySelector('[role="dialog"]');
+    expect(staffingDialog?.textContent).toContain("Staffing suggestion");
+    expect(staffingDialog?.closest(".ambient-context-surface")?.classList)
+      .toContain("ambient-context-surface--arrival-disclosure");
+    act(() => container.querySelector('[aria-label="Close context"]').click());
+    await settle();
+
+    act(() => pricingButton.click());
     const pricingDialog = container.querySelector('[role="dialog"]');
     expect(pricingDialog?.textContent).toContain("Pricing details");
     expect(pricingDialog?.closest(".ambient-context-surface")?.classList)
@@ -321,12 +416,12 @@ describe("AmbientLivingOpportunity", () => {
     act(() => container.querySelector('[aria-label="Close context"]').click());
     await settle();
 
-    act(() => remoteButtons[3].click());
+    act(() => proposalButton.click());
     expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Proposal details");
     act(() => container.querySelector('[aria-label="Close context"]').click());
     await settle();
 
-    act(() => remoteButtons[4].click());
+    act(() => nextButton.click());
     expect(onEditQuote).toHaveBeenCalledTimes(1);
   });
 
@@ -1263,7 +1358,7 @@ describe("AmbientLivingOpportunity", () => {
     expect(container.querySelector('[data-disclosure-layer="operational"]')).toBeNull();
     expect(container.querySelector('[data-disclosure-layer="supporting"]')).toBeNull();
 
-    act(() => button("Show event, menu, staffing, and pricing").click());
+    act(() => button("About this opportunity").click());
 
     const operational = container.querySelector('[data-disclosure-layer="operational"]');
     expect(operational).not.toBeNull();

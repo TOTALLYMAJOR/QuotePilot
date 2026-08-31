@@ -886,8 +886,6 @@ export function AdminCatalogView({
     return () => window.cancelAnimationFrame(frame);
   }, [dialogRef, embedded, focusRequest, onFocusResolution, open]);
 
-  if (!open) return null;
-
   const stagedPack = draft?.settings?.starterCatalogPack || {};
   const recoveryReplacementBlocked = stagedPack.replacementBlocked === true;
   const confirmedMissingMenuRecovery = confirmedMenuRecoveryChecked
@@ -912,6 +910,24 @@ export function AdminCatalogView({
     && hasCatalogContent
     && !stagedPack.id
     && !confirmedMissingMenuRecovery;
+  const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
+  const visibleAdminTabs = starterChoiceOnly
+    ? ADMIN_TABS.filter((tab) => tab.id === "starter")
+    : ADMIN_TABS.filter(
+      (tab) => tab.id !== "starter"
+        || showStarterTab
+    );
+  const hasActiveVisibleTab = visibleAdminTabs.some((tab) => tab.id === activeTab);
+  const resolvedActiveTab = hasActiveVisibleTab ? activeTab : (visibleAdminTabs[0]?.id || "");
+  const packageWorkspaceActive = resolvedActiveTab === "packages" && !starterChoiceOnly;
+
+  useEffect(() => {
+    if (open && !hasActiveVisibleTab && resolvedActiveTab && activeTab !== resolvedActiveTab) {
+      setActiveTab(resolvedActiveTab);
+    }
+  }, [open, hasActiveVisibleTab, resolvedActiveTab, activeTab]);
+
+  if (!open) return null;
 
   const handleApplyStarterPack = async (pack) => {
     if (blockForNewerCatalog()) return;
@@ -1900,22 +1916,6 @@ export function AdminCatalogView({
   const targetMarginPct = Number.isFinite(targetMarginCandidate) && targetMarginCandidate >= 0 && targetMarginCandidate <= 1
     ? targetMarginCandidate
     : null;
-  const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
-  const visibleAdminTabs = starterChoiceOnly
-    ? ADMIN_TABS.filter((tab) => tab.id === "starter")
-    : ADMIN_TABS.filter(
-      (tab) => tab.id !== "starter"
-        || showStarterTab
-    );
-  const hasActiveVisibleTab = visibleAdminTabs.some((tab) => tab.id === activeTab);
-  const resolvedActiveTab = hasActiveVisibleTab ? activeTab : (visibleAdminTabs[0]?.id || "");
-  const packageWorkspaceActive = resolvedActiveTab === "packages" && !starterChoiceOnly;
-  useEffect(() => {
-    if (open && !hasActiveVisibleTab && resolvedActiveTab && activeTab !== resolvedActiveTab) {
-      setActiveTab(resolvedActiveTab);
-    }
-  }, [open, hasActiveVisibleTab, resolvedActiveTab, activeTab]);
-
   const handleReload = () => {
     if (pendingCatalogEvidenceRef.current) {
       if (!window.confirm("Discard unsaved Library changes and load the newer version?")) {

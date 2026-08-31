@@ -15,6 +15,7 @@ const mockState = vi.hoisted(() => ({
   deleteDoc: vi.fn(),
   doc: vi.fn(),
   getDoc: vi.fn(),
+  getDocFromServer: vi.fn(),
   getDocs: vi.fn(),
   limit: vi.fn(),
   orderBy: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("firebase/firestore", () => ({
   deleteDoc: mockState.deleteDoc,
   doc: mockState.doc,
   getDoc: mockState.getDoc,
+  getDocFromServer: mockState.getDocFromServer,
   getDocs: mockState.getDocs,
   limit: mockState.limit,
   orderBy: mockState.orderBy,
@@ -82,6 +84,7 @@ import {
   buildClientWritablePortalPayment,
   convertQuoteToContract,
   getCustomerRecordByEmail,
+  getQuoteById,
   getQuoteHistory,
   getWorkflowAttentionSnapshot,
   requestQuoteApproval,
@@ -115,6 +118,18 @@ describe("quoteStore Firebase write safety", () => {
     mockState.orderBy.mockImplementation((...args) => ({ refType: "orderBy", args }));
     mockState.query.mockImplementation((...args) => ({ refType: "query", args }));
     mockState.getDocs.mockResolvedValue({ docs: [] });
+    mockState.getDocFromServer.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        organizationId: "org-one",
+        quoteNumber: "Q-ONE",
+        status: "draft",
+        activeVersionId: "v0002",
+        latestVersionNumber: 2,
+        event: { name: "Server Read Event", style: "Buffet" },
+        customer: { name: "Alex", email: "alex@example.test" }
+      })
+    });
     mockState.setDoc.mockResolvedValue(undefined);
     mockState.runTransaction.mockImplementation(async (_db, handler) => {
       const tx = {
@@ -323,6 +338,26 @@ describe("quoteStore Firebase write safety", () => {
     });
   });
 
+  test("uses an explicit server-only Firestore read for post-write quote confirmation", async () => {
+    setQuoteStoreOrganizationId("org-one");
+
+    const quote = await getQuoteById("quote-1", { serverOnly: true });
+
+    expect(mockState.getDocFromServer).toHaveBeenCalledWith(expect.objectContaining({
+      refType: "org-doc",
+      name: "quotes",
+      docId: "quote-1",
+      orgId: "org-one"
+    }));
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(quote).toEqual(expect.objectContaining({
+      id: "quote-1",
+      organizationId: "org-one",
+      activeVersionId: "v0002",
+      event: expect.objectContaining({ style: "Buffet" })
+    }));
+  });
+
   test("portal sync payloads omit all server-owned payment evidence", () => {
     expect(buildClientWritablePortalPayment({
       depositLink: "https://checkout.stripe.com/c/pay/cs_test_server",
@@ -497,6 +532,7 @@ describe("quoteStore Firebase write safety", () => {
       },
       ownerUid: "forged-owner",
       ownerEmail: "forged-owner@example.com",
+      expectedActiveVersionId: "v0001",
       commercialChangeAuthority: {
         simulationReceiptId: `ccs_${"a".repeat(48)}`,
         authorizationReceiptId: `cca_${"b".repeat(48)}`,
@@ -528,6 +564,7 @@ describe("quoteStore Firebase write safety", () => {
     expect(callable).toHaveBeenCalledWith({
       organizationId: "org-one",
       quoteId: "quote-1",
+      expectedActiveVersionId: "v0001",
       form: expect.objectContaining({
         name: "Updated Client",
         pkg: "classic"

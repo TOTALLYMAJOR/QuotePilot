@@ -813,6 +813,11 @@ export function QuoteHistoryView({
   arrivalContext = null,
   onArrivalResolution = null,
   onEditQuote,
+  serviceStyles = [],
+  onPreviewQuickUpdate,
+  onSaveQuickUpdate,
+  onOpenQuickUpdatesLibrary,
+  onQuickUpdatesGuardChange,
   ambientPricingCatalog = null,
   ambientPricingSettings = null,
   globalPilotRequest = null,
@@ -864,6 +869,7 @@ export function QuoteHistoryView({
   const [eventTypeFilter, setEventTypeFilter] = useState("all");
   const [eventTypes, setEventTypes] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
+  const filterOrganizationIdRef = useRef(String(organizationId || "").trim());
   const [updatingId, setUpdatingId] = useState("");
   const [convertingId, setConvertingId] = useState("");
   const [contractConversions, setContractConversions] = useState({});
@@ -1027,19 +1033,35 @@ export function QuoteHistoryView({
     if (!open) {
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      loading: true,
-      source: "",
-      error: "",
-      feedback: "",
-      quotes: []
-    }));
-    if (focusQuoteId) {
+    const requestedOrganizationId = String(organizationId || "").trim();
+    if (filterOrganizationIdRef.current !== requestedOrganizationId) {
+      filterOrganizationIdRef.current = requestedOrganizationId;
       setQuery("");
       setEventTypeFilter("all");
       setStatusFilter("all");
     }
+    setState((prev) => (
+      prev.organizationId === requestedOrganizationId
+        ? {
+            ...prev,
+            loading: true,
+            error: "",
+            readError: "",
+            feedback: ""
+          }
+        : {
+            loading: true,
+            source: "",
+            error: "",
+            readError: "",
+            feedback: "",
+            quotes: [],
+            truncated: false,
+            readComplete: false,
+            loadedAtISO: "",
+            organizationId: requestedOrganizationId
+          }
+    ));
   }, [open, focusQuoteId, focusAction, organizationId]);
 
   const pushToast = (message, tone = "info") => {
@@ -2233,6 +2255,113 @@ export function QuoteHistoryView({
       && portalConversationAvailable()
       && focusedQuoteCanUsePortal
     );
+    const quickUpdateRevisionId = String(
+      focusedQuote?.activeVersionId
+      || focusedQuote?.versionMeta?.versionId
+      || ""
+    ).trim();
+    const validateQuickUpdateRequest = (request) => {
+      const requestQuoteId = String(request?.quoteId || "").trim();
+      const requestOrganizationId = String(request?.organizationId || "").trim();
+      const requestRevisionId = String(request?.baseRevisionId || "").trim();
+      const requestedStyle = String(request?.patch?.event?.style || "").trim();
+      const exactDelta = Array.isArray(request?.delta)
+        && request.delta.length === 1
+        && request.delta[0]?.fieldPath === "event.style"
+        && String(request.delta[0]?.after || "").trim() === requestedStyle;
+      return Boolean(
+        ordinaryEditAllowed
+        && focusedQuote
+        && request?.modelId === "quick-updates-request-v1"
+        && request?.scope === "event.service_style"
+        && requestQuoteId === String(focusedQuote.id || focusedQuote.quoteId || "").trim()
+        && requestOrganizationId === String(organizationId || focusedQuote.organizationId || "").trim()
+        && requestRevisionId
+        && requestRevisionId === quickUpdateRevisionId
+        && requestedStyle
+        && exactDelta
+      );
+    };
+    const handlePreviewQuickUpdate = async (request) => {
+      if (!validateQuickUpdateRequest(request)) {
+        return {
+          status: "conflict",
+          message: "The Quick Updates draft no longer matches this exact tenant, opportunity, or saved revision."
+        };
+      }
+      if (typeof onPreviewQuickUpdate !== "function") {
+        return {
+          status: "failure",
+          message: "Authoritative Quick Updates review is not available in this workspace."
+        };
+      }
+      return onPreviewQuickUpdate(request);
+    };
+    const handleSaveQuickUpdate = async (request, hooks = {}) => {
+      if (!validateQuickUpdateRequest(request)) {
+        return {
+          status: "conflict",
+          message: "The saved opportunity changed before this menu draft could be submitted."
+        };
+      }
+      if (typeof onSaveQuickUpdate !== "function") {
+        return {
+          status: "failure",
+          message: "Authoritative Quick Updates save is not available in this workspace."
+        };
+      }
+      const persisted = await onSaveQuickUpdate(request);
+      const persistenceStatus = String(persisted?.status || "").trim().toLowerCase();
+      if (persistenceStatus !== "persisted") {
+        if (["conflict", "failure", "failed", "handoff", "uncertain"].includes(persistenceStatus)) {
+          return persisted;
+        }
+        return {
+          status: "uncertain",
+          message: "The save did not return the required persisted phase before authoritative list refresh."
+        };
+      }
+      const receipt = persisted.receipt || null;
+      hooks.onPersisted?.(receipt);
+      const refreshed = await load();
+      if (!refreshed || !Array.isArray(refreshed.quotes)) {
+        return {
+          status: "uncertain",
+          message: "The save returned, but the authoritative opportunity list could not be refreshed.",
+          receipt
+        };
+      }
+      const authoritativeQuote = refreshed.quotes.find((item) => (
+        String(item?.id || item?.quoteId || "").trim() === request.quoteId
+      ));
+      const refreshedOrganizationId = String(authoritativeQuote?.organizationId || organizationId || "").trim();
+      const refreshedRevisionId = String(
+        authoritativeQuote?.activeVersionId
+        || authoritativeQuote?.versionMeta?.versionId
+        || authoritativeQuote?.updatedAtISO
+        || ""
+      ).trim();
+      const expectedRevisionId = String(
+        receipt?.activeVersionId || receipt?.versionId || persisted?.activeVersionId || ""
+      ).trim();
+      if (
+        !authoritativeQuote
+        || refreshedOrganizationId !== request.organizationId
+        || String(authoritativeQuote?.event?.style || "").trim() !== request.patch.event.style
+        || (expectedRevisionId && refreshedRevisionId !== expectedRevisionId)
+      ) {
+        return {
+          status: "uncertain",
+          message: "The save returned, but the authoritative opportunity reread did not confirm the exact tenant, revision, and service style.",
+          receipt
+        };
+      }
+      return {
+        status: "saved",
+        quote: authoritativeQuote,
+        receipt
+      };
+    };
     return (
       <main
         className="container workspace-route-main embedded-workspace-route event-workspace-route"
@@ -2294,6 +2423,13 @@ export function QuoteHistoryView({
                 }}
                 onBackToQuotes={onBackToQuotes}
                 onEditQuote={handleEditQuote}
+                serviceStyles={serviceStyles}
+                onPreviewQuickUpdate={handlePreviewQuickUpdate}
+                onSaveQuickUpdate={handleSaveQuickUpdate}
+                onOpenQuickUpdatesLibrary={String(currentUserRole || "").trim().toLowerCase() === "admin"
+                  ? onOpenQuickUpdatesLibrary
+                  : undefined}
+                onQuickUpdatesGuardChange={onQuickUpdatesGuardChange}
                 onOpenWorkflow={onOpenWorkflow}
                 onOpenLegacyWorkspace={(context = {}) => (
                   typeof onOpenQuoteAdministration === "function"
@@ -2394,8 +2530,14 @@ export function QuoteHistoryView({
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="quote-history-title"
     >
-      <div className={`modal-card history-card${embedded ? " workspace-route-card" : ""}`} ref={dialogRef} tabIndex={-1}>
-        <div className="modal-head">
+      <div
+        className={`modal-card history-card${embedded ? " workspace-route-card" : ""}${
+          embedded && AMBIENT_UI_ENABLED ? " ambient-opportunities-host" : ""
+        }`}
+        ref={dialogRef}
+        tabIndex={-1}
+      >
+        {!(embedded && AMBIENT_UI_ENABLED) && <div className="modal-head">
           <h2
             ref={routeHeadingRef}
             id="quote-history-title"
@@ -2420,7 +2562,7 @@ export function QuoteHistoryView({
               {embedded ? AMBIENT_UI_ENABLED ? "Back to Now" : "Back to Home" : "Close"}
             </button>
           </div>
-        </div>
+        </div>}
 
         {!AMBIENT_UI_ENABLED && <details className="staff-evidence-disclosure workspace-data-details">
           <summary>Workspace data details</summary>
@@ -2689,6 +2831,7 @@ export function QuoteHistoryView({
             </section>
           )}>
             <AmbientOpportunitiesStream
+              headingRef={routeHeadingRef}
               quotes={state.quotes}
               source={state.source}
               readBoundary={ambientOpportunityReadBoundary}

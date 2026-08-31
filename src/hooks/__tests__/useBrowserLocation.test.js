@@ -1,9 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import {
+  BROWSER_HISTORY_STATE_KEY,
   BROWSER_LOCATION_CHANGE_EVENT,
   buildBrowserNavigationTarget,
+  ensureBrowserHistoryEntry,
   navigateBrowser,
   readBrowserLocation,
+  readBrowserHistoryEntry,
   subscribeToBrowserLocation
 } from "../useBrowserLocation";
 
@@ -84,7 +87,10 @@ describe("History API workspace navigation", () => {
     expect(navigateBrowser("/app/quotes", { windowObject, state: { source: "nav" } }))
       .toBe("/app/quotes?filter=open");
     expect(windowObject.history.pushState).toHaveBeenCalledWith(
-      { source: "nav" },
+      expect.objectContaining({
+        source: "nav",
+        [BROWSER_HISTORY_STATE_KEY]: expect.objectContaining({ position: 1 })
+      }),
       "",
       "/app/quotes?filter=open"
     );
@@ -97,7 +103,13 @@ describe("History API workspace navigation", () => {
     });
 
     navigateBrowser("/app", { windowObject, replace: true, preserveSearch: false });
-    expect(windowObject.history.replaceState).toHaveBeenCalledWith(null, "", "/app");
+    expect(windowObject.history.replaceState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        [BROWSER_HISTORY_STATE_KEY]: expect.objectContaining({ position: 1 })
+      }),
+      "",
+      "/app"
+    );
     expect(listener).toHaveBeenCalledTimes(2);
 
     unsubscribe();
@@ -115,5 +127,56 @@ describe("History API workspace navigation", () => {
 
     expect(listener).toHaveBeenCalledOnce();
     expect(readBrowserLocation(windowObject).pathname).toBe("/app/customers");
+  });
+
+  test("seeds and advances private history positions without replacing application route state", () => {
+    const windowObject = createFakeWindow("/app/quotes/rivera");
+    windowObject.history.state = {
+      ambientArrival: { surfaceId: "living-opportunity", quoteId: "rivera" },
+      [BROWSER_HISTORY_STATE_KEY]: {
+        sessionId: "caller-controlled",
+        position: 88,
+        entryId: "caller-controlled"
+      }
+    };
+
+    const seeded = ensureBrowserHistoryEntry(windowObject);
+    expect(seeded).toMatchObject({ position: 0 });
+    expect(windowObject.history.state.ambientArrival).toEqual({
+      surfaceId: "living-opportunity",
+      quoteId: "rivera"
+    });
+    expect(readBrowserHistoryEntry(windowObject)).toEqual(seeded);
+
+    navigateBrowser("/app/quotes", {
+      windowObject,
+      preserveSearch: false,
+      state: {
+        source: "index",
+        [BROWSER_HISTORY_STATE_KEY]: {
+          sessionId: "injected",
+          position: -500,
+          entryId: "injected"
+        }
+      }
+    });
+    expect(readBrowserHistoryEntry(windowObject)).toMatchObject({
+      sessionId: seeded.sessionId,
+      position: 1
+    });
+    expect(windowObject.history.state.source).toBe("index");
+    expect(windowObject.history.state[BROWSER_HISTORY_STATE_KEY].sessionId).not.toBe("injected");
+
+    navigateBrowser("/app/quotes?filter=open", {
+      windowObject,
+      replace: true,
+      preserveSearch: false,
+      state: { source: "filtered" }
+    });
+    expect(readBrowserHistoryEntry(windowObject)).toMatchObject({
+      sessionId: seeded.sessionId,
+      position: 1
+    });
+    expect(windowObject.history.state.source).toBe("filtered");
   });
 });

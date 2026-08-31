@@ -89,6 +89,11 @@ describe("recoverable lazy surfaces", () => {
     expect(mainSource).toContain('surfaceName="Staff assignment invitation"');
     expect(appSource).toContain("const QuoteCompareModal = createRecoverableLazy(");
     expect(appSource).toContain("component={QuoteCompareModal}");
+    expect(appSource).toContain("const CustomerPortalView = createRecoverableLazy(");
+    expect(appSource).toContain('() => import("quotepilot-active-customer-portal")');
+    expect(appSource).not.toContain('import CustomerPortalView from "quotepilot-active-customer-portal"');
+    expect(appSource).toContain('surfaceName="Customer portal"');
+    expect(appSource).toContain("onRetry={CustomerPortalView.retry}");
     for (const name of [
       "CustomerDirectoryView",
       "CustomerWorkspaceView",

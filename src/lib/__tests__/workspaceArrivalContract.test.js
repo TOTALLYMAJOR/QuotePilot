@@ -123,6 +123,9 @@ describe("workspace exact-arrival handoff", () => {
 
   test("builds and parses supported state-only Library arrivals", () => {
     const browse = createWorkspaceArrivalHandoff(libraryInput());
+    const contextualBrowse = createWorkspaceArrivalHandoff(libraryInput({
+      focus: { sectionId: "overview", quoteId: "quote-42" }
+    }));
     const section = createWorkspaceArrivalHandoff(libraryInput({
       object: { id: "templates", type: "library-section" },
       focus: { sectionId: "templates" },
@@ -167,6 +170,13 @@ describe("workspace exact-arrival handoff", () => {
         focus: { sectionId: "templates" }
       }
     });
+    expect(contextualBrowse).toMatchObject({
+      ok: true,
+      contract: {
+        destination: "library",
+        focus: { sectionId: "overview", quoteId: "quote-42" }
+      }
+    });
     expect(template).toMatchObject({
       ok: true,
       contract: {
@@ -175,9 +185,9 @@ describe("workspace exact-arrival handoff", () => {
         focus: { sectionId: "templates", recordId: "template-7" }
       }
     });
-    expect([browse, section, template].map((handoff) => (
+    expect([browse, contextualBrowse, section, template].map((handoff) => (
       parseWorkspaceArrivalHandoff(locationFor(handoff))
-    ))).toEqual([browse, section, template]);
+    ))).toEqual([browse, contextualBrowse, section, template]);
   });
 
   test("rejects mismatched Library intents, focus identities, and copied routes", () => {

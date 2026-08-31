@@ -54,8 +54,28 @@ async function seedLibrary(page) {
 async function openAmbientLibrary(page) {
   await page.goto("/app/catalog");
   const title = page.locator("#ambient-library-title");
-  await expect(title).toHaveText("Library", { timeout: LAZY_SURFACE_TIMEOUT_MS });
+  await expect(title).toHaveText("The choices behind every quote.", {
+    timeout: LAZY_SURFACE_TIMEOUT_MS
+  });
+  await expect(title).toBeFocused();
+  await expect(page).toHaveURL(/\/app\/catalog$/u);
+  await expect(page.locator(".ambient-library")).toHaveAttribute(
+    "data-library-context",
+    "standalone"
+  );
   return title;
+}
+
+async function readPersistedCatalog(page) {
+  return page.evaluate(() => localStorage.getItem("quoteWizard.catalog.e2e-org"));
+}
+
+async function beforeUnloadIsProtected(page) {
+  return page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
 }
 
 async function beginLibraryAcknowledgementObservation(page, actionId) {
@@ -169,7 +189,7 @@ test.describe("Ambient Library", () => {
   );
 
   for (const viewport of VIEWPORTS) {
-    test(`keeps Library contextual, accessible, and overlap-safe at ${viewport.width}px`, async ({ page }) => {
+    test(`keeps standalone Library truthful, accessible, and overlap-safe at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await seedLibrary(page);
       await openAmbientLibrary(page);
@@ -179,7 +199,8 @@ test.describe("Ambient Library", () => {
       await expect(page.locator('[data-library-section="templates"]')).toBeVisible();
       await expect(page.locator('[data-library-record-kind="event-template"]')).toHaveCount(2);
       await expect(page.locator("#catalog-admin-title")).toHaveCount(0);
-      await expect(page.locator("body")).not.toContainText("Facts that move");
+      await expect(page.locator(".ambient-library__usage")).toContainText("Available from opportunities");
+      await expect(page.locator("body")).not.toContainText("Return to Rivera Wedding");
 
       const audit = await layoutAudit(page);
       expect(audit.documentOverflow).toBeLessThanOrEqual(1);
@@ -200,10 +221,11 @@ test.describe("Ambient Library", () => {
     });
   }
 
-  test("acknowledges a primary action within 250ms and focuses its exact object", async ({ page }) => {
+  test("acknowledges a primary action within 250ms and opens its exact object", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await seedLibrary(page);
     await openAmbientLibrary(page);
+    const persistedBeforeBrowse = await readPersistedCatalog(page);
     const action = page.locator(".ambient-library__next [data-library-action-id]");
     await expect(action).toHaveAttribute("data-library-action-id", "review-library-menu");
 
@@ -224,8 +246,12 @@ test.describe("Ambient Library", () => {
     expect(observation.acknowledgementMs).toBeGreaterThanOrEqual(0);
     expect(observation.acknowledgementMs).toBeLessThanOrEqual(250);
     expect(observation.message).toContain("Opening Menu");
-    await expect(page.locator('[data-admin-tab-id="menu"]')).toHaveClass(/active/u);
-    await expect(page.locator("[data-library-acknowledgement]")).toContainText("ready to review");
+    const menuTab = page.locator('[data-admin-tab-id="menu"]');
+    await expect(menuTab).toHaveClass(/active/u);
+    const acknowledgement = page.locator("[data-library-acknowledgement]");
+    await expect(acknowledgement).toContainText("ready to review");
+    await expect(acknowledgement).toBeFocused();
+    expect(await readPersistedCatalog(page)).toBe(persistedBeforeBrowse);
 
     const audit = await layoutAudit(page);
     expect(audit.documentOverflow).toBeLessThanOrEqual(1);
@@ -237,15 +263,21 @@ test.describe("Ambient Library", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await seedLibrary(page);
     await openAmbientLibrary(page);
+    const persistedBeforeBrowse = await readPersistedCatalog(page);
+    await page.locator(".ambient-library__template-disclosure > summary").click();
     const wedding = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"]');
     await wedding.getByRole("button", { name: /Review Wedding/u }).click();
 
     const exactRecord = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"]');
     await expect(exactRecord).toBeVisible();
-    await expect(exactRecord.locator('[data-template-field="summary"]')).toHaveAttribute("aria-expanded", "true");
+    const summary = exactRecord.locator('[data-template-field="summary"]');
+    await expect(summary).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator('[data-library-record-id="corporate"] [data-template-field="summary"]'))
       .toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator("[data-library-acknowledgement]")).toContainText("requested template is ready");
+    const acknowledgement = page.locator("[data-library-acknowledgement]");
+    await expect(acknowledgement).toContainText("requested template is ready");
+    await expect(acknowledgement).toBeFocused();
+    expect(await readPersistedCatalog(page)).toBe(persistedBeforeBrowse);
 
     const audit = await layoutAudit(page);
     expect(audit.documentOverflow).toBeLessThanOrEqual(1);
@@ -270,22 +302,19 @@ test.describe("Ambient Library", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await seedLibrary(page);
     await openAmbientLibrary(page);
+    const persistedBeforeDraft = await readPersistedCatalog(page);
+    await page.locator(".ambient-library__template-disclosure > summary").click();
     const wedding = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"]');
     await wedding.getByRole("button", { name: /Review Wedding/u }).click();
     const name = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"] [data-template-field="name"]');
     await name.fill("Wedding evening");
 
-    expect(await page.evaluate(() => {
-      const event = new Event("beforeunload", { cancelable: true });
-      window.dispatchEvent(event);
-      return event.defaultPrevented;
-    })).toBe(true);
+    await expect.poll(() => beforeUnloadIsProtected(page)).toBe(true);
+    expect(await readPersistedCatalog(page)).toBe(persistedBeforeDraft);
 
+    const backToLibrary = page.getByRole("button", { name: "Back to Library" });
     page.once("dialog", async (dialog) => dialog.dismiss());
-    await page.evaluate(() => {
-      window.history.pushState(null, "", "/app/catalog?portal=attempted-portal");
-      window.dispatchEvent(new Event("quotepilot:locationchange"));
-    });
+    await backToLibrary.click();
     await expect(page).toHaveURL(/\/app\/catalog$/u);
     await expect(name).toHaveValue("Wedding evening");
 
@@ -296,15 +325,13 @@ test.describe("Ambient Library", () => {
     await page.goForward();
     await page.goBack();
     await expect(name).toHaveValue("Wedding evening");
+    expect(await readPersistedCatalog(page)).toBe(persistedBeforeDraft);
 
     page.once("dialog", async (dialog) => dialog.accept());
-    await page.getByRole("button", { name: "Back to Library" }).click();
+    await backToLibrary.click();
     await expect(page.locator("#ambient-library-title")).toBeFocused();
-    expect(await page.evaluate(() => {
-      const event = new Event("beforeunload", { cancelable: true });
-      window.dispatchEvent(event);
-      return event.defaultPrevented;
-    })).toBe(false);
+    expect(await readPersistedCatalog(page)).toBe(persistedBeforeDraft);
+    await expect.poll(() => beforeUnloadIsProtected(page)).toBe(false);
   });
 
   test("turns direct sales access into a contextual role boundary", async ({ page }) => {

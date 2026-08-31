@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-29 21:20:35 CDT
+Last updated: 2026-08-30 23:42:36 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -45,12 +45,13 @@ human visual acceptance.
 - Customer-facing surfaces (portal, proposal PDFs, marketing) keep their
   tenant-branded hospitality treatment and are NOT covered by this system.
 
-## Ambient Intelligence extension (source proof, default off)
+## Ambient Intelligence extension (source proof, release-profile enabled)
 
 Pilot Slice Alpha extends this system behind `VITE_AMBIENT_UI_ENABLED`. The
-gate defaults off, is not bound in the production workflows, and changes no
-data or provider authority. When off, the existing Event Workspace remains the
-exact rollback presentation.
+gate remains default-off outside governed release profiles and changes no data
+or provider authority. The v0.16 candidate and production release profiles
+bind it on. When off, the connected Quote Workspace remains the ordinary
+exact-quote rollback presentation.
 
 The Alpha visual grammar is an open editorial instrument rather than a card
 dashboard: the selected opportunity leads with identity, lifecycle state,
@@ -62,6 +63,103 @@ Desktop inspectors align to their invoking object when space allows and clamp
 both horizontal edges to a 16px viewport inset when the anchor sits too close
 to either edge. Anchoring may not clip the title, arrival context, evidence, or
 persistent outcome controls.
+
+### v0.16 Calm Four application contract (source candidate)
+
+Calm Four applies one information architecture across the authenticated staff
+workspace. It distinguishes three layers and does not trade one for another:
+
+1. **Global destinations:** **Now**, **Opportunities**, **Clients**, and
+   role-safe **Library** are the only persistent primary navigation. **New
+   quote** is a global action into the established opportunity/quote flow, not
+   a fifth destination.
+2. **Contextual workspace tools:** **Quick Updates** and opportunity-specific
+   menu, staffing, pricing, proposal, activity, and event actions stay attached
+   to the opportunity in view. They never become permanent navigation.
+3. **Secondary administration:** Search, Operations, current workspace identity,
+   account settings, sound preference, and sign-out remain quiet and reachable.
+   Desktop uses the secondary header/bottom controls. Mobile uses the standard
+   workspace/avatar trigger to open the focus-contained **Workspace & tools**
+   sheet; it does not add another bottom-nav item.
+
+v0.16 authorizes one organization per signed-in principal. It therefore does
+not present a same-account **Switch workspace** control that the identity and
+tenant model cannot honor. A person who needs another authorized principal uses
+the existing sign-out/sign-in path; multi-organization membership would require
+a separate authority design before it could enter this surface.
+
+Active primary state follows the canonical route. In the Ambient-enabled v0.16
+profile, `/app/quotes/:quoteId` opens the approved Opportunity workspace and
+keeps Opportunities active rather than presenting quote detail as a separate
+destination. Back and Forward preserve the actual history entry and its
+application state; an unsaved contextual draft may temporarily restore the
+current entry only to present its dismissal guard, then replay the exact
+requested traversal after discard.
+
+**Now** is an editorial home, not a KPI dashboard. It pairs the established
+hospitality image with at most three priorities from existing Workflow order,
+recorded upcoming work, and quiet internal progress. **Opportunities** is a
+meaningful index on desktop and mobile; groups and ordering come from actual
+attention/current-work state and recorded dates, never fixture position.
+Opening a row preserves the exact opportunity identity and its event, menu,
+staffing, pricing, proposal/activity, and evidence context.
+
+**Clients** keeps the approved hierarchy: eyebrow, editorial headline, short
+explanation, hospitality image, opportunity story/action, three relationship
+steps, then a quiet About disclosure. Its empty state contains no zero-value
+metrics, search, refresh, or source-dashboard chrome. Search and filtering
+appear only when records justify them. Populated Clients leads with identity,
+current/recent recorded event, recorded contact details, current status, and one
+next action before the larger directory. The v0.16 candidate renders no
+AI-derived relationship memory. If that capability is introduced later, it
+must be source-labelled, tenant-scoped, and correctable through an authoritative
+Client 360 write path before it may appear as fact.
+
+**Library** uses the same organization catalog in two modes. Standalone mode
+contains no opportunity fiction. Contextual mode names the exact opportunity
+and uses an explicit **Return to opportunity** or **Return to [event]** action.
+Browsing is read-only; only the existing guarded catalog or quote save
+authority may persist a change.
+
+### Quick Updates drawer and sheet
+
+Quick Updates is the same editorial surface as the opportunity underneath it,
+not a miniature administration dashboard. On desktop it is a narrow right-side
+drawer over the still-visible workspace; on mobile it is a full-height sheet.
+Opening, expanding, collapsing, and closing are write-free. Focus enters the
+surface, remains trapped while it is modal, and returns to the invoking Quick
+Updates control after clean dismissal.
+
+The common change is progressive: Menu exposes the supported service-style
+control; Staffing and Pricing expose their current summaries and outcome-named
+handoffs; **Open full Library** opens the exact contextual catalog. A changed
+control produces a visibly unsaved local draft. For a Firebase-backed draft,
+Review asks the existing server authority to project the exact persisted
+**Before**, requested **After**, and material total, deposit, staffing,
+draft-status/version, proposal, portal, lifecycle, and dependency effects. No
+underlying quote, staffing, pricing, proposal, client, or catalog value changes
+before explicit save.
+
+Every destructive dismissal path—X, Cancel, Escape, backdrop, contextual
+handoff, primary navigation, browser Back/Forward, and the applicable mobile
+back action—uses the same guard. **Keep editing** restores the intact draft;
+**Discard draft** removes only local draft state and then performs the original
+intent. Saving is single-flight and blocks duplicate submission and dismissal.
+The host binds the save to the reviewed simulation, active revision, catalog
+digest, and policy, then uses the existing calculation and trusted quote-save
+path. Success appears only after the exact write receipt, a server-only read of
+the same tenant, quote, saved revision, and supported field, and a refresh of
+the underlying opportunity list. Browser-local, sent, and viewed records
+browse in place but hand off to the full editor instead of claiming the compact
+save is authoritative. A rejection, conflict, ambiguous result, or failed
+reread preserves a recoverable draft and never masquerades as success.
+
+Service style does not currently carry a separate presentation-owned rule that
+derives staffing or pricing values. The panel reports the server authority's
+projected effects and offers the existing deeper workflows. It must not invent
+a parallel staffing, pricing, tax, margin, proposal, portal, lifecycle, or
+dependency calculator in order to make the compact interaction appear more
+consequential.
 
 ### Behavioral chromatic and sensory semantics
 
@@ -118,23 +216,29 @@ Opportunity explanation, the already-mounted draft command field, or one
 populated opportunity-choice recovery. Complete interpreted-destination parity
 remains open AIUI-16 scope.
 
-The connected Quote Workspace is the canonical exact-quote presentation at
-`/app/quotes/:quoteId`. Its open editorial composition, event-table image,
-quote identity, saved-state evidence, object tabs, commercial summary, and
-Activity & Save Health drawer replace the competing event-record presentation
-for ordinary exact-quote arrival. Its rail follows the same light orientation:
-**Now**, **Opportunities**, **Clients**, and role-safe **Library** are primary;
-**New quote** and **Operations** are utilities, while Event, Staffing,
-Proposal, Payment, Conversation, and other deep work begins from the selected
-object. The historical `/app/quote-workspace` and
-`/app/quote-workspace-concept` paths are compatibility aliases only.
+In the Ambient-enabled v0.16 profile, the approved Opportunity workspace owns
+ordinary authenticated `/app/quotes/:quoteId` arrival. Its editorial event
+composition keeps the exact opportunity identity and event, menu, staffing,
+pricing, proposal/activity, evidence, next-action, and contextual Quick Updates
+surface together under Opportunities.
 
-Canonical presentation does not absorb mutation authority. Editing routes to
-the trusted quote editor, conversation routes to the exact quote-scoped thread,
-and proposal/payment/lifecycle/delivery/recovery controls remain in the full
-Quote administration surface through an explicit continuation or a governed
-exact-arrival handoff. That continuation is rollback and authority
-preservation, not a second primary quote design.
+The connected dinner-table Quote Workspace remains available at
+`/app/quote-workspace` and `/app/quote-workspace-concept` as a compatibility
+presentation with its event-table image, quote identity, saved-state evidence,
+object tabs, commercial summary, and Activity & Save Health drawer. The same
+presentation also owns ordinary exact-quote rollback when Ambient is off. Its
+rail follows the same light orientation: **Now**, **Opportunities**,
+**Clients**, and role-safe **Library** are primary; **New quote** and
+**Operations** are utilities, while Event, Staffing, Proposal, Payment,
+Conversation, and other deep work begins from the selected object.
+
+Neither presentation absorbs new mutation authority. Quick Updates delegates
+its explicit reviewed save to the existing trusted quote calculation and save
+path; editing routes to the trusted quote editor, conversation routes to the
+exact quote-scoped thread, and proposal/payment/lifecycle/delivery/recovery
+controls remain in the full Quote administration surface through an explicit
+continuation or a governed exact-arrival handoff. Compatibility and rollback
+preserve authority without becoming a second Ambient primary quote design.
 
 At 390px, the Living Opportunity begins with one in-flow remote, not a floating
 or sticky layer. It must answer identity, state, what matters, and next action

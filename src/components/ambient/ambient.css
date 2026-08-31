@@ -667,3 +667,610 @@
     outline-color: CanvasText;
   }
 }
+
+/* v0.16 opportunity workspace
+   This is the approved editorial composition layered over the existing
+   opportunity authority. Unique selectors keep the underlying inspectors,
+   scenarios, and receipts intact while making the first viewport decisional. */
+.ambient-living-opportunity.ambient-purpose-surface {
+  --ambient-v16-line: color-mix(in srgb, var(--tone-ink-1, #262421) 15%, transparent);
+  --ambient-v16-gold: var(--tone-gold-3, #8d611a);
+  --ambient-v16-muted: var(--tone-ink-3, #706b63);
+  padding: clamp(1.25rem, 2.6vw, 2.75rem);
+  background: color-mix(in srgb, var(--tone-paper, #f7f1e6) 74%, #fff);
+}
+
+.ambient-living-opportunity.ambient-purpose-surface::before {
+  display: none;
+}
+
+.ambient-living-opportunity .ambient-opportunity-orientation {
+  justify-content: flex-start;
+  gap: 0.65rem;
+  color: var(--tone-ink-2, #514d47);
+  font-size: 0.91rem;
+  font-weight: 520;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ambient-living-opportunity .ambient-opportunity-orientation strong {
+  color: var(--tone-ink-2, #514d47);
+  font-weight: 520;
+}
+
+.ambient-living-opportunity .ambient-back-link {
+  min-height: 2.75rem;
+  font-weight: inherit;
+}
+
+.ambient-living-opportunity .ambient-mobile-remote.ambient-v16-opportunity__mobile {
+  display: none;
+}
+
+.ambient-living-opportunity .ambient-opportunity-hero.ambient-v16-opportunity__desktop {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(17rem, 0.78fr);
+  align-items: end;
+  gap: clamp(2rem, 4.25vw, 4.5rem);
+  min-height: 0;
+  padding: clamp(1.7rem, 3vw, 2.9rem) 0 1.8rem;
+  border-bottom: 1px solid var(--ambient-v16-line);
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__kicker,
+.ambient-living-opportunity .ambient-opportunity-hero .ambient-opportunity-identity > p.ambient-kicker,
+.ambient-living-opportunity .ambient-opportunity-glance dt {
+  margin: 0;
+  color: var(--ambient-v16-gold);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.ambient-living-opportunity .ambient-title-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.45rem;
+}
+
+.ambient-living-opportunity .ambient-title-line h1 {
+  max-width: none;
+  color: var(--tone-ink-1, #262421);
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: clamp(2.8rem, 4.3vw, 4.25rem);
+  font-weight: 520;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
+}
+
+.ambient-living-opportunity .ambient-title-line > .status-chip {
+  grid-column: 1;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0.72rem;
+}
+
+.ambient-living-opportunity .ambient-title-line > .ambient-quick-updates-trigger {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.ambient-living-opportunity .ambient-quick-updates-trigger {
+  display: inline-flex;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.58rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--ambient-v16-gold);
+  border-radius: var(--radius-md, 0.75rem);
+  color: var(--ambient-v16-gold);
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.ambient-living-opportunity .ambient-quick-updates-trigger:hover,
+.ambient-living-opportunity .ambient-quick-updates-trigger:focus-visible {
+  background: color-mix(in srgb, var(--tone-gold-1, #ead5ad) 36%, transparent);
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+  color: var(--tone-ink-2, #514d47);
+  font-size: 0.96rem;
+  line-height: 1.4;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__hospitality {
+  min-width: 0;
+  margin: 1.25rem 0 0;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__hospitality img {
+  display: block;
+  width: 100%;
+  height: clamp(13rem, 22vw, 18.5rem);
+  aspect-ratio: 2.08 / 1;
+  border-radius: var(--radius-lg, 1rem);
+  object-fit: cover;
+  object-position: center 56%;
+}
+
+.ambient-living-opportunity .ambient-opportunity-total {
+  min-width: 0;
+  padding: 0 0 clamp(1.5rem, 4vw, 3.1rem);
+  color: var(--tone-ink-1, #262421);
+  text-align: left;
+}
+
+.ambient-living-opportunity .ambient-opportunity-total > span,
+.ambient-living-opportunity .ambient-mobile-remote__next > div > span {
+  color: var(--ambient-v16-gold);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ambient-living-opportunity .ambient-opportunity-total h2,
+.ambient-living-opportunity .ambient-mobile-remote__next h2 {
+  margin: 0.48rem 0 0;
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: clamp(1.7rem, 2.7vw, 2.55rem);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.04;
+}
+
+.ambient-living-opportunity .ambient-opportunity-total p,
+.ambient-living-opportunity .ambient-mobile-remote__next p {
+  margin: 0.65rem 0 0;
+  color: var(--ambient-v16-muted);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.ambient-living-opportunity .ambient-opportunity-total .ambient-next-action,
+.ambient-living-opportunity .ambient-mobile-remote__next button {
+  display: inline-flex;
+  min-height: 3.15rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  margin-top: 1.25rem;
+  padding: 0.75rem 1.05rem;
+  border: 1px solid var(--ambient-v16-gold);
+  border-radius: var(--radius-md, 0.75rem);
+  color: #fff;
+  background: var(--ambient-v16-gold);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.ambient-living-opportunity .ambient-opportunity-total .ambient-next-action:hover,
+.ambient-living-opportunity .ambient-opportunity-total .ambient-next-action:focus-visible,
+.ambient-living-opportunity .ambient-mobile-remote__next button:hover,
+.ambient-living-opportunity .ambient-mobile-remote__next button:focus-visible {
+  border-color: color-mix(in srgb, var(--ambient-v16-gold) 84%, #000);
+  background: color-mix(in srgb, var(--ambient-v16-gold) 84%, #000);
+}
+
+.ambient-living-opportunity .ambient-opportunity-glance {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(16rem, 0.8fr);
+  gap: clamp(1.8rem, 3vw, 3.25rem);
+  margin: 0;
+  padding: 1.55rem 0;
+  border-bottom: 1px solid var(--ambient-v16-line);
+}
+
+.ambient-living-opportunity .ambient-opportunity-glance > .ambient-v16-opportunity__event-summary,
+.ambient-living-opportunity .ambient-opportunity-glance > .ambient-v16-opportunity__proposal-summary {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-summary > dd,
+.ambient-living-opportunity .ambient-v16-opportunity__proposal-summary > dd {
+  display: grid;
+  margin: 0.65rem 0 0;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-summary button {
+  display: grid;
+  grid-template-columns: 2.7rem minmax(5.5rem, 0.5fr) minmax(8rem, 1fr) auto;
+  min-height: 4.15rem;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.55rem 0;
+  border: 0;
+  border-top: 1px solid var(--ambient-v16-line);
+  color: var(--tone-ink-1, #262421);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-summary button:last-child {
+  border-bottom: 1px solid var(--ambient-v16-line);
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-summary button > span:not(.ambient-v16-opportunity__object-icon) {
+  color: var(--ambient-v16-muted);
+  font-size: 0.86rem;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-summary button:hover,
+.ambient-living-opportunity .ambient-v16-opportunity__event-summary button:focus-visible,
+.ambient-living-opportunity .ambient-mobile-remote__objects button:hover,
+.ambient-living-opportunity .ambient-mobile-remote__objects button:focus-visible {
+  background: color-mix(in srgb, var(--tone-gold-1, #ead5ad) 24%, transparent);
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__object-icon {
+  display: inline-grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border: 1px solid var(--ambient-v16-line);
+  border-radius: 999px;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__proposal-summary {
+  padding-left: clamp(1.3rem, 2.5vw, 2.8rem);
+  border-left: 1px solid var(--ambient-v16-line);
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__proposal-summary dd {
+  gap: 0.85rem;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__proposal-summary dd > div {
+  display: grid;
+  grid-template-columns: 1.65rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--tone-ink-2, #514d47);
+  font-size: 0.86rem;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__proposal-summary button {
+  display: inline-flex;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.25rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--ambient-v16-gold);
+  border-radius: var(--radius-md, 0.75rem);
+  color: var(--ambient-v16-gold);
+  background: transparent;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-logistics {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.45fr) minmax(0, 1.55fr);
+  align-items: center;
+  gap: clamp(1.4rem, 3vw, 3rem);
+  padding: 1.15rem 0;
+  border-bottom: 1px solid var(--ambient-v16-line);
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-logistics h2 {
+  margin: 0.25rem 0 0;
+  color: var(--tone-ink-1, #262421);
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: clamp(1.25rem, 2vw, 1.7rem);
+  font-weight: 520;
+  letter-spacing: -0.02em;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-logistics .ambient-event-logistics-values {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__event-logistics .ambient-event-logistics-value {
+  min-height: 3.5rem;
+  border-left: 1px solid var(--ambient-v16-line);
+  border-radius: 0;
+  padding: 0.35rem 0.7rem;
+}
+
+.ambient-living-opportunity .ambient-v16-opportunity__semantic-state {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+.ambient-living-opportunity .ambient-pilot-sentence {
+  margin: 0;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--ambient-v16-line);
+  background: transparent;
+}
+
+.ambient-living-opportunity .ambient-disclosure {
+  padding-block: 0.35rem;
+}
+
+.ambient-living-opportunity .ambient-disclosure > .ambient-disclosure-trigger:first-child {
+  width: 100%;
+  min-height: 3.25rem;
+  justify-content: space-between;
+  padding-inline: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ambient-v16-line);
+  border-radius: 0;
+  color: var(--tone-ink-1, #262421);
+  background: transparent;
+  font-weight: 620;
+}
+
+@media (max-width: 980px) and (min-width: 621px) {
+  .ambient-living-opportunity .ambient-opportunity-hero.ambient-v16-opportunity__desktop {
+    grid-template-columns: minmax(0, 1.2fr) minmax(14rem, 0.8fr);
+    gap: 1.75rem;
+  }
+
+  .ambient-living-opportunity .ambient-title-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ambient-living-opportunity .ambient-title-line > .ambient-quick-updates-trigger {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 620px) {
+  .ambient-living-opportunity.ambient-purpose-surface {
+    min-height: 100%;
+    padding: 1.25rem 1rem 2rem;
+    border-radius: 0;
+  }
+
+  .ambient-living-opportunity .ambient-opportunity-orientation {
+    gap: 0.55rem;
+    padding-bottom: 0.9rem;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .ambient-living-opportunity .ambient-opportunity-orientation .ambient-back-link svg {
+    display: none;
+  }
+
+  .ambient-living-opportunity .ambient-opportunity-orientation strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ambient-living-opportunity .ambient-opportunity-hero.ambient-v16-opportunity__desktop,
+  .ambient-living-opportunity .ambient-opportunity-glance,
+  .ambient-living-opportunity .ambient-v16-opportunity__event-logistics {
+    display: none;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote.ambient-v16-opportunity__mobile {
+    position: static;
+    display: grid;
+    gap: 1.35rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__identity {
+    display: block;
+  }
+
+  .ambient-living-opportunity .ambient-v16-opportunity__mobile-title {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: end;
+    gap: 0.65rem;
+    margin-top: 0.35rem;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__identity h1 {
+    margin: 0;
+    color: var(--tone-ink-1, #262421);
+    font-family: var(--font-editorial, Georgia, serif);
+    font-size: clamp(2.5rem, 10.5vw, 3.4rem);
+    font-weight: 520;
+    letter-spacing: -0.05em;
+    line-height: 0.94;
+    overflow-wrap: anywhere;
+  }
+
+  .ambient-living-opportunity .ambient-v16-opportunity__mobile-title > .status-chip {
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 0.67rem;
+  }
+
+  .ambient-living-opportunity .ambient-v16-opportunity__event-meta--button {
+    width: 100%;
+    min-height: 2.75rem;
+    margin-top: 1rem;
+    padding: 0;
+    border: 0;
+    color: var(--tone-ink-2, #514d47);
+    background: transparent;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ambient-living-opportunity .ambient-v16-opportunity__event-meta--button > span[aria-hidden="true"] {
+    display: none;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__identity .ambient-v16-opportunity__event-meta--button span,
+  .ambient-living-opportunity .ambient-v16-opportunity__mobile-title .status-chip span {
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: 0;
+    line-height: inherit;
+    text-transform: none;
+  }
+
+  .ambient-living-opportunity .ambient-v16-opportunity__hospitality {
+    margin: 0;
+  }
+
+  .ambient-living-opportunity .ambient-v16-opportunity__hospitality img {
+    height: clamp(10.5rem, 44vw, 12rem);
+    aspect-ratio: 2.02 / 1;
+    border-radius: var(--radius-lg, 1rem);
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__next {
+    display: grid;
+    gap: 0;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__next > div {
+    display: grid;
+    gap: 0;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__next h2 {
+    font-size: clamp(1.55rem, 6.8vw, 1.9rem);
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__next p {
+    font-size: 1rem;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__next button {
+    width: 100%;
+    max-width: none;
+    min-height: 3rem;
+    margin-top: 0.75rem;
+    padding-inline: 1.1rem;
+    font-size: 1rem;
+  }
+
+  .ambient-living-opportunity .ambient-quick-updates-trigger--mobile {
+    width: 100%;
+    min-height: 3.55rem;
+    font-size: 1rem;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-event-details {
+    margin-top: -0.4rem;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__objects {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border-top: 1px solid var(--ambient-v16-line);
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__objects button {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 4.85rem;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0.62rem 0;
+    border: 0;
+    border-bottom: 1px solid var(--ambient-v16-line);
+    border-radius: 0;
+    color: var(--tone-ink-1, #262421);
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__objects button > span:nth-child(2) {
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__objects button strong {
+    font-size: 1rem;
+    font-weight: 620;
+  }
+
+  .ambient-living-opportunity .ambient-mobile-remote__objects button small {
+    color: var(--ambient-v16-muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
+  .ambient-living-opportunity .ambient-pilot-sentence {
+    margin-top: 0.4rem;
+  }
+}
+
+@media (forced-colors: active) {
+  .ambient-living-opportunity .ambient-quick-updates-trigger,
+  .ambient-living-opportunity .ambient-opportunity-total .ambient-next-action,
+  .ambient-living-opportunity .ambient-v16-opportunity__event-summary button,
+  .ambient-living-opportunity .ambient-v16-opportunity__proposal-summary button,
+  .ambient-living-opportunity .ambient-mobile-remote__objects button,
+  .ambient-living-opportunity .ambient-v16-opportunity__event-meta--button,
+  .ambient-living-opportunity .ambient-disclosure > .ambient-disclosure-trigger:first-child {
+    border: 1px solid ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+    forced-color-adjust: auto;
+  }
+}

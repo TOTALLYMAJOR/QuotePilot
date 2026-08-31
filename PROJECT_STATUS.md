@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-30 13:37:25 CDT
+Last updated: 2026-08-30 23:42:36 CDT
 
 ## Current Production Release
 
@@ -25,6 +25,36 @@ Last updated: 2026-08-30 13:37:25 CDT
   receipt proves authenticated staff/portal acceptance,
   production-data correctness, provider delivery, recipient acknowledgement,
   or human acceptance.
+
+## v0.16 Calm Four Candidate Integration
+
+- The approved whole-application Calm Four source change is integrated onto the
+  current `release/v0.16.0` source line pending exact-head revalidation:
+  **Now**, **Opportunities**,
+  **Clients**, and role-safe **Library** are the only persistent primary
+  destinations; **New quote** remains an action; Search, Operations,
+  workspace/account controls, and sign-out remain secondary. The exact
+  `/app/quotes/:quoteId` route resolves to the approved Opportunity workspace
+  when the v0.16 Ambient profile is enabled and gains the contextual Quick
+  Updates drawer/sheet with a local draft, universal dismissal guard,
+  server-derived material-effects review, and single-flight
+  revision/catalog/policy-fenced save for Firebase-backed draft quotes.
+  Browser-local, sent, and viewed records hand off to the full editor; success
+  requires the exact write receipt followed by authoritative quote and
+  opportunity-list rereads. The connected Quote Workspace remains on its two
+  compatibility aliases and as the Ambient-off rollback presentation.
+- The pre-integration Phase 1 branch passed the ten-scenario browser gate
+  **10/10**, the representative responsive/accessibility cohort **24/24**, the
+  full unit suite with **4,069 passed and 78 intentionally skipped** across
+  **358 passed and 3 skipped files**, all **76** Firestore rules tests, and all
+  **127** Truth Loop tests. Side-by-side visual QA recorded no actionable P0,
+  P1, or P2 finding.
+- Those measurements qualify only the preserved Phase 1 source branch. The
+  integrated exact release head must rerun its focused, full release,
+  responsive/accessibility, bundle, and exact-head CI gates before candidate
+  promotion. No new v0.16 Firebase/Vercel deployment, production-data exercise,
+  authenticated hosted UAT, provider outcome, production release, or founder
+  acceptance is claimed by this integration record.
 
 ## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 
@@ -321,16 +351,19 @@ Last updated: 2026-08-30 13:37:25 CDT
   fail-closed selected-line margin calculation as staff-only Quote Pulse
   context. PDF export uses the saved font scale and letterhead fallback.
   Costs and margin remain absent from customer preview/export/portal artifacts.
-- The approved connected dinner-table Quote Workspace is now the source/local
-  canonical exact-quote presentation at authenticated admin/sales-only
-  `/app/quotes/:quoteId`; `/app/quote-workspace` and
-  `/app/quote-workspace-concept` remain compatibility aliases. It reads the
-  exact tenant saved quote without substitution, consolidates persistent
-  orientation to Now, Opportunities, Clients, and role-safe Library, presents
-  bounded completeness and save-health evidence, and preserves trusted edit,
-  message, Proposal, Payment, lifecycle, delivery, and recovery continuation.
-  It performs no quote/provider mutation. Candidate deployment, connected
-  tenant-250 responsive review, and owner acceptance remain unverified until
+- The Ambient-enabled v0.16 source candidate makes the approved Opportunity
+  workspace the ordinary exact-quote presentation at `/app/quotes/:quoteId`,
+  including contextual Quick Updates. The connected dinner-table Quote
+  Workspace remains available to authenticated admin/sales staff at
+  `/app/quote-workspace` and `/app/quote-workspace-concept` as a compatibility
+  presentation and becomes the ordinary exact-quote rollback when Ambient is
+  off. It reads the exact tenant saved quote without substitution, consolidates
+  persistent orientation to Now, Opportunities, Clients, and role-safe
+  Library, presents bounded completeness and save-health evidence, and
+  preserves trusted edit, message, Proposal, Payment, lifecycle, delivery, and
+  recovery continuation. It performs no quote/provider mutation. Candidate
+  deployment, authenticated staging review for the selected
+  `mm05366-sandbox` organization, and owner acceptance remain unverified until
   the exact published SHA completes those gates.
 - A ninth source-only checkpoint materially implements the QuotePilot Package
   Workspace on the existing `Library -> Packages` route without changing the

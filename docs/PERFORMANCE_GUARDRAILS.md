@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-29 02:49:23 CDT
+Last updated: 2026-08-31 00:20:56 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,9 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,213,578-byte aggregate
+- The current compatibility graph has a temporary 3,221,176-byte aggregate
   and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 3,928,552-byte aggregate ceiling and
+  graph has a separate temporary 4,017,992-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -59,9 +59,22 @@ Threshold policy:
   `33239048234` on release candidate `6ff9d605` measured 3,208,826 / 384,998
   bytes for compatibility and 3,928,479 / 388,269 bytes for Ambient. The
   CI-equivalent local Ambient build measured 3,928,552 / 388,303 bytes. The
-  Ambient ceiling is pinned to that larger literal exact-candidate measurement;
-  the 73-byte local/runner difference is the only retained environment margin,
-  and the reconciliation is not general product-growth headroom.
+  earlier Ambient ceiling was pinned to that larger literal exact-candidate
+  measurement; the 73-byte local/runner difference was the only retained
+  environment margin.
+  The approved v0.16 Calm Four and Quick Updates candidate now measures
+  3,214,012 / 385,130 bytes for compatibility and 4,017,689 / 385,130 bytes
+  for the exact production-equivalent Ambient graph. Lazy-loading the customer
+  portal removes it from the Ambient workspace chunk, bringing that chunk
+  below the unchanged largest-chunk ceiling; Firebase is again the largest
+  emitted asset. Compatibility remains below the Calm Four source candidate's
+  already reviewed absolute ceiling; the reconciliation restores that exact
+  source-approved value rather than widening it again.
+  The Ambient aggregate ceiling is therefore 4,017,992 bytes: the literal
+  candidate measurement plus only the previously established 303-byte
+  Ambient runner offset. This reconciliation is not general product-growth
+  headroom; any source increase beyond that offset must fail or receive a new
+  explicit review.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

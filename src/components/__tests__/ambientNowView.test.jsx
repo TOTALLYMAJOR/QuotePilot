@@ -88,7 +88,7 @@ function mount(props = {}) {
 }
 
 describe("AmbientNowView", () => {
-  test("shows at most three interpreted priorities with one exact resolution each", () => {
+  test("renders the approved editorial home with at most three state-ordered priorities", () => {
     const items = [0, 1, 2, 3].map((index) => attentionItem(index));
     const markup = renderToStaticMarkup(
       <AmbientNowView
@@ -100,15 +100,43 @@ describe("AmbientNowView", () => {
       />
     );
 
-    expect(markup).toContain("What matters now");
-    expect(markup).toContain("What needs attention next");
-    expect(markup).toContain("1 more item remains in Workflow");
+    expect(markup).toContain("Today, in clear view.");
+    expect(markup).toContain("The work that needs you, followed by what is coming next.");
+    expect(markup).toContain('/images/quote-workspace-wedding-table-v1.webp');
+    expect(markup).toContain("Three things deserve attention");
+    expect(markup).toContain("1 more priority remains in Workflow");
     expect(markup.match(/class="ambient-now-priority"/gu)).toHaveLength(3);
     expect(markup.match(/data-ambient-action-id="review-now-priority:/gu)).toHaveLength(3);
+    expect(markup).toContain("Event 0");
     expect(markup).toContain("Customer 0");
-    expect(markup).not.toContain("Customer 3");
-    expect(markup.indexOf("What needs attention next")).toBeLessThan(markup.indexOf("About this view"));
+    expect(markup).not.toContain("Event 3");
+    expect(markup.indexOf("Today, in clear view.")).toBeLessThan(markup.indexOf("Event 0"));
+    expect(markup.indexOf("Event 0")).toBeLessThan(markup.indexOf("About this view"));
+    expect(markup).not.toContain("Start a quote");
     expect(markup).not.toMatch(/bounded workspace snapshot|current workspace snapshot/iu);
+  });
+
+  test("preserves the supplied attention order and task-specific action language", () => {
+    const items = [
+      attentionItem(2, { type: "unread_customer_reply", state: "waiting", messageId: "message-2" }),
+      attentionItem(0),
+      attentionItem(1, { type: "change_request", state: "pending", sourceMessage: "Please revise the menu." })
+    ];
+    const markup = renderToStaticMarkup(
+      <AmbientNowView
+        {...baseProps}
+        snapshot={snapshot({
+          attentionSummary: { itemCount: items.length, items },
+          quotes: items.map((item) => quote(Number(item.quoteId.replace("quote-", ""))))
+        })}
+      />
+    );
+
+    expect(markup.indexOf("Event 2")).toBeLessThan(markup.indexOf("Event 0"));
+    expect(markup.indexOf("Event 0")).toBeLessThan(markup.indexOf("Event 1"));
+    expect(markup).toContain("Read reply");
+    expect(markup).toContain("Follow up");
+    expect(markup).toContain("Review request");
   });
 
   test("acknowledges a priority immediately and carries its exact Workflow focus", () => {
@@ -131,6 +159,18 @@ describe("AmbientNowView", () => {
       requestId: "request-1"
     });
     expect(container.querySelector(".ambient-now__acknowledgement").textContent).toContain("Opening follow up");
+  });
+
+  test("keeps refresh as an explicit non-mutating view action", () => {
+    const onRefresh = vi.fn();
+    mount({ onRefresh });
+
+    const refresh = container.querySelector('[data-ambient-action-id="refresh-ambient-now"]');
+    act(() => refresh.click());
+
+    expect(onRefresh).toHaveBeenCalledWith({ force: true });
+    expect(container.querySelector(".ambient-now__acknowledgement").textContent)
+      .toContain("Refreshing this workspace view");
   });
 
   test("shows a healthy caught-up state only when Workflow and payment steps are both clear", () => {
@@ -181,6 +221,28 @@ describe("AmbientNowView", () => {
     expect(markup).toContain("do not imply customer contact or provider delivery");
   });
 
+  test("shows only recorded upcoming work and keeps its chronological projection", () => {
+    const later = quote(2, {
+      status: "booked",
+      customer: { name: "Morgan Reed" },
+      event: { name: "Friday Dinner", date: "2026-08-14", time: "18:30", venue: "Grand Room", guests: 42 }
+    });
+    const sooner = quote(1, {
+      status: "accepted",
+      customer: { name: "Avery Bennett" },
+      event: { name: "Thursday Dinner", date: "2026-08-13", time: "17:00", venue: "Garden Terrace", guests: 30 }
+    });
+    const markup = renderToStaticMarkup(
+      <AmbientNowView {...baseProps} snapshot={snapshot({ quotes: [later, sooner] })} />
+    );
+
+    expect(markup).toContain("Upcoming work");
+    expect(markup.indexOf("Thursday Dinner")).toBeLessThan(markup.indexOf("Friday Dinner"));
+    expect(markup).toContain("17:00 · Garden Terrace");
+    expect(markup).toContain("30 guests");
+    expect(markup).not.toContain("Olivia Bennett");
+  });
+
   test("registers its surface, uses compact evidence context, and keeps layout in flow", () => {
     const markup = renderToStaticMarkup(
       <AmbientNowView {...baseProps} snapshot={snapshot({ stale: true })} />
@@ -195,6 +257,10 @@ describe("AmbientNowView", () => {
     expect(css).not.toMatch(/position:\s*(?:fixed|absolute|sticky)/u);
     expect(css).not.toMatch(/\bz-index\s*:/u);
     expect(css).toMatch(/min-height:\s*44px/u);
+    expect(css).toMatch(/@media \(max-width: 980px\)/u);
+    expect(css).toMatch(/@media \(max-width: 720px\)/u);
+    expect(css).toMatch(/@media \(max-width: 430px\)/u);
+    expect(css).toContain("var(--font-editorial)");
   });
 
   test("replaces an unavailable read with one safe productive recovery", () => {

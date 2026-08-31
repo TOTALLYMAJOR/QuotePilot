@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-30 14:53:30 CDT
+Last updated: 2026-08-30 23:42:36 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,36 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Integrated the approved v0.16 Calm Four staff-workspace candidate onto the
+  current release line. **Now**, **Opportunities**, **Clients**, and role-safe
+  **Library** remain the only persistent primary destinations; **New quote** is
+  an action; Search, Operations, workspace identity, account settings, and
+  sign-out remain secondary. The editorial Now and Clients states,
+  attention-driven Opportunities index, standalone/contextual Library modes,
+  mobile **Workspace & tools** sheet, browser-history continuity, tenant and
+  role boundaries, Client 360, catalog authority, and existing operational
+  routes are preserved rather than replaced by parallel workflows.
+- Added contextual **Quick Updates** as an accessible right-side desktop
+  drawer and full-height mobile sheet over the exact opportunity. Opening and
+  inspecting it are write-free; one allowlisted service-style draft stays
+  local, and every destructive dismissal path uses the same guard. For an
+  authoritative Firebase draft, review shows the requested field delta plus
+  the server-derived material pricing, staffing, version, proposal, portal,
+  lifecycle, and dependency effects. Save is single-flight and bound to the
+  reviewed simulation, active revision, catalog digest, and policy through the
+  existing calculation and trusted quote-save authority. Browser-local,
+  sent, and viewed records hand off to the full editor. Success appears only
+  after the write receipt and authoritative same-tenant quote/list rereads;
+  staffing, pricing, tax, margin, proposal, client, and catalog rules are not
+  duplicated in presentation code.
+- Added the approved 21-screen desktop/mobile visual package and the ten-test
+  Calm Four acceptance matrix. The pre-integration Phase 1 source branch passed
+  all ten browser scenarios, 24 representative responsive/accessibility cases,
+  the full unit/rules/Truth Loop cohorts, bundle checks, and side-by-side visual
+  QA with no actionable P0-P2 finding. Those results remain local/source
+  evidence and must be rerun against the integrated exact release head before
+  CI, candidate deployment, hosted authentication, production-data, provider,
+  or founder-acceptance claims can advance.
 - Bound both fixed non-production candidate profiles to the single verified
   `flightcontrol@quietpilot.us` platform operator after the previous staging
   Gmail identity became unable to receive mail. Candidate dotenv validation,
@@ -40,29 +70,24 @@ This changelog is backfilled from git history and will be maintained going forwa
   unchanged 391,901-byte ceiling. The compatibility graph remains below its
   existing ceiling. This is a measured update to the named temporary exception,
   not a new exception or evidence that the handler loads into every route.
-- Promoted the approved connected dinner-table Quote Workspace from an
-  isolated evaluation path to the canonical authenticated admin/sales exact-
-  quote experience at `/app/quotes/:quoteId`. The source candidate preserves
-  exact quote identity, renders the recorded quote number on mobile instead of
-  a fixed tenant label, reduces persistent orientation to **Now**,
-  **Opportunities**, **Clients**, and role-safe **Library**, and moves Events
-  and Staff into contextual Operations access. Editing, messaging, Proposal,
-  Payment, lifecycle, delivery, and recovery continue through their existing
-  trusted routes; explicit Quote administration and governed arrival paths
-  bypass the presentation without weakening authority. Approved Workflow
-  execution handoffs now retain their exact quote and action while opening the
-  Opportunities administration surface in both the Ambient and safe-off
-  runtime graphs, including exact governed-control focus. Repeated workspace
+- Reconciled exact-quote presentation ownership with the approved v0.16 design:
+  when Ambient is enabled, authenticated `/app/quotes/:quoteId` opens the
+  Opportunity workspace and owns contextual Quick Updates. The connected
+  dinner-table Quote Workspace remains available at `/app/quote-workspace` and
+  `/app/quote-workspace-concept` as a compatibility presentation and as the
+  Ambient-off exact-route rollback. It preserves exact quote identity, renders
+  the recorded quote number on mobile instead of a fixed tenant label, reduces
+  persistent orientation to **Now**, **Opportunities**, **Clients**, and
+  role-safe **Library**, and moves Events and Staff into contextual Operations
+  access. Editing, messaging, Proposal, Payment, lifecycle, delivery, and
+  recovery continue through their existing trusted routes; explicit Quote
+  administration and governed arrival paths preserve the exact object and
+  authority. Approved Workflow execution handoffs retain their exact quote and
+  action in both Ambient and safe-off runtime graphs. Repeated workspace
   boundary copy was tightened without changing its read-only or approval
   semantics, keeping the Ambient production bundle inside its existing budget.
-  Ambient-only interaction verification now enters the retained Living
-  Opportunity through its governed state-only arrival contract instead of
-  treating the ordinary exact-quote URL as a competing canonical surface.
-  The production pilot flag matrix uses that same governed entry when it
-  verifies the retained Event Room and Decide Stack, while direct exact-quote
-  navigation continues to verify the canonical connected workspace elsewhere.
-  Historical workspace routes remain compatibility aliases and hosted tenant-
-  250/owner acceptance remains a separate release gate.
+  Candidate deployment, authenticated staging review for `mm05366-sandbox`,
+  and owner acceptance remain separate release gates.
 - Reconciled the verified founder-pilot staffing activation from current
   `main` into the v0.16 release candidate. Protected run `33282940451`
   established the existing `v0.15.0` tenant-gate readback for

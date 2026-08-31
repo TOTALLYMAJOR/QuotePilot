@@ -570,11 +570,14 @@ function normalizeFocus(value, destination, intent) {
     return { quoteId: opaqueId(input.quoteId) };
   }
   if (destination === "library") {
-    const input = exactRecord(value, ["sectionId", "recordId"]);
+    const input = exactRecord(value, ["sectionId", "recordId", "quoteId"]);
     const focus = { sectionId: opaqueId(input.sectionId) };
     const hasRecordId = Object.prototype.hasOwnProperty.call(input, "recordId");
     if (intent.requiresRecordId !== hasRecordId) fail("unsupported_combination");
     if (hasRecordId) focus.recordId = opaqueId(input.recordId);
+    if (Object.prototype.hasOwnProperty.call(input, "quoteId")) {
+      focus.quoteId = opaqueId(input.quoteId);
+    }
     return focus;
   }
   const input = exactRecord(value, ["reportScope", "quoteId", "reportSignal"]);

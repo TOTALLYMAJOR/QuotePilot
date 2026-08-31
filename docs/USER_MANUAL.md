@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-30 12:28:27 CDT
+Last updated: 2026-08-30 23:42:36 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -38,6 +38,95 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - A saved draft has a reserved Customer Portal identity, but the link is not
   customer-visible or copyable. Only provider acceptance for the exact current,
   valid portal issuance activates that portal.
+
+## Calm Four workspace (v0.16 source candidate)
+
+The v0.16 candidate keeps four persistent primary destinations:
+
+- **Now** shows the established hospitality-led home, up to three current
+  priorities, recorded upcoming work, and quiet internal progress.
+- **Opportunities** opens the attention/current-work index. Select one event to
+  enter its exact opportunity workspace; use browser Back to return to the
+  index. Ordering follows current recorded state and dates, not a fixed display
+  list.
+- **Clients** opens the same-tenant relationship view. A tenant with no clients
+  sees one **Start an opportunity** path into the established quote flow and no
+  zero-value metrics or unnecessary search. A populated tenant sees current or
+  recent recorded event context, recorded contact details, current status, and
+  one next action before search and filtering. v0.16 does not display derived
+  relationship memory as fact; if such memory is added later, it must expose
+  its source and an authoritative correction path in Client 360.
+- **Library** opens the organization catalog for administrators. Standalone
+  Library has no event-specific context. Opening it from an opportunity names
+  that event and provides **Return to opportunity** or **Return to [event]**.
+  Browsing either mode does not change an opportunity.
+
+**New quote** is a global action into the existing opportunity/quote flow, not
+a navigation destination. On desktop, Search and Operations remain secondary
+controls and workspace/account controls stay quiet. On mobile, select the
+workspace/avatar control in the standard header to open **Workspace & tools**.
+That focus-contained sheet provides Search, Operations, workspace identity,
+account settings, sound preference, and sign-out without adding fifth or sixth
+bottom-navigation items. Staff-only and administrator-only entries retain their
+existing role and feature gates.
+
+The v0.16 identity model authorizes one organization per signed-in principal,
+so **Workspace & tools** shows the current workspace but does not pretend that
+the same account can switch organizations. Use sign-out and sign in with a
+different authorized account when necessary. **Account settings** shows the
+current identity and workspace; sending a password-reset email is a separate,
+explicit action and merely opening settings changes nothing.
+
+Now, Opportunities, Clients, and Library remain the only Calm Four primary
+entries. Menu, staffing, pricing, proposal, activity, event, messaging,
+schedule, reporting, and administrative actions remain contextual or inside
+Operations. Browser Back and Forward preserve the route and history entry. If
+Quick Updates has an unsaved draft, navigation first asks whether to keep or
+discard it; discarding then continues to the exact requested history entry.
+
+### Quick Updates in an opportunity
+
+1. Open an exact opportunity and select **Quick Updates**. The desktop drawer
+   or mobile sheet opens over that opportunity; opening and expanding Menu,
+   Staffing, or Pricing changes no saved record.
+2. Use Menu to choose a supported **Service style**. This creates a local draft
+   labeled as unsaved. Closing and reopening an accordion within the same sheet
+   retains it.
+3. Select **Review menu change**. For a Firebase-backed draft, QuotePilot asks
+   the existing server authority to project the requested **Before**/**After**
+   value and the material total, deposit, staffing, draft-status/version,
+   proposal, portal, lifecycle, and dependency effects. **Back to edit** keeps
+   the local draft; review itself saves nothing.
+4. Select **Save menu change** once. QuotePilot disables editing, dismissal,
+   and duplicate submission while the trusted save resolves. The save is
+   bound to the reviewed simulation, active revision, catalog digest, and
+   policy and delegates calculation and persistence to the existing quote
+   authority. A changed source requires a fresh review.
+5. A success receipt appears only after the exact Firebase write receipt, a
+   server-only read of the same tenant/opportunity/version, and refresh of the
+   underlying opportunity list. A rejection, concurrent-edit conflict,
+   uncertain result, or failed reread retains a recoverable draft and offers
+   the appropriate retry, reconciliation, or full-editor handoff.
+
+Quick Updates does not save browser-local fallback records and does not
+silently return a sent or viewed proposal to Draft. Those states can still be
+browsed in the panel, but review returns an explicit **Continue in quote
+editor** handoff. Following that handoff requires discarding only the panel
+draft; it does not change the saved opportunity.
+
+X, Cancel, Escape, backdrop, Calm Four navigation, contextual Library/staffing/
+pricing handoffs, browser Back/Forward, and the applicable mobile back action
+all use the same unsaved-draft guard. **Keep editing** returns to the intact
+draft. **Discard draft** removes only the local draft, keeps the original saved
+values, and then continues the requested action. No path implicitly saves.
+
+**Review staffing** and **Review pricing** open their existing authoritative
+workflows. **Open full Library** carries the exact opportunity context into the
+same organization catalog. The currently supported service-style field has no
+separate presentation-owned staffing or pricing rule. The panel reports the
+server authority's projected effects and never reproduces staffing, pricing,
+tax, margin, proposal, portal, or dependency calculations in presentation
+code.
 
 ## Staff Workflow (Quote Builder)
 1. Open the app and sign in. In a customer-centered workspace build, select
@@ -118,9 +207,10 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Event Workspace (Quote Detail)
 
-- Open a quote from Home, Customer 360, or Quotes to use
-  `/app/quotes/:quoteId` as the event record. Use `Back to Quotes` or `Quote
-  administration` to return to the full role-gated quote table.
+- With the v0.16 Ambient presentation enabled, open a quote from Now, Client
+  360, or Opportunities to use `/app/quotes/:quoteId` as its exact Opportunity
+  workspace. Use `Back to Opportunities` or `Quote administration` to return
+  to the full role-gated quote table.
 - Review the exact customer/event identity, quoted scope, lifecycle, and bounded
   current condition. `No tracked quote attention` means only that the bounded
   quote/Workflow read has no due item; it does not mean the event is ready or
@@ -2180,11 +2270,17 @@ even reconciliation could not complete — is pre-existing behavior, now
 literally marked for automated coverage; recording a cost uses the exact
 same save path as every other catalog field.
 
-## Canonical Quote Workspace
+## Connected Quote Workspace compatibility and rollback
 
-Open **Opportunities**, then open an exact saved quote. QuotePilot uses the
-connected Quote Workspace at `/app/quotes/:quoteId` as the primary quote view.
-The top of the workspace keeps the quote number, event, saved timestamp,
+In the v0.16 Ambient-enabled release profile, opening an exact saved quote from
+**Opportunities** uses the approved Opportunity workspace at
+`/app/quotes/:quoteId`, including contextual Quick Updates. The connected
+dinner-table Quote Workspace remains available to authorized staff at
+`/app/quote-workspace?quoteId=<quote-id>` and
+`/app/quote-workspace-concept?quoteId=<quote-id>` for compatible bookmarks and
+as the ordinary exact-quote rollback presentation when Ambient is off.
+
+The connected workspace keeps the quote number, event, saved timestamp,
 lifecycle label, event image, recorded event facts, and completeness review
 together. Menu items, quote totals, margin evidence when available, recent
 activity, and Activity & Save Health remain on the same exact saved quote.
@@ -2201,8 +2297,8 @@ editing controls to enter the trusted quote editor. Use **Send message** for
 the exact quote conversation. **Preview** and **Review & send** open the full
 role-safe Quote administration continuation, where existing proposal,
 delivery, payment, booking, artifact, and recovery checks remain authoritative.
-The former `/app/quote-workspace` and `/app/quote-workspace-concept` addresses
-remain compatibility aliases for existing bookmarks.
+These compatibility routes do not replace the Ambient Opportunity workspace or
+move their contextual tools into primary navigation.
 
 ## Difficult Question Desk preview
 

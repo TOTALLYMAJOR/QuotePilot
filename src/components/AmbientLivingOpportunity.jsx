@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState
@@ -11,12 +12,16 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarBlank,
   ChatCenteredDots,
   CheckCircle,
+  Clock,
   CurrencyDollar,
   FileText,
   ForkKnife,
   Info,
+  MapPin,
+  NotePencil,
   Package,
   Sparkle,
   UserGear,
@@ -67,6 +72,7 @@ import AmbientConversationContext from "./AmbientConversationContext";
 import AmbientProposalContext from "./AmbientProposalContext";
 import AmbientOperationalReceipts from "./AmbientOperationalReceipts";
 import { deriveAttendanceState } from "./attendanceState";
+import QuickUpdatesPanel from "./QuickUpdatesPanel";
 import "./ambientLivingOpportunity.css";
 
 const AMBIENT_INTERACTION_EVENT_NAME = "quotepilot:ambient-interaction";
@@ -347,6 +353,57 @@ function staffingLabel({ servers = 0, chefs = 0, bartenders = 0 } = {}) {
   return [label(servers, "server"), label(chefs, "chef"), label(bartenders, "bartender")].join(" · ");
 }
 
+function compactStaffingLabel({ servers = 0, chefs = 0, bartenders = 0 } = {}) {
+  const roles = [
+    [servers, "server"],
+    [chefs, "chef"],
+    [bartenders, "bartender"]
+  ].filter(([value]) => Number(value) > 0);
+  if (!roles.length) return "Staffing not recorded";
+  return roles.map(([value, singular]) => (
+    `${value} ${Number(value) === 1 ? singular : `${singular}s`}`
+  )).join(" · ");
+}
+
+function opportunityDateLabel(value, { compact = false } = {}) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Date not set";
+  const parsed = /^\d{4}-\d{2}-\d{2}$/u.test(raw)
+    ? new Date(`${raw}T12:00:00`)
+    : new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return new Intl.DateTimeFormat("en-US", {
+    month: compact ? "short" : "long",
+    day: "numeric"
+  }).format(parsed);
+}
+
+function opportunityTypeLabel(quote = {}) {
+  const value = String(
+    quote?.event?.type
+    || quote?.event?.eventType
+    || quote?.selection?.eventTypeName
+    || quote?.selection?.eventTypeId
+    || "Event"
+  ).trim();
+  return value
+    .replace(/[_-]+/gu, " ")
+    .replace(/\b\w/gu, (letter) => letter.toUpperCase());
+}
+
+function taskSpecificNextActionLabel(nextAction = {}, risk = {}) {
+  const context = [nextAction.title, risk.title]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (/\b(final )?guest count\b/u.test(context)) return "Review final count";
+  if (/\bstaff(?:ing|ed)?\b/u.test(context)) return "Review staffing";
+  if (/\bmenu\b|service style/u.test(context)) return "Review menu";
+  if (/\bpricing\b|\bmargin\b/u.test(context)) return "Review pricing";
+  if (/\bproposal\b/u.test(context)) return "Review proposal";
+  return nextAction.label || "Review opportunity";
+}
+
 function MomentumDimension({ item }) {
   return (
     <div
@@ -448,6 +505,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   onOpenWorkflow,
   onOpenConversation,
   onOpenLegacyWorkspace,
+  serviceStyles = [],
+  onPreviewQuickUpdate,
+  onSaveQuickUpdate,
+  onOpenQuickUpdatesLibrary,
+  onQuickUpdatesGuardChange,
   arrivalContext = null,
   onArrivalResolution = null,
   globalPilotRequest = null,
@@ -467,8 +529,16 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const proposalInspectRef = useRef(null);
   const packageInspectRef = useRef(null);
   const menuInspectRef = useRef(null);
+  const activeStaffingInspectRef = useRef(null);
+  const activePricingInspectRef = useRef(null);
+  const activeProposalInspectRef = useRef(null);
+  const activeMenuInspectRef = useRef(null);
   const selectionInspectRef = useRef(null);
   const pilotTriggerRef = useRef(null);
+  const quickUpdatesDesktopTriggerRef = useRef(null);
+  const quickUpdatesMobileTriggerRef = useRef(null);
+  const quickUpdatesReturnFocusRef = useRef(null);
+  const quickUpdatesDialogId = useId();
   const pilotContextAnchorRef = useRef(null);
   const eventLogisticsTriggerRefs = useRef(Object.fromEntries(
     EVENT_LOGISTICS_KINDS.map((kind) => [kind, { current: null }])
@@ -531,6 +601,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const [pricingPreviewState, setPricingPreviewState] = useState(EMPTY_PRICING_PREVIEW_STATE);
   const pricingScenarioRef = useRef(recordedGuestCount);
   const [pilotOpen, setPilotOpen] = useState(false);
+  const [quickUpdatesOpen, setQuickUpdatesOpen] = useState(false);
   const [pilotContextAlign, setPilotContextAlign] = useState("end");
   const [eventLogisticsOpenKind, setEventLogisticsOpenKind] = useState(null);
   const [mobileEventDetailsVisible, setMobileEventDetailsVisible] = useState(false);
@@ -643,6 +714,37 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     && staffingScenario.basisGuestCount !== model.staffingObject.guestCount
   );
   const activeStaffing = staffingScenario || model.staffingObject.current;
+  const eventType = opportunityTypeLabel(quote);
+  const eventDate = opportunityDateLabel(model.identity.date, { compact: true });
+  const nextActionLabel = taskSpecificNextActionLabel(model.nextAction, model.risk);
+  const menuSummary = [
+    String(quote?.event?.style || "").trim(),
+    model.menuObject.items.length > 0
+      ? `${model.menuObject.items.length} saved ${model.menuObject.items.length === 1 ? "item" : "items"}`
+      : "Menu not recorded"
+  ].filter(Boolean).join(" · ");
+  const proposalActivity = model.disclosureLayers.supporting.find((item) => item.id === "activity");
+  const quickUpdatesAvailable = Boolean(
+    ordinaryEditAllowed
+    && String(quote?.event?.style || "").trim()
+    && String(
+      quote?.activeVersionId || quote?.versionMeta?.versionId || ""
+    ).trim()
+    && Array.isArray(serviceStyles)
+    && serviceStyles.length > 0
+    && typeof onPreviewQuickUpdate === "function"
+    && typeof onSaveQuickUpdate === "function"
+  );
+
+  const openQuickUpdates = (triggerRef) => {
+    if (!quickUpdatesAvailable) return;
+    quickUpdatesReturnFocusRef.current = triggerRef?.current || null;
+    openExclusiveContext(null);
+    setQuickUpdatesOpen(true);
+  };
+  const closeQuickUpdates = useCallback(() => {
+    setQuickUpdatesOpen(false);
+  }, []);
 
   const emitFeedback = useCallback((type, options = {}) => {
     const event = createAmbientFeedbackEvent(type, {
@@ -852,10 +954,14 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
   };
 
-  const openStaffingContext = (event) => {
+  const openStaffingContext = (eventOrRef) => {
+    const trigger = eventOrRef?.currentTarget
+      || eventOrRef?.current
+      || staffingInspectRef.current;
+    activeStaffingInspectRef.current = trigger;
+    staffingContextTriggerRef.current = trigger;
     const action = model.actions.inspectStaffing;
     const runtimeToken = beginAction(action);
-    staffingContextTriggerRef.current = event?.currentTarget || staffingInspectRef.current;
     openExclusiveContext("staffing");
     acknowledge({
       action,
@@ -872,7 +978,10 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
   };
 
-  const openPricingContext = () => {
+  const openPricingContext = (eventOrRef) => {
+    activePricingInspectRef.current = eventOrRef?.currentTarget
+      || eventOrRef?.current
+      || pricingInspectRef.current;
     const action = model.actions.inspectPricing;
     const runtimeToken = beginAction(action);
     openExclusiveContext("pricing");
@@ -929,7 +1038,10 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
   };
 
-  const openProposalContext = () => {
+  const openProposalContext = (eventOrRef) => {
+    activeProposalInspectRef.current = eventOrRef?.currentTarget
+      || eventOrRef?.current
+      || proposalInspectRef.current;
     const action = model.actions.inspectProposal;
     const runtimeToken = beginAction(action);
     if (!runtimeToken) return;
@@ -971,7 +1083,10 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
   };
 
-  const openMenuContext = () => {
+  const openMenuContext = (eventOrRef) => {
+    activeMenuInspectRef.current = eventOrRef?.currentTarget
+      || eventOrRef?.current
+      || menuInspectRef.current;
     const action = model.actions.inspectMenu;
     const runtimeToken = beginAction(action);
     if (!runtimeToken) return;
@@ -3009,6 +3124,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     || menuOpen
     || selectionOpen
     || pilotOpen
+    || quickUpdatesOpen
     || eventLogisticsOpenKind
   );
 
@@ -3046,24 +3162,42 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           <ArrowLeft size={17} aria-hidden="true" />
           Opportunities
         </button>
-        <span>Living Opportunity</span>
+        <span aria-hidden="true">/</span>
+        <strong>{model.identity.eventName}</strong>
       </div>
 
       <section
-        className="ambient-mobile-remote"
+        className="ambient-mobile-remote ambient-v16-opportunity__mobile"
         aria-label="Opportunity quick actions"
         data-layout-audit-surface="ambient-mobile-opportunity-remote"
         data-surface-purpose="clarify advance reveal_context"
       >
         <header className="ambient-mobile-remote__identity">
-          <div>
-            <span>Active opportunity</span>
+          <div className="ambient-v16-opportunity__identity-copy">
+            <p className="ambient-v16-opportunity__kicker">{eventDate} · {eventType}</p>
+            <div className="ambient-v16-opportunity__mobile-title">
             <h1 id="ambient-mobile-opportunity-title">{model.identity.eventName}</h1>
+              <StatusChip {...model.identity.status} />
+            </div>
+            <button
+              type="button"
+              className="ambient-v16-opportunity__event-meta ambient-v16-opportunity__event-meta--button"
+              onClick={revealMobileEventDetails}
+              aria-label="Event"
+              aria-expanded={mobileEventDetailsVisible}
+              aria-controls="ambient-mobile-event-details"
+              data-ambient-action-id={model.actions.revealMobileEventDetails.id}
+            >
+              <span><MapPin size={18} aria-hidden="true" />{model.identity.venue}</span>
+              <span aria-hidden="true">·</span>
+              <span><UsersThree size={18} aria-hidden="true" />{model.guestObject.currentGuestCount} guests</span>
+              <span aria-hidden="true">·</span>
+              <span><Clock size={18} aria-hidden="true" />{model.identity.time}</span>
+            </button>
           </div>
-          <StatusChip {...model.identity.status} />
         </header>
 
-        <dl className="ambient-mobile-remote__signal" aria-label="Current opportunity summary">
+        <dl className="ambient-mobile-remote__signal ambient-v16-opportunity__semantic-state" aria-label="Current opportunity summary">
           <div>
             <dt>State</dt>
             <dd>{model.identity.status.label}</dd>
@@ -3074,44 +3208,52 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           </div>
         </dl>
 
-        <div className="ambient-mobile-remote__objects" role="group" aria-label="Open opportunity object">
-          <button
-            type="button"
-            onClick={revealMobileEventDetails}
-            aria-expanded={mobileEventDetailsVisible}
-            aria-controls="ambient-mobile-event-details"
-            data-ambient-action-id={model.actions.revealMobileEventDetails.id}
-          >
-            Event
-          </button>
-          <button
-            type="button"
-            onClick={openMenuContext}
-            disabled={!model.actions.inspectMenu.enabled}
-            title={model.actions.inspectMenu.disabledReason || undefined}
-            data-ambient-action-id={model.actions.inspectMenu.id}
-          >
-            Menu
-          </button>
-          <button
-            type="button"
-            onClick={openPricingContext}
-            disabled={!model.actions.inspectPricing.enabled}
-            title={model.actions.inspectPricing.disabledReason || undefined}
-            data-ambient-action-id={model.actions.inspectPricing.id}
-          >
-            Pricing
-          </button>
-          <button
-            type="button"
-            onClick={openProposalContext}
-            disabled={!model.actions.inspectProposal.enabled}
-            title={model.actions.inspectProposal.disabledReason || undefined}
-            data-ambient-action-id={model.actions.inspectProposal.id}
-          >
-            Proposal
-          </button>
+        <figure className="ambient-v16-opportunity__hospitality">
+          <img
+            src="/images/quote-workspace-wedding-table-v1.webp"
+            alt=""
+            width="1448"
+            height="1086"
+            loading="eager"
+            decoding="async"
+          />
+        </figure>
+
+        <div className="ambient-mobile-remote__next" data-next-action-kind={model.nextAction.kind}>
+          <div>
+            <span>Next</span>
+            <h2>{model.nextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
+            <p>{model.nextAction.title}</p>
+          </div>
+          {model.nextAction.kind === "caught_up" ? (
+            <small>{model.nextAction.label}</small>
+          ) : (
+            <button
+              type="button"
+              onClick={runNextAction}
+              data-ambient-action-id={model.actions.primary.id}
+            >
+              {nextActionLabel}
+              <ArrowRight size={19} aria-hidden="true" />
+            </button>
+          )}
         </div>
+
+        {quickUpdatesAvailable && (
+          <button
+            ref={quickUpdatesMobileTriggerRef}
+            type="button"
+            className="ambient-quick-updates-trigger ambient-quick-updates-trigger--mobile"
+            onClick={() => openQuickUpdates(quickUpdatesMobileTriggerRef)}
+            aria-haspopup="dialog"
+            aria-expanded={quickUpdatesOpen}
+            aria-controls={quickUpdatesDialogId}
+            data-ambient-action-id="open-quick-updates"
+          >
+            <NotePencil size={21} aria-hidden="true" />
+            Quick Updates
+          </button>
+        )}
 
         {mobileEventDetailsVisible && (
           <section
@@ -3138,91 +3280,219 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           </section>
         )}
 
-        <div className="ambient-mobile-remote__next" data-next-action-kind={model.nextAction.kind}>
-          <div>
-            <span>Next</span>
-            <strong>{model.nextAction.title}</strong>
+        <div className="ambient-mobile-remote__objects" role="group" aria-label="Open opportunity object">
+          <button
+            type="button"
+            onClick={openMenuContext}
+            disabled={!model.actions.inspectMenu.enabled}
+            title={model.actions.inspectMenu.disabledReason || undefined}
+            data-ambient-action-id={model.actions.inspectMenu.id}
+          >
+            <span className="ambient-v16-opportunity__object-icon" aria-hidden="true"><ForkKnife size={24} /></span>
+            <span><strong>Menu</strong><small>{menuSummary}</small></span>
+            <ArrowRight size={20} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={openStaffingContext}
+            data-ambient-action-id={model.actions.inspectStaffing.id}
+          >
+            <span className="ambient-v16-opportunity__object-icon" aria-hidden="true"><UsersThree size={24} /></span>
+            <span><strong>Staffing</strong><small>{compactStaffingLabel(activeStaffing)}</small></span>
+            <ArrowRight size={20} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={openPricingContext}
+            disabled={!model.actions.inspectPricing.enabled}
+            title={model.actions.inspectPricing.disabledReason || undefined}
+            data-ambient-action-id={model.actions.inspectPricing.id}
+          >
+            <span className="ambient-v16-opportunity__object-icon" aria-hidden="true"><CurrencyDollar size={24} /></span>
+            <span><strong>Pricing</strong><small>{model.identity.total}</small></span>
+            <ArrowRight size={20} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={openProposalContext}
+            disabled={!model.actions.inspectProposal.enabled}
+            title={model.actions.inspectProposal.disabledReason || undefined}
+            data-ambient-action-id={model.actions.inspectProposal.id}
+          >
+            <span className="ambient-v16-opportunity__object-icon" aria-hidden="true"><FileText size={24} /></span>
+            <span><strong>Proposal &amp; activity</strong><small>{proposalActivity?.value || model.proposalObject.readiness.statusLabel}</small></span>
+            <ArrowRight size={20} aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+
+      <header className="ambient-opportunity-hero ambient-v16-opportunity__desktop">
+        <div className="ambient-opportunity-identity">
+          <p className="ambient-kicker">{eventDate} · {eventType}</p>
+          <div className="ambient-title-line">
+            <h1 id="ambient-opportunity-title">{model.identity.eventName}</h1>
+            <StatusChip {...model.identity.status} />
+            {quickUpdatesAvailable && (
+              <button
+                ref={quickUpdatesDesktopTriggerRef}
+                type="button"
+                className="ambient-quick-updates-trigger"
+                onClick={() => openQuickUpdates(quickUpdatesDesktopTriggerRef)}
+                aria-haspopup="dialog"
+                aria-expanded={quickUpdatesOpen}
+                aria-controls={quickUpdatesDialogId}
+                data-ambient-action-id="open-quick-updates"
+              >
+                <NotePencil size={19} aria-hidden="true" />
+                Quick Updates
+              </button>
+            )}
           </div>
+          <div className="ambient-v16-opportunity__event-meta" aria-label="Recorded event context">
+            <span><MapPin size={19} aria-hidden="true" />{model.identity.venue}</span>
+            <span aria-hidden="true">·</span>
+            <span><UsersThree size={19} aria-hidden="true" />{model.guestObject.currentGuestCount} guests</span>
+            <span aria-hidden="true">·</span>
+            <span><Clock size={19} aria-hidden="true" />{model.identity.time}</span>
+          </div>
+          <figure className="ambient-v16-opportunity__hospitality">
+            <img
+              src="/images/quote-workspace-wedding-table-v1.webp"
+              alt=""
+              width="1448"
+              height="1086"
+              loading="eager"
+              decoding="async"
+            />
+          </figure>
+        </div>
+        <div className="ambient-opportunity-total" data-next-action-kind={model.nextAction.kind}>
+          <span>Next</span>
+          <h2>{model.nextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
+          <p>{model.nextAction.title}</p>
           {model.nextAction.kind === "caught_up" ? (
             <small>{model.nextAction.label}</small>
           ) : (
             <button
               type="button"
+              className="ambient-next-action"
               onClick={runNextAction}
               data-ambient-action-id={model.actions.primary.id}
             >
-              {model.nextAction.label}
-              <ArrowRight size={16} aria-hidden="true" />
+              {nextActionLabel}
+              <ArrowRight size={18} aria-hidden="true" />
             </button>
           )}
-        </div>
-      </section>
-
-      <header className="ambient-opportunity-hero">
-        <div className="ambient-opportunity-identity">
-          <p className="ambient-kicker">{model.identity.quoteNumber} · {model.identity.sourceLabel}</p>
-          <div className="ambient-title-line">
-            <h1 id="ambient-opportunity-title">{model.identity.eventName}</h1>
-            <StatusChip {...model.identity.status} />
-          </div>
-          <p>{model.identity.customerName}</p>
-        </div>
-        <div className="ambient-opportunity-total" aria-label={`Quoted total ${model.identity.total}`}>
-          <span>Quoted total</span>
-          <strong>{model.identity.total}</strong>
         </div>
       </header>
 
       <dl className="ambient-opportunity-glance" aria-label="Opportunity at a glance">
-        <div className="ambient-event-logistics-glance" data-event-logistics-layout="responsive">
-          <dt>Event details</dt>
-          <dd className="ambient-event-logistics-values">
-            {EVENT_LOGISTICS_KINDS.map((kind) => (
-              <EventLogisticsValue
-                key={kind}
-                kind={kind}
-                descriptor={model.eventLogisticsObjects[kind]}
-                action={model.actions[EVENT_LOGISTICS_UI[kind].inspect]}
-                triggerRef={eventLogisticsTriggerRefs.current[kind]}
-                onInspect={openEventLogisticsContext}
-              />
-            ))}
+        <div className="ambient-v16-opportunity__event-summary">
+          <dt>The event</dt>
+          <dd>
+            <button
+              type="button"
+              onClick={openMenuContext}
+              disabled={!model.actions.inspectMenu.enabled}
+              title={model.actions.inspectMenu.disabledReason || undefined}
+              data-ambient-action-id={model.actions.inspectMenu.id}
+            >
+              <span className="ambient-v16-opportunity__object-icon" aria-hidden="true"><ForkKnife size={23} /></span>
+              <strong>Menu</strong>
+              <span>{menuSummary}</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={openStaffingContext}
+              data-ambient-action-id={model.actions.inspectStaffing.id}
+              data-capability-entry="authoritative-operational-staffing"
+            >
+              <span className="ambient-v16-opportunity__object-icon" aria-hidden="true"><UsersThree size={23} /></span>
+              <strong>Staffing</strong>
+              <span>{compactStaffingLabel(activeStaffing)}</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={openPricingContext}
+              disabled={!model.actions.inspectPricing.enabled}
+              title={model.actions.inspectPricing.disabledReason || undefined}
+              data-ambient-action-id={model.actions.inspectPricing.id}
+            >
+              <span className="ambient-v16-opportunity__object-icon" aria-hidden="true"><CurrencyDollar size={23} /></span>
+              <strong>Pricing</strong>
+              <span>{model.identity.total}</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </button>
           </dd>
         </div>
-        <div data-glance="state">
+        <div className="ambient-v16-opportunity__proposal-summary">
+          <dt>Proposal &amp; activity</dt>
+          <dd>
+            <div><CalendarBlank size={21} aria-hidden="true" /><span>{model.proposalObject.readiness.statusLabel}</span></div>
+            <div><FileText size={21} aria-hidden="true" /><span>{proposalActivity?.value || "No recorded activity"}</span></div>
+            <button
+              type="button"
+              onClick={openProposalContext}
+              disabled={!model.actions.inspectProposal.enabled}
+              title={model.actions.inspectProposal.disabledReason || undefined}
+              data-ambient-action-id={model.actions.inspectProposal.id}
+            >
+              Review proposal &amp; activity
+              <ArrowRight size={18} aria-hidden="true" />
+            </button>
+          </dd>
+        </div>
+        <div className="ambient-v16-opportunity__semantic-state" data-glance="state">
           <dt>State</dt>
           <dd>
             <span>{model.identity.status.label}</span>
             <small>{model.momentum.proposal.value} proposal completeness</small>
           </dd>
         </div>
-        <div data-glance="risk" data-tone={model.risk.tone}>
+        <div className="ambient-v16-opportunity__semantic-state" data-glance="risk" data-tone={model.risk.tone}>
           <dt>What matters</dt>
           <dd>
             <span>{model.risk.title}</span>
             <small>{model.risk.label}</small>
           </dd>
         </div>
-        <div data-glance="next">
+        <div className="ambient-v16-opportunity__semantic-state" data-glance="next">
           <dt>Next</dt>
           <dd>
             <span>{model.nextAction.title}</span>
             {model.nextAction.kind === "caught_up" ? (
               <small>{model.nextAction.label}</small>
             ) : (
-              <button
-                type="button"
-                className="ambient-next-action"
-                onClick={runNextAction}
-                data-ambient-action-id={model.actions.primary.id}
-              >
-                {model.nextAction.label}
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
+              <small>{nextActionLabel}</small>
             )}
           </dd>
         </div>
       </dl>
+
+      <section
+        className="ambient-event-logistics-glance ambient-v16-opportunity__event-logistics"
+        data-event-logistics-layout="responsive"
+        aria-labelledby="ambient-event-logistics-title"
+      >
+        <div>
+          <p className="ambient-kicker">Recorded event details</p>
+          <h2 id="ambient-event-logistics-title">Date, time &amp; place</h2>
+        </div>
+        <div className="ambient-event-logistics-values">
+          {EVENT_LOGISTICS_KINDS.map((kind) => (
+            <EventLogisticsValue
+              key={kind}
+              kind={kind}
+              descriptor={model.eventLogisticsObjects[kind]}
+              action={model.actions[EVENT_LOGISTICS_UI[kind].inspect]}
+              triggerRef={eventLogisticsTriggerRefs.current[kind]}
+              onInspect={openEventLogisticsContext}
+            />
+          ))}
+        </div>
+      </section>
 
       <section className="ambient-pilot-sentence" data-origin="system" aria-label="Opportunity recommendation">
         <Sparkle size={20} weight="fill" aria-hidden="true" />
@@ -3256,11 +3526,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             type="button"
             className="ambient-disclosure-trigger"
             onClick={revealOperationalFacts}
+            aria-label="Show event, menu, staffing, and pricing"
             aria-expanded="false"
             aria-controls="ambient-operational-facts"
             data-ambient-action-id={model.actions.revealOperationalFacts.id}
           >
-            Show event, menu, staffing, and pricing
+            About this opportunity
             <ArrowRight size={17} aria-hidden="true" />
           </button>
         )}
@@ -3276,7 +3547,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             aria-labelledby="ambient-operational-facts-title"
           >
             <header>
-              <h2 id="ambient-operational-facts-title">Event, menu, staffing, pricing</h2>
+              <h2 id="ambient-operational-facts-title">About this opportunity</h2>
               <p>These are saved event, menu, staffing, and pricing details. Missing costs or activity are marked as unavailable.</p>
             </header>
             <DisclosureFacts items={model.disclosureLayers.operational} />
@@ -3685,6 +3956,26 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         clearActionId={model.actions.clearScenarioHistory.id}
       />
 
+      <QuickUpdatesPanel
+        open={quickUpdatesOpen}
+        dialogId={quickUpdatesDialogId}
+        quote={quote?.organizationId
+          ? quote
+          : { ...quote, organizationId: ambientContext?.organizationId }}
+        staffingSummary={staffingLabel(model.staffingObject.current)}
+        pricingSummary={`${model.identity.total} saved total`}
+        serviceStyles={serviceStyles}
+        returnFocusRef={quickUpdatesReturnFocusRef}
+        onClose={closeQuickUpdates}
+        onPreviewQuickUpdate={onPreviewQuickUpdate}
+        onSaveQuickUpdate={onSaveQuickUpdate}
+        onReviewStaffing={openStaffingContext}
+        onReviewPricing={openPricingContext}
+        onOpenQuickUpdatesLibrary={onOpenQuickUpdatesLibrary}
+        onOpenAuthoritativeEditor={() => openEditor()}
+        onQuickUpdatesGuardChange={onQuickUpdatesGuardChange}
+      />
+
       {activeEventLogisticsObject && (
         <ContextSurface
           key={eventLogisticsOpenKind}
@@ -3968,8 +4259,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         reason={model.menuObject.why}
         consequence={model.menuObject.consequence}
         collapseArrivalDetails
-        anchorRef={menuInspectRef}
-        returnFocusRef={menuInspectRef}
+        anchorRef={activeMenuInspectRef}
+        returnFocusRef={activeMenuInspectRef}
         onClose={dismissMenuContext}
         closeActionId={model.actions.dismissMenuContext.id}
       >
@@ -4181,8 +4472,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         reason={model.pricingObject.why}
         consequence={model.pricingObject.consequence}
         collapseArrivalDetails
-        anchorRef={pricingInspectRef}
-        returnFocusRef={pricingInspectRef}
+        anchorRef={activePricingInspectRef}
+        returnFocusRef={activePricingInspectRef}
         onClose={dismissPricingContext}
         closeActionId={model.actions.dismissPricingContext.id}
         footer={pricingFooter}
@@ -4391,8 +4682,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         reason={model.proposalObject.descriptor.why}
         consequence={model.proposalObject.descriptor.consequence}
         collapseArrivalDetails
-        anchorRef={proposalInspectRef}
-        returnFocusRef={proposalInspectRef}
+        anchorRef={activeProposalInspectRef}
+        returnFocusRef={activeProposalInspectRef}
         onClose={dismissProposalContext}
         closeActionId={model.actions.dismissProposalContext.id}
         footer={proposalFooter}

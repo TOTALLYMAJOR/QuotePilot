@@ -4,6 +4,7 @@ import {
   AMBIENT_LIBRARY_SECTION_ORDER,
   buildAmbientLibrary
 } from "../lib/ambientLibrary";
+import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { AdminCatalogView } from "./AdminCatalogModal";
 import "./ambientLibraryRoute.css";
 
@@ -30,6 +31,16 @@ function formatCheckedAt(value) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit"
+  }).format(new Date(timestamp));
+}
+
+function formatReviewDate(value) {
+  const timestamp = Date.parse(text(value));
+  if (!Number.isFinite(timestamp)) return "Review date unavailable";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
   }).format(new Date(timestamp));
 }
 
@@ -105,31 +116,93 @@ function LibraryAcknowledgement({ acknowledgement, acknowledgementRef, settledLa
 function summaryForSection(section) {
   const summary = section.summary || {};
   if (section.id === "pricing") {
-    if (summary.state === "confirmed") return "Reviewed for the current catalog version";
-    if (summary.state === "local_only") return "Reviewed in this browser only";
+    if (summary.state === "confirmed") return summary.confirmedAt
+      ? `Reviewed ${formatReviewDate(summary.confirmedAt)}`
+      : "Pricing reviewed";
+    if (summary.state === "local_only") return "Reviewed in this browser";
     if (summary.state === "recorded_confirmation_stale") return "Recorded review needs a current catalog check";
     return "Pricing needs review";
   }
   if (section.id === "menu" && summary.availability === "unavailable") {
-    return "Open Menu to review its event-specific records";
+    return "Review current menus";
   }
   if (section.id === "templates") {
     const count = Number(summary.totalCount || 0);
     const attention = Number(summary.attentionCount || 0);
     return `${count} ${count === 1 ? "starting point" : "starting points"}${attention ? ` · ${attention} to review` : ""}`;
   }
-  const total = Number(summary.totalCount || 0);
   const active = Number(summary.activeCount || 0);
-  return `${active} active · ${total} recorded`;
+  if (section.id === "rentals") return `${active} ${active === 1 ? "collection" : "collections"}`;
+  return `${active} active`;
 }
 
-function sectionExplanation(section) {
-  if (section.id === "packages") return "Starting packages and the items they include.";
-  if (section.id === "menu") return "Event-specific menu choices stay in their existing managed records.";
-  if (section.id === "addons") return "Optional services that can be added to a quote.";
-  if (section.id === "rentals") return "Rental choices and their quantity rules.";
-  if (section.id === "pricing") return "Fees, tax, deposit, travel, staffing, and pricing review.";
-  return "Reusable event details that give new quotes a considered starting point.";
+function displayLabelForSection(section) {
+  if (section.id === "menu") return "Menus";
+  if (section.id === "addons") return "Services";
+  if (section.id === "templates") return "Event templates";
+  return section.label;
+}
+
+function displayActionForSection(section) {
+  if (section.id === "menu") return "Review menus";
+  if (section.id === "addons") return "Review services";
+  if (section.id === "templates") return "Review templates";
+  if (section.id === "pricing") return "Review pricing";
+  return section.primaryAction.outcomeLabel;
+}
+
+function LibrarySectionIcon({ sectionId }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeWidth: 1.7
+  };
+  if (sectionId === "packages") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}><path d="M4 9h16v11H4zM3 6h18v3H3zM12 6v14M12 6H8.5a2 2 0 1 1 2-2c0 1.2 1.5 2 1.5 2Zm0 0h3.5a2 2 0 1 0-2-2c0 1.2-1.5 2-1.5 2Z" /></svg>;
+  }
+  if (sectionId === "menu") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}><path d="M6 3v8M3.5 3v5a2.5 2.5 0 0 0 5 0V3M6 11v10M16 3v18M16 3c3 2 3 7 0 9" /></svg>;
+  }
+  if (sectionId === "addons") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}><path d="M3 18h18M5 16a7 7 0 0 1 14 0H5ZM12 7V4M10 4h4" /></svg>;
+  }
+  if (sectionId === "rentals") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}><path d="M7 4h10v8H7zM6 12h12v4H6zM8 16l-1 5M16 16l1 5" /></svg>;
+  }
+  if (sectionId === "templates") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}><path d="M6 3h8l4 4v14H6zM14 3v5h5M9 12h6M9 16h6" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}><circle cx="12" cy="12" r="9" /><path d="M14.5 8.5c-.7-.8-1.6-1.1-2.6-1.1-1.4 0-2.5.8-2.5 2 0 3 5.2 1.6 5.2 4.8 0 1.4-1.2 2.4-2.8 2.4-1.2 0-2.3-.5-3-1.4M12 5.5v13" /></svg>;
+}
+
+function LibrarySectionRow({ section, onAction, isNext = false }) {
+  return (
+    <li>
+      <article
+        className={`ambient-library__row${isNext ? " ambient-library__next" : ""}`}
+        data-library-record-kind="catalog-section"
+        data-library-record-id={section.id}
+        data-library-health={section.health}
+      >
+        <span className="ambient-library__row-icon"><LibrarySectionIcon sectionId={section.id} /></span>
+        <h3>{displayLabelForSection(section)}</h3>
+        <p>{summaryForSection(section)}</p>
+        <button
+          type="button"
+          className="ambient-library__row-action"
+          data-library-action-id={section.primaryAction.id}
+          disabled={!section.primaryAction.enabled}
+          title={section.primaryAction.disabledReason || undefined}
+          onClick={(event) => onAction(section.primaryAction, event.currentTarget)}
+        >
+          <span className="ambient-library__row-action-label">{displayActionForSection(section)}</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </article>
+    </li>
+  );
 }
 
 function dependencySummary(template) {
@@ -160,35 +233,6 @@ function normalizeEditorTarget(action) {
     consequence: action.arrivalContract.consequence,
     action
   };
-}
-
-function LibraryLedger({ model }) {
-  const templateCount = model.sections.find((section) => section.id === "templates")?.summary?.totalCount ?? 0;
-  const pricingLabel = model.pricing.state === "confirmed"
-    ? "Pricing reviewed"
-    : model.pricing.state === "local_only"
-      ? "Browser-only review"
-      : "Pricing needs review";
-  return (
-    <dl className="ambient-library__ledger" aria-label="Current Library context">
-      <div data-library-source={model.readBoundary.kind}>
-        <dt>Source</dt>
-        <dd>{model.readBoundary.label}</dd>
-      </div>
-      <div>
-        <dt>Catalog version</dt>
-        <dd>{model.revision.catalogRevision ?? "Unavailable"}</dd>
-      </div>
-      <div data-library-pricing-state={model.pricing.state}>
-        <dt>Pricing</dt>
-        <dd>{pricingLabel}</dd>
-      </div>
-      <div>
-        <dt>Templates</dt>
-        <dd>{templateCount}</dd>
-      </div>
-    </dl>
-  );
 }
 
 function LibraryState({ model, onRefresh }) {
@@ -233,9 +277,10 @@ export default function AmbientLibraryRoute({
   arrivalContext = null,
   arrivalAttempted = false,
   onArrivalResolution,
-  onInteractionStateChange
+  onInteractionStateChange,
+  contextualOrigin = null
 }) {
-  const headingRef = useRef(null);
+  const headingRef = useWorkspaceRouteHeadingFocus(open);
   const acknowledgementRef = useRef(null);
   const returnFocusRef = useRef(null);
   const arrivalHandledRef = useRef(null);
@@ -243,6 +288,36 @@ export default function AmbientLibraryRoute({
   const editorOpenTimerRef = useRef(null);
   const [acknowledgement, setAcknowledgement] = useState(null);
   const [editorTarget, setEditorTarget] = useState(null);
+  const contextualLabel = text(contextualOrigin?.label || contextualOrigin?.eventName);
+  const contextualReturn = typeof contextualOrigin?.onReturn === "function"
+    ? contextualOrigin.onReturn
+    : null;
+  const requestedReturnLabel = text(contextualOrigin?.returnLabel);
+  const contextualReturnLabel = requestedReturnLabel && requestedReturnLabel.toLowerCase() !== "return"
+    ? requestedReturnLabel
+    : contextualLabel
+      ? `Return to ${contextualLabel}`
+      : "Return to opportunity";
+  const contextualBanner = contextualReturn ? (
+    <aside className="ambient-library__context" aria-label="Opportunity context">
+      <span className="ambient-library__context-icon" aria-hidden="true">◎</span>
+      <div>
+        <p className="ambient-library__label">Working with {contextualLabel || "this opportunity"}</p>
+        <p className="ambient-library__context-boundary">
+          <span>You opened the Library from opportunity work. Nothing changes until you choose and save.</span>
+          <span>Browsing changes nothing.</span>
+        </p>
+      </div>
+      <button
+        type="button"
+        className="ambient-library__return"
+        data-library-return-context={contextualLabel || "opportunity"}
+        onClick={() => contextualReturn(contextualOrigin)}
+      >
+        {contextualReturnLabel}<span aria-hidden="true">→</span>
+      </button>
+    </aside>
+  ) : null;
 
   const model = useMemo(() => buildAmbientLibrary({
     state: {
@@ -429,6 +504,7 @@ export default function AmbientLibraryRoute({
         data-surface-purpose={model.surfaceContract.purposes.join(" ")}
         data-surface-density="editorial"
         data-ambient-library-state="editing"
+        data-library-context={contextualReturn ? "opportunity" : "standalone"}
         data-library-draft-preserved={open ? undefined : "route-hidden"}
         hidden={!open}
       >
@@ -443,6 +519,7 @@ export default function AmbientLibraryRoute({
             <strong>{editorTarget.action.arrivalContract.object.label}</strong>
           </div>
         </div>
+        {contextualBanner}
         <LibraryAcknowledgement
           acknowledgement={acknowledgement}
           acknowledgementRef={acknowledgementRef}
@@ -483,34 +560,19 @@ export default function AmbientLibraryRoute({
     <main
       className="container workspace-route-main ambient-library ambient-purpose-surface"
       data-ambient-library-state={model.state}
+      data-library-context={contextualReturn ? "opportunity" : "standalone"}
       data-surface-contract-id={model.surfaceContract.id}
       data-surface-purpose={model.surfaceContract.purposes.join(" ")}
       data-surface-density="editorial"
       aria-labelledby="ambient-library-title"
     >
       <header className="ambient-library__masthead">
-        <div>
-          <p className="ambient-library__label">For this organization</p>
-          <h1 id="ambient-library-title" ref={headingRef} tabIndex={-1}>Library</h1>
-          <p>The catalog and event starting points used in new quotes.</p>
-        </div>
-        {model.nextAction && model.state !== "loading" && (
-          <aside className="ambient-library__next" data-library-next-state={model.caughtUp.eligible ? "caught-up" : "attention"}>
-            <p className="ambient-library__label">{model.caughtUp.eligible ? "Current view" : "Next useful step"}</p>
-            <h2>{model.caughtUp.eligible ? "Nothing in this view needs review" : model.nextAction.outcomeLabel}</h2>
-            <p>{model.caughtUp.eligible ? model.caughtUp.reason : model.nextActionReason}</p>
-            <button
-              type="button"
-              className="ambient-library__primary"
-              data-library-action-id={model.nextAction.id}
-              disabled={!model.nextAction.enabled}
-              title={model.nextAction.disabledReason || undefined}
-              onClick={(event) => handleAction(model.nextAction, event.currentTarget)}
-            >
-              {model.nextAction.outcomeLabel}<span aria-hidden="true">→</span>
-            </button>
-          </aside>
-        )}
+        <nav className="ambient-library__breadcrumb" aria-label="Breadcrumb">
+          <span>Library</span><span aria-hidden="true">/</span><strong>Overview</strong>
+        </nav>
+        <p className="ambient-library__label">Organization Library</p>
+        <h1 id="ambient-library-title" ref={headingRef} tabIndex={-1}>The choices behind every quote.</h1>
+        <p>Packages, menus, services, rentals, templates, and pricing—kept ready for the next opportunity.</p>
       </header>
 
       <LibraryAcknowledgement
@@ -518,77 +580,56 @@ export default function AmbientLibraryRoute({
         acknowledgementRef={acknowledgementRef}
       />
 
+      {contextualBanner}
+
       {model.sections.length === 0 ? (
         <LibraryState model={model} onRefresh={refreshLibrary} />
       ) : (
         <>
-          <LibraryLedger model={model} />
-          <div className="ambient-library__content">
-            <section className="ambient-library__section" data-library-section="catalog" aria-labelledby="ambient-library-catalog-title">
-              <div className="ambient-library__section-head">
-                <div>
-                  <p className="ambient-library__label">Catalog</p>
-                  <h2 id="ambient-library-catalog-title">Choices for new quotes</h2>
-                </div>
-                <p>Review saved choices and the pricing rules connected to them.</p>
-              </div>
-              <ol className="ambient-library__records">
-                {model.sections.filter((section) => section.id !== "templates").map((section) => (
-                  <li key={section.id}>
-                    <article
-                      className="ambient-library__record"
-                      data-library-record-kind="catalog-section"
-                      data-library-record-id={section.id}
-                      data-library-health={section.health}
-                    >
-                      <div>
-                        <p className="ambient-library__record-index" aria-hidden="true">
-                          {String(AMBIENT_LIBRARY_SECTION_ORDER.indexOf(section.id) + 1).padStart(2, "0")}
-                        </p>
-                        <div>
-                          <h3>{section.label}</h3>
-                          <p>{sectionExplanation(section)}</p>
-                        </div>
-                      </div>
-                      <p className="ambient-library__record-state">{summaryForSection(section)}</p>
-                      <button
-                        type="button"
-                        data-library-action-id={section.primaryAction.id}
-                        disabled={!section.primaryAction.enabled}
-                        title={section.primaryAction.disabledReason || undefined}
-                        onClick={(event) => handleAction(section.primaryAction, event.currentTarget)}
-                      >
-                        {section.primaryAction.outcomeLabel}<span aria-hidden="true">→</span>
-                      </button>
-                    </article>
-                  </li>
+          <section className="ambient-library__group" data-library-section="catalog" aria-labelledby="ambient-library-catalog-title">
+            <div className="ambient-library__group-title">
+              <p>Catalog choices</p><span aria-hidden="true" />
+              <h2 id="ambient-library-catalog-title" className="sr-only">Choices for new quotes</h2>
+            </div>
+            <ol className="ambient-library__row-list">
+              {model.sections
+                .filter((section) => ["packages", "menu", "addons", "rentals"].includes(section.id))
+                .map((section) => (
+                  <LibrarySectionRow
+                    key={section.id}
+                    section={section}
+                    isNext={model.nextAction?.id === section.primaryAction.id}
+                    onAction={handleAction}
+                  />
                 ))}
-              </ol>
-            </section>
+            </ol>
+          </section>
 
-            <section className="ambient-library__section ambient-library__templates" data-library-section="templates" aria-labelledby="ambient-library-templates-title">
-              <div className="ambient-library__section-head">
-                <div>
-                  <p className="ambient-library__label">Templates</p>
-                  <h2 id="ambient-library-templates-title">Event starting points</h2>
-                </div>
-                <button
-                  type="button"
-                  className="ambient-library__quiet-action"
-                  data-library-action-id={model.actions["review-library-templates"]?.id}
-                  disabled={!model.actions["review-library-templates"]?.enabled}
-                  onClick={(event) => handleAction(model.actions["review-library-templates"], event.currentTarget)}
-                >
-                  {model.templates.length ? "Review all" : "Add a template"}
-                </button>
-              </div>
-              {model.templates.length === 0 ? (
-                <div className="ambient-library__template-empty">
-                  <h3>No event templates yet</h3>
-                  <p>Add one to give new quotes an adjustable starting point.</p>
-                </div>
-              ) : (
-                <ol className="ambient-library__template-list">
+          <section className="ambient-library__group" data-library-section="templates" aria-labelledby="ambient-library-templates-title">
+            <div className="ambient-library__group-title">
+              <p>Starting points &amp; pricing</p><span aria-hidden="true" />
+              <h2 id="ambient-library-templates-title" className="sr-only">Event starting points and pricing</h2>
+            </div>
+            <ol className="ambient-library__row-list">
+              {["templates", "pricing"].map((sectionId) => model.sections.find((section) => section.id === sectionId))
+                .filter(Boolean)
+                .map((section) => (
+                  <LibrarySectionRow
+                    key={section.id}
+                    section={section}
+                    isNext={model.nextAction?.id === section.primaryAction.id}
+                    onAction={handleAction}
+                  />
+                ))}
+            </ol>
+
+            {model.templates.length > 0 && (
+              <details className="ambient-library__template-disclosure">
+                <summary>
+                  Browse saved templates
+                  <span>{model.templates.length}</span>
+                </summary>
+                <ol className="ambient-library__template-list" aria-label="Saved event templates">
                   {model.templates.map((template, index) => (
                     <li key={template.id}>
                       <article
@@ -618,19 +659,25 @@ export default function AmbientLibraryRoute({
                     </li>
                   ))}
                 </ol>
-              )}
-            </section>
-          </div>
+              </details>
+            )}
+          </section>
+
+          <aside className="ambient-library__usage">
+            <span aria-hidden="true">ⓘ</span>
+            <div>
+              <strong>{contextualReturn ? "Used contextually" : "Available from opportunities"}</strong>
+              <p>Quick Updates handles the common change. Open the full Library when comparison, structure, or broader catalog work needs more room.</p>
+            </div>
+          </aside>
         </>
       )}
 
-      <aside className="ambient-library__boundary" aria-labelledby="ambient-library-boundary-title">
+      <details className="ambient-library__boundary" aria-labelledby="ambient-library-boundary-title">
+        <summary>About this view</summary>
         <div>
-          <p className="ambient-library__label">Where this came from</p>
           <h2 id="ambient-library-boundary-title">{model.readBoundary.label}</h2>
           <p>Checked {formatCheckedAt(model.readBoundary.observedAt)}</p>
-        </div>
-        <div>
           <p>{model.readBoundary.sourceBoundary}</p>
           {model.omittedEvidence.length > 0 && (
             <details>
@@ -648,7 +695,7 @@ export default function AmbientLibraryRoute({
             {model.readBoundary.loading ? "Checking…" : "Check again"}
           </button>
         </div>
-      </aside>
+      </details>
     </main>
   );
 }
