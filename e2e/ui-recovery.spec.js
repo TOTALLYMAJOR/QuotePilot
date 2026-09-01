@@ -90,7 +90,7 @@ test("Escape preserves the Catalog Admin unsaved-change guard", async ({ page })
   await expect(operationsTrigger).toBeFocused();
 });
 
-test("authoritative menu deactivate and delete keep unrelated Catalog Admin drafts", async ({ page }) => {
+test("menu deactivation joins the setup draft and preserves unrelated Catalog Admin edits", async ({ page }) => {
   await page.goto("/app");
   await openOperationsItem(page, "Catalog Admin");
 
@@ -104,23 +104,18 @@ test("authoritative menu deactivate and delete keep unrelated Catalog Admin draf
   await catalog.getByRole("tab", { name: "Menu" }).click();
   const managedRows = catalog.locator(".admin-menu-row-managed");
   await expect.poll(() => managedRows.count()).toBeGreaterThan(0);
-  const row = managedRows.first();
-  const active = row.getByRole("checkbox");
-  await expect(active).toBeChecked();
-  await active.uncheck();
-  await active.press("Tab");
-
-  await expect(catalog.getByText(
-    /another catalog change in progress.*deactivating this menu item again/i
-  ).first()).toBeVisible();
-  await expect(active).toBeChecked();
-
   const rowCount = await managedRows.count();
-  await row.getByRole("button", { name: "Delete" }).click();
+  const row = managedRows.first();
+  const active = row.getByRole("checkbox", { name: "Active" });
+  await expect(active).toBeChecked();
+  await active.click();
+  await expect(managedRows).toHaveCount(rowCount - 1);
+
+  await managedRows.first().getByRole("button", { name: "Delete" }).click();
   await expect(catalog.getByText(
     /another catalog change in progress.*deleting this menu item again/i
   ).first()).toBeVisible();
-  await expect(managedRows).toHaveCount(rowCount);
+  await expect(managedRows).toHaveCount(rowCount - 1);
 
   await catalog.getByRole("tab", { name: "Pricing" }).click();
   await expect(catalog.getByLabel("Business name")).toHaveValue(draftName);
