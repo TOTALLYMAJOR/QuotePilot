@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-31 21:07:42 CDT
+Last updated: 2026-08-31 21:15:42 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2341,6 +2341,27 @@ Staffing provenance reads **Quote override**, **Current catalog rate**,
 unavailable**. A legacy quote never receives an invented historical revision.
 Accepted, declined, booked, paid, refunded, cancelled, expired, or void quotes
 remain immutable; duplicate or reopen them to begin a new commercial plan.
+
+## Unified commercial consequence review
+
+After **Preview change impact** succeeds, use the single consequence review to
+inspect **Price and deposit**, **Staffing**, **Rentals**, **Guided
+recommendations**, **Margin evidence**, and **Proposal readiness** together.
+Every entry names its source. Server-authoritative simulation effects are quote
+consequences; operator-declared guided-selling entries are recommendations;
+staff-only cost evidence and draft-completeness policy remain separate facts.
+
+- **Apply all** stages every available guided recommendation into the exact
+  proposed form.
+- **Apply selected** stages only the checked recommendations.
+- **Keep quoted plan** discards the unsaved proposal and restores the form that
+  was loaded for editing.
+
+Apply actions do not save a quote. QuotePilot reruns the authoritative simulation
+for the rebuilt form, after which the existing authorization and immutable
+version flow remains responsible for any save. If the quote revision, catalog
+revision, or simulation identity changes, the review is disabled; refresh the
+quote and simulation before choosing an outcome.
 
 ## Connected Quote Workspace compatibility and rollback
 

@@ -1,6 +1,6 @@
 # Business Setup and Revision-Safe Quoting Overhaul
 
-Last updated: 2026-08-31 21:07:42 CDT
+Last updated: 2026-08-31 21:15:42 CDT
 
 - Program recorded at (UTC): `2026-09-01T01:14:17Z`
 - Source candidate: `2d999c422da6aacaad0800eeb498d86a70b74427`
@@ -89,7 +89,7 @@ The existing governed commercial-change path is extended into one review grouped
 - [x] Slice 2 — Add the admin-only catalog setup draft and atomic publisher.
 - [x] Slice 3 — Add the Business Setup Center, Menu Builder, canonical costs, and readiness truth.
 - [x] Slice 4 — Add revision-aware quotes and explicit review outcomes.
-- [ ] Slice 5 — Unify commercial consequence review.
+- [x] Slice 5 — Unify commercial consequence review.
 - [ ] Final — Run local gates, close canonical documentation, and record residual evidence gaps.
 
 Planned checkpoint commits:
@@ -117,8 +117,8 @@ Planned checkpoint commits:
 | Cost truth | Managed menu `costMinor` participates in imports, normalization, publication, setup coverage, and margin from the same authoritative menu source | Locally proven | Managed-menu/import/draft/pricing normalization paths plus missing-cost readiness regression |
 | Revision review | All five states, selected-record comparison, inactive/missing preservation, keep/update outcomes, terminal immutability, stale fences | Locally proven | Server model, receipt, quote creation/runtime, and panel tests; editor disables automatic loaded-quote reconciliation and server save rechecks the review fence |
 | Provenance labels | Quote override, current catalog rate, quoted revision, and unavailable source labels are accurate | Locally proven | Pure provenance helper plus old-rate/legacy/current/override presentation tests |
-| Consequence review | One governed review with six groups, source labels, apply all/selected/keep, exact simulation, versioning, and invalidation | Pending | Slice 5 |
-| Customer-data boundary | Costs, margins, authorities, and private receipts absent from proposals, exports, portals, and customer projections | Pending | Slices 3–5 |
+| Consequence review | One governed review with six groups, source labels, apply all/selected/keep, exact simulation, versioning, and invalidation | Locally proven | Unified model/component tests verify exact groups, source labels, non-mutating form construction, three outcomes, and fail-closed quote/catalog/simulation fences; existing governed authority remains the only version-write path |
+| Customer-data boundary | Costs, margins, authorities, and private receipts absent from proposals, exports, portals, and customer projections | Locally proven | Existing customer-safe projection tests plus setup/revision/consequence models keep costs, margins, internal authorities, and receipts on staff/server-only paths; final full suite remains pending |
 | Interaction acceptance | Responsive phone/tablet/desktop behavior; keyboard, focus, overflow, and accessibility checks | Pending | Slices 3–5 |
 | Final local gates | Firestore rules, capability surfaces, unit suite, environment, build, documentation governance, focused browser tests, completion planner | Pending | Final |
 
@@ -150,6 +150,7 @@ Shared readiness and revision-review models carry reason codes, evidence timesta
 | 2026-09-01T01:39:36Z | Slice 2 catalog draft publisher | checkpoint commit created at slice close | Added six-layer draft authority: private rules, same-org admin callables, bounded normalized change records, generation/revision/baseline fences, 800 ms device buffer sync, and a sticky review/publish state bar. Publication is atomic, advances once, confirms once, receipts once, and closes the draft. Focused result: 5 files, 32 tests passed; capability-surface gate passed. | Setup presets, Import Studio, and direct managed-menu actions are routed through the shared draft in Slice 3; emulator rules and full suite remain final gates |
 | 2026-09-01T01:56:39Z | Slice 3 setup center and menu builder | checkpoint commit created at slice close | Library now starts with six independent readiness signals and the ordered eight-row Setup Center; sales receive read-only evidence. Menu Builder, setup presets, and catalog imports stage through the shared draft. Managed menu `costMinor` reaches import, normalization, publication, coverage, pricing context, and staff margin. Focused UI/model/server suites and the production build passed. | Browser viewport/accessibility acceptance remains a final gate; revision-aware quote behavior begins in Slice 4 |
 | 2026-09-01T02:07:42Z | Slice 4 revision-aware quotes | checkpoint commit created at slice close | Trusted quotes and versions persist exact pricing authority; the five-state server review compares selected commercial inputs and staffing/rental policy without silently reconciling loaded choices. Keep/update outcomes create private version-and-revision-fenced receipts; update reuses governed Change Impact, while terminal and stale work fail closed. Focused 55-test and broader 81-test runs passed; production build passed. | Hosted callable/readback and human workflow acceptance remain final external gates; Slice 5 unifies consequence presentation and selection actions |
+| 2026-09-01T02:15:42Z | Slice 5 unified consequence review | checkpoint commit pending at slice close | Extended the existing Commercial Change Impact presentation into six source-labeled groups. Apply all/selected rebuild exact proposed forms and rerun the existing authoritative simulation; Keep quoted plan restores the loaded base form without writing. Quote, catalog, and simulation fences invalidate stale work. Focused result: 5 files, 44 tests passed; production build passed. | Full repository gates, viewport/accessibility browser acceptance, and external hosted/human evidence remain pending |
 
 ## Per-slice execution record
 

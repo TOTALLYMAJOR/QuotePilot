@@ -186,6 +186,7 @@ export function hydrateSavedQuoteDraftBase({
         ? { ...quote.catalogRevisionReview }
         : null,
       selection: record(quote.selection) ? { ...quote.selection } : {},
+      baseForm: { ...form },
       rebooking: record(quote.rebooking) ? { ...quote.rebooking } : null,
       portalDecision: record(quote.portalDecision) ? { ...quote.portalDecision } : null
     }

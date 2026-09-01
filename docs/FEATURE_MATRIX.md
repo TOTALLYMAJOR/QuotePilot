@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-31 21:07:42 CDT
+Last updated: 2026-08-31 21:15:42 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -73,6 +73,26 @@ provider receipts.
   `$24/$32` versus `$48/$62` scenario, legacy authority, unrelated revisions,
   inactive/missing records, terminal status, and receipt fences. Hosted and
   authenticated human acceptance remain unclaimed.
+
+## Unified commercial consequence review (August 31, 2026)
+
+- **One authority:** `src/lib/unifiedCommercialConsequenceReview.js` and
+  `src/components/UnifiedCommercialConsequenceReview.jsx` extend the existing
+  server-authoritative Commercial Change Impact flow; they do not introduce a
+  second pricing or quote-write path.
+- **Six grouped consequences:** Price and deposit, Staffing, Rentals, Guided
+  recommendations, Margin evidence, and Proposal readiness remain visibly
+  separate and name their authoritative or advisory source.
+- **Three bounded outcomes:** Apply all and Apply selected build an exact
+  proposed form and rerun authoritative simulation before the existing governed
+  version action can run. Keep quoted plan restores the loaded form and discards
+  the unsaved proposal without writing the quote.
+- **Revision fences:** quote revision, proposed-form identity, and catalog
+  revision must still match. Any change invalidates the review and disables its
+  apply actions until a fresh simulation succeeds.
+- **Evidence boundary:** focused model/component/integration tests and a local
+  build qualify source behavior only; hosted callable behavior and authenticated
+  operator acceptance remain separate gates.
 
 The chronology below records first-source and release-containment evidence.
 Its `v0.7.0` row is a historical deployment receipt, not a current-runtime

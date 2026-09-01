@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 21:07:42 CDT
+Last updated: 2026-08-31 21:15:42 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Unified the existing Commercial Change Impact experience into one fenced
+  consequence review covering Price and deposit, Staffing, Rentals, Guided
+  recommendations, Margin evidence, and Proposal readiness. Each consequence
+  names whether it came from server-authoritative simulation, operator-declared
+  policy, tenant-recorded staff-only cost evidence, or draft completeness
+  policy. Apply all and Apply selected rebuild the exact proposed form and
+  require a fresh authoritative simulation before the governed version action;
+  Keep quoted plan discards only the unsaved proposal. Quote, catalog, or
+  simulation fence changes invalidate the review without mutating the quote.
 - Added revision-aware quote review. New trusted quotes and immutable versions
   persist the pricing engine's exact catalog authority; legacy quotes remain
   explicitly `Legacy revision unknown`. Loaded quotes no longer reconcile away

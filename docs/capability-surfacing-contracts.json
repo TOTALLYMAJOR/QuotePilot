@@ -2368,20 +2368,21 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, and advisory REVIEW or STALE consequences before any save.",
+      "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, advisory REVIEW or STALE consequences, and one six-group source-labeled consequence review before any save.",
       "backendPaths": [
         "functions/commercialChangeImpactPreview.js",
         "functions/index.js",
         "functions/pricingEngine.js",
         "src/lib/commerceOps.js",
-        "src/lib/commercialChangeImpact.js"
+        "src/lib/commercialChangeImpact.js",
+        "src/lib/unifiedCommercialConsequenceReview.js"
       ],
       "backendExports": [
         "functions/index.js#calculateQuotePricing"
@@ -2391,7 +2392,8 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
-        "src/components/CommercialChangeImpactPanel.jsx"
+        "src/components/CommercialChangeImpactPanel.jsx",
+        "src/components/UnifiedCommercialConsequenceReview.jsx"
       ],
       "entryPointLocators": [
         {
@@ -2401,6 +2403,10 @@
         {
           "path": "src/components/CommercialChangeImpactPanel.jsx",
           "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-presentation\""
+        },
+        {
+          "path": "src/components/UnifiedCommercialConsequenceReview.jsx",
+          "locator": "data-capability-id=\"unified-commercial-consequence-review\""
         }
       ],
       "testPaths": [
@@ -2408,7 +2414,9 @@
         "e2e/firebase-authoritative-pricing.smoke.spec.js",
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/lib/__tests__/commercialChangeImpact.test.js",
-        "src/lib/__tests__/commercialChangeImpactPreview.server.test.js"
+        "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
+        "src/lib/__tests__/unifiedCommercialConsequenceReview.test.js",
+        "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx"
       ],
       "testLocators": [
         {
@@ -2434,6 +2442,14 @@
         {
           "path": "src/lib/__tests__/commercialChangeImpact.test.js",
           "locator": "reports exact declared fact and supplied commercial-value changes without calculating them"
+        },
+        {
+          "path": "src/lib/__tests__/unifiedCommercialConsequenceReview.test.js",
+          "locator": "groups the six consequences and names every authority source"
+        },
+        {
+          "path": "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx",
+          "locator": "renders all six groups, named sources, and three outcomes"
         }
       ],
       "documentationPaths": [
@@ -2450,8 +2466,8 @@
           "locator": "## Quote Builder Details"
         }
       ],
-      "surfaceReview": "verified_existing",
-      "surfaceReviewNote": "Revision 1 reviewed the quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, and presentation states as changed. Revision 2 is a backend-only additive change to functions/pricingEngine.js with no UI, state, or export change: the addon/rental normalizers additionally preserve the strictly-boolean portalDecidable mark, and calculateQuotePricingAuthoritative additionally returns the exact addons/rentals collections from the same authoritative catalog read, so the trusted quote-write flows can compute the decision-room decidableOptionsProjection without a second, possibly-divergent catalog read. Pricing math reads none of the new fields \u2014 verified_existing.",
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Revision 4 binds the existing authoritative simulation to one six-group consequence review. Apply all/selected only rebuild the exact proposed form and rerun simulation; Keep restores the loaded form without writing. Quote, catalog, and proposed-form fences fail closed. No second pricing or version authority was introduced.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -2497,7 +2513,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can simulate the exact blast radius of an unsaved quote edit from canonical source and trusted pricing snapshots without exposing contact content or implying that any save, authorization, invalidation, regeneration, reconciliation, or publication occurred."
+      "safeOutcome": "Staff can simulate the exact blast radius of an unsaved quote edit, review six separately sourced consequence groups, and stage all, selected, or no recommendations without exposing customer-safe internal evidence or implying that any save, authorization, invalidation, regeneration, reconciliation, or publication occurred."
     },
     {
       "id": "commercial-dependency-graph-beo-provenance",

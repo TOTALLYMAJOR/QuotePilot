@@ -6,6 +6,7 @@ import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
 import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
+import { buildMarginPresentation } from "./components/marginPresentation";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
@@ -63,6 +64,11 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import {
+  buildUnifiedCommercialConsequenceReview,
+  buildUnifiedConsequenceProposedForm,
+  unifiedConsequenceFenceCurrent
+} from "./lib/unifiedCommercialConsequenceReview";
 import {
   hydrateSavedQuoteDraftBase
 } from "./lib/quoteDraftRuntimeBase";
@@ -371,6 +377,7 @@ const EMPTY_EDITING_QUOTE = Object.freeze({
   pricingCatalogAuthority: null,
   catalogRevisionReview: null,
   selection: {},
+  baseForm: null,
   rebooking: null
 });
 
@@ -401,7 +408,8 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   mutationKind: "",
   mutationMessage: "",
   applyResult: null,
-  applyOutcome: null
+  applyOutcome: null,
+  catalogRevision: null
 });
 const EMPTY_LIBRARY_INTERACTION = Object.freeze({ dirty: false, busy: false });
 
@@ -2031,6 +2039,10 @@ export default function App({
     () => buildUpsellRecommendations({ form, catalog, totals, settings: effectiveSettings }),
     [form, catalog, totals, effectiveSettings]
   );
+  const proposedMargin = useMemo(
+    () => buildMarginPresentation({ form, totals, catalog, settings: effectiveSettings }),
+    [catalog, effectiveSettings, form, totals]
+  );
   const quoteEditRouteId = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_EDIT
     ? String(browserRoute.params?.quoteId || "").trim()
     : "";
@@ -2039,11 +2051,27 @@ export default function App({
   const currentChangeImpactFormKey = JSON.stringify(form);
   const changeImpactPresentationError = changeImpactPreview.error || (
     changeImpactPreview.model
-    && changeImpactPreview.formKey
-    && changeImpactPreview.formKey !== currentChangeImpactFormKey
-      ? "Quote inputs changed after this preview. The retained result is stale; refresh it before relying on the comparison."
+      ? changeImpactPreview.formKey
+        && changeImpactPreview.formKey !== currentChangeImpactFormKey
+        ? "Quote inputs changed after this preview. The retained result is stale; refresh it before relying on the comparison."
+        : Number(changeImpactPreview.catalogRevision) !== Number(catalog.settings?.catalogRevision)
+          ? "The catalog revision changed after this preview. Refresh it before choosing a consequence outcome."
+          : ""
       : ""
   );
+  const unifiedConsequenceReview = useMemo(() => buildUnifiedCommercialConsequenceReview({
+    model: changeImpactPreview.model,
+    recommendations,
+    margin: proposedMargin,
+    proposalReadiness,
+    catalogRevision: changeImpactPreview.catalogRevision
+  }), [
+    changeImpactPreview.catalogRevision,
+    changeImpactPreview.model,
+    proposalReadiness,
+    proposedMargin,
+    recommendations
+  ]);
   const changeImpactPreviewAvailable = isEditingQuote
     && String(catalog.source || "").trim().toLowerCase().startsWith("firebase");
   const organizationName = String(organization?.name || "").trim();
@@ -2832,7 +2860,8 @@ export default function App({
           ? "The exact simulation receipt is ready for governed authorization."
           : "The exact simulation receipt is ready; enforcement remains dormant for this workspace.",
         applyResult: null,
-        applyOutcome: null
+        applyOutcome: null,
+        catalogRevision: Number(catalog.settings?.catalogRevision)
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -2862,6 +2891,51 @@ export default function App({
           : "No definitive simulation receipt was returned. The same request identity must be reconciled before another simulation starts."
       }));
     }
+  };
+
+  const unifiedConsequenceScopeIsCurrent = () => unifiedConsequenceFenceCurrent(
+    unifiedConsequenceReview,
+    {
+      quoteRevisionId: editingQuote.activeVersionId,
+      proposedRevisionId: changeImpactPreview.model?.identity?.proposedRevisionId,
+      catalogRevision: catalog.settings?.catalogRevision
+    }
+  ) && changeImpactScopeIsCurrent();
+
+  const handleApplyUnifiedConsequences = async (selectedIds) => {
+    if (!unifiedConsequenceScopeIsCurrent()) {
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: "The quote, catalog, or simulation fence changed. Refresh consequence review before applying a selection."
+      }));
+      return;
+    }
+    const nextForm = buildUnifiedConsequenceProposedForm({
+      form,
+      review: unifiedConsequenceReview,
+      selectedIds
+    });
+    setForm(nextForm);
+    setQuoteDirty(true);
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: "The selected consequence plan is staged. A fresh authoritative simulation is required before the governed version action."
+    }));
+    await handlePreviewChangeImpact({ candidateForm: nextForm });
+  };
+
+  const handleKeepUnifiedQuotedPlan = () => {
+    const baseForm = editingQuote.baseForm;
+    if (!baseForm) return;
+    setForm({ ...baseForm });
+    setQuoteDirty(false);
+    resetChangeImpactPreview();
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: "Kept the quoted plan. The unsaved consequence proposal was discarded and the saved quote was not mutated."
+    }));
   };
 
   const handleCatalogReviewOutcome = async (outcome) => {
@@ -5383,6 +5457,10 @@ export default function App({
               onApply={handleApplyCommercialChange}
               onReconcileApplyOutcome={handleReconcileCommercialChangeApplyOutcome}
               onRecoverApply={handleRecoverCommercialChangeApply}
+              unifiedReview={unifiedConsequenceReview}
+              onApplyAllConsequences={handleApplyUnifiedConsequences}
+              onApplySelectedConsequences={handleApplyUnifiedConsequences}
+              onKeepQuotedPlan={handleKeepUnifiedQuotedPlan}
               onReturnToEdit={() => {
                 if (!proposalComposerActive) setStep(1);
                 window.requestAnimationFrame(() => {
