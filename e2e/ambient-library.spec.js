@@ -259,6 +259,67 @@ test.describe("Ambient Library", () => {
     expect(audit.collisions).toEqual([]);
   });
 
+  test("keeps a failed menu draft on the device and rehydrates it after returning to Library", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedLibrary(page);
+    await openAmbientLibrary(page);
+
+    await page.getByRole("button", { name: "Open Menu Builder" }).click();
+    await expect(page.locator('[data-admin-tab-id="menu"]')).toHaveClass(/active/u);
+    const editor = page.locator("#catalog-admin-title").locator("..").locator("..");
+    const eventType = editor.getByRole("combobox", { name: "Event type", exact: true });
+    await expect.poll(() => eventType.locator("option").count()).toBeGreaterThan(1);
+    await eventType.selectOption({ index: 1 });
+    const menuSection = editor.getByRole("combobox", { name: "Menu section", exact: true });
+    await expect.poll(() => menuSection.locator("option").count()).toBeGreaterThan(1);
+    await menuSection.selectOption({ index: 1 });
+
+    await editor.getByLabel("New menu section name").fill("Device buffer section");
+    await editor.getByRole("button", { name: "Add Menu Section" }).click();
+    await expect(menuSection.locator("option", { hasText: "Device buffer section" })).toHaveCount(1);
+    await menuSection.selectOption({ index: 1 });
+
+    await editor.getByLabel("New menu item name").fill("Device buffer soup");
+    await editor.getByLabel("New menu item price", { exact: true }).fill("12.34");
+    await editor.getByRole("button", { name: "Add Item" }).click();
+    await editor.getByLabel("Select Device buffer soup").check();
+    await editor.getByLabel("Move selected items to menu section").selectOption({ label: "Device buffer section" });
+    await editor.getByRole("button", { name: "Move selected" }).click();
+    await expect(editor.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u))
+      .toBeVisible({ timeout: 10_000 });
+    await expect(editor.getByText("Device-only changes", { exact: true })).toBeVisible();
+    await expect(editor.getByText("All changes saved", { exact: false })).toHaveCount(0);
+
+    await editor.getByRole("button", { name: "Back to Library" }).click();
+    await expect(page.locator("#ambient-library-title")).toBeFocused();
+    await page.getByRole("button", { name: "Open Menu Builder" }).click();
+    await expect(page.locator('[data-admin-tab-id="menu"]')).toHaveClass(/active/u);
+
+    const reopened = page.locator("#catalog-admin-title").locator("..").locator("..");
+    await reopened.getByRole("combobox", { name: "Menu section", exact: true })
+      .selectOption({ label: "Device buffer section" });
+    await expect(reopened.getByLabel("Device buffer soup price", { exact: true })).toHaveValue("12.34");
+    await expect(reopened.locator(".admin-row-state", { hasText: "Device-only" })).toBeVisible();
+    const draftBarAccessibility = await new AxeBuilder({ page })
+      .include(".catalog-draft-state-bar")
+      .analyze();
+    expect(draftBarAccessibility.violations).toEqual([]);
+    const stagedItem = await page.evaluate(() => {
+      const key = Object.keys(localStorage)
+        .find((candidate) => candidate.startsWith("quotepilot.catalog-setup-device-buffer.v1:"));
+      const buffer = JSON.parse(localStorage.getItem(key) || "null");
+      return buffer?.changes?.find((change) => change.payload?.name === "Device buffer soup") || null;
+    });
+    expect(stagedItem).toMatchObject({ intent: "create", payload: { priceMinor: 1234 } });
+    if (CAPTURE_PROOF) {
+      mkdirSync(PROOF_DIRECTORY, { recursive: true });
+      await page.screenshot({
+        path: `${PROOF_DIRECTORY}/ambient-menu-device-buffer-mobile.png`,
+        fullPage: true
+      });
+    }
+  });
+
   test("opens the exact event template and restores Library orientation", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await seedLibrary(page);
@@ -334,12 +395,12 @@ test.describe("Ambient Library", () => {
     await expect.poll(() => beforeUnloadIsProtected(page)).toBe(false);
   });
 
-  test("turns direct sales access into a contextual role boundary", async ({ page }) => {
+  test("gives sales direct read-only Library readiness without an admin editor or duplicate main", async ({ page }) => {
     const salesPort = Number(process.env.PLAYWRIGHT_SALES_PORT || 4176);
     await page.goto(`http://127.0.0.1:${salesPort}/app/catalog`);
-    await expect(page.locator("#workspace-not-found-title"))
-      .toHaveText("Library requires organization admin access");
-    await expect(page.getByRole("button", { name: "Return to Now" })).toBeVisible();
+    await expect(page.getByText("Business Setup Center", { exact: true })).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Ask an administrator" }).first()).toBeDisabled();
     await expect(page.locator("#catalog-admin-title")).toHaveCount(0);
   });
 });

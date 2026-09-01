@@ -55,4 +55,15 @@ describe("catalog draft publication state bar", () => {
     expect(html).toContain("Review and publish catalog");
     expect(html).toContain("disabled");
   });
+
+  test("never labels a device-only or unpublished change as saved", () => {
+    const html = renderState({
+      status: "sync_failed",
+      deviceOnly: true,
+      changedRecordCount: 1,
+      label: "Sync failed — changes are device-only"
+    });
+    expect(html).not.toContain("All changes saved");
+    expect(html).not.toContain(">Saved<");
+  });
 });

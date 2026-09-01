@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { buildCatalogSetupChanges, createCatalogSetupRequestId } from "../catalogSetupDraftService";
+import {
+  applyCatalogSetupDraftChanges,
+  buildCatalogSetupChanges,
+  createCatalogSetupRequestId
+} from "../catalogSetupDraftService";
 
 function catalog(overrides = {}) {
   return {
@@ -121,5 +125,42 @@ describe("catalog setup draft client adapter", () => {
 
   test("creates stable callable-safe request ids", () => {
     expect(createCatalogSetupRequestId("draft")).toMatch(/^draft_[A-Za-z0-9_]{16,}$/);
+  });
+
+  test("rehydrates staged menu price and section changes without mutating the published source", () => {
+    const published = {
+      eventTypes: [{ id: "event-a", name: "Wedding", active: true }],
+      categories: [
+        { id: "section-a", eventTypeId: "event-a", name: "Mains", active: true },
+        { id: "section-b", eventTypeId: "event-a", name: "Specials", active: true }
+      ],
+      items: [{
+        id: "menu-a",
+        eventTypeId: "event-a",
+        categoryId: "section-a",
+        name: "Roasted chicken",
+        price: 10,
+        cost: 4,
+        pricingType: "per_person",
+        active: true
+      }]
+    };
+    const staged = applyCatalogSetupDraftChanges(published, [{
+      collection: "menuItems",
+      recordId: "menu-a",
+      intent: "update",
+      payload: {
+        eventTypeId: "event-a",
+        categoryId: "section-b",
+        name: "Roasted chicken",
+        priceMinor: 1234,
+        costMinor: 450,
+        pricingType: "per_person",
+        active: true
+      }
+    }]);
+
+    expect(staged.items[0]).toMatchObject({ categoryId: "section-b", price: 12.34, cost: 4.5 });
+    expect(published.items[0]).toMatchObject({ categoryId: "section-a", price: 10, cost: 4 });
   });
 });

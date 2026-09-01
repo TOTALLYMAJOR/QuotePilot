@@ -4679,10 +4679,11 @@ hr {
   gap: 1rem;
   margin: 0.75rem 0;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border: 1px solid #d8d2c7;
   border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--surface, #181512) 94%, transparent);
-  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.16);
+  color: #201c17;
+  background: rgba(248, 247, 246, 0.97);
+  box-shadow: 0 0.5rem 1.5rem rgba(58, 48, 34, 0.14);
   backdrop-filter: blur(14px);
 }
 
@@ -4695,6 +4696,7 @@ hr {
 .catalog-draft-state-bar small,
 .catalog-draft-state-bar .field-error {
   display: block;
+  color: #5f584e;
 }
 
 .catalog-draft-state-actions {
@@ -4702,6 +4704,14 @@ hr {
   flex: 0 0 auto;
   align-items: center;
   gap: 0.5rem;
+}
+
+.app-shell-neutral .embedded-workspace-route .catalog-draft-state-bar .cta:disabled,
+.app-shell-neutral .embedded-workspace-route .catalog-draft-state-bar .ghost:disabled {
+  border-color: #b9b1a5;
+  color: #514b43;
+  background: #e3ded6;
+  opacity: 1;
 }
 
 @media (max-width: 767px) {

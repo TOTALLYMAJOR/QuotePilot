@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-31 18:40:59 CDT
+Last updated: 2026-09-01 12:32:29 CDT
 
 ## Current Production Release
 
@@ -27,6 +27,19 @@ Last updated: 2026-08-31 18:40:59 CDT
   or human acceptance.
 
 ## v0.16 Calm Four Candidate Integration
+
+- Release head `fc1352bf6356b30dc4aaf8f4708ce3f0135d01ef` passed all nine
+  jobs in exact-head CI run `33467223260`, but the required local click-through
+  correctly stopped promotion after finding five Business Setup acceptance
+  defects: the wrong Offerings destination, a lost device-only menu buffer,
+  false saved labels, low-contrast mobile draft controls, and duplicate main
+  landmarks for sales. The bounded repair now has focused unit coverage and an
+  eight-scenario Ambient Library browser pass at 390, 768, and 1440 pixels,
+  including price-and-section rehydration and sales read-only access. The full
+  local release, Firebase auth/rules, authoritative-pricing, environment,
+  build, bundle, Truth Loop, governance, and 4,254-test unit gates now pass.
+  A new exact-head CI run remains pending; current production remains
+  `v0.15.0`.
 
 - The approved whole-application Calm Four source change is integrated onto the
   `integration/v016-calm-four` source line and has completed its Phase 1 local

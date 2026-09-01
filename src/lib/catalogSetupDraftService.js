@@ -35,6 +35,91 @@ function valuesMatch(left, right) {
   return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right));
 }
 
+const RECORD_KEY_BY_COLLECTION = Object.freeze({
+  catalogPackages: "packages",
+  catalogAddons: "addons",
+  catalogRentals: "rentals",
+  eventTypes: "eventTypes",
+  menuCategories: "categories",
+  menuItems: "items"
+});
+
+const MAJOR_SETTING_BY_MINOR = Object.freeze({
+  perMileRateMinor: "perMileRate",
+  longDistancePerMileRateMinor: "longDistancePerMileRate",
+  bartenderRateMinor: "bartenderRate",
+  serverRateMinor: "serverRate",
+  chefRateMinor: "chefRate"
+});
+
+function majorFromMinor(value) {
+  return value === null || value === undefined ? null : Number(value) / 100;
+}
+
+function draftPayloadForEditor(collection, recordId, payload = {}, intent = "update") {
+  const next = { ...payload, id: recordId };
+  if (Object.prototype.hasOwnProperty.call(payload, "pppMinor")) next.ppp = majorFromMinor(payload.pppMinor);
+  if (Object.prototype.hasOwnProperty.call(payload, "costPppMinor")) next.costPpp = majorFromMinor(payload.costPppMinor);
+  if (Object.prototype.hasOwnProperty.call(payload, "priceMinor")) next.price = majorFromMinor(payload.priceMinor);
+  if (Object.prototype.hasOwnProperty.call(payload, "costMinor")) next.cost = majorFromMinor(payload.costMinor);
+  if (intent === "deactivate") next.active = false;
+  return next;
+}
+
+function applySettingsDraft(settings = {}, patch = {}) {
+  const next = { ...settings };
+  Object.entries(patch || {}).forEach(([key, value]) => {
+    if (!Object.prototype.hasOwnProperty.call(MAJOR_SETTING_BY_MINOR, key)) next[key] = value;
+  });
+  Object.entries(MAJOR_SETTING_BY_MINOR).forEach(([minorKey, majorKey]) => {
+    if (Object.prototype.hasOwnProperty.call(patch, minorKey)) {
+      next[majorKey] = majorFromMinor(patch[minorKey]);
+    }
+  });
+  if (Array.isArray(patch.bartenderRateTypes)) {
+    next.bartenderRateTypes = patch.bartenderRateTypes.map((item) => ({
+      ...item,
+      ...(Object.prototype.hasOwnProperty.call(item, "rateMinor")
+        ? { rate: majorFromMinor(item.rateMinor) }
+        : {})
+    }));
+  }
+  if (Array.isArray(patch.staffingRateTypes)) {
+    next.staffingRateTypes = patch.staffingRateTypes.map((item) => ({
+      ...item,
+      ...(Object.prototype.hasOwnProperty.call(item, "serverRateMinor")
+        ? { serverRate: majorFromMinor(item.serverRateMinor) }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(item, "chefRateMinor")
+        ? { chefRate: majorFromMinor(item.chefRateMinor) }
+        : {})
+    }));
+  }
+  return next;
+}
+
+export function applyCatalogSetupDraftChanges(source = {}, changes = []) {
+  const next = Object.fromEntries(Object.entries(source || {}).map(([key, value]) => [
+    key,
+    Array.isArray(value) ? value.map((item) => ({ ...item })) : value
+  ]));
+  (Array.isArray(changes) ? changes : []).forEach((change) => {
+    const collection = String(change?.collection || "").trim();
+    const recordId = String(change?.recordId || "").trim();
+    if (collection === "settings" && recordId === "config") {
+      next.settings = applySettingsDraft(next.settings || {}, change.payload || {});
+      return;
+    }
+    const key = RECORD_KEY_BY_COLLECTION[collection];
+    if (!key || !recordId || !Array.isArray(next[key])) return;
+    const record = draftPayloadForEditor(collection, recordId, change.payload, change.intent);
+    const index = next[key].findIndex((item) => String(item?.id || "").trim() === recordId);
+    if (index >= 0) next[key][index] = { ...next[key][index], ...record };
+    else next[key].push(record);
+  });
+  return next;
+}
+
 function minor(value) {
   if (value === "" || value === null || value === undefined) return null;
   return Math.round(Number(value) * 100);

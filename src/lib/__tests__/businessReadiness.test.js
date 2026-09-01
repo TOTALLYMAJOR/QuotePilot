@@ -70,4 +70,12 @@ describe("business readiness", () => {
     expect(model.costs.complete).toBe(false);
     expect(model.costs.missing).toContain("Salmon");
   });
+
+  test("routes the offerings action to the Menu Builder named by the operator-facing action", () => {
+    const model = buildBusinessReadiness({ catalog: readyCatalog() });
+    expect(model.rows.find((row) => row.id === "offerings")).toMatchObject({
+      nextAction: "Open Menu Builder",
+      target: "menu"
+    });
+  });
 });

@@ -2112,7 +2112,8 @@ export default function App({
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled)
-    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG
+      && (authSession.isAdmin || AMBIENT_UI_ENABLED))
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin)
   );
   const workspaceShellModel = {
@@ -5989,7 +5990,9 @@ export default function App({
               ? !authSession.isAdmin
                 ? "role-denied"
                 : "feature-disabled"
-              : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && !authSession.isAdmin
+              : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG
+                && !authSession.isAdmin
+                && !AMBIENT_UI_ENABLED
                 ? "role-denied"
                 : ""}
             routeId={resolvedWorkspaceRouteId}

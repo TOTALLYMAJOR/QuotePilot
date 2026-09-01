@@ -48,7 +48,6 @@ const MODAL_LEGACY_ROUTES = new Set([
 
 const ADMIN_ONLY_ROUTES = new Set([
   WORKSPACE_ROUTE_IDS.STAFF,
-  WORKSPACE_ROUTE_IDS.CATALOG,
   WORKSPACE_ROUTE_IDS.IMPORTS
 ]);
 
@@ -63,7 +62,8 @@ describe("workspace shell route projection", () => {
       const model = buildWorkspaceShellModel({
         route: route(routeId),
         customerCenteredWorkspaceEnabled: workspaceEnabled,
-        isAdmin
+        isAdmin,
+        readOnlyLibraryEnabled: true
       });
       const roleDenied = ADMIN_ONLY_ROUTES.has(routeId) && !isAdmin;
       const legacyUnavailable = !workspaceEnabled && WORKSPACE_ONLY_LEGACY_GAPS.has(routeId);
@@ -181,15 +181,31 @@ describe("routed tool authorization and presentation", () => {
     }
   });
 
+  test("makes the ambient Library readable by sales while retaining admin-only mutation authority", () => {
+    const sales = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.CATALOG),
+      customerCenteredWorkspaceEnabled: true,
+      isAdmin: false,
+      readOnlyLibraryEnabled: true
+    });
+    expect(sales).toMatchObject({
+      routedTool: "catalog",
+      routedToolAuthorized: true,
+      showNotFound: false,
+      primary: { id: "catalog", presentation: "embedded" }
+    });
+  });
+
   test.each([
-    ["catalog", WORKSPACE_ROUTE_IDS.CATALOG],
-    ["imports", WORKSPACE_ROUTE_IDS.IMPORTS]
-  ])("keeps %s admin-only in both shells", (toolId, routeId) => {
+    ["catalog", WORKSPACE_ROUTE_IDS.CATALOG, false],
+    ["imports", WORKSPACE_ROUTE_IDS.IMPORTS, true]
+  ])("keeps %s admin-only when no read-only Library surface is enabled", (toolId, routeId, readOnlyLibraryEnabled) => {
     for (const workspaceEnabled of [false, true]) {
       const sales = buildWorkspaceShellModel({
         route: route(routeId),
         customerCenteredWorkspaceEnabled: workspaceEnabled,
-        isAdmin: false
+        isAdmin: false,
+        readOnlyLibraryEnabled
       });
       expect(sales).toMatchObject({
         routedTool: toolId,

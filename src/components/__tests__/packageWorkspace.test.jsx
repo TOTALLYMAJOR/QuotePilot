@@ -6,6 +6,7 @@ import {
   AdminCatalogView,
   packageCatalogDependencySummary
 } from "../AdminCatalogModal";
+import { catalogSetupDeviceBufferKey } from "../../hooks/useCatalogSetupDraft";
 
 vi.mock("../../lib/menuService", () => ({
   createCategory: vi.fn(async () => ({ id: "cat-1" })),
@@ -85,6 +86,7 @@ let container;
 let root;
 
 beforeEach(() => {
+  localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -256,6 +258,7 @@ describe("Package workspace", () => {
     clickButtonByText("Revert this package");
 
     expect(container.querySelector('input[aria-label="Customer-facing package name"]').value).toBe("Classic");
+    expect(localStorage.getItem(catalogSetupDeviceBufferKey("test-org"))).toBeNull();
     expect(container.querySelector(".modal-foot").textContent).toContain("reverted to the last saved catalog state");
   });
 });

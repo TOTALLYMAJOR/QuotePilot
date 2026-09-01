@@ -294,4 +294,12 @@ describe("AmbientLibraryRoute", () => {
     expect(container.querySelector("[data-library-acknowledgement]").textContent)
       .toContain("last completed view stays available");
   });
+
+  test("gives sales one read-only Library main without mounting an editor", () => {
+    mount({ currentUserRole: "sales" });
+    expect(container.querySelectorAll("main")).toHaveLength(1);
+    expect(container.textContent).toContain("Business Setup Center");
+    expect(container.querySelector('[data-library-action-id="review-library-menu"]').disabled).toBe(true);
+    expect(container.querySelector('[data-testid="catalog-editor"]')).toBeNull();
+  });
 });

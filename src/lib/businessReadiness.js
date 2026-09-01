@@ -10,7 +10,7 @@ export const SETUP_ROW_STATUSES = Object.freeze([
 
 const ROWS = Object.freeze([
   ["identity", "Identity", "pricing"],
-  ["offerings", "Offerings", "packages"],
+  ["offerings", "Offerings", "menu"],
   ["pricing", "Pricing", "pricing"],
   ["costs", "Costs and margin evidence", "pricing"],
   ["starting-points", "Quote starting points", "eventTemplates"],

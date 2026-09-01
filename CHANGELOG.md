@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 22:19:51 CDT
+Last updated: 2026-09-01 12:32:29 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Closed the Business Setup manual-acceptance blockers found after the first
+  exact-head CI pass. **Open Menu Builder** now opens Menu rather than
+  Packages; failed catalog-draft synchronization persists a bounded,
+  organization-scoped device buffer and rehydrates staged menu prices and
+  section movements after returning to Library; staged creates retain create
+  intent through later edits. Catalog chrome now distinguishes Published,
+  Draft saved, Unsaved, and Device-only states without claiming failed work is
+  saved. The mobile draft bar and disabled controls use explicit accessible
+  contrast. Ambient Library is now genuinely read-only for sales staff instead
+  of rendering the readiness view alongside an administrator-denial `<main>`.
 - Reconciled the existing temporary compatibility and Ambient bundle profiles
   to the exact Business Setup and revision-review release graphs. The measured
   local aggregates are 3,224,340 and 4,050,831 bytes respectively; the ceilings

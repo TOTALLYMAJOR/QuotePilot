@@ -22,6 +22,7 @@ import { buildPackageWorkspaceCollectionModel } from "../lib/packageWorkspaceMod
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useCatalogSetupDraft } from "../hooks/useCatalogSetupDraft";
 import {
+  applyCatalogSetupDraftChanges,
   buildCatalogSetupChanges,
   createCatalogSetupRequestId,
   stageCatalogSetupPreset
@@ -406,7 +407,8 @@ export function AdminCatalogView({
   onInteractionStateChange,
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
-  onToast
+  onToast,
+  catalogSetupDraftController = null
 }) {
   const embedded = presentation === "embedded";
   const [draft, setDraft] = useState(catalog);
@@ -462,11 +464,25 @@ export function AdminCatalogView({
   const acceptedCatalogRevisionRef = useRef(null);
   const scopedOrganizationId = String(organizationId || "").trim();
   const catalogRevision = Math.max(0, Number(catalog?.settings?.catalogRevision || 0));
-  const catalogSetupDraft = useCatalogSetupDraft({
-    enabled: Boolean(open && scopedOrganizationId),
+  const internalCatalogSetupDraft = useCatalogSetupDraft({
+    enabled: Boolean(open && scopedOrganizationId && !catalogSetupDraftController),
     organizationId: scopedOrganizationId,
     baseCatalogRevision: catalogRevision
   });
+  const catalogSetupDraft = catalogSetupDraftController || internalCatalogSetupDraft;
+  const catalogSetupDraftChanges = Array.isArray(catalogSetupDraft?.changes)
+    ? catalogSetupDraft.changes
+    : [
+        ...(Array.isArray(catalogSetupDraft?.serverChanges) ? catalogSetupDraft.serverChanges : []),
+        ...(Array.isArray(catalogSetupDraft?.deviceChanges) ? catalogSetupDraft.deviceChanges : [])
+      ];
+  const stagedIntentFor = (collection, recordId, fallbackIntent) => (
+    catalogSetupDraftChanges.some((change) => (
+      change.collection === collection
+      && change.recordId === recordId
+      && change.intent === "create"
+    )) ? "create" : fallbackIntent
+  );
   const authoritativeVersion = Math.max(0, Number(catalog?.authoritativeVersion || 0));
   const starterPackRevision = Math.max(
     0,
@@ -612,13 +628,13 @@ export function AdminCatalogView({
     pendingCatalogEvidenceRef.current = null;
     acceptedCatalogRevisionRef.current = null;
     resetOnNextOpenRef.current = false;
-    const nextDraft = {
+    const nextDraft = applyCatalogSetupDraftChanges({
       ...catalog,
       settings: {
         ...(catalog?.settings || {}),
         featureFlags: { ...(catalog?.settings?.featureFlags || {}) }
       }
-    };
+    }, catalogSetupDraftChanges);
     const nextJsonDrafts = buildJsonDrafts(catalog);
     setDraft(nextDraft);
     setSavedCatalogSnapshot(cloneCatalogSnapshot(nextDraft));
@@ -673,7 +689,11 @@ export function AdminCatalogView({
     async function loadEventTypeOptions() {
       setMenuLoading(true);
       try {
-        const eventTypes = await getEventTypes({ organizationId: scopedOrganizationId });
+        const publishedEventTypes = await getEventTypes({ organizationId: scopedOrganizationId });
+        const eventTypes = applyCatalogSetupDraftChanges(
+          { eventTypes: publishedEventTypes },
+          catalogSetupDraftChanges
+        ).eventTypes;
         if (!alive) return;
         setMenuEventTypes(eventTypes);
         setManagedEventType(resolveManagedEventTypeId(eventTypes, selectedEventTypeProp));
@@ -757,11 +777,17 @@ export function AdminCatalogView({
     async function loadEventMenuData() {
       setMenuLoading(true);
       try {
-        const [categories, items] = await Promise.all([
+        const [publishedCategories, publishedItems] = await Promise.all([
           getMenuCategories(eventTypeId, { organizationId: scopedOrganizationId }),
           getMenuItems(eventTypeId, { includeInactive: true, organizationId: scopedOrganizationId })
         ]);
         if (!alive) return;
+        const stagedMenu = applyCatalogSetupDraftChanges({
+          categories: publishedCategories,
+          items: publishedItems
+        }, catalogSetupDraftChanges);
+        const categories = stagedMenu.categories.filter((item) => item.eventTypeId === eventTypeId);
+        const items = stagedMenu.items.filter((item) => item.eventTypeId === eventTypeId);
         setMenuCategories(categories);
         applyManagedMenuItems(items);
         setSelectedCategory((current) => {
@@ -843,18 +869,28 @@ export function AdminCatalogView({
   );
   useEffect(() => {
     onInteractionStateChange?.({
-      dirty: hasAnyUnsavedChanges,
+      dirty: hasAnyUnsavedChanges || (catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0),
       busy: closeBlocked
     });
-  }, [closeBlocked, hasAnyUnsavedChanges, onInteractionStateChange]);
+  }, [
+    catalogSetupDraftChanges.length,
+    catalogSetupDraft.deviceOnly,
+    closeBlocked,
+    hasAnyUnsavedChanges,
+    onInteractionStateChange
+  ]);
 
   useEffect(() => {
     if (!open || !hasUnsavedChanges || shouldInitializeView || !scopedOrganizationId) return;
     try {
       const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const normalizedBaseline = buildPersistableCatalogDraft(
+        savedCatalogSnapshot,
+        buildJsonDrafts(savedCatalogSnapshot)
+      );
       const changes = buildCatalogSetupChanges({
         catalog: nextDraft,
-        baselineCatalog: savedCatalogSnapshot,
+        baselineCatalog: normalizedBaseline,
         serverFingerprints: catalog?.serverFingerprints || {}
       });
       if (changes.length > 0) catalogSetupDraft.queueChanges(changes);
@@ -1153,6 +1189,10 @@ export function AdminCatalogView({
     const savedPackage = (Array.isArray(savedCatalogSnapshot?.packages) ? savedCatalogSnapshot.packages : [])
       .find((pkg) => String(pkg?.id || "").trim() === id);
     if (!savedPackage) {
+      catalogSetupDraft.discardDeviceChanges?.([{
+        collection: "catalogPackages",
+        recordId: id
+      }]);
       setDraft((prev) => ({
         ...prev,
         packages: (Array.isArray(prev.packages) ? prev.packages : []).filter((pkg) => (
@@ -1162,6 +1202,10 @@ export function AdminCatalogView({
       setStatus("Unsaved package removed from this draft.");
       return;
     }
+    catalogSetupDraft.discardDeviceChanges?.([{
+      collection: "catalogPackages",
+      recordId: id
+    }]);
     setDraft((prev) => ({
       ...prev,
       packages: (Array.isArray(prev.packages) ? prev.packages : []).map((pkg) => (
@@ -1463,7 +1507,7 @@ export function AdminCatalogView({
 
     setMenuEventTypes((current) => current.map((item) => item.id === selectedEventType ? { ...item, name } : item));
     setEventTypeRenameTouched(false);
-    catalogSetupDraft.queueChanges([{ collection: "eventTypes", recordId: selectedEventType, intent: "update", payload: { name, active: true } }]);
+    catalogSetupDraft.queueChanges([{ collection: "eventTypes", recordId: selectedEventType, intent: stagedIntentFor("eventTypes", selectedEventType, "update"), payload: { name, active: true } }]);
     setStatus("Event type updated in the setup draft.");
     pushToast("Event type updated in the setup draft.", "success");
   };
@@ -1483,7 +1527,7 @@ export function AdminCatalogView({
 
     setMenuCategories((current) => current.map((item) => item.id === selectedCategory ? { ...item, name } : item));
     setCategoryRenameTouched(false);
-    catalogSetupDraft.queueChanges([{ collection: "menuCategories", recordId: selectedCategory, intent: "update", payload: { eventTypeId: selectedEventType, name, active: true } }]);
+    catalogSetupDraft.queueChanges([{ collection: "menuCategories", recordId: selectedCategory, intent: stagedIntentFor("menuCategories", selectedCategory, "update"), payload: { eventTypeId: selectedEventType, name, active: true } }]);
     setStatus("Menu section updated in the setup draft.");
     pushToast("Menu section updated in the setup draft.", "success");
   };
@@ -1551,7 +1595,11 @@ export function AdminCatalogView({
     catalogSetupDraft.queueChanges([{
       collection: "menuItems",
       recordId: itemId,
-      intent: baseline ? (normalized.active ? "update" : "deactivate") : "create",
+      intent: stagedIntentFor(
+        "menuItems",
+        itemId,
+        baseline ? (normalized.active ? "update" : "deactivate") : "create"
+      ),
       payload: {
         name: normalized.name,
         eventTypeId: normalized.eventTypeId,
@@ -1634,7 +1682,7 @@ export function AdminCatalogView({
     catalogSetupDraft.queueChanges([{
       collection: "menuItems",
       recordId: id,
-      intent: "deactivate",
+      intent: stagedIntentFor("menuItems", id, "deactivate"),
       payload: {
         name: item.name,
         eventTypeId: item.eventTypeId || selectedEventType,
@@ -1701,9 +1749,13 @@ export function AdminCatalogView({
     }
     try {
       const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const normalizedBaseline = buildPersistableCatalogDraft(
+        savedCatalogSnapshot,
+        buildJsonDrafts(savedCatalogSnapshot)
+      );
       const changes = buildCatalogSetupChanges({
         catalog: nextDraft,
-        baselineCatalog: savedCatalogSnapshot,
+        baselineCatalog: normalizedBaseline,
         serverFingerprints: catalog?.serverFingerprints || {}
       });
       if (changes.length === 0) {
@@ -1731,6 +1783,32 @@ export function AdminCatalogView({
   const catalogSaveCapabilityState = saving
     ? "submitting"
     : catalogDraftCapabilityState(catalogSetupDraft);
+  const catalogEditorStateLabel = saving || catalogSetupDraft.status === "saving"
+    ? "Saving draft…"
+    : catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
+      ? "Device-only changes"
+      : hasAnyUnsavedChanges
+        ? "Unsaved changes"
+        : Number(catalogSetupDraft.changedRecordCount || 0) > 0
+          ? "Draft saved"
+          : "Published catalog active";
+  const menuItemDraftStateLabel = (itemId) => {
+    if (menuItemSavingId === itemId) return "Saving draft…";
+    if (menuItemDirty[itemId]) return "Unsaved";
+    const staged = catalogSetupDraftChanges.some((change) => (
+      change.collection === "menuItems" && change.recordId === itemId
+    ));
+    if (staged && catalogSetupDraft.deviceOnly) return "Device-only";
+    if (staged) return "Draft saved";
+    return "Published";
+  };
+  const catalogFooterStatus = catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
+    ? catalogSetupDraft.label
+    : status || (hasAnyUnsavedChanges
+      ? "Your changes are not saved yet."
+      : Number(catalogSetupDraft.changedRecordCount || 0) > 0
+        ? "Catalog draft saved. Active pricing is unchanged until publication."
+        : "Published catalog is active.");
 
   const normalizedMenuSearch = String(menuSearch || "").trim().toLowerCase();
   const selectedCategoryItems = menuItems.filter((item) => (
@@ -1909,9 +1987,9 @@ export function AdminCatalogView({
           <h2 id="catalog-admin-title">{surfaceTitle}</h2>
           <div className="admin-save-actions">
             <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
-              {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
+              {catalogEditorStateLabel}
             </span>
-            {!starterChoiceOnly && !packageWorkspaceActive && (
+            {!starterChoiceOnly && !packageWorkspaceActive && (saving || hasUnsavedChanges) && (
               <button
                 type="button"
                 className="cta"
@@ -2106,7 +2184,7 @@ export function AdminCatalogView({
             <div className="package-workspace-savebar">
               <div>
                 <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
-                  {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
+                  {catalogEditorStateLabel}
                 </span>
                 <small>Edits auto-save as staged intent. Publication is the only action that activates pricing.</small>
               </div>
@@ -2489,7 +2567,7 @@ export function AdminCatalogView({
                   />
                 </label>
                 <span className="admin-row-state">
-                  {menuItemSavingId === item.id ? "Saving..." : (menuItemDirty[item.id] ? "Unsaved" : "Saved")}
+                  {menuItemDraftStateLabel(item.id)}
                 </span>
                 <button
                   type="button"
@@ -3228,14 +3306,14 @@ export function AdminCatalogView({
 
         <div className="modal-foot" data-capability-state={catalogSaveCapabilityState}>
           <span className="source-note" role="status" aria-live="polite">
-            {status || (hasAnyUnsavedChanges ? "Your changes are not saved yet." : "All changes saved.")}
+            {catalogFooterStatus}
           </span>
           {catalogRefreshRequired && (
             <button type="button" className="ghost" onClick={handleReload} disabled={closeBlocked}>
               Refresh latest catalog
             </button>
           )}
-          {!starterChoiceOnly && !packageWorkspaceActive && (
+          {!starterChoiceOnly && !packageWorkspaceActive && (saving || hasUnsavedChanges) && (
             <button
               type="button"
               className="cta"

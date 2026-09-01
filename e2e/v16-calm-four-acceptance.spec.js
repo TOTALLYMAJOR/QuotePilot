@@ -938,8 +938,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
 
     const salesPort = Number(process.env.PLAYWRIGHT_SALES_PORT || 4176);
     await page.goto(`http://127.0.0.1:${salesPort}/app/catalog`);
-    await expect(page.locator("#workspace-not-found-title"))
-      .toHaveText("Library requires organization admin access");
+    await expect(page.getByText("Business Setup Center", { exact: true })).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
     await expect(page.locator("#catalog-admin-title")).toHaveCount(0);
 
     await page.goto(`http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || 4173}${OPPORTUNITY_PATH}`);

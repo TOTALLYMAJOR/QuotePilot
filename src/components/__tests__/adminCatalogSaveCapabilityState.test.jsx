@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AdminCatalogView } from "../AdminCatalogModal";
+import { getMenuCategories, getMenuItems } from "../../lib/menuService";
 
 const setupDraft = vi.hoisted(() => ({ current: null }));
 const setupPreset = vi.hoisted(() => ({ stage: vi.fn() }));
@@ -70,6 +71,7 @@ beforeEach(() => {
     changedRecordCount: 0,
     serverChanges: [],
     deviceChanges: [],
+    changes: [],
     deviceOnly: false,
     error: "",
     receipt: null,
@@ -79,6 +81,8 @@ beforeEach(() => {
     review: vi.fn(async () => ({ readyToPublish: true })),
     publish: vi.fn(async () => ({ catalogRevisionAfter: 2 }))
   };
+  vi.mocked(getMenuCategories).mockResolvedValue([{ id: "cat-1", eventTypeId: "evt-1", name: "Starters" }]);
+  vi.mocked(getMenuItems).mockResolvedValue([]);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -361,5 +365,52 @@ describe("AdminCatalogModal save capability state", () => {
     setupDraft.current = { ...setupDraft.current, ...nextState };
     renderView();
     expect(container.innerHTML).toContain(`data-capability-state="${expected}"`);
+  });
+
+  test("rehydrates a device-only menu price and section move with truthful labels", async () => {
+    setupDraft.current = {
+      ...setupDraft.current,
+      status: "sync_failed",
+      label: "Sync failed — changes are device-only",
+      changedRecordCount: 1,
+      deviceOnly: true,
+      deviceChanges: [{
+        collection: "menuItems",
+        recordId: "menu-a",
+        intent: "update",
+        payload: {
+          name: "Roasted chicken",
+          eventTypeId: "evt-1",
+          categoryId: "cat-2",
+          priceMinor: 1234,
+          costMinor: 450,
+          pricingType: "per_person",
+          active: true
+        }
+      }]
+    };
+    setupDraft.current.changes = setupDraft.current.deviceChanges;
+    vi.mocked(getMenuCategories).mockResolvedValue([
+      { id: "cat-2", eventTypeId: "evt-1", name: "Specials" },
+      { id: "cat-1", eventTypeId: "evt-1", name: "Starters" }
+    ]);
+    vi.mocked(getMenuItems).mockResolvedValue([{
+      id: "menu-a",
+      name: "Roasted chicken",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      price: 10,
+      cost: 4,
+      pricingType: "per_person",
+      active: true
+    }]);
+
+    renderView({ initialTab: "menu" });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    expect(container.querySelector('input[aria-label="Roasted chicken price"]').value).toBe("12.34");
+    expect(container.querySelector('.admin-row-state').textContent).toBe("Device-only");
+    expect(container.textContent).toContain("Device-only changes");
+    expect(container.textContent).not.toContain("All changes saved");
   });
 });

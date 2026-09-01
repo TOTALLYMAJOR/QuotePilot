@@ -570,6 +570,7 @@ export default function AmbientLibraryRoute({
             selectedEventType={selectedEventType}
             onEventTypeChange={onEventTypeChange}
             onToast={onToast}
+            catalogSetupDraftController={setupDraft}
           />
         </section>
       </main>
