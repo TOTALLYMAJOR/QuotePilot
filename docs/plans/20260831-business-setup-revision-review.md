@@ -1,9 +1,9 @@
 # Business Setup and Revision-Safe Quoting Overhaul
 
-Last updated: 2026-08-31 21:34:17 CDT
+Last updated: 2026-08-31 21:35:45 CDT
 
 - Program recorded at (UTC): `2026-09-01T01:14:17Z`
-- Completion planner recorded at (UTC): `2026-09-01T02:33:59.842Z`
+- Completion planner recorded at (UTC): `2026-09-01T02:35:29.075Z`
 - Source candidate: `2d999c422da6aacaad0800eeb498d86a70b74427`
 - Implementation branch: `codex/business-setup-revision-review-20260831`
 - Isolated worktree: `/tmp/quoteflow-business-setup-2d999c4`
@@ -103,6 +103,16 @@ Planned checkpoint commits:
 6. `feat: unify commercial consequence review`
 7. `docs: close business setup overhaul evidence`
 
+Checkpoint identities:
+
+1. `f719870` — recorded program
+2. `faefe9d` — money persistence
+3. `1d63eee` — setup draft and publisher
+4. `394bba6` — Setup Center and Menu Builder
+5. `eb217f2` — quote revision review
+6. `efa8271` — unified consequence review
+7. `274d9e0` — closed local evidence
+
 ## Acceptance matrix
 
 | Capability | Required proof | Status | Evidence |
@@ -121,7 +131,7 @@ Planned checkpoint commits:
 | Consequence review | One governed review with six groups, source labels, apply all/selected/keep, exact simulation, versioning, and invalidation | Locally proven | Unified model/component tests verify exact groups, source labels, non-mutating form construction, three outcomes, and fail-closed quote/catalog/simulation fences; existing governed authority remains the only version-write path |
 | Customer-data boundary | Costs, margins, authorities, and private receipts absent from proposals, exports, portals, and customer projections | Locally proven | Existing customer-safe projection tests plus setup/revision/consequence models keep costs, margins, internal authorities, and receipts on staff/server-only paths; final full suite remains pending |
 | Interaction acceptance | Responsive phone/tablet/desktop behavior; keyboard, focus, overflow, and accessibility checks | Locally proven | Enabled Ambient Library Playwright cohort passed axe, focus, control-size, collision, and overflow checks at 390, 768, and 1440 pixels; Catalog Admin browser cohort passed 3/3 including one coalesced draft sync and no active-quote mutation |
-| Final local gates | Firestore rules, capability surfaces, unit suite, environment, build, documentation governance, focused browser tests, completion planner | Locally proven | Rules 77/77; unit 4,245 passed with 79 intentional skips; capability, project-state, environment, production build, documentation governance, and both browser cohorts passed; completion planner recorded `2026-09-01T02:33:59.842Z`. |
+| Final local gates | Firestore rules, capability surfaces, unit suite, environment, build, documentation governance, focused browser tests, completion planner | Locally proven | Rules 77/77; unit 4,245 passed with 79 intentional skips; capability, project-state, environment, production build, documentation governance, and both browser cohorts passed; final completion planner recorded `2026-09-01T02:35:29.075Z`. |
 
 ## Interface inventory
 
@@ -152,7 +162,7 @@ Shared readiness and revision-review models carry reason codes, evidence timesta
 | 2026-09-01T01:56:39Z | Slice 3 setup center and menu builder | `394bba6` | Library now starts with six independent readiness signals and the ordered eight-row Setup Center; sales receive read-only evidence. Menu Builder, setup presets, and catalog imports stage through the shared draft. Managed menu `costMinor` reaches import, normalization, publication, coverage, pricing context, and staff margin. Focused UI/model/server suites and the production build passed. | Browser viewport/accessibility acceptance remains a final gate; revision-aware quote behavior begins in Slice 4 |
 | 2026-09-01T02:07:42Z | Slice 4 revision-aware quotes | `eb217f2` | Trusted quotes and versions persist exact pricing authority; the five-state server review compares selected commercial inputs and staffing/rental policy without silently reconciling loaded choices. Keep/update outcomes create private version-and-revision-fenced receipts; update reuses governed Change Impact, while terminal and stale work fail closed. Focused 55-test and broader 81-test runs passed; production build passed. | Hosted callable/readback and human workflow acceptance remain final external gates; Slice 5 unifies consequence presentation and selection actions |
 | 2026-09-01T02:15:42Z | Slice 5 unified consequence review | `efa8271` | Extended the existing Commercial Change Impact presentation into six source-labeled groups. Apply all/selected rebuild exact proposed forms and rerun the existing authoritative simulation; Keep quoted plan restores the loaded base form without writing. Quote, catalog, and simulation fences invalidate stale work. Focused result: 5 files, 44 tests passed; production build passed. | External hosted/human evidence remains pending |
-| 2026-09-01T02:33:59.842Z | Full local qualification and closeout | closing documentation checkpoint | Firestore rules passed 77/77; unit suite passed 4,245 with 79 intentionally skipped; capability, docs-governance, environment, build, and project-state gates passed; the exact existing ignored Firebase environment supplied the isolated check without copying or printing values; responsive/accessibility Library passed 3/3 at 390/768/1440; Catalog Admin passed 3/3. The callable parser inventory was deliberately advanced from 95 to 101 for the six new exports. Completion planner classified the finished scope high-risk/auth-rules at this exact time. | Hosted/provider and authenticated human acceptance remain unproven. A later user request authorized deployment, but the governed candidate path still requires a clean published `release/vX.Y.Z` head and exact successful CI before any provider mutation. |
+| 2026-09-01T02:35:29.075Z | Full local qualification and closeout | `274d9e0` | Firestore rules passed 77/77; unit suite passed 4,245 with 79 intentionally skipped; capability, docs-governance, environment, build, and project-state gates passed; the exact existing ignored Firebase environment supplied the isolated check without copying or printing values; responsive/accessibility Library passed 3/3 at 390/768/1440; Catalog Admin passed 3/3. The callable parser inventory was deliberately advanced from 95 to 101 for the six new exports. Completion planner classified the finished scope high-risk/auth-rules at this exact time. | Hosted/provider and authenticated human acceptance remain unproven. A later user request authorized deployment, but the governed candidate path still requires a clean published `release/vX.Y.Z` head and exact successful CI before any provider mutation. |
 
 ## Per-slice execution record
 
