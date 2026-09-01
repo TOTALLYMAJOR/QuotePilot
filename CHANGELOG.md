@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-01 15:31:09 CDT
+Last updated: 2026-09-01 16:26:38 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Hardened the governed Firebase production deploy after the v0.16.0 provider
+  attempt exposed a false-green Firebase CLI boundary. Production currently
+  permits 50 Cloud Functions Admin API writes per minute; the previous
+  all-at-once 101-function operation stopped on the first new callable while
+  returning exit status zero. The deployer now derives the exact tracked
+  Functions inventory, sends at most 35 functions per batch with a full quota
+  window between batches, treats Firebase's textual create/update failure as
+  fatal, and requires an exact active-inventory plus safe-off runtime-config
+  provider readback before the workflow can report success.
 - Added the owner-authorized `safe-off` production release profile for the
   v0.16.0 promotion. Both manual provider workflows and their live evidence
   verifier now require that exact profile in the dispatch title and arguments.

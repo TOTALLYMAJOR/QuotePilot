@@ -1,25 +1,29 @@
 # Project Status
 
-Last updated: 2026-09-01 15:31:09 CDT
+Last updated: 2026-09-01 16:26:38 CDT
 
 ## Current Production Release
 
-- Annotated tag `v0.15.0` resolves to
-  `bc495c8c948d440b12363d5da34209a11ff151fd`.
-- Exact-main CI Quality run `32817744859` passed all eight required jobs,
-  including authoritative pricing, Firebase rules/emulators, Playwright,
-  performance, bundle, governance, and Docker gates.
-- Governed Vercel run `32819363438` deployed exact `v0.15.0` with
-  `f2f08629a784d0ff6c8af9af8139d3746d77085f` as its explicit rollback target.
-- Governed Firebase all-scope run `32818605404` deployed exact `v0.15.0` with
-  `87e97c113070424c6d522399116f19877a67721a` as its explicit Firebase rollback
-  target. The run verified the `pingram` / `pingram-2026-08-14-a` deployment
-  profile, completed the Hosting, Firestore, and default Functions mutation,
-  and passed the Firebase Hosting origin probe.
-- The application artifact at `v0.15.0` is the current production runtime. A
-  later receipt-only documentation commit may place repository `main` ahead of
-  that SHA without changing runtime code or requiring another application
-  deployment.
+- Annotated tag `v0.16.0` resolves to
+  `54672a9e414ed5a6099a8332da31d7f56bf8b28a`; exact-main CI Quality run
+  `33558167039` passed all required jobs. Governed Vercel run `33560027814`
+  deployed that exact source and bound `quotepilot.mbmapps.com` to deployment
+  `dpl_JBgY1ozpsUakiWcfzQaXSF9Ape6m` under the authorized `safe-off` profile.
+- Governed Firebase run `33559487588` released the v0.16.0 Hosting artifact and
+  Firestore rules, but did **not** complete Functions. The provider allows 50
+  Cloud Functions Admin API writes per minute; the 101-function operation
+  stopped on `getCatalogSetupDraft`, while Firebase CLI returned exit status
+  zero and the workflow therefore appeared green. Direct readback shows only
+  95 active functions, omits all six Business Setup/revision-review callables,
+  and retains the prior runtime profile on existing functions.
+- Production is consequently partial, not accepted as complete: the public
+  Vercel edge, Firebase origin, and Firestore rules are v0.16.0, while Firebase
+  Functions remain on the preceding revision. The bounded `release/v0.16.1`
+  repair batches no more than 35 writes per quota window, fails on Firebase's
+  textual provider error even when exit status is zero, and requires exact
+  callable inventory plus safe-off runtime readback before success. It must
+  pass local gates, exact-SHA CI, merge/tag, governed backend deployment, and
+  direct post-deploy verification before this incident can close.
 - These deployment receipts prove exact source, CI, and provider workflow
   success only. Tenant activation has its own receipt below; neither class of
   receipt proves authenticated staff/portal acceptance,
@@ -36,7 +40,9 @@ Last updated: 2026-09-01 15:31:09 CDT
   Stripe authority is preserved. Focused release-evidence and deployment-safety
   coverage passes 283 tests. Full local qualification, exact-SHA remote CI,
   same-SHA candidate proof, merge/tag, provider deployment, and post-deploy
-  verification remain required, so current production is still v0.15.0.
+  verification were completed for the source candidate. The Firebase
+  Functions completion defect is now tracked in the Current Production Release
+  section and must close through the v0.16.1 governed repair.
 
 - Release head `fc1352bf6356b30dc4aaf8f4708ce3f0135d01ef` passed all nine
   jobs in exact-head CI run `33467223260`, but the required local click-through

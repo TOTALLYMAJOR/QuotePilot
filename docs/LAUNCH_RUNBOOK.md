@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-01 15:31:09 CDT
+Last updated: 2026-09-01 16:26:38 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -72,6 +72,17 @@ the platform-admin GitHub secret; provider secrets remain bound through
 Firebase Secret Manager. Vercel deploys only to the fixed `mbmapps/quoteflow`
 project. Firebase deploys only to `tonicatering`, and backend/all always bind
 Firestore rules and Functions together.
+
+For a backend/all release, the production deployer derives the exact Functions
+export inventory from tracked source and deploys it in batches of at most 35.
+It waits 65 seconds between batches so the production project's 50-write/minute
+Cloud Functions Admin API quota cannot turn a valid release into a partial
+operation. Do not replace this with one `functions:default` mutation. Firebase
+CLI may print a create/update failure and still exit zero, so the deployer also
+parses the provider result and then requires `functions:list --json` to prove
+the exact active inventory, `us-central1` location, and safe-off runtime profile
+for every function. A Hosting-origin probe without that readback is not a
+successful backend or all-scope deployment.
 
 Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` and
 `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` into the frontend build

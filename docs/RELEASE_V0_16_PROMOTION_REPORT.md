@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-09-01 15:31:09 CDT
+Last updated: 2026-09-01 16:26:38 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -9,6 +9,21 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
 
 ## Candidate Summary
 
+- Production promotion reached a partial provider state on 2026-09-01. Exact
+  v0.16.0 source `54672a9e414ed5a6099a8332da31d7f56bf8b28a`
+  is live at the governed Vercel edge and Firebase Hosting; Firestore rules were
+  released. Firebase Functions did not update: the production project's
+  50-write/minute Admin API quota rejected the first of six new callables in a
+  101-function wave, while Firebase CLI returned exit status zero. Direct
+  readback proves 95 prior functions, none of the six Business Setup/revision
+  callables, and the prior runtime profile. This report does not classify that
+  workflow badge as production completion.
+- The bounded v0.16.1 release-control repair uses no more than 35-function
+  batches with a full quota-window pause, rejects textual Firebase provider
+  failures, and requires exact function inventory plus safe-off runtime
+  readback. It must still pass exact-SHA CI and governed backend deployment
+  before the production incident closes; no dormant provider capability is
+  being activated.
 - On 2026-09-01 the owner authorized the fail-closed `safe-off` production
   profile. It is now an exact workflow/evidence input for both production
   providers. The profile includes the Business Setup and Ambient presentation

@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-01 15:31:09 CDT
+Last updated: 2026-09-01 16:26:38 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -45,6 +45,13 @@ explicit owner promotion after real-run review.
   Commercial Change, Revenue Autopilot, and the server staffing authority off.
   It preserves `STRIPE_MODE=live` solely for the established quote-payment
   rail; the separate buyer-invoice rail remains disabled with test mode bound.
+- Firebase Functions production mutation is quota-aware and fail-closed. The
+  deployer derives the exact tracked export inventory, submits no more than 35
+  function writes per batch, waits a complete provider quota window between
+  batches, and rejects Firebase's textual create/update failure even if the CLI
+  exits zero. A backend/all workflow succeeds only after `functions:list`
+  proves the exact inventory active in `us-central1` with every function bound
+  to the expected safe-off runtime values and no disabled-provider residue.
 - Protect `main` and configure exactly one release approval mode. Team-owned
   repositories use `production` with a directly assigned independent reviewer
   and self-review prevention. Solo-owned repositories use the reviewless

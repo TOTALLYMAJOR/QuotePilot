@@ -2,6 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
+import {
+  FUNCTIONS_DEPLOY_BATCH_SIZE,
+  functionsDeployOutputHasFailure,
+  listExpectedFunctionIds,
+  planFunctionDeployBatches,
+  validateProductionFunctionsReadback
+} from "../../../scripts/deploy-firebase-production.mjs";
 
 const ROOT = process.cwd();
 const FIREBASE_WORKFLOW = path.join(
@@ -219,15 +226,89 @@ describe("direct production deployment safety", () => {
     expect(source).not.toContain("NOTIFICATIONS_OWNER_SMS_CONSENT");
   });
 
-  test("explicitly acknowledges retry-policy changes only for Functions deployments", () => {
+  test("explicitly acknowledges retry-policy changes only for batched Functions deployments", () => {
     const source = fs.readFileSync(FIREBASE_STUB, "utf8");
     const allowedArguments = source.slice(
       source.indexOf("const allowed = new Set"),
       source.indexOf("const args = process.argv.slice")
     );
 
-    expect(source).toContain('...(selected.functions ? ["--force"] : [])');
+    expect(source).toContain('batch.map((id) => `functions:${id}`).join(",")');
+    expect(source).toContain('"--force"');
     expect(allowedArguments).not.toContain('"--force"');
+  });
+
+  test("keeps each Functions deployment below the production write-quota ceiling", () => {
+    const ids = listExpectedFunctionIds(
+      fs.readFileSync(path.join(ROOT, "functions", "index.js"), "utf8")
+    );
+    const batches = planFunctionDeployBatches(ids);
+
+    expect(ids).toHaveLength(101);
+    expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 31]);
+    expect(batches.flat()).toEqual(ids);
+    expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
+    expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(
+      "Waiting ${FUNCTIONS_DEPLOY_PAUSE_MS / 1000} seconds for the provider write-quota window."
+    );
+    expect(functionsDeployOutputHasFailure(
+      "functions: failed to create function projects/tonicatering/locations/us-central1/functions/getCatalogSetupDraft"
+    )).toBe(true);
+    expect(functionsDeployOutputHasFailure(
+      "Failed to update function projects/tonicatering/locations/us-central1/functions/saveCatalogSetupDraft"
+    )).toBe(true);
+    expect(functionsDeployOutputHasFailure("Deploy complete!")).toBe(false);
+  });
+
+  test("fails closed unless every Function is active on the exact safe-off runtime profile", () => {
+    const expectedIds = ["getCatalogSetupDraft", "saveCatalogSetupDraft"];
+    const runtime = {
+      NOTIFICATIONS_EMAIL_PROVIDER: "none",
+      NOTIFICATIONS_SMS_PROVIDER: "none",
+      STRIPE_MODE: "live",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
+      REVENUE_AUTOPILOT_ENABLED: "false",
+      REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
+      BUYER_ACCESS_ENABLED: "false",
+      BUYER_ACCESS_STRIPE_MODE: "test"
+    };
+    const entry = (id, environmentVariables = runtime) => ({
+      id,
+      project: "tonicatering",
+      region: "us-central1",
+      state: "ACTIVE",
+      platform: "gcfv1",
+      environmentVariables
+    });
+    const response = {
+      status: "success",
+      result: expectedIds.map((id) => entry(id))
+    };
+
+    expect(validateProductionFunctionsReadback(response, expectedIds)).toEqual({
+      functionCount: 2,
+      profile: "safe-off"
+    });
+    expect(() => validateProductionFunctionsReadback({
+      ...response,
+      result: [entry(expectedIds[0])]
+    }, expectedIds)).toThrow(/inventory mismatch.*saveCatalogSetupDraft/i);
+    expect(() => validateProductionFunctionsReadback({
+      ...response,
+      result: [
+        entry(expectedIds[0]),
+        entry(expectedIds[1], { ...runtime, OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true" })
+      ]
+    }, expectedIds)).toThrow(/does not prove safe-off OPERATIONAL_STAFFING_AUTHORITY_ENABLED/i);
+    expect(() => validateProductionFunctionsReadback({
+      ...response,
+      result: [
+        entry(expectedIds[0]),
+        entry(expectedIds[1], { ...runtime, BUYER_ACCESS_TURNSTILE_HOSTNAMES: "example.invalid" })
+      ]
+    }, expectedIds)).toThrow(/disabled runtime residue BUYER_ACCESS_TURNSTILE_HOSTNAMES/i);
   });
 
   test("requires ephemeral workload identity credentials for Firebase production", () => {
