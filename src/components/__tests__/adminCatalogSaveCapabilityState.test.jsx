@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AdminCatalogView } from "../AdminCatalogModal";
 import { createMenuItem as createMenuItemMock } from "../../lib/menuService";
 
+const setupDraft = vi.hoisted(() => ({ current: null }));
+
+vi.mock("../../hooks/useCatalogSetupDraft", () => ({
+  useCatalogSetupDraft: () => setupDraft.current
+}));
+
 vi.mock("../../lib/menuService", () => ({
   createCategory: vi.fn(async () => ({ id: "cat-1" })),
   createEventType: vi.fn(async () => ({ id: "evt-1" })),
@@ -47,6 +53,22 @@ let container;
 let root;
 
 beforeEach(() => {
+  setupDraft.current = {
+    status: "idle",
+    label: "Draft saved",
+    generation: 0,
+    changedRecordCount: 0,
+    serverChanges: [],
+    deviceChanges: [],
+    deviceOnly: false,
+    error: "",
+    receipt: null,
+    queueChanges: vi.fn(() => true),
+    syncNow: vi.fn(async () => ({ ok: true })),
+    retry: vi.fn(async () => ({ ok: true })),
+    review: vi.fn(async () => ({ readyToPublish: true })),
+    publish: vi.fn(async () => ({ catalogRevisionAfter: 2 }))
+  };
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -87,8 +109,8 @@ function makeUnsavedEdit() {
 
 function clickSave() {
   const button = [...container.querySelectorAll("button")]
-    .find((element) => element.textContent.trim() === "Save catalog changes");
-  expect(button, 'button "Save catalog changes"').toBeTruthy();
+    .find((element) => element.textContent.trim() === "Sync draft now");
+  expect(button, 'button "Sync draft now"').toBeTruthy();
   return act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -146,7 +168,7 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector(".modal-foot").textContent)
       .toContain("A newer Library version is ready");
     expect([...container.querySelectorAll("button")]
-      .find((element) => element.textContent.trim() === "Save catalog changes").disabled).toBe(true);
+      .find((element) => element.textContent.trim() === "Sync draft now").disabled).toBe(true);
     expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: true, busy: false });
   });
 
@@ -303,79 +325,27 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.innerHTML).toContain('data-capability-state="submitting"');
   });
 
-  test("lands on receipt after a clean save", async () => {
-    renderView({ onSave: async () => ({ ok: true }) });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="receipt"');
-    expect(container.querySelector(".modal-foot").textContent).toContain("Catalog saved.");
-  });
-
-  test("reports a plain validation error as error, distinct from a conflict", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Add at least one specifically named package with a price above $0 before saving the catalog."
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="error"');
-  });
-
-  test("reports a reconciled concurrent-edit conflict as reconciliation", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Catalog changed while the save was in progress. Latest catalog state is loaded; review it and retry. (Catalog revision changed from 3 to 4.)"
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="reconciliation"');
-  });
-
-  test("reports a saved-but-unconfirmed revision as uncertain", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Catalog changes are saved at revision 4, but pricing is not confirmed for that revision. Latest catalog state is loaded; review Pricing and retry."
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="uncertain"');
-  });
-
-  test("offers recovery and its refresh action when reload itself failed", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Failed to save catalog. Refresh the latest catalog before retrying.",
-        refreshRequired: true
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="recovery"');
-    expect([...container.querySelectorAll("button")].some(
-      (button) => button.textContent.trim() === "Refresh latest catalog"
-    )).toBe(true);
-  });
-
-  test("recovery takes priority over a co-occurring reconciliation-shaped message", async () => {
-    // The two flags can theoretically both be present; recovery (a concrete,
-    // actionable "refresh now" affordance) should win over merely descriptive
-    // reconciliation/uncertain text, since it is the one with a real next step.
-    const onSave = vi.fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        error: "Catalog changed while the save was in progress. Latest catalog state is loaded; review it and retry.",
-        refreshRequired: true
-      });
+  test("syncs unpublished intent without calling the retired active-catalog save", async () => {
+    const onSave = vi.fn();
     renderView({ onSave });
     makeUnsavedEdit();
     await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="recovery"');
+    expect(setupDraft.current.queueChanges).toHaveBeenCalled();
+    expect(setupDraft.current.syncNow).toHaveBeenCalledOnce();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("Active pricing is unchanged until publication");
+  });
+
+  test.each([
+    ["error", { status: "error", error: "Draft validation failed." }],
+    ["reconciliation", { status: "conflict", error: "Draft changed on another device." }],
+    ["uncertain", { status: "sync_failed", deviceOnly: true, error: "Network unavailable." }],
+    ["recovery", { status: "recovery", error: "Reload the latest catalog." }],
+    ["receipt", { status: "saved", receipt: { receiptId: "publish-1" } }]
+  ])("projects the draft authority %s state", (expected, nextState) => {
+    setupDraft.current = { ...setupDraft.current, ...nextState };
+    renderView();
+    expect(container.innerHTML).toContain(`data-capability-state="${expected}"`);
   });
 });

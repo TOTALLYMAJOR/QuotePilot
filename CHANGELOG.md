@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 20:21:19 CDT
+Last updated: 2026-08-31 20:39:36 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added one private, server-backed catalog setup draft per organization. Library
+  edits now update locally and coalesce after 800 ms without activating prices;
+  failed synchronization retains an explicitly device-only buffer. Same-tenant
+  administrator callables enforce generation, catalog-revision, baseline,
+  dependency, payload, and 400-record bounds. Explicit review and atomic publish
+  advance the live catalog once, write one actor-attributed pricing confirmation
+  and immutable receipt, and close the draft. Direct browser access to setup
+  drafts and publication/revision receipts is denied.
 - Fixed catalog travel and staffing prices that appeared to save but reverted
   after refresh. Firestore minor-unit values are now authoritative on read but
   no longer leak into the editable major-unit model, changed settings write

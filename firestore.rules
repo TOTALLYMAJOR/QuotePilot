@@ -961,6 +961,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Catalog setup drafts, publication receipts, and quote catalog review
+    // outcomes are trusted callable-owned authority. Browser clients receive
+    // only bounded same-tenant projections after role verification.
+    match /organizations/{orgId}/catalogSetupDrafts/{draftId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/catalogPublicationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/quoteCatalogReviewReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/quoteApprovalExecutions/{executionId} {
       allow read: if isOrgAdmin(orgId);
       allow write: if false;

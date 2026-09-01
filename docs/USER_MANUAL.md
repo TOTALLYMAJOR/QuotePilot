@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-30 23:42:36 CDT
+Last updated: 2026-08-31 20:31:30 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -38,6 +38,25 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - A saved draft has a reserved Customer Portal identity, but the link is not
   customer-visible or copyable. Only provider acceptance for the exact current,
   valid portal issuance activates that portal.
+
+## Catalog draft and publication
+
+Administrators edit the organization Library without changing active quote
+pricing on each keystroke or field blur. Local edits appear immediately and
+coalesce into a background setup-draft synchronization after a short pause.
+The sticky draft bar distinguishes **Saving draft**, **Draft saved**, **Sync
+failed — changes are device-only**, **Revision conflict**, and **Ready to
+review**. If synchronization fails, keep the workspace open or use **Retry
+sync**; device-only changes have not reached the server and are not published.
+
+Choose **Review and publish catalog** to validate the complete change set. The
+review itself is read-only and does not confirm pricing. After a successful
+review, choose **Publish reviewed catalog**. Only that publication advances the
+live catalog by one revision and records the administrator-attributed pricing
+confirmation and receipt. A conflict means the active catalog or draft changed
+elsewhere; reload and reconcile instead of assuming either copy won. Sales
+staff may view readiness but cannot edit, review, or publish the private setup
+draft.
 
 ## Calm Four workspace (v0.16 source candidate)
 

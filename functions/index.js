@@ -286,6 +286,13 @@ const {
   mutateManagedMenuItemAvailability: mutateManagedMenuItemAvailabilityInternal
 } = require("./starterCatalogPacks");
 const {
+  CatalogSetupDraftError,
+  getCatalogSetupDraft: getCatalogSetupDraftInternal,
+  publishCatalogSetupDraft: publishCatalogSetupDraftInternal,
+  reviewCatalogSetupDraft: reviewCatalogSetupDraftInternal,
+  saveCatalogSetupDraft: saveCatalogSetupDraftInternal
+} = require("./catalogSetupDrafts");
+const {
   CatalogImportError,
   createCatalogImportBatch: createCatalogImportBatchInternal,
   rollbackCatalogImportBatch: rollbackCatalogImportBatchInternal
@@ -9420,6 +9427,16 @@ function toStarterCatalogHttpsError(error, fallbackMessage) {
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
 
+function toCatalogSetupDraftHttpsError(error, fallbackMessage) {
+  if (error instanceof CatalogSetupDraftError) {
+    return new functions.https.HttpsError(error.code, error.message, error.details);
+  }
+  functions.logger.error(fallbackMessage, {
+    error: normalizeText(error?.message)
+  });
+  return new functions.https.HttpsError("internal", fallbackMessage);
+}
+
 function toCatalogImportHttpsError(error, fallbackMessage) {
   if (error instanceof CatalogImportError) {
     return new functions.https.HttpsError(error.code, error.message, error.details);
@@ -10255,6 +10272,82 @@ exports.mutateManagedMenuItemAvailability = functions.region(REGION).https.onCal
     });
   } catch (error) {
     throw toStarterCatalogHttpsError(error, "Failed to change managed menu item availability.");
+  }
+});
+
+exports.getCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await getCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to load the catalog setup draft.");
+  }
+});
+
+exports.saveCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await saveCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId,
+      requestId: data?.requestId,
+      expectedGeneration: Number(data?.expectedGeneration),
+      baseCatalogRevision: Number(data?.baseCatalogRevision),
+      patches: data?.patches,
+      actorUid: staff.uid,
+      actorEmail: staff.email,
+      serverTimestamp: FieldValue.serverTimestamp
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to save the catalog setup draft.");
+  }
+});
+
+exports.reviewCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await reviewCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId,
+      expectedGeneration: Number(data?.expectedGeneration),
+      baseCatalogRevision: Number(data?.baseCatalogRevision)
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to review the catalog setup draft.");
+  }
+});
+
+exports.publishCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await publishCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId,
+      requestId: data?.requestId,
+      expectedGeneration: Number(data?.expectedGeneration),
+      baseCatalogRevision: Number(data?.baseCatalogRevision),
+      actorUid: staff.uid,
+      actorEmail: staff.email,
+      serverTimestamp: FieldValue.serverTimestamp,
+      deleteField: FieldValue.delete
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to publish the catalog setup draft.");
   }
 });
 

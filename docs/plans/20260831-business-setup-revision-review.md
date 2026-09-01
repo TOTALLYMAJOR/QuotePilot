@@ -1,6 +1,6 @@
 # Business Setup and Revision-Safe Quoting Overhaul
 
-Last updated: 2026-08-31 20:21:19 CDT
+Last updated: 2026-08-31 20:39:36 CDT
 
 - Program recorded at (UTC): `2026-09-01T01:14:17Z`
 - Source candidate: `2d999c422da6aacaad0800eeb498d86a70b74427`
@@ -86,7 +86,7 @@ The existing governed commercial-change path is extended into one review grouped
 
 - [x] Record the complete program before implementation.
 - [x] Slice 1 — Characterize and repair travel and staffing price persistence.
-- [ ] Slice 2 — Add the admin-only catalog setup draft and atomic publisher.
+- [x] Slice 2 — Add the admin-only catalog setup draft and atomic publisher.
 - [ ] Slice 3 — Add the Business Setup Center, Menu Builder, canonical costs, and readiness truth.
 - [ ] Slice 4 — Add revision-aware quotes and explicit review outcomes.
 - [ ] Slice 5 — Unify commercial consequence review.
@@ -109,9 +109,9 @@ Planned checkpoint commits:
 | Settings money round trip | Standard and long-distance travel; base server, chef, and bartender rates; named staffing/bartender rate types survive save, confirmation, forced reload, rehydration, and server pricing | Locally proven | Failing characterization reproduced stale minor shadowing; focused suites cover save planning, forced normalization, confirmation storage, and authoritative pricing |
 | Mixed money records | Minor-unit values win over conflicting legacy majors; zero survives; invalid/negative/non-finite/over-bound values fail closed | Locally proven | `useCatalogData.savePlan`, `starterCatalogPacks.server`, and `pricingEngine.authoritative` focused tests |
 | Old-rate scenario | Saved `$24/$32` quote with current `$48/$62` catalog is not labeled house/current and is not silently repriced | Pending | Slices 1 and 4 |
-| Draft autosave | Rapid edits update locally, coalesce to at most one draft sync, produce no active revision change, and avoid blocking flicker | Pending | Slice 2 |
-| Atomic publication | One revision, confirmation, and receipt; stable IDs; all-or-nothing conflict and dependency failures; at most 400 changes | Pending | Slice 2 |
-| Draft privacy and roles | Direct browser access to draft/receipt collections denied; callable same-org admin enforcement; sales read-only projection | Pending | Slices 2 and 3 |
+| Draft autosave | Rapid edits update locally, coalesce to at most one draft sync, produce no active revision change, and avoid blocking flicker | Locally proven | Hook and server characterization cover immediate local buffering, one 800 ms sync, retry, and no active-catalog mutation |
+| Atomic publication | One revision, confirmation, and receipt; stable IDs; all-or-nothing conflict and dependency failures; at most 400 changes | Locally proven | Server unit suite covers one revision/confirmation/receipt, stable IDs, idempotency, baselines, dependency validation, and size bounds |
+| Draft privacy and roles | Direct browser access to draft/receipt collections denied; callable same-org admin enforcement; sales read-only projection | Partial | Private rule assertions and callable same-org admin gates are implemented; sales read-only Setup Center remains Slice 3 |
 | Setup Center | Ordered eight-row readiness surface, one approved status and next action per row, operator terminology, role-safe actions | Pending | Slice 3 |
 | Readiness separation | Business-to-quote, draft-to-publish, quote-to-save, proposal-to-send, margin evidence, and provider connection remain independent | Pending | Slice 3 |
 | Cost truth | Managed menu `costMinor` participates in imports, normalization, publication, setup coverage, and margin from the same authoritative menu source | Pending | Slice 3 |
@@ -147,6 +147,7 @@ Shared readiness and revision-review models carry reason codes, evidence timesta
 | --- | --- | --- | --- | --- |
 | 2026-09-01T01:14:17Z | Session opened | `2d999c422da6aacaad0800eeb498d86a70b74427` | Original checkout identity and dirty state observed; clean sibling worktree created on dedicated branch; bounded read/write/validation scope locked; initial worktree status clean; task planner recorded `2026-09-01T01:12:29.843Z` | Implementation and all acceptance evidence pending |
 | 2026-09-01T01:21:19Z | Slice 1 money persistence | checkpoint commit created at slice close | Added a failing `$24/$32 → $48/$62` normalize-before-save characterization, then separated storage minor fields from the editor model; changed settings now write validated minor units and delete legacy majors; confirmation removes mixed-record conflicts; named rates reach client/server pricing. Focused result: 5 files, 90 tests passed. | Firebase emulator and hosted hard-refresh proof remain final local/hosted gates; the next publisher must reuse the same contract |
+| 2026-09-01T01:39:36Z | Slice 2 catalog draft publisher | checkpoint commit created at slice close | Added six-layer draft authority: private rules, same-org admin callables, bounded normalized change records, generation/revision/baseline fences, 800 ms device buffer sync, and a sticky review/publish state bar. Publication is atomic, advances once, confirms once, receipts once, and closes the draft. Focused result: 5 files, 32 tests passed; capability-surface gate passed. | Setup presets, Import Studio, and direct managed-menu actions are routed through the shared draft in Slice 3; emulator rules and full suite remain final gates |
 
 ## Per-slice execution record
 

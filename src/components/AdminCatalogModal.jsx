@@ -28,7 +28,10 @@ import {
 } from "../lib/menuService";
 import { buildPackageWorkspaceCollectionModel } from "../lib/packageWorkspaceModel";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { useCatalogSetupDraft } from "../hooks/useCatalogSetupDraft";
+import { buildCatalogSetupChanges } from "../lib/catalogSetupDraftService";
 import PackageWorkspace from "./PackageWorkspace";
+import CatalogDraftStateBar, { catalogDraftCapabilityState } from "./CatalogDraftStateBar";
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -279,6 +282,31 @@ function buildJsonDrafts(catalog) {
   };
 }
 
+function buildPersistableCatalogDraft(draft, jsonDrafts) {
+  const parseArray = (field, label) => {
+    const parsed = JSON.parse(jsonDrafts?.[field] || "[]");
+    if (!Array.isArray(parsed)) throw new Error(`${label}: Must be a JSON array.`);
+    return parsed;
+  };
+  const featureFlagsLocked = draft?.settings?.featureFlagsLocked === true;
+  const featureFlags = { ...(draft?.settings?.featureFlags || {}) };
+  if (!featureFlagsLocked && featureFlags.aiAssist === false) featureFlags.aiAutopilot = false;
+  return {
+    ...draft,
+    settings: {
+      ...(draft?.settings || {}),
+      featureFlags,
+      brandLogoUrl: normalizeBrandLogoUrl(draft?.settings?.brandLogoUrl),
+      documentFontScale: normalizeProposalDocumentFontScale(draft?.settings?.documentFontScale).id,
+      serviceFeeTiers: parseArray("serviceFeeTiers", "Service Fee Tiers JSON"),
+      taxRegions: parseArray("taxRegions", "Tax Regions JSON"),
+      eventTemplates: parseEventTemplateDrafts(jsonDrafts?.eventTemplates),
+      seasonalProfiles: parseArray("seasonalProfiles", "Seasonal Profiles JSON"),
+      brandCrew: parseArray("brandCrew", "Brand Crew JSON")
+    }
+  };
+}
+
 function cloneCatalogSnapshot(catalog = {}) {
   return JSON.parse(JSON.stringify(catalog || {}));
 }
@@ -433,6 +461,11 @@ export function AdminCatalogView({
   const acceptedCatalogRevisionRef = useRef(null);
   const scopedOrganizationId = String(organizationId || "").trim();
   const catalogRevision = Math.max(0, Number(catalog?.settings?.catalogRevision || 0));
+  const catalogSetupDraft = useCatalogSetupDraft({
+    enabled: Boolean(open && scopedOrganizationId),
+    organizationId: scopedOrganizationId,
+    baseCatalogRevision: catalogRevision
+  });
   const authoritativeVersion = Math.max(0, Number(catalog?.authoritativeVersion || 0));
   const starterPackRevision = Math.max(
     0,
@@ -810,6 +843,31 @@ export function AdminCatalogView({
   }, [closeBlocked, hasAnyUnsavedChanges, onInteractionStateChange]);
 
   useEffect(() => {
+    if (!open || !hasUnsavedChanges || shouldInitializeView || !scopedOrganizationId) return;
+    try {
+      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const changes = buildCatalogSetupChanges({
+        catalog: nextDraft,
+        baselineCatalog: savedCatalogSnapshot,
+        serverFingerprints: catalog?.serverFingerprints || {}
+      });
+      if (changes.length > 0) catalogSetupDraft.queueChanges(changes);
+    } catch {
+      // Invalid advanced JSON remains local and visibly unsaved until corrected.
+    }
+  }, [
+    catalog?.serverFingerprints,
+    catalogSetupDraft.queueChanges,
+    draft,
+    hasUnsavedChanges,
+    jsonDrafts,
+    open,
+    savedCatalogSnapshot,
+    scopedOrganizationId,
+    shouldInitializeView
+  ]);
+
+  useEffect(() => {
     if (!open) return;
     if (selectedPackageId === packageWorkspace.selectedPackageId) return;
     setSelectedPackageId(packageWorkspace.selectedPackageId);
@@ -880,7 +938,7 @@ export function AdminCatalogView({
         object: { type: "library-section", id: sectionId },
         reason: String(focusRequest?.reason || "The requested Library section is open."),
         consequence: "Reviewing this section changes nothing until an administrator explicitly saves catalog changes.",
-        nextResolutions: ["Review this section", "Save catalog changes when ready"]
+        nextResolutions: ["Review this section", "Review and publish the catalog when ready"]
       });
     });
     return () => window.cancelAnimationFrame(frame);
@@ -1047,7 +1105,7 @@ export function AdminCatalogView({
       eventTemplates: JSON.stringify(next.settings?.eventTemplates || [], null, 2)
     }));
     const label = String(removed?.name || removed?.id || "Catalog record").trim();
-    setStatus(`${label} removed. Dependent package inclusions, recommendation rules, and event-template defaults were removed too. Save catalog changes to persist.`);
+    setStatus(`${label} removed from the setup draft. Dependent package inclusions, recommendation rules, and quote starting points were removed too.`);
   };
 
   const patchPackageField = (packageId, field, value) => {
@@ -1288,8 +1346,8 @@ export function AdminCatalogView({
       || meta.templateId
       || "Template";
     setStatus(meta.type === "remove"
-      ? "Template removed from this draft. Save catalog changes to persist."
-      : `${templateName} updated in this draft. Save catalog changes to persist.`);
+      ? "Quote starting point removed from this setup draft."
+      : `${templateName} updated in this setup draft.`);
   };
 
   const selectAdminTab = (tabId) => {
@@ -1764,47 +1822,21 @@ export function AdminCatalogView({
       return;
     }
     try {
-      const serviceFeeTiers = parseJsonArray("serviceFeeTiers", "Service Fee Tiers JSON");
-      const taxRegions = parseJsonArray("taxRegions", "Tax Regions JSON");
-      const eventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
-      const seasonalProfiles = parseJsonArray("seasonalProfiles", "Seasonal Profiles JSON");
-      const brandCrew = parseJsonArray("brandCrew", "Brand Crew JSON");
-      const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
-      const normalizedFeatureFlags = {
-        ...(draft.settings?.featureFlags || {})
-      };
-      if (!featureFlagsLocked && normalizedFeatureFlags.aiAssist === false) {
-        normalizedFeatureFlags.aiAutopilot = false;
-      }
-
-      const nextDraft = {
-        ...draft,
-        settings: {
-          ...draft.settings,
-          featureFlags: normalizedFeatureFlags,
-          brandLogoUrl: normalizeBrandLogoUrl(draft.settings?.brandLogoUrl),
-          documentFontScale: normalizeProposalDocumentFontScale(draft.settings?.documentFontScale).id,
-          serviceFeeTiers,
-          taxRegions,
-          eventTemplates,
-          seasonalProfiles,
-          brandCrew
-        }
-      };
-
-      const result = await onSave(nextDraft);
-      if (result.ok) {
-        setCatalogRefreshRequired(false);
-        setDraft(nextDraft);
-        setSavedCatalogSnapshot(cloneCatalogSnapshot(nextDraft));
-        setSavedFingerprint(catalogDraftFingerprint(nextDraft, jsonDrafts));
-        setStatus("Catalog saved.");
-        pushToast("Catalog saved.", "success");
+      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const changes = buildCatalogSetupChanges({
+        catalog: nextDraft,
+        baselineCatalog: savedCatalogSnapshot,
+        serverFingerprints: catalog?.serverFingerprints || {}
+      });
+      if (changes.length === 0) {
+        setStatus("No unpublished catalog changes.");
         return;
       }
-      setCatalogRefreshRequired(result?.refreshRequired === true);
-      setStatus(result.error || "Save failed.");
-      pushToast(result.error || "Save failed.", "error");
+      catalogSetupDraft.queueChanges(changes);
+      await catalogSetupDraft.syncNow();
+      setCatalogRefreshRequired(false);
+      setStatus("Catalog draft saved. Active pricing is unchanged until publication.");
+      pushToast("Catalog draft saved. Active pricing is unchanged until publication.", "success");
     } catch (err) {
       setStatus(err?.message || "Invalid JSON in advanced settings.");
       pushToast(err?.message || "Invalid JSON in advanced settings.", "error");
@@ -1820,17 +1852,7 @@ export function AdminCatalogView({
   // refresh is "recovery"; anything else non-empty while idle is a plain "error".
   const catalogSaveCapabilityState = saving
     ? "submitting"
-    : status === "Catalog saved."
-      ? "receipt"
-      : catalogRefreshRequired
-        ? "recovery"
-        : status.includes("pricing is not confirmed for that revision")
-          ? "uncertain"
-          : status.includes("Catalog changed while the save was in progress")
-            ? "reconciliation"
-            : status && status !== "Your changes are not saved yet." && status !== "All changes saved."
-              ? "error"
-              : "ready";
+    : catalogDraftCapabilityState(catalogSetupDraft);
 
   const selectedCategoryItems = menuItems.filter((item) => item.categoryId === selectedCategory);
   const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
@@ -1990,7 +2012,7 @@ export function AdminCatalogView({
                 onClick={handleSave}
                 disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
               >
-                {saving ? "Saving..." : "Save catalog changes"}
+                {saving ? "Saving..." : "Sync draft now"}
               </button>
             )}
             <button
@@ -2004,6 +2026,21 @@ export function AdminCatalogView({
             </button>
           </div>
         </div>
+
+        <CatalogDraftStateBar
+          draftState={catalogSetupDraft}
+          disabled={saving || menuActionLoading}
+          onRetry={catalogSetupDraft.retry}
+          onReview={catalogSetupDraft.review}
+          onPublish={async () => {
+            const receipt = await catalogSetupDraft.publish();
+            acceptedCatalogRevisionRef.current = receipt.catalogRevisionAfter;
+            setStatus(`Catalog revision ${receipt.catalogRevisionAfter} published and pricing confirmed.`);
+            pushToast(`Catalog revision ${receipt.catalogRevisionAfter} published.`, "success");
+            onReload?.({ background: true });
+            return receipt;
+          }}
+        />
 
         <div className="admin-tabs" role="tablist" aria-label="Catalog admin sections">
           {visibleAdminTabs.map((tab) => (
@@ -2165,7 +2202,7 @@ export function AdminCatalogView({
                 <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
                   {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
                 </span>
-                <small>Saving persists the whole catalog draft. Package edits stay staged until this save runs.</small>
+                <small>Edits auto-save as staged intent. Publication is the only action that activates pricing.</small>
               </div>
               {(saving || hasUnsavedChanges) && (
                 <button
@@ -2174,7 +2211,7 @@ export function AdminCatalogView({
                   onClick={handleSave}
                   disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
                 >
-                  {saving ? "Saving..." : "Save catalog changes"}
+                  {saving ? "Saving..." : "Sync draft now"}
                 </button>
               )}
             </div>
@@ -3254,7 +3291,7 @@ export function AdminCatalogView({
               onClick={handleSave}
               disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
             >
-              {saving ? "Saving..." : "Save catalog changes"}
+              {saving ? "Saving..." : "Sync draft now"}
             </button>
           )}
         </div>

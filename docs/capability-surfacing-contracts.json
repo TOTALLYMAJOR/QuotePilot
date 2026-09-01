@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 58,
+  "catalogVersion": 59,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -3930,7 +3930,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 15,
+      "reviewRevision": 16,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -3940,7 +3940,9 @@
       "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable. Catalog-setting and managed-menu draft domains cannot advance together. Each of the seven managed-menu operations requires the exact loaded expectedCatalogRevision, which is compared inside the Firebase transaction or local commit before any record write; the development fallback compares the active organization's catalog revision and never reads the retired unscoped cache into another organization. Catalog Admin also owns proposal document font scale, brand readiness, guided-rule coverage, operator-authored proposal intro/closing copy, and cost/margin coverage summaries, while trusted quote create/edit snapshots retain the selected presentation plus a private saved commercial snapshot so Proposal Composer and related staff rails can prefer saved cost evidence without exposing it to customers. The Package Workspace is the bounded editor for the current package schema: it stages package identity, per-person price and cost, optional selected-at-zero inclusions, availability, revert, and dependency-reviewed delete through that same catalog save authority without changing quote-pricing behavior.",
       "backendPaths": [
         "functions/index.js",
+        "functions/pricingEngine.js",
         "functions/quoteCreation.js",
+        "functions/starterCatalogPacks.js",
         "src/data/mockCatalog.js",
         "src/lib/commercialSnapshot.js",
         "src/data/starterCatalogPacks.js",
@@ -3952,6 +3954,7 @@
         "src/lib/proposalDocumentPreferences.js",
         "src/lib/proposalExport.js",
         "src/lib/proposalPayload.js",
+        "src/lib/quoteCalculator.js",
         "src/lib/quoteStore.js",
         "src/lib/menuService.js"
       ],
@@ -4051,7 +4054,8 @@
         "src/lib/__tests__/quoteCreation.server.test.js",
         "src/data/__tests__/mockCatalog.tenantSettings.test.js",
         "src/components/__tests__/marginPresentation.test.js",
-        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx"
+        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+        "src/components/__tests__/catalogDraftStateBar.test.jsx"
       ],
       "testLocators": [
         {
@@ -4155,28 +4159,28 @@
           "locator": "starts ready with no unsaved changes and no message"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reflects submitting while the parent-owned saving prop is true"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects submitting while the private draft is saving"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "lands on receipt after a clean save"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects receipt only after publication returns a receipt"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a plain validation error as error, distinct from a conflict"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects error for a definitive draft failure"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a reconciled concurrent-edit conflict as reconciliation"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects reconciliation for a revision conflict"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a saved-but-unconfirmed revision as uncertain"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects uncertain when unsent edits are device-only"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "offers recovery and its refresh action when reload itself failed"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects recovery when the operator must retry"
         }
       ],
       "documentationPaths": [
@@ -4211,44 +4215,44 @@
       "stateEvidence": [
         {
           "state": "ready",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "starts ready with no unsaved changes and no message",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects ready without claiming publication early",
           "assertionLocator": "data-capability-state=\"ready\""
         },
         {
           "state": "submitting",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reflects submitting while the parent-owned saving prop is true",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects submitting while the private draft is saving",
           "assertionLocator": "data-capability-state=\"submitting\""
         },
         {
           "state": "receipt",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "lands on receipt after a clean save",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects receipt only after publication returns a receipt",
           "assertionLocator": "data-capability-state=\"receipt\""
         },
         {
           "state": "error",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a plain validation error as error, distinct from a conflict",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects error for a definitive draft failure",
           "assertionLocator": "data-capability-state=\"error\""
         },
         {
           "state": "reconciliation",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a reconciled concurrent-edit conflict as reconciliation",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects reconciliation for a revision conflict",
           "assertionLocator": "data-capability-state=\"reconciliation\""
         },
         {
           "state": "uncertain",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a saved-but-unconfirmed revision as uncertain",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects uncertain when unsent edits are device-only",
           "assertionLocator": "data-capability-state=\"uncertain\""
         },
         {
           "state": "recovery",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "offers recovery and its refresh action when reload itself failed",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects recovery when the operator must retry",
           "assertionLocator": "data-capability-state=\"recovery\""
         }
       ],
@@ -6109,6 +6113,129 @@
       ],
       "headlessReason": "The exporter and its Firestore reader are an explicitly invoked read-only operator tool that writes files, not application state. They own no callable export, expose no customer or staff surface, and grant no tenant, role, pricing, staffing, provider, or production authority. Reads are rooted at one named organization with no collectionGroup query.",
       "safeOutcome": "Operators receive a tenant-scoped canonical evidence bundle and a coverage report naming every section the exporter could not produce and why, without creating quote, payment, booking, delivery, provider, or production evidence. The reader performs no writes, requires an explicit organization, refuses any cross-tenant document, and withholds portal keys, buyer tokens, and provider secrets through an explicit field allowlist."
+    },
+    {
+      "id": "catalog-draft-publish-authority",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "organization_admins"
+      ],
+      "summary": "Catalog setup edits auto-save into one private organization draft while the live catalog remains the only pricing authority; one explicit review and atomic publication advances a single revision and creates an attributed confirmation and immutable receipt.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/catalogSetupDrafts.js",
+        "functions/index.js",
+        "src/hooks/useCatalogSetupDraft.js",
+        "src/lib/catalogSetupDraftService.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getCatalogSetupDraft",
+        "functions/index.js#saveCatalogSetupDraft",
+        "functions/index.js#reviewCatalogSetupDraft",
+        "functions/index.js#publishCatalogSetupDraft"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getCatalogSetupDraft",
+        "functions/index.js#saveCatalogSetupDraft",
+        "functions/index.js#reviewCatalogSetupDraft",
+        "functions/index.js#publishCatalogSetupDraft"
+      ],
+      "frontendPaths": [
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/CatalogDraftStateBar.jsx",
+        "src/styles.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CatalogDraftStateBar.jsx",
+          "locator": "data-capability-id=\"catalog-draft-publish-authority\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/catalogDraftStateBar.test.jsx",
+        "src/hooks/__tests__/useCatalogSetupDraft.test.jsx",
+        "src/lib/__tests__/catalogSetupDraftService.test.js",
+        "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+          "locator": "coalesces durable intent without activating it, then publishes one confirmed revision and receipt"
+        },
+        {
+          "path": "src/hooks/__tests__/useCatalogSetupDraft.test.jsx",
+          "locator": "coalesces rapid local edits into one non-blocking sync after 800 ms"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "catalog setup drafts and revision-review receipts are private callable-owned records"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Catalog setup draft and publication authority"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catalog draft and publication"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The administrator Library now distinguishes local device intent, durable server draft state, read-only review, and published catalog authority. Publication remains explicit and receipt-backed; autosave cannot confirm pricing or mutate active catalog records.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects ready without claiming publication early",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects submitting while the private draft is saving",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects uncertain when unsent edits are device-only",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects reconciliation for a revision conflict",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects receipt only after publication returns a receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects error for a definitive draft failure",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects recovery when the operator must retry",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "safeOutcome": "A same-tenant administrator can edit quickly without activating pricing, see whether changes are device-only or server-saved, review exact bounded consequences, and publish at most 400 baseline-fenced changes in one all-or-nothing revision with one attributed confirmation and immutable private receipt."
     }
   ]
 }

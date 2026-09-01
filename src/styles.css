@@ -4596,6 +4596,53 @@ hr {
   gap: 0.55rem;
 }
 
+.catalog-draft-state-bar {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--surface, #181512) 94%, transparent);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(14px);
+}
+
+.catalog-draft-state-bar > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.catalog-draft-state-bar small,
+.catalog-draft-state-bar .field-error {
+  display: block;
+}
+
+.catalog-draft-state-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 767px) {
+  .catalog-draft-state-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-draft-state-actions,
+  .catalog-draft-state-actions button {
+    width: 100%;
+  }
+}
+
 .admin-save-state {
   color: #52645c;
   font-size: 0.76rem;

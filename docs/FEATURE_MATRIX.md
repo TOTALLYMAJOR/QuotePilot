@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-31 09:43:09 CDT
+Last updated: 2026-08-31 20:31:30 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -45,6 +45,15 @@ claim. Current production is the exact deployed `v0.15.0` artifact; recheck
 - `Optional`: optional capability tracked but not required for core flow.
 
 ## Master Checklist Mapping
+
+**Catalog setup draft and publication authority:** implemented in the local
+source candidate. Administrator edits can be coalesced into one private,
+server-backed organization draft without changing the live catalog. Review is
+read-only; publication validates generation, base revision, record baselines,
+dependencies, and a 400-record bound in one transaction, then advances one
+revision, records one attributed pricing confirmation and immutable receipt,
+and closes the draft. Browser access to draft and receipt records is denied.
+Hosted, production-data, and human acceptance remain unclaimed.
 
 | # | Feature Area | Status | Primary Evidence |
 |---|---|---|---|
