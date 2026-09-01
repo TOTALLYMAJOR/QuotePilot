@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-01 16:26:38 CDT
+Last updated: 2026-09-01 18:27:16 CDT
 
 All notable project changes are documented in this file.
 
@@ -10,14 +10,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 - Hardened the governed Firebase production deploy after the v0.16.0 provider
-  attempt exposed a false-green Firebase CLI boundary. Production currently
-  permits 50 Cloud Functions Admin API writes per minute; the previous
-  all-at-once 101-function operation stopped on the first new callable while
-  returning exit status zero. The deployer now derives the exact tracked
-  Functions inventory, sends at most 35 functions per batch with a full quota
-  window between batches, treats Firebase's textual create/update failure as
-  fatal, and requires an exact active-inventory plus safe-off runtime-config
-  provider readback before the workflow can report success.
+  attempt exposed a false-green Firebase CLI boundary. Cloud Audit Logs proved
+  that the first new callable failed because the deploy identity lacked
+  `iam.serviceAccounts.actAs` on the Functions runtime service account, not
+  because the 50-write/minute quota rejected the operation. The owner approved
+  that exact runtime-account binding and the Cloud Scheduler administration
+  role required to update existing scheduled functions. Quota-aware 35-function
+  batches remain a preventative control; textual Firebase failures are fatal,
+  and an exact active-inventory plus safe-off runtime-config readback is required
+  before success.
+- Completed the governed v0.16.1 Firebase backend repair in workflow run
+  `33569585746` from tagged-main SHA
+  `4af43d2f097f8717357af210bb9ba0be9ef7be8f`. Independent provider readback
+  proves exactly 101 active `us-central1` functions, all six Business Setup and
+  revision-review callables, and the safe-off runtime contract on every
+  function. Public Vercel edge and Firebase Hosting origin probes returned HTTP
+  200; authenticated production-data and human acceptance remain separate.
 - Added the owner-authorized `safe-off` production release profile for the
   v0.16.0 promotion. Both manual provider workflows and their live evidence
   verifier now require that exact profile in the dispatch title and arguments.
