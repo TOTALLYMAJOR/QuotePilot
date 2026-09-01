@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 21:35:45 CDT
+Last updated: 2026-08-31 22:19:51 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reconciled the existing temporary compatibility and Ambient bundle profiles
+  to the exact Business Setup and revision-review release graphs. The measured
+  local aggregates are 3,224,340 and 4,050,831 bytes respectively; the ceilings
+  retain only the previously established local-to-CI offsets, keep the
+  391,901-byte largest-chunk cap, and do not alter the clean-main baseline.
 - Unified the existing Commercial Change Impact experience into one fenced
   consequence review covering Price and deposit, Staffing, Rentals, Guided
   recommendations, Margin evidence, and Proposal readiness. Each consequence

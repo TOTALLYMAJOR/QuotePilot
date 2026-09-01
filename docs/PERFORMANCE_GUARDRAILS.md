@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-31 00:20:56 CDT
+Last updated: 2026-08-31 22:19:51 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,9 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,221,176-byte aggregate
+- The current compatibility graph has a temporary 3,231,504-byte aggregate
   and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,017,992-byte aggregate ceiling and
+  graph has a separate temporary 4,051,134-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -70,11 +70,18 @@ Threshold policy:
   emitted asset. Compatibility remains below the Calm Four source candidate's
   already reviewed absolute ceiling; the reconciliation restores that exact
   source-approved value rather than widening it again.
-  The Ambient aggregate ceiling is therefore 4,017,992 bytes: the literal
-  candidate measurement plus only the previously established 303-byte
+  The Calm Four Ambient aggregate ceiling was therefore 4,017,992 bytes: the
+  literal candidate measurement plus only the previously established 303-byte
   Ambient runner offset. This reconciliation is not general product-growth
   headroom; any source increase beyond that offset must fail or receive a new
   explicit review.
+  The Business Setup and revision-review program now measures 3,224,340 /
+  385,181 bytes for the compatibility graph and 4,050,831 / 385,181 bytes for
+  the production-equivalent Ambient graph. Their ceilings are 3,231,504 and
+  4,051,134 aggregate bytes, retaining only the previously established
+  7,164-byte compatibility and 303-byte Ambient local-to-runner offsets. The
+  largest-chunk ceiling remains unchanged, and this is not general growth
+  headroom.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

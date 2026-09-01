@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-31 00:29:03 CDT
+Last updated: 2026-08-31 22:19:51 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -70,7 +70,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   advances the current Ambient aggregate ceiling to 4,017,992 bytes while
   retaining the 391,901-byte largest-chunk ceiling; compatibility retains the
   Calm Four source candidate's already reviewed 3,221,176 / 391,901-byte
-  ceilings.
+  ceilings. The Business Setup and revision-review release graph now measures
+  3,224,340 / 385,181 bytes for compatibility and 4,050,831 / 385,181 bytes
+  for Ambient. The recalibrated aggregate ceilings are 3,231,504 and
+  4,051,134 bytes respectively, preserving only the established 7,164-byte
+  compatibility and 303-byte Ambient local-to-runner offsets while leaving the
+  391,901-byte largest-chunk ceiling unchanged.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
