@@ -1,9 +1,10 @@
 # Business Setup and Revision-Safe Quoting Overhaul
 
-Last updated: 2026-08-31 21:35:45 CDT
+Last updated: 2026-09-01 12:33:52 CDT
 
 - Program recorded at (UTC): `2026-09-01T01:14:17Z`
 - Completion planner recorded at (UTC): `2026-09-01T02:35:29.075Z`
+- Acceptance-repair completion planner recorded at (UTC): `2026-09-01T17:33:52.650Z`
 - Source candidate: `2d999c422da6aacaad0800eeb498d86a70b74427`
 - Implementation branch: `codex/business-setup-revision-review-20260831`
 - Isolated worktree: `/tmp/quoteflow-business-setup-2d999c4`
@@ -102,6 +103,7 @@ Planned checkpoint commits:
 5. `feat: add quote catalog revision review`
 6. `feat: unify commercial consequence review`
 7. `docs: close business setup overhaul evidence`
+8. `fix: close business setup acceptance defects`
 
 Checkpoint identities:
 
@@ -112,6 +114,7 @@ Checkpoint identities:
 5. `eb217f2` — quote revision review
 6. `efa8271` — unified consequence review
 7. `274d9e0` — closed local evidence
+8. `f5d0c24` — closed the five manual-acceptance defects and requalified locally
 
 ## Acceptance matrix
 
@@ -130,8 +133,8 @@ Checkpoint identities:
 | Provenance labels | Quote override, current catalog rate, quoted revision, and unavailable source labels are accurate | Locally proven | Pure provenance helper plus old-rate/legacy/current/override presentation tests |
 | Consequence review | One governed review with six groups, source labels, apply all/selected/keep, exact simulation, versioning, and invalidation | Locally proven | Unified model/component tests verify exact groups, source labels, non-mutating form construction, three outcomes, and fail-closed quote/catalog/simulation fences; existing governed authority remains the only version-write path |
 | Customer-data boundary | Costs, margins, authorities, and private receipts absent from proposals, exports, portals, and customer projections | Locally proven | Existing customer-safe projection tests plus setup/revision/consequence models keep costs, margins, internal authorities, and receipts on staff/server-only paths; final full suite remains pending |
-| Interaction acceptance | Responsive phone/tablet/desktop behavior; keyboard, focus, overflow, and accessibility checks | Locally proven | Enabled Ambient Library Playwright cohort passed axe, focus, control-size, collision, and overflow checks at 390, 768, and 1440 pixels; Catalog Admin browser cohort passed 3/3 including one coalesced draft sync and no active-quote mutation |
-| Final local gates | Firestore rules, capability surfaces, unit suite, environment, build, documentation governance, focused browser tests, completion planner | Locally proven | Rules 77/77; unit 4,245 passed with 79 intentional skips; capability, project-state, environment, production build, documentation governance, and both browser cohorts passed; final completion planner recorded `2026-09-01T02:35:29.075Z`. |
+| Interaction acceptance | Responsive phone/tablet/desktop behavior; keyboard, focus, overflow, and accessibility checks | Locally proven | Enabled Ambient Library Playwright cohort passed 8/8, including axe, focus, control-size, collision, overflow, device-only price/section rehydration, and sales read-only access at 390, 768, and 1440 pixels; Catalog Admin browser cohort passed 3/3 including one coalesced draft sync and no active-quote mutation |
+| Final local gates | Firestore rules, capability surfaces, unit suite, environment, build, documentation governance, focused browser tests, completion planner | Locally proven | Canonical release, Firebase auth/rules, and authoritative-pricing lanes passed; rules 77/77; unit 4,254 passed with 79 intentional skips; Truth Loop 127/127; capability, project-state, environment, production build, bundle, workflow, secret, documentation-governance, and browser gates passed; repair completion planner recorded `2026-09-01T17:33:52.650Z`. |
 
 ## Interface inventory
 
@@ -163,6 +166,7 @@ Shared readiness and revision-review models carry reason codes, evidence timesta
 | 2026-09-01T02:07:42Z | Slice 4 revision-aware quotes | `eb217f2` | Trusted quotes and versions persist exact pricing authority; the five-state server review compares selected commercial inputs and staffing/rental policy without silently reconciling loaded choices. Keep/update outcomes create private version-and-revision-fenced receipts; update reuses governed Change Impact, while terminal and stale work fail closed. Focused 55-test and broader 81-test runs passed; production build passed. | Hosted callable/readback and human workflow acceptance remain final external gates; Slice 5 unifies consequence presentation and selection actions |
 | 2026-09-01T02:15:42Z | Slice 5 unified consequence review | `efa8271` | Extended the existing Commercial Change Impact presentation into six source-labeled groups. Apply all/selected rebuild exact proposed forms and rerun the existing authoritative simulation; Keep quoted plan restores the loaded base form without writing. Quote, catalog, and simulation fences invalidate stale work. Focused result: 5 files, 44 tests passed; production build passed. | External hosted/human evidence remains pending |
 | 2026-09-01T02:35:29.075Z | Full local qualification and closeout | `274d9e0` | Firestore rules passed 77/77; unit suite passed 4,245 with 79 intentionally skipped; capability, docs-governance, environment, build, and project-state gates passed; the exact existing ignored Firebase environment supplied the isolated check without copying or printing values; responsive/accessibility Library passed 3/3 at 390/768/1440; Catalog Admin passed 3/3. The callable parser inventory was deliberately advanced from 95 to 101 for the six new exports. Completion planner classified the finished scope high-risk/auth-rules at this exact time. | Hosted/provider and authenticated human acceptance remain unproven. A later user request authorized deployment, but the governed candidate path still requires a clean published `release/vX.Y.Z` head and exact successful CI before any provider mutation. |
+| 2026-09-01T17:33:52.650Z | Manual-acceptance repair and local requalification | `f5d0c24` | Corrected the Offerings route, durable bounded device-only draft rehydration, truthful draft-state labels, mobile contrast, and the sales duplicate-main defect. Staged creates preserve create intent through later edits and movement. Canonical `lane:release`, `lane:firebase-auth-rules`, and `lane:authoritative-pricing` all passed; full unit was 4,254 passed/79 skipped, Firestore rules 77/77, Truth Loop 127/127, and final responsive Library acceptance 8/8. Completion planner classified the closed repair scope high-risk UI at this exact time. | Release-branch push, exact-head remote CI, hosted/provider qualification, and authenticated human acceptance remain separate gates. Production remains `v0.15.0` until those gates and the governed tag/main promotion path pass. |
 
 ## Per-slice execution record
 
@@ -170,7 +174,7 @@ Each slice begins at a clean checkpoint, refreshes the bounded inventory once fo
 
 ## Final evidence boundary
 
-Local source and test evidence qualifies this implementation candidate only.
+Local source and test evidence qualifies repair checkpoint `f5d0c24` only.
 Hosted behavior, provider state, production readiness, and authenticated human
 acceptance remain separate future gates. The user later requested deployment,
 but repository policy rejects this local topic branch before provider mutation:
@@ -209,9 +213,11 @@ src/components/QuoteCatalogRevisionReviewPanel.jsx
 src/components/UnifiedCommercialConsequenceReview.jsx
 src/components/WorkspaceShell.jsx
 src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx
+src/components/__tests__/ambientLibraryRoute.test.jsx
 src/components/__tests__/adminCatalogStarterChoice.test.jsx
 src/components/__tests__/businessSetupCenter.test.jsx
 src/components/__tests__/catalogDraftStateBar.test.jsx
+src/components/__tests__/packageWorkspace.test.jsx
 src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx
 src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx
 src/components/__tests__/workspaceShell.test.jsx
@@ -232,6 +238,7 @@ src/lib/__tests__/quoteCatalogRevisionReview.server.test.js
 src/lib/__tests__/quoteCreation.server.test.js
 src/lib/__tests__/starterCatalogPacks.server.test.js
 src/lib/__tests__/unifiedCommercialConsequenceReview.test.js
+src/lib/__tests__/workspaceShellModel.test.js
 src/lib/ambientLibrary.js
 src/lib/businessReadiness.js
 src/lib/catalogSetupDraftService.js
@@ -242,6 +249,9 @@ src/lib/quoteCatalogRevisionReview.js
 src/lib/quoteDraftRuntimeBase.js
 src/lib/quoteStore.js
 src/lib/unifiedCommercialConsequenceReview.js
+src/lib/workspaceShellModel.js
 src/rules/__tests__/firestore.rules.test.js
 src/styles.css
+e2e/ambient-library.spec.js
+e2e/v16-calm-four-acceptance.spec.js
 ```

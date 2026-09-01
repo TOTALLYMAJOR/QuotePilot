@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-01 12:32:29 CDT
+Last updated: 2026-09-01 12:34:23 CDT
 
 ## Current Production Release
 
@@ -38,8 +38,8 @@ Last updated: 2026-09-01 12:32:29 CDT
   including price-and-section rehydration and sales read-only access. The full
   local release, Firebase auth/rules, authoritative-pricing, environment,
   build, bundle, Truth Loop, governance, and 4,254-test unit gates now pass.
-  A new exact-head CI run remains pending; current production remains
-  `v0.15.0`.
+  Local repair checkpoint `f5d0c24` records that evidence. A new exact-head CI
+  run remains pending; current production remains `v0.15.0`.
 
 - The approved whole-application Calm Four source change is integrated onto the
   `integration/v016-calm-four` source line and has completed its Phase 1 local
