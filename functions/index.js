@@ -286,6 +286,18 @@ const {
   mutateManagedMenuItemAvailability: mutateManagedMenuItemAvailabilityInternal
 } = require("./starterCatalogPacks");
 const {
+  CatalogSetupDraftError,
+  getCatalogSetupDraft: getCatalogSetupDraftInternal,
+  publishCatalogSetupDraft: publishCatalogSetupDraftInternal,
+  reviewCatalogSetupDraft: reviewCatalogSetupDraftInternal,
+  saveCatalogSetupDraft: saveCatalogSetupDraftInternal
+} = require("./catalogSetupDrafts");
+const {
+  QuoteCatalogRevisionReviewError,
+  buildQuoteCatalogRevisionReview,
+  buildQuoteCatalogReviewReceipt
+} = require("./quoteCatalogRevisionReview");
+const {
   CatalogImportError,
   createCatalogImportBatch: createCatalogImportBatchInternal,
   rollbackCatalogImportBatch: rollbackCatalogImportBatchInternal
@@ -485,8 +497,6 @@ const PAYMENT_REQUEST_FLOWS = Object.freeze({
     callableLabel: "final-balance request"
   })
 });
-let cachedFunctionsConfig = undefined;
-let functionsConfigErrorLogged = false;
 const CLAIMS_VERSION = 1;
 const PROVISIONING_EMAIL_LEASE_MS = 2 * 60 * 1000;
 const QUOTE_DELIVERY_LEASE_MS = 2 * 60 * 1000;
@@ -498,32 +508,6 @@ const UNKNOWN_HOST_WINDOW_MS = Math.max(1_000, Number(readConfig("security.unkno
 const UNKNOWN_HOST_LIMIT = Math.max(1, Number(readConfig("security.unknown_host_limit", "20")) || 20);
 const unknownHostCounter = new Map();
 const recordPortalRecoveryAttempt = createPortalRecoveryThrottle();
-function getFunctionsConfigSnapshot() {
-  if (cachedFunctionsConfig !== undefined) {
-    return cachedFunctionsConfig;
-  }
-
-  if (typeof functions.config !== "function") {
-    cachedFunctionsConfig = {};
-    return cachedFunctionsConfig;
-  }
-
-  try {
-    const config = functions.config();
-    cachedFunctionsConfig = config && typeof config === "object" ? config : {};
-  } catch (err) {
-    if (!functionsConfigErrorLogged) {
-      functions.logger.warn("functions.config() unavailable; falling back to environment variables.", {
-        message: normalizeText(err?.message).slice(0, 180)
-      });
-      functionsConfigErrorLogged = true;
-    }
-    cachedFunctionsConfig = {};
-  }
-
-  return cachedFunctionsConfig;
-}
-
 function readEnvConfig(path) {
   const envKey = String(path || "")
     .trim()
@@ -539,14 +523,7 @@ function readEnvConfig(path) {
 
 function readConfig(path, fallback = "") {
   const envValue = readEnvConfig(path);
-  if (envValue.present) return envValue.value;
-
-  const config = getFunctionsConfigSnapshot();
-  const value = path.split(".").reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), config);
-  if (value !== undefined && value !== null && String(value).trim()) {
-    return String(value).trim();
-  }
-  return fallback;
+  return envValue.present ? envValue.value : fallback;
 }
 
 function readBoundSecret(name) {
@@ -9455,6 +9432,26 @@ function toStarterCatalogHttpsError(error, fallbackMessage) {
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
 
+function toCatalogSetupDraftHttpsError(error, fallbackMessage) {
+  if (error instanceof CatalogSetupDraftError) {
+    return new functions.https.HttpsError(error.code, error.message, error.details);
+  }
+  functions.logger.error(fallbackMessage, {
+    error: normalizeText(error?.message)
+  });
+  return new functions.https.HttpsError("internal", fallbackMessage);
+}
+
+function toQuoteCatalogReviewHttpsError(error, fallbackMessage) {
+  if (error instanceof QuoteCatalogRevisionReviewError) {
+    return new functions.https.HttpsError(error.code, error.message, error.details);
+  }
+  functions.logger.error(fallbackMessage, {
+    error: normalizeText(error?.message)
+  });
+  return new functions.https.HttpsError("internal", fallbackMessage);
+}
+
 function toCatalogImportHttpsError(error, fallbackMessage) {
   if (error instanceof CatalogImportError) {
     return new functions.https.HttpsError(error.code, error.message, error.details);
@@ -10290,6 +10287,211 @@ exports.mutateManagedMenuItemAvailability = functions.region(REGION).https.onCal
     });
   } catch (error) {
     throw toStarterCatalogHttpsError(error, "Failed to change managed menu item availability.");
+  }
+});
+
+exports.getCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await getCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to load the catalog setup draft.");
+  }
+});
+
+exports.saveCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await saveCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId,
+      requestId: data?.requestId,
+      expectedGeneration: Number(data?.expectedGeneration),
+      baseCatalogRevision: Number(data?.baseCatalogRevision),
+      patches: data?.patches,
+      setupPreset: data?.setupPreset,
+      actorUid: staff.uid,
+      actorEmail: staff.email,
+      serverTimestamp: FieldValue.serverTimestamp
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to save the catalog setup draft.");
+  }
+});
+
+exports.reviewCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await reviewCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId,
+      expectedGeneration: Number(data?.expectedGeneration),
+      baseCatalogRevision: Number(data?.baseCatalogRevision)
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to review the catalog setup draft.");
+  }
+});
+
+exports.publishCatalogSetupDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await publishCatalogSetupDraftInternal({
+      db,
+      organizationId: staff.organizationId,
+      requestId: data?.requestId,
+      expectedGeneration: Number(data?.expectedGeneration),
+      baseCatalogRevision: Number(data?.baseCatalogRevision),
+      actorUid: staff.uid,
+      actorEmail: staff.email,
+      serverTimestamp: FieldValue.serverTimestamp,
+      deleteField: FieldValue.delete
+    });
+  } catch (error) {
+    throw toCatalogSetupDraftHttpsError(error, "Failed to publish the catalog setup draft.");
+  }
+});
+
+function quoteCatalogReviewRefs(organizationId, quoteId) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    organizationRef,
+    quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+    settingsRef: organizationRef.collection("settings").doc("config"),
+    receiptCollection: organizationRef.collection("quoteCatalogReviewReceipts"),
+    collectionRefs: {
+      catalogPackages: organizationRef.collection("catalogPackages"),
+      catalogAddons: organizationRef.collection("catalogAddons"),
+      catalogRentals: organizationRef.collection("catalogRentals"),
+      eventTypes: organizationRef.collection("eventTypes"),
+      menuCategories: organizationRef.collection("menuCategories"),
+      menuItems: organizationRef.collection("menuItems")
+    }
+  };
+}
+
+function quoteCatalogReviewCollections(snapshots, collectionNames) {
+  return Object.fromEntries(collectionNames.map((name, index) => [
+    name,
+    snapshots[index].docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }))
+  ]));
+}
+
+exports.getQuoteCatalogRevisionReview = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (!organizationId || !quoteId || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError("permission-denied", "Quote revision review requires same-organization staff authority.");
+  }
+  try {
+    const refs = quoteCatalogReviewRefs(organizationId, quoteId);
+    const collectionNames = Object.keys(refs.collectionRefs);
+    const [quoteSnap, settingsSnap, ...collectionSnaps] = await Promise.all([
+      refs.quoteRef.get(),
+      refs.settingsRef.get(),
+      ...collectionNames.map((name) => refs.collectionRefs[name].get())
+    ]);
+    if (!quoteSnap.exists) throw new QuoteCatalogRevisionReviewError("not-found", "Quote not found.");
+    if (!settingsSnap.exists) throw new QuoteCatalogRevisionReviewError("failed-precondition", "Current catalog settings are unavailable.");
+    const review = buildQuoteCatalogRevisionReview({
+      organizationId,
+      quoteId,
+      quote: { id: quoteSnap.id, ...(quoteSnap.data() || {}) },
+      settings: settingsSnap.data() || {},
+      collections: quoteCatalogReviewCollections(collectionSnaps, collectionNames),
+      observedAtISO: new Date().toISOString()
+    });
+    return { ok: true, storage: "firebase", review };
+  } catch (error) {
+    throw toQuoteCatalogReviewHttpsError(error, "Failed to review the quote against the current catalog.");
+  }
+});
+
+exports.recordQuoteCatalogReviewOutcome = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (!organizationId || !quoteId || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError("permission-denied", "Quote revision outcome requires same-organization staff authority.");
+  }
+  const refs = quoteCatalogReviewRefs(organizationId, quoteId);
+  const requestId = normalizeText(data?.requestId);
+  const receiptRef = refs.receiptCollection.doc(requestId || "invalid");
+  const collectionNames = Object.keys(refs.collectionRefs);
+  try {
+    const nowISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [receiptSnap, quoteSnap, settingsSnap, ...collectionSnaps] = await Promise.all([
+        tx.get(receiptRef),
+        tx.get(refs.quoteRef),
+        tx.get(refs.settingsRef),
+        ...collectionNames.map((name) => tx.get(refs.collectionRefs[name]))
+      ]);
+      if (receiptSnap.exists) {
+        const existing = receiptSnap.data() || {};
+        return { receipt: existing, idempotentReplay: true };
+      }
+      if (!quoteSnap.exists) throw new QuoteCatalogRevisionReviewError("not-found", "Quote not found.");
+      if (!settingsSnap.exists) throw new QuoteCatalogRevisionReviewError("failed-precondition", "Current catalog settings are unavailable.");
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      const review = buildQuoteCatalogRevisionReview({
+        organizationId,
+        quoteId,
+        quote,
+        settings: settingsSnap.data() || {},
+        collections: quoteCatalogReviewCollections(collectionSnaps, collectionNames),
+        observedAtISO: nowISO
+      });
+      if (
+        normalizeText(data?.expectedQuoteVersionId) !== review.quoteVersionId
+        || Number(data?.expectedCatalogRevision) !== review.currentCatalogRevision
+      ) {
+        throw new QuoteCatalogRevisionReviewError("aborted", "Quote or catalog revision changed while this outcome was being recorded.");
+      }
+      const receipt = buildQuoteCatalogReviewReceipt({
+        review,
+        outcome: data?.outcome,
+        requestId,
+        actor: staff,
+        recordedAtISO: nowISO
+      });
+      tx.create(receiptRef, { ...receipt, createdAt: FieldValue.serverTimestamp() });
+      if (receipt.freezesCommercialInputs) {
+        tx.update(refs.quoteRef, {
+          catalogRevisionReview: {
+            state: "kept_quoted_values",
+            receiptId: receipt.receiptId,
+            quoteVersionId: receipt.quoteVersionId,
+            reviewedCatalogRevision: receipt.reviewedCatalogRevision,
+            commercialInputsFrozen: true,
+            recordedAtISO: receipt.recordedAtISO,
+            recordedByEmail: receipt.recordedBy.email
+          },
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return { receipt, review, idempotentReplay: false };
+    });
+    return { ok: true, storage: "firebase", organizationId, quoteId, ...result };
+  } catch (error) {
+    throw toQuoteCatalogReviewHttpsError(error, "Failed to record the quote catalog review outcome.");
   }
 });
 
@@ -11733,25 +11935,38 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, { expectedOrganizationId: organizationId }));
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(staff.organizationId);
-  const [quotesSnap, executionsSnap, rolesSnap, settingsSnap] = await Promise.all([
+  const [quotesSnap, executionsSnap, rolesSnap, settingsSnap, roleAuthorityReceiptsSnap] = await Promise.all([
     organizationRef.collection(QUOTES_COLLECTION).limit(500).get(),
     organizationRef.collection(QUOTE_APPROVAL_EXECUTIONS_COLLECTION).limit(200).get(),
     db.collection(ROLES_COLLECTION).where("organizationId", "==", staff.organizationId).limit(200).get(),
-    organizationRef.collection("settings").doc("config").get()
+    organizationRef.collection("settings").doc("config").get(),
+    db.collection(ORGANIZATION_ROLE_AUTHORITY_RECEIPTS_COLLECTION)
+      .where("organizationId", "==", staff.organizationId)
+      .limit(200)
+      .get()
   ]);
+  const sourceTruncated = quotesSnap.size >= 500
+    || executionsSnap.size >= 200
+    || rolesSnap.size >= 200
+    || roleAuthorityReceiptsSnap.size >= 200;
   return {
     ok: true,
     source: "firebase",
     organizationId: staff.organizationId,
     sampledQuotes: quotesSnap.size,
     sampledExecutions: executionsSnap.size,
+    sampledRoleAuthorityReceipts: roleAuthorityReceiptsSnap.size,
     ...buildOperationsAuditSnapshot({
       quotes: quotesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       executions: executionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      roleAuthorityReceipts: roleAuthorityReceiptsSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() })),
       roles: rolesSnap.docs.map((doc) => ({ uid: doc.id, ...doc.data() })),
       settings: settingsSnap.exists ? settingsSnap.data() : {},
+      organizationId: staff.organizationId,
       nowISO: new Date().toISOString()
-    })
+    }),
+    sourceTruncated
   };
 });
 
@@ -12448,6 +12663,8 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
 });
 
 const COMMERCIAL_CHANGE_POLICY_VERSION = "commercial-change-policy-v1";
+const COMMERCIAL_CHANGE_PERSISTED_EFFECTS_VERSION =
+  "commercial-change-persisted-effects-v1";
 const COMMERCIAL_CHANGE_INVALIDATION_LIMIT = 64;
 const COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION = 1;
 const COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED =
@@ -12672,6 +12889,117 @@ function projectCommercialChangeSimulation(receipt, evaluatedImpact) {
   };
 }
 
+function projectCommercialChangePersistedEffects({
+  receipt,
+  quote,
+  documents
+} = {}) {
+  const factDiffs = Array.isArray(receipt?.factDiffs) ? receipt.factDiffs : [];
+  const requestedDelta = factDiffs.map((item) => ({
+    nodeId: normalizeText(item?.nodeId),
+    fieldPath: normalizeText(item?.nodeId) === "fact.event.service_style"
+      ? "event.style"
+      : normalizeText(item?.nodeId),
+    before: item?.before ?? null,
+    after: item?.proposedAfter ?? null
+  }));
+  const staffingDiff = factDiffs.find((item) => (
+    normalizeText(item?.nodeId) === "fact.staffing.counts"
+  ));
+  const staffingCount = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+  };
+  const projectStaffing = (event = {}) => ({
+    servers: staffingCount(event?.servers),
+    chefs: staffingCount(event?.chefs),
+    bartenders: staffingCount(event?.bartenders)
+  });
+  const beforeStatus = normalizeText(quote?.status).toLowerCase() || "draft";
+  const afterStatus = normalizeText(documents?.quotePatch?.status).toLowerCase();
+  const beforeRevisionId = normalizeText(
+    quote?.activeVersionId || quote?.versionMeta?.versionId
+  );
+  const afterRevisionId = normalizeText(documents?.version?.versionId);
+  const beforeVersionNumber = Number(
+    quote?.latestVersionNumber || quote?.versionMeta?.versionNumber || 0
+  );
+  const afterVersionNumber = Number(documents?.version?.versionNumber || 0);
+  const beforeDraftAtISO = normalizeText(quote?.lifecycle?.draftAtISO);
+  const afterDraftAtISO = normalizeText(documents?.quotePatch?.lifecycle?.draftAtISO);
+  const workflowEvidencePreserved = commercialDependencyGraphCore.canonicalSerialize(
+    quote?.workflow || {}
+  ) === commercialDependencyGraphCore.canonicalSerialize(
+    documents?.quotePatch?.workflow || {}
+  );
+
+  return {
+    schemaVersion: COMMERCIAL_CHANGE_PERSISTED_EFFECTS_VERSION,
+    authority: "server_authoritative",
+    source: "trusted_quote_edit_material_projection",
+    identity: {
+      organizationId: normalizeOrganizationId(receipt?.organizationId),
+      quoteId: normalizeText(receipt?.quoteId),
+      baseRevisionId: beforeRevisionId,
+      projectedRevisionId: afterRevisionId
+    },
+    requestedDelta,
+    pricing: receipt?.commercialValues || {},
+    staffing: {
+      before: staffingDiff?.before
+        ?? projectStaffing(quote?.event),
+      after: staffingDiff?.proposedAfter
+        ?? projectStaffing(documents?.quotePatch?.event),
+      changed: Boolean(staffingDiff)
+    },
+    status: {
+      before: beforeStatus,
+      after: afterStatus,
+      changed: beforeStatus !== afterStatus
+    },
+    version: {
+      beforeRevisionId,
+      afterRevisionId,
+      beforeVersionNumber,
+      afterVersionNumber,
+      createsImmutableVersion: true
+    },
+    proposal: {
+      statusBefore: beforeStatus,
+      statusAfter: afterStatus,
+      workflowEvidencePreserved,
+      customerDeliveryTriggered: false,
+      publicationTriggered: false
+    },
+    portal: {
+      activeRevisionIdBefore: beforeRevisionId,
+      activeRevisionIdAfter: normalizeText(documents?.result?.activeVersionId),
+      projectionRefreshed: true,
+      accessIdentityRetained: normalizeText(quote?.portalKey)
+        === normalizeText(documents?.result?.portalKey),
+      issuanceRecordedAtSave: true,
+      expiryRecalculatedAtSave: true,
+      customerDeliveryTriggered: false
+    },
+    lifecycle: {
+      draftAtPreserved: Boolean(beforeDraftAtISO && beforeDraftAtISO === afterDraftAtISO),
+      draftAtAssignedIfMissing: !beforeDraftAtISO && Boolean(afterDraftAtISO),
+      editedAtRecordedAtSave: true,
+      terminalDecisionEvidencePreserved: true
+    },
+    dependencies: {
+      authorizationRequired: receipt?.authorizationRequired === true,
+      impact: receipt?.impact || {
+        rootNodeIds: [],
+        dependentNodes: [],
+        counts: { total: 0, review: 0, stale: 0 }
+      }
+    },
+    boundary: "This is the exact enumerated material persisted-effects projection for review. Time-based values are assigned at save and are not projected as exact timestamps. Review creates no write, delivery, publication, acceptance, booking, charge, payout, or completed dependent work."
+  };
+}
+
 function projectCommercialChangeApproval(raw = null) {
   if (!raw || typeof raw !== "object") return null;
   const state = normalizeText(raw.state).toLowerCase();
@@ -12770,9 +13098,10 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
     });
     const refs = commercialChangeRefs(organizationId, quoteId);
     const result = await db.runTransaction(async (tx) => {
-      const [quoteSnap, settingsSnap] = await Promise.all([
+      const [quoteSnap, settingsSnap, organizationSnap] = await Promise.all([
         tx.get(refs.quoteRef),
-        tx.get(refs.settingsRef)
+        tx.get(refs.settingsRef),
+        tx.get(refs.organizationRef)
       ]);
       if (!quoteSnap.exists) {
         throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
@@ -12799,6 +13128,20 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         proposedPricing: pricingResult.pricing
       });
       const evaluatedImpact = evaluateCommercialChangeImpact(preview);
+      const projectedEditDocuments = buildTrustedQuoteEditDocuments({
+        quoteId,
+        quote,
+        staff,
+        form: sanitized.form,
+        pricing: pricingResult.pricing,
+        catalogSource: pricingResult.catalogSource,
+        catalog: pricingResult.catalog,
+        settings: {
+          ...(settingsSnap.data() || {}),
+          organizationName: normalizeText(organizationSnap.data()?.name)
+        },
+        nowISO
+      });
       const proposed = commercialChangeAuthority.simulate({
         request: { requestId, organizationId, quoteId, expectedActiveVersionId },
         canonicalQuote: quote,
@@ -12839,6 +13182,11 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       return {
         planned,
         evaluatedImpact,
+        persistedEffects: projectCommercialChangePersistedEffects({
+          receipt: planned.receipt,
+          quote,
+          documents: projectedEditDocuments
+        }),
         enforcement: commercialChangeEnforcementState(settingsSnap.data() || {})
       };
     });
@@ -12853,7 +13201,8 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       simulation: projectCommercialChangeSimulation(
         result.planned.receipt,
         result.evaluatedImpact
-      )
+      ),
+      persistedEffects: result.persistedEffects
     };
   } catch (error) {
     return throwCommercialChangeFailure(error, "simulateCommercialQuoteChange", {
@@ -14105,6 +14454,7 @@ async function createTrustedQuoteDraftInternal({
     staff,
     form: sanitized.form,
     pricing: pricingResult.pricing,
+    pricingCatalogAuthority: pricingResult.catalogAuthority,
     catalogSource: pricingResult.catalogSource,
     catalog: pricingResult.catalog,
     settings: {
@@ -14613,8 +14963,11 @@ async function updateTrustedQuoteDraftInternal({
   quoteId,
   staff,
   form,
-  commercialChangeAuthorityInput = null
+  commercialChangeAuthorityInput = null,
+  catalogReviewReceiptId = "",
+  expectedActiveVersionId = ""
 }) {
+  const expectedRevisionId = normalizeText(expectedActiveVersionId);
   const sanitized = sanitizeQuoteCreationRequest({
     organizationId,
     form
@@ -14689,8 +15042,61 @@ async function updateTrustedQuoteDraftInternal({
         "Quote is outside your organization."
       );
     }
+    if (expectedRevisionId) {
+      const currentRevisionId = normalizeText(
+        quote.activeVersionId || quote.versionMeta?.versionId
+      );
+      if (!currentRevisionId || currentRevisionId !== expectedRevisionId) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "This quote changed after the draft was opened. Reload the current saved version before applying the update."
+        );
+      }
+    }
     assertQuoteEditNotDispatching({ ...quote, id: quoteId }, nowISO);
     assertNoInProgressPaymentDispatch(quote, "editing the quote");
+
+    const review = buildQuoteCatalogRevisionReview({
+      organizationId,
+      quoteId,
+      quote: { id: quoteId, ...quote },
+      settings: transactionPricingSettingsSnapshot.data() || {},
+      collections: {
+        catalogPackages: (pricingResult.catalog?.packages || []).map((data) => ({ id: data.id, data })),
+        catalogAddons: (pricingResult.catalog?.addons || []).map((data) => ({ id: data.id, data })),
+        catalogRentals: (pricingResult.catalog?.rentals || []).map((data) => ({ id: data.id, data })),
+        menuItems: (pricingResult.catalog?.menuItems || []).map((data) => ({ id: data.id, data }))
+      },
+      observedAtISO: nowISO
+    });
+    const reviewReceiptId = normalizeText(catalogReviewReceiptId);
+    let catalogReviewReceipt = null;
+    if (["review_required", "legacy_unknown"].includes(review.state)) {
+      if (!reviewReceiptId) {
+        throw new QuoteCatalogRevisionReviewError(
+          "failed-precondition",
+          "Resolve the quote catalog revision review before saving commercial changes."
+        );
+      }
+      const reviewReceiptSnap = await tx.get(
+        organizationRef.collection("quoteCatalogReviewReceipts").doc(reviewReceiptId)
+      );
+      catalogReviewReceipt = reviewReceiptSnap.exists ? reviewReceiptSnap.data() || {} : null;
+      if (
+        !catalogReviewReceipt
+        || catalogReviewReceipt.outcome !== "review_and_update"
+        || normalizeOrganizationId(catalogReviewReceipt.organizationId) !== organizationId
+        || normalizeText(catalogReviewReceipt.quoteId) !== quoteId
+        || normalizeText(catalogReviewReceipt.quoteVersionId) !== review.quoteVersionId
+        || Number(catalogReviewReceipt.reviewedCatalogRevision) !== review.currentCatalogRevision
+        || catalogReviewReceipt.requiresGovernedCurrentCatalogSimulation !== true
+      ) {
+        throw new QuoteCatalogRevisionReviewError(
+          "failed-precondition",
+          "The catalog review receipt does not match this quote version and current catalog revision."
+        );
+      }
+    }
 
     const documents = buildTrustedQuoteEditDocuments({
       quoteId,
@@ -14698,6 +15104,7 @@ async function updateTrustedQuoteDraftInternal({
       staff,
       form: sanitized.form,
       pricing: pricingResult.pricing,
+      pricingCatalogAuthority: pricingResult.catalogAuthority,
       catalogSource: pricingResult.catalogSource,
       catalog: pricingResult.catalog,
       settings: {
@@ -14706,6 +15113,18 @@ async function updateTrustedQuoteDraftInternal({
       },
       nowISO
     });
+    if (catalogReviewReceipt) {
+      documents.quotePatch.catalogRevisionReview = {
+        state: "updated_to_current_catalog",
+        receiptId: reviewReceiptId,
+        sourceQuoteVersionId: review.quoteVersionId,
+        reviewedCatalogRevision: review.currentCatalogRevision,
+        commercialInputsFrozen: false,
+        recordedAtISO: nowISO,
+        recordedByEmail: normalizeEmail(staff.email)
+      };
+      documents.version.snapshot.catalogRevisionReview = documents.quotePatch.catalogRevisionReview;
+    }
     const enforcement = commercialChangeEnforcementState(
       transactionPricingSettingsSnapshot.data() || {}
     );
@@ -14720,6 +15139,70 @@ async function updateTrustedQuoteDraftInternal({
       dependencyStateRef: null,
       priorInvalidationDocs: []
     };
+    if (
+      enforcement.authorityState === "dormant"
+      && commercialChangeAuthorityInput
+    ) {
+      const envelope = normalizeCommercialChangeApplyEnvelope(
+        commercialChangeAuthorityInput
+      );
+      if (envelope.authorizationReceiptId) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Dormant Commercial Change review must not consume an authorization receipt."
+        );
+      }
+      const refs = commercialChangeRefs(organizationId, quoteId);
+      const simulationSnap = await tx.get(
+        refs.simulationsRef.doc(envelope.simulationReceiptId)
+      );
+      if (!simulationSnap.exists) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "The exact persisted commercial change simulation is required."
+        );
+      }
+      const existingSimulation = simulationSnap.data()?.receipt;
+      const validatedSimulation = commercialChangeAuthority.validateSimulationReceipt(
+        existingSimulation
+      );
+      if (
+        validatedSimulation.simulatedBy?.uid !== staff.uid
+        && staff.role !== "admin"
+      ) {
+        throw new CommercialChangeAuthorityError(
+          "permission-denied",
+          "Only the simulation requester or an administrator may save this reviewed change."
+        );
+      }
+      const canonicalQuote = { id: quoteId, ...quote };
+      const trustedContext = commercialChangeTrustedContext({
+        staff,
+        nowISO,
+        catalogAuthority: pricingResult.catalogAuthority
+      });
+      assertCommercialChangeSimulationCurrent({
+        simulationReceipt: existingSimulation,
+        organizationId,
+        quoteId,
+        quote: canonicalQuote,
+        catalogAuthority: pricingResult.catalogAuthority,
+        nowISO
+      });
+      commercialChangeAuthority.simulate({
+        request: {
+          requestId: validatedSimulation.requestId,
+          organizationId,
+          quoteId,
+          expectedActiveVersionId: validatedSimulation.baseRevisionId
+        },
+        canonicalQuote,
+        proposedForm: sanitized.form,
+        proposedPricing: pricingResult.pricing,
+        trustedContext,
+        existingReceipt: existingSimulation
+      });
+    }
     if (enforcement.authorityState === "enforced") {
       const canonicalQuote = { id: quoteId, ...quote };
       const preview = buildCommercialChangeImpactPreviewSnapshots({
@@ -15277,6 +15760,7 @@ function quoteCreationFailure(err, {
     || err instanceof QuoteDeliveryError
     || err instanceof CommercialChangeAuthorityError
     || err instanceof CommercialChangeImpactPreviewError
+    || err instanceof QuoteCatalogRevisionReviewError
   ) {
     throw new functions.https.HttpsError(err.code, err.message);
   }
@@ -15542,7 +16026,9 @@ exports.updateQuoteDraft = functions.region(REGION).https.onCall(async (data, co
       quoteId,
       staff,
       form: data?.form,
-      commercialChangeAuthorityInput: data?.commercialChangeAuthority
+      commercialChangeAuthorityInput: data?.commercialChangeAuthority,
+      catalogReviewReceiptId: data?.catalogReviewReceiptId,
+      expectedActiveVersionId: data?.expectedActiveVersionId
     });
   } catch (err) {
     if (err instanceof functions.https.HttpsError) {

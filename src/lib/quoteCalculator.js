@@ -215,15 +215,21 @@ export function resolveLaborRates(form, settings) {
   const bartenderRateOverride = toOptionalRate(form?.bartenderRateOverride);
   const serverRateOverride = toOptionalRate(form?.serverRateOverride);
   const chefRateOverride = toOptionalRate(form?.chefRateOverride);
+  const bartenderRateTypeId = String(form?.bartenderRateTypeId || "").trim();
+  const staffingRateTypeId = String(form?.staffingRateTypeId || "").trim();
+  const bartenderRateType = (settings?.bartenderRateTypes || [])
+    .find((item) => String(item?.id || "").trim() === bartenderRateTypeId);
+  const staffingRateType = (settings?.staffingRateTypes || [])
+    .find((item) => String(item?.id || "").trim() === staffingRateTypeId);
 
   return {
-    bartenderRateApplied: bartenderRateOverride ?? baseBartenderRate,
-    serverRateApplied: serverRateOverride ?? baseServerRate,
-    chefRateApplied: chefRateOverride ?? baseChefRate,
-    bartenderRateTypeId: "",
-    bartenderRateTypeName: "",
-    staffingRateTypeId: "",
-    staffingRateTypeName: ""
+    bartenderRateApplied: bartenderRateOverride ?? toNumber(bartenderRateType?.rate, baseBartenderRate),
+    serverRateApplied: serverRateOverride ?? toNumber(staffingRateType?.serverRate, baseServerRate),
+    chefRateApplied: chefRateOverride ?? toNumber(staffingRateType?.chefRate, baseChefRate),
+    bartenderRateTypeId: bartenderRateType ? bartenderRateTypeId : "",
+    bartenderRateTypeName: bartenderRateType ? String(bartenderRateType.name || "") : "",
+    staffingRateTypeId: staffingRateType ? staffingRateTypeId : "",
+    staffingRateTypeName: staffingRateType ? String(staffingRateType.name || "") : ""
   };
 }
 

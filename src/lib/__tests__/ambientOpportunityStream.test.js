@@ -130,6 +130,34 @@ describe("buildAmbientOpportunityStream", () => {
       expect(Object.keys(value).join(" ")).not.toMatch(/score|percent|readiness/iu);
     }
     expect(Object.keys(row.momentum).join(" ")).not.toMatch(/score|percent|readiness/iu);
+    expect(row.primaryAction.outcomeLabel).toBe("Open Bennett celebration");
+  });
+
+  test("keeps proposal momentum healthy when only recommended phone enrichment is missing", () => {
+    const row = build({
+      quotes: [completeQuote({
+        customer: {
+          ...completeQuote().customer,
+          phone: ""
+        }
+      })]
+    }).rows[0];
+
+    expect(row.momentum.domains.proposal).toMatchObject({
+      state: "healthy",
+      completenessPercent: 100,
+      summary: "All required proposal fields are recorded; 1 recommended contact detail remains."
+    });
+    expect(row.momentum.domains.proposal.evidence).toEqual([{
+      model: "proposal-readiness-v1",
+      criteriaCount: 11,
+      recordedCriteriaCount: 11,
+      recommendedGapCount: 1
+    }]);
+    expect(row.primaryAction).toMatchObject({
+      id: "open-opportunity:quote-ambient-1",
+      outcomeLabel: "Open Bennett celebration"
+    });
   });
 
   test("fails closed for unknown recorded states instead of applying fallback semantics", () => {
@@ -182,6 +210,84 @@ describe("buildAmbientOpportunityStream", () => {
     expect(row.primaryAction.arrivalContract).toMatchObject({
       object: { id: "quote-ambient-1", type: "opportunity" }
     });
+  });
+
+  test("groups and orders opportunities from canonical Workflow priority and recorded dates", () => {
+    const changeRequest = completeQuote({
+      id: "quote-change",
+      quoteNumber: "QP-100",
+      portalDecision: {
+        decision: "changes_requested",
+        requestId: "change-1",
+        message: "Please revise the menu.",
+        submittedAtISO: "2026-08-11T12:00:00.000Z"
+      }
+    });
+    const approval = completeQuote({
+      id: "quote-approval",
+      quoteNumber: "QP-200",
+      workflow: {
+        approvalRequests: [{
+          id: "approval-1",
+          state: "pending",
+          requestedAtISO: "2026-08-10T12:00:00.000Z"
+        }]
+      }
+    });
+    const activeLater = completeQuote({
+      id: "quote-active-later",
+      quoteNumber: "QP-400",
+      event: {
+        name: "Later event",
+        date: "2026-10-20",
+        time: "18:00",
+        venue: "The Glass House",
+        guests: 120,
+        hours: 5
+      }
+    });
+    const activeSooner = completeQuote({
+      id: "quote-active-sooner",
+      quoteNumber: "QP-300",
+      event: {
+        name: "Sooner event",
+        date: "2026-09-18",
+        time: "18:00",
+        venue: "The Garden",
+        guests: 90,
+        hours: 5
+      }
+    });
+    const closed = completeQuote({
+      id: "quote-closed",
+      quoteNumber: "QP-500",
+      status: "deleted",
+      updatedAtISO: "2026-08-12T12:00:00.000Z"
+    });
+    const unordered = [closed, activeLater, approval, activeSooner, changeRequest];
+
+    const first = build({ quotes: unordered });
+    const permuted = build({ quotes: [...unordered].reverse() });
+    const expectedOrder = [
+      "quote-change",
+      "quote-approval",
+      "quote-active-sooner",
+      "quote-active-later",
+      "quote-closed"
+    ];
+
+    expect(first.rows.map((row) => row.quoteId)).toEqual(expectedOrder);
+    expect(permuted.rows.map((row) => row.quoteId)).toEqual(expectedOrder);
+    expect(first.groups.map((group) => ({
+      id: group.id,
+      rows: group.rows.map((row) => row.quoteId)
+    }))).toEqual([
+      { id: "needs-attention", rows: ["quote-change", "quote-approval"] },
+      { id: "active-recent", rows: ["quote-active-sooner", "quote-active-later"] },
+      { id: "recent-closed", rows: ["quote-closed"] }
+    ]);
+    expect(first.rows.slice(0, 2).map((row) => row.workflow.priority)).toEqual([0, 4]);
+    expect(first.rows[2].identity.venue).toBe("The Garden");
   });
 
   test("falls back to exact opportunity context without widening Workflow authority", () => {

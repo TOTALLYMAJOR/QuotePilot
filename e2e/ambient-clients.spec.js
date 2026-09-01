@@ -107,6 +107,13 @@ async function gotoClientsWorkspace(page) {
   }
 }
 
+async function readPersistedOpportunityState(page) {
+  return page.evaluate(() => ({
+    quotes: localStorage.getItem("quoteWizard.quotes"),
+    history: localStorage.getItem("quoteWizard.quoteHistory")
+  }));
+}
+
 async function expectFortyFourPixelTargets(surface) {
   const undersized = await surface.locator(
     "button:visible, input:visible, summary:visible"
@@ -205,24 +212,36 @@ test.describe("Ambient Clients", () => {
 
       const directory = page.locator(".ambient-clients");
       const directoryHeading = directory.getByRole("heading", {
-        name: "Clients",
+        name: "Relationships, in context.",
+        level: 1,
         exact: true
       });
       await expect(directoryHeading).toBeVisible({ timeout: 30_000 });
       await expect(directoryHeading).toBeFocused();
       await expect(directory).toHaveAttribute("data-surface-contract-id", "ambient-clients-list");
-      await directory.getByPlaceholder("Search clients by name or email…")
+      const persistedBeforeBrowse = await readPersistedOpportunityState(page);
+      await directory.getByPlaceholder("Search clients")
         .fill(CLIENT_QUOTE.customer.email);
       await directory.getByRole("button", { name: "Search", exact: true }).click();
-      await expect(directory.locator(".ambient-client")).toHaveCount(1);
-      await expect(directory.locator('[data-client-id="ambient-client-maya"]')).toContainText("Maya Bennett");
+      const relationshipRows = directory.locator(
+        ".ambient-clients__featured, .ambient-clients__relationship-row"
+      );
+      const exactRelationship = directory.locator(`[data-client-id="${CLIENT_ID}"]`);
+      await expect(relationshipRows).toHaveCount(1);
+      await expect(exactRelationship).toContainText("Maya Bennett");
+      await expect(exactRelationship).toContainText("Autumn Benefit Dinner");
+      await expect(exactRelationship).toContainText("maya.bennett@example.test");
+      await expect(exactRelationship).toContainText("Upcoming event on file");
       await expect(page.locator(".customer-directory-table")).toHaveCount(0);
+      await expect(directory.locator(".ambient-clients__metrics")).toHaveCount(0);
 
-      const primaryCounts = await directory.locator(".ambient-client").evaluateAll((rows) => (
+      const primaryCounts = await relationshipRows.evaluateAll((rows) => (
         rows.map((row) => row.querySelectorAll(".ambient-client__primary").length)
       ));
       expect(primaryCounts).toEqual([1]);
-      await expect(directory.locator(".ambient-client__primary")).toHaveText(/Review client/u);
+      const reviewClient = exactRelationship.getByRole("button", { name: /Review client/u });
+      await expect(reviewClient).toHaveCount(1);
+      expect(await readPersistedOpportunityState(page)).toEqual(persistedBeforeBrowse);
 
       await expectFortyFourPixelTargets(directory);
       expect(await page.evaluate(() => (
@@ -238,7 +257,7 @@ test.describe("Ambient Clients", () => {
       ]);
       await capture(page, `ambient-clients-directory-${viewport.width}`);
 
-      await directory.locator(".ambient-client__primary").click();
+      await reviewClient.click();
       await expect(page).toHaveURL(new RegExp(`/app/customers/${CLIENT_ID}$`, "u"));
 
       const overview = page.locator(`[data-client-id="${CLIENT_ID}"].ambient-client-overview`);
@@ -277,6 +296,7 @@ test.describe("Ambient Clients", () => {
       await expect(conversation).toHaveCount(1);
       await expect(conversation).toContainText("2 recorded messages");
       expect(await overview.innerText()).not.toMatch(/\bunread\b/iu);
+      expect(await readPersistedOpportunityState(page)).toEqual(persistedBeforeBrowse);
 
       await expectFortyFourPixelTargets(overview);
       expect(await page.evaluate(() => (

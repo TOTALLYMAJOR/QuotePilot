@@ -1,6 +1,6 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: 2026-08-29 19:18:00 CDT
+Last updated: 2026-08-29 19:47:18 CDT
 
 Status: deployed in exact `v0.15.0` behind independent presentation, server,
 and tenant gates. The first two gates are deployed on; protected workflow run
@@ -75,6 +75,13 @@ that bounded operation for `mm05366-sandbox` from exact operator SHA
 `8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`, anchored to the exact `v0.15.0`
 Firebase-all receipt. Operator publication, deployed runtime, tenant activation, hosted use,
 and human acceptance remain separate evidence events.
+
+The protected tenant operator never selects a tenant implicitly. It accepts the
+existing bounded numeric identifier form or the single approved founder-pilot
+organization `mm05366-sandbox`, requires the exact typed state-and-organization
+confirmation, and still patches only the tenant gate with provider readback.
+This exception does not authorize arbitrary slugs, create a tenant, or change
+role, staffing, invitation, provider, or acceptance evidence.
 
 ## Roles and Tenant Scope
 

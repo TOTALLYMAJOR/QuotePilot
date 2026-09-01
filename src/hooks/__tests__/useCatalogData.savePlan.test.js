@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest";
+import { normalizeCatalog } from "../../data/mockCatalog";
 import {
   beginCatalogReloadState,
+  buildSettingsPatch,
   buildCatalogRecordChanges,
   isCatalogSaveReconciled,
   isStarterPackApplyReconciled,
   readLocalCatalogCache,
+  validateCatalogSettingsMoney,
   writeLocalCatalogCache
 } from "../useCatalogData";
 
@@ -22,6 +25,121 @@ describe("catalog reload presentation", () => {
       packages: [{ id: "package-a" }]
     });
     expect(beginCatalogReloadState(current)).toMatchObject({ loading: true, error: "" });
+  });
+});
+
+describe("catalog settings money round trip", () => {
+  test("keeps edited travel and staffing prices when a Firebase-normalized catalog is normalized for save", () => {
+    const loaded = normalizeCatalog({
+      packages: [{ id: "package-a", name: "Package A", pppMinor: 2500, active: true }],
+      addons: [],
+      rentals: [],
+      settings: {
+        catalogRevision: 8,
+        pricingSetupConfirmed: true,
+        perMileRate: 0.7,
+        perMileRateMinor: 70,
+        longDistancePerMileRate: 1.1,
+        longDistancePerMileRateMinor: 110,
+        bartenderRate: 30,
+        bartenderRateMinor: 3000,
+        serverRate: 24,
+        serverRateMinor: 2400,
+        chefRate: 32,
+        chefRateMinor: 3200,
+        bartenderRateTypes: [{
+          id: "standard",
+          name: "Standard bartender",
+          rate: 30,
+          rateMinor: 3000
+        }],
+        staffingRateTypes: [{
+          id: "standard",
+          name: "Standard staffing",
+          serverRate: 24,
+          serverRateMinor: 2400,
+          chefRate: 32,
+          chefRateMinor: 3200
+        }]
+      }
+    });
+
+    const normalizedForSave = normalizeCatalog({
+      ...loaded,
+      settings: {
+        ...loaded.settings,
+        perMileRate: 0.95,
+        longDistancePerMileRate: 1.45,
+        bartenderRate: 52,
+        serverRate: 48,
+        chefRate: 62,
+        bartenderRateTypes: [{
+          ...loaded.settings.bartenderRateTypes[0],
+          rate: 56
+        }],
+        staffingRateTypes: [{
+          ...loaded.settings.staffingRateTypes[0],
+          serverRate: 48,
+          chefRate: 62
+        }]
+      }
+    });
+
+    expect(normalizedForSave.settings).toMatchObject({
+      perMileRate: 0.95,
+      longDistancePerMileRate: 1.45,
+      bartenderRate: 52,
+      serverRate: 48,
+      chefRate: 62,
+      bartenderRateTypes: [{ rate: 56 }],
+      staffingRateTypes: [{ serverRate: 48, chefRate: 62 }]
+    });
+    expect(normalizedForSave.settings).not.toHaveProperty("perMileRateMinor");
+    expect(normalizedForSave.settings).not.toHaveProperty("serverRateMinor");
+
+    const legacyDelete = Symbol("delete legacy money field");
+    const patch = buildSettingsPatch(normalizedForSave.settings, loaded.settings, {
+      deleteLegacyMoneyField: () => legacyDelete
+    });
+    expect(patch).toMatchObject({
+      perMileRateMinor: 95,
+      perMileRate: legacyDelete,
+      longDistancePerMileRateMinor: 145,
+      longDistancePerMileRate: legacyDelete,
+      bartenderRateMinor: 5200,
+      bartenderRate: legacyDelete,
+      serverRateMinor: 4800,
+      serverRate: legacyDelete,
+      chefRateMinor: 6200,
+      chefRate: legacyDelete,
+      bartenderRateTypes: [{
+        id: "standard",
+        name: "Standard bartender",
+        rateMinor: 5600
+      }],
+      staffingRateTypes: [{
+        id: "standard",
+        name: "Standard staffing",
+        serverRateMinor: 4800,
+        chefRateMinor: 6200
+      }]
+    });
+  });
+
+  test("preserves zero and rejects malformed, negative, non-finite, over-bound, or over-precision settings money", () => {
+    expect(validateCatalogSettingsMoney({
+      perMileRate: 0,
+      longDistancePerMileRate: 0,
+      bartenderRate: 0,
+      serverRate: 0,
+      chefRate: 0,
+      bartenderRateTypes: [{ id: "zero", name: "Zero", rate: 0 }],
+      staffingRateTypes: [{ id: "zero", name: "Zero", serverRate: 0, chefRate: 0 }]
+    })).toBe(true);
+
+    ["", -1, Number.NaN, Number.POSITIVE_INFINITY, 1_000_000.01, 10.001].forEach((value) => {
+      expect(() => validateCatalogSettingsMoney({ serverRate: value })).toThrow(/server rate/i);
+    });
   });
 });
 

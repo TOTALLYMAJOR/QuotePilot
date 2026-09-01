@@ -8,6 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "plan:task": "node ./scripts/task-orchestration-plan.mjs",
+    "evidence:task": "node ./scripts/record-development-evidence.mjs",
+    "evidence:index": "node ./scripts/summarize-development-evidence.mjs",
+    "status:product": "node ./scripts/product-truth-observability.mjs --mode status",
+    "check:product-drift": "node ./scripts/product-truth-observability.mjs --mode gate",
     "classify:ci:lanes": "node ./scripts/ci-lane-classifier.mjs",
     "lane:quick": "bash ./scripts/orchestration-lanes.sh lane:quick",
     "lane:core": "bash ./scripts/orchestration-lanes.sh lane:core",
@@ -86,6 +90,7 @@
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.54.2",
     "@vitejs/plugin-react": "^5.2.0",
+    "google-auth-library": "10.5.0",
     "jsdom": "^30.0.1",
     "pdf-parse": "^1.1.1",
     "terser": "5.50.0",
@@ -93,6 +98,12 @@
     "vitest": "^4.0.18"
   },
   "overrides": {
+    "@lhci/cli": {
+      "lighthouse": "13.4.1"
+    },
+    "@lhci/utils": {
+      "lighthouse": "13.4.1"
+    },
     "tmp": "^0.2.6",
     "uuid": "^11.1.1"
   }

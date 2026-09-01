@@ -1,6 +1,6 @@
 # ADR-0001 Package Workspace State and Persistence
 
-Last updated: 2026-08-20 14:47:39 CDT
+Last updated: 2026-08-29 01:20:25 CDT
 
 ## Status
 

@@ -9,6 +9,7 @@ export const RELEASE_CANDIDATE_POLICY = Object.freeze({
   requiredCiJobs: RELEASE_EVIDENCE_POLICY.requiredCiJobs,
   firebase: Object.freeze({
     projectId: "quotepilot-staging-20260804",
+    projectNumber: "844470813106",
     siteId: "quotepilot-staging-20260804",
     hostingUrl: "https://quotepilot-staging-20260804.web.app",
     appId: "1:844470813106:web:1b2137f26676ef780ca4ab",
@@ -25,23 +26,50 @@ export const RELEASE_CANDIDATE_POLICY = Object.freeze({
 });
 
 export const RELEASE_CANDIDATE_UAT_PROFILE = "staging-safe-off";
+export const RELEASE_CANDIDATE_STAFFING_UAT_PROFILE = "staging-staffing-authority";
+export const RELEASE_CANDIDATE_UAT_PROFILES = Object.freeze([
+  RELEASE_CANDIDATE_UAT_PROFILE,
+  RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+]);
 
-export const CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED = Object.freeze({
+const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
   APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`,
   APP_BASE_DOMAIN: "mbmapps.com",
+  AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
   NOTIFICATIONS_EMAIL_PROVIDER: "none",
   EMAIL_FROM_NAME: "QuotePilot by MBMApps",
   EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us",
   NOTIFICATIONS_SMS_PROVIDER: "none",
   STRIPE_MODE: "test",
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",
-  OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
   REVENUE_AUTOPILOT_ENABLED: "false",
   REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
   BUYER_ACCESS_ENABLED: "false",
   BUYER_ACCESS_STRIPE_MODE: "test",
   BUYER_ACCESS_APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`
 });
+
+export function requireCandidateUatProfile(value) {
+  const profile = String(value || "").trim();
+  if (!RELEASE_CANDIDATE_UAT_PROFILES.includes(profile)) {
+    reject(`candidate profile must be one of: ${RELEASE_CANDIDATE_UAT_PROFILES.join(", ")}.`);
+  }
+  return profile;
+}
+
+export function candidateFunctionsRuntimeExpected(
+  profileValue = RELEASE_CANDIDATE_UAT_PROFILE
+) {
+  const profile = requireCandidateUatProfile(profileValue);
+  return Object.freeze({
+    ...CANDIDATE_FUNCTIONS_RUNTIME_BASE,
+    OPERATIONAL_STAFFING_AUTHORITY_ENABLED:
+      profile === RELEASE_CANDIDATE_STAFFING_UAT_PROFILE ? "true" : "false"
+  });
+}
+
+export const CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED =
+  candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_UAT_PROFILE);
 
 export const CANDIDATE_FUNCTIONS_FORBIDDEN_PLAINTEXT = Object.freeze([
   "RESEND_API_KEY",
@@ -62,9 +90,12 @@ export const CANDIDATE_REQUIRED_SECRET_METADATA = Object.freeze([
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
+  "PINGRAM_API_KEY",
+  "PINGRAM_WEBHOOK_SECRET",
   "RESEND_API_KEY",
   "RESEND_WEBHOOK_SECRET",
   "REVENUE_AUTOPILOT_TOKEN_SECRET",
+  "SMS_CONTACT_DIGEST_SECRET",
   "STAFF_INVITATION_TOKEN_SECRET",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
@@ -80,8 +111,7 @@ const CANDIDATE_FUNCTIONS_DISABLED_RESIDUE = Object.freeze([
 ]);
 
 const CANDIDATE_FUNCTIONS_ALLOWED_KEYS = new Set([
-  ...Object.keys(CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED),
-  "AUTH_PLATFORM_ADMIN_EMAILS"
+  ...Object.keys(CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED)
 ]);
 
 function reject(message) {
@@ -221,7 +251,11 @@ export function parseDotenv(source) {
   return result;
 }
 
-export function validateCandidateFunctionsEnvironment(environment = {}) {
+export function validateCandidateFunctionsEnvironment(
+  environment = {},
+  candidateProfile = RELEASE_CANDIDATE_UAT_PROFILE
+) {
+  const expectedRuntime = candidateFunctionsRuntimeExpected(candidateProfile);
   for (const secretName of CANDIDATE_FUNCTIONS_FORBIDDEN_PLAINTEXT) {
     if (String(environment[secretName] || "").trim()) {
       reject(`${secretName} must use staging Secret Manager and cannot appear in Functions dotenv.`);
@@ -238,7 +272,7 @@ export function validateCandidateFunctionsEnvironment(environment = {}) {
   if (unknownKeys.length) {
     reject(`Functions environment contains unreviewed variables: ${unknownKeys.sort().join(", ")}.`);
   }
-  for (const [name, value] of Object.entries(CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED)) {
+  for (const [name, value] of Object.entries(expectedRuntime)) {
     const actual = String(environment[name] || "").trim();
     const normalizedActual = value === value.toLowerCase() ? actual.toLowerCase() : actual;
     if (normalizedActual !== value) {
@@ -257,12 +291,16 @@ export function validateCandidateFunctionsEnvironment(environment = {}) {
     reject("AUTH_PLATFORM_ADMIN_EMAILS must contain verified non-placeholder staging operators.");
   }
   return Object.freeze({
-    ...CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
+    ...expectedRuntime,
     platformAdminCount: new Set(platformAdmins).size
   });
 }
 
-export function validateFirebaseFunctionsReadback({ response }) {
+export function validateFirebaseFunctionsReadback({
+  response,
+  candidateProfile = RELEASE_CANDIDATE_UAT_PROFILE
+}) {
+  const expectedRuntime = candidateFunctionsRuntimeExpected(candidateProfile);
   if (response?.status !== "success" || !Array.isArray(response?.result) || !response.result.length) {
     reject("Firebase Functions provider readback is missing or empty.");
   }
@@ -286,7 +324,7 @@ export function validateFirebaseFunctionsReadback({ response }) {
     }
     seen.add(key);
     const runtime = entry.environmentVariables || {};
-    for (const [name, expected] of Object.entries(CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED)) {
+    for (const [name, expected] of Object.entries(expectedRuntime)) {
       if (String(runtime[name] || "").trim() !== expected) {
         reject(`Firebase Functions runtime readback for ${key} does not prove ${name}=${expected}.`);
       }
@@ -305,15 +343,18 @@ export function validateFirebaseFunctionsReadback({ response }) {
     source: "firebase functions:list --json",
     functionCount: revisions.length,
     revisions,
-    runtimeConfig: { ...CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED }
+    runtimeConfig: { ...expectedRuntime }
   });
 }
 
 export function validateFirebaseHostingReadback({ channel, providerDeploymentId }) {
   const projectId = RELEASE_CANDIDATE_POLICY.firebase.projectId;
+  const projectNumber = RELEASE_CANDIDATE_POLICY.firebase.projectNumber;
   const siteId = RELEASE_CANDIDATE_POLICY.firebase.siteId;
   const expectedChannel = `projects/${projectId}/sites/${siteId}/channels/live`;
-  const expectedVersionSuffix = String(providerDeploymentId || "").replace(/^sites\//, `projects/${projectId}/sites/`);
+  const expectedVersionSuffix = String(providerDeploymentId || "")
+    .replace(/^sites\//, `projects/${projectId}/sites/`)
+    .replace(`projects/${projectNumber}/sites/`, `projects/${projectId}/sites/`);
   if (
     channel?.name !== expectedChannel
     || channel?.release?.type !== "DEPLOY"
@@ -365,8 +406,12 @@ export function validateFirebaseReceipt({ response, releaseSha }) {
   const sha = requireFullSha(releaseSha);
   if (response?.status !== "success") reject("Firebase did not report a successful deployment.");
   const version = String(response?.result?.hosting || "");
-  const prefix = `sites/${RELEASE_CANDIDATE_POLICY.firebase.siteId}/versions/`;
-  if (!version.startsWith(prefix) || version.length <= prefix.length) {
+  const prefixes = [
+    `sites/${RELEASE_CANDIDATE_POLICY.firebase.siteId}/versions/`,
+    `projects/${RELEASE_CANDIDATE_POLICY.firebase.projectNumber}/sites/${RELEASE_CANDIDATE_POLICY.firebase.siteId}/versions/`
+  ];
+  const prefix = prefixes.find((candidate) => version.startsWith(candidate));
+  if (!prefix || version.length <= prefix.length) {
     reject("Firebase did not return the fixed staging Hosting version id.");
   }
   return Object.freeze({
@@ -574,11 +619,22 @@ function mergeCandidateProvider(currentProvider, patchProvider) {
   return next;
 }
 
-export function reserveCandidateReceipt({ root, target, releaseSha, ci, provider }) {
+export function reserveCandidateReceipt({
+  root,
+  target,
+  releaseSha,
+  ci,
+  provider,
+  uatProfile = RELEASE_CANDIDATE_UAT_PROFILE
+}) {
   const normalizedTarget = requireCandidateTarget(target);
+  const normalizedUatProfile = requireCandidateUatProfile(uatProfile);
   const sha = requireFullSha(releaseSha);
   const directory = ensureReceiptDirectory(root, sha);
-  const receiptPath = path.join(directory, `${normalizedTarget}.json`);
+  const receiptPath = path.join(
+    directory,
+    `${normalizedTarget}.${normalizedUatProfile}.json`
+  );
   const reservationId = crypto.randomUUID();
   const now = new Date().toISOString();
   const receipt = {
@@ -586,7 +642,7 @@ export function reserveCandidateReceipt({ root, target, releaseSha, ci, provider
     reservationId,
     status: "reserved",
     target: normalizedTarget,
-    uatProfile: RELEASE_CANDIDATE_UAT_PROFILE,
+    uatProfile: normalizedUatProfile,
     sourceSha: sha,
     ci,
     provider,

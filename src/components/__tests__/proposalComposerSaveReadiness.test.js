@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildDraftSaveBlockers } from "../ProposalComposer";
+import { buildDraftSaveBlockers, buildSaveActionModel } from "../ProposalComposer";
 
 const COMPLETE_FORM = Object.freeze({
   name: "Morgan Lee",
@@ -46,5 +46,19 @@ describe("Proposal Composer save readiness", () => {
       changeImpactReviewRequired: true,
       changeImpactAuthorizationRequired: true
     }).map((blocker) => blocker.id)).toEqual(["change-impact-review"]);
+  });
+
+  test("turns a blocked save into an exact blocker-review action", () => {
+    expect(buildSaveActionModel({
+      saveBlockers: [
+        { id: "client-name", message: "Add the client name." },
+        { id: "venue", message: "Add the venue." }
+      ]
+    })).toEqual({ mode: "review", label: "Review 2 blockers", disabled: false });
+    expect(buildSaveActionModel({
+      saveBlockers: [],
+      saveLabel: "Save Changes",
+      saveDisabled: true
+    })).toEqual({ mode: "save", label: "Save Changes", disabled: true });
   });
 });

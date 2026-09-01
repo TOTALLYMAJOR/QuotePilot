@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-29 19:18:00 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 ## Current Production Release
 
@@ -26,6 +26,72 @@ Last updated: 2026-08-29 19:18:00 CDT
   production-data correctness, provider delivery, recipient acknowledgement,
   or human acceptance.
 
+## v0.16 Calm Four Candidate Integration
+
+- The owner authorized a fail-closed `safe-off` production profile for the
+  v0.16.0 promotion. Source now binds that profile into both manual production
+  workflow identities and rejects any other profile. Public buyer entry,
+  outbound notification providers, Commercial Change, Revenue Autopilot, and
+  server-authoritative staffing remain off; the existing live quote-payment
+  Stripe authority is preserved. Focused release-evidence and deployment-safety
+  coverage passes 283 tests. Full local qualification, exact-SHA remote CI,
+  same-SHA candidate proof, merge/tag, provider deployment, and post-deploy
+  verification remain required, so current production is still v0.15.0.
+
+- Release head `fc1352bf6356b30dc4aaf8f4708ce3f0135d01ef` passed all nine
+  jobs in exact-head CI run `33467223260`, but the required local click-through
+  correctly stopped promotion after finding five Business Setup acceptance
+  defects: the wrong Offerings destination, a lost device-only menu buffer,
+  false saved labels, low-contrast mobile draft controls, and duplicate main
+  landmarks for sales. The bounded repair now has focused unit coverage and an
+  eight-scenario Ambient Library browser pass at 390, 768, and 1440 pixels,
+  including price-and-section rehydration and sales read-only access. The full
+  local release, Firebase auth/rules, authoritative-pricing, environment,
+  build, bundle, Truth Loop, governance, and 4,254-test unit gates now pass.
+  Local repair checkpoint `f5d0c24` records that evidence. A new exact-head CI
+  run remains pending; current production remains `v0.15.0`.
+
+- The approved whole-application Calm Four source change is integrated onto the
+  `integration/v016-calm-four` source line and has completed its Phase 1 local
+  functional gate:
+  **Now**, **Opportunities**,
+  **Clients**, and role-safe **Library** are the only persistent primary
+  destinations; **New quote** remains an action; Search, Operations,
+  workspace/account controls, and sign-out remain secondary. The exact
+  `/app/quotes/:quoteId` route resolves to the approved Opportunity workspace
+  when the v0.16 Ambient profile is enabled and gains the contextual Quick
+  Updates drawer/sheet with a local draft, universal dismissal guard,
+  server-derived material-effects review, and single-flight
+  revision/catalog/policy-fenced save for Firebase-backed draft quotes.
+  Browser-local, sent, and viewed records hand off to the full editor; success
+  requires the exact write receipt followed by authoritative quote and
+  opportunity-list rereads. The connected Quote Workspace remains on its two
+  compatibility aliases and as the Ambient-off rollback presentation.
+- The integrated Phase 1 candidate passed the ten-scenario browser gate
+  **10/10**, the responsive/accessibility cohort **26/26** at 390, 768, and
+  1440 pixels, the full unit suite with **4,194 passed and 78 intentionally
+  skipped** across **369 passed and 3 skipped files**, all **76** Firestore
+  rules tests, all **127** Truth Loop tests, both selected build graphs, and
+  the local release/governance checks. Side-by-side visual QA recorded no
+  actionable P0, P1, or P2 finding.
+- Phase 2A deployed candidate
+  `49c51b42fd595f75295ef9b6848778ce0f6e619e` to the isolated Firebase staging
+  path and immutable Vercel Preview, then completed the hosted automated
+  qualification boundary. Final operator acceptance subsequently rejected that
+  candidate after a sales follow-up save and an administrator integration
+  activity record both received Firestore `PERMISSION_DENIED`; production
+  authorization therefore remains closed.
+- Candidate `4f6b9bbe01d71fd2ea231460d9ece0de910f3836` was deployed to isolated
+  Firebase staging after exact-SHA CI passed. Hosted sales follow-up now passes
+  and survives an independent reread. The same candidate also persists the
+  administrator integration version and audit record, but then reports a false
+  failure because that internal-only event unnecessarily invokes the
+  customer-portal snapshot mirror, which correctly denies the unrelated write.
+  The next bounded replacement removes only that mirror call; a focused
+  regression, full local qualification, a new immutable candidate, staging
+  deployment, and hosted readback remain required. No production,
+  provider-outcome, or founder-acceptance claim is made.
+
 ## Commercial Truth Loop (Python Tier + Evidence Exporter + Firestore Reader)
 
 - The chain is complete in source: `authoritative Firestore -> reader ->
@@ -43,7 +109,10 @@ Last updated: 2026-08-29 19:18:00 CDT
   — processor payout settlement (`integration`, blocked behind the Connect
   stopping point), declared processor fee schedules (`business_policy`, the
   settings field does not exist), and post-event consumption (`engineering`,
-  no capture surface). Run `npm run truthloop:coverage` for the current split.
+  no capture surface). Generate the current split with the explicit source and
+  evaluation instant required by the read-only contract, for example
+  `npm run truthloop:coverage -- --source <sources.json> --evaluated-at <ISO>`;
+  the bare command intentionally refuses to infer either input.
 - Containment is explicit-scope, not rule-enforced. The reader runs on the
   Admin SDK, which bypasses Firestore rules, so its guarantees come from a
   required organization argument, reads rooted at that organization, the
@@ -66,33 +135,216 @@ Last updated: 2026-08-29 19:18:00 CDT
 
 ## Production Completion and Pending Acceptance
 
-- Historical tenant activation run `32425529671` verified the then-current
-  successful `v0.14.0` Firebase all-scope receipt, then failed closed before
-  any patch because `organizations/250/settings/config` does not exist. Tenant
-  `250` remains absent and will not be created for the founder pilot.
-- The owner selected existing organization `mm05366-sandbox` for the founder
-  pilot. Protected workflow run `33282940451` used exact operator `main` SHA
-  `8582e4ac4dc54c8c2eb60c09bd1b2176cf1cd125`, verified tagged deployed
-  `v0.15.0` SHA `bc495c8c948d440b12363d5da34209a11ff151fd`, Firebase all-scope run
-  `32818605404`, and both deployed staffing gates, then verified
-  `operationalStaffingAuthorityEnabled: false -> true (changed)` for that one
-  tenant. The distinct WIF identity retained only `datastore.entities.get` and
-  `datastore.entities.update`; the PATCH requires the existing canonical
-  settings document. No application deployment, invitation, or provider
-  activation was part of this operation. Authenticated role/denial checks,
-  hosted responsive/accessibility acceptance, rollback exercise, and explicit
-  founder acceptance remain pending.
-- Production configuration names Resend as the email provider and pins owner
-  SMS to `pingram` generation `pingram-2026-08-14-a`. Configuration does not
-  prove provider acceptance, delivery,
-  staff acknowledgement, attendance, payroll, or human acceptance.
-- The deployed release includes the Ambient workspace, authoritative
-  operational staffing, Staff workspace and private records, briefing output,
-  manual staff invitations with independently tracked delivery and
-  acknowledgement states, hardened dormant owner-SMS provider support, and the
-  lighter quote-builder decisions. The founder-pilot tenant gate is now on;
-  actual hosted usability remains unaccepted until the role-safe human checks
-  above complete.
+### v0.16.0 bounded promotion in progress
+
+- Repeated staging verification for `flightcontrol@quietpilot.us` reached
+  Firebase's generic invalid-page-mode screen. Read-only Auth configuration
+  inspection found the correct default callback and `%LINK%` template, and a
+  disposable staging identity proved a newly generated five-parameter
+  `verifyEmail` link works end to end through the reserved Firebase handler;
+  that probe identity was then deleted. The candidate now contains a
+  QuotePilot-owned `/app/auth/action` repair that validates the exact local
+  project/mode/code-presence/continuation policy, strips the code from the
+  visible URL, requires a deliberate click, sends the code only to Firebase's
+  verify-email endpoint, and treats only a verified provider receipt as
+  success. The focused auth and recovery suites pass locally. This is not yet hosted:
+  a new exact-SHA candidate must pass release validation and deploy before the
+  staging Auth callback is rebound and a fresh message is requested. The real
+  account remains unverified and unbound to a tenant; no administrator override
+  is permitted. Production Auth and Stripe Connect remain unchanged.
+  Both CI-shaped production graphs build locally. Compatibility emits 3,213,133
+  JavaScript bytes under its existing 3,213,578-byte ceiling. Ambient emits
+  3,930,814 bytes after the isolated handler is included; the existing named
+  temporary exception records that exact aggregate while its largest-chunk
+  ceiling remains unchanged.
+
+- The owner authorized remote publication and governed deployment pursuit for
+  the current 74-commit candidate. Against `origin/main`, baseline
+  `303eec5237d143fc11398e23f24e86fcb28c2655` changes 180 files with 12,313
+  insertions and 1,030 deletions (net +11,283). The capability and holdback
+  inventory is recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md`.
+- The current full release lane plus Core Web Vitals passes after the
+  documentation gate correctly required timestamp reconciliation: 4,099 unit
+  tests pass with 78 skipped, 127 Truth Loop tests pass, the 503-module build
+  passes, all 76 Firestore rules tests pass, authoritative pricing, Firebase
+  auth/rules browser coverage, owner-SMS emulator coverage, bundle budget, and
+  Lighthouse/CWV pass.
+- The six high-severity root development-tool findings are resolved without
+  the breaking `@lhci/cli` downgrade proposed by `npm audit fix --force`.
+  Because `@lhci/cli` 0.15.1 remains the latest release and pins vulnerable
+  Lighthouse 12.6.1, the root lock now narrowly overrides its Lighthouse copy
+  to 13.4.1. That selects Puppeteer 25.9.0, removes `extract-zip`, passes the
+  unchanged real CWV gate, and leaves `npm audit` at zero findings. The major
+  tool-compatibility boundary is recorded in `docs/TECH_EXCEPTIONS.md` and
+  still requires exact remote CI before release use.
+- GitHub Dependabot alert #139 remains open against default-branch
+  `package-lock.json` for development-only `extract-zip` path traversal. The
+  release candidate no longer contains `extract-zip`, its root audit is clean,
+  and exact remote CWV passes. Narrow backport PR #112 at exact
+  `204f0d2eefd72a8f2d41a6fbb4e7ec6728bd454c` is open and mergeable; CI Quality
+  run `33246642372` passes all eight jobs and Stripe source-only runs
+  `33246642371`/`33246642373` pass. The alert remains operationally open until
+  the reviewed backport or release reaches `main`.
+- The Firebase production workflow source now uses a commit-pinned Google
+  authentication action and accepts only GitHub workload-identity ADC for the
+  fixed `tonicatering` project; its deploy command rejects `FIREBASE_TOKEN`,
+  static service-account JSON, missing credentials, and credentials outside the
+  checkout. The protected tenant-gate workflow also uses WIF, but with a
+  distinct service account and one short-lived Datastore-scoped token passed
+  only to its exact read/patch/readback client. The production WIF provider,
+  distinct deploy and tenant-operator service accounts, least-privilege
+  bindings, and all three repository variables are now provisioned with no
+  service-account key. First production workflow token exchange and governed
+  production deployment remain unverified.
+- Firebase production and staging-candidate mutation now execute only the
+  official v15.24.0 Linux CLI artifact after verifying SHA-256
+  `bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`.
+  The production workflow downloads it before OIDC authentication and passes
+  its verified path only to the deploy step. Candidate Web config, Functions,
+  Hosting, and secret-metadata inspection now use that same verified path;
+  Firestore Rules readback uses exact `google-auth-library` 10.5.0 ADC and the
+  public Rules API. Vercel preview uses a locally built Build Output API v3
+  artifact plus narrow REST upload/deploy/readback requests. No candidate path
+  searches local/global/npm-cache Firebase modules or runtime-downloads a
+  Vercel CLI. That lock has now produced a verified Firebase staging receipt;
+  Vercel preview remains unverified.
+- Release PR #111 publishes `release/v0.16.0`. Pre-reconciliation exact head
+  `ed228c1e84218eabaa8b859378d84f5e2339c17b` passed all eight jobs in CI
+  Quality run `33280654199`. Current `main` then added three verified staffing
+  activation and receipt commits, making the PR conflicting; the release
+  candidate is being reconciled with those exact commits and must obtain fresh
+  exact-head CI before another candidate deployment.
+- The governed `staging-staffing-authority` Firebase-all receipt for exact
+  `17582da99ae9ace1ec6fb11fe224336faaf75410` is verified. It binds staging
+  project `quotepilot-staging-20260804`, Hosting version
+  `503080e914239d13`, 95 Functions, Firestore Rules hashes, the positive global
+  staffing server and browser gates, and the safe-off unrelated authorities.
+  It does not enable a tenant, prove authenticated staffing behavior, or count
+  as Vercel, production, provider-delivery, or human-acceptance evidence.
+- Earlier governed candidate deployment was attempted for both targets at exact
+  `e620ce80`, rechecked at `98f5395`, and rechecked again at latest exact-CI
+  head `8b04582`. Every attempt stopped before provider mutation or receipt
+  reservation.
+  Those attempts found that Firebase staging lacked enabled versions for all eleven candidate-required
+  secret names: `BUYER_ACCESS_RATE_LIMIT_SECRET`,
+  `BUYER_ACCESS_STRIPE_SECRET_KEY`, `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`,
+  `BUYER_ACCESS_TURNSTILE_SECRET`, `RESEND_API_KEY`,
+  `RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`,
+  `STAFF_INVITATION_TOKEN_SECRET`, `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, and `TWILIO_AUTH_TOKEN`. The candidate tool will not
+  create or read their values. Vercel preview then stopped because the current
+  staging `acceptQuoteProposal` Functions readback does not prove
+  `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false`. The required order is: authorize
+  and create the required non-provider staging placeholders through the secret
+  process, deploy Firebase with one explicit tracked candidate profile, verify
+  the matching Functions readback, then deploy Vercel preview with that same
+  profile.
+- The bounded release-tooling correction makes the candidate command use
+  `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI for
+  CI verification. A live exact-SHA run with both token environment variables
+  explicitly unset verified CI through the CLI and reached the real missing
+  staging-secret prerequisite. It stopped before receipt reservation or
+  provider mutation and changed no deployment authority, secret handling,
+  provider target, or promotion gate. The later verified Firebase-all receipt
+  above proves that the staging metadata and deployment prerequisites were
+  subsequently satisfied without exposing secret values.
+- The tracked `staging-safe-off` UAT plan still has 17 applicable and 21
+  blocked items for Firebase-all, and 11 applicable and 7 blocked items for
+  Vercel preview. Applicable hosted results and named human review remain
+  separate evidence classes; current production remains exact `v0.15.0`.
+- The `staging-staffing-authority` profile remains separate from
+  `staging-safe-off`. Its verified receipt proves the selected profile and
+  global staging gates; the exact-tenant gate and positive authenticated
+  journey remain separate operations and evidence classes.
+- The current `firebase-all` `staging-staffing-authority` UAT plan is blocked:
+  18 items are applicable and 20 mandatory release-wide items remain blocked.
+  The blocked set covers provider-secret cutover, buyer, portal/delivery,
+  contract, payment, disabled-staffing rollback, and provider-backed SMS
+  evidence. Founder approval authorizes execution but is not evidence that
+  those hosted/provider checks passed, so PR #111 cannot yet be merged under
+  the canonical production-triggering release policy.
+- Production keyless identity configuration is now provisioned. The WIF
+  provider is restricted to the private repository's numeric owner/repository
+  ids, protected `main`, manual dispatch, and the two exact workflow refs. The
+  deploy and tenant workflows use separate service accounts; the tenant custom
+  role has only Firestore entity read/update permissions, and no key exists.
+  The three required GitHub variables are present. First token exchange and
+  governed deployment remain unverified.
+- The owner selected existing organization `mm05366-sandbox` as the bounded
+  founder-pilot tenant instead of creating tenant `250`. Protected run
+  `33282940451` verified its `operationalStaffingAuthorityEnabled` transition
+  from false to true against the exact tagged v0.15 Firebase-all deployment.
+  Tenant `250` remains absent. One person owns the designated email accounts,
+  so they are role-test identities rather than independent staff or reviewers.
+  Hosted use, role-path behavior, accessibility, rollback rehearsal, and
+  founder acceptance remain separate evidence.
+- Stripe Connect remains deploy-empty/provider-disabled; Steward remains
+  providerless with model output hidden; buyer access, Commercial Change,
+  Revenue Autopilot, and authoritative staffing remain fail-closed. Candidate
+  deployment may inspect their safe unavailable/presentation states but cannot
+  activate them or convert their external gates into production qualification.
+
+- Product Truth Observability is implemented as a read-only source/local
+  repository/CI candidate. The branch now contains the governed `v0.15.0`
+  receipts and is reconciled to current `origin/main`; an earlier digest's
+  branch-divergence and v0.14/v0.15 contradiction are therefore historical
+  findings, not current release truth. The compiler still preserves exact HEAD,
+  keeps unavailable CI/hosted/provider/production/human/outcome proof
+  `unknown`, and does not treat reachability as deployed identity. Exact CI
+  observation, owner comprehension review, freshness calibration, and any
+  promotion to a required gate remain pending human/external decisions.
+- Steward has no remaining repository-preparable work before its reviewed
+  private-runtime and human-evaluation gate. The deploy-dormant compiler,
+  policy/validation controls, consent/evaluation contracts, pinned synthetic
+  corpus, hidden-output workbench, disabled handoff, and manual recovery route
+  pass 84 focused tests, the secret scan, and three responsive browser checks.
+  A reviewed provider transport and credential, canonical context reads,
+  private persistence, billing/privacy approval, consenting silent execution,
+  100 actual human packet reviews, hosted rules evidence, deployment, and human
+  acceptance remain external. Model output stays unavailable to users.
+- Stripe Connect has no remaining repository-preparable foundation gap before
+  its cloud/provider gate. The reviewed Accounts v2 model remains full Stripe
+  Dashboard access, Stripe fee collection, Stripe negative-balance liability,
+  and direct charges with no QuotePilot application fee. Foundation,
+  infrastructure, and onboarding checks pass, and the read-only live staging
+  preflight currently confirms the exact project, Web app, and protected
+  `connect-control` database. Runtime exports stay empty and provider access
+  stays disabled until a human reviews and authorizes the saved Terraform plan,
+  reconciles applied identities, observes then promotes App Check, binds the
+  restricted Sandbox credential, and accepts hosted negative/replay UAT.
+- The optional bounded security-audit slice is repository-complete in the
+  current source candidate. Operations Audit has an explicit two-action
+  immutable taxonomy for final quote-approval executions and organization role
+  changes, a bounded privacy-safe DTO, replay and foreign-tenant filtering,
+  source-truncation state, and an explicit indefinite server-retention/no-clear
+  policy. Delivery and catalog rows remain legacy observations; provider
+  outcomes remain separate.
+  Deployment, authenticated hosted admin/tenant denial checks, production-data
+  review, and human acceptance remain open.
+- The PWA safe recovery shell is repository-complete in the current source
+  candidate. Its install manifest has stable identity and 192/512 maskable
+  icons; the service worker owns only its namespaced shell cache, allowlists
+  public build/brand assets, preserves unrelated caches, and serves an explicit
+  reconnect page instead of cached authenticated routes. Six unit contracts,
+  four responsive axe/browser checks, and a real minified-preview service-worker
+  fallback pass locally. The hosted app still serves the prior scaffold;
+  deployment, hosted installation/relaunch, and physical-device acceptance
+  remain open.
+- The tracked release-UAT contract now includes the stable
+  `operator.authenticated-workspace-journey` item for Hosting, Firebase-all,
+  and Vercel targets. It binds the required authenticated route/task matrix to
+  the exact SHA, immutable deployment, target, organization, role, and evidence
+  level. Repository validation does not complete the real staff session,
+  hosted data checks, denied-role/cross-tenant observations, or human acceptance.
+- Historical tenant-250 activation run `32425529671` failed closed because the
+  settings document did not exist. The founder subsequently selected existing
+  tenant `mm05366-sandbox`; protected run `33282940451` verified the bounded
+  false-to-true update and readback. No tenant was created or migrated, and the
+  successful activation does not establish hosted staffing usability.
+- Production configuration names Resend as the email provider and binds the
+  reviewed Pingram deployment profile. Configuration and deployment do not
+  prove provider delivery, staff acknowledgement, attendance, payroll, tenant
+  activation, or human acceptance.
 
 ## Engineering Checkpoint Detail
 
@@ -135,13 +387,20 @@ Last updated: 2026-08-29 19:18:00 CDT
   fail-closed selected-line margin calculation as staff-only Quote Pulse
   context. PDF export uses the saved font scale and letterhead fallback.
   Costs and margin remain absent from customer preview/export/portal artifacts.
-- A current source-only connected quote-workspace evaluation is available at
-  authenticated admin/sales-only `/app/quote-workspace` and
-  `/app/quote-workspace-concept`.
-  It reads the tenant's saved quote history, presents bounded completeness and
-  save-health evidence, and hands edits or communication back to the existing
-  authoritative quote routes. It performs no quote/provider mutation and has
-  no hosted-role, production-data, deployment, or human-acceptance evidence.
+- The Ambient-enabled v0.16 source candidate makes the approved Opportunity
+  workspace the ordinary exact-quote presentation at `/app/quotes/:quoteId`,
+  including contextual Quick Updates. The connected dinner-table Quote
+  Workspace remains available to authenticated admin/sales staff at
+  `/app/quote-workspace` and `/app/quote-workspace-concept` as a compatibility
+  presentation and becomes the ordinary exact-quote rollback when Ambient is
+  off. It reads the exact tenant saved quote without substitution, consolidates
+  persistent orientation to Now, Opportunities, Clients, and role-safe
+  Library, presents bounded completeness and save-health evidence, and
+  preserves trusted edit, message, Proposal, Payment, lifecycle, delivery, and
+  recovery continuation. It performs no quote/provider mutation. Candidate
+  deployment, authenticated staging review for the selected
+  `mm05366-sandbox` organization, and owner acceptance remain unverified until
+  the exact published SHA completes those gates.
 - A ninth source-only checkpoint materially implements the QuotePilot Package
   Workspace on the existing `Library -> Packages` route without changing the
   package persistence contract or quote-pricing authority. Catalog Admin now
@@ -286,9 +545,15 @@ Last updated: 2026-08-29 19:18:00 CDT
   the replacement graph. Local mode-specific `.env` flags and explicit release
   shell overrides resolve consistently. The compatibility boundary retains
   portal-token isolation, unsaved quote/Catalog recovery, and privacy-bounded
-  analytics, and passes the existing bundle ceiling without increasing it.
-  This is local source/build qualification only; no hosted candidate or
-  production runtime changed.
+  analytics. A clean committed candidate initially exceeded its unchanged
+  temporary ceiling by 5,600 bytes; eligible function-to-arrow minification now
+  reduces total JavaScript by 21,682 bytes to 3,197,496 bytes and the largest
+  chunk to 384,998 bytes. The full unit suite and a minified local-preview lazy-
+  route smoke pass with zero page errors. The temporary exception remains
+  active: standard-budget retirement still requires reviewed graph optimization
+  or baseline policy, browser/CWV evidence, and both build profiles. This is
+  local source/build qualification only; no hosted candidate or production
+  runtime changed.
 - The `v0.7.0` deployment receipts do not establish authenticated hosted-role
   behavior, production-data correctness, downstream provider acceptance,
   recipient evidence, or human acceptance.
@@ -326,6 +591,12 @@ Last updated: 2026-08-29 19:18:00 CDT
   payment steps, and limits quiet progress to timestamp-backed internal
   workflow receipts. All 50 remain partial against their complete acceptance
   contracts.
+  The quick Ambient release policy now also verifies that all 50 canonical
+  work-item definitions remain present, the authenticated operator UAT item is
+  browser-applicable under the fixed safe-off profile, and AIUI-48 cannot
+  authorize legacy removal before parity, exact rollback, release acceptance,
+  and explicit promotion approval all pass. This closes a repository policy
+  gap only; no item is formally closed and no external gate is reported passed.
   The exact CI-equivalent production Ambient build passes locally with 3,714,204 total
   JavaScript bytes and a 391,901-byte largest chunk, inside the existing
   temporary ceiling without recalibration. Its selected graph excludes the
@@ -470,25 +741,27 @@ Last updated: 2026-08-29 19:18:00 CDT
   parity, hosted roles, rollback-release evidence, timed comprehension,
   production-data acceptance, and human acceptance remain open.
 
-## Operational Health
+## Historical Operational Receipt — v0.7.0 (Superseded)
 
-- Production runtime: `v0.7.0` is live from commit
-  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, tagged `v0.7.0`.
-- Exact-main CI: run `31528176575` passed all eight required jobs.
-- Firebase: `all` deployment run `31529170963` updated Hosting, Firestore rules,
+- This retained record describes the governed August 11 deployment of commit
+  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, tagged `v0.7.0`; it was
+  superseded by the exact `v0.15.0` production release identified at the top of
+  this document and must not be read as current runtime state.
+- Exact-main CI run `31528176575` passed all eight required jobs.
+- Firebase `all` deployment run `31529170963` updated Hosting, Firestore rules,
   indexes, and Functions, then verified `https://tonicatering.web.app`.
-- Vercel: deployment run `31530050353` promoted immutable deployment
+- Vercel deployment run `31530050353` promoted immutable deployment
   `quoteflow-duqhsqfau-mbmapps.vercel.app` and rebound
   `https://quotepilot.mbmapps.com`.
-- Public reachability: `/`, `/app`, and `/app/messages` returned HTTP 200 on
+- At that time, `/`, `/app`, and `/app/messages` returned HTTP 200 on
   the production edge; `/` and `/app` also returned HTTP 200 on the Firebase
   origin.
-- Runtime inventory: Firebase lists 75 Functions. The newly deployed callable
-  `recordChangeRequestParse` reports `ACTIVE` on Node.js 22 in `us-central1`.
-- `v0.7.0` release-receipt parity: both production workflows checked out that
-  exact tagged release SHA. This documentation correction does not change the
-  deployed runtime.
-- Credential health: local Firebase CLI access to `tonicatering` and the
+- The contemporaneous Firebase inventory listed 75 Functions; the newly
+  deployed callable `recordChangeRequestParse` reported `ACTIVE` on Node.js 22
+  in `us-central1`.
+- Both contemporaneous production workflows checked out that exact tagged
+  release SHA.
+- At that checkpoint, local Firebase CLI access to `tonicatering` and the
   protected GitHub Firebase deployment credential were renewed and
   authenticated on August 10. No credential values are stored in tracked files.
 
@@ -584,7 +857,7 @@ route evidence are complete.
   payout readiness, and deterministic security review. This is source/local
   evidence only and made no provider or cloud request.
 
-- The QuotePilot Package Workspace slice passes 45 of 45 focused package
+- The QuotePilot Package Workspace source slice passes 45 of 45 focused package
   model, pricing parity, catalog save-state, static presentation, staged
   selector, activation, dependency-review, switch, and revert suites. A fresh
   local real-route browser audit passes at 390, 768, and 1440 pixels with zero
@@ -592,9 +865,9 @@ route evidence are complete.
   pixels, correct mobile/desktop navigation modes, full-viewport mobile selector
   focus, Escape cancellation/focus restoration, Apply staging, dirty package
   switching, activation blocking, and non-mutating dependency review. The local
-  production build and environment check also pass. Exact `v0.15.0` carries
-  this UI, but these local checks do not establish authenticated hosted
-  admin/sales behavior, production-data correctness, or human acceptance.
+  production build and environment check also pass. This is source/local
+  evidence only; authenticated hosted admin/sales behavior, production-data
+  correctness, deployment, and human acceptance remain open.
 
 - The Ambient zero-dead-click release contract now runs as a dedicated step in
   the protected Playwright CI lane with the production presentation flags and
@@ -605,12 +878,13 @@ route evidence are complete.
   3,839-test unit lane with 77 intentional skips, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. The reconciled `v0.15.0` source measured 3,221,176 /
-  387,248 bytes for compatibility and 3,905,603 / 387,248 for the explicit
-  Ambient production graph. Those exact local measurements are the temporary
-  ceilings, and exact-SHA CI run `32817744859` confirmed the governed bundle
-  profiles. Both keep the
-  391,901-byte largest-chunk ceiling. App Check provider code is excluded while its browser
+  build steps. Exact-SHA CI run `33239048234` on release candidate `6ff9d605`
+  measures 3,208,826 / 384,998 bytes for compatibility and 3,928,479 / 388,269
+  for Ambient; a CI-equivalent local Ambient build measures 3,928,552 / 388,303.
+  The temporary ceilings are 3,213,578 and 3,928,552 aggregate bytes
+  respectively, with Ambient pinned to the larger literal exact-candidate
+  measurement and no discretionary growth headroom; both keep the 391,901-byte
+  largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
@@ -725,13 +999,17 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. Exact `v0.15.0` uses named per-graph temporary ceilings: 3,221,176
-   bytes for compatibility and 3,905,603 bytes for Ambient. Both are exact
-   explicit local production-flag measurements confirmed by exact-main CI run
-   `32817744859`. Optimization or reviewed clean-main recalibration is required before the
+9. The combined workspace candidate uses named per-graph temporary ceilings:
+   3,213,578 bytes for compatibility and 3,928,552 bytes for Ambient. The
+   Ambient ceiling is pinned to the larger of exact-SHA CI and CI-equivalent
+   local candidate measurements, a 73-byte environment difference with no
+   discretionary headroom. A fresh exact-SHA CI pass is still required before merge, and
+   optimization or reviewed clean-main recalibration is required before the
    exception can close.
-10. `functions.config()` compatibility remains in source and must migrate before
-    Firebase removes the legacy API in March 2027.
+10. The sole `functions.config()` compatibility read is removed in the current
+    source candidate. Production still runs the prior deployed revision, so an
+    exact coordinated backend release and runtime readback remain required
+    before the March 2027 platform removal can be called operationally closed.
 11. The repository still lacks an independent human reviewer for stronger
     pre-merge and production UAT separation in the current solo-operator model.
 12. Operational staffing code and both global gates are deployed in exact
@@ -741,10 +1019,12 @@ route evidence are complete.
     Exact hosted admin/sales and denied-role behavior, responsive accessibility,
     rollback, and explicit founder acceptance remain separate evidence.
 13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
-    all-positive release checklist. Provider-backed buyer, delivery, payment,
-    contract-conversion, and authoritative-staffing items need a separately
-    reviewed immutable non-production acceptance window; blocked profile items
-    cannot be omitted or attested as passed.
+    all-positive release checklist. The separately tracked
+    `staging-staffing-authority` profile can expose positive staffing checks in
+    an immutable non-production window, but it does not create or enable a
+    tenant and does not unblock provider-backed buyer, delivery, payment, or
+    contract-conversion evidence. Blocked profile items cannot be omitted or
+    attested as passed.
 14. Stripe Connect remains deliberately unexported and unbound. Do not add a
     browser control, callable, handoff route, provider credential, or worker
     deployment until the isolated staging resources, trusted authority
@@ -788,6 +1068,11 @@ route evidence are complete.
     reviews; private runtime, provider-backed pilot, model-output UI,
     persistence, deployment, production behavior, and human acceptance remain
     absent.
+    The tracked review-receipt negative test now constructs its clearly
+    synthetic Stripe credential shape at runtime. The exact secret-rejection
+    assertion still passes 14/14, the repository secret scan and complete
+    `lane:quick` pass, and the release lane now advances to the independently
+    known capability-surfacing debt. No scanner rule or Steward policy changed.
     The authorized staff Quote Workspace now includes the bounded Desk status
     panel. Its live state is provider-unavailable, renders no model prose,
     labels no changes made, disables Steward handoff, and routes only to the
@@ -801,7 +1086,13 @@ route evidence are complete.
     Puppeteer/`extract-zip` chain; npm's available remediation is a breaking
     Lighthouse CI downgrade and must not be forced without a reviewed tooling
     migration.
-
+17. Cloud runner handoff is now documented as a source/process contract in the
+    orchestration blueprint and runbook. Hosted agents should bootstrap with
+    `npm ci`, `npm run check:env`, a bounded `plan:task --json` packet, emitted
+    validations, and a matching `--phase complete` packet. This improves
+    repeatability only; it does not prove a configured cloud provider account,
+    injected secrets, hosted deployment, production behavior, or human
+    acceptance.
 ## Current Focus
 
 1. Complete an authenticated production operator pass for quote create/save/
@@ -820,8 +1111,11 @@ route evidence are complete.
    opt-out-hold proof, and one controlled UAT plan.
 6. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
    denial matrix.
-7. Complete the bundle-exception closure path and continue `functions.config()`
-   migration planning.
+7. Review the remaining bundle-exception retirement path—graph optimization or
+   clean-main baseline policy—then run both build profiles, browser, and CWV
+   gates. Separately include the environment-only Functions configuration
+   candidate in an exact coordinated backend release and verify runtime readback
+   before closing that migration operationally.
 8. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any
    all-positive attestation or production-intent merge.
@@ -841,6 +1135,11 @@ route evidence are complete.
     after their pure privacy, memory, no-secret, and adversarial contracts pass;
     keep provider, billing, deployment, production, and autonomous authority
     outside that authorization.
+11. On the exact deployed PWA candidate, install and relaunch from supported
+    desktop and mobile devices, verify offline navigation reaches the truthful
+    reconnect state, reconnect successfully, and record the browser/OS/build
+    identity. Do not interpret installation as authenticated offline-data or
+    queued-mutation support.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

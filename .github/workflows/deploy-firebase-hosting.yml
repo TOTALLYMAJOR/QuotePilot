@@ -1,5 +1,5 @@
 name: Deploy Firebase Production
-run-name: deploy/v2/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.rollback_sha }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}
+run-name: deploy/v3/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_profile }}/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.rollback_sha }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}
 
 on:
   workflow_dispatch:
@@ -25,6 +25,13 @@ on:
           - hosting
           - backend
           - all
+      release_profile:
+        description: Fail-closed production authority profile
+        required: true
+        default: safe-off
+        type: choice
+        options:
+          - safe-off
       sms_provider:
         description: Exact deployment-owned owner-SMS provider for this release
         required: true
@@ -32,8 +39,6 @@ on:
         type: choice
         options:
           - none
-          - twilio
-          - pingram
       sms_configuration_generation:
         description: Exact Pingram configuration generation, or not-applicable for none or Twilio
         required: true
@@ -51,13 +56,14 @@ concurrency:
 jobs:
   deploy_firebase:
     name: Verify + Deploy Firebase
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && inputs.release_profile == 'safe-off' && inputs.sms_provider == 'none' && inputs.sms_configuration_generation == 'not-applicable'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
     permissions:
       actions: read
       contents: read
+      id-token: write
     env:
       RELEASE_APPROVAL_MODE: ${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}
       RELEASE_SOLO_OPERATOR_IDS: ${{ vars.RELEASE_SOLO_OPERATOR_IDS }}
@@ -85,6 +91,7 @@ jobs:
           RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
           SMS_PROVIDER: ${{ inputs.sms_provider }}
           SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
+          RELEASE_PROFILE: ${{ inputs.release_profile }}
         run: |
           node ./scripts/verify-direct-production-release.mjs \
             --release-sha "${RELEASE_SHA}" \
@@ -92,7 +99,8 @@ jobs:
             --rollback-sha "${ROLLBACK_SHA}" \
             --target "${RELEASE_TARGET}" \
             --sms-provider "${SMS_PROVIDER}" \
-            --sms-configuration-generation "${SMS_CONFIGURATION_GENERATION}"
+            --sms-configuration-generation "${SMS_CONFIGURATION_GENERATION}" \
+            --release-profile "${RELEASE_PROFILE}"
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -114,17 +122,10 @@ jobs:
         env:
           EXPECTED_SMS_PROVIDER: ${{ inputs.sms_provider }}
           EXPECTED_SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
-          CONFIGURED_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
-          CONFIGURED_PINGRAM_CONFIGURATION_GENERATION: ${{ vars.PINGRAM_CONFIGURATION_GENERATION }}
         run: |
           set -euo pipefail
-          test "${EXPECTED_SMS_PROVIDER}" = "${CONFIGURED_SMS_PROVIDER}"
-          if test "${EXPECTED_SMS_PROVIDER}" = "pingram"; then
-            test -n "${CONFIGURED_PINGRAM_CONFIGURATION_GENERATION}"
-            test "${EXPECTED_SMS_CONFIGURATION_GENERATION}" = "${CONFIGURED_PINGRAM_CONFIGURATION_GENERATION}"
-          else
-            test "${EXPECTED_SMS_CONFIGURATION_GENERATION}" = "not-applicable"
-          fi
+          test "${EXPECTED_SMS_PROVIDER}" = "none"
+          test "${EXPECTED_SMS_CONFIGURATION_GENERATION}" = "not-applicable"
 
       - name: Materialize validated Functions runtime configuration
         if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
@@ -133,32 +134,51 @@ jobs:
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           APP_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
           AUTH_PLATFORM_ADMIN_EMAILS: ${{ secrets.AUTH_PLATFORM_ADMIN_EMAILS }}
-          NOTIFICATIONS_EMAIL_PROVIDER: ${{ vars.NOTIFICATIONS_EMAIL_PROVIDER || 'none' }}
+          NOTIFICATIONS_EMAIL_PROVIDER: none
           EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
           EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
-          NOTIFICATIONS_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
-          NOTIFICATIONS_OWNER_PHONE: ${{ vars.NOTIFICATIONS_OWNER_PHONE }}
-          NOTIFICATIONS_OWNER_SMS_CONSENT: ${{ vars.NOTIFICATIONS_OWNER_SMS_CONSENT }}
-          TWILIO_ACCOUNT_SID: ${{ vars.TWILIO_ACCOUNT_SID }}
-          TWILIO_MESSAGING_SERVICE_SID: ${{ vars.TWILIO_MESSAGING_SERVICE_SID }}
-          PINGRAM_API_ORIGIN: ${{ vars.PINGRAM_API_ORIGIN }}
-          PINGRAM_FROM_NUMBER: ${{ vars.PINGRAM_FROM_NUMBER }}
-          PINGRAM_CONFIGURATION_GENERATION: ${{ vars.PINGRAM_CONFIGURATION_GENERATION }}
-          STRIPE_MODE: ${{ vars.STRIPE_MODE }}
-          COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ vars.COMMERCIAL_CHANGE_AUTHORITY_ENABLED || 'false' }}
-          OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
-          REVENUE_AUTOPILOT_ENABLED: ${{ vars.REVENUE_AUTOPILOT_ENABLED || 'false' }}
-          REVENUE_AUTOPILOT_SENDS_ENABLED: ${{ vars.REVENUE_AUTOPILOT_SENDS_ENABLED || 'false' }}
-          BUYER_ACCESS_ENABLED: ${{ vars.BUYER_ACCESS_ENABLED || 'false' }}
-          BUYER_ACCESS_STRIPE_MODE: ${{ vars.BUYER_ACCESS_STRIPE_MODE || 'test' }}
+          NOTIFICATIONS_SMS_PROVIDER: none
+          STRIPE_MODE: live
+          COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"
+          OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false"
+          REVENUE_AUTOPILOT_ENABLED: "false"
+          REVENUE_AUTOPILOT_SENDS_ENABLED: "false"
+          BUYER_ACCESS_ENABLED: "false"
+          BUYER_ACCESS_STRIPE_MODE: test
           BUYER_ACCESS_APP_BASE_URL: ${{ vars.BUYER_ACCESS_APP_BASE_URL }}
-          BUYER_ACCESS_TURNSTILE_HOSTNAMES: ${{ vars.BUYER_ACCESS_TURNSTILE_HOSTNAMES }}
         run: node ./scripts/materialize-functions-env.mjs
+
+      - name: Prepare checksum-verified Firebase CLI
+        id: firebase_cli
+        run: echo "path=$(node ./scripts/firebase-tools-binary.mjs --print-path)" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate Firebase workload identity configuration
+        env:
+          FIREBASE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "${FIREBASE_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${FIREBASE_DEPLOY_SERVICE_ACCOUNT}"
+          [[ "${FIREBASE_WORKLOAD_IDENTITY_PROVIDER}" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[^/]+/providers/[^/]+$ ]]
+          [[ "${FIREBASE_DEPLOY_SERVICE_ACCOUNT}" =~ ^[^@[:space:]]+@tonicatering\.iam\.gserviceaccount\.com$ ]]
+
+      - name: Authenticate to Google Cloud for Firebase deployment
+        id: google_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
+          project_id: tonicatering
+          create_credentials_file: true
+          export_environment_variables: false
 
       - name: Deploy selected Firebase surface
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.google_auth.outputs.credentials_file_path }}
+          GOOGLE_CLOUD_PROJECT: tonicatering
+          FIREBASE_CLI_PATH: ${{ steps.firebase_cli.outputs.path }}
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
@@ -166,6 +186,7 @@ jobs:
           DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
           EXPECTED_SMS_PROVIDER: ${{ inputs.sms_provider }}
           EXPECTED_SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
+          RELEASE_PROFILE: ${{ inputs.release_profile }}
           VITE_APP_URL: ${{ vars.APP_BASE_URL }}
           VITE_APP_HOST: quotepilot.mbmapps.com
           VITE_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
@@ -181,16 +202,16 @@ jobs:
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
-          VITE_BUYER_ACCESS_ENABLED: "true"
-          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
-          VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: ${{ vars.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY }}
+          VITE_BUYER_ACCESS_ENABLED: "false"
+          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
         run: |
           node ./scripts/deploy-firebase-production.mjs \
             --scope "${FIREBASE_SCOPE}" \
             --confirm "${DEPLOY_CONFIRMATION}" \
             --release-sha "${RELEASE_SHA}" \
             --ci-run-id "${CI_RUN_ID}" \
-            --rollback-sha "${ROLLBACK_SHA}"
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --release-profile "${RELEASE_PROFILE}"
 
       - name: Verify Firebase Hosting origin
         if: inputs.firebase_scope == 'hosting' || inputs.firebase_scope == 'all'
@@ -205,5 +226,6 @@ jobs:
             echo "- CI run: ${{ inputs.ci_run_id }}"
             echo "- Rollback SHA: ${{ inputs.rollback_sha }}"
             echo "- Owner SMS provider: ${{ inputs.sms_provider }}"
+            echo "- Release profile: ${{ inputs.release_profile }}"
             echo "- Owner SMS configuration generation: ${{ inputs.sms_configuration_generation }}"
           } >> "${GITHUB_STEP_SUMMARY}"

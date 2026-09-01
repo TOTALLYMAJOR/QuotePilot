@@ -84,10 +84,14 @@ describe("AmbientProposalContext", () => {
     expect(container.textContent).toContain("Complete customer view");
     expect(container.textContent).not.toMatch(/\bprojection\b/iu);
     expect(container.textContent).toContain("Proposal completeness");
-    expect(container.textContent).toContain("No gaps");
+    expect(container.textContent).toContain("Required details ready");
     expect(container.textContent).toContain("What each status is based on");
     expect(container.textContent).toContain("What you can do next");
     expect(container.textContent).toContain("Why this is shown");
+    expect(container.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this is shown");
+    expect(container.querySelector('[data-context-arrival-duplicate="consequence"]')?.textContent)
+      .toContain("What it affects");
     expect(container.textContent).not.toContain("Why QuotePilot is showing this");
     expect(container.textContent).toContain("If you do nothing");
     expect(container.textContent).toContain("Confidence and source");

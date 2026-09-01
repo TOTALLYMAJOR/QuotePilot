@@ -96,7 +96,12 @@ describe("buildAmbientLibrary", () => {
     expect(result.modelId).toBe(AMBIENT_LIBRARY_MODEL);
     expect(result.surfaceContract).toBe(AMBIENT_LIBRARY_SURFACE_CONTRACT);
     expect(result.state).toBe("ready");
-    expect(result.roleBoundary).toEqual({ role: "admin", allowed: true, reason: null });
+    expect(result.roleBoundary).toEqual({
+      role: "admin",
+      allowed: true,
+      editAllowed: true,
+      reason: null
+    });
     expect(result.readBoundary).toMatchObject({
       kind: "firebase",
       organizationId: ORGANIZATION_ID,
@@ -345,24 +350,25 @@ describe("buildAmbientLibrary", () => {
     expect(JSON.stringify(result)).not.toContain("Herb chicken");
   });
 
-  test("fails closed for non-admin callers without leaking catalog rows or controls", () => {
+  test("gives sales staff read-only Library readiness without edit controls", () => {
     const result = build({ currentUserRole: "sales" });
 
-    expect(result.state).toBe("unauthorized");
+    expect(result.state).toBe("ready");
     expect(result.roleBoundary).toEqual({
       role: "sales",
-      allowed: false,
-      reason: "Library is restricted to administrators."
+      allowed: true,
+      editAllowed: false,
+      reason: null
     });
-    expect(result.sections).toEqual([]);
-    expect(result.templates).toEqual([]);
-    expect(result.nextAction).toBeNull();
-    expect(result.actions["refresh-library"]).toMatchObject({
-      enabled: false,
-      primary: false,
-      disabledReason: "Library records and controls are available only to administrators."
-    });
-    expect(JSON.stringify(result)).not.toMatch(/Herb chicken|Plated dinner|Wedding/iu);
+    expect(result.sections).toHaveLength(6);
+    expect(result.templates).toHaveLength(1);
+    expect(result.capabilities.openSection).toBe(false);
+    expect(result.capabilities.openTemplate).toBe(false);
+    expect(Object.entries(result.actions)
+      .filter(([actionId]) => actionId !== "refresh-library")
+      .map(([, action]) => action)
+      .every((action) => action.enabled === false)).toBe(true);
+    expect(JSON.stringify(result)).toMatch(/Herb chicken|Plated dinner|Wedding/iu);
   });
 
   test("labels local fallback, revision, and pricing confirmation as browser-only", () => {

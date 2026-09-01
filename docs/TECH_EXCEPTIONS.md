@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-08-25 00:58:05 CDT
+Last updated: 2026-09-01 13:05:37 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -18,12 +18,45 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 ## Active Exceptions
 
+- Date: August 29, 2026
+- Owner: QuotePilot maintainers
+- Change: Keep the latest `@lhci/cli` 0.15.1 but override the Lighthouse copies
+  used by `@lhci/cli` and `@lhci/utils` from pinned 12.6.1 to 13.4.1. The
+  resolved graph uses Puppeteer 25.9.0 and `@puppeteer/browsers` 3.2.1 and no
+  longer installs `extract-zip`.
+- Exception type: `major-upgrade`
+- Rationale: The latest LHCI release still pins the vulnerable Lighthouse 12
+  chain. The registry-proposed forced repair downgrades LHCI to 0.12.0 and is
+  not an acceptable release-tool rollback. The narrow override removes all six
+  high-severity root development findings while retaining the tracked LHCI
+  collection, assertion, and filesystem-report contract.
+- Risk impact: LHCI 0.15.1 was released against Lighthouse 12.6.1, so
+  Lighthouse 13.4.1 is an upstream-unsupported pairing even though the public
+  autorun contract passes locally. Lighthouse 13.4.1 also requires Node
+  22.19 or newer; local validation uses Node 22.22.2, and exact remote CI
+  Quality run `33242537210` proves the hosted Node 22 runner resolves a
+  compatible patch for this candidate.
+- Performance impact: Audit scoring or metric implementation may shift across
+  the Lighthouse major version. QuotePilot does not relax any threshold: the
+  existing performance, LCP, CLS, and TBT assertions remain unchanged and the
+  real local CWV run passes.
+- Rollback plan: Revert the two package overrides and regenerated lockfile.
+  That restores the previous LHCI graph but also restores the six known high
+  findings, so the rollback is diagnostic only and must not be promoted as a
+  production-ready candidate.
+- Exit criteria: Adopt an LHCI release that natively depends on a
+  non-vulnerable Lighthouse/Puppeteer graph, remove the overrides, and pass the
+  dependency audit plus the same local and exact-CI CWV gates.
+- Verification evidence: `npm ls` resolves Lighthouse 13.4.1, Puppeteer
+  25.9.0, and `@puppeteer/browsers` 3.2.1 with no `extract-zip`; `npm audit`
+  reports zero vulnerabilities; `npm run check:perf:cwv` passes locally with
+  the existing configuration and thresholds. Exact remote CI Quality run
+  `33242537210` also passed the unchanged CWV gate under this graph.
+
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. The reconciled Steward and control-plane
-  candidate now measures 3,221,176 compatibility bytes and 3,905,603 Ambient
-  bytes with the largest chunk unchanged at 387,248 bytes. The Proposal Composer quote-builder
+  production-equivalent Ambient graphs. The Proposal Composer quote-builder
   candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
@@ -31,9 +64,21 @@ Use this log when a change intentionally departs from stable-first policy or req
   bytes, largest chunk unchanged) recalibrate compatibility to an absolute
   ceiling of 2,964,327 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient remains
-  temporarily capped at 3,905,603 aggregate bytes and the same 391,901-byte
-  largest-chunk ceiling. The prior local combined candidate measured 3,887,673
-  Ambient bytes; the active ceiling is the exact protected-Playwright graph.
+  temporarily capped at 3,827,245 aggregate bytes and the same 391,901-byte
+  largest-chunk ceiling (measured 3,750,363 local Ambient bytes is under that
+  standing ceiling). The approved v0.16 Calm Four and Quick Updates candidate
+  advances the current Ambient aggregate ceiling to 4,017,992 bytes while
+  retaining the 391,901-byte largest-chunk ceiling; compatibility retains the
+  Calm Four source candidate's already reviewed 3,221,176 / 391,901-byte
+  ceilings. The Business Setup and revision-review release graph measures
+  3,224,340 / 385,181 bytes for compatibility and 4,050,831 / 385,181 bytes
+  for the config-free Ambient graph. The compatibility ceiling remains
+  3,231,504 bytes. Exact-head CI run `33540311518` measured the
+  Firebase-configured production-equivalent Ambient graph at 4,056,299 /
+  385,181 bytes, while the same CI-equivalent graph measured 4,056,372 /
+  385,181 locally. The Ambient ceiling is therefore the larger literal
+  4,056,372-byte graph with no discretionary growth headroom; the 391,901-byte
+  largest-chunk ceiling remains unchanged.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -84,24 +129,22 @@ Use this log when a change intentionally departs from stable-first policy or req
   The catalog onboarding recovery hotfix adds 1,025 Ambient aggregate bytes in
   CI (`3,827,245 / 391,901`) for the hosted setup, manual, import, and bypass
   paths; the largest chunk remains unchanged.
-  The Document-hero landing remount (self-revising BEO hero, Plans rate card,
-  and design-partner chapter) adds 12,245 Ambient aggregate bytes in CI
-  (`3,839,490 / 387,248`); the Ambient ceiling recalibrates to `3,853,000`
-  with the largest chunk unchanged. Compatibility is unaffected (measured
-  2,936,683, under its standing 2,964,327 ceiling).
-  The prior combined source candidate, including the Package Workspace,
-  proposal presentation, read-only quote-workspace concept, and adjacent
-  workspace changes, measures 3,206,553 / 387,248 bytes for local compatibility
-  and 3,887,673 / 387,248 bytes for a prior local Ambient build. The temporary
-  ceilings were therefore 3,215,097 and 3,899,524 aggregate bytes respectively,
-  pinned to the exact protected-Playwright production-flag graphs. The current
-  reconciliation adds the bounded Steward Desk implementation, state control
-  plane, and their governance contracts. Explicit production-flag builds now
-  measure 3,221,176 compatibility bytes and 3,905,603 Ambient bytes, which are
-  the new exact temporary ceilings pending exact-SHA CI confirmation.
-  The largest-chunk ceiling remains 391,901 bytes. This is a combined-candidate
-  recalibration, not a claim that the Package Workspace alone caused the
-  increase and not general growth headroom.
+  The combined source checkpoint, including the Package Workspace, proposal
+  presentation, read-only quote-workspace concept, and adjacent workspace
+  changes, originally measured 3,206,553 / 387,248 bytes for compatibility and
+  3,887,673 / 387,248 bytes for Ambient. Exact-SHA CI run `33239048234` on
+  release candidate `6ff9d605` measured compatibility at 3,208,826 / 384,998
+  bytes and Ambient at 3,928,479 / 388,269 bytes after the later attendance,
+  observability, recovery, exact-arrival, and presentation slices were
+  assembled. A CI-equivalent local rebuild measured Ambient at 3,928,552 /
+  388,303 bytes, 73 aggregate bytes above the runner. The temporary ceilings
+  are therefore 3,213,578 and 3,928,552 aggregate bytes respectively:
+  compatibility retains its existing ceiling, while Ambient is pinned to the
+  larger literal exact-candidate measurement so both observed build
+  environments pass without discretionary growth headroom. The largest-chunk
+  ceiling remains 391,901 bytes. This is a combined-candidate reconciliation,
+  not a claim that any one capability caused the increase and not general
+  growth headroom.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
@@ -113,8 +156,26 @@ Use this log when a change intentionally departs from stable-first policy or req
   and preserve exact rollback evidence before AIUI-48 retirement or Ambient
   promotion.
 - Verification evidence: Seven focused profiler/release-policy tests, workflow
-  lint, and fresh local production builds for both graphs pass. CI exact-SHA
-  confirmation, hosted timing, and human acceptance remain open.
+  lint, and fresh local production builds for both graphs pass. Exact-SHA CI
+  run `33239048234` established the current runner measurements and failed only
+  because its Ambient aggregate exceeded the prior stale ceiling; all other
+  jobs passed. A fresh CI-equivalent local Ambient build established the larger
+  literal ceiling above. A subsequent exact-SHA CI pass, hosted timing, and
+  human acceptance remain open.
+  The v0.16 candidate then measured 3,214,012 / 385,130 bytes for compatibility
+  and 4,017,689 / 385,130 bytes for the exact production-equivalent Ambient
+  graph. The new global destinations, contextual Quick Updates behavior,
+  responsive surfaces, dismissal/review/save semantics, and their preserved
+  authority adapters account for the approved aggregate change. A reviewed
+  lazy customer-portal boundary keeps that surface out of the initial Ambient
+  workspace chunk and reduces the largest emitted application chunk; Firebase
+  is the 385,130-byte largest asset, below the unchanged 391,901-byte ceiling.
+  Removing approximately 87 KB instead would require dropping approved v0.16
+  behavior or an existing capability, so the Ambient aggregate exception is
+  recalibrated to 4,017,992 bytes: the literal local candidate plus only the
+  previously established 303-byte Ambient runner offset. It provides no
+  discretionary source-growth allowance. Exact-SHA CI, hosted timing, and
+  authenticated human acceptance remain separate gates.
 
 ## Superseded Exceptions
 

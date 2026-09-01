@@ -613,6 +613,14 @@ describe("trusted server quote creation documents", () => {
 
   test("builds one canonical draft, public snapshot, and v0001 from server proof", () => {
     const form = sanitizeQuoteCreationRequest({ form: buildForm() }).form;
+    const pricingCatalogAuthority = {
+      schemaVersion: 1,
+      organizationId: "org-a",
+      catalogSource: "firebase-org",
+      catalogRevision: 7,
+      confirmedCatalogRevision: 7,
+      settingsFingerprintSha256: "a".repeat(64)
+    };
     const documents = buildTrustedQuoteCreationDocuments({
       quoteId: "quote-a",
       quoteNumber: "Q-260727-1200-ABCDEF12",
@@ -625,6 +633,7 @@ describe("trusted server quote creation documents", () => {
       },
       form,
       pricing: buildPricing(),
+      pricingCatalogAuthority,
       catalogSource: "firebase-org",
       settings: {
         quoteValidityDays: 45,
@@ -674,6 +683,10 @@ describe("trusted server quote creation documents", () => {
         grandTotal: 1647
       }
     });
+    expect(documents.quote.pricingCatalogAuthority).toEqual(pricingCatalogAuthority);
+    expect(documents.version.pricingCatalogAuthority).toEqual(pricingCatalogAuthority);
+    expect(documents.version.snapshot.pricingCatalogAuthority).toEqual(pricingCatalogAuthority);
+    expect(documents.portal).not.toHaveProperty("pricingCatalogAuthority");
     expect(documents.quote.portalExpiresAtISO).toBe("2026-08-26T12:00:00.000Z");
     expect(documents.quote.selection.packageInclusions).toMatchObject({
       menuItems: [{ id: "included-side", name: "Included Side", price: 0, includedInPackage: true }],

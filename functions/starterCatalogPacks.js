@@ -3,6 +3,7 @@ const starterCatalogPackData = require("./data/starterCatalogPacks.json");
 
 const PACK_SOURCE = "starter-catalog-pack";
 const MAX_TRANSACTION_WRITES = 450;
+const MAX_CATALOG_MONEY_MINOR = 100_000_000;
 const MAX_PACKAGE_INCLUSIONS_PER_TYPE = 100;
 const PACKAGE_INCLUSION_KEYS = Object.freeze([
   "includedMenuItemIds",
@@ -452,10 +453,15 @@ function classifyPackRecord(collectionName, docData = {}, packId = "", packVersi
 }
 
 function assertIntegerMinor(value, label, { positive = false } = {}) {
-  if (!Number.isSafeInteger(value) || value < 0 || (positive && value <= 0)) {
+  if (
+    !Number.isSafeInteger(value)
+    || value < 0
+    || value > MAX_CATALOG_MONEY_MINOR
+    || (positive && value <= 0)
+  ) {
     throw new StarterCatalogPackError(
       "failed-precondition",
-      `${label} must be stored as ${positive ? "a positive" : "a non-negative"} integer minor-unit value.`
+      `${label} must be stored as ${positive ? "a positive" : "a non-negative"} integer minor-unit value no greater than 100000000.`
     );
   }
 }
@@ -1061,13 +1067,17 @@ function buildCatalogMoneyMigrations({ settings = {}, collections = {}, deleteFi
     const resolved = resolveStoredMinor(settings, minorKey, legacyKey, minorKey, {
       requireMinor: Boolean(text(settings?.starterCatalogPack?.id))
     });
-    if (!resolved.needsMigration) return;
-    settingsPatch[minorKey] = resolved.minor;
-    if (deleteField) settingsPatch[legacyKey] = deleteField();
+    if (resolved.needsMigration) settingsPatch[minorKey] = resolved.minor;
+    if (deleteField && Object.prototype.hasOwnProperty.call(settings, legacyKey)) {
+      settingsPatch[legacyKey] = deleteField();
+    }
   });
 
   const bartenderRateTypes = settings.bartenderRateTypes || [];
-  if (bartenderRateTypes.some((entry) => !Number.isSafeInteger(entry?.rateMinor))) {
+  if (bartenderRateTypes.some((entry) => (
+    !Number.isSafeInteger(entry?.rateMinor)
+    || Object.prototype.hasOwnProperty.call(entry || {}, "rate")
+  ))) {
     settingsPatch.bartenderRateTypes = bartenderRateTypes.map((entry) => {
       const resolved = resolveStoredMinor(
         entry,
@@ -1081,7 +1091,12 @@ function buildCatalogMoneyMigrations({ settings = {}, collections = {}, deleteFi
   }
   const staffingRateTypes = settings.staffingRateTypes || [];
   if (staffingRateTypes.some(
-    (entry) => !Number.isSafeInteger(entry?.serverRateMinor) || !Number.isSafeInteger(entry?.chefRateMinor)
+    (entry) => (
+      !Number.isSafeInteger(entry?.serverRateMinor)
+      || !Number.isSafeInteger(entry?.chefRateMinor)
+      || Object.prototype.hasOwnProperty.call(entry || {}, "serverRate")
+      || Object.prototype.hasOwnProperty.call(entry || {}, "chefRate")
+    )
   )) {
     settingsPatch.staffingRateTypes = staffingRateTypes.map((entry) => {
       const server = resolveStoredMinor(

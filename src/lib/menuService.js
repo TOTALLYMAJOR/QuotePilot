@@ -225,6 +225,22 @@ function toMinorUnits(value) {
   return Math.round(asNumber(value, 0) * 100);
 }
 
+function toNullableMinorUnits(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  return toMinorUnits(value);
+}
+
+function fromStoredNullableMoney(data = {}, minorKey = "costMinor", legacyKey = "cost") {
+  if (Object.prototype.hasOwnProperty.call(data, minorKey)) {
+    if (data[minorKey] === null || data[minorKey] === undefined) return null;
+    const minor = Number(data[minorKey]);
+    return Number.isSafeInteger(minor) ? minor / 100 : null;
+  }
+  if (data[legacyKey] === null || data[legacyKey] === undefined || data[legacyKey] === "") return null;
+  const amount = Number(data[legacyKey]);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 function fromStoredMoney(data = {}, minorKey = "priceMinor", legacyKey = "price") {
   if (Object.prototype.hasOwnProperty.call(data, minorKey)) {
     const minor = Number(data[minorKey]);
@@ -377,6 +393,7 @@ export async function getMenuItems(eventTypeId, { includeInactive = false, organ
           categoryId: asText(item.categoryId),
           name: asText(item.name, "Untitled Item"),
           price: fromStoredMoney(item),
+          cost: fromStoredNullableMoney(item),
           pricingType,
           type: pricingType,
           active: normalizeActive(item.active, true)
@@ -394,6 +411,7 @@ export async function getMenuItems(eventTypeId, { includeInactive = false, organ
       categoryId: asText(item.categoryId),
       name: asText(item.name, "Untitled Item"),
       price: fromStoredMoney(item),
+      cost: fromStoredNullableMoney(item),
       pricingType,
       type: pricingType,
       active: normalizeActive(item.active, true)
@@ -419,6 +437,7 @@ export async function createMenuItem(data = {}) {
     categoryId: asText(data.categoryId),
     name: asText(data.name, "New Menu Item"),
     priceMinor: toMinorUnits(data.price),
+    costMinor: toNullableMinorUnits(data.cost),
     pricingType,
     type: pricingType,
     active: normalizeActive(data.active, true),
@@ -442,7 +461,7 @@ export async function createMenuItem(data = {}) {
         throw new Error("Category no longer exists. Refresh the menu and try again.");
       }
       state.items.push({ id, ...payload, source: "local-custom" });
-      return { id, ...payload, price: asNumber(data.price, 0) };
+      return { id, ...payload, price: asNumber(data.price, 0), cost: data.cost ?? null };
     });
     return mutation;
   }
@@ -461,6 +480,7 @@ export async function createMenuItem(data = {}) {
     id: ref.id,
     ...payload,
     price: asNumber(data.price, 0),
+    cost: data.cost ?? null,
     ...catalogMutation
   };
 }
@@ -477,6 +497,9 @@ export async function updateMenuItem(id, data = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(data, "price")) {
     payload.priceMinor = toMinorUnits(data.price);
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "cost")) {
+    payload.costMinor = toNullableMinorUnits(data.cost);
   }
   if (Object.prototype.hasOwnProperty.call(data, "categoryId")) {
     payload.categoryId = asText(data.categoryId);
@@ -519,7 +542,8 @@ export async function updateMenuItem(id, data = {}) {
         ...payload,
         ...(Object.prototype.hasOwnProperty.call(data, "price")
           ? { price: asNumber(data.price, 0) }
-          : {})
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(data, "cost") ? { cost: data.cost ?? null } : {})
       };
     });
   }
@@ -544,6 +568,7 @@ export async function updateMenuItem(id, data = {}) {
       id: itemId,
       ...payload,
       ...(Object.prototype.hasOwnProperty.call(data, "price") ? { price: asNumber(data.price, 0) } : {}),
+      ...(Object.prototype.hasOwnProperty.call(data, "cost") ? { cost: data.cost ?? null } : {}),
       ...authorityResult,
       authoritativeMutation: true
     };
@@ -561,6 +586,7 @@ export async function updateMenuItem(id, data = {}) {
     id: itemId,
     ...payload,
     ...(Object.prototype.hasOwnProperty.call(data, "price") ? { price: asNumber(data.price, 0) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(data, "cost") ? { cost: data.cost ?? null } : {}),
     ...catalogMutation
   };
 }

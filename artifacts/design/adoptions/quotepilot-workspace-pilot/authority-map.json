@@ -1,6 +1,6 @@
 {
   "duplicateAuthorities": [],
-  "root": "/home/administrator/projects_new/quoteflow",
+  "root": "<repo-root>",
   "sources": [
     {
       "authorityClass": "repository-governance",

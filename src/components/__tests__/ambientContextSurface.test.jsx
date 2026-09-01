@@ -44,6 +44,23 @@ function AnchoredSurfaceHarness() {
   );
 }
 
+function ArrivalDisclosureHarness() {
+  return (
+    <ContextSurface
+      open
+      title="Proposal details"
+      description="Thompson Wedding, Q-1042"
+      reason="Proposal evidence stays separate."
+      consequence="Trusted controls recheck authority."
+      collapseArrivalDetails
+      onClose={() => {}}
+    >
+      <p data-context-arrival-duplicate="reason">Proposal evidence stays separate.</p>
+      <p>Current proposal state</p>
+    </ContextSurface>
+  );
+}
+
 describe("Ambient ContextSurface", () => {
   let container;
   let root;
@@ -82,8 +99,11 @@ describe("Ambient ContextSurface", () => {
     act(() => trigger.click());
 
     const dialog = container.querySelector('[role="dialog"]');
+    const detailsRegion = container.querySelector('[role="region"]');
     expect(dialog).not.toBeNull();
     expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(detailsRegion?.getAttribute("aria-label")).toBe("Staffing impact details");
+    expect(detailsRegion?.tabIndex).toBe(0);
     expect(dialog.textContent).toContain("Guest count increased to 135.");
     expect(dialog.textContent).toContain("One additional server protects the service ratio.");
     expect(container.querySelector('[aria-label="Close context"]').dataset.ambientActionId)
@@ -118,12 +138,43 @@ describe("Ambient ContextSurface", () => {
     expect(document.activeElement).toBe(last);
   });
 
+  test("does not duplicate details in the named scroll region", () => {
+    act(() => root.render(
+      <ContextSurface open title="Proposal details" onClose={() => {}}>
+        <p>Proposal evidence</p>
+      </ContextSurface>
+    ));
+
+    expect(container.querySelector('[role="region"]')?.getAttribute("aria-label"))
+      .toBe("Proposal details");
+  });
+
+  test("can demote repeated arrival explanation behind a native disclosure", () => {
+    act(() => root.render(<ArrivalDisclosureHarness />));
+
+    const surface = container.querySelector(".ambient-context-surface");
+    const details = container.querySelector(".ambient-context-surface__arrival-details");
+    expect(surface?.classList.contains("ambient-context-surface--arrival-disclosure")).toBe(true);
+    expect(details).not.toBeNull();
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")?.textContent).toBe("Why this view");
+    expect(details.textContent).toContain("Proposal evidence stays separate.");
+    const dialog = container.querySelector('[role="dialog"]');
+    const description = document.getElementById(dialog.getAttribute("aria-describedby"));
+    expect(description?.querySelector(".ambient-context-surface__description")?.textContent)
+      .toBe("Thompson Wedding, Q-1042");
+    expect(container.querySelector('[data-context-arrival-duplicate="reason"]')).not.toBeNull();
+  });
+
   test("keeps an anchored desktop inspector inside the visible viewport", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+    const clientWidthDescriptor = Object.getOwnPropertyDescriptor(document.documentElement, "clientWidth");
+    Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, value: 1265 });
     const originalRect = HTMLElement.prototype.getBoundingClientRect;
     HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
       if (this.matches?.("button")) {
-        return { top: 650, right: 1200, bottom: 694, left: 1050, width: 150, height: 44 };
+        return { top: 650, right: 300, bottom: 694, left: 150, width: 150, height: 44 };
       }
       if (this.matches?.(".ambient-context-surface__dialog")) {
         return { top: 0, right: 0, bottom: 620, left: 0, width: 432, height: 620 };
@@ -135,8 +186,15 @@ describe("Ambient ContextSurface", () => {
       act(() => root.render(<AnchoredSurfaceHarness />));
       expect(container.querySelector('[role="dialog"]').style.getPropertyValue("--ambient-context-anchor-top"))
         .toBe("164px");
+      expect(container.querySelector('[role="dialog"]').style.getPropertyValue("--ambient-context-anchor-right"))
+        .toBe("817px");
     } finally {
       HTMLElement.prototype.getBoundingClientRect = originalRect;
+      if (clientWidthDescriptor) {
+        Object.defineProperty(document.documentElement, "clientWidth", clientWidthDescriptor);
+      } else {
+        delete document.documentElement.clientWidth;
+      }
     }
   });
 });

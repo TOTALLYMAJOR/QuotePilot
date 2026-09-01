@@ -68,14 +68,18 @@ describe("event workspace presentation", () => {
     expect(first.readiness).toMatchObject({
       label: "Proposal readiness",
       scopeLabel: "Proposal completeness only",
-      score: 80,
+      score: 84,
       state: "review"
     });
     expect(first.readiness.gaps.map((gap) => gap.id)).toEqual([
       "customer-email",
-      "customer-phone",
       "duration"
     ]);
+    expect(first.readiness.evidence).toMatchObject({
+      criteriaCount: 11,
+      recordedCriteriaCount: 9,
+      recommendedGapCount: 1
+    });
     expect(first.flexibility).toMatchObject({
       state: "unavailable",
       score: null,

@@ -15,6 +15,7 @@ const mockState = vi.hoisted(() => ({
   deleteDoc: vi.fn(),
   doc: vi.fn(),
   getDoc: vi.fn(),
+  getDocFromServer: vi.fn(),
   getDocs: vi.fn(),
   limit: vi.fn(),
   orderBy: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("firebase/firestore", () => ({
   deleteDoc: mockState.deleteDoc,
   doc: mockState.doc,
   getDoc: mockState.getDoc,
+  getDocFromServer: mockState.getDocFromServer,
   getDocs: mockState.getDocs,
   limit: mockState.limit,
   orderBy: mockState.orderBy,
@@ -82,8 +84,10 @@ import {
   buildClientWritablePortalPayment,
   convertQuoteToContract,
   getCustomerRecordByEmail,
+  getQuoteById,
   getQuoteHistory,
   getWorkflowAttentionSnapshot,
+  recordQuoteIntegrationSync,
   requestQuoteApproval,
   reopenQuote,
   resolveQuoteApprovalRequest,
@@ -115,6 +119,18 @@ describe("quoteStore Firebase write safety", () => {
     mockState.orderBy.mockImplementation((...args) => ({ refType: "orderBy", args }));
     mockState.query.mockImplementation((...args) => ({ refType: "query", args }));
     mockState.getDocs.mockResolvedValue({ docs: [] });
+    mockState.getDocFromServer.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        organizationId: "org-one",
+        quoteNumber: "Q-ONE",
+        status: "draft",
+        activeVersionId: "v0002",
+        latestVersionNumber: 2,
+        event: { name: "Server Read Event", style: "Buffet" },
+        customer: { name: "Alex", email: "alex@example.test" }
+      })
+    });
     mockState.setDoc.mockResolvedValue(undefined);
     mockState.runTransaction.mockImplementation(async (_db, handler) => {
       const tx = {
@@ -323,6 +339,26 @@ describe("quoteStore Firebase write safety", () => {
     });
   });
 
+  test("uses an explicit server-only Firestore read for post-write quote confirmation", async () => {
+    setQuoteStoreOrganizationId("org-one");
+
+    const quote = await getQuoteById("quote-1", { serverOnly: true });
+
+    expect(mockState.getDocFromServer).toHaveBeenCalledWith(expect.objectContaining({
+      refType: "org-doc",
+      name: "quotes",
+      docId: "quote-1",
+      orgId: "org-one"
+    }));
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(quote).toEqual(expect.objectContaining({
+      id: "quote-1",
+      organizationId: "org-one",
+      activeVersionId: "v0002",
+      event: expect.objectContaining({ style: "Buffet" })
+    }));
+  });
+
   test("portal sync payloads omit all server-owned payment evidence", () => {
     expect(buildClientWritablePortalPayment({
       depositLink: "https://checkout.stripe.com/c/pay/cs_test_server",
@@ -497,6 +533,7 @@ describe("quoteStore Firebase write safety", () => {
       },
       ownerUid: "forged-owner",
       ownerEmail: "forged-owner@example.com",
+      expectedActiveVersionId: "v0001",
       commercialChangeAuthority: {
         simulationReceiptId: `ccs_${"a".repeat(48)}`,
         authorizationReceiptId: `cca_${"b".repeat(48)}`,
@@ -528,6 +565,7 @@ describe("quoteStore Firebase write safety", () => {
     expect(callable).toHaveBeenCalledWith({
       organizationId: "org-one",
       quoteId: "quote-1",
+      expectedActiveVersionId: "v0001",
       form: expect.objectContaining({
         name: "Updated Client",
         pkg: "classic"
@@ -626,26 +664,36 @@ describe("quoteStore Firebase write safety", () => {
 
   test("saveQuoteVersion binds immutable version authorship to the authenticated actor", async () => {
     mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    const canonicalQuote = {
+      quoteNumber: "Q-1",
+      organizationId: "org-one",
+      status: "draft",
+      createdAtISO: "2026-03-27T12:00:00.000Z",
+      updatedAtISO: "2026-03-27T12:00:00.000Z",
+      ownerUid: "original-owner",
+      ownerEmail: "original.owner@example.com",
+      customer: { name: "Client", email: "client@example.com" },
+      event: { name: "Event", date: "2026-05-01", venue: "Venue", guests: 50, hours: 4 },
+      selection: { menuItems: [] },
+      totals: { total: 1000, deposit: 300 },
+      pricing: { authority: "server_authoritative", grandTotal: 1000 },
+      payment: { depositStatus: "unpaid" },
+      booking: { confirmationStatus: "pending" },
+      lifecycle: { draftAtISO: "2026-03-27T12:00:00.000Z" },
+      latestVersionNumber: 0
+    };
     mockState.getDoc.mockResolvedValue({
       exists: () => true,
-      data: () => ({
-        quoteNumber: "Q-1",
-        organizationId: "org-one",
-        status: "draft",
-        createdAtISO: "2026-03-27T12:00:00.000Z",
-        updatedAtISO: "2026-03-27T12:00:00.000Z",
-        ownerUid: "original-owner",
-        ownerEmail: "original.owner@example.com",
-        customer: { name: "Client", email: "client@example.com" },
-        event: { name: "Event", date: "2026-05-01", venue: "Venue", guests: 50, hours: 4 },
-        selection: { menuItems: [] },
-        totals: { total: 1000, deposit: 300 },
-        pricing: { authority: "server_authoritative", grandTotal: 1000 },
-        payment: { depositStatus: "unpaid" },
-        booking: { confirmationStatus: "pending" },
-        lifecycle: { draftAtISO: "2026-03-27T12:00:00.000Z" }
-      })
+      data: () => canonicalQuote
     });
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => canonicalQuote
+      }),
+      set: mockState.transactionSet,
+      update: mockState.transactionUpdate
+    }));
 
     await expect(saveQuoteVersion("quote-1")).resolves.toMatchObject({
       ok: true,
@@ -662,6 +710,71 @@ describe("quoteStore Firebase write safety", () => {
     });
     expect(versionPayload.snapshot.ownerUid).toBe("original-owner");
     expect(versionPayload.snapshot.ownerEmail).toBe("original.owner@example.com");
+    expect(versionPayload.snapshot.payment).toEqual({ depositStatus: "unpaid" });
+    expect(versionPayload.snapshot.payment).not.toHaveProperty("finalBalance");
+  });
+
+  test("recordQuoteIntegrationSync persists the internal audit log without mirroring it to the customer portal", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    const canonicalQuote = {
+      quoteNumber: "Q-1",
+      organizationId: "org-one",
+      portalKey: "0123456789abcdef0123456789abcdef",
+      status: "draft",
+      createdAtISO: "2026-03-27T12:00:00.000Z",
+      updatedAtISO: "2026-03-27T12:00:00.000Z",
+      ownerUid: "current-admin",
+      ownerEmail: "current.admin@example.com",
+      customer: { name: "Client", email: "client@example.com" },
+      event: { name: "Event", date: "2026-05-01", venue: "Venue", guests: 50, hours: 4 },
+      selection: { menuItems: [] },
+      totals: { total: 1000, deposit: 300 },
+      pricing: { authority: "server_authoritative", grandTotal: 1000 },
+      payment: { depositStatus: "unpaid" },
+      booking: { confirmationStatus: "pending" },
+      lifecycle: { draftAtISO: "2026-03-27T12:00:00.000Z" },
+      integrations: { logs: [], providers: {}, retention: 50 },
+      latestVersionNumber: 0
+    };
+    mockState.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => canonicalQuote
+    });
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => canonicalQuote
+      }),
+      set: mockState.transactionSet,
+      update: mockState.transactionUpdate
+    }));
+
+    await expect(recordQuoteIntegrationSync({
+      quoteId: "quote-1",
+      provider: "webhook",
+      state: "skipped",
+      message: "Audit-only staging fixture.",
+      actorEmail: "current.admin@example.com",
+      payloadRef: "uat-audit-only"
+    })).resolves.toMatchObject({
+      ok: true,
+      storage: "firebase",
+      entry: {
+        provider: "webhook",
+        state: "skipped",
+        actorEmail: "current.admin@example.com"
+      }
+    });
+
+    expect(mockState.updateDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        integrations: expect.objectContaining({
+          logs: [expect.objectContaining({ payloadRef: "uat-audit-only" })]
+        })
+      })
+    );
+    expect(mockState.setDoc).not.toHaveBeenCalled();
   });
 
   test("portal rotation delegates identity and timestamps to the admin-only callable", async () => {

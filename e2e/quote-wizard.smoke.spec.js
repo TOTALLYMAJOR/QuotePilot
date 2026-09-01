@@ -75,15 +75,36 @@ async function advanceToSaveButton(page, saveButtonLabel) {
   throw new Error(`Unable to reach save button: ${saveButtonLabel}`);
 }
 
+async function expectSavedQuoteWorkspace(page, { eventName } = {}) {
+  const workspace = page.getByTestId("quote-workspace");
+  await expect(workspace).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/quotes\/[^/?#]+$/);
+  await expect(workspace.getByText("Saved workspace", { exact: true })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Back to opportunities" })).toBeVisible();
+  if (eventName) {
+    await expect(workspace.getByRole("heading", { name: new RegExp(eventName) })).toBeVisible();
+  }
+  const url = new URL(page.url());
+  return decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) || "");
+}
+
+async function openQuoteHistoryFromWorkspace(page) {
+  const workspace = page.getByTestId("quote-workspace");
+  await workspace.getByRole("button", { name: "Back to opportunities" }).click();
+  const history = page.getByRole("dialog", { name: "Quotes" });
+  await expect(history).toBeVisible();
+  return history;
+}
+
 async function createQuoteToHistory(page, { guests = 72, eventName, venue, date } = {}) {
   await fillRequiredQuoteFields(page, { guests, eventName, venue, date });
   await advanceToSaveButton(page, "Save draft");
-  const history = page.getByRole("dialog", { name: "Quotes" });
-  const handoff = history.locator(".saved-quote-handoff");
-  await expect(handoff).toContainText(/Saved as a draft/i);
-  await expect(handoff).toBeFocused();
+  const quoteId = await expectSavedQuoteWorkspace(page, { eventName });
+  const history = await openQuoteHistoryFromWorkspace(page);
   const historyHeading = history.getByRole("heading", { name: "Quotes" });
   await expect(historyHeading).toBeVisible();
+  await expect(history.locator(`tr[data-quote-id="${quoteId}"]`)).toBeVisible();
+  return quoteId;
 }
 
 function quoteRows(page) {
@@ -110,7 +131,21 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/app");
-  await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /New quote/i })).toBeVisible();
+});
+
+test("empty Workflow leads directly into the first quote", async ({ page }) => {
+  await page.getByRole("button", { name: /Workflow/i }).click();
+  await expect(page.getByRole("heading", {
+    name: "Create the first quote to begin follow-up"
+  })).toBeVisible();
+  await expect(page.getByText(/QuotePilot will carry the saved quote, proposal readiness, decisions, and follow-ups/i)).toBeVisible();
+
+  await page.getByRole("button", { name: "Start a quote" }).click();
+  await expect(page.getByText("Creating this quote", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Create the first quote to begin follow-up"
+  })).toHaveCount(0);
 });
 
 test("operator workspaces load only when first opened and stay mounted after close", async ({ page }) => {
@@ -357,10 +392,47 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
     .toHaveValue(selectedEventTypeId);
 });
 
-test("a menu item created in Catalog Admin appears in the active quote immediately", async ({ page }) => {
+test("a menu item stages immediately without activating the current quote", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__catalogDraftSaveCalls = [];
+    window.__catalogDraftChanges = [];
+    window.__catalogDraftGeneration = 0;
+    window.__quotePilotE2eFunctions = {
+      getCatalogSetupDraft: async () => ({
+        currentCatalogRevision: 1,
+        draft: {
+          state: "empty",
+          baseCatalogRevision: 1,
+          generation: window.__catalogDraftGeneration,
+          changedRecordCount: window.__catalogDraftChanges.length,
+          changes: window.__catalogDraftChanges
+        }
+      }),
+      saveCatalogSetupDraft: async (payload) => {
+        window.__catalogDraftSaveCalls.push(payload);
+        const changes = new Map(window.__catalogDraftChanges.map((change) => [
+          `${change.collection}:${change.recordId}`,
+          change
+        ]));
+        payload.patches.forEach((change) => changes.set(`${change.collection}:${change.recordId}`, change));
+        window.__catalogDraftChanges = [...changes.values()];
+        window.__catalogDraftGeneration += 1;
+        return {
+          draft: {
+            state: "open",
+            baseCatalogRevision: 1,
+            generation: window.__catalogDraftGeneration,
+            changedRecordCount: window.__catalogDraftChanges.length,
+            changes: window.__catalogDraftChanges
+          }
+        };
+      }
+    };
+  });
+  await page.reload();
   await fillRequiredQuoteFields(page, {
     guests: 55,
-    eventName: "Immediate Menu Refresh",
+    eventName: "Staged Menu Change",
     venue: "Refresh Hall"
   });
   const selectedEventTypeId = await page.getByLabel(/Event type/i).inputValue();
@@ -374,22 +446,20 @@ test("a menu item created in Catalog Admin appears in the active quote immediate
   await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
   await catalogAdmin.getByRole("combobox", { name: "Event type", exact: true })
     .selectOption(selectedEventTypeId);
-  const category = catalogAdmin.getByRole("combobox", { name: "Category", exact: true });
-  await expect.poll(() => category.locator("option").count()).toBeGreaterThan(1);
-  await category.selectOption({ index: 1 });
+  const menuSection = catalogAdmin.getByRole("combobox", { name: "Menu section", exact: true });
+  await expect.poll(() => menuSection.locator("option").count()).toBeGreaterThan(1);
+  await menuSection.selectOption({ index: 1 });
   await catalogAdmin.getByPlaceholder("New item name").fill("Immediate Recovery Entree");
-  await catalogAdmin.locator(".admin-inline-actions-create-item input[type='number']").fill("12.34");
+  await catalogAdmin.getByRole("spinbutton", { name: "New menu item price" }).fill("12.34");
   await catalogAdmin.getByRole("button", { name: "Add Item" }).click();
-  const setupCatalogAdmin = page.getByRole("dialog").filter({
-    has: page.getByRole("heading", { name: "Catalog Admin" })
-  });
-  await expect(setupCatalogAdmin.getByRole("heading", { name: "Review Pricing Before Quoting" }))
-    .toBeVisible();
-  await setupCatalogAdmin.getByLabel("Pricing setup reviewed and approved").check();
-  await setupCatalogAdmin.getByRole("button", { name: "Save catalog changes" }).first().click();
-  await expect(setupCatalogAdmin).toHaveCount(0);
+  await expect(catalogAdmin.getByLabel("Immediate Recovery Entree name")).toHaveValue("Immediate Recovery Entree");
+  await expect(catalogAdmin.getByText("Ready to review", { exact: true })).toBeVisible();
+  await expect(catalogAdmin.getByText("1 changed record; active pricing is unchanged.")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__catalogDraftSaveCalls.length)).toBe(1);
 
-  await expect(page.getByRole("checkbox", { name: /Immediate Recovery Entree/i })).toBeVisible();
+  await catalogAdmin.getByRole("button", { name: "Close" }).click();
+  await expect(catalogAdmin).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: /Immediate Recovery Entree/i })).toHaveCount(0);
 });
 
 test("menu retry repeats the selected event request without clearing selections", async ({ page }) => {
@@ -660,7 +730,7 @@ test("good better best scenarios can be compared and applied", async ({ page }) 
   await expect(page.getByLabel("Package tier")).toHaveValue("deluxe");
 });
 
-test("draft save handoff targets the exact new quote and stays truthful across saves", async ({ page }) => {
+test("draft saves land on the exact canonical workspace and stay truthful across saves", async ({ page }) => {
   await fillRequiredQuoteFields(page, { guests: 60, eventName: "E2E Quote A", venue: "Hall A" });
   await page.getByRole("button", { name: /^Next:/ }).click();
 
@@ -678,23 +748,21 @@ test("draft save handoff targets the exact new quote and stays truthful across s
 
   await advanceToSaveButton(page, "Save draft");
 
-  const history = page.getByRole("dialog", { name: "Quotes" });
-  const firstHandoff = history.locator(".saved-quote-handoff");
-  await expect(firstHandoff).toContainText(/Saved as a draft/i);
-  await expect(firstHandoff).toContainText(/has not been sent/i);
-  await expect(firstHandoff).toBeFocused();
+  const firstQuoteId = await expectSavedQuoteWorkspace(page, { eventName: "E2E Quote A" });
+  const firstWorkspace = page.getByTestId("quote-workspace");
+  await expect(firstWorkspace.getByText("Draft", { exact: true }).first()).toBeVisible();
+  await expect(firstWorkspace.getByText("110 guests", { exact: true })).toBeVisible();
   await expect(page.locator(".portal-link-row")).toHaveCount(0);
-  const firstQuoteId = await firstHandoff.getAttribute("data-quote-id");
   expect(firstQuoteId).toBeTruthy();
+  const history = await openQuoteHistoryFromWorkspace(page);
   const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
   }).first();
   await expect(firstQuoteRow).toContainText("E2E Staff");
   await expect(firstQuoteRow).toContainText("110");
-  await expect(history.locator("tr.history-row-target")).toHaveAttribute("data-quote-id", firstQuoteId);
+  await expect(history.locator(`tr[data-quote-id="${firstQuoteId}"]`)).toBeVisible();
 
   await history.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("button", { name: "Save draft" })).toBeFocused();
   await page.getByRole("button", { name: "New Quote" }).click();
   await fillRequiredQuoteFields(page, {
     guests: 61,
@@ -704,34 +772,31 @@ test("draft save handoff targets the exact new quote and stays truthful across s
   });
   await advanceToSaveButton(page, "Save draft");
 
-  const secondHandoff = page.getByRole("dialog", { name: "Quotes" }).locator(".saved-quote-handoff");
-  await expect(secondHandoff).toBeFocused();
-  const secondQuoteId = await secondHandoff.getAttribute("data-quote-id");
+  const secondQuoteId = await expectSavedQuoteWorkspace(page, { eventName: "E2E Quote B" });
+  await expect(page.getByTestId("quote-workspace").getByText("61 guests", { exact: true })).toBeVisible();
   expect(secondQuoteId).toBeTruthy();
   expect(secondQuoteId).not.toBe(firstQuoteId);
-  const secondTargetRow = page.getByRole("dialog", { name: "Quotes" })
-    .locator("tr.history-row-target");
-  await expect(secondTargetRow).toHaveAttribute("data-quote-id", secondQuoteId);
+  const secondHistory = await openQuoteHistoryFromWorkspace(page);
+  const secondTargetRow = secondHistory.locator(`tr[data-quote-id="${secondQuoteId}"]`);
   await expect(secondTargetRow).toContainText("61");
 
-  const customerSearch = page.getByRole("dialog", { name: "Quotes" })
+  const customerSearch = secondHistory
     .getByPlaceholder("Search customer, quote #, or event");
   await customerSearch.fill("No Matching Customer");
-  await expect(secondHandoff).toHaveCount(0);
+  await expect(secondTargetRow).toHaveCount(0);
   await expect(customerSearch).toBeFocused();
   await customerSearch.fill("");
-  await expect(secondHandoff).toHaveAttribute("data-quote-id", secondQuoteId);
+  await expect(secondHistory.locator(`tr[data-quote-id="${secondQuoteId}"]`)).toBeVisible();
   await expect(customerSearch).toBeFocused();
 });
 
 test("unresolved quote delivery locks conflicting mutations but keeps read-only artifacts", async ({ page }) => {
-  await createQuoteToHistory(page, {
+  const quoteId = await createQuoteToHistory(page, {
     guests: 58,
     eventName: "Unresolved Delivery",
     venue: "Safety Hall"
   });
   const history = page.getByRole("dialog", { name: "Quotes" });
-  const quoteId = await history.locator(".saved-quote-handoff").getAttribute("data-quote-id");
   expect(quoteId).toBeTruthy();
   await history.getByRole("button", { name: "Close" }).click();
 
@@ -1040,7 +1105,16 @@ test("portal acceptance requires typed consent and shows the signed revision rec
   await page.getByPlaceholder("Paste your quote key").fill(portalKey);
   await page.getByRole("button", { name: "Open Proposal" }).click();
 
-  const signButton = page.getByRole("button", { name: "Sign and Accept Proposal" });
+  const decisionGroup = page.getByRole("group", { name: "Proposal decision" });
+  const signButton = page.getByRole("button", { name: /Sign and accept proposal/i });
+  await expect(page.getByText(
+    "Choose the response that matches what you want to do. Nothing is selected or submitted for you.",
+    { exact: true }
+  )).toBeVisible();
+  await expect(signButton).toHaveCount(0);
+  await expect(page.getByLabel("Full legal name")).toHaveCount(0);
+
+  await decisionGroup.getByRole("button", { name: /Accept(?: proposal)?/i }).click();
   const signerName = page.getByLabel("Full legal name");
   const signatureConsent = page.getByLabel(
     /consent to use my typed name as my electronic signature/i
@@ -1359,20 +1433,16 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("95");
   await advanceToSaveButton(page, "Save Changes");
 
-  const history = page.getByRole("dialog", { name: "Quotes" });
-  const handoff = history.locator(".saved-quote-handoff");
-  await expect(handoff).toHaveAttribute("data-quote-id", originalQuoteId);
-  await expect(handoff.locator(".eyebrow")).toHaveText("Draft updated");
-  await expect(handoff).toContainText(/Changes are saved/i);
-  await expect(handoff).toBeFocused();
-  await expect(history.locator("tr.history-row-target")).toHaveAttribute("data-quote-id", originalQuoteId);
+  const updatedQuoteId = await expectSavedQuoteWorkspace(page);
+  expect(updatedQuoteId).toBe(originalQuoteId);
+  await expect(page.getByTestId("quote-workspace").getByText("95 guests", { exact: true })).toBeVisible();
+  const history = await openQuoteHistoryFromWorkspace(page);
+  await expect(history.locator(`tr[data-quote-id="${originalQuoteId}"]`)).toBeVisible();
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("95");
 
   await setQuoteStatus(quoteRows.first(), "sent");
-  await expect(handoff.locator(".eyebrow")).toHaveText("Quote sent");
-  await expect(handoff).toContainText("Current quote status is sent.");
-  await expect(handoff).not.toContainText(/did not send|has not been sent/i);
+  await expect(quoteRows.first().locator("select").first()).toHaveValue("sent");
 });
 
 test("Catalog Admin menu browsing never mutates the clean quote being edited", async ({ page }) => {

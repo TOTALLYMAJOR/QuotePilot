@@ -47,7 +47,7 @@
 - Immutable candidate deployment id/URL:
 - Checklist digest (`npm run release:uat:digest`):
 - Intended target(s) and complete required positive-pass ids (`npm run release:uat:items -- --target <profile>`):
-- Candidate profile plan (`npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`), including blocked ids/reasons:
+- Candidate profile plan (`npm run release:uat:plan -- --target <profile> --candidate-profile <staging-safe-off|staging-staffing-authority>`), including blocked ids/reasons:
 - Candidate UAT attester and evidence link:
 - Post-merge release SHA / exact-main CI run id (release operator):
 - Protected UAT run id / exact deploy profile / rollback SHA (release operator):

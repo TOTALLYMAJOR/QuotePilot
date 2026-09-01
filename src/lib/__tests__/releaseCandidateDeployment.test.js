@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
 import {
   RELEASE_CANDIDATE_POLICY,
+  RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
   RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
@@ -19,6 +20,16 @@ import {
   validateFirebaseRulesReadback,
   validateVercelReceipt
 } from "../../../scripts/release-candidate-policy.mjs";
+import {
+  buildVercelOutputConfig,
+  collectVercelBuildFiles,
+  isEnabledFirebaseSecretVersion,
+  providerRequestHeaders,
+  resolveGitHubToken,
+  validateHostedManifest,
+  vercelAutomationBypassToken,
+  vercelDeploymentPayload
+} from "../../../scripts/deploy-release-candidate.mjs";
 
 const ROOT = process.cwd();
 const SCRIPT = path.join(ROOT, "scripts", "deploy-release-candidate.mjs");
@@ -54,12 +65,11 @@ function ciFixture(overrides = {}) {
 function functionsEnvironment(overrides = {}) {
   return {
     ...CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
-    AUTH_PLATFORM_ADMIN_EMAILS: "candidate-admin@mbmapps.com",
     ...overrides
   };
 }
 
-function reserveVercelCandidateReceipt(root) {
+function reserveVercelCandidateReceipt(root, uatProfile = RELEASE_CANDIDATE_UAT_PROFILE) {
   return reserveCandidateReceipt({
     root,
     target: "vercel-preview",
@@ -69,7 +79,8 @@ function reserveVercelCandidateReceipt(root) {
       name: "vercel",
       ...RELEASE_CANDIDATE_POLICY.vercel,
       target: "preview"
-    }
+    },
+    uatProfile
   });
 }
 
@@ -78,6 +89,61 @@ function readCandidateReceipt(reservation) {
 }
 
 describe("governed release candidate deployment", () => {
+  test("uses explicit GitHub tokens before the authenticated CLI fallback", () => {
+    expect(resolveGitHubToken({
+      env: { GITHUB_TOKEN: "github-token", GH_TOKEN: "gh-token" },
+      readCliToken: () => {
+        throw new Error("CLI must not be read when GITHUB_TOKEN exists");
+      }
+    })).toBe("github-token");
+    expect(resolveGitHubToken({
+      env: { GH_TOKEN: "gh-token" },
+      readCliToken: () => {
+        throw new Error("CLI must not be read when GH_TOKEN exists");
+      }
+    })).toBe("gh-token");
+    expect(resolveGitHubToken({
+      env: {},
+      readCliToken: () => "cli-token"
+    })).toBe("cli-token");
+    expect(() => resolveGitHubToken({
+      env: {},
+      readCliToken: () => {
+        throw new Error("provider-specific authentication output");
+      }
+    })).toThrow(/GITHUB_TOKEN, GH_TOKEN, or an authenticated GitHub CLI session/i);
+  });
+
+  test("binds Firebase Rules user-ADC requests to the fixed staging quota project", () => {
+    expect(providerRequestHeaders({
+      token: "opaque-token",
+      quotaProject: RELEASE_CANDIDATE_POLICY.firebase.projectId
+    })).toMatchObject({
+      Authorization: "Bearer opaque-token",
+      "x-goog-user-project": "quotepilot-staging-20260804"
+    });
+    expect(providerRequestHeaders({ token: "vercel-token" }))
+      .not.toHaveProperty("x-goog-user-project");
+    expect(providerRequestHeaders({ protectionBypass: "opaque-bypass-secret" }))
+      .toMatchObject({ "x-vercel-protection-bypass": "opaque-bypass-secret" });
+  });
+
+  test("binds protected preview reads to one existing automation bypass", () => {
+    const secret = "vcp_opaque_existing_automation_secret";
+    expect(vercelAutomationBypassToken({
+      protectionBypass: {
+        [secret]: { scope: "automation-bypass" }
+      }
+    })).toBe(secret);
+    expect(() => vercelAutomationBypassToken({ protectionBypass: {} }))
+      .toThrow(/exactly one automation protection bypass/i);
+    expect(() => vercelAutomationBypassToken({
+      protectionBypass: {
+        [secret]: { scope: "email-invite" }
+      }
+    })).toThrow(/exactly one automation protection bypass/i);
+  });
+
   test("accepts only exact successful release-branch CI evidence", () => {
     const fixture = ciFixture();
     expect(validateCandidateCiEvidence({ ...fixture, releaseSha: SHA, branch: BRANCH }))
@@ -100,27 +166,84 @@ describe("governed release candidate deployment", () => {
     expect(candidateConfirmation("firebase-all", SHA)).toContain(`quotepilot-staging-20260804 ${SHA}`);
     expect(candidateConfirmation("vercel-preview", SHA)).toContain(`quoteflow PREVIEW ${SHA}`);
     expect(RELEASE_CANDIDATE_UAT_PROFILE).toBe("staging-safe-off");
+    expect(RELEASE_CANDIDATE_STAFFING_UAT_PROFILE).toBe("staging-staffing-authority");
   });
 
   test("checks every bound staging secret by metadata without reading or creating values", () => {
     expect(CANDIDATE_REQUIRED_SECRET_METADATA).toEqual(expect.arrayContaining([
+      "PINGRAM_API_KEY",
+      "PINGRAM_WEBHOOK_SECRET",
       "RESEND_WEBHOOK_SECRET",
       "REVENUE_AUTOPILOT_TOKEN_SECRET",
+      "SMS_CONTACT_DIGEST_SECRET",
       "STRIPE_SECRET_KEY",
       "TWILIO_AUTH_TOKEN"
     ]));
     const source = fs.readFileSync(SCRIPT, "utf8");
-    expect(source).toContain("getSecretMetadata(project, name, \"latest\")");
+    expect(source).toContain('"functions:secrets:get"');
+    expect(source).toContain('version?.state === "ENABLED"');
     expect(source).not.toContain("accessSecretVersion(");
     expect(source).not.toContain("createSecret(");
   });
 
-  test("keeps operational staffing authority explicitly off", () => {
+  test("accepts the pinned Firebase CLI secret metadata shape and rejects disabled versions", () => {
+    expect(isEnabledFirebaseSecretVersion({
+      secret: {
+        projectId: "844470813106",
+        name: "STAFF_INVITATION_TOKEN_SECRET"
+      },
+      versionId: "1",
+      state: "ENABLED"
+    }, "STAFF_INVITATION_TOKEN_SECRET")).toBe(true);
+    expect(isEnabledFirebaseSecretVersion({
+      secret: "projects/844470813106/secrets/STAFF_INVITATION_TOKEN_SECRET",
+      state: "ENABLED"
+    }, "STAFF_INVITATION_TOKEN_SECRET")).toBe(true);
+    expect(isEnabledFirebaseSecretVersion({
+      secret: { name: "STAFF_INVITATION_TOKEN_SECRET" },
+      state: "DISABLED"
+    }, "STAFF_INVITATION_TOKEN_SECRET")).toBe(false);
+  });
+
+  test("prepares the checksum-verified Firebase binary before receipt reservation and mutation", () => {
+    const source = fs.readFileSync(SCRIPT, "utf8");
+    const prepareOffset = source.lastIndexOf("await prepareFirebaseToolsBinary()");
+    const rulesPreflightOffset = source.lastIndexOf("await readFirebaseRulesReleases(firebaseRulesAccessToken)");
+    const vercelPreflightOffset = source.lastIndexOf("await validateVercelProjectAccess(vercelToken)");
+    const reserveOffset = source.lastIndexOf("reservation = reserveCandidateReceipt");
+    const mutationOffset = source.indexOf("attempt.providerMutationAttempted = true");
+    const firebaseMutation = source.slice(mutationOffset, source.indexOf("response = parseJsonOutput", mutationOffset));
+
+    expect(prepareOffset).toBeGreaterThan(0);
+    expect(reserveOffset).toBeGreaterThan(prepareOffset);
+    expect(reserveOffset).toBeGreaterThan(rulesPreflightOffset);
+    expect(reserveOffset).toBeGreaterThan(vercelPreflightOffset);
+    expect(firebaseMutation).toContain("capture(firebaseCliPath");
+    expect(firebaseMutation).not.toContain('capture("npx"');
+    expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
+    expect(firebaseMutation).toContain('"--force"');
+  });
+
+  test("binds operational staffing authority to the exact candidate profile", () => {
     expect(validateCandidateFunctionsEnvironment(functionsEnvironment()))
-      .toMatchObject({ OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false" });
+      .toMatchObject({
+        AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
+        OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
+        platformAdminCount: 1
+      });
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      AUTH_PLATFORM_ADMIN_EMAILS: "mm05366@gmail.com"
+    }))).toThrow(/AUTH_PLATFORM_ADMIN_EMAILS.*flightcontrol@quietpilot\.us/i);
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
     }))).toThrow(/explicitly false/i);
+    expect(validateCandidateFunctionsEnvironment(functionsEnvironment({
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+    }), RELEASE_CANDIDATE_STAFFING_UAT_PROFILE)).toMatchObject({
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+    });
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment(),
+      RELEASE_CANDIDATE_STAFFING_UAT_PROFILE)).toThrow(/explicitly true/i);
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       STRIPE_SECRET_KEY: "plaintext-fixture"
     }))).toThrow(/Secret Manager/i);
@@ -150,9 +273,45 @@ describe("governed release candidate deployment", () => {
     expect(functions).toMatchObject({ functionCount: 1 });
     expect(functions.revisions[0].hash).toBe("b".repeat(40));
 
+    const staffingFunctions = validateFirebaseFunctionsReadback({
+      candidateProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
+      response: {
+        status: "success",
+        result: [{
+          id: "calculateQuotePricing",
+          region: "us-central1",
+          platform: "gcfv1",
+          project: RELEASE_CANDIDATE_POLICY.firebase.projectId,
+          state: "ACTIVE",
+          hash: "c".repeat(40),
+          environmentVariables: {
+            ...CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
+            OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+          }
+        }]
+      }
+    });
+    expect(staffingFunctions.runtimeConfig.OPERATIONAL_STAFFING_AUTHORITY_ENABLED)
+      .toBe("true");
+
     const providerDeploymentId = "sites/quotepilot-staging-20260804/versions/0123456789abcdef";
     expect(validateFirebaseHostingReadback({
       providerDeploymentId,
+      channel: {
+        name: "projects/quotepilot-staging-20260804/sites/quotepilot-staging-20260804/channels/live",
+        release: {
+          name: "projects/quotepilot-staging-20260804/sites/quotepilot-staging-20260804/channels/live/releases/123",
+          type: "DEPLOY",
+          releaseTime: "2026-08-12T00:00:00Z",
+          version: {
+            name: "projects/quotepilot-staging-20260804/sites/quotepilot-staging-20260804/versions/0123456789abcdef",
+            status: "FINALIZED"
+          }
+        }
+      }
+    }).version).toContain("0123456789abcdef");
+    expect(validateFirebaseHostingReadback({
+      providerDeploymentId: "projects/844470813106/sites/quotepilot-staging-20260804/versions/0123456789abcdef",
       channel: {
         name: "projects/quotepilot-staging-20260804/sites/quotepilot-staging-20260804/channels/live",
         release: {
@@ -198,6 +357,16 @@ describe("governed release candidate deployment", () => {
         ci: { runId: 123 },
         provider: { name: "vercel" }
       })).toThrow(/EEXIST/i);
+      const staffingReservation = reserveVercelCandidateReceipt(
+        root,
+        RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+      );
+      expect(staffingReservation.receiptPath).toContain(
+        `vercel-preview.${RELEASE_CANDIDATE_STAFFING_UAT_PROFILE}.json`
+      );
+      expect(readCandidateReceipt(staffingReservation)).toMatchObject({
+        uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+      });
       expect(() => updateCandidateReceipt(reservation, { unexpected: true }))
         .toThrow(/unknown field unexpected/i);
       for (const field of [
@@ -375,6 +544,26 @@ describe("governed release candidate deployment", () => {
         result: { hosting: "sites/quotepilot-staging-20260804/versions/0123456789abcdef" }
       }
     }).providerDeploymentId).toContain("/versions/");
+    expect(validateFirebaseReceipt({
+      releaseSha: SHA,
+      response: {
+        status: "success",
+        result: {
+          hosting: "projects/844470813106/sites/quotepilot-staging-20260804/versions/0123456789abcdef"
+        }
+      }
+    }).providerDeploymentId).toBe(
+      "projects/844470813106/sites/quotepilot-staging-20260804/versions/0123456789abcdef"
+    );
+    expect(() => validateFirebaseReceipt({
+      releaseSha: SHA,
+      response: {
+        status: "success",
+        result: {
+          hosting: "projects/999999999999/sites/quotepilot-staging-20260804/versions/0123456789abcdef"
+        }
+      }
+    })).toThrow(/fixed staging Hosting version id/i);
     expect(validateVercelReceipt({
       releaseSha: SHA,
       deployment: {
@@ -385,6 +574,100 @@ describe("governed release candidate deployment", () => {
         url: "quoteflow-candidate-mbmapps.vercel.app"
       }
     }).providerDeploymentId).toBe("dpl_candidate123");
+  });
+
+  test("retries exact hosted manifest equality across bounded propagation", async () => {
+    const expected = {
+      schema: "com.mbmapps.quotepilot.release-candidate/v2",
+      sourceSha: SHA,
+      ciRunId: 123,
+      uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+    };
+    let fetchCount = 0;
+    let waitCount = 0;
+    const manifestUrl = await validateHostedManifest("https://candidate.example", expected, {
+      fetchManifest: async () => {
+        fetchCount += 1;
+        return fetchCount === 1 ? { ...expected, sourceSha: "b".repeat(40) } : expected;
+      },
+      wait: async () => { waitCount += 1; },
+      attempts: 3,
+      delayMs: 1
+    });
+    expect(manifestUrl).toBe("https://candidate.example/release-candidate.json");
+    expect(fetchCount).toBe(2);
+    expect(waitCount).toBe(1);
+  });
+
+  test("allows the default bounded window to absorb a one-minute Hosting propagation lag", async () => {
+    const expected = {
+      schema: "com.mbmapps.quotepilot.release-candidate/v2",
+      sourceSha: SHA,
+      ciRunId: 123,
+      uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+    };
+    let fetchCount = 0;
+    let waitCount = 0;
+    const manifestUrl = await validateHostedManifest("https://candidate.example", expected, {
+      fetchManifest: async () => {
+        fetchCount += 1;
+        return fetchCount === 31 ? expected : { ...expected, sourceSha: "b".repeat(40) };
+      },
+      wait: async () => { waitCount += 1; }
+    });
+    expect(manifestUrl).toBe("https://candidate.example/release-candidate.json");
+    expect(fetchCount).toBe(31);
+    expect(waitCount).toBe(30);
+  });
+
+  test("builds a deterministic Vercel Build Output v3 payload without a runtime CLI", () => {
+    expect(buildVercelOutputConfig()).toEqual({
+      version: 3,
+      routes: [
+        {
+          src: "^(?:/(.*))$",
+          headers: {
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "strict-origin-when-cross-origin"
+          },
+          continue: true
+        },
+        { handle: "filesystem" },
+        { src: "^(?:/(.*))$", dest: "/index.html", check: true },
+        { handle: "error" },
+        { status: 404, src: "^(?!/api).*$", dest: "/404.html" }
+      ],
+      crons: []
+    });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-vercel-output-"));
+    const output = path.join(root, ".vercel", "output");
+    try {
+      fs.mkdirSync(path.join(output, "static", "assets"), { recursive: true });
+      fs.writeFileSync(path.join(output, "config.json"), '{"version":3}\n');
+      fs.writeFileSync(path.join(output, "static", "index.html"), "<main>candidate</main>\n");
+      fs.writeFileSync(path.join(output, "static", "assets", "app.js"), "export default true;\n");
+      const files = collectVercelBuildFiles(output, { root });
+      expect(files.map((file) => file.file)).toEqual([
+        ".vercel/output/config.json",
+        ".vercel/output/static/assets/app.js",
+        ".vercel/output/static/index.html"
+      ]);
+      expect(files.every((file) => /^[0-9a-f]{40}$/.test(file.sha))).toBe(true);
+      const payload = vercelDeploymentPayload({ files, releaseSha: SHA, ciRunId: 123 });
+      expect(payload).toMatchObject({
+        name: "quoteflow",
+        project: RELEASE_CANDIDATE_POLICY.vercel.projectId,
+        version: 2,
+        meta: { candidateSha: SHA, candidateCiRunId: "123" }
+      });
+      expect(payload.files).toHaveLength(3);
+      expect(JSON.stringify(payload)).not.toContain("content");
+      fs.symlinkSync(path.join(output, "config.json"), path.join(output, "static", "linked-config.json"));
+      expect(() => collectVercelBuildFiles(output, { root })).toThrow(/symbolic links/i);
+      expect(() => collectVercelBuildFiles(root, { root })).toThrow(/inside the repository/i);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("fails closed before provider access and contains no production promotion command", () => {
@@ -401,7 +684,7 @@ describe("governed release candidate deployment", () => {
     expect(source).not.toContain('PROJECT_ID = "tonicatering"');
     expect(source).toContain('VITE_AMBIENT_UI_ENABLED: "true"');
     expect(source).toContain('VITE_OPERATIONAL_STAFFING_ENABLED: "true"');
-    expect(source).toContain('uatProfile: RELEASE_CANDIDATE_UAT_PROFILE');
+    expect(source).toContain("uatProfile: candidateProfile");
     expect(source).toContain('com.mbmapps.quotepilot.release-candidate/v2');
     expect(source).not.toMatch(/"--token",\s*\.\.\.tokenArgs/);
     for (const flag of [
@@ -420,6 +703,12 @@ describe("governed release candidate deployment", () => {
     expect(source).toContain('VITE_PILOT_MODEL_ENABLED: "false"');
     expect(source).toContain('QUOTEPILOT_BUILD_PROFILE: "release-candidate"');
     expect(source).toContain('"apps:sdkconfig"');
+    expect(source).not.toContain('capture("npx"');
+    expect(source).not.toContain('run("npx"');
+    expect(source).not.toContain("VERCEL_CLI");
+    expect(source).not.toContain("locateFirebaseToolsRoot");
+    expect(source).toContain('"https://api.vercel.com"');
+    expect(source).toContain("https://firebaserules.googleapis.com/v1/");
     expect(source.indexOf("reserveCandidateReceipt({")).toBeLessThan(
       source.indexOf("await deployFirebase(context)")
     );

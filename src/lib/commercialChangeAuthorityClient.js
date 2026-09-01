@@ -4,6 +4,9 @@ import {
   COMMERCIAL_DEPENDENCY_GRAPH_VERSION
 } from "./commercialDependencyGraph";
 import { cloudFunctions, firebaseReady } from "./firebase";
+import normalizeActivePersistedEffects, {
+  COMMERCIAL_CHANGE_PERSISTED_EFFECTS_ENABLED
+} from "quotepilot-active-commercial-persisted-effects";
 
 export const COMMERCIAL_CHANGE_AUTHORITY_CALLABLES = Object.freeze({
   simulate: "simulateCommercialQuoteChange",
@@ -1393,7 +1396,8 @@ export async function simulateCommercialQuoteChange(input = {}) {
     "idempotent",
     "authorityState",
     "simulationReceipt",
-    "simulation"
+    "simulation",
+    "persistedEffects"
   ], "Commercial change simulation response");
   const idempotent = exactBoolean(result.idempotent, "Simulation idempotency state");
   const authorityState = text(result.authorityState).toLowerCase();
@@ -1407,6 +1411,25 @@ export async function simulateCommercialQuoteChange(input = {}) {
     expectedActiveVersionId
   );
   const simulation = normalizeSimulationProjection(result.simulation, scope, simulationReceipt);
+  const persistedEffects = COMMERCIAL_CHANGE_PERSISTED_EFFECTS_ENABLED
+    ? normalizeActivePersistedEffects(
+        result.persistedEffects,
+        scope,
+        simulationReceipt,
+        {
+          boundedInteger,
+          exactBoolean,
+          exactKeys,
+          exactOpaqueId,
+          exactText,
+          fail,
+          jsonClone,
+          normalizeCommercialValues,
+          normalizeReceiptImpact,
+          sameJson
+        }
+      )
+    : null;
   return deepFreeze({
     ok: true,
     storage: "firebase",
@@ -1415,7 +1438,8 @@ export async function simulateCommercialQuoteChange(input = {}) {
     idempotent,
     authorityState,
     simulationReceipt,
-    simulation
+    simulation,
+    ...(persistedEffects ? { persistedEffects } : {})
   });
 }
 

@@ -1,7 +1,5 @@
 "use strict";
 
-const { jsPDF } = require("jspdf");
-
 const PAGE = Object.freeze({ width: 612, height: 792, margin: 44 });
 const BODY_WIDTH = PAGE.width - (PAGE.margin * 2);
 
@@ -44,6 +42,9 @@ function renderKitchenBeoPdf({ payload, provenance } = {}) {
     throw new TypeError("Server Kitchen BEO provenance is required.");
   }
 
+  // Keep the native/encoding-heavy renderer out of Firebase manifest discovery.
+  // Cloud Functions loads it only when an authorized request renders a BEO.
+  const { jsPDF } = require("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "letter", compress: true });
   let y = PAGE.margin;
 

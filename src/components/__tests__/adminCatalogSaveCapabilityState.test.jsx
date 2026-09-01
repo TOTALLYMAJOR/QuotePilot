@@ -4,7 +4,22 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AdminCatalogView } from "../AdminCatalogModal";
-import { createMenuItem as createMenuItemMock } from "../../lib/menuService";
+import { getMenuCategories, getMenuItems } from "../../lib/menuService";
+
+const setupDraft = vi.hoisted(() => ({ current: null }));
+const setupPreset = vi.hoisted(() => ({ stage: vi.fn() }));
+
+vi.mock("../../hooks/useCatalogSetupDraft", () => ({
+  useCatalogSetupDraft: () => setupDraft.current
+}));
+
+vi.mock("../../lib/catalogSetupDraftService", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    stageCatalogSetupPreset: (...args) => setupPreset.stage(...args)
+  };
+});
 
 vi.mock("../../lib/menuService", () => ({
   createCategory: vi.fn(async () => ({ id: "cat-1" })),
@@ -47,6 +62,27 @@ let container;
 let root;
 
 beforeEach(() => {
+  setupPreset.stage.mockReset();
+  setupPreset.stage.mockResolvedValue({ ok: true, draft: { changedRecordCount: 1 } });
+  setupDraft.current = {
+    status: "idle",
+    label: "Draft saved",
+    generation: 0,
+    changedRecordCount: 0,
+    serverChanges: [],
+    deviceChanges: [],
+    changes: [],
+    deviceOnly: false,
+    error: "",
+    receipt: null,
+    queueChanges: vi.fn(() => true),
+    syncNow: vi.fn(async () => ({ ok: true })),
+    retry: vi.fn(async () => ({ ok: true })),
+    review: vi.fn(async () => ({ readyToPublish: true })),
+    publish: vi.fn(async () => ({ catalogRevisionAfter: 2 }))
+  };
+  vi.mocked(getMenuCategories).mockResolvedValue([{ id: "cat-1", eventTypeId: "evt-1", name: "Starters" }]);
+  vi.mocked(getMenuItems).mockResolvedValue([]);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -87,8 +123,8 @@ function makeUnsavedEdit() {
 
 function clickSave() {
   const button = [...container.querySelectorAll("button")]
-    .find((element) => element.textContent.trim() === "Save catalog changes");
-  expect(button, 'button "Save catalog changes"').toBeTruthy();
+    .find((element) => element.textContent.trim() === "Sync draft now");
+  expect(button, 'button "Sync draft now"').toBeTruthy();
   return act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -146,7 +182,7 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector(".modal-foot").textContent)
       .toContain("A newer Library version is ready");
     expect([...container.querySelectorAll("button")]
-      .find((element) => element.textContent.trim() === "Save catalog changes").disabled).toBe(true);
+      .find((element) => element.textContent.trim() === "Sync draft now").disabled).toBe(true);
     expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: true, busy: false });
   });
 
@@ -191,13 +227,9 @@ describe("AdminCatalogModal save capability state", () => {
       .toContain("One menu edit is still in progress");
   });
 
-  test("opens manual setup when a starter pack is blocked by existing catalog content", async () => {
+  test("stages a setup preset through the shared durable draft", async () => {
     renderView({
-      catalog: starterCatalog(),
-      onApplyStarterPack: async () => ({
-        ok: false,
-        error: "This organization already has catalog content. Choose replacement only for an untouched staged pack."
-      })
+      catalog: starterCatalog()
     });
     const applyButton = [...container.querySelectorAll("button")]
       .find((button) => button.textContent.trim() === "Use Wedding & events");
@@ -208,11 +240,13 @@ describe("AdminCatalogModal save capability state", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
 
-    expect(container.querySelector(".modal-foot").textContent).toContain(
-      "Manual catalog setup has been opened so you can continue editing."
-    );
-    expect([...container.querySelectorAll("button")]
-      .some((button) => button.textContent.trim() === "Packages")).toBe(true);
+    expect(setupPreset.stage).toHaveBeenCalledWith({
+      organizationId: "test-org",
+      packId: "wedding-events",
+      packVersion: 2
+    });
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("setup preset added to the shared draft");
   });
 
   test("allows adding a menu item while a separate package catalog draft is pending", async () => {
@@ -248,9 +282,15 @@ describe("AdminCatalogModal save capability state", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
 
-    expect(createMenuItemMock).toHaveBeenCalledTimes(1);
+    expect(setupDraft.current.queueChanges).toHaveBeenCalledWith([
+      expect.objectContaining({
+        collection: "menuItems",
+        intent: "create",
+        payload: expect.objectContaining({ name: "Seasonal soup" })
+      })
+    ]);
     expect(container.querySelector(".modal-foot").textContent)
-      .toContain("Menu item added.");
+      .toContain("Menu item added to the setup draft.");
     expect(container.querySelector(".modal-foot").textContent)
       .not.toContain("One Library edit is already in progress. Save or discard it, then try this change again. Nothing changed.");
   });
@@ -303,79 +343,74 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.innerHTML).toContain('data-capability-state="submitting"');
   });
 
-  test("lands on receipt after a clean save", async () => {
-    renderView({ onSave: async () => ({ ok: true }) });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="receipt"');
-    expect(container.querySelector(".modal-foot").textContent).toContain("Catalog saved.");
-  });
-
-  test("reports a plain validation error as error, distinct from a conflict", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Add at least one specifically named package with a price above $0 before saving the catalog."
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="error"');
-  });
-
-  test("reports a reconciled concurrent-edit conflict as reconciliation", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Catalog changed while the save was in progress. Latest catalog state is loaded; review it and retry. (Catalog revision changed from 3 to 4.)"
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="reconciliation"');
-  });
-
-  test("reports a saved-but-unconfirmed revision as uncertain", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Catalog changes are saved at revision 4, but pricing is not confirmed for that revision. Latest catalog state is loaded; review Pricing and retry."
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="uncertain"');
-  });
-
-  test("offers recovery and its refresh action when reload itself failed", async () => {
-    renderView({
-      onSave: async () => ({
-        ok: false,
-        error: "Failed to save catalog. Refresh the latest catalog before retrying.",
-        refreshRequired: true
-      })
-    });
-    makeUnsavedEdit();
-    await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="recovery"');
-    expect([...container.querySelectorAll("button")].some(
-      (button) => button.textContent.trim() === "Refresh latest catalog"
-    )).toBe(true);
-  });
-
-  test("recovery takes priority over a co-occurring reconciliation-shaped message", async () => {
-    // The two flags can theoretically both be present; recovery (a concrete,
-    // actionable "refresh now" affordance) should win over merely descriptive
-    // reconciliation/uncertain text, since it is the one with a real next step.
-    const onSave = vi.fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        error: "Catalog changed while the save was in progress. Latest catalog state is loaded; review it and retry.",
-        refreshRequired: true
-      });
+  test("syncs unpublished intent without calling the retired active-catalog save", async () => {
+    const onSave = vi.fn();
     renderView({ onSave });
     makeUnsavedEdit();
     await clickSave();
-    expect(container.innerHTML).toContain('data-capability-state="recovery"');
+    expect(setupDraft.current.queueChanges).toHaveBeenCalled();
+    expect(setupDraft.current.syncNow).toHaveBeenCalledOnce();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("Active pricing is unchanged until publication");
+  });
+
+  test.each([
+    ["error", { status: "error", error: "Draft validation failed." }],
+    ["reconciliation", { status: "conflict", error: "Draft changed on another device." }],
+    ["uncertain", { status: "sync_failed", deviceOnly: true, error: "Network unavailable." }],
+    ["recovery", { status: "recovery", error: "Reload the latest catalog." }],
+    ["receipt", { status: "saved", receipt: { receiptId: "publish-1" } }]
+  ])("projects the draft authority %s state", (expected, nextState) => {
+    setupDraft.current = { ...setupDraft.current, ...nextState };
+    renderView();
+    expect(container.innerHTML).toContain(`data-capability-state="${expected}"`);
+  });
+
+  test("rehydrates a device-only menu price and section move with truthful labels", async () => {
+    setupDraft.current = {
+      ...setupDraft.current,
+      status: "sync_failed",
+      label: "Sync failed — changes are device-only",
+      changedRecordCount: 1,
+      deviceOnly: true,
+      deviceChanges: [{
+        collection: "menuItems",
+        recordId: "menu-a",
+        intent: "update",
+        payload: {
+          name: "Roasted chicken",
+          eventTypeId: "evt-1",
+          categoryId: "cat-2",
+          priceMinor: 1234,
+          costMinor: 450,
+          pricingType: "per_person",
+          active: true
+        }
+      }]
+    };
+    setupDraft.current.changes = setupDraft.current.deviceChanges;
+    vi.mocked(getMenuCategories).mockResolvedValue([
+      { id: "cat-2", eventTypeId: "evt-1", name: "Specials" },
+      { id: "cat-1", eventTypeId: "evt-1", name: "Starters" }
+    ]);
+    vi.mocked(getMenuItems).mockResolvedValue([{
+      id: "menu-a",
+      name: "Roasted chicken",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      price: 10,
+      cost: 4,
+      pricingType: "per_person",
+      active: true
+    }]);
+
+    renderView({ initialTab: "menu" });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    expect(container.querySelector('input[aria-label="Roasted chicken price"]').value).toBe("12.34");
+    expect(container.querySelector('.admin-row-state').textContent).toBe("Device-only");
+    expect(container.textContent).toContain("Device-only changes");
+    expect(container.textContent).not.toContain("All changes saved");
   });
 });

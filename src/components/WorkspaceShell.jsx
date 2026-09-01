@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   CalendarBlank,
   ClipboardText,
@@ -40,8 +41,27 @@ const MENU_ICONS = {
   more: Plus
 };
 
+const FOCUSABLE_WORKSPACE_TOOL = [
+  "button:not([disabled])",
+  "a[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
+
+const EMPTY_ACCOUNT_SETTINGS_FEEDBACK = Object.freeze({
+  phase: "idle",
+  message: ""
+});
+
 function call(action, ...args) {
   if (typeof action === "function") action(...args);
+}
+
+function assignRef(ref, value) {
+  if (typeof ref === "function") ref(value);
+  else if (ref && typeof ref === "object") ref.current = value;
 }
 
 /** Presentation only: route, role, tenant-gate, and action truth stay caller-owned. */
@@ -77,6 +97,53 @@ export default function WorkspaceShell({
   const openMenu = menu.openId || "";
   const setMenu = (value) => call(menu.onOpenChange, value);
   const close = () => setMenu("");
+  const shellRef = useRef(null);
+  const workspaceToolsLayerRef = useRef(null);
+  const workspaceToolsDialogRef = useRef(null);
+  const accountSettingsLayerRef = useRef(null);
+  const accountSettingsDialogRef = useRef(null);
+  const accountSettingsReturnFocusRef = useRef(null);
+  const accountSettingsRequestRef = useRef(0);
+  const [accountSettingsFeedback, setAccountSettingsFeedback] = useState(
+    EMPTY_ACCOUNT_SETTINGS_FEEDBACK
+  );
+  const workspaceToolsOpen = ambientOrientation && openMenu === "more";
+  const accountSettingsOpen = openMenu === "account-settings";
+  const accountSettingsAvailable = typeof actions.onRequestPasswordReset === "function";
+  const closeAccountSettings = () => {
+    accountSettingsRequestRef.current += 1;
+    setAccountSettingsFeedback(EMPTY_ACCOUNT_SETTINGS_FEEDBACK);
+    close();
+  };
+  const openAccountSettings = (returnFocusTarget) => {
+    accountSettingsReturnFocusRef.current = returnFocusTarget || null;
+    accountSettingsRequestRef.current += 1;
+    setAccountSettingsFeedback(EMPTY_ACCOUNT_SETTINGS_FEEDBACK);
+    setMenu("account-settings");
+  };
+  const requestAccountPasswordReset = async () => {
+    if (!accountSettingsAvailable || accountSettingsFeedback.phase === "pending") return;
+    const requestId = accountSettingsRequestRef.current + 1;
+    accountSettingsRequestRef.current = requestId;
+    setAccountSettingsFeedback({
+      phase: "pending",
+      message: "Requesting a secure password reset email…"
+    });
+    try {
+      await actions.onRequestPasswordReset({ email: principal.email || "" });
+      if (accountSettingsRequestRef.current !== requestId) return;
+      setAccountSettingsFeedback({
+        phase: "success",
+        message: `Password reset email requested for ${principal.email || "this account"}.`
+      });
+    } catch {
+      if (accountSettingsRequestRef.current !== requestId) return;
+      setAccountSettingsFeedback({
+        phase: "error",
+        message: "We could not request the reset email. Check your connection and try again."
+      });
+    }
+  };
   const navigate = (action) => {
     close();
     call(action);
@@ -114,7 +181,7 @@ export default function WorkspaceShell({
     : attentionCount > 0
       ? `Workflow, ${attentionCount} ${attentionCount === 1 ? "quote needs" : "quotes need"} attention`
       : "Workflow, no quote follow-ups in this view";
-  const menuContent = (id) => {
+  const menuContent = (id, { itemRole = "menuitem", showSummary = true } = {}) => {
     const operations = id !== "account";
     const account = id !== "operations";
     const items = [
@@ -129,7 +196,15 @@ export default function WorkspaceShell({
       [
         ambientOrientation && operations,
         actions.onOperations,
-        "Operations switchboard",
+        "Operations",
+        false,
+        false,
+        { capability: "live-operations-planning" }
+      ],
+      [
+        ambientOrientation && operations,
+        actions.onEvents,
+        "Events",
         false,
         false,
         { capability: "live-operations-planning" }
@@ -150,12 +225,22 @@ export default function WorkspaceShell({
         false,
         { ariaLabel: workflowLabel, attention: true }
       ],
+      [
+        ambientOrientation && operations && typeof actions.onPilot === "function",
+        actions.onPilot,
+        "Pilot",
+        false,
+        false,
+        { capability: "ambient-pilot-context" }
+      ],
       [operations && capabilities.eventSchedule !== false, actions.onSchedule, "Event Schedule", true],
       [
-        operations && isAdmin && capabilities.staffDirectory !== false && !ambientOrientation,
+        operations && isAdmin && capabilities.staffDirectory !== false,
         actions.onStaff,
         "Staff",
-        true
+        true,
+        false,
+        { capability: "staff-directory" }
       ],
       [operations && capabilities.reportingDashboard !== false, actions.onReporting, "Reporting Dashboard", true],
       [operations && capabilities.integrationsOps !== false, actions.onIntegrations, "Integrations Ops", true],
@@ -167,15 +252,28 @@ export default function WorkspaceShell({
       [account, actions.onSignOut, "Sign Out"]
     ];
     return <>
-      {account && <div className="header-account-summary" role="presentation">
+      {account && showSummary && <div className="header-account-summary" role="presentation">
         <strong>{principal.email || ""}</strong>
         <span>{principal.role || ""}</span>
       </div>}
+      {account && accountSettingsAvailable && (
+        <button
+          type="button"
+          role={itemRole || undefined}
+          aria-haspopup="dialog"
+          aria-controls="account-settings-dialog"
+          onClick={() => openAccountSettings(
+            triggerRefs[openMenu]?.current || triggerRefs.account?.current || triggerRefs.more?.current
+          )}
+        >
+          Account settings
+        </button>
+      )}
       {items.map(([visible, action, label, operation, sound, item = EMPTY]) => visible && (
         <button
           key={label}
           type="button"
-          role="menuitem"
+          role={itemRole || undefined}
           data-capability-entry={item.capability}
           aria-label={item.ariaLabel}
           aria-pressed={sound ? sounds.enabled === true : undefined}
@@ -193,8 +291,182 @@ export default function WorkspaceShell({
     </>;
   };
 
+  useEffect(() => {
+    if (!workspaceToolsOpen) return undefined;
+    const shell = shellRef.current;
+    const layer = workspaceToolsLayerRef.current;
+    const dialog = workspaceToolsDialogRef.current;
+    if (!shell || !layer || !dialog) return undefined;
+
+    const background = Array.from(shell.children)
+      .filter((element) => element !== layer)
+      .map((element) => ({
+        element,
+        hadInert: element.hasAttribute("inert"),
+        ariaHidden: element.getAttribute("aria-hidden")
+      }));
+    background.forEach(({ element }) => {
+      element.setAttribute("inert", "");
+      element.setAttribute("aria-hidden", "true");
+    });
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    const initialFocus = dialog.querySelector("[data-workspace-tools-initial-focus]")
+      || dialog.querySelector(FOCUSABLE_WORKSPACE_TOOL)
+      || dialog;
+    initialFocus.focus();
+
+    return () => {
+      background.forEach(({ element, hadInert, ariaHidden }) => {
+        if (!hadInert) element.removeAttribute("inert");
+        if (ariaHidden === null) element.removeAttribute("aria-hidden");
+        else element.setAttribute("aria-hidden", ariaHidden);
+      });
+      document.documentElement.style.overflow = previousOverflow;
+      const trigger = triggerRefs.more?.current;
+      if (trigger && document.contains(trigger)) trigger.focus();
+    };
+  }, [menu.onOpenChange, triggerRefs.more, workspaceToolsOpen]);
+
+  useEffect(() => {
+    if (!accountSettingsOpen) return undefined;
+    const shell = shellRef.current;
+    const layer = accountSettingsLayerRef.current;
+    const dialog = accountSettingsDialogRef.current;
+    if (!shell || !layer || !dialog) return undefined;
+
+    const background = Array.from(shell.children)
+      .filter((element) => element !== layer)
+      .map((element) => ({
+        element,
+        hadInert: element.hasAttribute("inert"),
+        ariaHidden: element.getAttribute("aria-hidden")
+      }));
+    background.forEach(({ element }) => {
+      element.setAttribute("inert", "");
+      element.setAttribute("aria-hidden", "true");
+    });
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    const initialFocus = dialog.querySelector("[data-account-settings-initial-focus]")
+      || dialog.querySelector(FOCUSABLE_WORKSPACE_TOOL)
+      || dialog;
+    initialFocus.focus();
+
+    return () => {
+      background.forEach(({ element, hadInert, ariaHidden }) => {
+        if (!hadInert) element.removeAttribute("inert");
+        if (ariaHidden === null) element.removeAttribute("aria-hidden");
+        else element.setAttribute("aria-hidden", ariaHidden);
+      });
+      document.documentElement.style.overflow = previousOverflow;
+      const returnTarget = accountSettingsReturnFocusRef.current;
+      if (returnTarget && document.contains(returnTarget)) returnTarget.focus();
+    };
+  }, [accountSettingsOpen]);
+
+  useEffect(() => {
+    const onGuardChange = actions.onWorkspaceToolsGuardChange;
+    if (typeof onGuardChange !== "function") return undefined;
+    if (!workspaceToolsOpen && !accountSettingsOpen) {
+      onGuardChange(null);
+      return undefined;
+    }
+    onGuardChange({
+      modelId: accountSettingsOpen
+        ? "account-settings-navigation-guard-v1"
+        : "workspace-tools-navigation-guard-v1",
+      open: true,
+      dirty: false,
+      busy: false,
+      requestDismiss: () => {
+        if (accountSettingsOpen) closeAccountSettings();
+        else call(menu.onOpenChange, "");
+        // Browser/mobile Back is consumed by this overlay. The history
+        // continuation intentionally remains untouched until a later Back.
+        return { status: "guarded" };
+      }
+    });
+    return () => onGuardChange(null);
+  }, [
+    accountSettingsOpen,
+    actions.onWorkspaceToolsGuardChange,
+    menu.onOpenChange,
+    workspaceToolsOpen
+  ]);
+
+  const handleWorkspaceToolsKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const dialog = workspaceToolsDialogRef.current;
+    if (!dialog) return;
+    const focusable = Array.from(dialog.querySelectorAll(FOCUSABLE_WORKSPACE_TOOL));
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  const handleAccountSettingsKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAccountSettings();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const dialog = accountSettingsDialogRef.current;
+    if (!dialog) return;
+    const focusable = Array.from(dialog.querySelectorAll(FOCUSABLE_WORKSPACE_TOOL));
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  const workspaceBrandContent = <>
+    {logo ? (
+      <img className="workspace-brand-logo" src={logo} alt="" loading="eager" decoding="async" />
+    ) : (
+      <span className="workspace-brand-logo workspace-brand-logo-placeholder" aria-hidden="true">
+        {workspaceName.slice(0, 2).toUpperCase()}
+      </span>
+    )}
+    <span className="workspace-brand-copy">
+      <small>Today at</small>
+      <strong>{workspaceName}</strong>
+      {tagline && brandName !== PRODUCT_NAME && <span>{tagline}</span>}
+    </span>
+  </>;
+
   return (
     <div
+      ref={shellRef}
       className={`app-shell${workspace ? " app-shell-neutral" : ""}${
         ambientOpportunity ? " app-shell-ambient-opportunity" : ""
       }${
@@ -207,20 +479,30 @@ export default function WorkspaceShell({
         <div className="container nav">
           <div className="workspace-header-identity">
             <ProductBrandLockup compact className="header-product-brand" />
-            <div className="workspace-brand" aria-label={`Current workspace: ${workspaceName}`}>
-              {logo ? (
-                <img className="workspace-brand-logo" src={logo} alt="" loading="eager" decoding="async" />
-              ) : (
-                <span className="workspace-brand-logo workspace-brand-logo-placeholder" aria-hidden="true">
-                  {workspaceName.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-              <div className="workspace-brand-copy">
-                <small>Today at</small>
-                <strong>{workspaceName}</strong>
-                {tagline && brandName !== PRODUCT_NAME && <span>{tagline}</span>}
+            {ambientOrientation ? (
+              <button
+                type="button"
+                className="workspace-brand workspace-tools-trigger"
+                ref={(node) => {
+                  assignRef(triggerRefs.more, node);
+                  // Pilot now lives inside secondary tools. Its existing modal
+                  // still restores focus to this persistent entry point after
+                  // the temporary menu item has unmounted.
+                  assignRef(triggerRefs.pilot, node);
+                }}
+                aria-label="Workspace and tools"
+                aria-haspopup="dialog"
+                aria-controls="workspace-tools-dialog"
+                aria-expanded={workspaceToolsOpen}
+                onClick={() => setMenu(workspaceToolsOpen ? "" : "more")}
+              >
+                {workspaceBrandContent}
+              </button>
+            ) : (
+              <div className="workspace-brand" aria-label={`Current workspace: ${workspaceName}`}>
+                {workspaceBrandContent}
               </div>
-            </div>
+            )}
           </div>
 
           {crew.length > 0 && (
@@ -247,7 +529,7 @@ export default function WorkspaceShell({
           <div className="right-actions header-actions" ref={triggerRefs.headerMenus}>
             {workspace && (
               ambientOrientation ? (
-                <>
+                <nav className="ambient-primary-navigation" aria-label="Primary workspace">
                   {navButton("Now", "home", actions.onHome, undefined, undefined, true, true, "now")}
                   {navButton(
                     "Opportunities",
@@ -260,16 +542,6 @@ export default function WorkspaceShell({
                     "opportunities"
                   )}
                   {navButton(
-                    "Events",
-                    "events",
-                    actions.onEvents,
-                    undefined,
-                    "live-operations-planning",
-                    true,
-                    true,
-                    "events"
-                  )}
-                  {navButton(
                     "Clients",
                     "customers",
                     actions.onCustomers,
@@ -279,17 +551,7 @@ export default function WorkspaceShell({
                     true,
                     "clients"
                   )}
-                  {isAdmin && capabilities.staffDirectory !== false && navButton(
-                    "Staff",
-                    "staff",
-                    actions.onStaff,
-                    undefined,
-                    "staff-directory",
-                    true,
-                    true,
-                    "staff"
-                  )}
-                  {isAdmin && navButton(
+                  {navButton(
                     "Library",
                     "catalog",
                     actions.onCatalog,
@@ -299,24 +561,7 @@ export default function WorkspaceShell({
                     true,
                     "library"
                   )}
-                  <button
-                    type="button"
-                    className="ghost commercial-search-trigger ambient-utility-action"
-                    ref={triggerRefs.search}
-                    data-ambient-utility="search"
-                    aria-haspopup="dialog"
-                    aria-keyshortcuts="Meta+K Control+K"
-                    aria-label="Search"
-                    title="Search customers and quotes (Ctrl or Command K)"
-                    onClick={(event) => {
-                      close();
-                      call(actions.onSearch, event.currentTarget);
-                    }}
-                  >
-                    <MagnifyingGlass className="shell-nav-icon" size={20} aria-hidden="true" />
-                    <span className="shell-nav-label">Search</span><kbd aria-hidden="true">⌘K</kbd>
-                  </button>
-                </>
+                </nav>
               ) : (
                 <>
                   {navButton("Now", "home", actions.onHome)}
@@ -349,6 +594,25 @@ export default function WorkspaceShell({
               <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
               <span className="shell-nav-label">New quote</span>
             </button>
+            {workspace && ambientOrientation && (
+              <button
+                type="button"
+                className="ghost commercial-search-trigger ambient-utility-action ambient-secondary-search"
+                ref={triggerRefs.search}
+                data-ambient-utility="search"
+                aria-haspopup="dialog"
+                aria-keyshortcuts="Meta+K Control+K"
+                aria-label="Search"
+                title="Search customers and quotes (Ctrl or Command K)"
+                onClick={(event) => {
+                  close();
+                  call(actions.onSearch, event.currentTarget);
+                }}
+              >
+                <MagnifyingGlass className="shell-nav-icon" size={20} aria-hidden="true" />
+                <span className="shell-nav-label">Search</span><kbd aria-hidden="true">⌘K</kbd>
+              </button>
+            )}
             {!ambientOrientation && navButton(
               "Quotes",
               "quotes",
@@ -376,7 +640,9 @@ export default function WorkspaceShell({
               <span className="shell-nav-label">Workflow</span><AttentionBadge count={attentionCount} />
             </button>}
 
-            {HEADER_MENUS.map(([id, label]) => {
+            {HEADER_MENUS.filter(([id]) => (
+              ambientOrientation ? id === "operations" : true
+            )).map(([id, label]) => {
               const mobile = id === "more";
               const open = openMenu === id;
               const MenuIcon = MENU_ICONS[id] || Plus;
@@ -407,42 +673,220 @@ export default function WorkspaceShell({
                 </div>
               );
             })}
-            {ambientOrientation && (
-              <button
-                type="button"
-                className="ghost ambient-global-pilot-trigger"
-                ref={triggerRefs.pilot}
-                data-ambient-utility="pilot"
-                data-ambient-action-id="open-global-pilot-context"
-                aria-label="Open Pilot for the current context"
-                onClick={() => {
-                  close();
-                  call(actions.onPilot);
-                }}
-              >
-                <StarFour className="ambient-global-pilot-mark shell-nav-icon" size={20} weight="fill" aria-hidden="true" />
-                <span className="shell-nav-label">Pilot</span>
-              </button>
-            )}
           </div>
         </div>
       </header>
 
+      {workspaceToolsOpen && (
+        <div
+          className="workspace-tools-layer"
+          ref={workspaceToolsLayerRef}
+          data-layout-overlap-allowed="true"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) close();
+          }}
+        >
+          <section
+            className="workspace-tools-dialog"
+            id="workspace-tools-dialog"
+            ref={workspaceToolsDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workspace-tools-title"
+            aria-describedby="workspace-tools-description"
+            tabIndex={-1}
+            onKeyDown={handleWorkspaceToolsKeyDown}
+          >
+            <header className="workspace-tools-dialog__header">
+              <div>
+                <p className="workspace-tools-dialog__eyebrow">{workspaceName}</p>
+                <h2 id="workspace-tools-title">Workspace &amp; tools</h2>
+                <p id="workspace-tools-description">Search, operational tools, and account controls.</p>
+              </div>
+              <button type="button" aria-label="Close workspace and tools" onClick={close}>×</button>
+            </header>
+            <section className="workspace-tools-dialog__section workspace-tools-dialog__workspace" aria-labelledby="workspace-tools-workspace-title">
+              <h3 id="workspace-tools-workspace-title">Current workspace</h3>
+              <div
+                className="workspace-tools-dialog__workspace-current"
+                role="group"
+                aria-label={`Current workspace: ${workspaceName}`}
+              >
+                {logo ? (
+                  <img className="workspace-brand-logo" src={logo} alt="" />
+                ) : (
+                  <span className="workspace-brand-logo workspace-brand-logo-placeholder" aria-hidden="true">
+                    {workspaceName.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <strong>{workspaceName}</strong>
+                <span className="workspace-tools-dialog__current-state">Current</span>
+              </div>
+              {typeof actions.onSwitchWorkspace === "function" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    call(actions.onSwitchWorkspace);
+                  }}
+                >
+                  <span>Switch workspace</span>
+                </button>
+              )}
+            </section>
+            <section className="workspace-tools-dialog__section" aria-labelledby="workspace-tools-find-title">
+              <h3 id="workspace-tools-find-title">Find</h3>
+              <button
+                type="button"
+                data-workspace-tools-initial-focus="true"
+                onClick={(event) => {
+                  const returnTarget = triggerRefs.more?.current || event.currentTarget;
+                  close();
+                  call(actions.onSearch, returnTarget);
+                }}
+              >
+                <MagnifyingGlass size={20} aria-hidden="true" />
+                <span>Search customers and opportunities</span>
+              </button>
+            </section>
+            <section className="workspace-tools-dialog__section" aria-labelledby="workspace-tools-operations-title">
+              <h3 id="workspace-tools-operations-title">Operations</h3>
+              <div className="workspace-tools-dialog__actions">
+                {menuContent("operations", { itemRole: "", showSummary: false })}
+              </div>
+            </section>
+            <section className="workspace-tools-dialog__section" aria-labelledby="workspace-tools-account-title">
+              <h3 id="workspace-tools-account-title">Account</h3>
+              <div className="workspace-tools-dialog__identity">
+                <small>Signed in as</small>
+                <strong>{principal.email || "Signed-in account"}</strong>
+                {principal.role && <span>{principal.role}</span>}
+              </div>
+              <div className="workspace-tools-dialog__actions">
+                {menuContent("account", { itemRole: "", showSummary: false })}
+              </div>
+            </section>
+          </section>
+        </div>
+      )}
+
+      {accountSettingsOpen && (
+        <div
+          className="workspace-tools-layer account-settings-layer"
+          ref={accountSettingsLayerRef}
+          data-layout-overlap-allowed="true"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeAccountSettings();
+          }}
+        >
+          <section
+            className="workspace-tools-dialog account-settings-dialog"
+            id="account-settings-dialog"
+            ref={accountSettingsDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-settings-title"
+            aria-describedby="account-settings-description"
+            aria-busy={accountSettingsFeedback.phase === "pending" ? "true" : undefined}
+            tabIndex={-1}
+            onKeyDown={handleAccountSettingsKeyDown}
+          >
+            <header className="workspace-tools-dialog__header">
+              <div>
+                <p className="workspace-tools-dialog__eyebrow">Account</p>
+                <h2 id="account-settings-title">Account settings</h2>
+                <p id="account-settings-description">
+                  Review this sign-in and request a secure password reset when you need one.
+                </p>
+              </div>
+              <button
+                type="button"
+                data-account-settings-initial-focus="true"
+                aria-label="Close account settings"
+                onClick={closeAccountSettings}
+              >
+                ×
+              </button>
+            </header>
+            <div className="account-settings-dialog__body">
+              <section className="account-settings-dialog__identity" aria-labelledby="account-settings-sign-in-title">
+                <h3 id="account-settings-sign-in-title">Current sign-in</h3>
+                <dl>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{principal.email || "Signed-in account"}</dd>
+                  </div>
+                  <div>
+                    <dt>Workspace</dt>
+                    <dd>{workspaceName}</dd>
+                  </div>
+                </dl>
+              </section>
+              <section className="account-settings-dialog__reset" aria-labelledby="account-settings-reset-title">
+                <h3 id="account-settings-reset-title">Password</h3>
+                <p>
+                  QuotePilot will send a reset link to the signed-in email. Nothing changes until that
+                  link is completed, and this request does not sign you out.
+                </p>
+                <button
+                  type="button"
+                  className="cta account-settings-dialog__reset-action"
+                  disabled={
+                    !principal.email
+                    || accountSettingsFeedback.phase === "pending"
+                    || accountSettingsFeedback.phase === "success"
+                  }
+                  onClick={() => void requestAccountPasswordReset()}
+                >
+                  {accountSettingsFeedback.phase === "pending"
+                    ? "Requesting reset email…"
+                    : accountSettingsFeedback.phase === "success"
+                      ? "Reset email requested"
+                      : "Send password reset email"}
+                </button>
+                {accountSettingsFeedback.message && (
+                  <p
+                    className={`account-settings-dialog__feedback is-${accountSettingsFeedback.phase}`}
+                    role={accountSettingsFeedback.phase === "error" ? "alert" : "status"}
+                    aria-live={accountSettingsFeedback.phase === "error" ? "assertive" : "polite"}
+                  >
+                    {accountSettingsFeedback.message}
+                  </p>
+                )}
+              </section>
+            </div>
+            <footer className="account-settings-dialog__footer">
+              <button type="button" className="ghost" onClick={closeAccountSettings}>Cancel</button>
+            </footer>
+          </section>
+        </div>
+      )}
+
       {searchSurface && <div data-commercial-search-surface="true">{searchSurface}</div>}
 
-      <aside className="workspace-intro container" aria-label="Workspace status">
-        <p><strong>{identity.organizationName || brandName || "Your catering team"}</strong></p>
-        <p
-          className={`workspace-save-state${draftStatus.dirty === true ? " is-dirty" : ""}`}
-          aria-live="polite"
-        >
-          {draftStatus.dirty === true
-            ? "Unsaved changes"
-            : draftStatus.editing === true
-              ? `Editing ${draftStatus.quoteNumber || "saved quote"} · all changes saved`
-              : "Workspace open"}
-        </p>
-      </aside>
+      {(!ambientOrientation || draftStatus.dirty === true || draftStatus.editing === true) && (
+        <aside className="workspace-intro container" aria-label="Workspace status">
+          <p>
+            <strong>
+              {ambientOrientation
+                ? "Quote status"
+                : identity.organizationName || brandName || "Your catering team"}
+            </strong>
+          </p>
+          <p
+            className={`workspace-save-state${draftStatus.dirty === true ? " is-dirty" : ""}`}
+            aria-live="polite"
+          >
+            {draftStatus.dirty === true
+              ? "Unsaved changes"
+              : draftStatus.editing === true
+                ? `Editing ${draftStatus.quoteNumber || "saved quote"} · all changes saved`
+                : "Workspace open"}
+          </p>
+        </aside>
+      )}
       {children}
     </div>
   );

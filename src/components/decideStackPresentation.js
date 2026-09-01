@@ -105,22 +105,36 @@ export function buildStaffingCard(quote = {}, { ordinaryEditAllowed = false } = 
 export function buildReadinessGapCards(quote = {}, { ordinaryEditAllowed = false } = {}) {
   const readiness = buildProposalReadiness(quote);
   if (readiness.complete || !Array.isArray(readiness.gaps) || !readiness.gaps.length) return [];
+  const requiredPointTotal = readiness.requiredCriteria.reduce(
+    (sum, criterion) => sum + Number(criterion.points || 0),
+    0
+  );
+  const recordedRequiredPoints = readiness.requiredCriteria.reduce(
+    (sum, criterion) => sum + (criterion.passed ? Number(criterion.points || 0) : 0),
+    0
+  );
   return [...readiness.gaps]
     .sort((a, b) => Number(b.points || 0) - Number(a.points || 0))
     .slice(0, READINESS_GAP_CARD_LIMIT)
-    .map((gap) => ({
-      id: `readiness-gap-${gap.id}`,
-      kind: "readiness_gap",
-      signal: "attend",
-      family: "info",
-      label: "Advisory",
-      title: `Record the ${String(gap.label || gap.id).toLowerCase()}`,
-      meta: "Proposal completeness",
-      sentence: `Recording the ${String(gap.label || gap.id).toLowerCase()} adds ${gap.points} of 100 toward the existing proposal-completeness score. This is not operational event readiness.`,
-      basis: "proposal-readiness-v1, the existing weighted proposal-field model.",
-      impact: `+${gap.points} toward Ready to send.`,
-      action: editAction(ordinaryEditAllowed)
-    }));
+    .map((gap) => {
+      const scoreAfterResolution = requiredPointTotal > 0
+        ? Math.round(((recordedRequiredPoints + Number(gap.points || 0)) / requiredPointTotal) * 100)
+        : readiness.score;
+      const scoreImpact = Math.max(0, scoreAfterResolution - readiness.score);
+      return {
+        id: `readiness-gap-${gap.id}`,
+        kind: "readiness_gap",
+        signal: "attend",
+        family: "info",
+        label: "Advisory",
+        title: `Record the ${String(gap.label || gap.id).toLowerCase()}`,
+        meta: "Proposal completeness",
+        sentence: `Recording the ${String(gap.label || gap.id).toLowerCase()} adds ${scoreImpact} percentage ${scoreImpact === 1 ? "point" : "points"} toward required proposal completeness. This is not operational event readiness.`,
+        basis: "proposal-readiness-v1, the existing required proposal-field model.",
+        impact: `+${scoreImpact} toward Ready to send.`,
+        action: editAction(ordinaryEditAllowed)
+      };
+    });
 }
 
 export function buildDecideStack(quote = {}, { ordinaryEditAllowed = false } = {}) {

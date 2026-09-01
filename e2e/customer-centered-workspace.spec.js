@@ -14,6 +14,12 @@ const PILOT_TRANSFORMATION_ENABLED = [
 ].every((name) => ["1", "true", "yes", "on"].includes(
   String(process.env[name] || "").trim().toLowerCase()
 ));
+const AMBIENT_UI_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(process.env.VITE_AMBIENT_UI_ENABLED || "").trim().toLowerCase()
+);
+const LOCAL_REVIEW_FIXTURES_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(process.env.VITE_E2E_LOCAL_REVIEW_FIXTURES || "").trim().toLowerCase()
+);
 const HOME_HEADING = /What (?:needs|deserves) your attention/;
 
 async function gotoWorkspace(page, path) {
@@ -25,6 +31,22 @@ async function gotoWorkspace(page, path) {
     await page.getByRole("button", { name: "Explore the workspace" }).click();
     await expect(workspaceHeader).toBeVisible({ timeout: 30_000 });
   }
+}
+
+async function gotoGovernedOpportunity(page, quoteId) {
+  await gotoWorkspace(page, "/app");
+  await page.evaluate(async (exactQuoteId) => {
+    const { createWorkspaceArrivalHandoff } = await import("/src/lib/workspaceArrivalContract.js");
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "opportunity",
+      object: { id: exactQuoteId, type: "opportunity" },
+      focus: { quoteId: exactQuoteId },
+      intentId: "review_opportunity"
+    });
+    if (!handoff.ok) throw new Error(`Pilot opportunity handoff failed: ${handoff.recovery.code}`);
+    window.history.pushState(handoff.navigation.state, "", handoff.navigation.path);
+    window.dispatchEvent(new Event("quotepilot:locationchange"));
+  }, quoteId);
 }
 
 async function fillRequiredQuoteFields(page) {
@@ -160,6 +182,54 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
   });
 
+  test("client-language aliases replace to the canonical customer routes", async ({ page }) => {
+    test.skip(
+      !(AMBIENT_UI_ENABLED && LOCAL_REVIEW_FIXTURES_ENABLED),
+      "Exact Client alias proof needs the Ambient local review fixture."
+    );
+
+    await gotoWorkspace(page, "/app/clients");
+    await expect(page).toHaveURL(/\/app\/customers$/);
+    await expect(page.getByRole("heading", { name: "Clients", level: 1 })).toBeVisible();
+
+    const firstClientName = await page.locator("#ambient-client-directory h2").first().textContent();
+    await page.locator("#ambient-client-directory").getByRole("button", { name: "Review client" }).first().click();
+    const canonicalUrl = new URL(page.url());
+    const customerId = canonicalUrl.pathname.split("/").at(-1);
+    expect(customerId).toBeTruthy();
+
+    await gotoWorkspace(page, `/app/clients/${customerId}`);
+    await expect(page).toHaveURL(new RegExp(`/app/customers/${customerId}$`));
+    await expect(page.getByRole("heading", { name: firstClientName, level: 1 })).toBeVisible();
+  });
+
+  test("Events turns an unavailable read into one productive recovery path", async ({ page }) => {
+    test.skip(
+      !LOCAL_REVIEW_FIXTURES_ENABLED,
+      "The unavailable Events proof uses the explicit local review environment."
+    );
+
+    await gotoWorkspace(page, "/app/events");
+    const recovery = page.locator('[data-events-state="unavailable"]');
+    await expect(recovery).toBeVisible();
+    await expect(recovery.getByRole("heading", { name: "We couldn’t load event records." })).toBeVisible();
+    await expect(recovery.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(recovery.getByRole("button", { name: "Review opportunities" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+    const readBoundary = page.locator('[data-events-evidence="collapsed"]');
+    await expect(readBoundary).toBeVisible();
+    await expect(readBoundary).not.toHaveAttribute("open", "");
+    await expect(readBoundary.getByRole("heading", { name: "Staff read context" })).toBeHidden();
+    await readBoundary.getByText("About this view", { exact: true }).click();
+    await expect(readBoundary.getByRole("heading", { name: "Staff read context" })).toBeVisible();
+    await expect(page.getByText(/Missing or insufficient permissions/i)).toHaveCount(0);
+    await expect(page.getByText("Live operations evidence not established", { exact: true })).toHaveCount(0);
+
+    await recovery.getByRole("button", { name: "Review opportunities" }).click();
+    await expect(page).toHaveURL(/\/app\/quotes$/);
+    await expect(page.getByRole("heading", { name: "Current opportunities", level: 2 })).toBeVisible();
+  });
+
   test("the production pilot matrix exposes NOW, Event Room, command, margins, and staged client changes", async ({ page }) => {
     test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
     await seedPilotQuote(page);
@@ -168,7 +238,7 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: "What to review today" })).toBeVisible();
     await expect(page.locator(".now-surface")).toBeVisible();
 
-    await gotoWorkspace(page, "/app/quotes/pilot-release-quote");
+    await gotoGovernedOpportunity(page, "pilot-release-quote");
     await expect(page.getByRole("heading", { name: "Pilot Release Dinner" })).toBeVisible();
     await expect(page.locator('[data-decide-stack="decide-stack-v1"]')).toBeVisible();
     await expect(page.getByRole("img", { name: /Proposal readiness:/ })).toBeVisible();
@@ -193,19 +263,101 @@ test.describe("customer-centered workspace", () => {
 
   test("the production CREATE intake applies bounded facts and shows a draft-only pricing band", async ({ page }) => {
     test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
+    await page.setViewportSize({ width: 390, height: 844 });
     await gotoWorkspace(page, "/app/quotes/new");
 
     const intake = page.locator('[data-create-intake="intent-extraction-v1"]');
     await expect(intake.getByRole("heading", { name: "What are you planning?" })).toBeVisible();
+    await expect(page.locator(".pilot-command")).toHaveCount(0);
     await intake.getByRole("textbox", { name: "Describe the event in your own words" }).fill(
       "Corporate dinner for about 80 guests on September 12, 2027 at The Foundry, plated, 4 hours, pilot@example.test."
     );
     await intake.getByRole("button", { name: "Structure it" }).click();
     await intake.getByRole("button", { name: /Add \d+ details? to the draft/ }).click();
 
+    await expect(intake).toHaveAttribute("data-create-intake-state", "applied");
+    const appliedHeading = intake.getByRole("heading", { name: /details? (?:is|are) in this draft/ });
+    await expect(appliedHeading).toBeVisible();
+    await expect(appliedHeading).toBeFocused();
+    await expect(intake.getByRole("heading", { name: "What are you planning?" })).toHaveCount(0);
+    await expect(page.locator(".pilot-command")).toBeVisible();
+    await expect(intake.getByRole("button", { name: "Review intake" })).toBeVisible();
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    ))).toBe(true);
+
     await expect(page.getByRole("spinbutton", { name: /Guests \(max 400\)/i })).toHaveValue("80");
+
+    await intake.getByRole("button", { name: "Review intake" }).click();
+    await expect(intake.getByRole("heading", { name: "What are you planning?" })).toBeVisible();
+    await expect(intake.getByRole("button", { name: "Added - review below" })).toBeDisabled();
+    await expect(intake.getByRole("textbox", { name: "Describe the event in your own words" })).toBeFocused();
+
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await intake.getByRole("button", { name: "Collapse intake" }).click();
+    await expect(appliedHeading).toBeVisible();
+    await expect(appliedHeading).toBeFocused();
     await expect(page.locator('[data-pricing-band="pricing-band-v1"]')).toBeVisible();
     await expect(page.getByText("Saving always prices the exact recorded count.", { exact: false })).toBeVisible();
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    ))).toBe(true);
+  });
+
+  test("mobile Clients leads with the highest-priority relationship view and preserves exact client handoff", async ({ page }) => {
+    test.skip(
+      !(AMBIENT_UI_ENABLED && LOCAL_REVIEW_FIXTURES_ENABLED),
+      "The Ambient Clients journey needs the explicit local review fixture."
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoWorkspace(page, "/app/customers");
+
+    const priority = page.locator(".ambient-clients__mobile-priority");
+    const metrics = page.locator(".ambient-clients__metrics");
+    const desktopFilters = page.locator(".ambient-clients__filters");
+    const mobileFilter = page.locator(".ambient-clients__mobile-filter select");
+    const directory = page.locator("#ambient-client-directory");
+
+    await expect(priority).toBeVisible();
+    await expect(priority).toContainText("7 clients need contact details");
+    await expect(priority).toContainText("24 clients are shown on this page");
+    await expect(metrics).toBeHidden();
+    await expect(desktopFilters).toBeHidden();
+    await expect(mobileFilter).toBeVisible();
+    await expect(mobileFilter).toHaveValue("all");
+
+    await priority.getByRole("button", { name: "Review contact gaps" }).click();
+    await expect(mobileFilter).toHaveValue("contact_gap");
+    await expect(directory).toBeFocused();
+    await expect(directory.locator("[data-client-id]")).toHaveCount(7);
+    await expect(directory.locator(".ambient-client__state")).toHaveText([
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact",
+      "Add contact"
+    ]);
+
+    const selectBox = await mobileFilter.boundingBox();
+    expect(selectBox).not.toBeNull();
+    expect(selectBox.x).toBeGreaterThanOrEqual(0);
+    expect(selectBox.x + selectBox.width).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    ))).toBe(true);
+
+    const firstClientName = await directory.locator("h2").first().textContent();
+    await directory.getByRole("button", { name: "Review client" }).first().click();
+    await expect(page).toHaveURL(/\/app\/customers\/[a-z0-9-]+$/u);
+    await expect(page.getByRole("heading", { name: firstClientName, level: 1 })).toBeVisible();
+
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goBack();
+    await expect(metrics).toBeVisible();
+    await expect(priority).toBeHidden();
+    await expect(desktopFilters).toBeVisible();
   });
 
   test("explicit New quote discard and browser-exit protection remain attached to a dirty routed draft", async ({ page }) => {

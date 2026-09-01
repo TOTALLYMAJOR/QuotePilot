@@ -14,7 +14,8 @@ const TOOLS = Object.freeze([
 
 export const WORKSPACE_SHELL_TOOL_IDS = Object.freeze(TOOLS.map(([id]) => id));
 
-function toolAuthorized(feature, adminOnly, features, admin) {
+function toolAuthorized(id, feature, adminOnly, features, admin, readOnlyLibraryEnabled) {
+  if (id === "catalog" && readOnlyLibraryEnabled) return true;
   const featureAllowed = feature ? features[feature] === true : true;
   const roleAllowed = adminOnly === true || !feature ? admin : true;
   return featureAllowed && roleAllowed;
@@ -74,6 +75,7 @@ export function buildWorkspaceShellModel({
   customerCenteredWorkspaceEnabled = false,
   pilotNowEnabled = false,
   isAdmin = false,
+  readOnlyLibraryEnabled = false,
   featureFlags = {},
   transientTools = {}
 } = {}) {
@@ -94,7 +96,14 @@ export function buildWorkspaceShellModel({
   const selectedTool = TOOLS.find(([, routeId]) => routeId === resolvedRouteId);
   const routedTool = selectedTool?.[0] || "";
   const routedToolAuthorized = Boolean(selectedTool)
-    && toolAuthorized(selectedTool[2], selectedTool[3], features, admin);
+    && toolAuthorized(
+      selectedTool[0],
+      selectedTool[2],
+      selectedTool[3],
+      features,
+      admin,
+      readOnlyLibraryEnabled === true
+    );
 
   let notFoundReason = "";
   if (!portal) {
@@ -111,7 +120,14 @@ export function buildWorkspaceShellModel({
   const routedTools = {};
   const modalTools = {};
   TOOLS.forEach(([id, routeId, feature, adminOnly]) => {
-    const authorized = toolAuthorized(feature, adminOnly, features, admin);
+    const authorized = toolAuthorized(
+      id,
+      feature,
+      adminOnly,
+      features,
+      admin,
+      readOnlyLibraryEnabled === true
+    );
     const selected = !portal && routeId === resolvedRouteId;
     const routeOpen = workspace && selected;
     const modalOpen = transientTools?.[id] === true || (!workspace && selected);

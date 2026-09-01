@@ -5,6 +5,10 @@ import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, test } from "vitest";
 
 const SCRIPT_PATH = path.resolve(process.cwd(), "scripts/materialize-functions-env.mjs");
+const FUNCTIONS_INDEX_SOURCE = fs.readFileSync(
+  path.resolve(process.cwd(), "functions/index.js"),
+  "utf8"
+);
 const INTEGRATION_OPS_SOURCE = fs.readFileSync(
   path.resolve(process.cwd(), "src/components/IntegrationOpsModal.jsx"),
   "utf8"
@@ -50,6 +54,14 @@ afterEach(() => {
 });
 
 describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
+  test("keeps runtime configuration environment-only after legacy config retirement", () => {
+    expect(FUNCTIONS_INDEX_SOURCE).not.toContain("functions.config");
+    expect(FUNCTIONS_INDEX_SOURCE).not.toContain("getFunctionsConfigSnapshot");
+    expect(FUNCTIONS_INDEX_SOURCE).toMatch(
+      /function readConfig\(path, fallback = ""\) \{\s+const envValue = readEnvConfig\(path\);\s+return envValue\.present \? envValue\.value : fallback;\s+\}/
+    );
+  });
+
   test("keeps operator guidance aligned with dotenv and Secret Manager ownership", () => {
     expect(INTEGRATION_OPS_SOURCE).toContain(
       "local validation of the production deploy configuration only"

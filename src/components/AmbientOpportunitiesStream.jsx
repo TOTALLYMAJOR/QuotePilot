@@ -9,6 +9,7 @@ import {
   buildAmbientOpportunityStream
 } from "../lib/ambientOpportunityStream";
 import { formatWorkspaceDateTime } from "../lib/workspacePresentation";
+import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import "./ambientOpportunitiesStream.css";
 
 const MOMENTUM_LABELS = Object.freeze({
@@ -76,15 +77,19 @@ function StatusFact({ fact }) {
   );
 }
 
-function OpportunityRow({ row, onResolve }) {
+function OpportunityRow({ row, onResolve, position }) {
   const { primaryAction } = row;
   return (
     <li
       className="ambient-opportunity"
       data-opportunity-id={row.quoteId}
       data-needs-attention={row.requiresAttention ? "true" : "false"}
+      data-opportunity-group={row.groupId}
     >
       <article aria-labelledby={`ambient-opportunity-title-${row.quoteId}`}>
+        <span className="ambient-opportunity__index" aria-hidden="true">
+          {String(position).padStart(2, "0")}
+        </span>
         <header className="ambient-opportunity__identity">
           <div>
             <p className="ambient-opportunity__reference">{row.identity.quoteNumber}</p>
@@ -105,33 +110,14 @@ function OpportunityRow({ row, onResolve }) {
         <p className="ambient-opportunity__event-line">
           <span>{row.identity.eventDate}</span>
           <span aria-hidden="true">·</span>
+          <span>{row.identity.venue}</span>
+          <span aria-hidden="true">·</span>
           <span>
             {row.identity.guests === "Guest count not set"
               ? row.identity.guests
               : `${row.identity.guests} guests`}
           </span>
         </p>
-
-        <dl className="ambient-opportunity__momentum" aria-label="Opportunity status by area">
-          {Object.entries(row.momentum.domains).map(([domain, value]) => (
-            <MomentumFact key={domain} domain={domain} value={value} />
-          ))}
-        </dl>
-
-        <details className="ambient-opportunity__recorded-state">
-          <summary>
-            <span>Booking and payment details</span>
-            <span className="ambient-opportunity__recorded-cue" aria-hidden="true" />
-          </summary>
-          <dl>
-            <StatusFact fact={row.statusFacts.booking} />
-            <StatusFact fact={row.statusFacts.deposit} />
-            <StatusFact fact={row.statusFacts.finalBalance} />
-          </dl>
-          <p>
-            These details are kept separate. Together, they still do not confirm that the event is ready or every payment is complete.
-          </p>
-        </details>
 
         <div className="ambient-opportunity__next">
           <div>
@@ -157,6 +143,28 @@ function OpportunityRow({ row, onResolve }) {
             {primaryAction.disabledReason}
           </p>
         )}
+        <details className="ambient-opportunity__details">
+          <summary>
+            <span>Opportunity details</span>
+            <span className="ambient-opportunity__recorded-cue" aria-hidden="true" />
+          </summary>
+          <dl className="ambient-opportunity__momentum" aria-label="Opportunity status by area">
+            {Object.entries(row.momentum.domains).map(([domain, value]) => (
+              <MomentumFact key={domain} domain={domain} value={value} />
+            ))}
+          </dl>
+          <div className="ambient-opportunity__recorded-state">
+            <p className="ambient-opportunity__reference">Booking and payment details</p>
+            <dl>
+              <StatusFact fact={row.statusFacts.booking} />
+              <StatusFact fact={row.statusFacts.deposit} />
+              <StatusFact fact={row.statusFacts.finalBalance} />
+            </dl>
+            <p>
+              These details are kept separate. Together, they still do not confirm that the event is ready or every payment is complete.
+            </p>
+          </div>
+        </details>
       </article>
     </li>
   );
@@ -168,16 +176,15 @@ function ReadBoundary({ boundary, omittedCount }) {
     concerns.push(`${omittedCount} record${omittedCount === 1 ? " was" : "s were"} omitted because exact identity could not be established.`);
   }
   return (
-    <aside
+    <details
       className="ambient-opportunities__boundary"
-      aria-labelledby="ambient-opportunities-boundary-title"
       data-read-current={boundary.currentComplete ? "true" : "false"}
     >
-      <div>
-        <p className="ambient-opportunity__reference">Where this came from</p>
-        <h3 id="ambient-opportunities-boundary-title">{boundary.sourceLabel}</h3>
-      </div>
-      <div>
+      <summary>
+        <span>About this view</span>
+        <strong>{boundary.sourceLabel}</strong>
+      </summary>
+      <div className="ambient-opportunities__boundary-body">
         <p>{boundary.sourceBoundary}</p>
         {boundary.loadedAtISO && (
           <p>Last checked on this device {formatWorkspaceDateTime(boundary.loadedAtISO)}.</p>
@@ -188,11 +195,12 @@ function ReadBoundary({ boundary, omittedCount }) {
           </ul>
         )}
       </div>
-    </aside>
+    </details>
   );
 }
 
 export default function AmbientOpportunitiesStream({
+  headingRef,
   quotes = [],
   source = "",
   readBoundary = {},
@@ -388,21 +396,18 @@ export default function AmbientOpportunitiesStream({
       <header className="ambient-opportunities__masthead">
         <div>
           <p className="ambient-opportunity__reference">Opportunities</p>
-          <h2 id="ambient-opportunities-heading">Current opportunities</h2>
+          <h2
+            id="ambient-opportunities-heading"
+            ref={headingRef}
+            className="workspace-route-heading"
+            tabIndex={-1}
+          >
+            Every event, with its next move.
+          </h2>
           <p>
-            Each opportunity keeps proposal, pricing, customer, and event-planning details separate, with one useful next step.
+            Active and recent opportunities, ordered by what needs attention.
           </p>
         </div>
-        <button
-          type="button"
-          className="ambient-opportunities__refresh"
-          data-ambient-action-id={refreshAction.id}
-          disabled={!refreshAction.enabled}
-          title={refreshAction.disabledReason || undefined}
-          onClick={requestRefresh}
-        >
-          {stream.readBoundary.loading ? "Refreshing…" : "Refresh"}
-        </button>
       </header>
 
       {acknowledgement && (
@@ -444,31 +449,65 @@ export default function AmbientOpportunitiesStream({
       )}
 
       {stream.state === "incomplete" && (
-        <section className="ambient-opportunities__state" aria-labelledby="ambient-opportunities-incomplete-title">
-          <p className="ambient-opportunity__reference">Still checking</p>
-          <h3 id="ambient-opportunities-incomplete-title">We couldn’t finish loading opportunities.</h3>
-          <p>Caught-up status is unavailable until the current records finish loading.</p>
+        <WorkspaceRecoveryState
+          className="ambient-opportunities__recovery"
+          data-opportunities-state="unavailable"
+          eyebrow="Opportunities unavailable"
+          title="We couldn’t load opportunities."
+          description="Try again when you’re ready. No quote or customer record changed, and you can still start a new quote."
+          titleId="ambient-opportunities-incomplete-title"
+          actionGroupLabel="Opportunity recovery actions"
+        >
           {refreshAction.enabled && (
             <button
               type="button"
-              className="ambient-opportunity__primary-action"
+              className="cta"
               data-ambient-action-id={refreshAction.id}
               onClick={requestRefresh}
             >
-              Refresh opportunities
-              <span aria-hidden="true">→</span>
+              Try again
             </button>
           )}
-        </section>
+          {startAction.enabled && (
+            <button
+              type="button"
+              className="ghost"
+              data-ambient-action-id={startAction.id}
+              onClick={startOpportunity}
+            >
+              Start a quote
+            </button>
+          )}
+        </WorkspaceRecoveryState>
       )}
 
       {stream.rows.length > 0 && (
         <>
-          <ol className="ambient-opportunities__list">
-            {stream.rows.map((row) => (
-              <OpportunityRow key={row.quoteId} row={row} onResolve={resolve} />
+          <div className="ambient-opportunities__groups">
+            {stream.groups.map((group) => (
+              <section
+                className="ambient-opportunities__group"
+                data-opportunity-group={group.id}
+                aria-labelledby={`ambient-opportunities-group-${group.id}`}
+                key={group.id}
+              >
+                <header className="ambient-opportunities__group-heading">
+                  <h3 id={`ambient-opportunities-group-${group.id}`}>{group.label}</h3>
+                  <span>{group.rows.length}</span>
+                </header>
+                <ol className="ambient-opportunities__list" aria-label={`${group.label} opportunities`}>
+                  {group.rows.map((row) => (
+                    <OpportunityRow
+                      key={row.quoteId}
+                      row={row}
+                      onResolve={resolve}
+                      position={stream.rows.findIndex((candidate) => candidate.quoteId === row.quoteId) + 1}
+                    />
+                  ))}
+                </ol>
+              </section>
             ))}
-          </ol>
+          </div>
           {stream.caughtUp.eligible && (
             <div className="ambient-opportunities__caught-up" data-caught-up="true">
               <span aria-hidden="true">✓</span>

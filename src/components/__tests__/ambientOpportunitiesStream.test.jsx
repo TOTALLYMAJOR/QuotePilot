@@ -88,13 +88,53 @@ describe("AmbientOpportunitiesStream", () => {
 
     expect(markup).toContain('data-surface-contract-id="ambient-opportunities-stream"');
     expect(markup).toContain('data-surface-purpose="clarify advance resolve reveal_context"');
-    expect(markup).toContain("Current opportunities");
+    expect(markup).toContain("Every event, with its next move.");
+    expect(markup).toContain("Active &amp; recent");
     expect(markup).toContain("Event 1");
     expect(markup).toContain("Customer 2");
     expect(markup.match(/class="ambient-opportunity"/gu)).toHaveLength(2);
     expect(markup.match(/class="ambient-opportunity__primary-action"/gu)).toHaveLength(2);
     expect(markup).not.toContain("<table");
     expect(markup).not.toContain("Quote readiness");
+  });
+
+  test("renders canonical attention groups in model order instead of caller order", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientOpportunitiesStream
+        {...baseProps}
+        quotes={[
+          quote(1),
+          quote(2, {
+            workflow: {
+              approvalRequests: [{
+                id: "approval-2",
+                state: "pending",
+                requestedAtISO: "2026-08-10T12:00:00.000Z"
+              }]
+            }
+          }),
+          quote(3, {
+            portalDecision: {
+              decision: "changes_requested",
+              requestId: "change-3",
+              message: "Please revise the service plan.",
+              submittedAtISO: "2026-08-11T12:00:00.000Z"
+            }
+          })
+        ]}
+      />
+    );
+    const parsed = document.createElement("div");
+    parsed.innerHTML = markup;
+
+    expect(Array.from(parsed.querySelectorAll(".ambient-opportunities__group-heading h3"))
+      .map((heading) => heading.textContent)).toEqual(["Needs attention", "Active & recent"]);
+    expect(Array.from(parsed.querySelectorAll("[data-opportunity-id]"))
+      .map((row) => row.dataset.opportunityId)).toEqual(["quote-3", "quote-2", "quote-1"]);
+    expect(parsed.querySelector('[data-opportunity-id="quote-3"] .ambient-opportunity__primary-action')
+      .textContent).toContain("Review requested changes");
+    expect(parsed.querySelector('[data-opportunity-id="quote-1"] .ambient-opportunity__index')
+      .textContent.trim()).toBe("03");
   });
 
   test("labels all four dimensions while using a percentage only for proposal completeness", () => {
@@ -244,8 +284,12 @@ describe("AmbientOpportunitiesStream", () => {
     );
 
     expect(markup).toContain('data-opportunity-stream-state="incomplete"');
-    expect(markup).toContain("We couldn’t finish loading opportunities");
-    expect(markup).toContain("Caught-up status is unavailable until the current records finish loading");
+    expect(markup).toContain('data-opportunities-state="unavailable"');
+    expect(markup).toContain("We couldn’t load opportunities");
+    expect(markup).toContain("No quote or customer record changed");
+    expect(markup).toContain("Try again");
+    expect(markup).toContain("Start a quote");
+    expect(markup).toContain("About this view");
     expect(markup).not.toContain("No opportunities are recorded");
     expect(markup).not.toContain('data-caught-up="true"');
   });

@@ -1355,6 +1355,25 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(deleteDoc(receiptRef));
   });
 
+  test("catalog setup drafts and revision-review receipts are private callable-owned records", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    const privateRefs = [
+      doc(adminDb, "organizations", "org-a", "catalogSetupDrafts", "current"),
+      doc(adminDb, "organizations", "org-a", "catalogPublicationReceipts", "publish-request-1"),
+      doc(adminDb, "organizations", "org-a", "quoteCatalogReviewReceipts", "review-request-1")
+    ];
+
+    for (const privateRef of privateRefs) {
+      await assertFails(getDoc(privateRef));
+      await assertFails(setDoc(privateRef, { organizationId: "org-a" }));
+      await assertFails(updateDoc(privateRef, { state: "tampered" }));
+      await assertFails(deleteDoc(privateRef));
+    }
+  });
+
   test("direct quote creation is denied even with draft shape or fabricated authority labels", async () => {
     const draftRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-direct-draft");
     const terminalRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-terminal-create");

@@ -124,11 +124,15 @@ test.describe("Ambient Opportunities stream", () => {
       await page.setViewportSize(viewport);
       await page.goto("/app/quotes");
 
-      await expect(page.getByRole("heading", { name: "Opportunities", exact: true }))
-        .toBeVisible({ timeout: 30_000 });
       const stream = page.locator(".ambient-opportunities");
-      await expect(stream).toBeVisible();
-      await expect(stream.getByRole("heading", { name: "Current opportunities" })).toBeVisible();
+      await expect(stream).toBeVisible({ timeout: 30_000 });
+      await expect(stream.getByRole("heading", {
+        name: "Every event, with its next move.",
+        exact: true
+      })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Opportunities", exact: true })).toHaveCount(0);
+      await expect(stream.getByRole("heading", { name: "Current opportunities", exact: true }))
+        .toHaveCount(0);
       await expect(stream.locator(".ambient-opportunity")).toHaveCount(2);
       await expect(stream.locator(".ambient-opportunity__primary-action")).toHaveCount(2);
       await expect(page.getByText("Quote administration", { exact: true })).toBeVisible();

@@ -25,7 +25,8 @@ function validateArgs() {
     "--confirm",
     "--release-sha",
     "--ci-run-id",
-    "--rollback-sha"
+    "--rollback-sha",
+    "--release-profile"
   ]);
   const args = process.argv.slice(2);
   const seen = new Set();
@@ -38,7 +39,7 @@ function validateArgs() {
     seen.add(name);
   }
   if (seen.size !== allowed.size) {
-    throw new Error("Vercel deployment requires confirmation, release SHA, CI run, and rollback SHA.");
+    throw new Error("Vercel deployment requires confirmation, release SHA, CI run, rollback SHA, and release profile.");
   }
 }
 
@@ -147,12 +148,16 @@ async function verify(headSha) {
     deploymentRunId: process.env.GITHUB_RUN_ID,
     token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
     approvalMode: process.env.RELEASE_APPROVAL_MODE,
+    releaseProfile: readArg("--release-profile"),
     soloOperatorIds: process.env.RELEASE_SOLO_OPERATOR_IDS,
     root: ROOT
   });
 }
 
 validateArgs();
+if (readArg("--release-profile") !== "safe-off") {
+  throw new Error('Vercel production deployment requires --release-profile "safe-off".');
+}
 if (readArg("--confirm") !== CONFIRMATION) {
   throw new Error(`Vercel production deployment requires --confirm "${CONFIRMATION}".`);
 }

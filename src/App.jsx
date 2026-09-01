@@ -1,10 +1,12 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
-import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import CatalogReadNotice from "./components/CatalogReadNotice";
+import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
+import { buildMarginPresentation } from "./components/marginPresentation";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
@@ -52,6 +54,8 @@ import {
 } from "./lib/commercialSearchShell";
 import { areWorkspaceSoundsEnabled, setWorkspaceSoundsEnabled } from "./components/soundKit";
 import { setActiveOrganizationId } from "./lib/organizationService";
+import { requestPasswordReset } from "./lib/authClient";
+import { firebaseReady } from "./lib/firebase";
 import { isCatalogPricingConfirmationCurrent } from "./lib/catalogPricingConfirmation";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
@@ -60,6 +64,11 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import {
+  buildUnifiedCommercialConsequenceReview,
+  buildUnifiedConsequenceProposedForm,
+  unifiedConsequenceFenceCurrent
+} from "./lib/unifiedCommercialConsequenceReview";
 import {
   hydrateSavedQuoteDraftBase
 } from "./lib/quoteDraftRuntimeBase";
@@ -120,6 +129,10 @@ const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
 const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
+);
+const CustomerPortalView = createRecoverableLazy(
+  () => import("quotepilot-active-customer-portal"),
+  "CustomerPortalView"
 );
 const CommandCenterHome = AMBIENT_UI_ENABLED
   ? null
@@ -361,7 +374,20 @@ const EMPTY_EDITING_QUOTE = Object.freeze({
   activeVersionId: "",
   customerId: "",
   organizationId: "",
+  pricingCatalogAuthority: null,
+  catalogRevisionReview: null,
+  selection: {},
+  baseForm: null,
   rebooking: null
+});
+
+const EMPTY_CATALOG_REVISION_REVIEW = Object.freeze({
+  loading: false,
+  submitting: false,
+  error: "",
+  review: null,
+  outcome: "",
+  receipt: null
 });
 
 const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
@@ -382,7 +408,8 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   mutationKind: "",
   mutationMessage: "",
   applyResult: null,
-  applyOutcome: null
+  applyOutcome: null,
+  catalogRevision: null
 });
 const EMPTY_LIBRARY_INTERACTION = Object.freeze({ dirty: false, busy: false });
 
@@ -717,11 +744,16 @@ function ambientWorkflowArrivalInput(target = {}, options = {}) {
 function ambientConversationArrivalInput(quoteId, options = {}) {
   const normalizedQuoteId = String(quoteId || "").trim();
   const messageId = String(options?.arrivalContext?.target?.messageId || "").trim();
+  const requestedObject = options?.arrivalContext?.object || {};
+  const exactConversationObject = requestedObject.type === "customer-communication-evidence"
+    && String(requestedObject.id || "").trim() === normalizedQuoteId;
   return {
     destination: "messages",
     object: messageId
       ? { id: messageId, type: "customer-communication-evidence" }
-      : { id: normalizedQuoteId, type: "opportunity" },
+      : exactConversationObject
+        ? { id: normalizedQuoteId, type: "customer-communication-evidence" }
+        : { id: normalizedQuoteId, type: "opportunity" },
     focus: messageId
       ? { quoteId: normalizedQuoteId, messageId }
       : { quoteId: normalizedQuoteId },
@@ -741,6 +773,30 @@ function ambientOpportunityArrivalInput(target = {}) {
     intentId: actionId.startsWith("review-opportunity-proposal:")
       ? "review_proposal_gap"
       : "review_opportunity"
+  };
+}
+
+function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
+  const normalizedQuoteId = String(quoteId || "").trim();
+  const sourceObjectType = String(context?.object?.type || "").trim();
+  const proposal = sourceObjectType === "customer-decision-artifact";
+  const payment = sourceObjectType === "commercial-evidence";
+  return {
+    destination: "administration",
+    object: {
+      id: normalizedQuoteId,
+      type: proposal
+        ? "customer-decision-artifact"
+        : payment
+          ? "payment-evidence"
+          : "opportunity"
+    },
+    focus: { quoteId: normalizedQuoteId },
+    intentId: proposal
+      ? "review_proposal_controls"
+      : payment
+        ? "review_payment_controls"
+        : "review_quote_controls"
   };
 }
 
@@ -765,7 +821,8 @@ export default function App({
     route: browserRoute,
     location: browserLocation,
     navigate,
-    replace
+    replace,
+    setHistoryTraversalGuard
   } = useWorkspaceNavigation();
   const workspaceArrivalHandoff = useMemo(() => {
     if (!AMBIENT_UI_ENABLED || !browserLocation.state?.ambientArrival) return null;
@@ -780,6 +837,15 @@ export default function App({
   const [workspaceArrivalResolution, setWorkspaceArrivalResolution] = useState(null);
   const [catalogRouteInteraction, setCatalogRouteInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
   const [catalogModalInteraction, setCatalogModalInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
+  const [libraryContextualOrigin, setLibraryContextualOrigin] = useState(null);
+  const [quickUpdatesGuard, setQuickUpdatesGuard] = useState(null);
+  const handleQuickUpdatesGuardChange = useCallback((guard = null) => {
+    setQuickUpdatesGuard(guard);
+    if (typeof setHistoryTraversalGuard === "function") setHistoryTraversalGuard(guard);
+  }, [setHistoryTraversalGuard]);
+  useEffect(() => () => {
+    if (typeof setHistoryTraversalGuard === "function") setHistoryTraversalGuard(null);
+  }, [setHistoryTraversalGuard]);
   const ambientLibraryInteraction = useMemo(() => ({
     dirty: catalogRouteInteraction.dirty || catalogModalInteraction.dirty,
     busy: catalogRouteInteraction.busy || catalogModalInteraction.busy
@@ -820,10 +886,78 @@ export default function App({
     }
     setWorkspaceArrivalResolution(null);
   }, [workspaceArrivalKey]);
-  const navigateWorkspace = useCallback((destination, options = {}) => navigate(destination, {
-    ...options,
-    preserveSearch: false
-  }), [navigate]);
+  useEffect(() => {
+    const contextualLibrary = workspaceArrivalContext?.surfaceId === "ambient-library"
+      && workspaceArrivalContext?.intentId === "browse_library";
+    const quoteId = contextualLibrary
+      ? String(workspaceArrivalContext?.focus?.quoteId || "").trim()
+      : "";
+    const organizationId = String(authSession.organizationId || "").trim();
+    const requestedOrganizationId = String(workspaceArrivalContext?.object?.id || "").trim();
+    if (!quoteId || !organizationId || requestedOrganizationId !== organizationId) return undefined;
+
+    const sectionId = String(workspaceArrivalContext?.focus?.sectionId || "overview").trim() || "overview";
+    let cancelled = false;
+    setLibraryContextualOrigin((current) => current?.quoteId === quoteId
+      ? current
+      : {
+          quoteId,
+          organizationId,
+          label: "opportunity",
+          sectionId,
+          returnLabel: "Return to opportunity"
+        });
+
+    void getQuoteById(quoteId)
+      .then((quote) => {
+        if (cancelled) return;
+        const quoteOrganizationId = String(quote?.organizationId || organizationId).trim();
+        if (!quote?.id || quoteOrganizationId !== organizationId) return;
+        const label = String(
+          quote.event?.name || quote.quoteNumber || "opportunity"
+        ).trim() || "opportunity";
+        setLibraryContextualOrigin({
+          quoteId,
+          organizationId,
+          label,
+          sectionId,
+          returnLabel: label === "opportunity" ? "Return to opportunity" : `Return to ${label}`
+        });
+      })
+      .catch(() => {
+        // The exact route-state identity is sufficient for a safe return. A
+        // failed label refresh must not erase that contextual navigation.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authSession.organizationId,
+    workspaceArrivalContext?.focus?.quoteId,
+    workspaceArrivalContext?.focus?.sectionId,
+    workspaceArrivalContext?.intentId,
+    workspaceArrivalContext?.object?.id,
+    workspaceArrivalContext?.surfaceId
+  ]);
+  const navigateWorkspace = useCallback((destination, options = {}) => {
+    const {
+      bypassQuickUpdatesGuard = false,
+      quickUpdatesReason = "navigation",
+      ...navigationOptions
+    } = options;
+    const commitNavigation = () => navigate(destination, {
+      ...navigationOptions,
+      preserveSearch: false
+    });
+    if (
+      !bypassQuickUpdatesGuard
+      && quickUpdatesGuard?.open === true
+      && typeof quickUpdatesGuard.requestDismiss === "function"
+    ) {
+      return quickUpdatesGuard.requestDismiss(quickUpdatesReason, commitNavigation);
+    }
+    return commitNavigation();
+  }, [navigate, quickUpdatesGuard]);
   const navigateAmbientWorkflow = useCallback((target = {}, options = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientWorkflowArrivalInput(target, options));
@@ -843,6 +977,15 @@ export default function App({
   const navigateAmbientOpportunity = useCallback((target = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientOpportunityArrivalInput(target));
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return { status: "pending", contract: handoff.contract };
+  }, [navigateWorkspace]);
+  const navigateAmbientQuoteAdministration = useCallback((quoteId, context = {}) => {
+    if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff(
+      ambientQuoteAdministrationArrivalInput(quoteId, context)
+    );
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
     navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
     return { status: "pending", contract: handoff.contract };
@@ -1074,6 +1217,21 @@ export default function App({
     : browserRoute.routeId;
   const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]
     .includes(resolvedWorkspaceRouteId);
+  const quoteAdministrationArrival = workspaceArrivalContext?.surfaceId === "quote-administration"
+    ? workspaceArrivalContext
+    : null;
+  const historyFocusQuoteId = browserRoute.params?.quoteId
+    || quoteAdministrationArrival?.focus?.quoteId
+    || historyTarget.quoteId;
+  const historyFocusAction = quoteAdministrationArrival
+    ? "administration"
+    : historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+      ? historyTarget.action
+      : "";
+  const historyFocusReason = quoteAdministrationArrival?.reasonId
+    || (historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+      ? historyTarget.reason
+      : "");
   const messagingOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.MESSAGING;
   const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
@@ -1175,6 +1333,7 @@ export default function App({
   const commercialSnapshot = useCommercialWorkspaceSnapshot({
     enabled: Boolean(authSession.isStaff && authSession.organizationId),
     includeHistory: CUSTOMER_CENTERED_WORKSPACE_ENABLED,
+    includeRevenueAttention: CUSTOMER_CENTERED_WORKSPACE_ENABLED && firebaseReady,
     tenantTimeZone: String(catalog.settings?.businessTimeZone || "").trim(),
     organizationId: authSession.organizationId
   });
@@ -1216,6 +1375,7 @@ export default function App({
   // change-request version linking").
   const [pendingResolutionLink, setPendingResolutionLink] = useState(null);
   const [changeImpactPreview, setChangeImpactPreview] = useState(EMPTY_CHANGE_IMPACT_PREVIEW);
+  const [catalogRevisionReview, setCatalogRevisionReview] = useState(EMPTY_CATALOG_REVISION_REVIEW);
   const [quoteEditLoadState, setQuoteEditLoadState] = useState({
     quoteId: "",
     loading: false,
@@ -1264,6 +1424,45 @@ export default function App({
     changeImpactPreviewGenerationRef.current += 1;
     setChangeImpactPreview(EMPTY_CHANGE_IMPACT_PREVIEW);
   };
+
+  const loadQuoteCatalogRevisionReview = useCallback(async () => {
+    const organizationId = String(authSession.organizationId || "").trim();
+    const quoteId = String(editingQuote.id || "").trim();
+    if (!organizationId || !quoteId) {
+      setCatalogRevisionReview(EMPTY_CATALOG_REVISION_REVIEW);
+      return;
+    }
+    setCatalogRevisionReview((current) => ({
+      ...current,
+      loading: true,
+      error: ""
+    }));
+    try {
+      const { getQuoteCatalogRevisionReview } = await import("./lib/quoteCatalogRevisionReview");
+      const result = await getQuoteCatalogRevisionReview({ organizationId, quoteId });
+      setCatalogRevisionReview({
+        loading: false,
+        submitting: false,
+        error: "",
+        review: result.review,
+        outcome: "",
+        receipt: null
+      });
+    } catch (error) {
+      setCatalogRevisionReview({
+        loading: false,
+        submitting: false,
+        error: error?.message || "Catalog revision review is unavailable.",
+        review: null,
+        outcome: "",
+        receipt: null
+      });
+    }
+  }, [authSession.organizationId, editingQuote.activeVersionId, editingQuote.id]);
+
+  useEffect(() => {
+    void loadQuoteCatalogRevisionReview();
+  }, [catalog.authoritativeVersion, loadQuoteCatalogRevisionReview]);
 
   useEffect(() => {
     if (
@@ -1624,6 +1823,7 @@ export default function App({
   // return to a pristine new-quote route. New drafts only — an edit session
   // always has its saved canonical revision — and cleared on save/discard.
   const [draftRecoveryOffer, setDraftRecoveryOffer] = useState(null);
+  const [draftRecoveryResumed, setDraftRecoveryResumed] = useState(false);
   const draftRecoveryStorageKey = draftRecoveryKey({ organizationId: authSession.organizationId });
 
   useEffect(() => {
@@ -1652,6 +1852,7 @@ export default function App({
     if (!draftRecoveryOffer) return;
     setForm({ ...INITIAL_FORM, ...draftRecoveryOffer.form });
     setQuoteDirty(true);
+    setDraftRecoveryResumed(true);
     setDraftRecoveryOffer(null);
   };
 
@@ -1838,6 +2039,10 @@ export default function App({
     () => buildUpsellRecommendations({ form, catalog, totals, settings: effectiveSettings }),
     [form, catalog, totals, effectiveSettings]
   );
+  const proposedMargin = useMemo(
+    () => buildMarginPresentation({ form, totals, catalog, settings: effectiveSettings }),
+    [catalog, effectiveSettings, form, totals]
+  );
   const quoteEditRouteId = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_EDIT
     ? String(browserRoute.params?.quoteId || "").trim()
     : "";
@@ -1846,11 +2051,27 @@ export default function App({
   const currentChangeImpactFormKey = JSON.stringify(form);
   const changeImpactPresentationError = changeImpactPreview.error || (
     changeImpactPreview.model
-    && changeImpactPreview.formKey
-    && changeImpactPreview.formKey !== currentChangeImpactFormKey
-      ? "Quote inputs changed after this preview. The retained result is stale; refresh it before relying on the comparison."
+      ? changeImpactPreview.formKey
+        && changeImpactPreview.formKey !== currentChangeImpactFormKey
+        ? "Quote inputs changed after this preview. The retained result is stale; refresh it before relying on the comparison."
+        : Number(changeImpactPreview.catalogRevision) !== Number(catalog.settings?.catalogRevision)
+          ? "The catalog revision changed after this preview. Refresh it before choosing a consequence outcome."
+          : ""
       : ""
   );
+  const unifiedConsequenceReview = useMemo(() => buildUnifiedCommercialConsequenceReview({
+    model: changeImpactPreview.model,
+    recommendations,
+    margin: proposedMargin,
+    proposalReadiness,
+    catalogRevision: changeImpactPreview.catalogRevision
+  }), [
+    changeImpactPreview.catalogRevision,
+    changeImpactPreview.model,
+    proposalReadiness,
+    proposedMargin,
+    recommendations
+  ]);
   const changeImpactPreviewAvailable = isEditingQuote
     && String(catalog.source || "").trim().toLowerCase().startsWith("firebase");
   const organizationName = String(organization?.name || "").trim();
@@ -1891,7 +2112,8 @@ export default function App({
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled)
-    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG
+      && (authSession.isAdmin || AMBIENT_UI_ENABLED))
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin)
   );
   const workspaceShellModel = {
@@ -1993,6 +2215,10 @@ export default function App({
             .filter(Boolean)
         )))
       : null;
+    // Loaded quotes retain their saved commercial plan until the operator
+    // resolves the catalog revision review. Never remove or replace a missing
+    // or inactive saved choice during hydration.
+    if (editingQuote.id) return;
     const result = reconcileCatalogSelections({ form, catalog, menuItemIds });
     if (!result.changed) {
       catalogReconciliationNoticeRef.current = "";
@@ -2020,6 +2246,7 @@ export default function App({
     dynamicMenuLoadedEventTypeId,
     dynamicMenuLoading,
     effectiveMenuSections,
+    editingQuote.id,
     form,
     isUnscopedPlatformOperator,
     pushToast
@@ -2554,27 +2781,34 @@ export default function App({
     setStep((current) => Math.min(5, current + 1));
   };
 
-  const buildCurrentPricingInput = (source = catalog.source || "") => ({
+  const buildCurrentPricingInput = (
+    source = catalog.source || "",
+    {
+      candidateForm = form,
+      candidateEditingQuote = editingQuote,
+      candidateIsEditing = isEditingQuote
+    } = {}
+  ) => ({
     organizationId: authSession.organizationId || "",
-    quoteId: isEditingQuote ? editingQuote.id : "",
-    quoteNumber: isEditingQuote ? editingQuote.quoteNumber || "" : "",
+    quoteId: candidateIsEditing ? candidateEditingQuote.id : "",
+    quoteNumber: candidateIsEditing ? candidateEditingQuote.quoteNumber || "" : "",
     actor: {
       uid: authSession.user?.uid || "",
       email: authSession.user?.email || "",
       role: authSession.role || "sales"
     },
-    form,
+    form: candidateForm,
     metadata: {
       source,
       generatedAt: new Date().toISOString()
     }
   });
 
-  const handlePreviewChangeImpact = async ({ recovery = false } = {}) => {
+  const handlePreviewChangeImpact = async ({ recovery = false, candidateForm = form } = {}) => {
     if (!isEditingQuote || !editingQuote.id) return;
     const generation = changeImpactPreviewGenerationRef.current + 1;
     changeImpactPreviewGenerationRef.current = generation;
-    const formKey = JSON.stringify(form);
+    const formKey = JSON.stringify(candidateForm);
     const priorRequestId = recovery ? changeImpactPreview.simulationRequestId : "";
     setChangeImpactPreview((current) => ({
       ...current,
@@ -2604,7 +2838,7 @@ export default function App({
         quoteId: editingQuote.id,
         expectedActiveVersionId: editingQuote.activeVersionId,
         requestId: simulationRequestId,
-        form
+        form: candidateForm
       });
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
@@ -2627,7 +2861,8 @@ export default function App({
           ? "The exact simulation receipt is ready for governed authorization."
           : "The exact simulation receipt is ready; enforcement remains dormant for this workspace.",
         applyResult: null,
-        applyOutcome: null
+        applyOutcome: null,
+        catalogRevision: Number(catalog.settings?.catalogRevision)
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -2655,6 +2890,106 @@ export default function App({
         mutationMessage: definitive
           ? "The simulation was definitively rejected. Correct the quote source, then start a new simulation request."
           : "No definitive simulation receipt was returned. The same request identity must be reconciled before another simulation starts."
+      }));
+    }
+  };
+
+  const unifiedConsequenceScopeIsCurrent = () => unifiedConsequenceFenceCurrent(
+    unifiedConsequenceReview,
+    {
+      quoteRevisionId: editingQuote.activeVersionId,
+      proposedRevisionId: changeImpactPreview.model?.identity?.proposedRevisionId,
+      catalogRevision: catalog.settings?.catalogRevision
+    }
+  ) && changeImpactScopeIsCurrent();
+
+  const handleApplyUnifiedConsequences = async (selectedIds) => {
+    if (!unifiedConsequenceScopeIsCurrent()) {
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: "The quote, catalog, or simulation fence changed. Refresh consequence review before applying a selection."
+      }));
+      return;
+    }
+    const nextForm = buildUnifiedConsequenceProposedForm({
+      form,
+      review: unifiedConsequenceReview,
+      selectedIds
+    });
+    setForm(nextForm);
+    setQuoteDirty(true);
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: "The selected consequence plan is staged. A fresh authoritative simulation is required before the governed version action."
+    }));
+    await handlePreviewChangeImpact({ candidateForm: nextForm });
+  };
+
+  const handleKeepUnifiedQuotedPlan = () => {
+    const baseForm = editingQuote.baseForm;
+    if (!baseForm) return;
+    setForm({ ...baseForm });
+    setQuoteDirty(false);
+    resetChangeImpactPreview();
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: "Kept the quoted plan. The unsaved consequence proposal was discarded and the saved quote was not mutated."
+    }));
+  };
+
+  const handleCatalogReviewOutcome = async (outcome) => {
+    const review = catalogRevisionReview.review;
+    if (!review || !editingQuote.id) return;
+    setCatalogRevisionReview((current) => ({ ...current, submitting: true, error: "" }));
+    try {
+      const {
+        createQuoteCatalogReviewRequestId,
+        recordQuoteCatalogReviewOutcome
+      } = await import("./lib/quoteCatalogRevisionReview");
+      const result = await recordQuoteCatalogReviewOutcome({
+        organizationId: authSession.organizationId,
+        quoteId: editingQuote.id,
+        expectedQuoteVersionId: review.quoteVersionId,
+        expectedCatalogRevision: review.currentCatalogRevision,
+        outcome,
+        requestId: createQuoteCatalogReviewRequestId(outcome)
+      });
+      setCatalogRevisionReview((current) => ({
+        ...current,
+        submitting: false,
+        outcome,
+        receipt: result.receipt
+      }));
+      if (outcome === "keep_quoted_values") {
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "Quoted commercial inputs were preserved for this saved version. Change guests, duration, service style, staffing, or selections only through Review and update."
+        }));
+        return;
+      }
+      const savedSelection = editingQuote.selection || {};
+      const currentCatalogForm = {
+        ...form,
+        bartenderRateOverride: savedSelection.bartenderRateOverride ?? "",
+        serverRateOverride: savedSelection.serverRateOverride ?? "",
+        chefRateOverride: savedSelection.chefRateOverride ?? ""
+      };
+      setForm(currentCatalogForm);
+      setQuoteDirty(true);
+      setSubmitState((current) => ({
+        ...current,
+        saving: false,
+        message: "Current-catalog values are staged for authoritative Change Impact review. Nothing has been saved yet."
+      }));
+      await handlePreviewChangeImpact({ candidateForm: currentCatalogForm });
+    } catch (error) {
+      setCatalogRevisionReview((current) => ({
+        ...current,
+        submitting: false,
+        error: error?.message || "The catalog review outcome was not recorded."
       }));
     }
   };
@@ -3056,17 +3391,56 @@ export default function App({
 
   const handleSubmitQuote = async ({
     commercialChangeAuthority = null,
-    propagateError = false
+    propagateError = false,
+    explicitDraft = null,
+    navigateAfterSave = true,
+    manageEditorState = true,
+    onPersistenceResolved = null
   } = {}) => {
-    if (quoteEditRouteId && !quoteEditReady) {
-      setSubmitState((current) => ({
-        ...current,
-        saving: false,
-        message: "This saved quote has not loaded for editing. Retry the edit before saving."
-      }));
+    const submissionForm = explicitDraft?.form || form;
+    const submissionEditingQuote = explicitDraft?.editingQuote || editingQuote;
+    const submissionIsEditing = explicitDraft
+      ? Boolean(String(submissionEditingQuote?.id || "").trim())
+      : isEditingQuote;
+    const submissionTotals = explicitDraft
+      ? calculateQuote(submissionForm, catalog, effectiveSettings)
+      : totals;
+    const submissionMenuItemCount = Array.isArray(submissionForm?.menuItems)
+      ? submissionForm.menuItems.length
+      : 0;
+    if (!explicitDraft && quoteEditRouteId && !quoteEditReady) {
+      if (manageEditorState) {
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "This saved quote has not loaded for editing. Retry the edit before saving."
+        }));
+      }
       return;
     }
+    if (!explicitDraft && submissionIsEditing) {
+      const reviewState = catalogRevisionReview.review?.state;
+      const unresolved = ["review_required", "legacy_unknown", "unavailable"].includes(reviewState)
+        && catalogRevisionReview.outcome !== "review_and_update";
+      const keptPlanChanged = catalogRevisionReview.outcome === "keep_quoted_values" && quoteDirty;
+      if (unresolved || keptPlanChanged) {
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: keptPlanChanged
+            ? "The kept commercial plan is frozen. Choose Review and update before changing guests, duration, service style, staffing, or selections."
+            : "Resolve the catalog revision review before saving. No saved values were repriced or removed."
+        }));
+        window.requestAnimationFrame(() => {
+          wizardRef.current?.querySelector('[data-capability-id="quote-catalog-revision-review"]')
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        return null;
+      }
+    }
     if (
+      !explicitDraft
+      &&
       pilotScenarioDraftReview
       && pilotScenarioReviewResolution === "pending_review"
     ) {
@@ -3083,6 +3457,8 @@ export default function App({
       return null;
     }
     if (
+      !explicitDraft
+      &&
       ambientDraftIntentReview
       && ambientDraftReviewResolution === "pending_review"
     ) {
@@ -3099,7 +3475,7 @@ export default function App({
       });
       return null;
     }
-    if (isEditingQuote && changeImpactPreviewAvailable && !commercialChangeAuthority) {
+    if (!explicitDraft && isEditingQuote && changeImpactPreviewAvailable && !commercialChangeAuthority) {
       if (!changeImpactScopeIsCurrent()) {
         setStep(5);
         setSubmitState((current) => ({
@@ -3122,48 +3498,57 @@ export default function App({
         return null;
       }
     }
-    if (selectedMenuItemCount < 1) {
-      showMissingMenuSelection({ moveToMenuStep: true });
+    if (submissionMenuItemCount < 1) {
+      const message = "Choose at least one menu item before saving this quote.";
+      if (manageEditorState) {
+        showMissingMenuSelection({ moveToMenuStep: true });
+      }
+      if (propagateError) throw new Error(message);
       return;
     }
     const requiredError =
-      totals.guests <= 0
+      submissionTotals.guests <= 0
         ? "Add guest count before saving a quote."
-        : !form.name.trim()
+        : !submissionForm.name.trim()
           ? "Client name is required."
-          : !form.email.trim()
+          : !submissionForm.email.trim()
             ? "Client email is required."
-            : !/^\S+@\S+\.\S+$/.test(form.email.trim())
+            : !/^\S+@\S+\.\S+$/.test(submissionForm.email.trim())
               ? "Client email format is invalid."
-              : !form.eventTypeId
+              : !submissionForm.eventTypeId
                 ? "Event type is required."
-                : !form.date
+                : !submissionForm.date
                   ? "Event date is required."
-                  : !form.eventName.trim()
+                  : !submissionForm.eventName.trim()
                     ? "Event name is required."
-                    : !form.venue.trim()
+                    : !submissionForm.venue.trim()
                       ? "Venue is required."
                       : "";
 
     if (requiredError) {
-      setSubmitState((prev) => ({ ...prev, saving: false, message: requiredError }));
+      if (manageEditorState) {
+        setSubmitState((prev) => ({ ...prev, saving: false, message: requiredError }));
+      }
+      if (propagateError) throw new Error(requiredError);
       return;
     }
 
-    setSubmitState((prev) => ({
-      ...prev,
-      saving: true,
-      message: ""
-    }));
+    if (manageEditorState) {
+      setSubmitState((prev) => ({
+        ...prev,
+        saving: true,
+        message: ""
+      }));
+    }
     try {
       const availability = await checkEventAvailability({
-        eventDate: form.date,
-        venue: form.venue,
-        eventTime: form.time,
-        eventHours: form.hours,
-        eventGuests: form.guests,
+        eventDate: submissionForm.date,
+        venue: submissionForm.venue,
+        eventTime: submissionForm.time,
+        eventHours: submissionForm.hours,
+        eventGuests: submissionForm.guests,
         capacityLimit: scheduleCapacityLimit,
-        excludeQuoteId: isEditingQuote ? editingQuote.id : "",
+        excludeQuoteId: submissionIsEditing ? submissionEditingQuote.id : "",
         organizationId: authSession.organizationId
       });
       if (availability.hasBlockingConflict) {
@@ -3176,23 +3561,24 @@ export default function App({
         const capacityNote = availability.capacityExceeded
           ? ` Capacity alert: projected load (${availability.sameVenueLoad}) exceeds configured threshold (${availability.capacityLimit}).`
           : "";
-        setAvailabilityBlock({
-          conflicts: bookedConflicts,
-          capacityExceeded: Boolean(availability.capacityExceeded),
-          sameVenueLoad: Number(availability.sameVenueLoad || 0),
-          capacityLimit: Number(availability.capacityLimit || 0)
-        });
-        setSubmitState({
-          saving: false,
-          message:
-            `Availability conflict: this date/venue is already booked.` +
-            `${conflictRefs ? ` Existing booking(s): ${conflictRefs}.` : ""}` +
-            capacityNote +
-            " Open the schedule for context or edit the date, time, or venue to continue."
-        });
+        const message =
+          `Availability conflict: this date/venue is already booked.` +
+          `${conflictRefs ? ` Existing booking(s): ${conflictRefs}.` : ""}` +
+          capacityNote +
+          " Open the schedule for context or edit the date, time, or venue to continue.";
+        if (manageEditorState) {
+          setAvailabilityBlock({
+            conflicts: bookedConflicts,
+            capacityExceeded: Boolean(availability.capacityExceeded),
+            sameVenueLoad: Number(availability.sameVenueLoad || 0),
+            capacityLimit: Number(availability.capacityLimit || 0)
+          });
+          setSubmitState({ saving: false, message });
+        }
+        if (propagateError) throw new Error(message);
         return;
       }
-      setAvailabilityBlock(null);
+      if (manageEditorState) setAvailabilityBlock(null);
       const softConflicts = availability.conflicts.filter((item) => item.status === "accepted");
       const notes = [];
       if (softConflicts.length) {
@@ -3209,17 +3595,23 @@ export default function App({
           `Capacity note: projected same-venue load is ${availability.sameVenueLoad} guests (limit ${availability.capacityLimit}).`
         );
       }
-      if (notes.length) {
-        setAvailabilityNotice(notes.join(" "));
-      } else {
-        setAvailabilityNotice("");
+      if (manageEditorState) {
+        if (notes.length) {
+          setAvailabilityNotice(notes.join(" "));
+        } else {
+          setAvailabilityNotice("");
+        }
       }
 
       const requiresAuthoritativePricing =
         !E2E_ALLOW_NON_AUTHORITATIVE_PRICING
         && String(catalog.source || "").trim().toLowerCase().startsWith("firebase");
-      const pricingInput = buildCurrentPricingInput();
-      let totalsForPersistence = totals;
+      const pricingInput = buildCurrentPricingInput(catalog.source || "", {
+        candidateForm: submissionForm,
+        candidateEditingQuote: submissionEditingQuote,
+        candidateIsEditing: submissionIsEditing
+      });
+      let totalsForPersistence = submissionTotals;
       let pricingSnapshot = null;
       let pricingAdjustmentNote = "";
 
@@ -3235,8 +3627,8 @@ export default function App({
           throw new Error("Authoritative pricing response was empty.");
         }
         pricingSnapshot = authoritativePricing;
-        totalsForPersistence = buildTotalsFromPricingSnapshot(authoritativePricing, totals);
-        const previewTotal = toNumber(totals.total, 0);
+        totalsForPersistence = buildTotalsFromPricingSnapshot(authoritativePricing, submissionTotals);
+        const previewTotal = toNumber(submissionTotals.total, 0);
         const authoritativeTotal = toNumber(totalsForPersistence.total, previewTotal);
         if (Math.abs(authoritativeTotal - previewTotal) >= 0.01) {
           pricingAdjustmentNote = ` Server pricing adjusted total from ${currency(previewTotal)} to ${currency(authoritativeTotal)}.`;
@@ -3248,10 +3640,10 @@ export default function App({
       }
 
       const result = await withTimeout(
-        isEditingQuote
+        submissionIsEditing
           ? updateQuote({
-            quoteId: editingQuote.id,
-            form,
+            quoteId: submissionEditingQuote.id,
+            form: submissionForm,
             totals: totalsForPersistence,
             pricingSnapshot,
             catalogSource: catalog.source,
@@ -3260,10 +3652,16 @@ export default function App({
             ownerUid: authSession.user?.uid || "",
             ownerEmail: authSession.user?.email || "",
             organizationId: authSession.organizationId,
+            expectedActiveVersionId: explicitDraft?.expectedActiveVersionId
+              || submissionEditingQuote.activeVersionId
+              || undefined,
+            catalogReviewReceiptId: catalogRevisionReview.outcome === "review_and_update"
+              ? catalogRevisionReview.receipt?.receiptId
+              : undefined,
             ...(commercialChangeAuthority ? { commercialChangeAuthority } : {})
           })
           : submitQuote({
-            form,
+            form: submissionForm,
             totals: totalsForPersistence,
             pricingSnapshot,
             catalogSource: catalog.source,
@@ -3274,14 +3672,19 @@ export default function App({
             organizationId: authSession.organizationId
           }),
         SAVE_FLOW_TIMEOUT_MS,
-        isEditingQuote ? "updateQuote" : "submitQuote"
+        submissionIsEditing ? "updateQuote" : "submitQuote"
       );
-      if (isEditingQuote) {
-        setQuoteDirty(false);
-        setAmbientDraftIntentReview(null);
-        setAmbientDraftCatalogContext(null);
-        setAmbientDraftReviewResolution("");
-        clearPilotScenarioDraftReview();
+      if (typeof onPersistenceResolved === "function") {
+        onPersistenceResolved(result);
+      }
+      if (submissionIsEditing) {
+        if (manageEditorState) {
+          setQuoteDirty(false);
+          setAmbientDraftIntentReview(null);
+          setAmbientDraftCatalogContext(null);
+          setAmbientDraftReviewResolution("");
+          clearPilotScenarioDraftReview();
+        }
         recordProductAnalyticsEvent("quote_saved");
         if (typeof loadAmbientProductAnalytics === "function") {
           const observedAtMs = Date.now();
@@ -3293,23 +3696,26 @@ export default function App({
             }))
             .catch(() => {});
         }
-        setSubmitState({
-          saving: false,
-          message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
-        });
-        pushToast(`Quote ${result.quoteNumber} updated.`, "success");
+        if (manageEditorState) {
+          setSubmitState({
+            saving: false,
+            message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
+          });
+          pushToast(`Quote ${result.quoteNumber} updated.`, "success");
+        }
         // Structured change-request version linking: this save already
         // fully succeeded above, so linking is strictly best-effort — never
         // block navigation or surface its own failure. Cleared either way
         // so a later, unrelated save cannot attempt a stale link.
         if (
           result.storage === "firebase"
-          && pendingResolutionLink?.quoteId === editingQuote.id
+          && manageEditorState
+          && pendingResolutionLink?.quoteId === submissionEditingQuote.id
           && result.activeVersionId
         ) {
           void linkChangeRequestResolutionVersion({
             organizationId: authSession.organizationId,
-            quoteId: editingQuote.id,
+            quoteId: submissionEditingQuote.id,
             resolutionId: pendingResolutionLink.resolutionId,
             versionId: result.activeVersionId
           }).catch((error) => {
@@ -3320,9 +3726,16 @@ export default function App({
           });
           setPendingResolutionLink(null);
         }
-        setHistoryTarget({ quoteId: result.id, reason: "updated" });
-        navigateWorkspace(buildQuotePath(result.id));
-        return result;
+        requestWorkflowAttentionRefresh({ force: true });
+        if (manageEditorState) {
+          setHistoryTarget({ quoteId: result.id, reason: "updated" });
+        }
+        if (navigateAfterSave) navigateWorkspace(buildQuotePath(result.id));
+        return {
+          ...result,
+          pricingSnapshot,
+          pricingAdjustmentNote
+        };
       }
 
       const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
@@ -3395,20 +3808,527 @@ export default function App({
     } catch (err) {
       recordDiagnosticError(err, {
         surface: "app",
-        action: "submit-quote",
-        eventDate: form.date,
-        venue: form.venue,
-        guests: totals.guests
+        action: explicitDraft ? "save-quick-update" : "submit-quote",
+        eventDate: submissionForm.date,
+        venue: submissionForm.venue,
+        guests: submissionTotals.guests
       });
-      pushToast(err?.message || "Failed to save quote.", "error");
-      setSubmitState((prev) => ({
-        ...prev,
-        saving: false,
-        message: err?.message || "Failed to save quote."
-      }));
+      if (manageEditorState) {
+        pushToast(err?.message || "Failed to save quote.", "error");
+        setSubmitState((prev) => ({
+          ...prev,
+          saving: false,
+          message: err?.message || "Failed to save quote."
+        }));
+      }
       if (propagateError) throw err;
       return null;
     }
+  };
+
+  const quickUpdateFailure = (status, code, reason, nextResolution, recovery = {}) => ({
+    status,
+    code,
+    reason,
+    consequence: "The Quick Updates draft remains open and no additional quote change is assumed.",
+    nextResolution,
+    recoveryAction: String(recovery.action || "").trim(),
+    recoveryLabel: String(recovery.label || "").trim(),
+    retryable: recovery.retryable !== false
+  });
+
+  const quickUpdateRequiresEditor = (reason, nextResolution) => quickUpdateFailure(
+    "handoff",
+    "full-editor-required",
+    reason,
+    nextResolution,
+    {
+      action: "open_editor",
+      label: "Continue in quote editor",
+      retryable: false
+    }
+  );
+
+  const isFirebaseQuickUpdateSource = () => String(catalog.source || "")
+    .trim()
+    .toLowerCase()
+    .startsWith("firebase");
+
+  const quickUpdatePersistedEffectsMatch = (preview, candidate) => {
+    const effects = preview?.persistedEffects;
+    const delta = Array.isArray(effects?.requestedDelta)
+      ? effects.requestedDelta
+      : [];
+    const requested = candidate?.delta?.[0] || {};
+    return Boolean(
+      effects?.schemaVersion === "commercial-change-persisted-effects-v1"
+      && effects?.authority === "server_authoritative"
+      && effects?.identity?.organizationId === String(authSession.organizationId || "").trim()
+      && effects?.identity?.quoteId === String(candidate?.quote?.id || candidate?.editingQuote?.id || "").trim()
+      && effects?.identity?.baseRevisionId === candidate?.baseRevisionId
+      && effects?.status?.before === "draft"
+      && effects?.status?.after === "draft"
+      && effects?.version?.beforeRevisionId === candidate?.baseRevisionId
+      && effects?.version?.afterRevisionId === effects?.identity?.projectedRevisionId
+      && effects?.version?.createsImmutableVersion === true
+      && delta.length === 1
+      && delta[0]?.fieldPath === "event.style"
+      && String(delta[0]?.before || "").trim() === String(requested.before || "").trim()
+      && String(delta[0]?.after || "").trim() === String(requested.after || "").trim()
+    );
+  };
+
+  const prepareQuickUpdateCandidate = async (request = {}) => {
+    const quoteId = String(request.quoteId || "").trim();
+    const organizationId = String(request.organizationId || "").trim();
+    const baseRevisionId = String(request.baseRevisionId || "").trim();
+    const nextStyle = String(request.patch?.event?.style || "").trim();
+    const requestedDelta = Array.isArray(request.delta) ? request.delta : [];
+    const allowedStyles = Object.keys(STAFF_RULES);
+    if (
+      request.modelId !== "quick-updates-request-v1"
+      || request.source !== "quick_updates"
+      || request.scope !== "event.service_style"
+      || !quoteId
+      || !organizationId
+      || !baseRevisionId
+      || !nextStyle
+      || requestedDelta.length !== 1
+      || requestedDelta[0]?.fieldPath !== "event.style"
+    ) {
+      throw Object.assign(new Error("The Quick Updates request is incomplete or unsupported."), {
+        code: "invalid-argument"
+      });
+    }
+    if (organizationId !== String(authSession.organizationId || "").trim()) {
+      throw Object.assign(new Error("The Quick Updates request belongs to another workspace."), {
+        code: "permission-denied"
+      });
+    }
+    if (!["admin", "sales"].includes(String(authSession.role || "").trim().toLowerCase())) {
+      throw Object.assign(new Error("Your role cannot edit this opportunity."), {
+        code: "permission-denied"
+      });
+    }
+    if (!allowedStyles.includes(nextStyle)) {
+      throw Object.assign(new Error("Choose a service style offered by the current quote editor."), {
+        code: "invalid-argument"
+      });
+    }
+    const currentQuote = await getQuoteById(quoteId);
+    const currentOrganizationId = String(
+      currentQuote?.organizationId || organizationId
+    ).trim();
+    if (currentOrganizationId !== organizationId) {
+      throw Object.assign(new Error("The saved quote belongs to another workspace."), {
+        code: "permission-denied"
+      });
+    }
+    const currentRevisionId = String(
+      currentQuote?.activeVersionId || currentQuote?.versionMeta?.versionId || ""
+    ).trim();
+    if (!currentRevisionId || currentRevisionId !== baseRevisionId) {
+      throw Object.assign(
+        new Error("This opportunity changed after Quick Updates opened. Reload the current saved version before editing it."),
+        { code: "conflict" }
+      );
+    }
+    const currentStyle = String(currentQuote?.event?.style || "").trim();
+    if (
+      String(requestedDelta[0]?.before || "").trim() !== currentStyle
+      || String(requestedDelta[0]?.after || "").trim() !== nextStyle
+      || currentStyle === nextStyle
+    ) {
+      throw Object.assign(
+        new Error("The reviewed service-style delta no longer matches the saved opportunity."),
+        { code: "conflict" }
+      );
+    }
+    const runtime = hydrateSavedQuoteDraftBase({
+      quote: currentQuote,
+      previousForm: INITIAL_FORM,
+      catalogPackages: catalog.packages,
+      organizationId
+    });
+    if (!runtime.ok) {
+      throw Object.assign(new Error(runtime.reason || "The saved quote could not be prepared for editing."), {
+        code: "failed-precondition"
+      });
+    }
+    return {
+      quote: currentQuote,
+      baseRevisionId: currentRevisionId,
+      form: { ...runtime.form, style: nextStyle },
+      editingQuote: runtime.editingQuote,
+      delta: [{
+        ...requestedDelta[0],
+        fieldPath: "event.style",
+        before: currentStyle,
+        after: nextStyle
+      }]
+    };
+  };
+
+  const handlePreviewQuickUpdate = async (request = {}) => {
+    try {
+      const candidate = await prepareQuickUpdateCandidate(request);
+      if (!isFirebaseQuickUpdateSource()) {
+        return quickUpdateRequiresEditor(
+          "Quick Updates can browse this local fallback quote, but it cannot claim an authoritative save.",
+          "Discard only this panel draft, then make and review the change in the full quote editor."
+        );
+      }
+      const quoteStatus = String(candidate.quote?.status || "draft").trim().toLowerCase();
+      if (quoteStatus !== "draft") {
+        return quickUpdateRequiresEditor(
+          `This ${quoteStatus || "non-draft"} opportunity needs the full quote editor because saving an edit creates a new draft lifecycle version.`,
+          "Discard only this panel draft, then review the lifecycle and customer-facing effects in the full quote editor."
+        );
+      }
+      const {
+        buildCommercialChangeRequestId,
+        simulateCommercialQuoteChange
+      } = await import("./lib/commercialChangeAuthorityClient");
+      const result = await simulateCommercialQuoteChange({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        expectedActiveVersionId: candidate.baseRevisionId,
+        requestId: buildCommercialChangeRequestId("simulation"),
+        form: candidate.form
+      });
+      const authorizationRequired = result.simulationReceipt?.authorizationRequired === true;
+      const persistedEffects = result.persistedEffects;
+      if (!quickUpdatePersistedEffectsMatch({ persistedEffects }, candidate)) {
+        return quickUpdateFailure(
+          "failed",
+          "invalid-server-response",
+          "The authoritative review did not return the exact enumerated material effects for this menu draft.",
+          "Keep the draft open or continue in the full quote editor.",
+          { action: "open_editor", label: "Continue in quote editor", retryable: false }
+        );
+      }
+      const saveAllowed = !(result.authorityState === "enforced" && authorizationRequired);
+      return {
+        status: "ready",
+        storage: result.storage,
+        authorityState: result.authorityState,
+        authorizationRequired,
+        simulationReceiptId: result.simulationReceipt?.receiptId || "",
+        applyRequestId: buildCommercialChangeRequestId("apply"),
+        baseRevisionId: candidate.baseRevisionId,
+        simulation: result.simulation,
+        persistedEffects,
+        saveAllowed,
+        handoffReason: saveAllowed
+          ? ""
+          : "This reviewed change has governed dependencies and must continue through Change Impact in the full quote editor.",
+        delta: candidate.delta
+      };
+    } catch (error) {
+      recordDiagnosticError(error, {
+        surface: "quick-updates",
+        action: "preview-service-style",
+        quoteId: request.quoteId
+      });
+      const code = String(error?.code || "").replace(/^functions\//u, "") || "failed-precondition";
+      const conflict = code === "conflict" || code === "aborted";
+      return quickUpdateFailure(
+        conflict ? "conflict" : "failed",
+        code,
+        error?.message || "The exact service-style review could not be prepared.",
+        conflict
+          ? "Reload the opportunity, then create a new Quick Updates draft from its current version."
+          : "Keep the draft open or continue in the full authoritative editor."
+      );
+    }
+  };
+
+  const handleSaveQuickUpdate = async (request = {}) => {
+    let persistenceReceipt = null;
+    try {
+      const preview = request.preview && typeof request.preview === "object"
+        ? request.preview
+        : null;
+      if (!preview || preview.status !== "ready") {
+        return quickUpdateFailure(
+          "failed",
+          "failed-precondition",
+          "Review the exact Quick Updates delta before saving.",
+          "Return to the review step, then save the current reviewed delta."
+        );
+      }
+      if (
+        preview.saveAllowed === false
+        || (preview.authorityState === "enforced" && preview.authorizationRequired === true)
+      ) {
+        return quickUpdateFailure(
+          "handoff",
+          "authorization-required",
+          "This change requires the existing Commercial Change authorization flow.",
+          "Discard only this panel draft, then open the full editor to review Change Impact and obtain the required authorization.",
+          { action: "open_editor", label: "Continue in quote editor", retryable: false }
+        );
+      }
+      const commercialChangeAuthority = {
+        simulationReceiptId: String(preview.simulationReceiptId || "").trim(),
+        authorizationReceiptId: "",
+        applyRequestId: String(preview.applyRequestId || "").trim()
+      };
+      if (
+        !commercialChangeAuthority.simulationReceiptId
+        || !commercialChangeAuthority.applyRequestId
+      ) {
+        return quickUpdateFailure(
+          "failure",
+          "failed-precondition",
+          "The reviewed Commercial Change receipt is incomplete.",
+          "Return to edit and prepare a new exact review before saving."
+        );
+      }
+      const candidate = await prepareQuickUpdateCandidate(request);
+      if (!isFirebaseQuickUpdateSource()) {
+        return quickUpdateRequiresEditor(
+          "Quick Updates cannot save from the local fallback catalog.",
+          "Discard only this panel draft, then continue in the full quote editor."
+        );
+      }
+      if (String(candidate.quote?.status || "draft").trim().toLowerCase() !== "draft") {
+        return quickUpdateRequiresEditor(
+          "This opportunity is no longer a draft, so its lifecycle effects need the full quote editor.",
+          "Discard only this panel draft, then review the current saved lifecycle in the full quote editor."
+        );
+      }
+      if (
+        String(preview.baseRevisionId || "").trim() !== candidate.baseRevisionId
+        || JSON.stringify(preview.delta || []) !== JSON.stringify(candidate.delta)
+        || !quickUpdatePersistedEffectsMatch(preview, candidate)
+      ) {
+        return quickUpdateFailure(
+          "conflict",
+          "conflict",
+          "The reviewed delta is no longer bound to the current saved version.",
+          "Reload the opportunity and review the current values before saving."
+        );
+      }
+      const result = await handleSubmitQuote({
+        commercialChangeAuthority,
+        propagateError: true,
+        explicitDraft: {
+          source: "quick_updates",
+          form: candidate.form,
+          editingQuote: candidate.editingQuote,
+          expectedActiveVersionId: candidate.baseRevisionId
+        },
+        navigateAfterSave: false,
+        manageEditorState: false,
+        onPersistenceResolved: (writeResult) => {
+          persistenceReceipt = {
+            quoteId: String(writeResult?.id || ""),
+            organizationId: String(request.organizationId),
+            activeVersionId: String(writeResult?.activeVersionId || ""),
+            latestVersionNumber: Number(writeResult?.latestVersionNumber || 0),
+            quoteNumber: String(writeResult?.quoteNumber || ""),
+            status: String(writeResult?.status || ""),
+            storage: String(writeResult?.storage || ""),
+            portalKey: String(writeResult?.portalKey || ""),
+            portalIssuedAtISO: String(writeResult?.portalIssuedAtISO || ""),
+            portalExpiresAtISO: String(writeResult?.portalExpiresAtISO || "")
+          };
+        }
+      });
+      if (!result?.id || !result?.activeVersionId) {
+        return quickUpdateFailure(
+          "uncertain",
+          "unknown",
+          "The save did not return an exact version receipt.",
+          "Reconcile the saved opportunity before retrying this request.",
+          { action: "reconcile_only", label: "Reconcile in quote editor", retryable: false }
+        );
+      }
+      if (
+        persistenceReceipt.storage !== "firebase"
+        || persistenceReceipt.activeVersionId
+          !== String(preview.persistedEffects?.version?.afterRevisionId || "").trim()
+        || persistenceReceipt.latestVersionNumber
+          !== Number(preview.persistedEffects?.version?.afterVersionNumber || 0)
+        || persistenceReceipt.status.toLowerCase()
+          !== String(preview.persistedEffects?.status?.after || "").trim().toLowerCase()
+        || persistenceReceipt.portalKey !== String(candidate.quote?.portalKey || "").trim()
+        || !Number.isFinite(Date.parse(persistenceReceipt.portalIssuedAtISO))
+        || !Number.isFinite(Date.parse(persistenceReceipt.portalExpiresAtISO))
+      ) {
+        return quickUpdateFailure(
+          "uncertain",
+          "write-receipt-mismatch",
+          "The write returned, but its exact Firebase version receipt did not match the reviewed edit plan.",
+          "Reconcile the authoritative opportunity before submitting anything again.",
+          { action: "reconcile_only", label: "Reconcile in quote editor", retryable: false }
+        );
+      }
+      const authoritativeQuote = await getQuoteById(result.id, { serverOnly: true });
+      const readbackRevisionId = String(
+        authoritativeQuote?.activeVersionId || authoritativeQuote?.versionMeta?.versionId || ""
+      ).trim();
+      const readbackStyle = String(authoritativeQuote?.event?.style || "").trim();
+      const expectedEffects = preview.persistedEffects;
+      const expectedTotal = Number(expectedEffects?.pricing?.authoritativeTotal?.proposedAfter);
+      const expectedDeposit = Number(expectedEffects?.pricing?.depositRequirement?.proposedAfter);
+      const readbackTotal = Number(
+        authoritativeQuote?.pricing?.grandTotal ?? authoritativeQuote?.totals?.total
+      );
+      const readbackDeposit = Number(
+        authoritativeQuote?.pricing?.deposit?.amount ?? authoritativeQuote?.totals?.deposit
+      );
+      const staffingFields = ["servers", "chefs", "bartenders"];
+      const staffingMatches = staffingFields.every((field) => {
+        const expected = expectedEffects?.staffing?.after?.[field];
+        const actual = authoritativeQuote?.event?.[field];
+        if (expected === null) return actual === null || actual === undefined;
+        return Number(actual) === Number(expected);
+      });
+      const proposalWorkflowMatches = expectedEffects?.proposal?.workflowEvidencePreserved === true
+        && JSON.stringify(authoritativeQuote?.workflow || {})
+          === JSON.stringify(candidate.quote?.workflow || {});
+      const beforeDraftAtISO = String(candidate.quote?.lifecycle?.draftAtISO || "").trim();
+      const afterDraftAtISO = String(authoritativeQuote?.lifecycle?.draftAtISO || "").trim();
+      const lifecycleMatches = (
+        expectedEffects?.lifecycle?.draftAtPreserved === true
+          ? Boolean(beforeDraftAtISO) && afterDraftAtISO === beforeDraftAtISO
+          : expectedEffects?.lifecycle?.draftAtAssignedIfMissing === true
+            && Number.isFinite(Date.parse(afterDraftAtISO))
+      ) && Number.isFinite(Date.parse(authoritativeQuote?.lifecycle?.editedAtISO || ""));
+      const terminalEvidenceMatches = [
+        "acceptanceReceipt",
+        "portalDecision",
+        "booking",
+        "payment"
+      ].every((field) => (
+        JSON.stringify(authoritativeQuote?.[field] || {})
+          === JSON.stringify(candidate.quote?.[field] || {})
+      ));
+      if (
+        String(authoritativeQuote?.id || "").trim() !== String(request.quoteId || "").trim()
+        || String(authoritativeQuote?.organizationId || request.organizationId || "").trim()
+          !== String(request.organizationId || "").trim()
+        || readbackRevisionId !== String(result.activeVersionId || "").trim()
+        || readbackRevisionId !== persistenceReceipt.activeVersionId
+        || readbackStyle !== String(request.patch?.event?.style || "").trim()
+        || String(authoritativeQuote?.status || "").trim().toLowerCase()
+          !== String(expectedEffects?.status?.after || "").trim().toLowerCase()
+        || Number(authoritativeQuote?.latestVersionNumber || 0)
+          !== persistenceReceipt.latestVersionNumber
+        || String(authoritativeQuote?.portalKey || "").trim() !== persistenceReceipt.portalKey
+        || String(authoritativeQuote?.portalIssuedAtISO || "").trim()
+          !== persistenceReceipt.portalIssuedAtISO
+        || String(authoritativeQuote?.portalExpiresAtISO || "").trim()
+          !== persistenceReceipt.portalExpiresAtISO
+        || !staffingMatches
+        || !proposalWorkflowMatches
+        || !lifecycleMatches
+        || !terminalEvidenceMatches
+        || !Number.isFinite(readbackTotal)
+        || !Number.isFinite(expectedTotal)
+        || Math.abs(readbackTotal - expectedTotal) >= 0.005
+        || !Number.isFinite(readbackDeposit)
+        || !Number.isFinite(expectedDeposit)
+        || Math.abs(readbackDeposit - expectedDeposit) >= 0.005
+      ) {
+        return quickUpdateFailure(
+          "uncertain",
+          "readback-mismatch",
+          "The write returned, but the authoritative quote readback did not match its receipt.",
+          "Keep this result open and reconcile the saved opportunity before submitting anything again.",
+          { action: "reconcile_only", label: "Reconcile in quote editor", retryable: false }
+        );
+      }
+      return {
+        status: "persisted",
+        receipt: {
+          ...persistenceReceipt,
+          activeVersionId: readbackRevisionId,
+          quoteNumber: String(result.quoteNumber || authoritativeQuote.quoteNumber || "")
+        },
+        quote: authoritativeQuote
+      };
+    } catch (error) {
+      recordDiagnosticError(error, {
+        surface: "quick-updates",
+        action: "save-service-style",
+        quoteId: request.quoteId
+      });
+      const code = String(error?.code || "").replace(/^functions\//u, "") || "unknown";
+      const definitive = [
+        "aborted",
+        "already-exists",
+        "failed-precondition",
+        "invalid-argument",
+        "not-found",
+        "permission-denied"
+      ].includes(code);
+      const conflict = code === "aborted" || code === "conflict"
+        || /changed after|reload the current saved version/iu.test(String(error?.message || ""));
+      if (persistenceReceipt) {
+        return quickUpdateFailure(
+          "uncertain",
+          code,
+          error?.message || "The write returned, but its authoritative readback did not complete.",
+          "Reconcile the authoritative opportunity before submitting anything again.",
+          { action: "reconcile_only", label: "Reconcile in quote editor", retryable: false }
+        );
+      }
+      return quickUpdateFailure(
+        conflict ? "conflict" : definitive ? "failed" : "uncertain",
+        code,
+        error?.message || "The Quick Updates save did not return a confirmed result.",
+        conflict
+          ? "Reload the opportunity before reviewing a new draft."
+          : definitive
+            ? "Correct the stated problem and retry this retained draft."
+            : "Reconcile the authoritative opportunity before submitting this request again.",
+        conflict || definitive
+          ? {}
+          : { action: "reconcile_only", label: "Reconcile in quote editor", retryable: false }
+      );
+    }
+  };
+
+  const handleOpenQuickUpdatesLibrary = (handoff = {}) => {
+    const quoteId = String(handoff.quoteId || handoff.opportunityId || "").trim();
+    const organizationId = String(
+      handoff.organizationId || authSession.organizationId || ""
+    ).trim();
+    const sectionId = String(handoff.sectionId || "overview").trim() || "overview";
+    const label = String(
+      handoff.label || handoff.opportunityLabel || "opportunity"
+    ).trim() || "opportunity";
+    if (!quoteId || !organizationId || organizationId !== String(authSession.organizationId || "").trim()) {
+      return quickUpdateFailure(
+        "failed",
+        "invalid-argument",
+        "The contextual Library destination is incomplete or belongs to another workspace.",
+        "Keep the opportunity open and use the standalone Library only from the current workspace."
+      );
+    }
+    const arrival = createWorkspaceArrivalHandoff({
+      destination: "library",
+      object: { id: organizationId, type: "organization-library" },
+      focus: { sectionId, quoteId },
+      intentId: "browse_library"
+    });
+    if (!arrival.ok) return { status: "failed", ...arrival.recovery };
+    setLibraryContextualOrigin({
+      quoteId,
+      organizationId,
+      label,
+      sectionId,
+      returnLabel: `Return to ${label}`
+    });
+    navigateWorkspace(arrival.navigation.path, {
+      state: arrival.navigation.state,
+      bypassQuickUpdatesGuard: true,
+      quickUpdatesReason: "library"
+    });
+    return { status: "pending", contract: arrival.contract };
   };
 
   const handleEditQuote = async (
@@ -3678,6 +4598,7 @@ export default function App({
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote(EMPTY_EDITING_QUOTE);
+    setDraftRecoveryResumed(false);
     setAmbientDraftIntentReview(null);
     setAmbientDraftCatalogContext(null);
     setAmbientDraftReviewResolution("");
@@ -3900,11 +4821,28 @@ export default function App({
   if (portalMode && customerPortalEnabled) {
     return (
       <div className="app-shell" style={appThemeVars}>
-        <CustomerPortalView
-          initialPortalKey={portalKey}
-          initialPaymentReturn={paymentReturn}
-          onBackToStaff={closePortalMode}
-        />
+        <RecoverableErrorBoundary
+          active
+          surfaceName="Customer portal"
+          surfaceKind="route"
+          onRetry={CustomerPortalView.retry}
+          onClose={closePortalMode}
+        >
+          <Suspense fallback={(
+            <main className="auth-shell container" role="status" aria-live="polite">
+              <WorkspaceStatusCard>
+                <h1>Opening Customer Portal</h1>
+                <p className="muted">Loading this customer-safe view…</p>
+              </WorkspaceStatusCard>
+            </main>
+          )}>
+            <CustomerPortalView
+              initialPortalKey={portalKey}
+              initialPaymentReturn={paymentReturn}
+              onBackToStaff={closePortalMode}
+            />
+          </Suspense>
+        </RecoverableErrorBoundary>
       </div>
     );
   }
@@ -4027,13 +4965,14 @@ export default function App({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Your Catalog Connection Needs Attention</h1>
-          <p className="muted">
-            Firebase catalog access is required in this environment.
-          </p>
-          <p className="source-note">{catalog.error || "Configure Firebase credentials and reload."}</p>
+          <CatalogReadNotice
+            canContinue={false}
+            loading={catalog.loading}
+            onRetry={catalog.reload}
+            headingLevel={1}
+            titleId="catalog-blocked-title"
+          />
           <div className="auth-actions">
-            <button type="button" className="cta" onClick={catalog.reload}>Retry Catalog</button>
             <button type="button" className="ghost" onClick={() => window.location.reload()}>Reload Workspace</button>
             <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
@@ -4138,7 +5077,7 @@ export default function App({
   const catalogTool = {
     surfaceName: AMBIENT_UI_ENABLED ? "Library" : "Catalog Admin",
     component: AdminCatalogView,
-    enabled: authSession.isAdmin,
+    enabled: Boolean(authSession.organizationId),
     onClose: closeCatalogWorkspace,
     surfaceProps: {
       catalog,
@@ -4164,7 +5103,15 @@ export default function App({
           : null,
         arrivalAttempted: workspaceArrivalAttempted,
         onArrivalResolution: setWorkspaceArrivalResolution,
-        onInteractionStateChange: setCatalogRouteInteraction
+        onInteractionStateChange: setCatalogRouteInteraction,
+        contextualOrigin: libraryContextualOrigin ? {
+          ...libraryContextualOrigin,
+          onReturn: (context = libraryContextualOrigin) => {
+            const quoteId = String(context?.quoteId || libraryContextualOrigin.quoteId || "").trim();
+            setLibraryContextualOrigin(null);
+            if (quoteId) navigateWorkspace(buildQuotePath(quoteId));
+          }
+        } : null
       }
     },
     modal: {
@@ -4199,7 +5146,9 @@ export default function App({
       onReload: () => catalog.reload({ background: true }),
       onImported: (result) => {
         catalog.reload({ background: true });
-        if (result?.status === "rolled_back") {
+        if (result?.status === "staged") {
+          pushToast(`Added ${result?.stagedCount || 0} record(s) to the catalog setup draft.`, "success");
+        } else if (result?.status === "rolled_back") {
           pushToast(`Import ${result.importBatchId} was undone.`, "info");
         } else {
           pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");
@@ -4386,7 +5335,6 @@ export default function App({
           Editing quote {editingQuote.quoteNumber}. Saving updates this quote (with version history) and keeps labor rates locked by snapshot.
         </p>
       )}
-      {catalog.error && <p className="error-note">{catalog.error}</p>}
       {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
       {availabilityBlock && (
         <article className="warning-note availability-recovery" role="alert">
@@ -4424,6 +5372,16 @@ export default function App({
       {submitState.message && <p className="source-note">{submitState.message}</p>}
     </>
   );
+
+  const catalogReadNotice = catalog.error ? (
+    <CatalogReadNotice
+      canContinue
+      loading={catalog.loading}
+      onRetry={catalog.reload}
+      headingLevel={2}
+      titleId="quote-builder-catalog-read-title"
+    />
+  ) : null;
 
   // "What will this change affect?" — the server-checked impact preview for a
   // saved quote being edited. Shared so it renders identically in the
@@ -4500,6 +5458,10 @@ export default function App({
               onApply={handleApplyCommercialChange}
               onReconcileApplyOutcome={handleReconcileCommercialChangeApplyOutcome}
               onRecoverApply={handleRecoverCommercialChangeApply}
+              unifiedReview={unifiedConsequenceReview}
+              onApplyAllConsequences={handleApplyUnifiedConsequences}
+              onApplySelectedConsequences={handleApplyUnifiedConsequences}
+              onKeepQuotedPlan={handleKeepUnifiedQuotedPlan}
               onReturnToEdit={() => {
                 if (!proposalComposerActive) setStep(1);
                 window.requestAnimationFrame(() => {
@@ -4560,6 +5522,7 @@ export default function App({
       eventTemplates={effectiveSettings.eventTemplates || []}
       readiness={proposalReadiness}
       editingQuote={editingQuote}
+      touchedFields={touchedFields}
       quoteDirty={quoteDirty}
       saving={submitState.saving}
       saveLabel={submitState.saving
@@ -4672,7 +5635,13 @@ export default function App({
         onCatalog: (menuTriggerRef) => openRoutedWorkspaceTool(
           WORKSPACE_PATHS.catalog,
           setAdminOpen,
-          { menuTriggerRef, beforeOpen: () => setAdminInitialTab("") }
+          {
+            menuTriggerRef,
+            beforeOpen: () => {
+              setLibraryContextualOrigin(null);
+              setAdminInitialTab("");
+            }
+          }
         ),
         onDiagnostics: (menuTriggerRef) => openRoutedWorkspaceTool(
           WORKSPACE_PATHS.diagnostics,
@@ -4681,6 +5650,10 @@ export default function App({
         ),
         onPortal: openPortalMode,
         onPilot: AMBIENT_UI_ENABLED ? openGlobalPilot : undefined,
+        onRequestPasswordReset: () => requestPasswordReset({
+          email: authSession.user?.email || ""
+        }),
+        onWorkspaceToolsGuardChange: setHistoryTraversalGuard,
         onSignOut: handleSignOut
       }}
       searchSurface={commercialSearchAvailable && commercialSearchOpen ? (
@@ -4869,6 +5842,9 @@ export default function App({
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
             onOpenOperations={() => navigateWorkspace(WORKSPACE_PATHS.operations)}
+            onOpenEvents={() => navigateWorkspace(WORKSPACE_PATHS.events)}
+            onOpenOpportunities={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
+            onStartOpportunity={handleGetInstantQuote}
           />
         </WorkspaceLazyRoute>
       )}
@@ -4884,7 +5860,11 @@ export default function App({
             onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
             onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
             onOpenReporting={() => navigateWorkspace(WORKSPACE_PATHS.reporting)}
-            onOpenCatalog={authSession.isAdmin ? () => navigateWorkspace(WORKSPACE_PATHS.catalog) : undefined}
+            onOpenCatalog={authSession.isAdmin ? () => {
+              setLibraryContextualOrigin(null);
+              setAdminInitialTab("");
+              navigateWorkspace(WORKSPACE_PATHS.catalog);
+            } : undefined}
             onOpenDiagnostics={() => navigateWorkspace(WORKSPACE_PATHS.diagnostics)}
           />
         </WorkspaceLazyRoute>
@@ -5010,7 +5990,9 @@ export default function App({
               ? !authSession.isAdmin
                 ? "role-denied"
                 : "feature-disabled"
-              : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && !authSession.isAdmin
+              : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG
+                && !authSession.isAdmin
+                && !AMBIENT_UI_ENABLED
                 ? "role-denied"
                 : ""}
             routeId={resolvedWorkspaceRouteId}
@@ -5066,7 +6048,28 @@ export default function App({
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
-        {PILOT_COMMAND_ENABLED && PilotCommandBar && pilotCommandSurfaceOpen && (
+        {isEditingQuote && (
+          <QuoteCatalogRevisionReviewPanel
+            review={catalogRevisionReview.review}
+            loading={catalogRevisionReview.loading}
+            error={catalogRevisionReview.error}
+            submitting={catalogRevisionReview.submitting}
+            resolvedOutcome={catalogRevisionReview.outcome}
+            receipt={catalogRevisionReview.receipt}
+            onRetry={loadQuoteCatalogRevisionReview}
+            onKeepQuotedValues={() => handleCatalogReviewOutcome("keep_quoted_values")}
+            onReviewAndUpdate={() => handleCatalogReviewOutcome("review_and_update")}
+          />
+        )}
+        {PILOT_COMMAND_ENABLED
+          && PilotCommandBar
+          && pilotCommandSurfaceOpen
+          && (
+            Boolean(editingQuote.id)
+            || Object.keys(touchedFields).length > 0
+            || draftRecoveryResumed
+            || globalPilotRequest?.target === "draft_command"
+          ) && (
           <RecoverableErrorBoundary
             key={`pilot-command-${authSession.organizationId || "no-org"}-${quoteEditRouteId || "new"}`}
             active={pilotCommandSurfaceOpen}
@@ -5154,6 +6157,7 @@ export default function App({
                 }
           />
         )}
+        {catalogReadNotice}
         {proposalComposerSurface}
         {!proposalComposerActive && (
         <>
@@ -5410,6 +6414,13 @@ export default function App({
             fallbackSurfaceId="living-opportunity"
           />
         )}
+        {AMBIENT_UI_ENABLED && quoteAdministrationArrival && (
+          <WorkspaceArrivalNotice
+            context={quoteAdministrationArrival}
+            resolution={workspaceArrivalResolution}
+            fallbackSurfaceId="quote-administration"
+          />
+        )}
         <WorkspaceLazyRoute
           active={historyOpen}
           surfaceName="Quotes"
@@ -5430,6 +6441,7 @@ export default function App({
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
             tenantTimeZone={tenantTimeZone}
+            serviceStyles={Object.keys(STAFF_RULES)}
             ambientPricingCatalog={AMBIENT_UI_ENABLED ? catalog : null}
             ambientPricingSettings={AMBIENT_UI_ENABLED ? effectiveSettings : null}
             globalPilotRequest={AMBIENT_UI_ENABLED && globalPilotRequest?.target === "living_opportunity"
@@ -5437,13 +6449,22 @@ export default function App({
               : null}
             globalPilotReturnFocusRef={AMBIENT_UI_ENABLED ? globalPilotTriggerRef : null}
             onGlobalPilotResolution={AMBIENT_UI_ENABLED ? handleGlobalPilotResolution : undefined}
-            focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
-            focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
-            focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
+            focusQuoteId={historyFocusQuoteId}
+            focusAction={historyFocusAction}
+            focusReason={historyFocusReason}
             arrivalContext={workspaceArrivalContext?.surfaceId === "living-opportunity"
+              || workspaceArrivalContext?.surfaceId === "quote-administration"
               ? workspaceArrivalContext
               : null}
             onArrivalResolution={setWorkspaceArrivalResolution}
+            onPreviewQuickUpdate={AMBIENT_UI_ENABLED ? handlePreviewQuickUpdate : undefined}
+            onSaveQuickUpdate={AMBIENT_UI_ENABLED ? handleSaveQuickUpdate : undefined}
+            onOpenQuickUpdatesLibrary={AMBIENT_UI_ENABLED && authSession.isAdmin
+              ? handleOpenQuickUpdatesLibrary
+              : undefined}
+            onQuickUpdatesGuardChange={AMBIENT_UI_ENABLED
+              ? handleQuickUpdatesGuardChange
+              : undefined}
             onEditQuote={AMBIENT_UI_ENABLED
               ? (quote, options) => {
                   requestWorkflowAttentionRefresh({ force: true });
@@ -5470,6 +6491,18 @@ export default function App({
             onOpenWorkflow={AMBIENT_UI_ENABLED
               ? openAmbientWorkflow
               : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenQuoteAdministration={(quoteId, context = {}) => {
+              const normalizedQuoteId = String(quoteId || "").trim();
+              if (!normalizedQuoteId) {
+                return {
+                  status: "recovery",
+                  reason: "The exact quote could not be identified.",
+                  consequence: "The current opportunity remains open and unchanged.",
+                  nextResolution: "Return to Opportunities and reopen the exact quote."
+                };
+              }
+              return navigateAmbientQuoteAdministration(normalizedQuoteId, context);
+            }}
             onOpenConversation={CUSTOMER_CENTERED_WORKSPACE_ENABLED
               ? AMBIENT_UI_ENABLED
                 ? openAmbientConversation
@@ -5525,9 +6558,10 @@ export default function App({
                   : `Execute approved ${actionLabel}`,
                 returnFocus: "workflow"
               });
-              navigateWorkspace(buildQuotePath(quoteId));
+              navigateWorkspace(WORKSPACE_PATHS.quotes);
             }}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onStartQuote={handleGetInstantQuote}
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}

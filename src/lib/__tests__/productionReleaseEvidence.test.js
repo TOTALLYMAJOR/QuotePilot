@@ -8,6 +8,7 @@ import {
   getReleaseUatChecklist,
   getReleaseUatProfilePlan,
   parseAttesterIds,
+  parseProductionReleaseProfile,
   parseReleaseApprovalMode,
   parseSoloOperatorIds,
   parseReleaseEvidenceCliArgs,
@@ -53,6 +54,7 @@ const PREPARATION_RUN_ID = 505;
 const OPERATOR_ID = 606;
 const SMS_PROVIDER = "none";
 const SMS_CONFIGURATION_GENERATION = "not-applicable";
+const PRODUCTION_RELEASE_PROFILE = "safe-off";
 const DEPLOYMENT_PROFILES = [
   "firebase-hosting",
   "firebase-backend",
@@ -69,6 +71,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
+    "operator.authenticated-workspace-journey",
     "portal.decision",
     "delivery.link-surface-gating",
     "payment.customer-surface",
@@ -124,6 +127,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "quote.legacy-bulk-purge-denied",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
+    "operator.authenticated-workspace-journey",
     "portal.decision",
     "delivery.current-issuance",
     "delivery.invalid-issuance",
@@ -156,6 +160,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
+    "operator.authenticated-workspace-journey",
     "portal.decision",
     "delivery.link-surface-gating",
     "payment.customer-surface",
@@ -180,6 +185,11 @@ const CRITICAL_UAT_TARGETS = Object.freeze({
   "buyer.hosted-invoice-lifecycle": ["firebase-backend", "firebase-all"],
   "buyer.pending-invite-activation": ["firebase-backend", "firebase-all"],
   "buyer.verified-activation-surface": ["firebase-hosting", "firebase-all", "vercel"],
+  "operator.authenticated-workspace-journey": [
+    "firebase-hosting",
+    "firebase-all",
+    "vercel"
+  ],
   "payment.deposit-scoped-dispatch": ["firebase-backend", "firebase-all"],
   "payment.final-balance-scoped-dispatch": ["firebase-backend", "firebase-all"],
   "payment.webhook-reconciliation": ["firebase-backend", "firebase-all"],
@@ -295,6 +305,7 @@ function makePreparationOptions(target = "vercel", overrides = {}) {
 
 function makeDirectDeploymentTitle({
   approvalMode = "solo-operator",
+  releaseProfile = PRODUCTION_RELEASE_PROFILE,
   profile = "vercel",
   releaseSha = RELEASE_SHA,
   ciRunId = CI_RUN_ID,
@@ -305,8 +316,9 @@ function makeDirectDeploymentTitle({
   return profile.startsWith("firebase-")
     ? [
       "deploy",
-      "v2",
+      "v3",
       approvalMode,
+      releaseProfile,
       profile,
       releaseSha,
       String(ciRunId),
@@ -316,8 +328,9 @@ function makeDirectDeploymentTitle({
     ].join("/")
     : [
       "deploy",
-      "v1",
+      "v2",
       approvalMode,
+      releaseProfile,
       profile,
       releaseSha,
       String(ciRunId),
@@ -341,6 +354,7 @@ function makeDirectDeploymentOptions(target = "vercel", overrides = {}) {
     deploymentRunId: PREPARATION_RUN_ID,
     ciRunId: CI_RUN_ID,
     approvalMode: "solo-operator",
+    releaseProfile: PRODUCTION_RELEASE_PROFILE,
     ...(target.startsWith("firebase-") ? {
       smsProvider: SMS_PROVIDER,
       smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION
@@ -719,7 +733,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v3"
     );
-    expect(checklist.checklist.version).toBe("2026-08-12.1");
+    expect(checklist.checklist.version).toBe("2026-08-29.1");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -800,6 +814,9 @@ describe("tracked UAT checklist", () => {
     expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
       /stops automatic status polling.*manual Check again.*only active/is
     );
+    expect(labelsByItemId.get("operator.authenticated-workspace-journey")).toMatch(
+      /exact release SHA.*deployment id.*organization.*user role.*evidence level.*Workflow.*Event Workspace.*Customer 360.*Messaging Station.*Kitchen BEO.*Decision Debt.*denied-role.*cross-tenant.*human acceptance/is
+    );
     expect(labelsByItemId.get("staffing.authoritative-plan")).toMatch(
       /same-tenant admins.*operator-confirmed plans.*immutable quote revision.*fail closed.*immutable receipt/is
     );
@@ -842,6 +859,23 @@ describe("tracked UAT checklist", () => {
       EXPECTED_UAT_ITEM_IDS_BY_TARGET["firebase-all"]
     ));
     expect(plan.blockedItems.every((item) => item.reason.length > 0)).toBe(true);
+  });
+
+  test("exposes positive staffing checks only in the governed staffing candidate profile", () => {
+    const plan = getReleaseUatProfilePlan(
+      "firebase-all",
+      "staging-staffing-authority",
+      process.cwd()
+    );
+
+    expect(plan.candidateProfile.id).toBe("staging-staffing-authority");
+    expect(plan.applicableItemIds).toEqual(expect.arrayContaining([
+      "staffing.authoritative-plan",
+      "staffing.authoritative-surface"
+    ]));
+    expect(plan.blockedItems).toContainEqual(expect.objectContaining({
+      id: "staffing.disabled-authority-boundary"
+    }));
   });
 
   test("changes the checklist digest when only target applicability changes", () => {
@@ -1130,6 +1164,15 @@ describe("current preparation workflow validator", () => {
 });
 
 describe("direct deployment workflow validator", () => {
+  test("accepts only the fail-closed production release profile", () => {
+    expect(parseProductionReleaseProfile(PRODUCTION_RELEASE_PROFILE)).toBe(
+      PRODUCTION_RELEASE_PROFILE
+    );
+    expect(() => parseProductionReleaseProfile("full-authority")).toThrow(
+      /must be safe-off/i
+    );
+  });
+
   test.each(DEPLOYMENT_PROFILES)(
     "accepts the active exact-evidence human %s dispatch",
     (profile) => {
@@ -1152,6 +1195,19 @@ describe("direct deployment workflow validator", () => {
         smsConfigurationGeneration: "sandbox-2026-08-11-01"
       })
     )).toThrow(/title is not bound to the supplied evidence/i);
+  });
+
+  test("binds deployment evidence to the exact release profile", () => {
+    expect(() => validateDirectDeploymentRun(
+      makeDirectDeploymentRun("vercel"),
+      makeDirectDeploymentOptions("vercel", { releaseProfile: "full-authority" })
+    )).toThrow(/production release profile must be safe-off/i);
+    expect(() => validateDirectDeploymentRun(
+      makeDirectDeploymentRun("vercel", {
+        display_title: makeDirectDeploymentTitle({ releaseProfile: "full-authority" })
+      }),
+      makeDirectDeploymentOptions("vercel")
+    )).toThrow(/title is not bound/i);
   });
 
   test.each([

@@ -81,12 +81,19 @@ describe("recoverable lazy surfaces", () => {
     const workspaceBoundarySource = readSource("../WorkspaceSurfaceBoundary.jsx");
 
     expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(5);
+    expect(readSource("../WorkspaceRoute.jsx"))
+      .toContain("mountFirebaseEmailActionPage(node)");
     expect(mainSource).toContain("const RevenueAutopilotUnsubscribePage = createRecoverableLazy(");
     expect(mainSource).toContain('surfaceName="Email preferences"');
     expect(mainSource).toContain("const StaffInvitationResponsePage = createRecoverableLazy(");
     expect(mainSource).toContain('surfaceName="Staff assignment invitation"');
     expect(appSource).toContain("const QuoteCompareModal = createRecoverableLazy(");
     expect(appSource).toContain("component={QuoteCompareModal}");
+    expect(appSource).toContain("const CustomerPortalView = createRecoverableLazy(");
+    expect(appSource).toContain('() => import("quotepilot-active-customer-portal")');
+    expect(appSource).not.toContain('import CustomerPortalView from "quotepilot-active-customer-portal"');
+    expect(appSource).toContain('surfaceName="Customer portal"');
+    expect(appSource).toContain("onRetry={CustomerPortalView.retry}");
     for (const name of [
       "CustomerDirectoryView",
       "CustomerWorkspaceView",
@@ -127,6 +134,18 @@ describe("recoverable lazy surfaces", () => {
     expect(recoverySource).toContain("Reload workspace");
     expect(recoverySource).toContain("Close tool");
     expect(recoverySource).not.toMatch(/\{\s*(?:error|this\.state\.error)\.(?:message|stack)/);
+  });
+
+  test("keeps Ambient Opportunities recovery ahead of legacy Quote History diagnostics", () => {
+    const historySource = readSource("../QuoteHistoryModal.jsx");
+
+    expect(historySource).toContain(
+      '{!AMBIENT_UI_ENABLED && <details className="staff-evidence-disclosure workspace-data-details">'
+    );
+    expect(historySource).toContain(
+      '{state.error && !AMBIENT_UI_ENABLED && <p className="error-note" role="alert">{state.error}</p>}'
+    );
+    expect(historySource).toContain("<AmbientOpportunitiesStream");
   });
 
   test("requires explicit discard confirmation before a tool recovery reload loses quote work", () => {

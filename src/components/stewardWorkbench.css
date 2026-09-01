@@ -3,6 +3,7 @@
   --steward-muted: var(--qwc-muted, #5f6268);
   --steward-line: var(--qwc-line, #e6ddcb);
   --steward-brass: var(--qwc-brass, #a4761f);
+  --steward-brass-text: #805918;
   padding: 1rem;
   color: var(--steward-ink);
   border: 1px solid var(--steward-line);
@@ -34,7 +35,7 @@
 }
 
 .steward-workbench-heading p {
-  color: var(--steward-brass);
+  color: var(--steward-brass-text);
   font-size: 0.64rem;
   font-weight: 850;
   letter-spacing: 0.09em;

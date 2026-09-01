@@ -89,23 +89,69 @@ function calendarDateKey(value = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function selectFeaturedClient(rows = [], declaredCustomerId = "") {
+  const exactCustomerId = text(declaredCustomerId);
+  if (exactCustomerId) {
+    const declared = rows.find((row) => (
+      text(row.customerId || row.clientId || row.id) === exactCustomerId
+    ));
+    if (declared) return { row: declared, source: "caller-declared" };
+  }
+
+  const today = calendarDateKey();
+  const dated = rows
+    .map((row, index) => ({
+      row,
+      index,
+      date: calendarDateKey(clientLatest(row).eventDate)
+    }))
+    .filter(({ date }) => Boolean(date));
+  if (!dated.length) return { row: null, source: "none" };
+
+  dated.sort((left, right) => {
+    const leftUpcoming = left.date >= today;
+    const rightUpcoming = right.date >= today;
+    if (leftUpcoming !== rightUpcoming) return leftUpcoming ? -1 : 1;
+    if (left.date !== right.date) {
+      return leftUpcoming
+        ? left.date.localeCompare(right.date)
+        : right.date.localeCompare(left.date);
+    }
+    return left.index - right.index;
+  });
+  return { row: dated[0].row, source: "recorded-event-date" };
+}
+
 function clientDirectoryState(row = {}) {
   const identity = clientIdentity(row);
   const latest = clientLatest(row);
-  if (!identity.email || !identity.phone) return { key: "contact_gap", label: "Add contact", tone: "warning" };
-  if (calendarDateKey(latest.eventDate) >= calendarDateKey()) return { key: "upcoming", label: "Event ahead", tone: "good" };
-  if (latest.quoteNumber || latest.eventName) return { key: "linked", label: "Quote or event on file", tone: "neutral" };
-  return { key: "unlinked", label: "No quote yet", tone: "neutral" };
+  if (!identity.email || !identity.phone) {
+    return { key: "contact_gap", label: "Contact details to add", tone: "warning" };
+  }
+  if (calendarDateKey(latest.eventDate) >= calendarDateKey()) {
+    return { key: "upcoming", label: "Upcoming event on file", tone: "good" };
+  }
+  if (latest.quoteNumber || latest.eventName) {
+    return { key: "linked", label: "Recorded work on file", tone: "neutral" };
+  }
+  return { key: "unlinked", label: "No linked work in this view", tone: "neutral" };
 }
 
-function clientInitials(identity = {}) {
-  return String(identity.name || identity.email || "Client")
-    .trim()
-    .split(/\s+/u)
-    .slice(0, 2)
-    .map((part) => part[0] || "")
-    .join("")
-    .toUpperCase();
+function clientRecordedContactDetails(row = {}) {
+  const identity = clientIdentity(row);
+  const details = [identity.company, identity.email, identity.phone].filter(Boolean);
+  return details.length
+    ? details.join(" · ")
+    : "No recorded contact details are shown on this page yet.";
+}
+
+function clientEventSummary(row = {}) {
+  const latest = clientLatest(row);
+  return {
+    title: latest.eventName || latest.quoteNumber || "No linked opportunity in this view",
+    reference: latest.eventName ? latest.quoteNumber : "",
+    date: latest.eventDate ? formatWorkspaceDate(latest.eventDate) : "No event date shown"
+  };
 }
 
 function fallbackReviewClientAction(row, currentUserRole) {
@@ -157,14 +203,6 @@ export function AmbientClientsDirectory({
   const rows = directoryRows(model);
   const boundary = directoryBoundary(model);
   const state = text(model.state) || (rows.length ? "success" : "empty");
-  const linkedCount = rows.filter((row) => {
-    const latest = clientLatest(row);
-    return Boolean(latest.quoteNumber || latest.eventName);
-  }).length;
-  const upcomingCount = rows.filter((row) => (
-    calendarDateKey(clientLatest(row).eventDate) >= calendarDateKey()
-  )).length;
-  const contactGapCount = rows.filter((row) => clientDirectoryState(row).key === "contact_gap").length;
   const visibleRows = rows.filter((row) => {
     if (directoryFilter === "all") return true;
     const rowState = clientDirectoryState(row);
@@ -173,6 +211,18 @@ export function AmbientClientsDirectory({
     if (directoryFilter === "upcoming") return calendarDateKey(latest.eventDate) >= calendarDateKey();
     return directoryFilter === rowState.key;
   });
+  const featuredSelection = selectFeaturedClient(
+    visibleRows,
+    model.featuredCustomerId || model.featuredClientId
+  );
+  const featuredRow = featuredSelection.row;
+  // This is a presentation choice over the already tenant-scoped page, not a
+  // relationship-quality or attention inference. An explicit caller selection
+  // wins; otherwise the nearest recorded upcoming event (or latest recorded
+  // past event) leads. Undated rows remain peers in the directory.
+  const remainingRows = featuredRow
+    ? visibleRows.filter((row) => row !== featuredRow)
+    : visibleRows;
 
   const announce = (result, message) => {
     setAcknowledgement({ result, message });
@@ -289,65 +339,12 @@ export function AmbientClientsDirectory({
         data-surface-density="editorial"
         data-ambient-clients-state={state}
       >
-        <header className="ambient-clients__masthead ambient-clients__command">
-          <div className="ambient-clients__command-topline">
-            <div>
-              <p className="ambient-clients__label">Client relationships</p>
-              <h1 ref={headingRef} id="ambient-clients-title" className="workspace-route-heading" tabIndex={-1}>Clients</h1>
-            </div>
-            <dl className="ambient-clients__metrics" aria-label="Client directory metrics">
-              <div><dt>Clients shown</dt><dd>{formatWorkspaceInteger(rows.length)}</dd></div>
-              <div><dt>With linked work</dt><dd>{formatWorkspaceInteger(linkedCount)}</dd></div>
-              <div><dt>Upcoming events</dt><dd>{formatWorkspaceInteger(upcomingCount)}</dd></div>
-              <div className={contactGapCount ? "is-attention" : ""}><dt>Contact details to add</dt><dd>{formatWorkspaceInteger(contactGapCount)}</dd></div>
-            </dl>
-          </div>
-
-          <form className="ambient-clients__toolbar" role="search" onSubmit={onApplySearch}>
-            <label className="ambient-clients__search">
-              <span className="visually-hidden">Find a client by name or email</span>
-              <input
-                type="search"
-                value={searchDraft}
-                autoComplete="off"
-                placeholder="Search clients by name or email…"
-                onChange={(event) => onSearchDraftChange?.(event.target.value)}
-              />
-            </label>
-            <button type="submit" className="ghost">Search</button>
-            {searchDraft ? <button type="button" className="ghost" onClick={onClear}>Clear</button> : null}
-            <button
-              type="button"
-              className="ambient-clients__refresh"
-              data-ambient-action-id={refreshAction.id}
-              disabled={!refreshAction.enabled}
-              onClick={refresh}
-            >
-              {model.loading ? "Freshening up…" : "Freshen list"}
-            </button>
-            {state !== "empty" && (
-              <button
-                type="button"
-                className="ambient-clients__start"
-                data-ambient-action-id={startAction.id}
-                disabled={!startAction.enabled}
-                onClick={start}
-              >
-                + Start an opportunity
-              </button>
-            )}
-          </form>
-
-          {rows.length > 0 ? (
-            <div className="ambient-clients__filters" role="group" aria-label="Client directory filters">
-              <span>Filter</span>
-              <button type="button" className={directoryFilter === "all" ? "is-selected" : ""} onClick={() => setDirectoryFilter("all")}>All</button>
-              <button type="button" className={directoryFilter === "linked" ? "is-selected" : ""} onClick={() => setDirectoryFilter("linked")}>With linked work</button>
-              <button type="button" className={directoryFilter === "upcoming" ? "is-selected" : ""} onClick={() => setDirectoryFilter("upcoming")}>Upcoming events</button>
-              <button type="button" className={directoryFilter === "contact_gap" ? "is-selected" : ""} onClick={() => setDirectoryFilter("contact_gap")}>Contact to add</button>
-            </div>
-          ) : null}
-        </header>
+        <nav className="ambient-clients__breadcrumb" aria-label="Breadcrumb">
+          <span>Clients</span><span aria-hidden="true">/</span><strong>Relationships</strong>
+        </nav>
+        {rows.length === 0 && state !== "empty" && (
+          <h1 ref={headingRef} id="ambient-clients-title" className="sr-only workspace-route-heading" tabIndex={-1}>Clients</h1>
+        )}
 
         {acknowledgement && (
           <div
@@ -384,78 +381,163 @@ export function AmbientClientsDirectory({
         )}
 
         {state === "empty" && (
-          <section className="ambient-clients__state">
-            <p className="ambient-clients__label">A clear starting point</p>
-            <h2>Your first client story starts here</h2>
-            <p>Start an opportunity whenever someone new is ready to celebrate.</p>
-            <button
-              type="button"
-              className="ambient-clients__start"
-              data-ambient-action-id={startAction.id}
-              disabled={!startAction.enabled}
-              onClick={start}
-            >
-              {startAction.outcomeLabel}
-            </button>
-          </section>
+          <>
+            <section className="ambient-clients__empty" aria-labelledby="ambient-clients-title">
+              <div className="ambient-clients__empty-copy">
+                <p className="ambient-clients__label">Client relationships</p>
+                <h1 ref={headingRef} id="ambient-clients-title" className="workspace-route-heading" tabIndex={-1}>
+                  Your first client story starts here
+                </h1>
+                <p>Start with the event. QuotePilot will build the relationship record as the work takes shape.</p>
+              </div>
+              <img
+                className="ambient-clients__hospitality-image"
+                src="/images/quote-workspace-wedding-table-v1.webp"
+                alt=""
+              />
+              <div className="ambient-clients__empty-action">
+                <button
+                  type="button"
+                  className="ambient-clients__start"
+                  data-ambient-action-id={startAction.id}
+                  disabled={!startAction.enabled}
+                  onClick={start}
+                >
+                  {startAction.outcomeLabel}<span aria-hidden="true">→</span>
+                </button>
+                <a href="#ambient-clients-how">How clients work</a>
+              </div>
+            </section>
+            <section id="ambient-clients-how" className="ambient-clients__steps" aria-label="How client relationships work">
+              <article><span aria-hidden="true">01</span><div><h2>Start an opportunity</h2><p>Begin with the client and the work ahead.</p></div></article>
+              <article><span aria-hidden="true">02</span><div><h2>Add the event details</h2><p>Capture the date, place, service, and vision.</p></div></article>
+              <article><span aria-hidden="true">03</span><div><h2>Keep client details together</h2><p>Carry recorded contact details and event history forward.</p></div></article>
+            </section>
+          </>
         )}
 
         {rows.length > 0 && (
-          <section className="ambient-clients__directory" aria-label="Client directory">
-            <div className="ambient-clients__columns" aria-hidden="true">
-              <span>Client</span><span>Relationship</span><span>Contact</span><span>Status</span><span>Action</span>
-            </div>
-            {visibleRows.length ? <ol className="ambient-clients__list">
-            {visibleRows.map((row) => {
-              const customerId = text(row.customerId || row.clientId || row.id);
-              const identity = clientIdentity(row);
-              const latest = clientLatest(row);
-              const relationshipState = clientDirectoryState(row);
-              const action = row.primaryAction || fallbackReviewClientAction(row, currentUserRole);
+          <section className="ambient-clients__populated" aria-labelledby="ambient-clients-title">
+            <header className="ambient-clients__populated-hero">
+              <div>
+                <p className="ambient-clients__label">Client relationships</p>
+                <h1 ref={headingRef} id="ambient-clients-title" className="workspace-route-heading" tabIndex={-1}>Relationships, in context.</h1>
+                <p>Recorded event context first, followed by details worth carrying forward.</p>
+              </div>
+              <img className="ambient-clients__hospitality-image" src="/images/quote-workspace-wedding-table-v1.webp" alt="" />
+            </header>
+
+            {featuredRow && (() => {
+              const customerId = text(featuredRow.customerId || featuredRow.clientId || featuredRow.id);
+              const identity = clientIdentity(featuredRow);
+              const event = clientEventSummary(featuredRow);
+              const relationshipState = clientDirectoryState(featuredRow);
+              const action = featuredRow.primaryAction || fallbackReviewClientAction(featuredRow, currentUserRole);
               return (
-                <li key={customerId}>
-                  <article className="ambient-client" data-client-id={customerId}>
-                    <div className="ambient-client__identity">
-                      <span className="ambient-client__avatar" aria-hidden="true">{clientInitials(identity)}</span>
-                      <span>
+                <article
+                  className="ambient-clients__featured"
+                  data-client-id={customerId}
+                  data-featured-source={featuredSelection.source}
+                >
+                  <div className="ambient-clients__featured-heading">
+                    <div className="ambient-clients__featured-identity">
                       <h2>{identity.name}</h2>
-                      {identity.company && <p>{identity.company}</p>}
-                      </span>
+                      <p className="ambient-clients__featured-mobile-event">{event.title}<span aria-hidden="true"> · </span>{event.date}</p>
                     </div>
-                    <div className="ambient-client__latest">
-                      <strong>{latest.eventName || latest.quoteNumber || "No opportunity yet"}</strong>
-                      <small>
-                        {[latest.quoteNumber, latest.eventDate ? formatWorkspaceDate(latest.eventDate) : ""]
-                          .filter(Boolean).join(" · ") || "No event date yet"}
-                      </small>
-                    </div>
-                    <div className="ambient-client__contact">
-                      <p>{identity.email || "Add an email to stay connected"}</p>
-                      <small>{identity.phone || "Add a phone for easy follow-up"}</small>
-                    </div>
-                    <strong className="ambient-client__state" data-tone={relationshipState.tone}>{relationshipState.label}</strong>
+                    <img className="ambient-clients__featured-image" src="/images/quote-workspace-wedding-table-v1.webp" alt="" />
                     <button
                       type="button"
                       className="ambient-client__primary"
                       data-ambient-action-id={action.id}
                       disabled={!action.enabled}
                       title={action.disabledReason || undefined}
-                      onClick={() => reviewClient(row)}
+                      onClick={() => reviewClient(featuredRow)}
                     >
-                      {action.outcomeLabel}
-                      <span aria-hidden="true">→</span>
+                      {action.outcomeLabel}<span aria-hidden="true">→</span>
                     </button>
-                  </article>
-                </li>
+                  </div>
+                  <dl className="ambient-clients__featured-details">
+                    <div className="ambient-clients__featured-event">
+                      <dt>Recorded event</dt>
+                      <dd>{event.title}<span>{event.date}{event.reference ? ` · ${event.reference}` : ""}</span></dd>
+                    </div>
+                    <div><dt>Recorded contact details</dt><dd>{clientRecordedContactDetails(featuredRow)}</dd></div>
+                    <div><dt>Current status</dt><dd>{relationshipState.label}<span>Based on the recorded event and contact details in this view.</span></dd></div>
+                  </dl>
+                </article>
               );
-            })}
-            </ol> : (
-              <div className="ambient-clients__filter-empty">
-                <strong>No clients match this view yet.</strong>
-                <span>Try another view—your current client page is unchanged.</span>
-                <button type="button" className="ghost" onClick={() => setDirectoryFilter("all")}>Show all clients</button>
+            })()}
+
+            <section className="ambient-clients__directory" aria-labelledby="ambient-clients-list-title">
+              <div className="ambient-clients__directory-heading">
+                <h2 id="ambient-clients-list-title">All clients</h2>
               </div>
-            )}
+              <div className="ambient-clients__directory-controls">
+                <form className="ambient-clients__toolbar" role="search" onSubmit={onApplySearch}>
+                  <label className="ambient-clients__search">
+                    <span className="visually-hidden">Find a client by name or email</span>
+                    <input
+                      type="search"
+                      value={searchDraft}
+                      autoComplete="off"
+                      placeholder="Search clients"
+                      onChange={(event) => onSearchDraftChange?.(event.target.value)}
+                    />
+                  </label>
+                  <button type="submit" className="ghost">Search</button>
+                  {searchDraft ? <button type="button" className="ghost" onClick={onClear}>Clear</button> : null}
+                </form>
+                {rows.length > 1 && (
+                  <label className="ambient-clients__filter-select">
+                    <span className="visually-hidden">Filter clients</span>
+                    <select value={directoryFilter} onChange={(event) => setDirectoryFilter(event.target.value)}>
+                      <option value="all">All clients</option>
+                      <option value="linked">With linked work</option>
+                      <option value="upcoming">Upcoming events</option>
+                      <option value="contact_gap">Contact to add</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+
+              {remainingRows.length ? (
+                <ol className="ambient-clients__relationship-list">
+                  {remainingRows.map((row) => {
+                    const customerId = text(row.customerId || row.clientId || row.id);
+                    const identity = clientIdentity(row);
+                    const event = clientEventSummary(row);
+                    const relationshipState = clientDirectoryState(row);
+                    const action = row.primaryAction || fallbackReviewClientAction(row, currentUserRole);
+                    return (
+                      <li key={customerId}>
+                        <article className="ambient-clients__relationship-row" data-client-id={customerId}>
+                          <div><h3>{identity.name}</h3>{identity.company && <p>{identity.company}</p>}</div>
+                          <div><strong>{event.title}</strong><span>{event.date}{event.reference ? ` · ${event.reference}` : ""}</span></div>
+                          <p>{clientRecordedContactDetails(row)}</p>
+                          <span className="ambient-clients__relationship-state" data-tone={relationshipState.tone}>{relationshipState.label}</span>
+                          <button
+                            type="button"
+                            className="ambient-client__primary"
+                            data-ambient-action-id={action.id}
+                            disabled={!action.enabled}
+                            title={action.disabledReason || undefined}
+                            onClick={() => reviewClient(row)}
+                          >
+                            {action.outcomeLabel}<span aria-hidden="true">→</span>
+                          </button>
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : !visibleRows.length ? (
+                <div className="ambient-clients__filter-empty">
+                  <strong>No clients match this view yet.</strong>
+                  <span>Try another view—your current client page is unchanged.</span>
+                  <button type="button" className="ghost" onClick={() => setDirectoryFilter("all")}>Show all clients</button>
+                </div>
+              ) : null}
+            </section>
           </section>
         )}
 
@@ -470,19 +552,28 @@ export function AmbientClientsDirectory({
           </nav>
         )}
 
-        <aside className="ambient-clients__boundary" aria-labelledby="ambient-clients-boundary-title">
+        <details className="ambient-clients__about">
+          <summary>About this view</summary>
           <div>
-            <p className="ambient-clients__label">How this list stays current</p>
             <h2 id="ambient-clients-boundary-title">{boundary.sourceLabel || "Client records"}</h2>
-          </div>
-          <div>
             <p>{boundary.sourceBoundary || boundary.outcome || "Only the client information available on this page is shown."}</p>
             {boundary.loadedAtISO && <p>Last checked on this device {formatWorkspaceDateTime(boundary.loadedAtISO)}.</p>}
             {Array.isArray(boundary.messages || boundary.notes) && (boundary.messages || boundary.notes).length > 0 && (
               <ul>{(boundary.messages || boundary.notes).map((message) => <li key={message}>{message}</li>)}</ul>
             )}
+            {rows.length > 0 && (
+              <button
+                type="button"
+                className="ambient-clients__refresh"
+                data-ambient-action-id={refreshAction.id}
+                disabled={!refreshAction.enabled}
+                onClick={refresh}
+              >
+                {model.loading ? "Checking…" : "Check this view again"}
+              </button>
+            )}
           </div>
-        </aside>
+        </details>
       </section>
     </main>
   );

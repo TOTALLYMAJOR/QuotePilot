@@ -9,6 +9,10 @@ const RULES_SOURCE = fs.readFileSync(
   new URL("../../../firestore.rules", import.meta.url),
   "utf8"
 );
+const APP_SOURCE = fs.readFileSync(
+  new URL("../../App.jsx", import.meta.url),
+  "utf8"
+);
 
 function sourceBetween(startMarker, endMarker) {
   const start = FUNCTIONS_SOURCE.indexOf(startMarker);
@@ -17,6 +21,15 @@ function sourceBetween(startMarker, endMarker) {
     throw new Error(`Unable to locate source between ${startMarker} and ${endMarker}.`);
   }
   return FUNCTIONS_SOURCE.slice(start, end);
+}
+
+function appSourceBetween(startMarker, endMarker) {
+  const start = APP_SOURCE.indexOf(startMarker);
+  const end = APP_SOURCE.indexOf(endMarker, start + startMarker.length);
+  if (start < 0 || end < 0 || end <= start) {
+    throw new Error(`Unable to locate App source between ${startMarker} and ${endMarker}.`);
+  }
+  return APP_SOURCE.slice(start, end);
 }
 
 describe("Commercial Change Authority callable integration", () => {
@@ -40,9 +53,11 @@ describe("Commercial Change Authority callable integration", () => {
     expect(simulation).toContain("await assertStaff(context");
     expect(simulation).toContain("calculateQuotePricingAuthoritative({");
     expect(simulation).toContain("buildCommercialChangeImpactPreviewSnapshots({");
+    expect(simulation).toContain("buildTrustedQuoteEditDocuments({");
     expect(simulation).toContain("commercialChangeAuthority.simulate({");
     expect(simulation).toContain("tx.create(receiptRef");
     expect(simulation).toContain("simulation: projectCommercialChangeSimulation");
+    expect(simulation).toContain("persistedEffects: projectCommercialChangePersistedEffects({");
 
     const approvalRequest = sourceBetween(
       "exports.requestCommercialQuoteChangeAuthorization =",
@@ -87,6 +102,9 @@ describe("Commercial Change Authority callable integration", () => {
       "function quoteCreationFailure"
     );
     expect(update).toContain('if (enforcement.authorityState === "enforced")');
+    expect(update).toContain('enforcement.authorityState === "dormant"');
+    expect(update).toContain("assertCommercialChangeSimulationCurrent({");
+    expect(update).toContain("existingReceipt: existingSimulation");
     expect(update).toContain("persistCommercialChangeApply({");
     expect(update).toContain("tx.get(refs.applyOutcomesRef.doc(applyOutcomeIdentity.outcomeReceiptId))");
     expect(update).toContain("was reconciled as not committed and is permanently fenced");
@@ -121,6 +139,72 @@ describe("Commercial Change Authority callable integration", () => {
     expect(persistence).toContain('state: "open"');
     expect(persistence).toContain("invalidationSetComplete: true");
     expect(persistence).toContain("openInvalidationCount");
+  });
+
+  test("fences every trusted edit to the exact loaded quote revision before building write documents", () => {
+    const update = sourceBetween(
+      "async function updateTrustedQuoteDraftInternal",
+      "function quoteCreationFailure"
+    );
+    const revisionReadIndex = update.indexOf(
+      "quote.activeVersionId || quote.versionMeta?.versionId"
+    );
+    const revisionFailureIndex = update.indexOf(
+      "This quote changed after the draft was opened"
+    );
+    const documentBuildIndex = update.indexOf("buildTrustedQuoteEditDocuments({");
+
+    expect(update).toContain("expectedActiveVersionId = \"\"");
+    expect(update).toContain("const expectedRevisionId = normalizeText(expectedActiveVersionId)");
+    expect(revisionReadIndex).toBeGreaterThan(-1);
+    expect(revisionFailureIndex).toBeGreaterThan(revisionReadIndex);
+    expect(documentBuildIndex).toBeGreaterThan(revisionFailureIndex);
+
+    const callable = sourceBetween(
+      "exports.updateQuoteDraft =",
+      "// Structured change-request record"
+    );
+    expect(callable).toContain("expectedActiveVersionId: data?.expectedActiveVersionId");
+  });
+
+  test("binds Quick Updates review to Commercial Change receipts and delegates save calculations", () => {
+    const preview = appSourceBetween(
+      "const handlePreviewQuickUpdate =",
+      "const handleSaveQuickUpdate ="
+    );
+    expect(preview).toContain("simulateCommercialQuoteChange({");
+    expect(preview).toContain('buildCommercialChangeRequestId("apply")');
+    expect(preview).toContain("simulationReceiptId:");
+
+    const save = appSourceBetween(
+      "const handleSaveQuickUpdate =",
+      "const handleOpenQuickUpdatesLibrary ="
+    );
+    expect(save).toContain("const commercialChangeAuthority = {");
+    expect(save).toContain("simulationReceiptId:");
+    expect(save).toContain("applyRequestId:");
+    expect(save).toContain("!isFirebaseQuickUpdateSource()");
+    expect(save).toContain('trim().toLowerCase() !== "draft"');
+    expect(save).toContain("quickUpdatePersistedEffectsMatch(preview, candidate)");
+    expect(save).toContain("const result = await handleSubmitQuote({");
+    expect(save).toContain("commercialChangeAuthority,");
+    expect(save).toContain("onPersistenceResolved:");
+    expect(save).toContain("expectedActiveVersionId: candidate.baseRevisionId");
+    expect(save).toContain('getQuoteById(result.id, { serverOnly: true })');
+    expect(save).toContain('status: "persisted"');
+    expect(save).not.toContain('status: "saved"');
+    expect(save).not.toContain("calculateQuotePricing(");
+    expect(save).not.toContain("calculateQuote(");
+    expect(save).toContain('action: "reconcile_only"');
+
+    const sharedSave = appSourceBetween(
+      "const handleSubmitQuote =",
+      "const quickUpdateFailure ="
+    );
+    expect(sharedSave).toContain("calculateQuote(submissionForm, catalog, effectiveSettings)");
+    expect(sharedSave).toContain("calculateQuotePricing({");
+    expect(sharedSave).toContain("updateQuote({");
+    expect(sharedSave).toContain("onPersistenceResolved(result)");
   });
 
   test("reconciliation resolves exact open invalidations and updates completeness atomically", () => {

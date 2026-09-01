@@ -348,5 +348,6 @@ describe("Living Opportunity event-logistics intelligent objects", () => {
     expect(layout.textContent).toContain("The Foundry Hall · 1200 East Fifth Street, Austin, TX");
     expect(container.querySelectorAll('[data-glance="state"], [data-glance="risk"], [data-glance="next"]'))
       .toHaveLength(3);
+    expect(container.querySelector('[data-glance="next"] button')).toBeNull();
   });
 });

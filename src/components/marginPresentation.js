@@ -21,6 +21,9 @@ function num(value) {
 }
 
 function menuCatalogItems(catalog) {
+  if (Array.isArray(catalog?.managedMenuItems) && catalog.managedMenuItems.length) {
+    return catalog.managedMenuItems;
+  }
   return (catalog?.settings?.menuSections || []).flatMap((section) => section?.items || []);
 }
 

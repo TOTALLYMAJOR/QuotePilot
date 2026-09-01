@@ -198,6 +198,68 @@ function simulationProjection(overrides = {}) {
   };
 }
 
+function persistedEffects(overrides = {}) {
+  return {
+    schemaVersion: "commercial-change-persisted-effects-v1",
+    authority: "server_authoritative",
+    source: "trusted_quote_edit_material_projection",
+    identity: {
+      organizationId: SCOPE.organizationId,
+      quoteId: SCOPE.quoteId,
+      baseRevisionId: BASE_REVISION_ID,
+      projectedRevisionId: TARGET_REVISION_ID
+    },
+    requestedDelta: [{
+      nodeId: "fact.event.guest_count",
+      fieldPath: "fact.event.guest_count",
+      before: 125,
+      after: 175
+    }],
+    pricing: commercialValues(),
+    staffing: {
+      before: { servers: 8, chefs: 3, bartenders: 2 },
+      after: { servers: 8, chefs: 3, bartenders: 2 },
+      changed: false
+    },
+    status: { before: "draft", after: "draft", changed: false },
+    version: {
+      beforeRevisionId: BASE_REVISION_ID,
+      afterRevisionId: TARGET_REVISION_ID,
+      beforeVersionNumber: 14,
+      afterVersionNumber: 15,
+      createsImmutableVersion: true
+    },
+    proposal: {
+      statusBefore: "draft",
+      statusAfter: "draft",
+      workflowEvidencePreserved: true,
+      customerDeliveryTriggered: false,
+      publicationTriggered: false
+    },
+    portal: {
+      activeRevisionIdBefore: BASE_REVISION_ID,
+      activeRevisionIdAfter: TARGET_REVISION_ID,
+      projectionRefreshed: true,
+      accessIdentityRetained: true,
+      issuanceRecordedAtSave: true,
+      expiryRecalculatedAtSave: true,
+      customerDeliveryTriggered: false
+    },
+    lifecycle: {
+      draftAtPreserved: true,
+      draftAtAssignedIfMissing: false,
+      editedAtRecordedAtSave: true,
+      terminalDecisionEvidencePreserved: true
+    },
+    dependencies: {
+      authorizationRequired: true,
+      impact: receiptImpact()
+    },
+    boundary: "Exact trusted quote edit plan; no write or delivery occurred.",
+    ...overrides
+  };
+}
+
 function simulationResponse(overrides = {}) {
   return {
     ok: true,
@@ -207,6 +269,7 @@ function simulationResponse(overrides = {}) {
     authorityState: "dormant",
     simulationReceipt: simulationReceipt(),
     simulation: simulationProjection(),
+    persistedEffects: persistedEffects(),
     ...overrides
   };
 }
@@ -436,6 +499,21 @@ describe("Commercial Change Authority simulation client", () => {
       simulation: {
         receiptId: SIMULATION_RECEIPT_ID,
         impact: { counts: { total: 1, stale: 1 } }
+      },
+      persistedEffects: {
+        identity: {
+          baseRevisionId: BASE_REVISION_ID,
+          projectedRevisionId: TARGET_REVISION_ID
+        },
+        version: {
+          beforeVersionNumber: 14,
+          afterVersionNumber: 15,
+          createsImmutableVersion: true
+        },
+        portal: {
+          projectionRefreshed: true,
+          customerDeliveryTriggered: false
+        }
       }
     });
     expect(Object.isFrozen(result)).toBe(true);
@@ -476,6 +554,18 @@ describe("Commercial Change Authority simulation client", () => {
       })
     });
     await expect(simulateCommercialQuoteChange(input)).rejects.toThrow(/change flag|receipt/i);
+
+    mockState.callable.mockResolvedValueOnce({
+      data: simulationResponse({
+        persistedEffects: persistedEffects({
+          version: {
+            ...persistedEffects().version,
+            afterVersionNumber: 16
+          }
+        })
+      })
+    });
+    await expect(simulateCommercialQuoteChange(input)).rejects.toThrow(/version effect/i);
   });
 
   test("rejects path, email, and content-bearing URL identities before calling Firebase", async () => {

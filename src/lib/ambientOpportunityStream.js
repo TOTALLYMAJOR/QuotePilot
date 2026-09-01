@@ -1,7 +1,8 @@
 import {
   createAmbientAction,
   createOpportunityMomentum,
-  createSurfacePurposeContract
+  createSurfacePurposeContract,
+  rankAmbientNextActions
 } from "./ambientContracts";
 import {
   STATUS_FAMILY,
@@ -63,6 +64,18 @@ const FINAL_BALANCE_STATES = new Set([
   "failed",
   "expired"
 ]);
+
+const OPPORTUNITY_GROUPS = Object.freeze([
+  Object.freeze({ id: "needs-attention", label: "Needs attention" }),
+  Object.freeze({ id: "active-recent", label: "Active & recent" }),
+  Object.freeze({ id: "recent-closed", label: "Recent & closed" })
+]);
+
+const OPPORTUNITY_GROUP_PRIORITY = Object.freeze(
+  Object.fromEntries(OPPORTUNITY_GROUPS.map((group, index) => [group.id, index]))
+);
+
+const CLOSED_LIFECYCLE_STATES = new Set(["declined", "expired", "deleted"]);
 
 function text(value) {
   return String(value ?? "").trim();
@@ -185,6 +198,9 @@ function identityFor(quote, quoteId) {
     ),
     eventDate: formatWorkspaceDate(quote?.event?.date || quote?.date, {
       emptyLabel: "Event date not set"
+    }),
+    venue: formatWorkspaceText(quote?.event?.venue || quote?.venue, {
+      emptyLabel: "Venue not set"
     }),
     guests: formatWorkspaceInteger(quote?.event?.guests ?? quote?.guests, {
       emptyLabel: "Guest count not set"
@@ -367,14 +383,17 @@ function primaryIntent({ quoteId, identity, proposal, workflow, capabilities }) 
 
   const enabled = capabilities.openOpportunity === true;
   const hasProposalGap = !proposal.complete;
+  const namedOpportunityLabel = identity.eventName === "Event name not recorded"
+    ? "Open opportunity"
+    : `Open ${identity.eventName}`;
   return {
     id: `${hasProposalGap ? "review-opportunity-proposal" : "open-opportunity"}:${quoteId}`,
-    label: hasProposalGap ? "Review proposal details" : "Open opportunity",
+    label: hasProposalGap ? "Review proposal details" : namedOpportunityLabel,
     category: hasProposalGap ? "proposal_gap" : "recommendation",
     severity: hasProposalGap ? "attention" : "info",
     object,
     reason: hasProposalGap
-      ? `${proposal.gaps.length} weighted proposal field${proposal.gaps.length === 1 ? "" : "s"} need review.`
+      ? `${proposal.gaps.length} required proposal field${proposal.gaps.length === 1 ? "" : "s"} need review.`
       : "There isn’t a due follow-up or an unfinished proposal detail in this record.",
     consequence: "The exact opportunity opens for review. No quote, customer, payment, booking, or provider state changes through navigation.",
     purpose: hasProposalGap ? "resolve" : "reveal_context",
@@ -394,6 +413,7 @@ function opportunityProjection(quote, options) {
   const identity = identityFor(quote, quoteId);
   const facts = statusFacts(quote);
   const proposal = buildProposalReadiness(quote);
+  const recommendedProposalGapCount = proposal.recommendedGaps.length;
   const workflow = workflowEvidence(quote, options);
   const intent = primaryIntent({
     quoteId,
@@ -407,12 +427,15 @@ function opportunityProjection(quote, options) {
       proposal: {
         state: proposal.complete ? "healthy" : "attention",
         summary: proposal.complete
-          ? "All weighted proposal fields are recorded."
-          : `${proposal.gaps.length} weighted proposal fields need review.`,
+          ? recommendedProposalGapCount > 0
+            ? `All required proposal fields are recorded; ${recommendedProposalGapCount} recommended contact ${recommendedProposalGapCount === 1 ? "detail remains" : "details remain"}.`
+            : "All required proposal fields are recorded."
+          : `${proposal.gaps.length} required proposal ${proposal.gaps.length === 1 ? "field needs" : "fields need"} review.`,
         evidence: [{
           model: "proposal-readiness-v1",
-          criteriaCount: proposal.criteria.length,
-          recordedCriteriaCount: proposal.criteria.filter((criterion) => criterion.passed).length
+          criteriaCount: proposal.requiredCriteria.length,
+          recordedCriteriaCount: proposal.requiredCriteria.filter((criterion) => criterion.passed).length,
+          recommendedGapCount: recommendedProposalGapCount
         }],
         completenessPercent: proposal.score
       },
@@ -428,6 +451,7 @@ function opportunityProjection(quote, options) {
       object: intent.object,
       reason: intent.reason,
       consequence: intent.consequence,
+      dueAt: safeIso(workflow.item?.dateISO),
       ...(intent.enabled ? { resolutionActionId: intent.id } : {}),
       availability: intent.enabled
         ? "available"
@@ -462,10 +486,16 @@ function opportunityProjection(quote, options) {
     enabled: intent.enabled,
     ...(!intent.enabled ? { disabledReason: intent.disabledReason } : {})
   });
-  const requiresAttention = !facts.lifecycle.available
+  const requiresAttention = Boolean(workflow.item)
+    || !facts.lifecycle.available
     || Object.values(momentum.domains).some(
       (domain) => ["attention", "blocked"].includes(domain.state)
     );
+  const groupId = requiresAttention
+    ? "needs-attention"
+    : CLOSED_LIFECYCLE_STATES.has(facts.lifecycle.raw)
+      ? "recent-closed"
+      : "active-recent";
 
   return {
     quoteId,
@@ -476,12 +506,56 @@ function opportunityProjection(quote, options) {
       evaluated: workflow.evaluated,
       attentionType: text(workflow.item?.type) || null,
       attentionState: text(workflow.item?.state) || null,
+      priority: Number.isFinite(workflow.item?.priority) ? workflow.item.priority : null,
+      dueAtISO: safeIso(workflow.item?.dateISO),
       target: intent.workflowTarget,
       reason: workflow.reason
     },
     primaryAction,
-    requiresAttention
+    requiresAttention,
+    groupId,
+    ordering: {
+      eventAtISO: safeIso(quote?.event?.date || quote?.date),
+      updatedAtISO: safeIso(quote?.updatedAtISO || quote?.updatedAt || quote?.createdAtISO || quote?.createdAt),
+      stableKey: text(quote?.quoteNumber || quoteId).toLowerCase()
+    }
   };
+}
+
+function compareOpportunityRows(left, right, actionRankById) {
+  const groupDelta = OPPORTUNITY_GROUP_PRIORITY[left.groupId]
+    - OPPORTUNITY_GROUP_PRIORITY[right.groupId];
+  if (groupDelta !== 0) return groupDelta;
+
+  if (left.groupId === "needs-attention") {
+    const workflowDelta = (left.workflow.priority ?? Number.POSITIVE_INFINITY)
+      - (right.workflow.priority ?? Number.POSITIVE_INFINITY);
+    if (workflowDelta !== 0) return workflowDelta;
+    const actionDelta = (actionRankById.get(left.primaryAction.id) ?? Number.POSITIVE_INFINITY)
+      - (actionRankById.get(right.primaryAction.id) ?? Number.POSITIVE_INFINITY);
+    if (actionDelta !== 0) return actionDelta;
+  }
+
+  if (left.groupId === "recent-closed") {
+    const leftUpdated = left.ordering.updatedAtISO
+      ? Date.parse(left.ordering.updatedAtISO)
+      : Number.NEGATIVE_INFINITY;
+    const rightUpdated = right.ordering.updatedAtISO
+      ? Date.parse(right.ordering.updatedAtISO)
+      : Number.NEGATIVE_INFINITY;
+    if (leftUpdated !== rightUpdated) return rightUpdated - leftUpdated;
+  } else {
+    const leftEvent = left.ordering.eventAtISO
+      ? Date.parse(left.ordering.eventAtISO)
+      : Number.POSITIVE_INFINITY;
+    const rightEvent = right.ordering.eventAtISO
+      ? Date.parse(right.ordering.eventAtISO)
+      : Number.POSITIVE_INFINITY;
+    if (leftEvent !== rightEvent) return leftEvent - rightEvent;
+  }
+
+  return left.ordering.stableKey.localeCompare(right.ordering.stableKey)
+    || left.quoteId.localeCompare(right.quoteId);
 }
 
 function sourceBoundary(source) {
@@ -590,6 +664,18 @@ export function buildAmbientOpportunityStream({
     }));
   });
 
+  const rankedActions = rankAmbientNextActions(
+    rows.flatMap((row) => row.momentum.nextAction ? [row.momentum.nextAction] : [])
+  );
+  const actionRankById = new Map(rankedActions.map((action) => [action.id, action.rank]));
+  rows.sort((left, right) => compareOpportunityRows(left, right, actionRankById));
+  const groups = OPPORTUNITY_GROUPS
+    .map((group) => ({
+      ...group,
+      rows: rows.filter((row) => row.groupId === group.id)
+    }))
+    .filter((group) => group.rows.length > 0);
+
   const readTrustworthy = boundary.currentComplete && omittedRecords.length === 0;
   const workflowEvaluationComplete = rows.every((row) => row.workflow.evaluated);
   const caughtUp = {
@@ -623,6 +709,7 @@ export function buildAmbientOpportunityStream({
     surfaceContract: AMBIENT_OPPORTUNITIES_SURFACE_CONTRACT,
     state,
     rows,
+    groups,
     rowCount: rows.length,
     omittedRecords,
     readBoundary: boundary,

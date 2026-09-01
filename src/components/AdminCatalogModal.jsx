@@ -14,21 +14,21 @@ import {
 } from "../lib/proposalDocumentPreferences";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import {
-  createCategory,
-  createEventType,
-  createMenuItem,
-  deleteMenuItem,
   getEventTypes,
   getMenuCategories,
-  getMenuItems,
-  isMenuCatalogRevisionConflict,
-  updateCategory,
-  updateEventType,
-  updateMenuItem
+  getMenuItems
 } from "../lib/menuService";
 import { buildPackageWorkspaceCollectionModel } from "../lib/packageWorkspaceModel";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { useCatalogSetupDraft } from "../hooks/useCatalogSetupDraft";
+import {
+  applyCatalogSetupDraftChanges,
+  buildCatalogSetupChanges,
+  createCatalogSetupRequestId,
+  stageCatalogSetupPreset
+} from "../lib/catalogSetupDraftService";
 import PackageWorkspace from "./PackageWorkspace";
+import CatalogDraftStateBar, { catalogDraftCapabilityState } from "./CatalogDraftStateBar";
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -279,6 +279,31 @@ function buildJsonDrafts(catalog) {
   };
 }
 
+function buildPersistableCatalogDraft(draft, jsonDrafts) {
+  const parseArray = (field, label) => {
+    const parsed = JSON.parse(jsonDrafts?.[field] || "[]");
+    if (!Array.isArray(parsed)) throw new Error(`${label}: Must be a JSON array.`);
+    return parsed;
+  };
+  const featureFlagsLocked = draft?.settings?.featureFlagsLocked === true;
+  const featureFlags = { ...(draft?.settings?.featureFlags || {}) };
+  if (!featureFlagsLocked && featureFlags.aiAssist === false) featureFlags.aiAutopilot = false;
+  return {
+    ...draft,
+    settings: {
+      ...(draft?.settings || {}),
+      featureFlags,
+      brandLogoUrl: normalizeBrandLogoUrl(draft?.settings?.brandLogoUrl),
+      documentFontScale: normalizeProposalDocumentFontScale(draft?.settings?.documentFontScale).id,
+      serviceFeeTiers: parseArray("serviceFeeTiers", "Service Fee Tiers JSON"),
+      taxRegions: parseArray("taxRegions", "Tax Regions JSON"),
+      eventTemplates: parseEventTemplateDrafts(jsonDrafts?.eventTemplates),
+      seasonalProfiles: parseArray("seasonalProfiles", "Seasonal Profiles JSON"),
+      brandCrew: parseArray("brandCrew", "Brand Crew JSON")
+    }
+  };
+}
+
 function cloneCatalogSnapshot(catalog = {}) {
   return JSON.parse(JSON.stringify(catalog || {}));
 }
@@ -382,7 +407,8 @@ export function AdminCatalogView({
   onInteractionStateChange,
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
-  onToast
+  onToast,
+  catalogSetupDraftController = null
 }) {
   const embedded = presentation === "embedded";
   const [draft, setDraft] = useState(catalog);
@@ -411,12 +437,17 @@ export function AdminCatalogView({
   const [newItemDraft, setNewItemDraft] = useState({
     name: "",
     price: 0,
+    cost: "",
     pricingType: "per_event",
     active: true
   });
   const [menuItemBaselines, setMenuItemBaselines] = useState({});
   const [menuItemDirty, setMenuItemDirty] = useState({});
   const [menuItemSavingId, setMenuItemSavingId] = useState("");
+  const [menuSearch, setMenuSearch] = useState("");
+  const [showUnavailableMenuItems, setShowUnavailableMenuItems] = useState(false);
+  const [selectedMenuItemIds, setSelectedMenuItemIds] = useState([]);
+  const [bulkTargetSection, setBulkTargetSection] = useState("");
   const menuItemSaveInFlightRef = useRef(new Set());
   const resetOnNextOpenRef = useRef(true);
   const initializedViewScopeRef = useRef("");
@@ -433,6 +464,25 @@ export function AdminCatalogView({
   const acceptedCatalogRevisionRef = useRef(null);
   const scopedOrganizationId = String(organizationId || "").trim();
   const catalogRevision = Math.max(0, Number(catalog?.settings?.catalogRevision || 0));
+  const internalCatalogSetupDraft = useCatalogSetupDraft({
+    enabled: Boolean(open && scopedOrganizationId && !catalogSetupDraftController),
+    organizationId: scopedOrganizationId,
+    baseCatalogRevision: catalogRevision
+  });
+  const catalogSetupDraft = catalogSetupDraftController || internalCatalogSetupDraft;
+  const catalogSetupDraftChanges = Array.isArray(catalogSetupDraft?.changes)
+    ? catalogSetupDraft.changes
+    : [
+        ...(Array.isArray(catalogSetupDraft?.serverChanges) ? catalogSetupDraft.serverChanges : []),
+        ...(Array.isArray(catalogSetupDraft?.deviceChanges) ? catalogSetupDraft.deviceChanges : [])
+      ];
+  const stagedIntentFor = (collection, recordId, fallbackIntent) => (
+    catalogSetupDraftChanges.some((change) => (
+      change.collection === collection
+      && change.recordId === recordId
+      && change.intent === "create"
+    )) ? "create" : fallbackIntent
+  );
   const authoritativeVersion = Math.max(0, Number(catalog?.authoritativeVersion || 0));
   const starterPackRevision = Math.max(
     0,
@@ -476,6 +526,7 @@ export function AdminCatalogView({
   const newItemDraftDirty = Boolean(
     String(newItemDraft.name || "").trim()
     || Number(newItemDraft.price || 0) !== 0
+    || String(newItemDraft.cost || "").trim()
     || normalizePricingType(newItemDraft.pricingType, "per_event") !== "per_event"
     || newItemDraft.active === false
   );
@@ -577,13 +628,13 @@ export function AdminCatalogView({
     pendingCatalogEvidenceRef.current = null;
     acceptedCatalogRevisionRef.current = null;
     resetOnNextOpenRef.current = false;
-    const nextDraft = {
+    const nextDraft = applyCatalogSetupDraftChanges({
       ...catalog,
       settings: {
         ...(catalog?.settings || {}),
         featureFlags: { ...(catalog?.settings?.featureFlags || {}) }
       }
-    };
+    }, catalogSetupDraftChanges);
     const nextJsonDrafts = buildJsonDrafts(catalog);
     setDraft(nextDraft);
     setSavedCatalogSnapshot(cloneCatalogSnapshot(nextDraft));
@@ -621,7 +672,11 @@ export function AdminCatalogView({
     setCategoryEditName("");
     setEventTypeRenameTouched(false);
     setCategoryRenameTouched(false);
-    setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
+    setNewItemDraft({ name: "", price: 0, cost: "", pricingType: "per_event", active: true });
+    setMenuSearch("");
+    setShowUnavailableMenuItems(false);
+    setSelectedMenuItemIds([]);
+    setBulkTargetSection("");
   }, [open, viewScopeKey]); // Draft state is intentionally read inside this scope-change reconciliation effect.
 
   useEffect(() => {
@@ -634,7 +689,11 @@ export function AdminCatalogView({
     async function loadEventTypeOptions() {
       setMenuLoading(true);
       try {
-        const eventTypes = await getEventTypes({ organizationId: scopedOrganizationId });
+        const publishedEventTypes = await getEventTypes({ organizationId: scopedOrganizationId });
+        const eventTypes = applyCatalogSetupDraftChanges(
+          { eventTypes: publishedEventTypes },
+          catalogSetupDraftChanges
+        ).eventTypes;
         if (!alive) return;
         setMenuEventTypes(eventTypes);
         setManagedEventType(resolveManagedEventTypeId(eventTypes, selectedEventTypeProp));
@@ -718,11 +777,17 @@ export function AdminCatalogView({
     async function loadEventMenuData() {
       setMenuLoading(true);
       try {
-        const [categories, items] = await Promise.all([
+        const [publishedCategories, publishedItems] = await Promise.all([
           getMenuCategories(eventTypeId, { organizationId: scopedOrganizationId }),
           getMenuItems(eventTypeId, { includeInactive: true, organizationId: scopedOrganizationId })
         ]);
         if (!alive) return;
+        const stagedMenu = applyCatalogSetupDraftChanges({
+          categories: publishedCategories,
+          items: publishedItems
+        }, catalogSetupDraftChanges);
+        const categories = stagedMenu.categories.filter((item) => item.eventTypeId === eventTypeId);
+        const items = stagedMenu.items.filter((item) => item.eventTypeId === eventTypeId);
         setMenuCategories(categories);
         applyManagedMenuItems(items);
         setSelectedCategory((current) => {
@@ -804,10 +869,45 @@ export function AdminCatalogView({
   );
   useEffect(() => {
     onInteractionStateChange?.({
-      dirty: hasAnyUnsavedChanges,
+      dirty: hasAnyUnsavedChanges || (catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0),
       busy: closeBlocked
     });
-  }, [closeBlocked, hasAnyUnsavedChanges, onInteractionStateChange]);
+  }, [
+    catalogSetupDraftChanges.length,
+    catalogSetupDraft.deviceOnly,
+    closeBlocked,
+    hasAnyUnsavedChanges,
+    onInteractionStateChange
+  ]);
+
+  useEffect(() => {
+    if (!open || !hasUnsavedChanges || shouldInitializeView || !scopedOrganizationId) return;
+    try {
+      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const normalizedBaseline = buildPersistableCatalogDraft(
+        savedCatalogSnapshot,
+        buildJsonDrafts(savedCatalogSnapshot)
+      );
+      const changes = buildCatalogSetupChanges({
+        catalog: nextDraft,
+        baselineCatalog: normalizedBaseline,
+        serverFingerprints: catalog?.serverFingerprints || {}
+      });
+      if (changes.length > 0) catalogSetupDraft.queueChanges(changes);
+    } catch {
+      // Invalid advanced JSON remains local and visibly unsaved until corrected.
+    }
+  }, [
+    catalog?.serverFingerprints,
+    catalogSetupDraft.queueChanges,
+    draft,
+    hasUnsavedChanges,
+    jsonDrafts,
+    open,
+    savedCatalogSnapshot,
+    scopedOrganizationId,
+    shouldInitializeView
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -880,13 +980,11 @@ export function AdminCatalogView({
         object: { type: "library-section", id: sectionId },
         reason: String(focusRequest?.reason || "The requested Library section is open."),
         consequence: "Reviewing this section changes nothing until an administrator explicitly saves catalog changes.",
-        nextResolutions: ["Review this section", "Save catalog changes when ready"]
+        nextResolutions: ["Review this section", "Review and publish the catalog when ready"]
       });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [dialogRef, embedded, focusRequest, onFocusResolution, open]);
-
-  if (!open) return null;
 
   const stagedPack = draft?.settings?.starterCatalogPack || {};
   const recoveryReplacementBlocked = stagedPack.replacementBlocked === true;
@@ -912,14 +1010,28 @@ export function AdminCatalogView({
     && hasCatalogContent
     && !stagedPack.id
     && !confirmedMissingMenuRecovery;
+  const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
+  const visibleAdminTabs = starterChoiceOnly
+    ? ADMIN_TABS.filter((tab) => tab.id === "starter")
+    : ADMIN_TABS.filter(
+      (tab) => tab.id !== "starter"
+        || showStarterTab
+    );
+  const hasActiveVisibleTab = visibleAdminTabs.some((tab) => tab.id === activeTab);
+  const resolvedActiveTab = hasActiveVisibleTab ? activeTab : (visibleAdminTabs[0]?.id || "");
+  const packageWorkspaceActive = resolvedActiveTab === "packages" && !starterChoiceOnly;
+
+  useEffect(() => {
+    if (open && !hasActiveVisibleTab && resolvedActiveTab && activeTab !== resolvedActiveTab) {
+      setActiveTab(resolvedActiveTab);
+    }
+  }, [open, hasActiveVisibleTab, resolvedActiveTab, activeTab]);
+
+  if (!open) return null;
 
   const handleApplyStarterPack = async (pack) => {
     if (blockForNewerCatalog()) return;
     if (blockForOtherDrafts()) return;
-    if (typeof onApplyStarterPack !== "function") {
-      setStatus("Starter pack application is unavailable.");
-      return;
-    }
     const replacing = Boolean(stagedPack.id) || confirmedMissingMenuRecovery;
     if (replacing && hasUnsavedChanges) {
       setStatus("Save or discard local catalog changes before replacing a staged pack.");
@@ -940,11 +1052,16 @@ export function AdminCatalogView({
     }
     setPackActionId(pack.id);
     setStatus("");
-    const result = await onApplyStarterPack({
-      packId: pack.id,
-      packVersion: pack.version,
-      replaceStagedPack: replacing
-    });
+    let result;
+    try {
+      result = await stageCatalogSetupPreset({
+        organizationId: scopedOrganizationId,
+        packId: pack.id,
+        packVersion: pack.version
+      });
+    } catch (error) {
+      result = { ok: false, error: error?.message || "Failed to stage setup preset." };
+    }
     setPackActionId("");
     if (!result?.ok) {
       setCatalogRefreshRequired(result?.refreshRequired === true);
@@ -962,9 +1079,7 @@ export function AdminCatalogView({
       return;
     }
     setCatalogRefreshRequired(false);
-    const message = confirmedMissingMenuRecovery
-      ? `${pack.name} added without replacing existing records or pricing settings. Review the recovered catalog and confirm pricing again.`
-      : `${pack.name} staged. Review every suggested amount before confirming pricing.`;
+    const message = `${pack.name} setup preset added to the shared draft. Review every suggested amount before publishing.`;
     setActiveTab("menu");
     setStatus(message);
     pushToast(message, "success");
@@ -1031,7 +1146,7 @@ export function AdminCatalogView({
       eventTemplates: JSON.stringify(next.settings?.eventTemplates || [], null, 2)
     }));
     const label = String(removed?.name || removed?.id || "Catalog record").trim();
-    setStatus(`${label} removed. Dependent package inclusions, recommendation rules, and event-template defaults were removed too. Save catalog changes to persist.`);
+    setStatus(`${label} removed from the setup draft. Dependent package inclusions, recommendation rules, and quote starting points were removed too.`);
   };
 
   const patchPackageField = (packageId, field, value) => {
@@ -1074,6 +1189,10 @@ export function AdminCatalogView({
     const savedPackage = (Array.isArray(savedCatalogSnapshot?.packages) ? savedCatalogSnapshot.packages : [])
       .find((pkg) => String(pkg?.id || "").trim() === id);
     if (!savedPackage) {
+      catalogSetupDraft.discardDeviceChanges?.([{
+        collection: "catalogPackages",
+        recordId: id
+      }]);
       setDraft((prev) => ({
         ...prev,
         packages: (Array.isArray(prev.packages) ? prev.packages : []).filter((pkg) => (
@@ -1083,6 +1202,10 @@ export function AdminCatalogView({
       setStatus("Unsaved package removed from this draft.");
       return;
     }
+    catalogSetupDraft.discardDeviceChanges?.([{
+      collection: "catalogPackages",
+      recordId: id
+    }]);
     setDraft((prev) => ({
       ...prev,
       packages: (Array.isArray(prev.packages) ? prev.packages : []).map((pkg) => (
@@ -1272,8 +1395,8 @@ export function AdminCatalogView({
       || meta.templateId
       || "Template";
     setStatus(meta.type === "remove"
-      ? "Template removed from this draft. Save catalog changes to persist."
-      : `${templateName} updated in this draft. Save catalog changes to persist.`);
+      ? "Quote starting point removed from this setup draft."
+      : `${templateName} updated in this setup draft.`);
   };
 
   const selectAdminTab = (tabId) => {
@@ -1334,64 +1457,39 @@ export function AdminCatalogView({
       return;
     }
     if (blockForOtherDrafts("event-create")) return;
-    setMenuActionLoading(true);
-    try {
-      const created = await createEventType({
-        name,
-        organizationId: scopedOrganizationId,
-        expectedCatalogRevision: catalogRevision
-      });
-      setNewEventTypeName("");
-      await refreshEventTypes(created.id);
-      await refreshEventMenuData(created.id);
-      acceptedCatalogRevisionRef.current = created.catalogRevision;
-      onCatalogMutation?.(created);
-      const seededLabel = created?.seeded
-        ? ` Seeded ${Number(created.seeded.categories || 0)} categories and ${Number(created.seeded.items || 0)} items.`
-        : "";
-      setStatus(`Event type "${created.name}" added.${seededLabel}`);
-      pushToast(`Event type "${created.name}" added.${seededLabel}`, "success");
-    } catch (err) {
-      setStatus(err?.message || "Failed to create event type.");
-      pushToast(err?.message || "Failed to create event type.", "error");
-    } finally {
-      setMenuActionLoading(false);
-    }
+    const id = createCatalogSetupRequestId("event_type");
+    const created = { id, name, active: true };
+    setMenuEventTypes((current) => [...current, created]);
+    setManagedEventType(id);
+    setMenuCategories([]);
+    setMenuItems([]);
+    setSelectedCategory("");
+    setNewEventTypeName("");
+    catalogSetupDraft.queueChanges([{ collection: "eventTypes", recordId: id, intent: "create", payload: { name, active: true } }]);
+    setStatus(`Event type "${name}" added to the setup draft.`);
+    pushToast(`Event type "${name}" added to the setup draft.`, "success");
   };
 
   const handleCreateCategory = async () => {
     if (blockForNewerCatalog()) return;
     const name = String(newCategoryName || "").trim();
     if (!selectedEventType) {
-      setStatus("Choose an event type before adding a category.");
+      setStatus("Choose an event type before adding a menu section.");
       return;
     }
     if (!name) {
-      setStatus("Enter a category name first.");
+      setStatus("Enter a menu section name first.");
       return;
     }
     if (blockForOtherDrafts("category-create")) return;
-    setMenuActionLoading(true);
-    try {
-      const created = await createCategory({
-        eventTypeId: selectedEventType,
-        name,
-        organizationId: scopedOrganizationId,
-        expectedCatalogRevision: catalogRevision
-      });
-      setNewCategoryName("");
-      await refreshEventMenuData(selectedEventType);
-      setSelectedCategory(created.id);
-      acceptedCatalogRevisionRef.current = created.catalogRevision;
-      onCatalogMutation?.(created);
-      setStatus(`Category "${created.name}" added.`);
-      pushToast(`Category "${created.name}" added.`, "success");
-    } catch (err) {
-      setStatus(err?.message || "Failed to create category.");
-      pushToast(err?.message || "Failed to create category.", "error");
-    } finally {
-      setMenuActionLoading(false);
-    }
+    const id = createCatalogSetupRequestId("menu_section");
+    const created = { id, eventTypeId: selectedEventType, name, active: true };
+    setMenuCategories((current) => [...current, created]);
+    setSelectedCategory(id);
+    setNewCategoryName("");
+    catalogSetupDraft.queueChanges([{ collection: "menuCategories", recordId: id, intent: "create", payload: { eventTypeId: selectedEventType, name, active: true } }]);
+    setStatus(`Menu section "${name}" added to the setup draft.`);
+    pushToast(`Menu section "${name}" added to the setup draft.`, "success");
   };
 
   const handleUpdateEventType = async () => {
@@ -1407,65 +1505,38 @@ export function AdminCatalogView({
     }
     if (blockForOtherDrafts("event-rename")) return;
 
-    setMenuActionLoading(true);
-    try {
-      const updated = await updateEventType(selectedEventType, {
-        name,
-        organizationId: scopedOrganizationId,
-        expectedCatalogRevision: catalogRevision
-      });
-      await refreshEventTypes(selectedEventType);
-      acceptedCatalogRevisionRef.current = updated.catalogRevision;
-      onCatalogMutation?.(updated);
-      setStatus("Event type updated.");
-      pushToast("Event type updated.", "success");
-    } catch (err) {
-      setStatus(err?.message || "Failed to update event type.");
-      pushToast(err?.message || "Failed to update event type.", "error");
-    } finally {
-      setMenuActionLoading(false);
-    }
+    setMenuEventTypes((current) => current.map((item) => item.id === selectedEventType ? { ...item, name } : item));
+    setEventTypeRenameTouched(false);
+    catalogSetupDraft.queueChanges([{ collection: "eventTypes", recordId: selectedEventType, intent: stagedIntentFor("eventTypes", selectedEventType, "update"), payload: { name, active: true } }]);
+    setStatus("Event type updated in the setup draft.");
+    pushToast("Event type updated in the setup draft.", "success");
   };
 
   const handleUpdateCategory = async () => {
     if (blockForNewerCatalog()) return;
     if (!selectedEventType || !selectedCategory) {
-      setStatus("Choose event type and category first.");
+      setStatus("Choose an event type and menu section first.");
       return;
     }
     const name = String(categoryEditName || "").trim();
     if (!name) {
-      setStatus("Category name cannot be empty.");
+      setStatus("Menu section name cannot be empty.");
       return;
     }
     if (blockForOtherDrafts("category-rename")) return;
 
-    setMenuActionLoading(true);
-    try {
-      const updated = await updateCategory(selectedCategory, {
-        name,
-        eventTypeId: selectedEventType,
-        organizationId: scopedOrganizationId,
-        expectedCatalogRevision: catalogRevision
-      });
-      await refreshEventMenuData(selectedEventType);
-      acceptedCatalogRevisionRef.current = updated.catalogRevision;
-      onCatalogMutation?.(updated);
-      setStatus("Category updated.");
-      pushToast("Category updated.", "success");
-    } catch (err) {
-      setStatus(err?.message || "Failed to update category.");
-      pushToast(err?.message || "Failed to update category.", "error");
-    } finally {
-      setMenuActionLoading(false);
-    }
+    setMenuCategories((current) => current.map((item) => item.id === selectedCategory ? { ...item, name } : item));
+    setCategoryRenameTouched(false);
+    catalogSetupDraft.queueChanges([{ collection: "menuCategories", recordId: selectedCategory, intent: stagedIntentFor("menuCategories", selectedCategory, "update"), payload: { eventTypeId: selectedEventType, name, active: true } }]);
+    setStatus("Menu section updated in the setup draft.");
+    pushToast("Menu section updated in the setup draft.", "success");
   };
 
   const handleCreateMenuItem = async () => {
     if (blockForNewerCatalog()) return;
     const name = String(newItemDraft.name || "").trim();
     if (!selectedEventType || !selectedCategory) {
-      setStatus("Choose event type and category before adding an item.");
+      setStatus("Choose an event type and menu section before adding an item.");
       return;
     }
     if (!name) {
@@ -1473,30 +1544,15 @@ export function AdminCatalogView({
       return;
     }
     if (blockForOtherDrafts("item-create", "", { includeCatalogDraft: false })) return;
-    setMenuActionLoading(true);
-    try {
-      const created = await createMenuItem({
-        eventTypeId: selectedEventType,
-        categoryId: selectedCategory,
-        name,
-        price: Number(newItemDraft.price || 0),
-        pricingType: normalizePricingType(newItemDraft.pricingType, "per_event"),
-        active: newItemDraft.active !== false,
-        organizationId: scopedOrganizationId,
-        expectedCatalogRevision: catalogRevision
-      });
-      setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
-      await refreshEventMenuData(selectedEventType);
-      acceptedCatalogRevisionRef.current = created.catalogRevision;
-      onCatalogMutation?.(created);
-      setStatus("Menu item added.");
-      pushToast("Menu item added.", "success");
-    } catch (err) {
-      setStatus(err?.message || "Failed to add menu item.");
-      pushToast(err?.message || "Failed to add menu item.", "error");
-    } finally {
-      setMenuActionLoading(false);
-    }
+    const id = createCatalogSetupRequestId("menu_item");
+    const pricingType = normalizePricingType(newItemDraft.pricingType, "per_event");
+    const created = { id, eventTypeId: selectedEventType, categoryId: selectedCategory, name, price: Number(newItemDraft.price || 0), cost: newItemDraft.cost === "" ? null : Number(newItemDraft.cost), pricingType, type: pricingType, active: newItemDraft.active !== false };
+    setMenuItems((current) => [...current, created]);
+    setMenuItemBaselines((current) => ({ ...current, [id]: created }));
+    setNewItemDraft({ name: "", price: 0, cost: "", pricingType: "per_event", active: true });
+    catalogSetupDraft.queueChanges([{ collection: "menuItems", recordId: id, intent: "create", payload: { name, eventTypeId: selectedEventType, categoryId: selectedCategory, priceMinor: Math.round(created.price * 100), costMinor: created.cost === null ? null : Math.round(created.cost * 100), pricingType, type: pricingType, active: created.active } }]);
+    setStatus("Menu item added to the setup draft.");
+    pushToast("Menu item added to the setup draft.", "success");
   };
 
   const patchManagedMenuItem = (id, field, value) => {
@@ -1522,103 +1578,47 @@ export function AdminCatalogView({
   const handleUpdateManagedMenuItem = async (item) => {
     if (blockForNewerCatalog()) return;
     const itemId = String(item?.id || "").trim();
-    if (!itemId || menuItemSaveInFlightRef.current.has(itemId)) return;
-    if (
-      item?.active === false
-      && blockManagedMenuMutationForDraft("deactivate", itemId)
-    ) {
-      const baseline = menuItemBaselines[itemId];
-      if (baseline) {
-        const revertedItem = { ...item, active: baseline.active !== false };
-        const stillDirty = (
-          String(revertedItem.name || "").trim() !== String(baseline.name || "").trim()
-          || Number(revertedItem.price || 0) !== Number(baseline.price || 0)
-          || normalizePricingType(revertedItem.pricingType || revertedItem.type, "per_event")
-            !== normalizePricingType(baseline.pricingType || baseline.type, "per_event")
-        );
-        setMenuItems((prev) => prev.map((entry) => (
-          entry.id === itemId ? revertedItem : entry
-        )));
-        setMenuItemDirty((prev) => {
-          const next = { ...prev };
-          if (stillDirty) next[itemId] = true;
-          else delete next[itemId];
-          return next;
-        });
-      }
-      return;
-    }
-    if (blockForOtherDrafts("item-update", itemId)) return;
-    menuItemSaveInFlightRef.current.add(itemId);
-    setMenuItemSavingId(itemId);
-    try {
-      const pricingType = normalizePricingType(item.pricingType || item.type, "per_event");
-      const nextPayload = {
-        name: String(item.name || "").trim() || "Untitled Item",
-        price: Number(item.price || 0),
+    if (!itemId) return;
+    const baseline = menuItemBaselines[itemId];
+    const pricingType = normalizePricingType(item.pricingType || item.type, "per_event");
+    const normalized = {
+      ...item,
+      name: String(item.name || "").trim() || "Untitled Item",
+      eventTypeId: selectedEventType || item.eventTypeId,
+      categoryId: item.categoryId || selectedCategory,
+      price: Number(item.price || 0),
+      cost: item.cost === "" || item.cost === null || item.cost === undefined ? null : Number(item.cost),
+      pricingType,
+      type: pricingType,
+      active: item.active !== false
+    };
+    catalogSetupDraft.queueChanges([{
+      collection: "menuItems",
+      recordId: itemId,
+      intent: stagedIntentFor(
+        "menuItems",
+        itemId,
+        baseline ? (normalized.active ? "update" : "deactivate") : "create"
+      ),
+      payload: {
+        name: normalized.name,
+        eventTypeId: normalized.eventTypeId,
+        categoryId: normalized.categoryId,
+        priceMinor: Math.round(normalized.price * 100),
+        costMinor: normalized.cost === null ? null : Math.round(normalized.cost * 100),
         pricingType,
-        active: item.active !== false
-      };
-      const updated = await updateMenuItem(item.id, {
-        ...nextPayload,
-        eventTypeId: selectedEventType,
-        categoryId: selectedCategory || item.categoryId,
-        organizationId: scopedOrganizationId,
-        expectedCatalogRevision: catalogRevision
-      });
-      setMenuItems((prev) =>
-        prev.map((entry) =>
-          entry.id === itemId
-            ? {
-              ...entry,
-              ...nextPayload,
-              type: pricingType
-            }
-            : entry
-        )
-      );
-      setMenuItemBaselines((prev) => ({
-        ...prev,
-        [itemId]: {
-          ...(prev[itemId] || item),
-          ...nextPayload,
-          type: pricingType
-        }
-      }));
-      setMenuItemDirty((prev) => {
-        const next = { ...prev };
-        delete next[itemId];
-        return next;
-      });
-      acceptedCatalogRevisionRef.current = updated.catalogRevision;
-      if (updated?.authoritativeMutation) onReload?.({ background: true });
-      else onCatalogMutation?.(updated);
-      const successMessage = updated?.authoritativeMutation
-        ? "Menu item deactivated. Pricing review reopened for the new catalog revision."
-        : "Menu item updated.";
-      setStatus(successMessage);
-      pushToast(successMessage, "success");
-    } catch (err) {
-      const revisionConflict = isMenuCatalogRevisionConflict(err);
-      const errorMessage = revisionConflict
-        ? `${err?.message || "Catalog revision changed."} Refreshing the latest catalog before retry.`
-        : err?.message || "Failed to update menu item.";
-      if (revisionConflict) onReload?.({ background: true });
-      setStatus(errorMessage);
-      const baseline = menuItemBaselines[itemId];
-      if (baseline) {
-        setMenuItems((prev) => prev.map((entry) => (entry.id === itemId ? { ...baseline } : entry)));
+        type: pricingType,
+        active: normalized.active
       }
-      setMenuItemDirty((prev) => {
-        const next = { ...prev };
-        delete next[itemId];
-        return next;
-      });
-      pushToast(errorMessage, "error");
-    } finally {
-      menuItemSaveInFlightRef.current.delete(itemId);
-      setMenuItemSavingId("");
-    }
+    }]);
+    setMenuItems((current) => current.map((entry) => entry.id === itemId ? normalized : entry));
+    setMenuItemBaselines((current) => ({ ...current, [itemId]: normalized }));
+    setMenuItemDirty((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
+    setStatus("Menu item added to the shared setup draft.");
   };
 
   const handleManagedMenuItemBlur = (itemId) => {
@@ -1676,27 +1676,27 @@ export function AdminCatalogView({
       pushToast(message, "error");
       return;
     }
-    setMenuActionLoading(true);
-    try {
-      const deleted = await deleteMenuItem(id, {
-        organizationId: scopedOrganizationId,
-        expectedCatalogRevision: catalogRevision
-      });
-      acceptedCatalogRevisionRef.current = deleted.catalogRevision;
-      onReload?.({ background: true });
-      setStatus("Menu item deleted. Pricing review reopened for the new catalog revision.");
-      pushToast("Menu item deleted. Pricing review reopened for the new catalog revision.", "success");
-    } catch (err) {
-      const revisionConflict = isMenuCatalogRevisionConflict(err);
-      const errorMessage = revisionConflict
-        ? `${err?.message || "Catalog revision changed."} Refreshing the latest catalog before retry.`
-        : err?.message || "Failed to delete menu item.";
-      if (revisionConflict) onReload?.({ background: true });
-      setStatus(errorMessage);
-      pushToast(errorMessage, "error");
-    } finally {
-      setMenuActionLoading(false);
-    }
+    const item = menuItems.find((entry) => entry.id === id);
+    if (!item) return;
+    const pricingType = normalizePricingType(item.pricingType || item.type, "per_event");
+    catalogSetupDraft.queueChanges([{
+      collection: "menuItems",
+      recordId: id,
+      intent: stagedIntentFor("menuItems", id, "deactivate"),
+      payload: {
+        name: item.name,
+        eventTypeId: item.eventTypeId || selectedEventType,
+        categoryId: item.categoryId || selectedCategory,
+        priceMinor: Math.round(Number(item.price || 0) * 100),
+        costMinor: item.cost === null || item.cost === undefined || item.cost === "" ? null : Math.round(Number(item.cost) * 100),
+        pricingType,
+        type: pricingType,
+        active: false
+      }
+    }]);
+    setMenuItems((current) => current.map((entry) => entry.id === id ? { ...entry, active: false } : entry));
+    setStatus("Menu item made unavailable in the setup draft. Active quotes are unchanged.");
+    pushToast("Menu item made unavailable in the setup draft.", "success");
   };
 
   const handleLogoUpload = async (file) => {
@@ -1748,47 +1748,25 @@ export function AdminCatalogView({
       return;
     }
     try {
-      const serviceFeeTiers = parseJsonArray("serviceFeeTiers", "Service Fee Tiers JSON");
-      const taxRegions = parseJsonArray("taxRegions", "Tax Regions JSON");
-      const eventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
-      const seasonalProfiles = parseJsonArray("seasonalProfiles", "Seasonal Profiles JSON");
-      const brandCrew = parseJsonArray("brandCrew", "Brand Crew JSON");
-      const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
-      const normalizedFeatureFlags = {
-        ...(draft.settings?.featureFlags || {})
-      };
-      if (!featureFlagsLocked && normalizedFeatureFlags.aiAssist === false) {
-        normalizedFeatureFlags.aiAutopilot = false;
-      }
-
-      const nextDraft = {
-        ...draft,
-        settings: {
-          ...draft.settings,
-          featureFlags: normalizedFeatureFlags,
-          brandLogoUrl: normalizeBrandLogoUrl(draft.settings?.brandLogoUrl),
-          documentFontScale: normalizeProposalDocumentFontScale(draft.settings?.documentFontScale).id,
-          serviceFeeTiers,
-          taxRegions,
-          eventTemplates,
-          seasonalProfiles,
-          brandCrew
-        }
-      };
-
-      const result = await onSave(nextDraft);
-      if (result.ok) {
-        setCatalogRefreshRequired(false);
-        setDraft(nextDraft);
-        setSavedCatalogSnapshot(cloneCatalogSnapshot(nextDraft));
-        setSavedFingerprint(catalogDraftFingerprint(nextDraft, jsonDrafts));
-        setStatus("Catalog saved.");
-        pushToast("Catalog saved.", "success");
+      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const normalizedBaseline = buildPersistableCatalogDraft(
+        savedCatalogSnapshot,
+        buildJsonDrafts(savedCatalogSnapshot)
+      );
+      const changes = buildCatalogSetupChanges({
+        catalog: nextDraft,
+        baselineCatalog: normalizedBaseline,
+        serverFingerprints: catalog?.serverFingerprints || {}
+      });
+      if (changes.length === 0) {
+        setStatus("No unpublished catalog changes.");
         return;
       }
-      setCatalogRefreshRequired(result?.refreshRequired === true);
-      setStatus(result.error || "Save failed.");
-      pushToast(result.error || "Save failed.", "error");
+      catalogSetupDraft.queueChanges(changes);
+      await catalogSetupDraft.syncNow();
+      setCatalogRefreshRequired(false);
+      setStatus("Catalog draft saved. Active pricing is unchanged until publication.");
+      pushToast("Catalog draft saved. Active pricing is unchanged until publication.", "success");
     } catch (err) {
       setStatus(err?.message || "Invalid JSON in advanced settings.");
       pushToast(err?.message || "Invalid JSON in advanced settings.", "error");
@@ -1804,19 +1782,59 @@ export function AdminCatalogView({
   // refresh is "recovery"; anything else non-empty while idle is a plain "error".
   const catalogSaveCapabilityState = saving
     ? "submitting"
-    : status === "Catalog saved."
-      ? "receipt"
-      : catalogRefreshRequired
-        ? "recovery"
-        : status.includes("pricing is not confirmed for that revision")
-          ? "uncertain"
-          : status.includes("Catalog changed while the save was in progress")
-            ? "reconciliation"
-            : status && status !== "Your changes are not saved yet." && status !== "All changes saved."
-              ? "error"
-              : "ready";
+    : catalogDraftCapabilityState(catalogSetupDraft);
+  const catalogEditorStateLabel = saving || catalogSetupDraft.status === "saving"
+    ? "Saving draft…"
+    : catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
+      ? "Device-only changes"
+      : hasAnyUnsavedChanges
+        ? "Unsaved changes"
+        : Number(catalogSetupDraft.changedRecordCount || 0) > 0
+          ? "Draft saved"
+          : "Published catalog active";
+  const menuItemDraftStateLabel = (itemId) => {
+    if (menuItemSavingId === itemId) return "Saving draft…";
+    if (menuItemDirty[itemId]) return "Unsaved";
+    const staged = catalogSetupDraftChanges.some((change) => (
+      change.collection === "menuItems" && change.recordId === itemId
+    ));
+    if (staged && catalogSetupDraft.deviceOnly) return "Device-only";
+    if (staged) return "Draft saved";
+    return "Published";
+  };
+  const catalogFooterStatus = catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
+    ? catalogSetupDraft.label
+    : status || (hasAnyUnsavedChanges
+      ? "Your changes are not saved yet."
+      : Number(catalogSetupDraft.changedRecordCount || 0) > 0
+        ? "Catalog draft saved. Active pricing is unchanged until publication."
+        : "Published catalog is active.");
 
-  const selectedCategoryItems = menuItems.filter((item) => item.categoryId === selectedCategory);
+  const normalizedMenuSearch = String(menuSearch || "").trim().toLowerCase();
+  const selectedCategoryItems = menuItems.filter((item) => (
+    item.categoryId === selectedCategory
+    && (showUnavailableMenuItems || item.active !== false)
+    && (!normalizedMenuSearch || `${item.name || ""} ${item.id || ""}`.toLowerCase().includes(normalizedMenuSearch))
+  ));
+  const applyBulkMenuChange = ({ active, categoryId } = {}) => {
+    const selected = menuItems.filter((item) => selectedMenuItemIds.includes(item.id));
+    if (!selected.length) return;
+    if (categoryId && !menuCategories.some((section) => section.id === categoryId)) {
+      setStatus("Choose an available menu section before moving items.");
+      return;
+    }
+    selected.forEach((item) => {
+      void handleUpdateManagedMenuItem({
+        ...item,
+        ...(typeof active === "boolean" ? { active } : {}),
+        ...(categoryId ? { categoryId } : {})
+      });
+    });
+    setSelectedMenuItemIds([]);
+    setStatus(categoryId
+      ? `${selected.length} item(s) moved in the setup draft; stable item identities were preserved.`
+      : `${selected.length} item availability changes added to the setup draft.`);
+  };
   const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
   const featureFlagsPaid = Array.isArray(draft.settings?.featureFlagsPaid)
     ? draft.settings.featureFlagsPaid.map((value) => String(value || "").trim()).filter(Boolean)
@@ -1900,22 +1918,6 @@ export function AdminCatalogView({
   const targetMarginPct = Number.isFinite(targetMarginCandidate) && targetMarginCandidate >= 0 && targetMarginCandidate <= 1
     ? targetMarginCandidate
     : null;
-  const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
-  const visibleAdminTabs = starterChoiceOnly
-    ? ADMIN_TABS.filter((tab) => tab.id === "starter")
-    : ADMIN_TABS.filter(
-      (tab) => tab.id !== "starter"
-        || showStarterTab
-    );
-  const hasActiveVisibleTab = visibleAdminTabs.some((tab) => tab.id === activeTab);
-  const resolvedActiveTab = hasActiveVisibleTab ? activeTab : (visibleAdminTabs[0]?.id || "");
-  const packageWorkspaceActive = resolvedActiveTab === "packages" && !starterChoiceOnly;
-  useEffect(() => {
-    if (open && !hasActiveVisibleTab && resolvedActiveTab && activeTab !== resolvedActiveTab) {
-      setActiveTab(resolvedActiveTab);
-    }
-  }, [open, hasActiveVisibleTab, resolvedActiveTab, activeTab]);
-
   const handleReload = () => {
     if (pendingCatalogEvidenceRef.current) {
       if (!window.confirm("Discard unsaved Library changes and load the newer version?")) {
@@ -1950,7 +1952,11 @@ export function AdminCatalogView({
       setCategoryEditName("");
       setEventTypeRenameTouched(false);
       setCategoryRenameTouched(false);
-      setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
+      setNewItemDraft({ name: "", price: 0, cost: "", pricingType: "per_event", active: true });
+      setMenuSearch("");
+      setShowUnavailableMenuItems(false);
+      setSelectedMenuItemIds([]);
+      setBulkTargetSection("");
       setCatalogRefreshRequired(false);
       setStatus("The latest Library version is loaded. Review it before making changes.");
       onInteractionStateChange?.({ dirty: false, busy: false });
@@ -1981,16 +1987,16 @@ export function AdminCatalogView({
           <h2 id="catalog-admin-title">{surfaceTitle}</h2>
           <div className="admin-save-actions">
             <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
-              {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
+              {catalogEditorStateLabel}
             </span>
-            {!starterChoiceOnly && !packageWorkspaceActive && (
+            {!starterChoiceOnly && !packageWorkspaceActive && (saving || hasUnsavedChanges) && (
               <button
                 type="button"
                 className="cta"
                 onClick={handleSave}
                 disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
               >
-                {saving ? "Saving..." : "Save catalog changes"}
+                {saving ? "Saving..." : "Sync draft now"}
               </button>
             )}
             <button
@@ -2004,6 +2010,21 @@ export function AdminCatalogView({
             </button>
           </div>
         </div>
+
+        <CatalogDraftStateBar
+          draftState={catalogSetupDraft}
+          disabled={saving || menuActionLoading}
+          onRetry={catalogSetupDraft.retry}
+          onReview={catalogSetupDraft.review}
+          onPublish={async () => {
+            const receipt = await catalogSetupDraft.publish();
+            acceptedCatalogRevisionRef.current = receipt.catalogRevisionAfter;
+            setStatus(`Catalog revision ${receipt.catalogRevisionAfter} published and pricing confirmed.`);
+            pushToast(`Catalog revision ${receipt.catalogRevisionAfter} published.`, "success");
+            onReload?.({ background: true });
+            return receipt;
+          }}
+        />
 
         <div className="admin-tabs" role="tablist" aria-label="Catalog admin sections">
           {visibleAdminTabs.map((tab) => (
@@ -2033,7 +2054,7 @@ export function AdminCatalogView({
 
         {pricingReviewRequired && (
           <div className="starter-pack-review-banner" role="status">
-            <strong>{stagedPack.name || "Starter pack"} is a draft.</strong>
+            <strong>{stagedPack.name || "Setup preset"} is a draft.</strong>
             <span> Suggested prices are not active until an admin reviews the complete catalog and confirms pricing.</span>
           </div>
         )}
@@ -2041,7 +2062,7 @@ export function AdminCatalogView({
         {existingContentRequiresManualSetup && (
           <div className="starter-pack-review-banner" role="status">
             <strong>Existing catalog records were found.</strong>
-            <span> To protect them, starter packs only populate a blank catalog. Continue editing this catalog, or close and choose Import Studio.</span>
+            <span> Setup presets are staged intent. Continue editing this catalog, or close and choose Import Studio.</span>
           </div>
         )}
 
@@ -2049,7 +2070,7 @@ export function AdminCatalogView({
           <div className="starter-pack-review-banner" role="alert">
             <div>
               <strong>This confirmed catalog has no menu.</strong>
-              <span> Choose a starter pack to add only missing catalog records. Existing records and pricing settings stay unchanged, and pricing must be confirmed again after recovery.</span>
+              <span> Choose a setup preset to add missing records to the shared draft. Active pricing stays unchanged until review and publication.</span>
             </div>
             <button type="button" className="cta" onClick={() => setActiveTab("starter")}>
               Choose a recovery pack
@@ -2163,9 +2184,9 @@ export function AdminCatalogView({
             <div className="package-workspace-savebar">
               <div>
                 <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
-                  {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "All changes saved"}
+                  {catalogEditorStateLabel}
                 </span>
-                <small>Saving persists the whole catalog draft. Package edits stay staged until this save runs.</small>
+                <small>Edits auto-save as staged intent. Publication is the only action that activates pricing.</small>
               </div>
               {(saving || hasUnsavedChanges) && (
                 <button
@@ -2174,7 +2195,7 @@ export function AdminCatalogView({
                   onClick={handleSave}
                   disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
                 >
-                  {saving ? "Saving..." : "Save catalog changes"}
+                  {saving ? "Saving..." : "Sync draft now"}
                 </button>
               )}
             </div>
@@ -2209,9 +2230,9 @@ export function AdminCatalogView({
                   patchArrayItem("addons", i, "type", pricingType);
                 }}
               >
-                <option value="per_person">per_person</option>
-                <option value="per_item">per_item</option>
-                <option value="per_event">per_event</option>
+                <option value="per_person">Per guest</option>
+                <option value="per_item">Per item</option>
+                <option value="per_event">Per event</option>
               </select>
               <input type="number" value={item.price} onChange={(e) => patchArrayItem("addons", i, "price", Number(e.target.value))} />
               {PILOT_MARGINS_ENABLED && (
@@ -2264,9 +2285,9 @@ export function AdminCatalogView({
                   patchArrayItem("rentals", i, "type", pricingType);
                 }}
               >
-                <option value="per_item">per_item</option>
-                <option value="per_person">per_person</option>
-                <option value="per_event">per_event</option>
+                <option value="per_item">Per item</option>
+                <option value="per_person">Per guest</option>
+                <option value="per_event">Per event</option>
               </select>
               <input type="number" value={item.price} onChange={(e) => patchArrayItem("rentals", i, "price", Number(e.target.value))} />
               {PILOT_MARGINS_ENABLED && (
@@ -2308,7 +2329,7 @@ export function AdminCatalogView({
 
         {resolvedActiveTab === "menu" && (
           <section className="admin-section">
-          <div className="admin-section-head"><h3>Menu Management</h3></div>
+          <div className="admin-section-head"><h3>Menu Builder</h3><span>Event type → Menu section → Item</span></div>
           <div className="admin-section-body">
             <div className="admin-menu-management-grid">
               <label>
@@ -2361,13 +2382,13 @@ export function AdminCatalogView({
 
             <div className="admin-menu-management-grid">
               <label>
-                Category
+                Menu section
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   disabled={!selectedEventType || menuLoading}
                 >
-                  <option value="">Choose category</option>
+                  <option value="">Choose menu section</option>
                   {menuCategories.map((category) => (
                     <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
@@ -2376,8 +2397,8 @@ export function AdminCatalogView({
               <div className="admin-inline-actions">
                 <input
                   type="text"
-                  placeholder="Edit selected category"
-                  aria-label="Selected category name"
+                  placeholder="Edit selected menu section"
+                  aria-label="Selected menu section name"
                   value={categoryEditName}
                   onChange={(e) => {
                     setCategoryEditName(e.target.value);
@@ -2391,20 +2412,20 @@ export function AdminCatalogView({
                   onClick={handleUpdateCategory}
                   disabled={menuActionLoading || !selectedCategory}
                 >
-                  {menuActionLoading ? "Saving..." : "Save Category"}
+                  {menuActionLoading ? "Saving..." : "Save Menu Section"}
                 </button>
               </div>
               <div className="admin-inline-actions">
                 <input
                   type="text"
-                  placeholder="New category"
-                  aria-label="New category name"
+                  placeholder="New menu section"
+                  aria-label="New menu section name"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   disabled={!selectedEventType}
                 />
                 <button type="button" className="ghost compact" onClick={handleCreateCategory} disabled={menuActionLoading || !selectedEventType}>
-                  {menuActionLoading ? "Saving..." : "Add Category"}
+                  {menuActionLoading ? "Saving..." : "Add Menu Section"}
                 </button>
               </div>
             </div>
@@ -2426,8 +2447,18 @@ export function AdminCatalogView({
                 onChange={(e) => setNewItemDraft((prev) => ({ ...prev, price: Number(e.target.value) }))}
                 disabled={!selectedCategory}
               />
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Cost"
+                aria-label="New menu item cost"
+                value={newItemDraft.cost}
+                onChange={(e) => setNewItemDraft((prev) => ({ ...prev, cost: e.target.value }))}
+                disabled={!selectedCategory}
+              />
               <select
-                aria-label="New menu item pricing type"
+                aria-label="New menu item price basis"
                 value={newItemDraft.pricingType}
                 onChange={(e) =>
                   setNewItemDraft((prev) => ({
@@ -2437,9 +2468,9 @@ export function AdminCatalogView({
                 }
                 disabled={!selectedCategory}
               >
-                <option value="per_event">per_event</option>
-                <option value="per_person">per_person</option>
-                <option value="per_item">per_item</option>
+                <option value="per_event">Per event</option>
+                <option value="per_person">Per guest</option>
+                <option value="per_item">Per item</option>
               </select>
               <label className="admin-inline-toggle">
                 <span>Active</span>
@@ -2455,13 +2486,37 @@ export function AdminCatalogView({
               </button>
             </div>
 
+            <div className="admin-menu-builder-tools" aria-label="Menu Builder tools">
+              <input
+                type="search"
+                aria-label="Search menu items"
+                placeholder="Search items"
+                value={menuSearch}
+                onChange={(event) => setMenuSearch(event.target.value)}
+              />
+              <label className="admin-inline-toggle"><span>Show unavailable</span><input type="checkbox" checked={showUnavailableMenuItems} onChange={(event) => setShowUnavailableMenuItems(event.target.checked)} /></label>
+              <button type="button" className="ghost compact" disabled={!selectedMenuItemIds.length} onClick={() => applyBulkMenuChange({ active: true })}>Make available</button>
+              <button type="button" className="ghost compact" disabled={!selectedMenuItemIds.length} onClick={() => applyBulkMenuChange({ active: false })}>Make unavailable</button>
+              <select aria-label="Move selected items to menu section" value={bulkTargetSection} onChange={(event) => setBulkTargetSection(event.target.value)}>
+                <option value="">Move to menu section…</option>
+                {menuCategories.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
+              </select>
+              <button type="button" className="ghost compact" disabled={!selectedMenuItemIds.length || !bulkTargetSection} onClick={() => applyBulkMenuChange({ categoryId: bulkTargetSection })}>Move selected</button>
+            </div>
+
             {menuLoading && <p className="source-note">Loading menu data...</p>}
             {!menuLoading && selectedCategory && selectedCategoryItems.length === 0 && (
-              <p className="source-note">No menu items in this category yet.</p>
+              <p className="source-note">No menu items match this section and filter.</p>
             )}
 
             {!menuLoading && selectedCategoryItems.map((item) => (
               <div className="admin-menu-row admin-menu-row-managed" key={item.id}>
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${item.name || "menu item"}`}
+                  checked={selectedMenuItemIds.includes(item.id)}
+                  onChange={(event) => setSelectedMenuItemIds((current) => event.target.checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))}
+                />
                 <input aria-label={`${item.name || "Menu item"} ID`} value={item.id || ""} disabled />
                 <input
                   type="text"
@@ -2472,15 +2527,15 @@ export function AdminCatalogView({
                   onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
                 />
                 <select
-                  aria-label={`${item.name || "Menu item"} pricing type`}
+                  aria-label={`${item.name || "Menu item"} price basis`}
                   value={item.pricingType || item.type || "per_event"}
                   onChange={(e) => patchManagedMenuItem(item.id, "pricingType", e.target.value)}
                   onBlur={() => handleManagedMenuItemBlur(item.id)}
                   onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
                 >
-                  <option value="per_event">per_event</option>
-                  <option value="per_person">per_person</option>
-                  <option value="per_item">per_item</option>
+                  <option value="per_event">Per event</option>
+                  <option value="per_person">Per guest</option>
+                  <option value="per_item">Per item</option>
                 </select>
                 <input
                   type="number"
@@ -2488,6 +2543,17 @@ export function AdminCatalogView({
                   aria-label={`${item.name || "Menu item"} price`}
                   value={Number(item.price || 0)}
                   onChange={(e) => patchManagedMenuItem(item.id, "price", e.target.value)}
+                  onBlur={() => handleManagedMenuItemBlur(item.id)}
+                  onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Cost"
+                  aria-label={`${item.name || "Menu item"} cost`}
+                  value={item.cost ?? ""}
+                  onChange={(e) => patchManagedMenuItem(item.id, "cost", e.target.value)}
                   onBlur={() => handleManagedMenuItemBlur(item.id)}
                   onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
                 />
@@ -2501,7 +2567,7 @@ export function AdminCatalogView({
                   />
                 </label>
                 <span className="admin-row-state">
-                  {menuItemSavingId === item.id ? "Saving..." : (menuItemDirty[item.id] ? "Unsaved" : "Saved")}
+                  {menuItemDraftStateLabel(item.id)}
                 </span>
                 <button
                   type="button"
@@ -3240,21 +3306,21 @@ export function AdminCatalogView({
 
         <div className="modal-foot" data-capability-state={catalogSaveCapabilityState}>
           <span className="source-note" role="status" aria-live="polite">
-            {status || (hasAnyUnsavedChanges ? "Your changes are not saved yet." : "All changes saved.")}
+            {catalogFooterStatus}
           </span>
           {catalogRefreshRequired && (
             <button type="button" className="ghost" onClick={handleReload} disabled={closeBlocked}>
               Refresh latest catalog
             </button>
           )}
-          {!starterChoiceOnly && !packageWorkspaceActive && (
+          {!starterChoiceOnly && !packageWorkspaceActive && (saving || hasUnsavedChanges) && (
             <button
               type="button"
               className="cta"
               onClick={handleSave}
               disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
             >
-              {saving ? "Saving..." : "Save catalog changes"}
+              {saving ? "Saving..." : "Sync draft now"}
             </button>
           )}
         </div>

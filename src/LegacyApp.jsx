@@ -14,6 +14,7 @@ import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import CatalogReadNotice from "./components/CatalogReadNotice";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import {
   createRecoverableLazy,
@@ -1214,6 +1215,7 @@ function LegacyAppCore({
   // return to a pristine new-quote route. New drafts only — an edit session
   // always has its saved canonical revision — and cleared on save/discard.
   const [draftRecoveryOffer, setDraftRecoveryOffer] = useState(null);
+  const [draftRecoveryResumed, setDraftRecoveryResumed] = useState(false);
   const draftRecoveryStorageKey = draftRecoveryKey({ organizationId: authSession.organizationId });
 
   useEffect(() => {
@@ -1242,6 +1244,7 @@ function LegacyAppCore({
     if (!draftRecoveryOffer) return;
     setForm({ ...INITIAL_FORM, ...draftRecoveryOffer.form });
     setQuoteDirty(true);
+    setDraftRecoveryResumed(true);
     setDraftRecoveryOffer(null);
   };
 
@@ -2900,6 +2903,7 @@ function LegacyAppCore({
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote(EMPTY_EDITING_QUOTE);
+    setDraftRecoveryResumed(false);
     resetChangeImpactPreview();
     setQuoteDirty(false);
     setForm({
@@ -3258,13 +3262,14 @@ function LegacyAppCore({
     return (
       <main className="auth-shell container">
         <WorkspaceStatusCard>
-          <h1>Your Catalog Connection Needs Attention</h1>
-          <p className="muted">
-            Firebase catalog access is required in this environment.
-          </p>
-          <p className="source-note">{catalog.error || "Configure Firebase credentials and reload."}</p>
+          <CatalogReadNotice
+            canContinue={false}
+            loading={catalog.loading}
+            onRetry={catalog.reload}
+            headingLevel={1}
+            titleId="catalog-blocked-title"
+          />
           <div className="auth-actions">
-            <button type="button" className="cta" onClick={catalog.reload}>Retry Catalog</button>
             <button type="button" className="ghost" onClick={() => window.location.reload()}>Reload Workspace</button>
             <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
@@ -3409,7 +3414,6 @@ function LegacyAppCore({
           Editing quote {editingQuote.quoteNumber}. Saving updates this quote (with version history) and keeps labor rates locked by snapshot.
         </p>
       )}
-      {catalog.error && <p className="error-note">{catalog.error}</p>}
       {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
       {availabilityBlock && (
         <article className="warning-note availability-recovery" role="alert">
@@ -3447,6 +3451,16 @@ function LegacyAppCore({
       {submitState.message && <p className="source-note">{submitState.message}</p>}
     </>
   );
+
+  const catalogReadNotice = catalog.error ? (
+    <CatalogReadNotice
+      canContinue
+      loading={catalog.loading}
+      onRetry={catalog.reload}
+      headingLevel={2}
+      titleId="quote-builder-catalog-read-title"
+    />
+  ) : null;
 
   // "What will this change affect?" — the server-checked impact preview for a
   // saved quote being edited. Shared so it renders identically in the
@@ -4158,6 +4172,10 @@ function LegacyAppCore({
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
         {PILOT_COMMAND_ENABLED && (
+          Boolean(editingQuote.id)
+          || Object.keys(touchedFields).length > 0
+          || draftRecoveryResumed
+        ) && (
           <PilotCommandBar
             form={form}
             catalog={catalog}
@@ -4215,6 +4233,7 @@ function LegacyAppCore({
             }
           />
         )}
+        {catalogReadNotice}
         {proposalComposerSurface}
         {!proposalComposerActive && (
         <>
@@ -4548,8 +4567,8 @@ function LegacyAppCore({
             currentUserRole={authSession.role}
             tenantTimeZone={tenantTimeZone}
             focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
-            focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
-            focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
+            focusAction={historyTarget.action}
+            focusReason={historyTarget.reason}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
@@ -4601,9 +4620,10 @@ function LegacyAppCore({
                   : `Execute approved ${actionLabel}`,
                 returnFocus: "workflow"
               });
-              navigateWorkspace(buildQuotePath(quoteId));
+              navigateWorkspace(WORKSPACE_PATHS.quotes);
             }}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onStartQuote={handleGetInstantQuote}
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}

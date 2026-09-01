@@ -1,6 +1,6 @@
 # Preliminary Threat Model: QuotePilot Steward
 
-Last updated: 2026-08-25 00:38:30 CDT
+Last updated: 2026-08-21 00:06:22 CDT
 
 Status: Accepted for implementation planning; owner context recorded
 Date: August 15, 2026

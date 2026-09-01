@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import React, { act, createRef } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import WorkspaceShell from "../WorkspaceShell";
@@ -49,6 +51,7 @@ function createProps(overrides = {}) {
     onDiagnostics: vi.fn(),
     onPortal: vi.fn(),
     onPilot: vi.fn(),
+    onRequestPasswordReset: vi.fn().mockResolvedValue({ requestAccepted: true }),
     onSignOut: vi.fn(),
     ...overrides.actions
   };
@@ -191,8 +194,9 @@ describe("WorkspaceShell", () => {
     expect(shell.classList.contains("app-shell-ambient-navigation")).toBe(true);
     expect(shell.dataset.ambientNavigation).toBe("orientation");
     expect(orientation.map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Events", "Clients", "Staff", "Library"]);
+      .toEqual(["Now", "Opportunities", "Clients", "Library"]);
     expect(orientation.every((button) => button.classList.contains("ambient-orientation-action"))).toBe(true);
+    expect(container.querySelector('[aria-label="Primary workspace"]')).not.toBeNull();
     expect(buttonsByText(container, "Home")).toHaveLength(0);
     expect(buttonsByText(container, "Customers")).toHaveLength(0);
     expect(buttonsByText(container, "Quotes")).toHaveLength(0);
@@ -201,45 +205,49 @@ describe("WorkspaceShell", () => {
 
     const now = buttonsByText(container, "Now")[0];
     const opportunities = buttonsByText(container, "Opportunities")[0];
-    const events = buttonsByText(container, "Events")[0];
     const clients = buttonsByText(container, "Clients")[0];
-    const staff = buttonsByText(container, "Staff")[0];
     const library = buttonsByText(container, "Library")[0];
     const search = container.querySelector('button[aria-label="Search"]');
     const newQuote = buttonsByText(container, "New quote")[0];
-    const pilot = container.querySelector('button[data-ambient-utility="pilot"]');
     expect(now.getAttribute("aria-current")).toBe("page");
     expect(now.classList.contains("nav-view-active")).toBe(true);
     expect(search.dataset.ambientUtility).toBe("search");
     expect(search.classList.contains("ambient-utility-action")).toBe(true);
     expect(newQuote.dataset.ambientUtility).toBe("new-quote");
     expect(newQuote.classList.contains("ambient-utility-action")).toBe(true);
-    expect(pilot.dataset.ambientUtility).toBe("pilot");
-    expect(pilot.dataset.ambientActionId).toBe("open-global-pilot-context");
-    expect(pilot.getAttribute("aria-label")).toBe("Open Pilot for the current context");
+    expect(container.querySelector('button[data-ambient-utility="pilot"]')).toBeNull();
+    expect(buttonsByText(container, "Pilot")).toHaveLength(0);
     expect(container.querySelectorAll("button.cta")).toHaveLength(1);
 
     act(() => now.click());
     act(() => opportunities.click());
-    act(() => events.click());
     act(() => clients.click());
-    act(() => staff.click());
     act(() => library.click());
     act(() => search.click());
     act(() => newQuote.click());
-    act(() => pilot.click());
     expect(props.actions.onHome).toHaveBeenCalledTimes(1);
     expect(props.actions.onQuotes).toHaveBeenCalledTimes(1);
-    expect(props.actions.onEvents).toHaveBeenCalledTimes(1);
     expect(props.actions.onCustomers).toHaveBeenCalledTimes(1);
-    expect(props.actions.onStaff).toHaveBeenCalledTimes(1);
     expect(props.actions.onCatalog).toHaveBeenCalledTimes(1);
     expect(props.actions.onSearch).toHaveBeenCalledWith(search);
     expect(props.actions.onNewQuote).toHaveBeenCalledTimes(1);
-    expect(props.actions.onPilot).toHaveBeenCalledTimes(1);
+    expect(props.actions.onPilot).not.toHaveBeenCalled();
   });
 
-  test("keeps Opportunities and Library current across their exact ambient routes", () => {
+  test("removes redundant ambient workspace labeling while retaining contextual quote status", () => {
+    render({ ambientNavigation: true });
+    expect(container.querySelector(".workspace-intro")).toBeNull();
+
+    render({
+      ambientNavigation: true,
+      draftStatus: { dirty: false, editing: true, quoteNumber: "QP-101" }
+    });
+    expect(container.querySelector(".workspace-intro strong").textContent).toBe("Quote status");
+    expect(container.querySelector(".workspace-save-state").textContent)
+      .toBe("Editing QP-101 · all changes saved");
+  });
+
+  test("keeps Opportunities and Library current without promoting contextual event routes", () => {
     render({
       ambientNavigation: true,
       model: model(WORKSPACE_ROUTE_IDS.QUOTE_DETAIL, true, true)
@@ -260,12 +268,11 @@ describe("WorkspaceShell", () => {
       ambientNavigation: true,
       model: model(WORKSPACE_ROUTE_IDS.EVENT_LIVE, true, true)
     });
-    const events = buttonsByText(container, "Events")[0];
-    expect(events.classList.contains("nav-view-active")).toBe(true);
-    expect(events.getAttribute("aria-current")).toBe("page");
+    expect(buttonsByText(container, "Events")).toHaveLength(0);
+    expect(container.querySelector('[aria-label="Primary workspace"] [aria-current="page"]')).toBeNull();
   });
 
-  test("keeps Library absent for sales while retaining role-safe ambient orientation", () => {
+  test("gives sales staff read-only Library navigation without Catalog Admin", () => {
     render({
       ambientNavigation: true,
       model: model(WORKSPACE_ROUTE_IDS.HOME, true, false),
@@ -275,12 +282,12 @@ describe("WorkspaceShell", () => {
 
     expect(Array.from(container.querySelectorAll("[data-ambient-orientation]"))
       .map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Events", "Clients"]);
-    expect(buttonsByText(container, "Library")).toHaveLength(0);
+      .toEqual(["Now", "Opportunities", "Clients", "Library"]);
+    expect(buttonsByText(container, "Library")).toHaveLength(1);
     expect(buttonsByText(container, "Catalog Admin")).toHaveLength(0);
   });
 
-  test("retains Messages and Workflow in ambient Operations and More menus", () => {
+  test("retains contextual tools in desktop Operations while mobile uses the switchboard", () => {
     const onOpenChange = vi.fn();
     const props = render({
       ambientNavigation: true,
@@ -289,37 +296,317 @@ describe("WorkspaceShell", () => {
     });
     const operations = container.querySelector('[role="menu"][aria-label="Operations"]');
     const clearDeck = buttonsByText(operations, "Clear the Deck")[0];
-    const switchboard = buttonsByText(operations, "Operations switchboard")[0];
+    const switchboard = buttonsByText(operations, "Operations")[0];
+    const events = buttonsByText(operations, "Events")[0];
     const messages = buttonsByText(operations, "Messages")[0];
+    const staff = buttonsByText(operations, "Staff")[0];
+    const pilot = buttonsByText(operations, "Pilot")[0];
     const workflow = operations.querySelector('button[aria-label="Workflow, 2 quotes need attention"]');
     expect(clearDeck.dataset.capabilityEntry).toBe("live-operations-planning");
     expect(switchboard.dataset.capabilityEntry).toBe("live-operations-planning");
+    expect(events.dataset.capabilityEntry).toBe("live-operations-planning");
     expect(messages.dataset.capabilityEntry).toBe("event-messaging-station");
+    expect(pilot.dataset.capabilityEntry).toBe("ambient-pilot-context");
+    expect(staff).not.toBeNull();
     expect(workflow.querySelector(".workflow-attention-badge").textContent).toBe("2");
     expect(buttonsByText(operations, "Catalog Admin")).toHaveLength(0);
 
     act(() => clearDeck.click());
     act(() => switchboard.click());
+    act(() => events.click());
     act(() => messages.click());
     act(() => workflow.click());
-    expect(onOpenChange).toHaveBeenCalledTimes(4);
+    act(() => pilot.click());
+    act(() => staff.click());
+    expect(onOpenChange).toHaveBeenCalledTimes(7);
     expect(onOpenChange).toHaveBeenNthCalledWith(1, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(2, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(3, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(4, "");
+    expect(onOpenChange).toHaveBeenNthCalledWith(5, "");
+    expect(onOpenChange).toHaveBeenNthCalledWith(6, "");
+    expect(onOpenChange).toHaveBeenNthCalledWith(7, "");
     expect(props.actions.onClearDeck).toHaveBeenCalledTimes(1);
     expect(props.actions.onOperations).toHaveBeenCalledTimes(1);
+    expect(props.actions.onEvents).toHaveBeenCalledTimes(1);
     expect(props.actions.onMessages).toHaveBeenCalledTimes(1);
     expect(props.actions.onWorkflow).toHaveBeenCalledTimes(1);
+    expect(props.actions.onStaff).toHaveBeenCalledTimes(1);
+    expect(props.actions.onPilot).toHaveBeenCalledTimes(1);
 
     render({
       ambientNavigation: true,
       attentionCount: 1,
       menu: { openId: "more", onOpenChange: vi.fn() }
     });
-    const more = container.querySelector('[role="menu"][aria-label="More"]');
-    expect(buttonsByText(more, "Messages")).toHaveLength(1);
-    expect(more.querySelector('button[aria-label="Workflow, 1 quote needs attention"]')).not.toBeNull();
+    const tools = container.querySelector('[role="dialog"][aria-labelledby="workspace-tools-title"]');
+    const mobileOperations = buttonsByText(tools, "Operations")[0];
+    const mobileWorkflow = tools.querySelector('button[aria-label="Workflow, 1 quote needs attention"]');
+    expect(mobileOperations.dataset.capabilityEntry).toBe("live-operations-planning");
+    expect(buttonsByText(tools, "Clear the Deck")).toHaveLength(1);
+    expect(buttonsByText(tools, "Events")).toHaveLength(1);
+    expect(buttonsByText(tools, "Messages")).toHaveLength(1);
+    expect(buttonsByText(tools, "Pilot")).toHaveLength(1);
+    expect(buttonsByText(tools, "Staff")).toHaveLength(1);
+    expect(buttonsByText(tools, "Integrations Ops")).toHaveLength(1);
+    expect(buttonsByText(tools, "Import Studio")).toHaveLength(1);
+    expect(mobileWorkflow).not.toBeNull();
+    act(() => mobileOperations.click());
+    act(() => buttonsByText(tools, "Messages")[0].click());
+    act(() => mobileWorkflow.click());
+    act(() => buttonsByText(tools, "Staff")[0].click());
+    act(() => buttonsByText(tools, "Integrations Ops")[0].click());
+    act(() => buttonsByText(tools, "Import Studio")[0].click());
+    expect(currentProps.actions.onOperations).toHaveBeenCalledTimes(1);
+    expect(currentProps.actions.onMessages).toHaveBeenCalledTimes(1);
+    expect(currentProps.actions.onWorkflow).toHaveBeenCalledTimes(1);
+    expect(currentProps.actions.onStaff).toHaveBeenCalledTimes(1);
+    expect(currentProps.actions.onIntegrations).toHaveBeenCalledTimes(1);
+    expect(currentProps.actions.onImports).toHaveBeenCalledTimes(1);
+  });
+
+  test("opens the explicit mobile Workspace and tools dialog with focus containment and restoration", () => {
+    const onOpenChange = vi.fn();
+    const props = render({ ambientNavigation: true, menu: { openId: "", onOpenChange } });
+    const trigger = props.triggerRefs.more.current;
+    expect(trigger.getAttribute("aria-label")).toBe("Workspace and tools");
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    act(() => trigger.click());
+    expect(onOpenChange).toHaveBeenCalledWith("more");
+
+    onOpenChange.mockClear();
+    render({
+      ambientNavigation: true,
+      menu: { openId: "more", onOpenChange },
+      triggerRefs: props.triggerRefs
+    });
+    const dialog = container.querySelector('[role="dialog"][aria-modal="true"]');
+    const closeButton = buttonsByText(dialog, "×")[0];
+    const search = buttonsByText(dialog, "Search customers and opportunities")[0];
+    const signOut = buttonsByText(dialog, "Sign Out")[0];
+    expect(dialog.textContent).toContain("admin@smith.test");
+    expect(dialog.querySelector('[aria-label="Current workspace: Smith Hospitality"]')).not.toBeNull();
+    expect(dialog.textContent).toContain("Current workspace");
+    expect(buttonsByText(dialog, "Switch workspace")).toHaveLength(0);
+    expect(buttonsByText(dialog, "Account settings")).toHaveLength(1);
+    expect(document.activeElement).toBe(search);
+    expect(container.querySelector(".site-header").hasAttribute("inert")).toBe(true);
+    expect(container.querySelector('[data-testid="shell-child"]').hasAttribute("inert")).toBe(true);
+
+    act(() => closeButton.focus());
+    act(() => closeButton.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Tab",
+      shiftKey: true,
+      bubbles: true
+    })));
+    expect(document.activeElement).toBe(signOut);
+    act(() => signOut.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
+    expect(document.activeElement).toBe(closeButton);
+
+    act(() => closeButton.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(onOpenChange).toHaveBeenCalledWith("");
+
+    render({
+      ambientNavigation: true,
+      menu: { openId: "", onOpenChange },
+      triggerRefs: props.triggerRefs
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector(".site-header").hasAttribute("inert")).toBe(false);
+    expect(document.activeElement).toBe(currentProps.triggerRefs.more.current);
+  });
+
+  test("opens account settings from Workspace and tools without inventing workspace switching or sending email", () => {
+    const onRequestPasswordReset = vi.fn().mockResolvedValue({ requestAccepted: true });
+    const onOpenChange = vi.fn();
+    const props = render({
+      ambientNavigation: true,
+      menu: { openId: "more", onOpenChange },
+      actions: { onRequestPasswordReset }
+    });
+    const dialog = container.querySelector('[role="dialog"][aria-modal="true"]');
+    const accountSettings = buttonsByText(dialog, "Account settings")[0];
+
+    expect(buttonsByText(dialog, "Switch workspace")).toHaveLength(0);
+    expect(accountSettings).not.toBeNull();
+    act(() => accountSettings.click());
+    expect(onOpenChange).toHaveBeenCalledWith("account-settings");
+    expect(onRequestPasswordReset).not.toHaveBeenCalled();
+
+    onOpenChange.mockClear();
+    render({
+      ambientNavigation: true,
+      menu: { openId: "account-settings", onOpenChange },
+      triggerRefs: props.triggerRefs,
+      actions: { onRequestPasswordReset }
+    });
+    const settings = container.querySelector('[role="dialog"][aria-labelledby="account-settings-title"]');
+    expect(settings.textContent).toContain("admin@smith.test");
+    expect(settings.textContent).toContain("Smith Hospitality");
+    expect(settings.textContent).toContain("Nothing changes until that link is completed");
+    expect(onRequestPasswordReset).not.toHaveBeenCalled();
+    expect(document.activeElement.getAttribute("aria-label")).toBe("Close account settings");
+    expect(container.querySelector(".site-header").hasAttribute("inert")).toBe(true);
+    expect(props.actions.onSignOut).not.toHaveBeenCalled();
+  });
+
+  test("sends a password reset only on explicit request and preserves a retry after failure", async () => {
+    const onRequestPasswordReset = vi.fn()
+      .mockRejectedValueOnce(new Error("network unavailable"))
+      .mockResolvedValueOnce({ requestAccepted: true });
+    render({
+      ambientNavigation: true,
+      menu: { openId: "account-settings", onOpenChange: vi.fn() },
+      actions: { onRequestPasswordReset }
+    });
+    const settings = container.querySelector('[role="dialog"][aria-labelledby="account-settings-title"]');
+    const requestReset = buttonsByText(settings, "Send password reset email")[0];
+
+    expect(onRequestPasswordReset).not.toHaveBeenCalled();
+    await act(async () => {
+      requestReset.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onRequestPasswordReset).toHaveBeenNthCalledWith(1, { email: "admin@smith.test" });
+    expect(settings.querySelector('[role="alert"]').textContent)
+      .toContain("Check your connection and try again");
+    expect(requestReset.disabled).toBe(false);
+
+    await act(async () => {
+      requestReset.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onRequestPasswordReset).toHaveBeenCalledTimes(2);
+    expect(settings.querySelector('[role="status"]').textContent)
+      .toBe("Password reset email requested for admin@smith.test.");
+    expect(buttonsByText(settings, "Reset email requested")[0].disabled).toBe(true);
+  });
+
+  test("traps account-settings focus, closes by Escape, and restores the Workspace and tools trigger", () => {
+    const onOpenChange = vi.fn();
+    const props = render({ ambientNavigation: true, menu: { openId: "more", onOpenChange } });
+    act(() => buttonsByText(container, "Account settings")[0].click());
+
+    onOpenChange.mockClear();
+    render({
+      ambientNavigation: true,
+      menu: { openId: "account-settings", onOpenChange },
+      triggerRefs: props.triggerRefs,
+      actions: { onRequestPasswordReset: props.actions.onRequestPasswordReset }
+    });
+    const settings = container.querySelector('[role="dialog"][aria-labelledby="account-settings-title"]');
+    const closeButton = settings.querySelector('button[aria-label="Close account settings"]');
+    const cancel = buttonsByText(settings, "Cancel")[0];
+
+    expect(document.activeElement).toBe(closeButton);
+    act(() => closeButton.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Tab",
+      shiftKey: true,
+      bubbles: true
+    })));
+    expect(document.activeElement).toBe(cancel);
+    act(() => cancel.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
+    expect(document.activeElement).toBe(closeButton);
+
+    act(() => closeButton.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(onOpenChange).toHaveBeenCalledWith("");
+    render({
+      ambientNavigation: true,
+      menu: { openId: "", onOpenChange },
+      triggerRefs: props.triggerRefs,
+      actions: { onRequestPasswordReset: props.actions.onRequestPasswordReset }
+    });
+    expect(container.querySelector('[aria-labelledby="account-settings-title"]')).toBeNull();
+    expect(document.activeElement).toBe(currentProps.triggerRefs.more.current);
+  });
+
+  test("consumes browser or mobile Back by closing Workspace and tools before route traversal", () => {
+    const onOpenChange = vi.fn();
+    const guards = [];
+    const continuation = vi.fn();
+    render({
+      ambientNavigation: true,
+      menu: { openId: "more", onOpenChange },
+      actions: {
+        onWorkspaceToolsGuardChange: (guard) => guards.push(guard)
+      }
+    });
+
+    const guard = guards.find((candidate) => candidate?.modelId === "workspace-tools-navigation-guard-v1");
+    expect(guard).toMatchObject({ open: true, dirty: false, busy: false });
+    expect(guard.requestDismiss("browser_back", continuation)).toEqual({ status: "guarded" });
+    expect(onOpenChange).toHaveBeenCalledWith("");
+    expect(continuation).not.toHaveBeenCalled();
+
+    render({
+      ambientNavigation: true,
+      menu: { openId: "", onOpenChange },
+      actions: {
+        onWorkspaceToolsGuardChange: (nextGuard) => guards.push(nextGuard)
+      }
+    });
+    expect(guards.at(-1)).toBeNull();
+  });
+
+  test("consumes browser or mobile Back by closing Account settings before route traversal", () => {
+    const onOpenChange = vi.fn();
+    const guards = [];
+    const continuation = vi.fn();
+    render({
+      ambientNavigation: true,
+      menu: { openId: "account-settings", onOpenChange },
+      actions: {
+        onWorkspaceToolsGuardChange: (guard) => guards.push(guard)
+      }
+    });
+
+    const guard = guards.find((candidate) => candidate?.modelId === "account-settings-navigation-guard-v1");
+    expect(guard).toMatchObject({ open: true, dirty: false, busy: false });
+    expect(guard.requestDismiss("browser_back", continuation)).toEqual({ status: "guarded" });
+    expect(onOpenChange).toHaveBeenCalledWith("");
+    expect(continuation).not.toHaveBeenCalled();
+  });
+
+  test("dismisses Workspace and tools from the backdrop and opens Search through the stable header trigger", () => {
+    const onOpenChange = vi.fn();
+    const props = render({
+      ambientNavigation: true,
+      menu: { openId: "more", onOpenChange }
+    });
+    const layer = container.querySelector(".workspace-tools-layer");
+    const outsidePointerHandler = vi.fn();
+    document.addEventListener("pointerdown", outsidePointerHandler);
+    act(() => layer.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
+    expect(outsidePointerHandler).not.toHaveBeenCalled();
+    document.removeEventListener("pointerdown", outsidePointerHandler);
+
+    act(() => layer.click());
+    expect(onOpenChange).toHaveBeenCalledWith("");
+
+    onOpenChange.mockClear();
+    act(() => buttonsByText(layer, "Search customers and opportunities")[0].click());
+    expect(onOpenChange).toHaveBeenCalledWith("");
+    expect(props.actions.onSearch).toHaveBeenCalledWith(props.triggerRefs.more.current);
+  });
+
+  test("defines a thumb-reachable Calm Four bar and safe-area-aware mobile tools sheet", () => {
+    const css = readFileSync(join(process.cwd(), "src/styles.css"), "utf8");
+
+    expect(css).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.app-shell-ambient-navigation[\s\S]*\.ambient-primary-navigation\s*\{[\s\S]*position:\s*fixed;[\s\S]*bottom:\s*0;/u);
+    expect(css).toMatch(/grid-auto-flow:\s*column/u);
+    expect(css).toMatch(/env\(safe-area-inset-bottom\)/u);
+    expect(css).toMatch(/\.workspace-tools-dialog__actions button\s*\{[\s\S]*min-height:\s*44px/u);
+    expect(css).toMatch(/\.workspace-tools-trigger\s*\{[\s\S]*min-width:\s*44px/u);
+    expect(css).toMatch(/\.account-settings-layer\s*\{[\s\S]*align-items:\s*center/u);
+    expect(css).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.account-settings-layer\s*\{[\s\S]*align-items:\s*flex-end/u);
+    expect(css).toMatch(/\.account-settings-dialog__reset-action\s*\{[\s\S]*min-height:\s*44px/u);
+    expect(css).toMatch(/@media \(min-width:\s*1181px\)[\s\S]*\.app-shell-neutral\.app-shell-ambient-navigation\s*\{[\s\S]*padding-left:\s*236px/u);
+    expect(css).toMatch(/\.app-shell-neutral\.app-shell-ambient-navigation \.site-header\s*\{[\s\S]*width:\s*236px/u);
+    expect(css).toMatch(/\.header-product-brand \.product-brand-copy\s*\{[\s\S]*display:\s*grid/u);
   });
 
   test("keeps legacy navigation compact and suppresses active Quotes while the builder is open", () => {

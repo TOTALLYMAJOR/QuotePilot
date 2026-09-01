@@ -97,7 +97,7 @@
   },
   "authorities": {
     "duplicateAuthorities": [],
-    "root": "/home/administrator/projects_new/quoteflow",
+    "root": "<repo-root>",
     "sources": [
       {
         "authorityClass": "repository-governance",
@@ -11986,7 +11986,7 @@
       {
         "auditErrors": [],
         "auditStatus": "PASS",
-        "authorityRoot": "/home/administrator/design-intelligence",
+        "authorityRoot": "<external-design-intelligence-root>",
         "decision": "DEFER",
         "lifecycle": "DEFERRED",
         "path": "artifacts/design/baseline-decisions/quotepilot-hold-2026-08-21.json",
@@ -12164,7 +12164,7 @@
   "memoryRequired": true,
   "profile": "quotepilot",
   "repairPerformed": false,
-  "repositoryRoot": "/home/administrator/projects_new/quoteflow",
+  "repositoryRoot": "<repo-root>",
   "schemaVersion": 1,
   "sources": [
     {

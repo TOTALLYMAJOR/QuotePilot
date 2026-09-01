@@ -1,7 +1,239 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 53,
+  "catalogVersion": 60,
   "contracts": [
+    {
+      "id": "bounded-security-operations-audit",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "organization_admins",
+        "platform_operators"
+      ],
+      "summary": "Operations Audit gives same-tenant organization admins a bounded projection of immutable quote-approval and organization-role-change receipts while labeling delivery reconciliation and catalog confirmation as legacy server projections rather than immutable evidence.",
+      "backendPaths": [
+        ".github/workflows/set-operational-staffing-tenant.yml",
+        "firestore.rules",
+        "functions/index.js",
+        "functions/operationsAudit.js",
+        "functions/organizationRoleAuthority.js",
+        "src/lib/commerceOps.js",
+        "src/lib/operationsAuditPresentation.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getOperationsAuditSnapshot"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getOperationsAuditSnapshot"
+      ],
+      "frontendPaths": [
+        "src/components/IntegrationOpsModal.jsx",
+        "src/lib/operationsAuditPresentation.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/IntegrationOpsModal.jsx",
+          "locator": "data-capability-id=\"bounded-security-audit\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/operationsAudit.server.test.js",
+        "src/lib/__tests__/operationsAuditPresentation.test.js",
+        "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/operationsAudit.server.test.js",
+          "locator": "deduplicates replayed receipts, drops cross-tenant rows, retains failed executions, and bounds projection"
+        },
+        {
+          "path": "src/lib/__tests__/operationsAudit.server.test.js",
+          "locator": "summarizes delivery retry/review states, sync trend, roles, and server actions"
+        },
+        {
+          "path": "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+          "locator": "requires authentication within five minutes"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "organization role authority receipts are private and immutable in browsers"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Bounded cross-surface security audit"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Operations Audit"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The existing admin-only Operations Audit now separates immutable receipt evidence from legacy server observations, projects role-change receipts without UID, recent-auth, App Check, or raw receipt fields, reports source truncation, and exposes no browser export or clear control. Role-authority receipts remain indefinite server records because no receipt-clear workflow is implemented.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/lib/__tests__/operationsAuditPresentation.test.js",
+          "locator": "maps every canonical bounded read state without inventing stale data",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "Operations Audit performs a fresh callable read on open and refresh and does not retain a cached snapshot after failure, so it never presents a stale-data variant."
+        }
+      },
+      "safeOutcome": "An authenticated same-tenant admin can distinguish immutable role-change and quote-approval receipts from bounded legacy delivery and catalog observations. Replayed role receipts collapse to one row, foreign-tenant rows fail the defense-in-depth filter, failed approval executions remain visible, raw security metadata stays private, the table caps at 50 rows from bounded server samples, and retention is explicitly indefinite with no browser export or implemented clear workflow."
+    },
+    {
+      "id": "privacy-bounded-session-diagnostics",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "staff",
+        "operators",
+        "developers"
+      ],
+      "summary": "Session diagnostics provide app-local runtime route, session, and error observability for staff troubleshooting while stripping URL query/hash values, redacting sensitive context, and hashing stable identifiers before export.",
+      "backendPaths": [
+        "src/lib/sessionDiagnostics.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/DiagnosticsModal.jsx",
+        "src/main.jsx"
+      ],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/sessionDiagnostics.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/sessionDiagnostics.test.js",
+          "locator": "records errors with redacted context and user session details"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/ORCHESTRATION_RUNBOOK.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Privacy-bounded session diagnostics"
+        },
+        {
+          "path": "docs/ORCHESTRATION_RUNBOOK.md",
+          "locator": "## Runtime Diagnostics"
+        }
+      ],
+      "headlessReason": "The diagnostics library is operational infrastructure for troubleshooting and handoff rather than a customer workflow or authority-changing callable.",
+      "safeOutcome": "Staff can export bounded local browser diagnostics for triage without storing raw emails, phone numbers, tokens, user identifiers, URL query/hash values, or stack traces."
+    },
+    {
+      "id": "product-truth-observability",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "repository_owners",
+        "release_operators",
+        "developers"
+      ],
+      "summary": "A deterministic read-only compiler reconciles Git identity and divergence, canonical production claims, capability inventory and gate output, development-evidence coverage, and optional bounded reachability into a source-linked text or JSON digest with separate status and fail-closed gate exit policies.",
+      "backendPaths": [
+        "scripts/product-truth-observability.mjs",
+        "scripts/summarize-development-evidence.mjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/productTruthObservability.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "emits blocking release drift and nonblocking dirty divergence"
+        },
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "status and gate emit the same digest semantics with different exit policy"
+        },
+        {
+          "path": "src/lib/__tests__/productTruthObservability.test.js",
+          "locator": "malformed required input exits 2 with the exact locator"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/ORCHESTRATION_RUNBOOK.md",
+        "docs/adr/ADR-0002-product-truth-observability.md",
+        "docs/design/product-truth-observability-design.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Product Truth Observability"
+        },
+        {
+          "path": "docs/ORCHESTRATION_RUNBOOK.md",
+          "locator": "## Product Truth Reconciliation"
+        },
+        {
+          "path": "docs/adr/ADR-0002-product-truth-observability.md",
+          "locator": "Adopt a generated, read-only Product Truth Digest"
+        },
+        {
+          "path": "docs/design/product-truth-observability-design.md",
+          "locator": "### Digest Contract"
+        }
+      ],
+      "headlessReason": "The command is repository and release-process observability. It reads existing authorities, emits an ignored or ephemeral projection, and has no customer, application-runtime, provider, deployment, data, pricing, role, or mutation authority.",
+      "safeOutcome": "Repository owners can see independent production claims, exact candidate identity, proof-class coverage, blocking drift, and bounded next decisions without the digest selecting a convenient source, persisting secrets or customer data, or promoting local, reachability, CI, provider, production, or human evidence into another class."
+    },
     {
       "id": "steward-private-validation-foundation",
       "reviewRevision": 5,
@@ -162,7 +394,7 @@
     },
     {
       "id": "firebase-email-action-return-policy",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
@@ -172,7 +404,8 @@
       ],
       "summary": "Firebase verification and password-reset continue URLs are restricted to the canonical QuotePilot production /app URL, the one fixed isolated staging /app URL used for governed candidate acceptance, or loopback development.",
       "backendPaths": [
-        "src/lib/authClient.js"
+        "src/lib/authClient.js",
+        "src/lib/firebaseEmailActionPolicy.js"
       ],
       "backendExports": [],
       "frontendPaths": [],
@@ -202,15 +435,118 @@
       "safeOutcome": "Email actions can return only to an exact reviewed QuotePilot /app origin, while arbitrary previews, lookalike domains, credentials, alternate paths, queries, and fragments fail closed."
     },
     {
+      "id": "firebase-email-verification-handler",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "unverified staff users",
+        "release operators"
+      ],
+      "summary": "QuotePilot owns a deliberate-confirmation Firebase email-verification route that validates the exact local project, mode, one-time-code presence, and approved return location before sending the code only to Firebase's verify-email endpoint, requires a verified provider receipt, and distinguishes provider uncertainty, reconciliation, receipt, definite failure, and recovery without exposing the code.",
+      "backendPaths": [
+        "src/lib/firebaseEmailAction.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/FirebaseEmailActionPage.jsx",
+        "src/components/WorkspaceRoute.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/FirebaseEmailActionPage.jsx",
+          "locator": "data-capability-id=\"firebase-email-verification-handler\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/firebaseEmailAction.test.js",
+        "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+        "e2e/firebase-email-action.smoke.spec.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "does not apply a verification code until the person chooses Verify email"
+        },
+        {
+          "path": "e2e/firebase-email-action.smoke.spec.js",
+          "locator": "staging email action route requires a deliberate verification action"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "deliberate one-time verification confirmation"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "Secure email verification"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The handler reuses the canonical restrained authentication card and brand lockup, requires an explicit 44-pixel-class button instead of an automatic mutation, removes the code from the address bar, and gives each provider boundary a truthful next step.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the ready state before the user authorizes the mutation",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the submitting state while Firebase applies the code",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the uncertain state without claiming verification",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders reconciliation while waiting for the Firebase receipt",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the receipt state only after Firebase acceptance",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the error state for a definitively unusable code",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/firebaseEmailActionPage.test.jsx",
+          "locator": "renders the recovery state for a malformed action link",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "A person who received the exact staging verification message can deliberately apply its one-time Firebase code, see a truthful provider-backed result, and return to QuotePilot without a link preview auto-verifying the account or exposing the code in the visible URL."
+    },
+    {
       "id": "customer-directory-and-360",
-      "reviewRevision": 6,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The default-off Ambient presentation reuses the same caller-owned evidence and authority in a compact relationship-operations directory. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The v0.16 Ambient presentation reuses that authority in a sparse hospitality-led empty state and a populated relationship view led by client identity, current or recent event, recorded memory, current attention, and one next action; search and filtering appear only for a populated bounded page. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
@@ -247,7 +583,7 @@
         },
         {
           "path": "src/components/AmbientClientsView.jsx",
-          "locator": "Client relationships"
+          "locator": "<span>Clients</span><span aria-hidden=\"true\">/</span><strong>Relationships</strong>"
         },
         {
           "path": "src/components/AmbientClientsView.jsx",
@@ -269,6 +605,7 @@
       "testPaths": [
         "e2e/customer-centered-workspace.spec.js",
         "e2e/ambient-clients.spec.js",
+        "e2e/v16-calm-four-acceptance.spec.js",
         "e2e/workspace-no-unintended-overlap.spec.js",
         "src/components/__tests__/ambientClientsView.test.jsx",
         "src/components/__tests__/customerCommercialMeasuresPresentation.test.jsx",
@@ -352,7 +689,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 6 gives the default-off Ambient Clients route a compact command header, bounded-page metrics, immediate search and local page filters, dense relationship rows, one truthful row state, and a structured responsive relationship overview. It adds a 24-record August-through-October local_fixture only under the explicit local authentication bypass; selecting an exact fixture identity now opens its matching local relationship context rather than falling through to Firebase. The fixture is labeled browser-local and performs no Firebase or provider write. The legacy directory and Customer 360 routes, exact client arrival, one ranked next step, bounded source and freshness language, immutable-version comparison, separately labeled quote and payment totals, safe proposal preview, keyboard access, and recovery controls preserve the same role and evidence boundaries.",
+      "surfaceReviewNote": "Revision 7 replaces the dashboard-like empty Clients presentation with the approved sparse hospitality hierarchy, one established Start an opportunity action, three relationship steps, and quiet disclosure; zero metrics, search, refresh, and source chrome are absent until records justify controls. Populated Clients uses the same editorial language and leads with identity, current or recent event, recorded relationship memory, current attention, and one next action before the bounded searchable directory. Existing Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, local_fixture boundary, keyboard behavior, and recovery controls remain intact.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -398,7 +735,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can scan a bounded relationship-operations directory, filter only the current page by linked work, dated upcoming events, or contact gaps, open one exact client, understand read freshness and limits, inspect recorded milestones, compare stored immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Browser-local fixture records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
+      "safeOutcome": "Staff see a truthful sparse starting point when the completed same-tenant read has no clients, or a relationship-led populated view with search and filtering only when records exist. They can open one exact client, correct remembered context through existing Client 360 controls, inspect recorded milestones and immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Browser-local fixture records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
     },
     {
       "id": "bounded-commercial-search",
@@ -1688,7 +2025,7 @@
     },
     {
       "id": "exact-version-rebook-and-delivery-gate",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -1703,7 +2040,8 @@
         "scripts/rebook-quote-emulator-acceptance.mjs",
         "src/lib/anniversaryRebookingAttention.js",
         "src/lib/customerRebookingRadar.js",
-        "src/lib/rebookQuoteClient.js"
+        "src/lib/rebookQuoteClient.js",
+        "src/lib/quoteStore.js"
       ],
       "backendExports": [
         "functions/index.js#createRebookQuoteDraft",
@@ -1748,11 +2086,14 @@
         "src/components/__tests__/commandCenterAttentionRouting.test.jsx",
         "src/components/__tests__/customerRebookDraftAction.test.jsx",
         "src/components/__tests__/customerRevenueOpportunities.test.jsx",
+        "src/components/__tests__/quoteHistoryQuickUpdatesAuthority.test.jsx",
         "src/components/__tests__/quoteHistoryPermissions.test.jsx",
         "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
         "src/lib/__tests__/anniversaryRebookingAttention.test.js",
         "src/lib/__tests__/customerRebookingRadar.test.js",
         "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
+        "src/lib/__tests__/quoteStore.writeSafety.test.js",
         "src/lib/__tests__/rebookQuoteClient.test.js",
         "src/lib/__tests__/rebookQuoteDraft.server.test.js"
       ],
@@ -1800,6 +2141,14 @@
         {
           "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
           "locator": "shows exact completed evidence and detects an unsaved date divergence"
+        },
+        {
+          "path": "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
+          "locator": "fences every trusted edit to the exact loaded quote revision before building write documents"
+        },
+        {
+          "path": "src/lib/__tests__/quoteStore.writeSafety.test.js",
+          "locator": "updateQuote delegates only quote presentation and exact commercial authority identities to the trusted edit callable"
         }
       ],
       "documentationPaths": [
@@ -1817,7 +2166,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The bounded Home and Workflow anniversary cues, tenant-calendar and truncation evidence, stable client-overview handoff, anniversary entry, exact immutable source labels, deterministic submission identity, uncertainty and reconciliation copy, new-draft handoff, staff review banner, and delivery gate were reviewed together. Revision 3 changes user-facing destination language only; opaque identity, callable authority, and evidence boundaries are unchanged.",
+      "surfaceReviewNote": "Revision 4 preserves the bounded anniversary/rebook surface and strengthens its shared trusted update boundary: every edit carrying an expected revision is rejected transactionally before write-document construction when the active quote version has changed. The v0.16 Quick Updates host uses the same fence and cannot treat updatedAt as a version identity. Existing tenant-calendar cues, stable-client handoff, deterministic rebook identity, staff review banner, delivery gate, role authority, and evidence boundaries are unchanged.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2019,20 +2368,21 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, and advisory REVIEW or STALE consequences before any save.",
+      "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, advisory REVIEW or STALE consequences, and one six-group source-labeled consequence review before any save.",
       "backendPaths": [
         "functions/commercialChangeImpactPreview.js",
         "functions/index.js",
         "functions/pricingEngine.js",
         "src/lib/commerceOps.js",
-        "src/lib/commercialChangeImpact.js"
+        "src/lib/commercialChangeImpact.js",
+        "src/lib/unifiedCommercialConsequenceReview.js"
       ],
       "backendExports": [
         "functions/index.js#calculateQuotePricing"
@@ -2042,7 +2392,8 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
-        "src/components/CommercialChangeImpactPanel.jsx"
+        "src/components/CommercialChangeImpactPanel.jsx",
+        "src/components/UnifiedCommercialConsequenceReview.jsx"
       ],
       "entryPointLocators": [
         {
@@ -2052,6 +2403,10 @@
         {
           "path": "src/components/CommercialChangeImpactPanel.jsx",
           "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-presentation\""
+        },
+        {
+          "path": "src/components/UnifiedCommercialConsequenceReview.jsx",
+          "locator": "data-capability-id=\"unified-commercial-consequence-review\""
         }
       ],
       "testPaths": [
@@ -2059,7 +2414,9 @@
         "e2e/firebase-authoritative-pricing.smoke.spec.js",
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/lib/__tests__/commercialChangeImpact.test.js",
-        "src/lib/__tests__/commercialChangeImpactPreview.server.test.js"
+        "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
+        "src/lib/__tests__/unifiedCommercialConsequenceReview.test.js",
+        "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx"
       ],
       "testLocators": [
         {
@@ -2085,6 +2442,14 @@
         {
           "path": "src/lib/__tests__/commercialChangeImpact.test.js",
           "locator": "reports exact declared fact and supplied commercial-value changes without calculating them"
+        },
+        {
+          "path": "src/lib/__tests__/unifiedCommercialConsequenceReview.test.js",
+          "locator": "groups the six consequences and names every authority source"
+        },
+        {
+          "path": "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx",
+          "locator": "renders all six groups, named sources, and three outcomes"
         }
       ],
       "documentationPaths": [
@@ -2101,8 +2466,8 @@
           "locator": "## Quote Builder Details"
         }
       ],
-      "surfaceReview": "verified_existing",
-      "surfaceReviewNote": "Revision 1 reviewed the quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, and presentation states as changed. Revision 2 is a backend-only additive change to functions/pricingEngine.js with no UI, state, or export change: the addon/rental normalizers additionally preserve the strictly-boolean portalDecidable mark, and calculateQuotePricingAuthoritative additionally returns the exact addons/rentals collections from the same authoritative catalog read, so the trusted quote-write flows can compute the decision-room decidableOptionsProjection without a second, possibly-divergent catalog read. Pricing math reads none of the new fields \u2014 verified_existing.",
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Revision 4 binds the existing authoritative simulation to one six-group consequence review. Apply all/selected only rebuild the exact proposed form and rerun simulation; Keep restores the loaded form without writing. Quote, catalog, and proposed-form fences fail closed. No second pricing or version authority was introduced.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -2148,7 +2513,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can simulate the exact blast radius of an unsaved quote edit from canonical source and trusted pricing snapshots without exposing contact content or implying that any save, authorization, invalidation, regeneration, reconciliation, or publication occurred."
+      "safeOutcome": "Staff can simulate the exact blast radius of an unsaved quote edit, review six separately sourced consequence groups, and stage all, selected, or no recommendations without exposing customer-safe internal evidence or implying that any save, authorization, invalidation, regeneration, reconciliation, or publication occurred."
     },
     {
       "id": "commercial-dependency-graph-beo-provenance",
@@ -2234,7 +2599,7 @@
     },
     {
       "id": "commercial-change-authority",
-      "reviewRevision": 2,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2242,13 +2607,18 @@
         "staff",
         "administrators"
       ],
-      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, atomic application, and exact transport-ambiguous outcome reconciliation remain exposed inside the trusted quote-edit path. Living Opportunity adds a role-gated advisory guest-count simulation: local mode produces a deterministic ImpactPreview without a receipt, while the connected path may return an immutable simulation receipt; neither path saves, authorizes, or applies the scenario.",
+      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, atomic application, and exact transport-ambiguous outcome reconciliation remain exposed inside the trusted quote-edit path. The v0.16 Living Opportunity adds contextual Quick Updates for one allowlisted service-style delta: opening is write-free, the draft stays local, and a Firebase draft review projects the requested change plus enumerated material pricing, staffing, version, proposal, portal, lifecycle, and dependency effects through the existing server authority. Save is single-flight and bound to that simulation, active revision, catalog digest, and policy; browser-local, sent, and viewed records hand off to the full editor. Success requires the trusted write receipt, a server-only same-tenant quote reread, and refreshed opportunity-list state. The panel duplicates no commercial rule. Living Opportunity also retains its role-gated advisory guest-count simulation: local mode produces a deterministic ImpactPreview without a receipt, while the connected path may return an immutable simulation receipt; neither path saves, authorizes, or applies that scenario.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
         "functions/commercialChangeAuthority.js",
         "functions/commercialChangeImpactEvaluator.js",
-        "src/lib/commercialChangeAuthorityClient.js"
+        "scripts/customer-centered-authority-emulator-acceptance.mjs",
+        "src/lib/commercialChangeAuthorityClient.js",
+        "src/lib/commercialChangePersistedEffectsDisabled.js",
+        "src/lib/commercialChangePersistedEffectsEnabled.js",
+        "src/lib/quickUpdatesState.js",
+        "src/lib/quoteStore.js"
       ],
       "backendExports": [
         "functions/index.js#simulateCommercialQuoteChange",
@@ -2271,7 +2641,9 @@
         "src/App.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/AmbientLivingOpportunityRoute.jsx",
-        "src/components/AmbientLivingOpportunity.jsx"
+        "src/components/AmbientLivingOpportunity.jsx",
+        "src/components/QuickUpdatesPanel.jsx",
+        "src/components/QuoteHistoryModal.jsx"
       ],
       "entryPointLocators": [
         {
@@ -2281,15 +2653,24 @@
         {
           "path": "src/components/AmbientLivingOpportunity.jsx",
           "locator": "data-capability-entry=\"aiui-10-pricing-impact-preview\""
+        },
+        {
+          "path": "src/components/QuickUpdatesPanel.jsx",
+          "locator": "data-testid=\"quick-updates-panel\""
         }
       ],
       "testPaths": [
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
         "src/components/__tests__/ambientPricingRouteHost.test.jsx",
+        "src/components/__tests__/QuickUpdatesPanel.test.jsx",
+        "src/components/__tests__/quoteHistoryQuickUpdatesAuthority.test.jsx",
         "src/lib/__tests__/commercialChangeAuthority.server.test.js",
         "src/lib/__tests__/commercialChangeAuthorityClient.test.js",
         "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
+        "src/lib/__tests__/quickUpdatesState.test.js",
+        "src/lib/__tests__/quoteStore.writeSafety.test.js",
+        "e2e/v16-calm-four-acceptance.spec.js",
         "src/rules/__tests__/firestore.rules.test.js",
         "scripts/customer-centered-authority-emulator-acceptance.mjs"
       ],
@@ -2337,6 +2718,22 @@
         {
           "path": "src/components/__tests__/ambientPricingRouteHost.test.jsx",
           "locator": "injects the existing governed Commercial Change client only for the exact Firebase source"
+        },
+        {
+          "path": "src/components/__tests__/QuickUpdatesPanel.test.jsx",
+          "locator": "previews the exact delta, saves only after confirmation, and waits for authoritative readback"
+        },
+        {
+          "path": "src/components/__tests__/QuickUpdatesPanel.test.jsx",
+          "locator": "guards Cancel, backdrop, Library, and external navigation without running a continuation early"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryQuickUpdatesAuthority.test.jsx",
+          "locator": "threads host options and callbacks, then verifies the authoritative list reread before saved"
+        },
+        {
+          "path": "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
+          "locator": "binds Quick Updates review to Commercial Change receipts and delegates save calculations"
         }
       ],
       "documentationPaths": [
@@ -2354,7 +2751,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The existing quote-edit simulation, staff approval handoff, administrator authorization, exact receipt application, request-identity lock, transport uncertainty, exact committed-receipt reconciliation, fenced not-committed recovery, changed-source handling, definitive rejection, and recovery controls were reviewed together. The Living Opportunity host was additionally reviewed as an advisory, staff-role and ordinary-edit-gated guest-count counterfactual with visibly distinct deterministic local calculation and connected immutable-receipt sources.",
+      "surfaceReviewNote": "Revision 4 reviews contextual Quick Updates together with the existing trusted quote-edit and Commercial Change authority. The drawer/sheet is write-free on open, keeps one allowlisted service-style draft local and visible, guards every destructive dismissal path, and renders the server authority's enumerated material persisted-effects projection rather than claiming a whole-document preview across time-assigned fields. Firebase draft saves are single-flight and bound to the persisted simulation, active revision, catalog digest, and policy even while Commercial Change enforcement is dormant; local, sent, viewed, authorization-required, rejected, and uncertain cases retain explicit handoff or reconciliation boundaries. A saved result requires the write receipt, server-only quote verification, and refreshed opportunity-list state. Executable emulator evidence covers form mismatch, catalog drift, stale revision, zero-write failures, and one successful dormant save/readback. The panel exposes staffing, pricing, and Library as contextual handoffs rather than parallel rules or global destinations. The existing advisory guest-count counterfactual retains its distinct deterministic local-calculation and connected immutable-receipt sources.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2430,7 +2827,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can still use the trusted edit path to simulate and route an exact commercial change, while only an authorized administrator can issue the bound authorization receipt required for atomic application. In Living Opportunity, eligible staff may compare a staged guest-count scenario with the saved quote through either a local deterministic ImpactPreview or a connected immutable simulation receipt; this advisory surface cannot save, authorize, or apply the change. Any uncertain connected request retains the exact tenant, quote, base revision, and request identity for reconciliation before another simulation; the existing apply path separately proves immutable commit or atomically fences a proven absence before recovery."
+      "safeOutcome": "Staff can use contextual Quick Updates for one exact service-style draft without changing the underlying opportunity until explicit review and save. Every destructive exit protects that draft. A Firebase draft save delegates to existing calculation and persistence authority and is fenced to the reviewed simulation, revision, catalog, and policy; only its exact write receipt, server-only same-tenant quote verification, and refreshed list state may produce the saved outcome. Browser-local, sent, viewed, authorization-required, and uncertain states hand off or reconcile without an implicit retry or write. Staffing, pricing, tax, margin, proposal, client, catalog, and dependency rules remain owned by their existing governed workflows. Existing Commercial Change authorization, apply, and reconciliation boundaries remain intact. Eligible staff may still compare a staged guest-count scenario with the saved quote through either a local deterministic ImpactPreview or a connected immutable simulation receipt; that advisory surface cannot save, authorize, or apply the change, and uncertain connected requests retain exact identity for reconciliation."
     },
     {
       "id": "commercial-dependency-state-and-reconciliation",
@@ -2591,7 +2988,7 @@
     },
     {
       "id": "trusted-kitchen-beo-authority",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -2670,8 +3067,8 @@
           "locator": "## Trusted Kitchen BEO generation and artifact freshness"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were reviewed together.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "The existing quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were verified unchanged. The server PDF renderer now loads only after the existing authorization and input-validation boundary; exports, role authority, UI states, receipt semantics, and recovery behavior are unchanged.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -3549,7 +3946,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 15,
+      "reviewRevision": 16,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -3559,7 +3956,9 @@
       "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable. Catalog-setting and managed-menu draft domains cannot advance together. Each of the seven managed-menu operations requires the exact loaded expectedCatalogRevision, which is compared inside the Firebase transaction or local commit before any record write; the development fallback compares the active organization's catalog revision and never reads the retired unscoped cache into another organization. Catalog Admin also owns proposal document font scale, brand readiness, guided-rule coverage, operator-authored proposal intro/closing copy, and cost/margin coverage summaries, while trusted quote create/edit snapshots retain the selected presentation plus a private saved commercial snapshot so Proposal Composer and related staff rails can prefer saved cost evidence without exposing it to customers. The Package Workspace is the bounded editor for the current package schema: it stages package identity, per-person price and cost, optional selected-at-zero inclusions, availability, revert, and dependency-reviewed delete through that same catalog save authority without changing quote-pricing behavior.",
       "backendPaths": [
         "functions/index.js",
+        "functions/pricingEngine.js",
         "functions/quoteCreation.js",
+        "functions/starterCatalogPacks.js",
         "src/data/mockCatalog.js",
         "src/lib/commercialSnapshot.js",
         "src/data/starterCatalogPacks.js",
@@ -3571,6 +3970,7 @@
         "src/lib/proposalDocumentPreferences.js",
         "src/lib/proposalExport.js",
         "src/lib/proposalPayload.js",
+        "src/lib/quoteCalculator.js",
         "src/lib/quoteStore.js",
         "src/lib/menuService.js"
       ],
@@ -3670,7 +4070,8 @@
         "src/lib/__tests__/quoteCreation.server.test.js",
         "src/data/__tests__/mockCatalog.tenantSettings.test.js",
         "src/components/__tests__/marginPresentation.test.js",
-        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx"
+        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+        "src/components/__tests__/catalogDraftStateBar.test.jsx"
       ],
       "testLocators": [
         {
@@ -3774,28 +4175,28 @@
           "locator": "starts ready with no unsaved changes and no message"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reflects submitting while the parent-owned saving prop is true"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects submitting while the private draft is saving"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "lands on receipt after a clean save"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects receipt only after publication returns a receipt"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a plain validation error as error, distinct from a conflict"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects error for a definitive draft failure"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a reconciled concurrent-edit conflict as reconciliation"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects reconciliation for a revision conflict"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a saved-but-unconfirmed revision as uncertain"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects uncertain when unsent edits are device-only"
         },
         {
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "offers recovery and its refresh action when reload itself failed"
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects recovery when the operator must retry"
         }
       ],
       "documentationPaths": [
@@ -3830,44 +4231,44 @@
       "stateEvidence": [
         {
           "state": "ready",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "starts ready with no unsaved changes and no message",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects ready without claiming publication early",
           "assertionLocator": "data-capability-state=\"ready\""
         },
         {
           "state": "submitting",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reflects submitting while the parent-owned saving prop is true",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects submitting while the private draft is saving",
           "assertionLocator": "data-capability-state=\"submitting\""
         },
         {
           "state": "receipt",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "lands on receipt after a clean save",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects receipt only after publication returns a receipt",
           "assertionLocator": "data-capability-state=\"receipt\""
         },
         {
           "state": "error",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a plain validation error as error, distinct from a conflict",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects error for a definitive draft failure",
           "assertionLocator": "data-capability-state=\"error\""
         },
         {
           "state": "reconciliation",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a reconciled concurrent-edit conflict as reconciliation",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects reconciliation for a revision conflict",
           "assertionLocator": "data-capability-state=\"reconciliation\""
         },
         {
           "state": "uncertain",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "reports a saved-but-unconfirmed revision as uncertain",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects uncertain when unsent edits are device-only",
           "assertionLocator": "data-capability-state=\"uncertain\""
         },
         {
           "state": "recovery",
-          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-          "locator": "offers recovery and its refresh action when reload itself failed",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects recovery when the operator must retry",
           "assertionLocator": "data-capability-state=\"recovery\""
         }
       ],
@@ -3883,7 +4284,7 @@
       "audiences": [
         "staff"
       ],
-      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it \u2014 INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
+      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it — INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
       "backendPaths": [
         "functions/index.js",
         "functions/intentParserCore.cjs",
@@ -4109,7 +4510,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 12,
+      "reviewRevision": 15,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4117,7 +4518,7 @@
         "staff",
         "customers"
       ],
-      "summary": "Pure deterministic Ambient NOW, Opportunities, Library, exact-arrival, selection, Money, Proposal, Conversation, global Pilot, voice-preview, and customer decision-room contracts prepare source-only interaction and intelligent-object presentation without adding Firebase, provider, communication, pricing, role, or mutation authority. The default-off Opportunities stream projects the caller-owned, already tenant-scoped bounded quote read into identity and four separate proposal, commercial, customer, and operational momentum domains; only proposal completeness may use a percentage. It keeps quote lifecycle, booking confirmation, deposit, and final balance independent, chooses one recommended next step, preserves local-fallback truth and the legacy controls under Quote administration, and hands the exact opaque opportunity plus its arrival context to the canonical Living Opportunity. The administrator-only Library projects the existing organization-scoped catalog snapshot into Catalog and first-class Event Templates, presents source, observation, Catalog version, pricing-review, and incomplete-menu boundaries in calm task-centered language, shows contextual recovery for unavailable exact arrivals, retains dirty drafts across ordinary workspace navigation, keeps catalog-setting and managed-menu draft domains from advancing together, prevents fresher evidence from silently replacing work, and opens exact objects only through the existing guarded editor and save authority. Its development fallback cache and revision comparison are organization-scoped and remain explicitly non-authoritative. A portal-token provider remount occurs only after the App-level draft guard accepts the transition; direct initial portal precedence remains intact and each distinct token receives a distinct public scope. The default-off Ambient NOW briefing narrows the existing bounded staff snapshot to at most three already-ranked Workflow priorities, withholds caught-up language whenever reads or bounds are incomplete, and shows only timestamp-backed internal workflow receipts as quiet progress. The default-off staff shell's global Pilot trigger resolves only the exact context already in view: it relays a matching Living Opportunity into its populated evidence explanation, focuses the existing deterministic draft command field without executing it when that independent gate is enabled, or presents a nonempty choose-an-opportunity recovery instead of generic chat. In Ambient mode, supported browser speech uses pointer or keyboard hold-to-capture, immediate contextual state, release-to-preview, bounded transcript handling, and exact recovery; the transcript is not persisted or staged, explicit Apply remains required, and the flag-off Pilot retains its existing click-to-toggle behavior. Exact arrivals carry only allowlisted semantics and opaque identifiers and remain pending until a supported destination proves exact focus without substitution. Schedule supports only exact accepted/booked events and complete-current-conflict evidence while refusing to conflate its legacy staff-lead field with authoritative operational staffing. Reporting supports only exact opportunity, bounded pipeline, and Ambient interaction-health targets and keeps its targeted opportunity read outside aggregate denominators. Selection scenarios remain local, reversible, unpriced, and unsaved; Money preserves five payment evidence domains; Proposal separates saved revision, authoritative pricing, customer projection, portal issuance, and provider acceptance; Conversation keeps sent, provider-delivered, portal-viewed, replied, and inferred engagement independent; higher-authority Pilot classes remain blocked. The separately gated customer decision room composes the existing exact-token projection into calm Event, Menu and service, Pricing, Planning assumptions, Terms, Possible additions, Response, and Questions sections. Staff-marked additions stage only reversible ordinary change-request lines, and contextual questions reuse one existing conversation composer with explicit staged, preserved-draft, pending-attempt, read-only, and unavailable acknowledgements.",
+      "summary": "Pure deterministic Ambient NOW, Opportunities, Library, exact-arrival, selection, Money, Proposal, Conversation, global Pilot, voice-preview, and customer decision-room contracts prepare source-only interaction and intelligent-object presentation without adding Firebase, provider, communication, pricing, role, or mutation authority. The default-off Opportunities stream projects the caller-owned, already tenant-scoped bounded quote read into identity and four separate proposal, commercial, customer, and operational momentum domains; only proposal completeness may use a percentage. It keeps quote lifecycle, booking confirmation, deposit, and final balance independent, chooses one recommended next step, preserves local-fallback truth and the legacy controls under Quote administration, and hands the exact opaque opportunity plus its arrival context to the canonical Living Opportunity. The administrator-only Library projects the existing organization-scoped catalog snapshot into Catalog and first-class Event Templates, presents source, observation, Catalog version, pricing-review, and incomplete-menu boundaries in calm task-centered language, shows contextual recovery for unavailable exact arrivals, retains dirty drafts across ordinary workspace navigation, keeps catalog-setting and managed-menu draft domains from advancing together, prevents fresher evidence from silently replacing work, and opens exact objects only through the existing guarded editor and save authority. Its development fallback cache and revision comparison are organization-scoped and remain explicitly non-authoritative. A portal-token provider remount occurs only after the App-level draft guard accepts the transition; direct initial portal precedence remains intact and each distinct token receives a distinct public scope. The default-off Ambient NOW briefing narrows the existing bounded staff snapshot to at most three already-ranked Workflow priorities, withholds caught-up language whenever reads or bounds are incomplete, and shows only timestamp-backed internal workflow receipts as quiet progress. The default-off staff shell's global Pilot trigger resolves only the exact context already in view: it relays a matching Living Opportunity into its populated evidence explanation, focuses the existing deterministic draft command field without executing it when that independent gate is enabled, or presents a nonempty choose-an-opportunity recovery instead of generic chat. In Ambient mode, supported browser speech uses pointer or keyboard hold-to-capture, immediate contextual state, release-to-preview, bounded transcript handling, and exact recovery; the transcript is not persisted or staged, explicit Apply remains required, and the flag-off Pilot retains its existing click-to-toggle behavior. Exact arrivals carry only allowlisted semantics and opaque identifiers and remain pending until a supported destination proves exact focus without substitution. Schedule supports only exact accepted/booked events and complete-current-conflict evidence while refusing to conflate its legacy staff-lead field with authoritative operational staffing. Reporting supports only exact opportunity, bounded pipeline, and Ambient interaction-health targets and keeps its targeted opportunity read outside aggregate denominators. Selection scenarios remain local, reversible, unpriced, and unsaved; Money preserves five payment evidence domains; Proposal separates saved revision, authoritative pricing, customer projection, portal issuance, and provider acceptance; Conversation keeps sent, provider-delivered, portal-viewed, replied, and inferred engagement independent; higher-authority Pilot classes remain blocked. The separately gated customer decision room composes the existing exact-token projection into calm Event, Menu and service, Pricing, Planning assumptions, Terms, Possible additions, Response, and Questions sections. Staff-marked additions stage only reversible ordinary change-request lines, and contextual questions reuse one existing conversation composer with explicit staged, preserved-draft, pending-attempt, read-only, and unavailable acknowledgements. The v0.16 Calm Four shell keeps Now, Opportunities, Clients, and role-safe Library as the only persistent destinations, preserves secondary utilities in a focus-contained mobile Workspace & tools sheet, derives opportunity ordering from current recorded state, and keeps standalone and contextual Library modes on the same catalog authority without making browsing a write.",
       "backendPaths": [
         "src/lib/ambientMoneyObject.js",
         "src/lib/ambientProposalObject.js",
@@ -4144,7 +4545,9 @@
         "src/lib/ambientSurfaceGrammar.js",
         "src/lib/ambientOperationalReceipts.js",
         "src/lib/ambientGestureController.js",
-        "src/lib/ambientLegacyRetirement.js"
+        "src/lib/ambientLegacyRetirement.js",
+        "src/hooks/useBrowserLocation.js",
+        "src/context/WorkspaceNavigationContext.jsx"
       ],
       "backendExports": [],
       "affectedBackendExports": [],
@@ -4178,7 +4581,11 @@
       "entryPointLocators": [
         {
           "path": "src/components/WorkspaceShell.jsx",
-          "locator": "data-ambient-action-id=\"open-global-pilot-context\""
+          "locator": "data-ambient-navigation={ambientOrientation ? \"orientation\" : undefined}"
+        },
+        {
+          "path": "src/components/WorkspaceShell.jsx",
+          "locator": "{ capability: \"ambient-pilot-context\" }"
         },
         {
           "path": "src/components/AmbientGlobalPilotSurface.jsx",
@@ -4202,7 +4609,7 @@
         },
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "<QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>"
+          "locator": "<QuoteAdministrationBoundary"
         },
         {
           "path": "src/components/CustomerPortalView.jsx",
@@ -4254,11 +4661,13 @@
         }
       ],
       "testPaths": [
+        "e2e/ambient-intelligence-accessibility.spec.js",
         "e2e/ambient-opportunities-stream.spec.js",
         "e2e/ambient-library.spec.js",
         "e2e/ambient-intelligence-object-verification.spec.js",
         "e2e/customer-decision-room.spec.js",
         "e2e/pilot-voice-capture.spec.js",
+        "e2e/v16-calm-four-acceptance.spec.js",
         "e2e/workspace-no-unintended-overlap.spec.js",
         "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
         "src/components/__tests__/ambientNowView.test.jsx",
@@ -4274,6 +4683,7 @@
         "src/components/__tests__/ambientMoneyContext.test.jsx",
         "src/components/__tests__/ambientProposalContext.test.jsx",
         "src/components/__tests__/ambientConversationContext.test.jsx",
+        "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
         "src/components/__tests__/ambientPilotScenarioReview.test.jsx",
         "src/components/__tests__/ambientSelectionObjects.test.jsx",
         "src/components/__tests__/customerPortalAskAbout.flagOn.test.jsx",
@@ -4288,6 +4698,8 @@
         "src/components/__tests__/eventScheduleArrival.test.jsx",
         "src/components/__tests__/reportingDashboardArrival.test.jsx",
         "src/components/__tests__/workspaceShell.test.jsx",
+        "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+        "src/hooks/__tests__/useBrowserLocation.test.js",
         "src/lib/__tests__/ambientGlobalPilot.test.js",
         "src/lib/__tests__/ambientNowBriefing.test.js",
         "src/lib/__tests__/ambientOpportunityStream.test.js",
@@ -4339,7 +4751,7 @@
         },
         {
           "path": "src/components/__tests__/ambientNowView.test.jsx",
-          "locator": "shows at most three interpreted priorities with one exact resolution each"
+          "locator": "renders the approved editorial home with at most three state-ordered priorities"
         },
         {
           "path": "src/lib/__tests__/ambientOpportunityStream.test.js",
@@ -4407,7 +4819,11 @@
         },
         {
           "path": "e2e/ambient-library.spec.js",
-          "locator": "keeps Library contextual, accessible, and overlap-safe at"
+          "locator": "keeps standalone Library truthful, accessible, and overlap-safe at"
+        },
+        {
+          "path": "e2e/v16-calm-four-acceptance.spec.js",
+          "locator": "8. standalone and contextual Library share catalog authority without leaking or mutating context"
         },
         {
           "path": "src/components/__tests__/staffEvidenceRail.test.jsx",
@@ -4420,6 +4836,18 @@
         {
           "path": "src/components/__tests__/workspaceShell.test.jsx",
           "locator": "reduces ambient workspace navigation to exact orientation and utility actions"
+        },
+        {
+          "path": "src/components/__tests__/workspaceShell.test.jsx",
+          "locator": "opens the explicit mobile Workspace and tools dialog with focus containment and restoration"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "restores a dirty Back attempt and replays the exact history entry only after discard"
+        },
+        {
+          "path": "src/hooks/__tests__/useBrowserLocation.test.js",
+          "locator": "seeds and advances private history positions without replacing application route state"
         },
         {
           "path": "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
@@ -4488,6 +4916,30 @@
         {
           "path": "src/components/__tests__/ambientConversationContext.test.jsx",
           "locator": "renders a populated content-first context with five visibly separate evidence rails"
+        },
+        {
+          "path": "e2e/ambient-intelligence-accessibility.spec.js",
+          "locator": "keeps Conversation evidence ahead of repeated arrival explanation"
+        },
+        {
+          "path": "e2e/ambient-intelligence-accessibility.spec.js",
+          "locator": "keeps Payment and Proposal context handoffs keyboard-operable and exact"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
+          "locator": "opens administration on only the exact focused quote instead of returning to an ambiguous list"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx",
+          "locator": "accepts only an exact semantic Payment administration arrival"
+        },
+        {
+          "path": "src/lib/__tests__/ambientConversationObject.test.js",
+          "locator": "does not turn the quote-store default follow-up shell into scheduled work"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceArrivalContract.test.js",
+          "locator": "preserves an exact quote-scoped Conversation object on a general thread arrival"
         },
         {
           "path": "src/lib/__tests__/pilotCommandPolicy.test.js",
@@ -4583,10 +5035,15 @@
         }
       ],
       "documentationPaths": [
+        "docs/DESIGN_SYSTEM.md",
         "docs/FEATURE_MATRIX.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "For a general Conversation handoff, the canonical object is the exact quote ID"
+        },
         {
           "path": "docs/FEATURE_MATRIX.md",
           "locator": "purpose-bearing editorial grammar, accepted/booked receipt domains, and equivalent mobile manipulation"
@@ -5152,7 +5609,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 3,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -5169,6 +5626,7 @@
         "functions/staffDirectoryAuthority.js",
         "functions/staffInvitationAuthority.js",
         "scripts/operational-staffing-emulator-acceptance.mjs",
+        "scripts/set-operational-staffing-tenant.mjs",
         "src/lib/defaultEmailApp.js",
         "src/lib/operationalStaffingClient.js",
         "src/lib/proposalExport.js",
@@ -5211,7 +5669,7 @@
       "entryPointLocators": [
         {
           "path": "src/components/AmbientLivingOpportunity.jsx",
-          "locator": "data-ambient-action-id={model.actions.inspectStaffing.id}"
+          "locator": "data-capability-entry=\"authoritative-operational-staffing\""
         },
         {
           "path": "src/components/OperationalStaffingPanel.jsx",
@@ -5237,6 +5695,8 @@
       "testPaths": [
         "scripts/operational-staffing-emulator-acceptance.mjs",
         "src/components/__tests__/operationalStaffingPanel.test.jsx",
+        "src/components/__tests__/QuickUpdatesPanel.test.jsx",
+        "src/components/__tests__/workspaceShell.test.jsx",
         "src/components/__tests__/staffInvitationResponsePage.test.jsx",
         "src/components/__tests__/staffWorkspace.test.jsx",
         "src/lib/__tests__/deploymentSafety.test.js",
@@ -5245,6 +5705,7 @@
         "src/lib/__tests__/operationalStaffingClient.test.js",
         "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
         "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
+        "src/lib/__tests__/operationalStaffingTenantActivation.server.test.js",
         "src/lib/__tests__/staffBriefingSheet.test.js",
         "src/lib/__tests__/staffDirectoryClient.localFixture.test.js",
         "src/lib/__tests__/staffDirectoryAuthority.server.test.js",
@@ -5315,6 +5776,14 @@
           "locator": "records acceptance and replaces actions with a truthful receipt state"
         },
         {
+          "path": "src/components/__tests__/QuickUpdatesPanel.test.jsx",
+          "locator": "expands and collapses Menu, Staffing, and Pricing without navigation or mutation"
+        },
+        {
+          "path": "src/components/__tests__/workspaceShell.test.jsx",
+          "locator": "preserves admin operation labels while sales and tenant feature gates fail closed"
+        },
+        {
           "path": "src/lib/__tests__/staffInvitationRoute.server.test.js",
           "locator": "requires the exact response path and non-empty bearer while preserving portal precedence"
         },
@@ -5338,7 +5807,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 3 replaces the Staff route's profile-demo composition with a compact command header, dense photo roster, assignment-first detail, readiness/evidence rail, collapsed full-record editor, and separate mobile roster/detail states while preserving every existing role and mutation boundary. A photo-rich local_fixture is available only under the explicit local authentication bypass for review and performs no Firebase or provider write. The independently gated Event Workspace staffing context, administrator-only Staff route, and public exact-token response route remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read and mutation states. The nine callable exports and one signed webhook remain source-only and default-off behind separate global, tenant, presentation, provider, sender-approval, and secret boundaries.",
+      "surfaceReviewNote": "Revision 5 preserves every revision 4 staffing, protected tenant-gate, WIF, role, and mutation boundary while moving Staff out of persistent primary navigation. Administrators reach the existing Staff workspace from desktop Operations or mobile Workspace & tools; eligible opportunity users reach the same staffing context through the task-specific Quick Updates handoff. The photo-rich local_fixture remains available only under explicit local authentication bypass and performs no Firebase or provider write. The independently gated Event Workspace context, administrator-only Staff route, public exact-token response route, and protected tenant-gate operator remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read/mutation states. The tenant-gate operator still accepts only a short-lived WIF Datastore token from its distinct service account and changes only the named tenant field with readback. No new role, profile field, assignment command, invitation path, provider evidence, or readiness claim is introduced.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -5660,6 +6129,270 @@
       ],
       "headlessReason": "The exporter and its Firestore reader are an explicitly invoked read-only operator tool that writes files, not application state. They own no callable export, expose no customer or staff surface, and grant no tenant, role, pricing, staffing, provider, or production authority. Reads are rooted at one named organization with no collectionGroup query.",
       "safeOutcome": "Operators receive a tenant-scoped canonical evidence bundle and a coverage report naming every section the exporter could not produce and why, without creating quote, payment, booking, delivery, provider, or production evidence. The reader performs no writes, requires an explicit organization, refuses any cross-tenant document, and withholds portal keys, buyer tokens, and provider secrets through an explicit field allowlist."
+    },
+    {
+      "id": "catalog-draft-publish-authority",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "organization_admins"
+      ],
+      "summary": "The role-safe Business Setup Center separates quote, draft, proposal, margin, and provider readiness while catalog and menu edits auto-save into one private organization draft; one explicit review and atomic publication advances a single live-catalog revision with an attributed confirmation and immutable receipt.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/catalogImportBatches.js",
+        "functions/catalogSetupDrafts.js",
+        "functions/index.js",
+        "src/hooks/useCatalogSetupDraft.js",
+        "src/lib/businessReadiness.js",
+        "src/lib/importStudio.js",
+        "src/lib/catalogSetupDraftService.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getCatalogSetupDraft",
+        "functions/index.js#saveCatalogSetupDraft",
+        "functions/index.js#reviewCatalogSetupDraft",
+        "functions/index.js#publishCatalogSetupDraft"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getCatalogSetupDraft",
+        "functions/index.js#saveCatalogSetupDraft",
+        "functions/index.js#reviewCatalogSetupDraft",
+        "functions/index.js#publishCatalogSetupDraft"
+      ],
+      "frontendPaths": [
+        "src/components/AmbientLibraryRoute.jsx",
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/BusinessSetupCenter.jsx",
+        "src/components/CatalogDraftStateBar.jsx",
+        "src/components/ImportStudioModal.jsx",
+        "src/lib/businessReadiness.js",
+        "src/styles.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/BusinessSetupCenter.jsx",
+          "locator": "data-capability-id=\"business-setup-readiness\""
+        },
+        {
+          "path": "src/components/CatalogDraftStateBar.jsx",
+          "locator": "data-capability-id=\"catalog-draft-publish-authority\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/businessSetupCenter.test.jsx",
+        "src/components/__tests__/catalogDraftStateBar.test.jsx",
+        "src/hooks/__tests__/useCatalogSetupDraft.test.jsx",
+        "src/lib/__tests__/catalogSetupDraftService.test.js",
+        "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+        "src/lib/__tests__/businessReadiness.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+          "locator": "coalesces durable intent without activating it, then publishes one confirmed revision and receipt"
+        },
+        {
+          "path": "src/hooks/__tests__/useCatalogSetupDraft.test.jsx",
+          "locator": "coalesces rapid local edits into one non-blocking sync after 800 ms"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "catalog setup drafts and revision-review receipts are private callable-owned records"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Catalog setup draft and publication authority"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catalog draft and publication"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Business Setup Center and Menu Builder"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Revision 2 makes Library a role-safe Setup Center with six independent readiness projections and eight ordered next actions, adds the Menu Builder's operator language/search/filter/bulk workflow, and routes manual menu edits, setup presets, and catalog imports into the shared draft. Sales can inspect readiness but cannot edit. Publication remains explicit and receipt-backed; autosave cannot confirm pricing or mutate active catalog records, and missing cost evidence never blocks ordinary quote creation.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects ready without claiming publication early",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects submitting while the private draft is saving",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects uncertain when unsent edits are device-only",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects reconciliation for a revision conflict",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects receipt only after publication returns a receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects error for a definitive draft failure",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/catalogDraftStateBar.test.jsx",
+          "locator": "projects recovery when the operator must retry",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "safeOutcome": "Operators can tell whether the business can quote, whether a draft is publishable, and which optional evidence is missing without collapsing those states. A same-tenant administrator can edit quickly without activating pricing, see whether changes are device-only or server-saved, and publish at most 400 baseline-fenced changes in one all-or-nothing revision with one attributed confirmation and immutable private receipt; sales staff remain read-only and customer surfaces receive no costs, margins, or private receipts."
+    },
+    {
+      "id": "quote-catalog-revision-review",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "organization_admins",
+        "organization_sales_staff"
+      ],
+      "summary": "Saved quotes retain exact catalog authority and commercial selections, receive a five-state server comparison against the current catalog, and require a private version-and-revision-fenced keep or governed-update outcome instead of silent repricing.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/pricingEngine.js",
+        "functions/quoteCatalogRevisionReview.js",
+        "functions/quoteCreation.js",
+        "src/lib/quoteCatalogRevisionReview.js",
+        "src/lib/quoteDraftRuntimeBase.js",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getQuoteCatalogRevisionReview",
+        "functions/index.js#recordQuoteCatalogReviewOutcome"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#createQuoteDraft",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#getQuoteCatalogRevisionReview",
+        "functions/index.js#recordQuoteCatalogReviewOutcome"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/QuoteCatalogRevisionReviewPanel.jsx",
+        "src/styles.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteCatalogRevisionReviewPanel.jsx",
+          "locator": "data-capability-id=\"quote-catalog-revision-review\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+        "src/lib/__tests__/quoteCatalogRevisionReview.server.test.js",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/quoteDraftRuntime.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/quoteCatalogRevisionReview.server.test.js",
+          "locator": "requires review for saved 24/32 staffing rates after the catalog moves to 48/62"
+        },
+        {
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "shows saved and current values with exact non-house provenance"
+        },
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "builds one canonical draft, public snapshot, and v0001 from server proof"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Revision-safe quote review"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catalog revision review on saved quotes"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The saved-quote editor now leads with authoritative revision status and explicit quoted/current differences. Loaded missing or inactive selections remain visible. Keep records a private freeze receipt; Review and update stages current rates and reuses governed Change Impact. Terminal quotes expose only duplicate/reopen guidance.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects ready for a current quote",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "shows saved and current values with exact non-house provenance",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects uncertain when current catalog authority is unavailable",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects error for a definitive review failure",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects recovery before a review can be loaded",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects submitting while the review outcome is being recorded",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects receipt after an immutable outcome is recorded",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "safeOutcome": "Same-tenant staff can tell whether a saved quote is current, unaffected by a newer revision, materially stale, legacy-unknown, or unavailable. No saved selection is silently removed or repriced; keep and update decisions are tied to the exact active version and current catalog, terminal quotes remain immutable, and customer-safe projections receive neither internal authority nor private receipts."
     }
   ]
 }

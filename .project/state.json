@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReconciled": "2026-08-25",
+  "lastReconciled": "2026-08-30",
   "reconciliationHead": "bc495c8c948d440b12363d5da34209a11ff151fd",
   "project": {
     "id": "quote-pilot",
@@ -106,10 +106,13 @@
       "description": "Role-safe operational presentation, exact arrivals, and bounded Pilot interaction over existing authority.",
       "lifecycle_state": "DEPLOYED",
       "confidence": "MEDIUM",
-      "evidence": [{"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "VERCEL_AND_FIREBASE_DEPLOYED", "verifiedAt": "2026-08-25", "note": "Exact v0.15.0 is recorded at Vercel and Firebase; authenticated and human acceptance are not."}],
+      "evidence": [
+        {"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "VERCEL_AND_FIREBASE_DEPLOYED", "verifiedAt": "2026-08-25", "note": "Exact v0.15.0 is recorded at Vercel and Firebase; authenticated and human acceptance are not."},
+        {"type": "test", "path": "docs/acceptance/quotepilot-v16-calm-four-acceptance-matrix.md", "status": "PASSED", "verifiedAt": "2026-08-30", "note": "The integrated v0.16 Calm Four exact candidate has current local evidence: 10/10 scenario browser tests, 26/26 responsive/accessibility tests, 73/73 latest focused tests, a preceding 196/196 integrated Quick Updates cohort, and a Firebase emulator authority trace. Candidate deployment, authenticated hosted proof, and founder acceptance remain pending."}
+      ],
       "dependencies": ["cap-quote-lifecycle", "int-vercel"],
       "blockers": ["block-authenticated-production-acceptance"],
-      "last_verified": "2026-08-25",
+      "last_verified": "2026-08-30",
       "owner_or_authority": "React workspace routes and existing server authorities"
     },
     {

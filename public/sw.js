@@ -1,10 +1,24 @@
-const CACHE_VERSION = "quotepilot-static-v2";
+const CACHE_NAMESPACE = "quotepilot-shell-";
+const CACHE_VERSION = `${CACHE_NAMESPACE}v3`;
 const CORE_ASSETS = [
-  "/",
-  "/index.html",
+  "/offline.html",
   "/manifest.webmanifest",
-  "/brand/quotepilot-mark.svg"
+  "/brand/quotepilot-mark.svg",
+  "/brand/quotepilot-mark-192.png",
+  "/brand/quotepilot-mark-512.png"
 ];
+
+function isCacheableStaticRequest(request, url) {
+  return request.method === "GET"
+    && url.origin === self.location.origin
+    && (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/brand/"));
+}
+
+function isSafeStaticResponse(response) {
+  if (!response || !response.ok || response.type !== "basic") return false;
+  const cacheControl = String(response.headers?.get("cache-control") || "");
+  return !/(?:^|,)\s*(?:no-store|private)\b/i.test(cacheControl);
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -18,7 +32,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== CACHE_VERSION)
+          .filter((key) => key.startsWith(CACHE_NAMESPACE) && key !== CACHE_VERSION)
           .map((key) => caches.delete(key))
       )
     )
@@ -34,18 +48,22 @@ self.addEventListener("fetch", (event) => {
 
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req).catch(() => caches.match("/index.html"))
+      fetch(req).catch(() => caches.match("/offline.html"))
     );
     return;
   }
 
+  if (!isCacheableStaticRequest(req, url)) return;
+
   event.respondWith(
     caches.match(req).then((cached) => {
       const networkFetch = fetch(req)
-        .then((response) => {
-          if (response && response.status === 200) {
+        .then(async (response) => {
+          if (isSafeStaticResponse(response)) {
             const clone = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(req, clone));
+            await caches.open(CACHE_VERSION)
+              .then((cache) => cache.put(req, clone))
+              .catch(() => undefined);
           }
           return response;
         })

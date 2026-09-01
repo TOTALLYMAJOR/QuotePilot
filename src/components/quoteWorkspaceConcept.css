@@ -983,7 +983,6 @@
 @media (max-width: 720px) {
   .qwc-shell {
     display: block;
-    padding-bottom: 96px;
     background: var(--qwc-ivory);
   }
 
@@ -1027,21 +1026,12 @@
     margin: 0;
   }
 
-  .qwc-title-line h1 {
-    font-size: 1.7rem;
-  }
-
-  .qwc-title-line h1 span,
-  .qwc-title-line h1:not(:first-child) {
+  .qwc-title-divider,
+  .qwc-title-event {
     display: none;
   }
 
   .qwc-title-line h1 {
-    font-size: 0;
-  }
-
-  .qwc-title-line h1::before {
-    content: "MM05366";
     font-size: 1.75rem;
   }
 
@@ -1277,20 +1267,17 @@
   }
 
   .qwc-mobile-actions {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 20;
     min-height: 92px;
     display: grid;
     grid-template-columns: auto auto minmax(150px, 1fr);
     align-items: center;
     gap: 0.9rem;
-    padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
+    margin: 0.75rem 1rem 0;
+    padding: 0.8rem 1rem;
     color: #fff;
     background: #18191b;
-    box-shadow: 0 -12px 34px -24px rgba(0, 0, 0, 0.8);
+    border-radius: 10px;
+    box-shadow: 0 12px 34px -28px rgba(0, 0, 0, 0.8);
   }
 
   .qwc-mobile-actions > div {

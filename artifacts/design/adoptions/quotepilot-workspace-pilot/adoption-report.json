@@ -97,7 +97,7 @@
   },
   "authorities": {
     "duplicateAuthorities": [],
-    "root": "/home/administrator/projects_new/quoteflow",
+    "root": "<repo-root>",
     "sources": [
       {
         "authorityClass": "repository-governance",
@@ -11099,7 +11099,7 @@
   },
   "profile": "quotepilot",
   "repairPerformed": false,
-  "repositoryRoot": "/home/administrator/projects_new/quoteflow",
+  "repositoryRoot": "<repo-root>",
   "schemaVersion": 1,
   "sources": [
     {

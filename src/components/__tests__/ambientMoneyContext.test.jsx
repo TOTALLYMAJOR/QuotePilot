@@ -66,6 +66,8 @@ describe("Ambient Money context", () => {
     expect(container.textContent).toContain("Payment stages");
     expect(container.querySelector('[aria-label="Payment stages"]')).not.toBeNull();
     expect(container.textContent).toContain("Why this is shown");
+    expect(container.querySelector('[data-context-arrival-duplicate="reason"]')?.textContent)
+      .toContain("Why this is shown");
     expect(container.textContent).toContain("If nothing changes");
     expect(container.textContent).toContain("Confidence and source");
     expect(container.textContent).toContain("What you can do next");

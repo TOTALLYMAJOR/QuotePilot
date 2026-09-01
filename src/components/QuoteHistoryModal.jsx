@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getIntegrationSetupStatus,
   reconcileDepositCheckout,
@@ -36,6 +36,7 @@ import {
 } from "../lib/quoteStore";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { navigateBrowser } from "../hooks/useBrowserLocation";
+import { buildQuotePath } from "../lib/workspaceRoutes";
 import {
   buildQuoteHistoryController,
   getQuoteActionPermissions
@@ -66,12 +67,16 @@ const AmbientOpportunitiesStream = AMBIENT_UI_ENABLED
   ? lazy(() => import("./AmbientOpportunitiesStream"))
   : null;
 
-function QuoteAdministrationBoundary({ ambient = false, children }) {
-  const [open, setOpen] = useState(false);
+function QuoteAdministrationBoundary({ ambient = false, initiallyOpen = false, children }) {
+  const [open, setOpen] = useState(Boolean(initiallyOpen));
+  useEffect(() => {
+    if (initiallyOpen) setOpen(true);
+  }, [initiallyOpen]);
   if (!ambient) return children();
   return (
     <details
       className="ambient-opportunities-administration"
+      data-quote-administration="true"
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -84,16 +89,11 @@ function QuoteAdministrationBoundary({ ambient = false, children }) {
   );
 }
 
-// The quote workspace is an isolated route with no navigation entry of its own,
-// so the Quotes list is where staff reach it. Navigation stays context-free via
-// navigateBrowser so this view keeps rendering outside a navigation provider.
-const QUOTE_WORKSPACE_PATH = "/app/quote-workspace";
-
 function openQuoteWorkspace(quoteId) {
   const requested = String(quoteId || "").trim();
   const destination = requested
-    ? `${QUOTE_WORKSPACE_PATH}?quoteId=${encodeURIComponent(requested)}`
-    : QUOTE_WORKSPACE_PATH;
+    ? buildQuotePath(requested)
+    : "/app/quotes";
   navigateBrowser(destination, { preserveSearch: false, preserveHash: false });
 }
 
@@ -435,6 +435,62 @@ export function getQuoteHistoryFinancialCells(quote = {}) {
   };
 }
 
+export function getAmbientQuoteSourceFreshness({
+  source = "",
+  complete = false,
+  loading = false,
+  stale = false,
+  loadedAtISO = "",
+  error = ""
+} = {}) {
+  const observedAt = String(loadedAtISO || "").trim();
+  const sourceLabel = String(source || "").trim().toLowerCase() === "firebase"
+    ? "Firestore quote history"
+    : "quote history";
+
+  if (complete && !loading && !stale && !error && observedAt) {
+    return {
+      state: "fresh",
+      observedAt,
+      reason: `This exact quote came from the latest completed ${sourceLabel} read.`
+    };
+  }
+
+  if (complete && observedAt && (loading || stale || error)) {
+    return {
+      state: "stale",
+      observedAt,
+      reason: loading
+        ? `A prior ${sourceLabel} snapshot remains visible while QuotePilot refreshes it.`
+        : `A prior ${sourceLabel} snapshot remains visible because the latest read did not complete successfully.`
+    };
+  }
+
+  return {
+    state: "unknown",
+    reason: `A completed ${sourceLabel} observation is not available yet.`
+  };
+}
+
+export function isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId } = {}) {
+  const exactQuoteId = String(focusQuoteId || "").trim();
+  const objectType = String(arrivalContext?.object?.type || "").trim();
+  const expectedIntent = {
+    opportunity: "review_quote_controls",
+    "payment-evidence": "review_payment_controls",
+    "customer-decision-artifact": "review_proposal_controls"
+  }[objectType] || "";
+  return Boolean(
+    exactQuoteId
+    && arrivalContext?.destination === "administration"
+    && arrivalContext?.surfaceId === "quote-administration"
+    && arrivalContext?.focusConsumerState === "supported"
+    && String(arrivalContext?.object?.id || "").trim() === exactQuoteId
+    && String(arrivalContext?.focus?.quoteId || "").trim() === exactQuoteId
+    && arrivalContext?.intentId === expectedIntent
+  );
+}
+
 const fmtDate = formatQuoteHistoryDate;
 
 function canConvertToContract(quote) {
@@ -757,6 +813,11 @@ export function QuoteHistoryView({
   arrivalContext = null,
   onArrivalResolution = null,
   onEditQuote,
+  serviceStyles = [],
+  onPreviewQuickUpdate,
+  onSaveQuickUpdate,
+  onOpenQuickUpdatesLibrary,
+  onQuickUpdatesGuardChange,
   ambientPricingCatalog = null,
   ambientPricingSettings = null,
   globalPilotRequest = null,
@@ -769,6 +830,7 @@ export function QuoteHistoryView({
   onOpenOpportunity,
   onOpenWorkflow,
   onOpenConversation,
+  onOpenQuoteAdministration,
   onOpenIntegrations,
   integrationsAvailable = true,
   canDeleteQuotes = false,
@@ -776,7 +838,14 @@ export function QuoteHistoryView({
   onToast
 }) {
   const embedded = presentation === "embedded";
-  const detailMode = embedded && Boolean(String(focusQuoteId || "").trim());
+  const administrationFocusActive = Boolean(
+    embedded
+    && String(focusQuoteId || "").trim()
+    && String(focusAction || "").trim() === "administration"
+  );
+  const detailMode = embedded
+    && Boolean(String(focusQuoteId || "").trim())
+    && !administrationFocusActive;
   const [state, setState] = useState({
     loading: false,
     source: "",
@@ -800,6 +869,7 @@ export function QuoteHistoryView({
   const [eventTypeFilter, setEventTypeFilter] = useState("all");
   const [eventTypes, setEventTypes] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
+  const filterOrganizationIdRef = useRef(String(organizationId || "").trim());
   const [updatingId, setUpdatingId] = useState("");
   const [convertingId, setConvertingId] = useState("");
   const [contractConversions, setContractConversions] = useState({});
@@ -819,6 +889,10 @@ export function QuoteHistoryView({
   const [resolvingDeliveryId, setResolvingDeliveryId] = useState("");
   const [conversationQuote, setConversationQuote] = useState(null);
   const [kitchenBeoQuote, setKitchenBeoQuote] = useState(null);
+  const [focusedDecisionDebtRead, setFocusedDecisionDebtRead] = useState(null);
+  const handleFocusedDecisionDebtRead = useCallback((nextRead) => {
+    setFocusedDecisionDebtRead(nextRead && typeof nextRead === "object" ? nextRead : null);
+  }, []);
   const kitchenBeoQuoteRef = useRef(null);
   const [deliveryClockMs, setDeliveryClockMs] = useState(() => Date.now());
   const dialogRef = useRef(null);
@@ -959,19 +1033,35 @@ export function QuoteHistoryView({
     if (!open) {
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      loading: true,
-      source: "",
-      error: "",
-      feedback: "",
-      quotes: []
-    }));
-    if (focusQuoteId) {
+    const requestedOrganizationId = String(organizationId || "").trim();
+    if (filterOrganizationIdRef.current !== requestedOrganizationId) {
+      filterOrganizationIdRef.current = requestedOrganizationId;
       setQuery("");
       setEventTypeFilter("all");
       setStatusFilter("all");
     }
+    setState((prev) => (
+      prev.organizationId === requestedOrganizationId
+        ? {
+            ...prev,
+            loading: true,
+            error: "",
+            readError: "",
+            feedback: ""
+          }
+        : {
+            loading: true,
+            source: "",
+            error: "",
+            readError: "",
+            feedback: "",
+            quotes: [],
+            truncated: false,
+            readComplete: false,
+            loadedAtISO: "",
+            organizationId: requestedOrganizationId
+          }
+    ));
   }, [open, focusQuoteId, focusAction, organizationId]);
 
   const pushToast = (message, tone = "info") => {
@@ -1088,7 +1178,7 @@ export function QuoteHistoryView({
     if (!open) return;
     const timer = setTimeout(() => load(), 0);
     return () => clearTimeout(timer);
-  }, [open, focusQuoteId, organizationId]);
+  }, [open, focusQuoteId, focusAction, organizationId]);
 
   useEffect(() => {
     const canCheck = getQuoteActionPermissions(currentUserRole).role === "admin";
@@ -1135,10 +1225,50 @@ export function QuoteHistoryView({
     if (!open || !focusQuoteId || state.loading) return;
     const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}`;
     if (focusedHandoffIdRef.current === focusKey) return;
-    if (loadedFocusQuoteIdRef.current !== focusQuoteId) return;
+    const normalizedAction = String(focusAction || "").trim();
+    const administrationArrival = normalizedAction === "administration"
+      && arrivalContext?.surfaceId === "quote-administration";
+    const exactAdministrationArrival = !administrationArrival
+      || isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId });
+    if (administrationArrival && !exactAdministrationArrival) {
+      focusedHandoffIdRef.current = focusKey;
+      onArrivalResolution?.({
+        status: "recovery",
+        reason: "The requested quote controls do not match this exact workspace record.",
+        consequence: "No alternate quote or control set was selected and no record changed.",
+        nextResolution: "Return to the originating opportunity and reopen the exact Payment or Proposal action."
+      });
+      return;
+    }
+    if (loadedFocusQuoteIdRef.current !== focusQuoteId) {
+      if (administrationArrival && state.readComplete && !state.quotes.some((quote) => quote.id === focusQuoteId)) {
+        focusedHandoffIdRef.current = focusKey;
+        onArrivalResolution?.({
+          status: "recovery",
+          reason: "The exact quote is not present in the completed Quote history read.",
+          consequence: "No alternate quote was substituted and no proposal or payment control ran.",
+          nextResolution: "Return to the originating opportunity, refresh current quote evidence, and retry."
+        });
+      }
+      return;
+    }
     const targetQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
     if (!targetQuote) return;
-    const normalizedAction = String(focusAction || "").trim();
+    if (normalizedAction === "administration") {
+      const frame = window.requestAnimationFrame(() => {
+        const administrationSummary = dialogRef.current?.querySelector(
+          '[data-quote-administration="true"] > summary'
+        );
+        if (!administrationSummary) return;
+        administrationSummary.focus({ preventScroll: true });
+        administrationSummary.scrollIntoView({ block: "start", inline: "nearest" });
+        if (administrationArrival && document.activeElement === administrationSummary) {
+          onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId });
+        }
+        focusedHandoffIdRef.current = focusKey;
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
     if (normalizedAction === "conversation") {
       const focusedConversation = resolveFocusedConversationQuote({
         focusAction: normalizedAction,
@@ -1169,7 +1299,17 @@ export function QuoteHistoryView({
       focusedHandoffIdRef.current = focusKey;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open, focusQuoteId, focusAction, state.loading, state.quotes, conversationQuote]);
+  }, [
+    open,
+    focusQuoteId,
+    focusAction,
+    state.loading,
+    state.readComplete,
+    state.quotes,
+    conversationQuote,
+    arrivalContext,
+    onArrivalResolution
+  ]);
 
   useEffect(() => {
     if (!deliveryReview) return undefined;
@@ -1196,6 +1336,10 @@ export function QuoteHistoryView({
     state.readError,
     state.truncated
   ]);
+  const ambientQuoteSourceFreshness = useMemo(() => getAmbientQuoteSourceFreshness({
+    ...ambientOpportunityReadBoundary,
+    source: state.source
+  }), [ambientOpportunityReadBoundary, state.source]);
 
   // Keep the child conversation mounted across a blocked route transition so
   // its in-memory request identity cannot be destroyed before /app/quotes is
@@ -1213,7 +1357,10 @@ export function QuoteHistoryView({
     (eventTypes || []).map((item) => [String(item.id), item.name])
   );
 
-  const filteredQuotes = filterQuoteHistoryQuotes(state.quotes, {
+  const administrationQuotes = administrationFocusActive
+    ? state.quotes.filter((quote) => String(quote?.id || "") === String(focusQuoteId || ""))
+    : state.quotes;
+  const filteredQuotes = filterQuoteHistoryQuotes(administrationQuotes, {
     query,
     eventTypeFilter,
     statusFilter
@@ -1236,6 +1383,15 @@ export function QuoteHistoryView({
     source: state.source
   });
   const focusedQuote = quoteHistoryController.eventRoom.quote;
+  const focusedDecisionDebtSnapshot = state.source === "firebase"
+    && focusedQuote
+    && focusedDecisionDebtRead?.organizationId === String(organizationId || "").trim()
+    && focusedDecisionDebtRead?.quoteId === String(focusedQuote.id || "").trim()
+    && focusedDecisionDebtRead.loading === false
+    && focusedDecisionDebtRead.stale === false
+    && !focusedDecisionDebtRead.error
+      ? focusedDecisionDebtRead.result
+      : null;
   const focusedQuoteIsVisible = Boolean(
     focusedQuote && filteredQuotes.some((quote) => quote.id === focusedQuote.id)
   );
@@ -2099,6 +2255,113 @@ export function QuoteHistoryView({
       && portalConversationAvailable()
       && focusedQuoteCanUsePortal
     );
+    const quickUpdateRevisionId = String(
+      focusedQuote?.activeVersionId
+      || focusedQuote?.versionMeta?.versionId
+      || ""
+    ).trim();
+    const validateQuickUpdateRequest = (request) => {
+      const requestQuoteId = String(request?.quoteId || "").trim();
+      const requestOrganizationId = String(request?.organizationId || "").trim();
+      const requestRevisionId = String(request?.baseRevisionId || "").trim();
+      const requestedStyle = String(request?.patch?.event?.style || "").trim();
+      const exactDelta = Array.isArray(request?.delta)
+        && request.delta.length === 1
+        && request.delta[0]?.fieldPath === "event.style"
+        && String(request.delta[0]?.after || "").trim() === requestedStyle;
+      return Boolean(
+        ordinaryEditAllowed
+        && focusedQuote
+        && request?.modelId === "quick-updates-request-v1"
+        && request?.scope === "event.service_style"
+        && requestQuoteId === String(focusedQuote.id || focusedQuote.quoteId || "").trim()
+        && requestOrganizationId === String(organizationId || focusedQuote.organizationId || "").trim()
+        && requestRevisionId
+        && requestRevisionId === quickUpdateRevisionId
+        && requestedStyle
+        && exactDelta
+      );
+    };
+    const handlePreviewQuickUpdate = async (request) => {
+      if (!validateQuickUpdateRequest(request)) {
+        return {
+          status: "conflict",
+          message: "The Quick Updates draft no longer matches this exact tenant, opportunity, or saved revision."
+        };
+      }
+      if (typeof onPreviewQuickUpdate !== "function") {
+        return {
+          status: "failure",
+          message: "Authoritative Quick Updates review is not available in this workspace."
+        };
+      }
+      return onPreviewQuickUpdate(request);
+    };
+    const handleSaveQuickUpdate = async (request, hooks = {}) => {
+      if (!validateQuickUpdateRequest(request)) {
+        return {
+          status: "conflict",
+          message: "The saved opportunity changed before this menu draft could be submitted."
+        };
+      }
+      if (typeof onSaveQuickUpdate !== "function") {
+        return {
+          status: "failure",
+          message: "Authoritative Quick Updates save is not available in this workspace."
+        };
+      }
+      const persisted = await onSaveQuickUpdate(request);
+      const persistenceStatus = String(persisted?.status || "").trim().toLowerCase();
+      if (persistenceStatus !== "persisted") {
+        if (["conflict", "failure", "failed", "handoff", "uncertain"].includes(persistenceStatus)) {
+          return persisted;
+        }
+        return {
+          status: "uncertain",
+          message: "The save did not return the required persisted phase before authoritative list refresh."
+        };
+      }
+      const receipt = persisted.receipt || null;
+      hooks.onPersisted?.(receipt);
+      const refreshed = await load();
+      if (!refreshed || !Array.isArray(refreshed.quotes)) {
+        return {
+          status: "uncertain",
+          message: "The save returned, but the authoritative opportunity list could not be refreshed.",
+          receipt
+        };
+      }
+      const authoritativeQuote = refreshed.quotes.find((item) => (
+        String(item?.id || item?.quoteId || "").trim() === request.quoteId
+      ));
+      const refreshedOrganizationId = String(authoritativeQuote?.organizationId || organizationId || "").trim();
+      const refreshedRevisionId = String(
+        authoritativeQuote?.activeVersionId
+        || authoritativeQuote?.versionMeta?.versionId
+        || authoritativeQuote?.updatedAtISO
+        || ""
+      ).trim();
+      const expectedRevisionId = String(
+        receipt?.activeVersionId || receipt?.versionId || persisted?.activeVersionId || ""
+      ).trim();
+      if (
+        !authoritativeQuote
+        || refreshedOrganizationId !== request.organizationId
+        || String(authoritativeQuote?.event?.style || "").trim() !== request.patch.event.style
+        || (expectedRevisionId && refreshedRevisionId !== expectedRevisionId)
+      ) {
+        return {
+          status: "uncertain",
+          message: "The save returned, but the authoritative opportunity reread did not confirm the exact tenant, revision, and service style.",
+          receipt
+        };
+      }
+      return {
+        status: "saved",
+        quote: authoritativeQuote,
+        receipt
+      };
+    };
     return (
       <main
         className="container workspace-route-main embedded-workspace-route event-workspace-route"
@@ -2142,6 +2405,7 @@ export function QuoteHistoryView({
                 onGlobalPilotResolution={onGlobalPilotResolution}
                 arrivalContext={arrivalContext}
                 quoteActionController={quoteHistoryController.actions}
+                decisionDebtSnapshot={focusedDecisionDebtSnapshot}
                 onArrivalResolution={onArrivalResolution}
                 ambientContext={{
                   organizationId: String(organizationId || focusedQuote.organizationId || "local-fallback"),
@@ -2154,15 +2418,24 @@ export function QuoteHistoryView({
                     label: String(focusedQuote.event?.name || focusedQuote.quoteNumber || "Selected opportunity")
                   },
                   revision: focusedQuote.activeVersionId || focusedQuote.versionMeta?.versionId || null,
-                  sourceFreshness: {
-                    state: "unknown",
-                    reason: "Quote history does not expose a source observation timestamp."
-                  },
+                  sourceFreshness: ambientQuoteSourceFreshness,
                   pendingPreview: null
                 }}
                 onBackToQuotes={onBackToQuotes}
                 onEditQuote={handleEditQuote}
+                serviceStyles={serviceStyles}
+                onPreviewQuickUpdate={handlePreviewQuickUpdate}
+                onSaveQuickUpdate={handleSaveQuickUpdate}
+                onOpenQuickUpdatesLibrary={String(currentUserRole || "").trim().toLowerCase() === "admin"
+                  ? onOpenQuickUpdatesLibrary
+                  : undefined}
+                onQuickUpdatesGuardChange={onQuickUpdatesGuardChange}
                 onOpenWorkflow={onOpenWorkflow}
+                onOpenLegacyWorkspace={(context = {}) => (
+                  typeof onOpenQuoteAdministration === "function"
+                    ? onOpenQuoteAdministration(focusedQuote.id, context)
+                    : onBackToQuotes(context)
+                )}
                 onOpenConversation={(quoteId, options) => onOpenConversation
                   ? onOpenConversation(quoteId, options)
                   : setConversationQuote(focusedQuote)}
@@ -2213,6 +2486,7 @@ export function QuoteHistoryView({
               quoteId={focusedQuote.id}
               available={Boolean(organizationId)}
               onOpenWorkflow={onOpenWorkflow}
+              onReadStateChange={handleFocusedDecisionDebtRead}
             />
           )}
           {conversationQuote && (
@@ -2256,8 +2530,14 @@ export function QuoteHistoryView({
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="quote-history-title"
     >
-      <div className={`modal-card history-card${embedded ? " workspace-route-card" : ""}`} ref={dialogRef} tabIndex={-1}>
-        <div className="modal-head">
+      <div
+        className={`modal-card history-card${embedded ? " workspace-route-card" : ""}${
+          embedded && AMBIENT_UI_ENABLED ? " ambient-opportunities-host" : ""
+        }`}
+        ref={dialogRef}
+        tabIndex={-1}
+      >
+        {!(embedded && AMBIENT_UI_ENABLED) && <div className="modal-head">
           <h2
             ref={routeHeadingRef}
             id="quote-history-title"
@@ -2282,9 +2562,9 @@ export function QuoteHistoryView({
               {embedded ? AMBIENT_UI_ENABLED ? "Back to Now" : "Back to Home" : "Close"}
             </button>
           </div>
-        </div>
+        </div>}
 
-        <details className="staff-evidence-disclosure workspace-data-details">
+        {!AMBIENT_UI_ENABLED && <details className="staff-evidence-disclosure workspace-data-details">
           <summary>Workspace data details</summary>
           <p className="source-note">Source: {formatWorkspaceSource(state.source)}</p>
           <p className="source-note">
@@ -2295,7 +2575,7 @@ export function QuoteHistoryView({
               Kitchen BEO fallback is browser-local in this workspace. It has no server generation receipt, retained artifact history, or authoritative freshness status.
             </p>
           )}
-        </details>
+        </details>}
         {quoteHistoryCloseGuard.blocked && (
           <p className="warning-note" role="status">{quoteHistoryCloseGuard.message}</p>
         )}
@@ -2313,9 +2593,9 @@ export function QuoteHistoryView({
                 : `Email delivery unavailable: ${emailSetup.error || "finish provider setup in Integration Ops."}`}
           </p>
         )}
-        {state.error && <p className="error-note" role="alert">{state.error}</p>}
+        {state.error && !AMBIENT_UI_ENABLED && <p className="error-note" role="alert">{state.error}</p>}
         {state.feedback && <p className="source-note" role="status" aria-live="polite">{state.feedback}</p>}
-        {focusedQuoteIsVisible && (
+        {focusedQuoteIsVisible && !administrationFocusActive && (
           <section
             className="saved-quote-handoff"
             ref={savedQuoteHandoffRef}
@@ -2519,6 +2799,7 @@ export function QuoteHistoryView({
           </section>
         )}
         {focusedQuoteIsVisible
+          && !administrationFocusActive
           && state.source === "firebase"
           && ["admin", "sales"].includes(permissions.role) && (
           <CommercialDependencyStatePanel
@@ -2529,15 +2810,16 @@ export function QuoteHistoryView({
             canReconcile
           />
         )}
-        {focusedQuoteIsVisible && state.source === "firebase" && (
+        {focusedQuoteIsVisible && !administrationFocusActive && state.source === "firebase" && (
           <QuoteDecisionDebtPanel
             organizationId={organizationId}
             quoteId={focusedQuote.id}
             available={Boolean(organizationId)}
             onOpenWorkflow={onOpenWorkflow}
+            onReadStateChange={handleFocusedDecisionDebtRead}
           />
         )}
-        {AMBIENT_UI_ENABLED && AmbientOpportunitiesStream && (
+        {AMBIENT_UI_ENABLED && !administrationFocusActive && AmbientOpportunitiesStream && (
           <Suspense fallback={(
             <section
               className="ambient-opportunities-loading"
@@ -2549,6 +2831,7 @@ export function QuoteHistoryView({
             </section>
           )}>
             <AmbientOpportunitiesStream
+              headingRef={routeHeadingRef}
               quotes={state.quotes}
               source={state.source}
               readBoundary={ambientOpportunityReadBoundary}
@@ -2566,7 +2849,10 @@ export function QuoteHistoryView({
             />
           </Suspense>
         )}
-        <QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>
+        <QuoteAdministrationBoundary
+          ambient={AMBIENT_UI_ENABLED}
+          initiallyOpen={administrationFocusActive}
+        >
           {() => (
           <>
         <div className="history-controls">

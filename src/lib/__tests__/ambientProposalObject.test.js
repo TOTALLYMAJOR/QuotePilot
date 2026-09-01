@@ -101,6 +101,39 @@ describe("Ambient Proposal intelligent object", () => {
     expect(Object.isFrozen(result.actions)).toBe(true);
   });
 
+  test("keeps phone enrichment visible without blocking an exact proposal or governed delivery", () => {
+    const quote = completeQuote({
+      customer: {
+        ...completeQuote().customer,
+        phone: ""
+      }
+    });
+    const result = model(quote);
+
+    expect(result.readiness).toMatchObject({
+      score: 100,
+      coverageScore: 95,
+      complete: true,
+      gaps: []
+    });
+    expect(result.readiness.recommendedGaps.map((entry) => entry.id)).toEqual([
+      "customer-phone"
+    ]);
+    expect(result.customerProjection).toMatchObject({
+      state: "available",
+      exactCurrent: true,
+      readinessGapIds: [],
+      recommendedGapIds: ["customer-phone"]
+    });
+    expect(result.actionById["prepare-proposal"].availability).toBe("available");
+    expect(result.actionById["send-proposal"].availability).toBe("governed_resolution");
+    expect(result.descriptor.summary).toMatch(/all required proposal details are present/iu);
+    expect(result.descriptor.recommendation).toMatchObject({
+      actionId: "review-proposal-recommendation-customer-phone"
+    });
+    expect(result.descriptor.recommendation.summary).toMatch(/does not block preparation or sending/iu);
+  });
+
   test("surfaces completeness gaps and blocks preparation without changing the quote", () => {
     const input = completeQuote({
       customer: { name: "Maya Thompson", email: "not-an-email", phone: "" },

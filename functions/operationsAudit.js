@@ -2,6 +2,12 @@ function text(value, max = 160) {
   return String(value || "").trim().slice(0, max);
 }
 
+const OPERATIONS_AUDIT_TAXONOMY_VERSION = 1;
+const OPERATIONS_AUDIT_PROJECTION_LIMIT = 50;
+const OPERATIONS_AUDIT_SOURCE_SAMPLE_LIMIT = 200;
+const STAFF_ROLES = new Set(["admin", "sales"]);
+const AUDIT_ROLE_VALUES = new Set(["none", "admin", "sales"]);
+
 function iso(value) {
   const parsed = new Date(String(value || ""));
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
@@ -91,21 +97,74 @@ function roleSummary(roles) {
   return { ...counts, staff: counts.admin + counts.sales };
 }
 
-function actionLog({ executions, quotes, settings, roles }) {
-  const roleByUid = new Map(roles.map((role) => [text(role?.uid), text(role?.role, 20).toLowerCase()]));
+function receiptActionLog({ executions, roleAuthorityReceipts, organizationId }) {
   const rows = [];
   executions.forEach((execution) => {
+    const occurredAtISO = iso(execution?.completedAtISO);
+    const actorRole = text(execution?.executedBy?.role, 20).toLowerCase();
+    const state = text(execution?.state, 40).toLowerCase();
+    const requestId = text(execution?.approvalRequestId || execution?.id);
+    if (!occurredAtISO || !requestId || !STAFF_ROLES.has(actorRole) || !["succeeded", "failed"].includes(state)) {
+      return;
+    }
     rows.push({
-      id: `approval:${text(execution?.approvalRequestId || execution?.id)}`,
-      occurredAtISO: iso(execution?.completedAtISO || execution?.startedAtISO || execution?.updatedAtISO),
+      id: `approval:${requestId}`,
+      occurredAtISO,
       action: text(execution?.action, 80) || "approval_execution",
-      state: text(execution?.state, 40),
+      state,
       quoteId: text(execution?.quoteId),
       actorEmail: text(execution?.executedBy?.email, 254).toLowerCase(),
-      actorRole: text(execution?.executedBy?.role, 20).toLowerCase(),
-      authority: "server"
+      actorRole,
+      authority: "server_receipt",
+      evidenceClass: "immutable_receipt"
     });
   });
+
+  const seenRequests = new Set();
+  roleAuthorityReceipts.forEach((receipt) => {
+    const requestId = text(receipt?.requestId || receipt?.id);
+    const receiptOrganizationId = text(receipt?.organizationId);
+    const occurredAtISO = iso(receipt?.changedAtISO);
+    const actorRole = receipt?.actorWasOwner === true ? "owner" : "admin";
+    const previousRole = text(receipt?.previousRole, 20).toLowerCase();
+    const nextRole = text(receipt?.nextRole, 20).toLowerCase();
+    const actorEmail = text(receipt?.actorEmail, 254).toLowerCase();
+    const targetEmail = text(receipt?.targetEmail, 254).toLowerCase();
+    if (
+      receipt?.schemaVersion !== 1
+      || !requestId
+      || seenRequests.has(requestId)
+      || !organizationId
+      || receiptOrganizationId !== organizationId
+      || !occurredAtISO
+      || typeof receipt?.actorWasOwner !== "boolean"
+      || !AUDIT_ROLE_VALUES.has(previousRole)
+      || !AUDIT_ROLE_VALUES.has(nextRole)
+      || previousRole === nextRole
+      || !actorEmail
+      || !targetEmail
+    ) {
+      return;
+    }
+    seenRequests.add(requestId);
+    rows.push({
+      id: `role:${requestId}`,
+      occurredAtISO,
+      action: "organization_role_changed",
+      state: `${previousRole}_to_${nextRole}`,
+      targetEmail,
+      actorEmail,
+      actorRole,
+      authority: "server_receipt",
+      evidenceClass: "immutable_receipt"
+    });
+  });
+  return rows;
+}
+
+function legacyActionLog({ quotes, settings, roles }) {
+  const roleByUid = new Map(roles.map((role) => [text(role?.uid), text(role?.role, 20).toLowerCase()]));
+  const rows = [];
   quotes.forEach((quote) => {
     const resolution = quote?.workflow?.quoteDelivery?.lastResolution;
     if (!resolution || typeof resolution !== "object") return;
@@ -118,7 +177,8 @@ function actionLog({ executions, quotes, settings, roles }) {
       quoteNumber: text(quote?.quoteNumber, 80),
       actorEmail: text(resolution?.actorEmail, 254).toLowerCase(),
       actorRole: roleByUid.get(text(resolution?.actorUid)) || "admin",
-      authority: "server"
+      authority: "server_projection",
+      evidenceClass: "legacy_observation"
     });
   });
   const confirmation = settings?.pricingConfirmation;
@@ -130,29 +190,51 @@ function actionLog({ executions, quotes, settings, roles }) {
       state: `revision_${Number(confirmation.confirmedCatalogRevision || 0)}`,
       actorEmail: text(confirmation.actorEmail, 254).toLowerCase(),
       actorRole: roleByUid.get(text(confirmation.actorUid)) || "admin",
-      authority: "server"
+      authority: "server_projection",
+      evidenceClass: "legacy_observation"
     });
   }
-  return rows
-    .filter((row) => row.occurredAtISO)
-    .sort((left, right) => right.occurredAtISO.localeCompare(left.occurredAtISO))
-    .slice(0, 50);
+  return rows.filter((row) => row.occurredAtISO);
 }
 
 function buildOperationsAuditSnapshot({
   quotes = [],
   executions = [],
+  roleAuthorityReceipts = [],
   roles = [],
   settings = {},
+  organizationId = "",
   nowISO = new Date().toISOString()
 } = {}) {
   const nowMs = Date.parse(nowISO);
+  const receiptActions = receiptActionLog({
+    executions,
+    roleAuthorityReceipts,
+    organizationId: text(organizationId)
+  });
+  const legacyActions = legacyActionLog({ quotes, settings, roles });
+  const actions = [...receiptActions, ...legacyActions]
+    .sort((left, right) => right.occurredAtISO.localeCompare(left.occurredAtISO))
+    .slice(0, OPERATIONS_AUDIT_PROJECTION_LIMIT);
   return {
     generatedAtISO: new Date(Number.isFinite(nowMs) ? nowMs : Date.now()).toISOString(),
     delivery: deliveryHealth(quotes, Number.isFinite(nowMs) ? nowMs : Date.now()),
     sync: syncHealth(quotes, Number.isFinite(nowMs) ? nowMs : Date.now()),
     roles: roleSummary(roles),
-    actions: actionLog({ executions, quotes, settings, roles })
+    security: {
+      taxonomyVersion: OPERATIONS_AUDIT_TAXONOMY_VERSION,
+      inScopeActionTypes: ["organization_role_change", "quote_approval_execution"],
+      receiptBackedActionCount: receiptActions.length,
+      legacyObservationCount: legacyActions.length,
+      projectionLimit: OPERATIONS_AUDIT_PROJECTION_LIMIT,
+      sourceSampleLimit: OPERATIONS_AUDIT_SOURCE_SAMPLE_LIMIT,
+      storageRetention: "indefinite_server_record",
+      archivePolicy: "retained",
+      clearPolicy: "not_available",
+      exportPolicy: "not_available",
+      privacy: "bounded_projection"
+    },
+    actions
   };
 }
 

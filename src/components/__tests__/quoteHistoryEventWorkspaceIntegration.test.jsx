@@ -19,7 +19,10 @@ vi.mock("../../lib/menuService", async () => ({
   getEventTypes: mocks.getEventTypes
 }));
 
-import { QuoteHistoryView } from "../QuoteHistoryModal";
+import {
+  isExactQuoteAdministrationArrival,
+  QuoteHistoryView
+} from "../QuoteHistoryModal";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,6 +53,16 @@ async function settle() {
     await new Promise((resolve) => window.setTimeout(resolve, 10));
     await Promise.resolve();
   });
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 function byText(label) {
@@ -115,5 +128,230 @@ describe("QuoteHistoryView event workspace integration", () => {
     expect(onOpenSchedule).toHaveBeenCalledOnce();
     expect(onOpenCustomer).toHaveBeenCalledWith(QUOTE.customerId);
     expect(onBackToQuotes).toHaveBeenCalledOnce();
+  });
+
+  test("opens administration on only the exact focused quote instead of returning to an ambiguous list", async () => {
+    const otherQuote = {
+      ...QUOTE,
+      id: "quote-other",
+      quoteNumber: "Q-OTHER"
+    };
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "local",
+      quotes: [otherQuote, QUOTE]
+    });
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={QUOTE.id}
+          currentUserRole="sales"
+          onClose={() => {}}
+          onBackToQuotes={() => {}}
+          onEditQuote={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(".event-workspace")).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={QUOTE.id}
+          focusAction="administration"
+          currentUserRole="sales"
+          onClose={() => {}}
+          onBackToQuotes={() => {}}
+          onEditQuote={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(".event-workspace")).toBeNull();
+    expect(container.querySelector("table")).not.toBeNull();
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+    expect(container.querySelector('tr[data-quote-id="quote-other"]')).toBeNull();
+    expect(container.textContent).toContain("Showing 1 of 2 quotes");
+  });
+
+  test("accepts only an exact semantic Payment administration arrival", () => {
+    const arrivalContext = {
+      destination: "administration",
+      surfaceId: "quote-administration",
+      focusConsumerState: "supported",
+      object: { id: QUOTE.id, type: "payment-evidence", label: "Payment" },
+      intentId: "review_payment_controls",
+      focus: { quoteId: QUOTE.id }
+    };
+
+    expect(isExactQuoteAdministrationArrival({
+      arrivalContext,
+      focusQuoteId: QUOTE.id
+    })).toBe(true);
+    expect(isExactQuoteAdministrationArrival({
+      arrivalContext: {
+        ...arrivalContext,
+        object: { ...arrivalContext.object, id: "quote-other" }
+      },
+      focusQuoteId: QUOTE.id
+    })).toBe(false);
+    expect(isExactQuoteAdministrationArrival({
+      arrivalContext: {
+        ...arrivalContext,
+        intentId: "review_proposal_controls"
+      },
+      focusQuoteId: QUOTE.id
+    })).toBe(false);
+  });
+
+  test("keeps same-organization index rows mounted while Back refreshes authoritative history", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId={QUOTE.id}
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    expect(container.querySelector(`.event-workspace[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+
+    const pendingRefresh = deferred();
+    mocks.getQuoteHistory.mockReturnValueOnce(pendingRefresh.promise);
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId=""
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+    pendingRefresh.resolve({
+      source: "local",
+      quotes: [{ ...QUOTE, quoteNumber: "Q-1616-REFRESHED" }]
+    });
+    await settle();
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)?.textContent)
+      .toContain("Q-1616-REFRESHED");
+  });
+
+  test("preserves same-organization index filters across opportunity detail and Back", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId=""
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const search = container.querySelector('input[placeholder="Search customer, quote #, or event"]');
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(search, "Maya");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(search.value).toBe("Maya");
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId={QUOTE.id}
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    expect(container.querySelector(`.event-workspace[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          focusQuoteId=""
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector('input[placeholder="Search customer, quote #, or event"]')?.value)
+      .toBe("Maya");
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+  });
+
+  test("clears prior-organization rows immediately when the tenant changes", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-a"
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).not.toBeNull();
+
+    const pendingTenantRead = deferred();
+    mocks.getQuoteHistory.mockReturnValueOnce(pendingTenantRead.promise);
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          organizationId="org-b"
+          currentUserRole="sales"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(`tr[data-quote-id="${QUOTE.id}"]`)).toBeNull();
+    pendingTenantRead.resolve({
+      source: "local",
+      quotes: [{
+        ...QUOTE,
+        id: "quote-other-tenant",
+        quoteNumber: "Q-OTHER-TENANT",
+        customerId: "customer-other-tenant",
+        event: { ...QUOTE.event, name: "Other Tenant Event" }
+      }]
+    });
+    await settle();
+    expect(container.querySelector('tr[data-quote-id="quote-other-tenant"]')?.textContent)
+      .toContain("Q-OTHER-TENANT");
   });
 });

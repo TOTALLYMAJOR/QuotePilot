@@ -3,6 +3,7 @@ import { calculateQuote } from "../../lib/quoteCalculator";
 import {
   buildCompositionLine,
   buildExperienceModel,
+  buildExperienceSectionStatus,
   buildGuestChangeConsequences,
   buildHeaderModel,
   buildInvestmentModel,
@@ -375,6 +376,21 @@ describe("completeness + header", () => {
     expect(incomplete.event).toBe(false);
     expect(incomplete.client).toBe(false);
     expect(incomplete.staffing).toBe(false);
+  });
+
+  it("distinguishes an inherited experience preset from a reviewed or saved choice", () => {
+    expect(buildExperienceSectionStatus({ complete: false })).toBeNull();
+    expect(buildExperienceSectionStatus({ complete: true })).toEqual({
+      id: "preset",
+      label: "Preset",
+      ariaLabel: "Experience uses a preset; review the package and service style"
+    });
+    expect(buildExperienceSectionStatus({
+      complete: true,
+      packageReviewed: true,
+      styleReviewed: true
+    }).id).toBe("complete");
+    expect(buildExperienceSectionStatus({ complete: true, saved: true }).id).toBe("complete");
   });
 
   it("formats event dates without timezone drift", () => {

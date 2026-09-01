@@ -1,9 +1,8 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-25 00:43:38 CDT
+Last updated: 2026-08-30 23:48:44 CDT
 
-Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF,
-with a read-only Python reconciliation tier for commercial evidence.
+Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
 - Canonical project state: [PROJECT_STATE.md](PROJECT_STATE.md)
@@ -13,7 +12,9 @@ with a read-only Python reconciliation tier for commercial evidence.
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
-  Firebase staging or Vercel preview only; see the launch runbook)
+  Firebase staging or Vercel preview only; checksum-verified Firebase binary,
+  ADC Rules readback, direct Vercel APIs, and an explicit safe-off or bounded
+  staffing-authority profile; see the launch runbook)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Design system: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
@@ -30,8 +31,9 @@ with a read-only Python reconciliation tier for commercial evidence.
 - Authoritative operational staffing ADR: [docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md](docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md)
 - Orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
 - Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
-- Commercial Truth Loop ADR: [docs/COMMERCIAL_TRUTH_LOOP_ADR.md](docs/COMMERCIAL_TRUTH_LOOP_ADR.md)
-- Commercial Truth Loop design: [docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md](docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md)
+- Repository operating-system audit: [docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md](docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md)
+- Development evidence compiler: [docs/DEVELOPMENT_EVIDENCE_COMPILER.md](docs/DEVELOPMENT_EVIDENCE_COMPILER.md)
+- Product Truth Observability: [ADR](docs/adr/ADR-0002-product-truth-observability.md), [design](docs/design/product-truth-observability-design.md), [work plan](docs/plans/20260828-feature-product-truth-observability.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
 
 The project-state control plane reconciles these existing authorities without
@@ -60,9 +62,15 @@ evidence paths, freshness, blocker references, and the single next proof event.
   controls preserved under disclosure. This presentation adds no data or role
   authority.
 - `/app/quotes`, `/app/quotes/new`, `/app/quotes/:quoteId`, and
-  `/app/quotes/:quoteId/edit`: routed quote administration, sticky-mounted
-  builder, event-first quote record, and trusted edit entry points. The event
-  record composes existing quote/Workflow evidence plus the existing
+  `/app/quotes/:quoteId/edit`: routed Opportunities, sticky-mounted builder,
+  canonical connected Quote Workspace, and trusted edit entry points. The
+  exact quote route now leads with the approved dinner-table workspace over
+  saved tenant data, consolidated **Now**, **Opportunities**, **Clients**, and
+  role-safe **Library** orientation, visible completeness/save-health evidence,
+  and explicit handoffs to the unchanged editing, messaging, proposal,
+  payment, lifecycle, delivery, and recovery authorities. The explicit
+  `?view=administration` continuation and governed administration arrivals
+  retain the prior full control surface. The workspace composes existing quote/Workflow evidence plus the existing
   proposal-readiness selector through one deterministic presentation contract;
   it labels that result as proposal completeness and does not create an
   event-wide readiness or data-authority contract. An independently default-off
@@ -71,11 +79,10 @@ evidence paths, freshness, blocker references, and the single next proof event.
   server, and exact-tenant gates and does not change quoted labor, pricing,
   booking, BEO, portal, payment, attendance, payroll, or readiness evidence.
 - `/app/quote-workspace` and `/app/quote-workspace-concept`: authenticated
-  admin/sales-only, read-only visual evaluation routes for the generated desktop/mobile
-  quote-workspace direction. They read the tenant's saved quote history,
-  perform no quote/provider mutation, and hand every edit or communication
-  action to the unchanged authoritative quote routes. `/app/quotes` remains
-  the immediate fallback during review.
+  admin/sales-only compatibility aliases for the canonical connected Quote
+  Workspace. Existing bookmarks continue to work, but new exact-quote
+  navigation uses `/app/quotes/:quoteId`; neither alias grants mutation or
+  provider authority.
 - `/app/messages`: temporary-flagged staff Event Messaging Station. Each
   conversation remains segregated by its canonical quote/event, the inbox
   watches up to 50 same-tenant quote documents ordered by their body-free
@@ -642,13 +649,26 @@ defaults off. The existing quote-payment `STRIPE_MODE`, credentials, and
 
 The manual Firebase production workflow materializes only reviewed non-secret
 runtime configuration plus the allowlisted platform-admin identity immediately
-before deployment. Provider credentials remain in Firebase Secret Manager and
-are never written to Functions dotenv files, artifacts, or logs. The approved
+before deployment. Its Firebase CLI authentication is short-lived GitHub OIDC
+through Google Cloud Workload Identity Federation; the workflow requires the
+fixed-project provider and deployer identity named by
+`FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and `FIREBASE_DEPLOY_SERVICE_ACCOUNT`.
+The separate protected staffing tenant-gate workflow uses
+`FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT` and passes one short-lived
+Datastore-scoped access token only to its exact read/patch/readback step.
+Application provider credentials remain in Firebase Secret Manager and are
+never written to Functions dotenv files, artifacts, or logs. The approved
 sender identity in configuration does not prove the Resend domain is verified
 or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth. Backend
 and all-surface releases also pass Firebase's explicit non-interactive
 acknowledgement for reviewed Functions retry-policy changes; hosting-only
 releases do not receive that acknowledgement.
+
+Firebase mutation does not install a provider CLI from npm at the credentialed
+step. The workflow first downloads the official v15.24.0 Linux release asset,
+verifies its repository-pinned SHA-256, and passes only that verified path to
+the deploy command. The governed staging-candidate Firebase mutation uses the
+same verifier; a missing or changed artifact fails before mutation.
 
 ## Quality Gates
 ```bash
@@ -659,6 +679,7 @@ npm run test:truthloop-export:emulator
 npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
 npm run test:operational-staffing:emulator
+npm run test:customer-centered-authority:emulator
 npm run test:e2e
 npm run test:e2e:ambient-release-gate
 npm run test:e2e:firebase
@@ -676,6 +697,14 @@ npm run check:perf:bundle
 npm run check:perf:cwv
 ```
 
+`test:customer-centered-authority:emulator` is the reproducible Firebase
+Functions/Firestore trace for customer-centered mutation authority, including
+Quick Updates. It proves that an exact simulation receipt is bound to tenant,
+quote revision, catalog digest, policy, and requested form; drift produces zero
+write; and a successful save is confirmed through the authoritative persisted
+quote/version consequences. It is local emulator evidence, not hosted Firebase,
+provider, production, or human acceptance.
+
 `plan:task` classifies a bounded task before broad repository reading. It emits
 the recommended runner model/reasoning effort, relevant dependency reads,
 canonical documentation obligations, ordered checks, and a small task graph.
@@ -688,6 +717,15 @@ performs the actual model switch. The policy is owned by
 `lifecycle.recordedAt` timestamp. UI plans additionally require the
 `design-language` skill and the repository's canonical design system and
 principles before implementation.
+
+For cloud or hosted-agent work, use the bootstrap and handoff packet in
+[`docs/ORCHESTRATION_RUNBOOK.md`](docs/ORCHESTRATION_RUNBOOK.md#cloud-runner-bootstrap).
+The expected flow is `npm ci`, `npm run check:env`, a bounded
+`plan:task --json` packet saved under ignored `.cache/task-plans/`, the emitted
+validation list, and a matching `--phase complete` packet. Environment
+injection may make the run faster, but provider secrets stay out of tracked
+files and evidence claims must keep local, CI, hosted/provider, production, and
+human acceptance separate.
 
 `test:rebook-quote:emulator` is a disposable `demo-*` Auth, Firestore, and
 Functions lane for the exact-version rebook callable. It verifies same-tenant
@@ -1289,8 +1327,10 @@ platform-admin workflow.
 
 Primary production deployment is manual-workflow-only:
 
-- `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`
-  prints the fixed candidate's applicable and blocked checks. Applicable is not
+- `npm run release:uat:plan -- --target <profile> --candidate-profile <staging-safe-off|staging-staffing-authority>`
+  prints the selected fixed candidate's applicable and blocked checks. The
+  staffing profile enables only the global staging staffing gate and still
+  requires one separately authorized disposable tenant. Applicable is not
   passed, and blocked checks cannot be waived or supplied to the exact-main
   all-positive attestation.
 - `Deploy Firebase Production` deploys the explicitly selected `hosting`,
@@ -1313,8 +1353,17 @@ available ancestor, that the dispatch came from the canonical workflow, and
 that the configured production environment is protected-branch-only with
 administrator bypass disabled. Solo mode additionally requires the one
 allowlisted human dispatcher. The same live evidence is checked again after
-the build and immediately before provider mutation. Provider tokens are scoped
-to that final workflow step.
+the build and immediately before provider mutation. The Vercel token and the
+Firebase workload-identity ADC file are scoped to their final mutation steps;
+Firebase production rejects the legacy `FIREBASE_TOKEN` path.
+
+The pre-merge candidate path is narrower than the production workflows. It
+uses the checksum-verified official Firebase v15.24.0 binary for every Firebase
+CLI read or mutation, exact `google-auth-library` 10.5.0 ADC for public Rules
+API readback, and direct Vercel Build Output/file/deployment APIs for preview.
+Rules permission and the fixed Vercel project are checked read-only before a
+receipt can enter a provider-mutation state. The candidate path does not invoke
+`npx` or dynamically resolve a Firebase/Vercel package.
 
 The Vercel step uses the fixed reviewed project link, pulls that project's
 production settings with the scoped token, revalidates the fixed project

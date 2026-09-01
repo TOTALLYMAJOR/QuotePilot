@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { validateFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
 import { verifyDirectProductionReleaseEvidence } from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,7 +22,8 @@ function validateArgs() {
     "--confirm",
     "--release-sha",
     "--ci-run-id",
-    "--rollback-sha"
+    "--rollback-sha",
+    "--release-profile"
   ]);
   const args = process.argv.slice(2);
   const seen = new Set();
@@ -34,7 +36,7 @@ function validateArgs() {
     seen.add(name);
   }
   if (seen.size !== allowed.size) {
-    throw new Error("Firebase deployment requires scope, confirmation, release SHA, CI run, and rollback SHA.");
+    throw new Error("Firebase deployment requires scope, confirmation, release SHA, CI run, rollback SHA, and release profile.");
   }
 }
 
@@ -95,7 +97,42 @@ function validateFunctionsEnvironment() {
   }
 }
 
+function validateApplicationDefaultCredentials() {
+  if (String(process.env.FIREBASE_TOKEN || "").trim()) {
+    throw new Error("Firebase production deployment forbids legacy FIREBASE_TOKEN authentication.");
+  }
+  const configuredPath = String(process.env.GOOGLE_APPLICATION_CREDENTIALS || "").trim();
+  if (!configuredPath) {
+    throw new Error("Firebase production deployment requires workload-identity Application Default Credentials.");
+  }
+  const credentialsPath = path.resolve(ROOT, configuredPath);
+  const relativePath = path.relative(ROOT, credentialsPath);
+  if (
+    !relativePath
+    || relativePath.startsWith(`..${path.sep}`)
+    || path.isAbsolute(relativePath)
+    || !/^gha-creds-[^/\\]+\.json$/u.test(path.basename(credentialsPath))
+  ) {
+    throw new Error("Firebase production credentials must be the GitHub workload-identity credentials file in the checkout.");
+  }
+  if (!fs.existsSync(credentialsPath) || !fs.statSync(credentialsPath).isFile()) {
+    throw new Error("Firebase production workload-identity credentials file is missing.");
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf8"));
+  } catch {
+    throw new Error("Firebase production workload-identity credentials file is not valid JSON.");
+  }
+  if (credentials?.type !== "external_account") {
+    throw new Error("Firebase production deployment requires external-account workload identity credentials.");
+  }
+}
+
 validateArgs();
+if (readArg("--release-profile") !== "safe-off") {
+  throw new Error('Firebase production deployment requires --release-profile "safe-off".');
+}
 const scope = readArg("--scope");
 const scopes = {
   hosting: {
@@ -122,9 +159,8 @@ if (!selected) throw new Error("--scope must be one of: hosting, backend, all.")
 if (readArg("--confirm") !== selected.confirmation) {
   throw new Error(`Production deployment requires --confirm "${selected.confirmation}".`);
 }
-if (!String(process.env.FIREBASE_TOKEN || "").trim()) {
-  throw new Error("Firebase production deployment requires FIREBASE_TOKEN.");
-}
+validateApplicationDefaultCredentials();
+const firebaseCliPath = await validateFirebaseToolsBinary(process.env.FIREBASE_CLI_PATH);
 const releaseTarget = `firebase-${scope}`;
 const verify = (headSha) => verifyDirectProductionReleaseEvidence({
   releaseSha: readArg("--release-sha"),
@@ -137,6 +173,7 @@ const verify = (headSha) => verifyDirectProductionReleaseEvidence({
   deploymentRunId: process.env.GITHUB_RUN_ID,
   token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
   approvalMode: process.env.RELEASE_APPROVAL_MODE,
+  releaseProfile: readArg("--release-profile"),
   soloOperatorIds: process.env.RELEASE_SOLO_OPERATOR_IDS,
   root: ROOT
 });
@@ -148,22 +185,16 @@ if (selected.build) run("npm", ["run", "build"]);
 await verify(validateWorkflowContext());
 
 if (scope !== "backend") {
-  run("npx", [
-    "--yes",
-    "firebase-tools@15.24.0",
+  run(firebaseCliPath, [
     "target:apply",
     "hosting",
     "app",
     PROJECT_ID,
     "--project",
-    PROJECT_ID,
-    "--token",
-    process.env.FIREBASE_TOKEN
+    PROJECT_ID
   ]);
 }
-run("npx", [
-  "--yes",
-  "firebase-tools@15.24.0",
+run(firebaseCliPath, [
   "deploy",
   "--only",
   selected.selector,
@@ -172,7 +203,5 @@ run("npx", [
   "--non-interactive",
   "--message",
   `QuotePilot ${readArg("--release-sha")}`,
-  "--token",
-  process.env.FIREBASE_TOKEN,
   ...(selected.functions ? ["--force"] : [])
 ]);

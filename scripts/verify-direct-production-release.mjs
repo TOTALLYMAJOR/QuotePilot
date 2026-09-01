@@ -6,7 +6,13 @@ import { fileURLToPath } from "node:url";
 import { verifyDirectProductionReleaseEvidence } from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const required = new Set(["--release-sha", "--ci-run-id", "--rollback-sha", "--target"]);
+const required = new Set([
+  "--release-sha",
+  "--ci-run-id",
+  "--rollback-sha",
+  "--target",
+  "--release-profile"
+]);
 const allowed = new Set([
   ...required,
   "--sms-provider",
@@ -50,6 +56,7 @@ const evidence = await verifyDirectProductionReleaseEvidence({
   target: values.get("--target"),
   smsProvider: values.get("--sms-provider"),
   smsConfigurationGeneration: values.get("--sms-configuration-generation"),
+  releaseProfile: values.get("--release-profile"),
   headSha: String(headResult.stdout || "").trim(),
   deploymentRunId: process.env.GITHUB_RUN_ID,
   token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,

@@ -88,13 +88,15 @@ describe("operational staffing tenant activation", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  test("requires a workload-identity access token", async () => {
+  test("rejects a missing workload-identity access token before provider reads", async () => {
+    const fetchImpl = vi.fn();
     await expect(setOperationalStaffingTenant({
       projectId: "tonicatering",
-      organizationId: "mm05366-sandbox",
-      enabled: true,
+      organizationId: "250",
+      enabled: false,
       accessToken: "",
-      fetchImpl: vi.fn()
+      fetchImpl
     })).rejects.toThrow(/workload-identity access token/u);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

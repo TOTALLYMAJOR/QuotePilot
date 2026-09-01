@@ -93,7 +93,7 @@ export default function AmbientMoneyContext({ model }) {
       </ol>
 
       <dl className="ambient-money-context__judgment">
-        <div>
+        <div data-context-arrival-duplicate="reason">
           <dt>Why this is shown</dt>
           <dd>{descriptor.why}</dd>
         </div>

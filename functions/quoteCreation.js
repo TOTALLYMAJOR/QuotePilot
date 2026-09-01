@@ -1614,6 +1614,7 @@ function buildTrustedQuoteCreationDocuments({
   staff,
   form,
   pricing,
+  pricingCatalogAuthority = null,
   catalogSource,
   catalog = null,
   settings,
@@ -1853,6 +1854,9 @@ function buildTrustedQuoteCreationDocuments({
     },
     totals,
     pricing: pricingWithCommercialSnapshot,
+    pricingCatalogAuthority: isRecord(pricingCatalogAuthority)
+      ? { ...pricingCatalogAuthority }
+      : null,
     quoteMeta,
     status: "draft",
     source: text(catalogSource, 120),
@@ -1879,6 +1883,9 @@ function buildTrustedQuoteCreationDocuments({
     createdBy: versionMeta.createdBy,
     status: "draft",
     pricing: pricingWithCommercialSnapshot,
+    pricingCatalogAuthority: isRecord(pricingCatalogAuthority)
+      ? { ...pricingCatalogAuthority }
+      : null,
     snapshot: {
       id,
       ...quote
@@ -1919,6 +1926,7 @@ function buildTrustedQuoteEditDocuments({
   staff,
   form,
   pricing,
+  pricingCatalogAuthority = null,
   catalogSource,
   catalog = null,
   settings,
@@ -1976,6 +1984,7 @@ function buildTrustedQuoteEditDocuments({
     staff,
     form,
     pricing,
+    pricingCatalogAuthority,
     catalogSource,
     settings,
     nowISO: editedAtISO,
@@ -2103,6 +2112,7 @@ function buildTrustedQuoteEditDocuments({
     integrations,
     totals: editedQuote.totals,
     pricing: editedQuote.pricing,
+    pricingCatalogAuthority: editedQuote.pricingCatalogAuthority || null,
     quoteMeta,
     status: "draft",
     source: editedQuote.source,
@@ -2124,6 +2134,7 @@ function buildTrustedQuoteEditDocuments({
     createdBy: versionMeta.createdBy,
     status: "draft",
     pricing: editedQuote.pricing,
+    pricingCatalogAuthority: editedQuote.pricingCatalogAuthority || null,
     snapshot: {
       ...editedQuote,
       id

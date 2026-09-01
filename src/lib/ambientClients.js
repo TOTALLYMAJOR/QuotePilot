@@ -583,7 +583,11 @@ function rebookRows(radar, quoteById, role, capabilities, scopeMatches) {
     if (!id || !quoteId || !quoteById.has(quoteId)) return [];
     const targetQuoteId = existing ? existingQuoteId : sourceQuoteId;
     const exact = ready || existing;
-    const label = existing ? "Review matching opportunity" : "Review repeat-event option";
+    const label = existing
+      ? "Review matching opportunity"
+      : ready
+        ? "Start a rebook"
+        : "Review repeat-event option";
     const object = { id: targetQuoteId || quoteId, type: "opportunity", label: quoteLabel(quoteById.get(targetQuoteId || quoteId)) };
     const reviewAction = action({
       id: `review-client-rebook:${id}`,

@@ -72,7 +72,19 @@ async function seedAmbientOpportunity(page) {
 }
 
 async function openAmbientOpportunity(page) {
-  await page.goto("/app/quotes/ambient-a11y");
+  await page.goto("/app");
+  await page.evaluate(async () => {
+    const { createWorkspaceArrivalHandoff } = await import("/src/lib/workspaceArrivalContract.js");
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "opportunity",
+      object: { id: "ambient-a11y", type: "opportunity" },
+      focus: { quoteId: "ambient-a11y" },
+      intentId: "review_opportunity"
+    });
+    if (!handoff.ok) throw new Error(`Ambient opportunity handoff failed: ${handoff.recovery.code}`);
+    window.history.pushState(handoff.navigation.state, "", handoff.navigation.path);
+    window.dispatchEvent(new Event("quotepilot:locationchange"));
+  });
   const surface = page.locator(".ambient-living-opportunity");
   await expect(surface).toBeVisible({ timeout: LAZY_SURFACE_TIMEOUT_MS });
   await expect(surface).toHaveAttribute("data-ambient-model", "pilot-slice-alpha-v1");
@@ -114,7 +126,7 @@ test.describe("Ambient Intelligence accessibility contract", () => {
       await expect(surface.locator(".ambient-now-priority")).toHaveCount(1);
       expect(await surface.locator(".ambient-now-priority").count()).toBeLessThanOrEqual(3);
       await expect(surface.locator('[data-staff-evidence-presentation="compact"]')).toBeVisible();
-      await expect(surface).toContainText("This view is partial; source details follow below.");
+      await expect(surface).toContainText("This view needs a little more context");
 
       const undersizedTargets = await surface.locator("button:visible, summary:visible").evaluateAll((controls) => (
         controls.map((control) => {
@@ -155,30 +167,41 @@ test.describe("Ambient Intelligence accessibility contract", () => {
       await expect(surface.getByRole("heading", { name: "Autumn Benefit Dinner" })).toBeVisible();
       await expect(surface.locator('[data-glance="state"]')).toContainText("Draft");
       await expect(surface.locator('[data-glance="risk"]')).toContainText("Staffing may need attention");
-      await expect(surface.locator('[data-glance="next"]')).toContainText("Review draft");
+      await expect(surface.locator('[data-glance="next"]')).toContainText("Review staffing");
 
       const comprehensionLayer = viewport.width <= 620
         ? surface.getByRole("region", { name: "Opportunity quick actions" })
-        : surface.locator(".ambient-opportunity-glance");
+        : surface.locator(".ambient-opportunity-hero");
       await expect(comprehensionLayer).toBeVisible();
       if (viewport.width <= 620) {
         await expect(comprehensionLayer.getByRole("heading", { name: "Autumn Benefit Dinner" })).toBeVisible();
         await expect(comprehensionLayer).toContainText(/State\s*Draft/u);
         await expect(comprehensionLayer).toContainText(/What matters\s*Staffing may need attention/u);
-        await expect(comprehensionLayer).toContainText(/Next\s*Staffing may need attention/u);
+        const nextAction = comprehensionLayer.locator(".ambient-mobile-remote__next");
+        await expect(nextAction.getByRole("heading", { name: "Ready except one thing." })).toBeVisible();
+        await expect(nextAction).toContainText("Staffing may need attention");
+        await expect(nextAction.getByRole("button", { name: "Review staffing" })).toBeVisible();
         await expect(surface.locator(".ambient-opportunity-hero")).toBeHidden();
         await expect(surface.locator(".ambient-opportunity-glance")).toBeHidden();
       }
 
-      const topLayer = await comprehensionLayer.evaluate((layer) => {
+      const topLayer = await comprehensionLayer.evaluate((layer, mobile) => {
         const root = layer.closest(".ambient-living-opportunity");
         const rootRect = root.getBoundingClientRect();
-        const layerRect = layer.getBoundingClientRect();
+        const boundary = mobile
+          ? layer.querySelector(".ambient-mobile-remote__next")
+          : layer;
+        const boundaryRect = boundary.getBoundingClientRect();
         return {
-          height: layerRect.bottom - rootRect.top,
+          // The approved mobile workspace is a progressive editorial page. Its
+          // object rows may scroll, but the next decision must begin in the
+          // first viewport. Desktop keeps the complete hero as its top layer.
+          height: mobile
+            ? boundaryRect.top - rootRect.top
+            : boundaryRect.bottom - rootRect.top,
           viewportHeight: window.innerHeight
         };
-      });
+      }, viewport.width <= 620);
       expect(topLayer.height).toBeLessThanOrEqual(topLayer.viewportHeight);
 
       const undersizedTargets = await surface.locator("button:visible").evaluateAll((buttons) => (
@@ -318,7 +341,9 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     const surface = await openAmbientOpportunity(page);
 
-    const inspect = surface.getByRole("button", { name: "Review staffing" });
+    const inspect = surface
+      .getByRole("region", { name: "Opportunity quick actions" })
+      .getByRole("button", { name: "Review staffing", exact: true });
     await inspect.click();
     const dialog = page.getByRole("dialog", { name: "Staffing suggestion" });
     await expect(dialog).toBeVisible();
@@ -384,14 +409,22 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     await page.getByRole("button", { name: "Close context" }).click();
     await expect(page.getByRole("dialog", { name: "Why this recommendation appears" })).toHaveCount(0);
 
-    await surface.getByRole("button", { name: "Review draft" }).click();
+    const primaryAction = surface
+      .locator(".ambient-opportunity-total")
+      .getByRole("button", { name: "Review staffing", exact: true });
+    await expect(primaryAction).toHaveAccessibleName("Review staffing");
+    await primaryAction.click();
+    const staffingDialog = page.getByRole("dialog", { name: "Staffing suggestion" });
+    await expect(staffingDialog).toBeVisible();
+    await staffingDialog.getByRole("button", { name: "Use recommendation" }).click();
+    await staffingDialog.getByRole("button", { name: "Stage staffing in editor" }).click();
     await expect(page.locator(".wizard-panel")).toBeVisible();
 
     const observations = await page.evaluate(() => window.__ambientInteractionObservations);
     const primaryReceipt = observations.find((item) => (
       item.phase === "acknowledge"
       && item.primary === true
-      && item.resultKind === "pending"
+      && item.resultKind === "context"
     ));
     expect(primaryReceipt).toMatchObject({
       monitorAvailable: true,
@@ -404,6 +437,154 @@ test.describe("Ambient Intelligence accessibility contract", () => {
     });
     expect(JSON.stringify(observations)).not.toContain("ambient-a11y");
     expect(JSON.stringify(observations)).not.toContain("Maya Bennett");
+  });
+
+  test("keeps Payment and Proposal context handoffs keyboard-operable and exact", async ({ page }) => {
+    await page.addInitScript(() => {
+      const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
+      if (!quotes[0]) return;
+      quotes.push({
+        ...quotes[0],
+        id: "ambient-a11y-other",
+        quoteNumber: "Q-AMBIENT-A11Y-OTHER",
+        customer: {
+          ...quotes[0].customer,
+          name: "Other Customer",
+          email: "other@example.test"
+        },
+        event: {
+          ...quotes[0].event,
+          name: "Other Event"
+        }
+      });
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify(quotes));
+    });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    const journeys = [
+      {
+        viewport: { width: 390, height: 844 },
+        triggerName: "Review payments",
+        dialogName: "Payments and balance",
+        detailsRegionName: "Payments and balance details",
+        handoffName: "Open quote workspace"
+      },
+      {
+        viewport: { width: 1440, height: 1000 },
+        triggerName: "Review proposal",
+        dialogName: "Proposal details",
+        detailsRegionName: "Proposal details",
+        handoffName: "Open proposal controls"
+      }
+    ];
+
+    for (const journey of journeys) {
+      await page.setViewportSize(journey.viewport);
+      const surface = await openAmbientOpportunity(page);
+      const trigger = surface.getByRole("button", { name: journey.triggerName, exact: true });
+
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: journey.dialogName });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Close context" })).toBeFocused();
+
+      const detailsRegion = dialog.getByRole("region", {
+        name: journey.detailsRegionName
+      });
+      const arrivalDetails = dialog.locator("details.ambient-context-surface__arrival-details");
+      const arrivalDisclosure = arrivalDetails.getByText("Why this view", { exact: true });
+      await page.keyboard.press("Tab");
+      await expect(arrivalDisclosure).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(arrivalDetails).toHaveAttribute("open", "");
+      await page.keyboard.press("Tab");
+      await expect(detailsRegion).toBeFocused();
+
+      const accessibility = await new AxeBuilder({ page })
+        .include('[role="dialog"]')
+        .analyze();
+      expect(accessibility.violations).toEqual([]);
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
+      const footerButtonNames = await dialog.locator(".ambient-context-surface__footer button")
+        .allTextContents();
+      const handoffIndex = footerButtonNames.findIndex((name) => name.trim() === journey.handoffName);
+      expect(handoffIndex).toBeGreaterThanOrEqual(0);
+      for (let tabIndex = 0; tabIndex < 3 + handoffIndex; tabIndex += 1) {
+        await page.keyboard.press("Tab");
+      }
+      const handoff = dialog.getByRole("button", { name: journey.handoffName });
+      await expect(handoff).toBeFocused();
+      await page.keyboard.press("Enter");
+
+      await expect(page).toHaveURL(/\/app\/quotes$/u);
+      const administration = page.locator("summary", { hasText: "Quote administration" });
+      await expect(administration).toBeFocused();
+      await expect(page.getByText("Showing 1 of 2 quotes", { exact: true })).toBeVisible();
+      await expect(page.locator('tr[data-quote-id="ambient-a11y"]')).toBeVisible();
+      await expect(page.locator('tr[data-quote-id="ambient-a11y-other"]')).toHaveCount(0);
+    }
+  });
+
+  test("keeps Conversation evidence ahead of repeated arrival explanation", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 1000 }
+    ]) {
+      await page.setViewportSize(viewport);
+      const surface = await openAmbientOpportunity(page);
+      const trigger = surface.getByRole("button", { name: "Review conversation" });
+
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Conversation details" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Close context" })).toBeFocused();
+
+      const arrivalDetails = dialog.locator("details.ambient-context-surface__arrival-details");
+      const arrivalDisclosure = arrivalDetails.getByText("Why this view", { exact: true });
+      const detailsRegion = dialog.getByRole("region", { name: "Conversation details" });
+      await expect(arrivalDetails).not.toHaveAttribute("open", "");
+      await expect(detailsRegion.locator('[data-context-arrival-duplicate="reason"]')).toBeHidden();
+      await expect(detailsRegion.locator('[data-context-arrival-duplicate="consequence"]')).toBeHidden();
+      await expect(detailsRegion.getByRole("heading", { name: "Recorded conversation activity" }))
+        .toBeVisible();
+
+      const geometry = await detailsRegion.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        top: element.getBoundingClientRect().top,
+        bottom: element.getBoundingClientRect().bottom
+      }));
+      expect(geometry.clientHeight).toBeGreaterThanOrEqual(viewport.width === 390 ? 420 : 360);
+      expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+      expect(geometry.top).toBeGreaterThanOrEqual(0);
+      expect(geometry.bottom).toBeLessThanOrEqual(viewport.height);
+
+      await page.keyboard.press("Tab");
+      await expect(arrivalDisclosure).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(arrivalDetails).toHaveAttribute("open", "");
+      await page.keyboard.press("Tab");
+      await expect(detailsRegion).toBeFocused();
+
+      const accessibility = await new AxeBuilder({ page })
+        .include('[role="dialog"]')
+        .analyze();
+      expect(accessibility.violations).toEqual([]);
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+    }
   });
 
   test("retains explicit controls and focus visibility in forced-colors mode", async ({ page }) => {

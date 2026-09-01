@@ -97,15 +97,16 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await fillRequiredQuoteFields(page);
   await advanceToSave(page, "Save draft");
 
-  await expect(page).toHaveURL(/\/app\/quotes\/[^/]+$/, { timeout: 45_000 });
+  await expect(page).toHaveURL(/\/app\/quotes\/(?!new(?:$|\?))[^/?]+(?:\?.*)?$/, { timeout: 45_000 });
+  await expect(page.getByTestId("quote-workspace")).toBeVisible({ timeout: 45_000 });
   await expect(
-    page.getByRole("heading", { name: "Authoritative Pricing E2E" })
-  ).toBeVisible({ timeout: 45_000 });
-  await expect(page.getByText("Draft", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Download PDF" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
+    page.getByRole("heading", { name: /Authoritative Pricing E2E/ })
+  ).toBeVisible();
   const quoteId = decodeURIComponent(new URL(page.url()).pathname.split("/").filter(Boolean).at(-1));
   expect(quoteId).toBeTruthy();
+  await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review & send" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
 
   const customerProjection = await page.evaluate(async () => {
     const store = await import("/src/lib/quoteStore.js");
@@ -152,7 +153,7 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
     draftPortalRejected: true
   });
 
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("button", { name: "All opportunities", exact: true }).click();
   const quotesSurface = page.getByRole("region", { name: "Quotes" });
   await expect(quotesSurface).toBeVisible();
   const rows = quotesSurface.locator(".history-table-wrap tbody tr").filter({
@@ -197,6 +198,10 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
 
   await quoteRow.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/app/quotes/${quoteId}/edit$`));
+  const guidedMode = page.getByRole("button", { name: "Guided mode" });
+  if (await guidedMode.isVisible()) {
+    await guidedMode.click();
+  }
   const guestCount = page.getByRole("spinbutton", { name: /Guests \(max 400\)/i });
   await expect(guestCount).toHaveValue("96", { timeout: 45_000 });
   await guestCount.fill("104");

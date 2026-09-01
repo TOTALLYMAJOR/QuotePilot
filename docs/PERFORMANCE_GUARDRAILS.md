@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-25 00:58:05 CDT
+Last updated: 2026-09-01 13:05:37 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,9 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,221,176-byte aggregate
+- The current compatibility graph has a temporary 3,231,504-byte aggregate
   and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 3,905,603-byte aggregate ceiling and
+  graph has a separate temporary 4,051,134-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -54,11 +54,36 @@ Threshold policy:
   2,963,542 / 391,901 bytes for compatibility and 3,749,888 / 391,901 for
   Ambient. The shared shell and Now visual-system pass measures 2,964,327 /
   391,901 bytes for compatibility and 3,750,363 / 391,901 for Ambient.
-  The current reconciled source candidate measures 3,221,176 / 387,248 bytes
-  for the explicit compatibility production graph and 3,905,603 / 387,248
-  bytes for the explicit Ambient production graph. Those exact local
-  measurements are the temporary ceilings; exact-SHA CI must independently
-  confirm them. This recalibration is not general product-growth headroom.
+  The earlier combined source checkpoint measured 3,206,553 / 387,248 bytes
+  for compatibility and 3,887,673 / 387,248 bytes for Ambient. Exact-SHA CI run
+  `33239048234` on release candidate `6ff9d605` measured 3,208,826 / 384,998
+  bytes for compatibility and 3,928,479 / 388,269 bytes for Ambient. The
+  CI-equivalent local Ambient build measured 3,928,552 / 388,303 bytes. The
+  earlier Ambient ceiling was pinned to that larger literal exact-candidate
+  measurement; the 73-byte local/runner difference was the only retained
+  environment margin.
+  The approved v0.16 Calm Four and Quick Updates candidate now measures
+  3,214,012 / 385,130 bytes for compatibility and 4,017,689 / 385,130 bytes
+  for the exact production-equivalent Ambient graph. Lazy-loading the customer
+  portal removes it from the Ambient workspace chunk, bringing that chunk
+  below the unchanged largest-chunk ceiling; Firebase is again the largest
+  emitted asset. Compatibility remains below the Calm Four source candidate's
+  already reviewed absolute ceiling; the reconciliation restores that exact
+  source-approved value rather than widening it again.
+  The Calm Four Ambient aggregate ceiling was therefore 4,017,992 bytes: the
+  literal candidate measurement plus only the previously established 303-byte
+  Ambient runner offset. This reconciliation is not general product-growth
+  headroom; any source increase beyond that offset must fail or receive a new
+  explicit review.
+  The Business Setup and revision-review program measures 3,224,340 / 385,181
+  bytes for the compatibility graph and 4,050,831 / 385,181 bytes for the
+  config-free Ambient graph. The compatibility ceiling remains 3,231,504
+  aggregate bytes. Exact-head CI run `33540311518` then measured the
+  Firebase-configured production-equivalent Ambient graph at 4,056,299 /
+  385,181 bytes; the same CI-equivalent graph measured 4,056,372 / 385,181
+  locally. The Ambient ceiling is therefore 4,056,372 aggregate bytes, the
+  larger literal verified graph, with no discretionary growth headroom. The
+  largest-chunk ceiling remains unchanged.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining
@@ -92,7 +117,17 @@ Lighthouse CI config: `.lighthouserc.json`
 The CI lane builds a fresh production bundle, explicitly selects the
 Playwright-managed Chromium binary, and runs a local `vite preview` server on
 the strict `127.0.0.1:4173` endpoint. Readiness detection matches Vite's stable
-`Local` label so ANSI terminal formatting cannot delay the audit.
+`Local` label so ANSI terminal formatting cannot delay the audit. The runner
+sets `TMPDIR`, `TMP`, and `TEMP` to Linux `/tmp` so Chrome profiles remain OS
+scratch artifacts rather than repository or runner-workspace state.
+
+The latest `@lhci/cli` release still pins vulnerable Lighthouse 12.6.1. The
+root dependency policy therefore overrides only the Lighthouse copies used by
+`@lhci/cli` and `@lhci/utils` to 13.4.1. This selects Puppeteer 25.9.0 and
+removes the vulnerable `extract-zip` chain while preserving the existing LHCI
+configuration and thresholds. Treat this as a reviewed major-tool
+compatibility exception until LHCI publishes a release with a non-vulnerable
+Lighthouse dependency; exact local and CI CWV gates remain mandatory.
 
 Current enforced assertions:
 - Performance category score minimum

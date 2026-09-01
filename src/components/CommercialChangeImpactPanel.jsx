@@ -11,6 +11,7 @@ import {
   formatWorkspaceText,
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
+import UnifiedCommercialConsequenceReview from "./UnifiedCommercialConsequenceReview";
 
 const STATE_PRESENTATION = Object.freeze({
   loading: { family: "info", label: "Simulating impact" },
@@ -642,6 +643,10 @@ export default function CommercialChangeImpactPanel({
   onApply,
   onReconcileApplyOutcome,
   onRecoverApply,
+  unifiedReview = null,
+  onApplyAllConsequences,
+  onApplySelectedConsequences,
+  onKeepQuotedPlan,
   titleId = "commercial-change-impact-title"
 }) {
   const view = buildCommercialChangeImpactPanelState({ model, loading, recovering, error, partial });
@@ -705,6 +710,16 @@ export default function CommercialChangeImpactPanel({
       </p>
 
       {view.snapshotAvailable && <SimulationEvidence model={model} />}
+      {view.snapshotAvailable && unifiedReview && (
+        <UnifiedCommercialConsequenceReview
+          review={unifiedReview}
+          scopeCurrent={scopeCurrent && !partial && !error}
+          busy={loading || recovering || ["submitting", "applying", "reconciliation"].includes(text(mutationState).toLowerCase())}
+          onApplyAll={onApplyAllConsequences}
+          onApplySelected={onApplySelectedConsequences}
+          onKeepQuotedPlan={onKeepQuotedPlan}
+        />
+      )}
       {view.snapshotAvailable && (
         <CommercialChangeAuthorityControls
           authorityState={authorityState}

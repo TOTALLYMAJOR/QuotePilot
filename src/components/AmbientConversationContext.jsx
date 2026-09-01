@@ -211,11 +211,11 @@ export default function AmbientConversationContext({ model }) {
       </section>
 
       <dl className="ambient-conversation-context__judgment">
-        <div>
+        <div data-context-arrival-duplicate="reason">
           <dt>Why this is shown</dt>
           <dd>{descriptor.why}</dd>
         </div>
-        <div>
+        <div data-context-arrival-duplicate="consequence">
           <dt>What it affects</dt>
           <dd>{descriptor.consequence}</dd>
         </div>

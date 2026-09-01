@@ -61,32 +61,44 @@ describe("direct production deployment safety", () => {
 
     expect(source).toMatch(/name: Deploy .* Production/i);
     expect(source).toMatch(provider === "Firebase"
-      ? /run-name: deploy\/v2\/.+inputs\.sms_provider.+inputs\.sms_configuration_generation/
-      : /run-name: deploy\/v1\//);
+      ? /run-name: deploy\/v3\/.+inputs\.release_profile.+inputs\.sms_provider.+inputs\.sms_configuration_generation/
+      : /run-name: deploy\/v2\/.+inputs\.release_profile/);
     expect(source).toMatch(/workflow_dispatch:/);
     expect(source).toMatch(/github\.sha == inputs\.release_sha/);
     expect(source).toMatch(/environment:.*production-solo/);
     expect(source).toMatch(/persist-credentials:\s*false/);
     expect(source).toMatch(/scripts\/verify-direct-production-release\.mjs/);
     expect(source).toMatch(/scripts\/deploy-(?:firebase|vercel)-production\.mjs/);
+    expect(source).toMatch(/--release-profile "\$\{RELEASE_PROFILE\}"/);
+    expect(source).toMatch(/inputs\.release_profile == 'safe-off'/);
     if (provider === "Firebase") {
       expect(source).toMatch(/--sms-provider "\$\{SMS_PROVIDER\}"/);
       expect(source).toMatch(/--sms-configuration-generation "\$\{SMS_CONFIGURATION_GENERATION\}"/);
       expect(source).toMatch(/EXPECTED_SMS_PROVIDER:\s*\$\{\{ inputs\.sms_provider \}\}/);
       expect(source).toMatch(/EXPECTED_SMS_CONFIGURATION_GENERATION:\s*\$\{\{ inputs\.sms_configuration_generation \}\}/);
+      expect(source).toMatch(/id-token:\s*write/);
+      expect(source).toMatch(/google-github-actions\/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093/);
+      expect(source).toMatch(/workload_identity_provider:\s*\$\{\{ vars\.FIREBASE_WORKLOAD_IDENTITY_PROVIDER \}\}/);
+      expect(source).toMatch(/service_account:\s*\$\{\{ vars\.FIREBASE_DEPLOY_SERVICE_ACCOUNT \}\}/);
+      expect(source).toMatch(/export_environment_variables:\s*false/);
+      expect(source).toMatch(/GOOGLE_APPLICATION_CREDENTIALS:\s*\$\{\{ steps\.google_auth\.outputs\.credentials_file_path \}\}/);
+      expect(source).not.toContain("secrets.FIREBASE_TOKEN");
+      const authOffset = source.indexOf("- name: Authenticate to Google Cloud for Firebase deployment");
+      const deployOffset = source.indexOf("- name: Deploy selected Firebase surface");
+      expect(authOffset).toBeGreaterThan(0);
+      expect(deployOffset).toBeGreaterThan(authOffset);
+    } else {
+      expect(source).toMatch(/VERCEL_TOKEN:\s*\$\{\{ secrets\.VERCEL_TOKEN \}\}/);
+      const tokenOffset = source.indexOf("VERCEL_TOKEN:");
+      const deployStepOffset = source.indexOf("- name: Build and deploy exact release");
+      expect(tokenOffset).toBeGreaterThan(deployStepOffset);
     }
-    expect(source).toMatch(new RegExp(`${provider.toUpperCase()}_TOKEN:\\s*\\$\\{\\{ secrets\\.${provider.toUpperCase()}_TOKEN \\}\\}`));
-    const tokenOffset = source.indexOf(`${provider.toUpperCase()}_TOKEN:`);
-    const deployStepOffset = source.indexOf(provider === "Firebase"
-      ? "- name: Deploy selected Firebase surface"
-      : "- name: Build and deploy exact release");
-    expect(tokenOffset).toBeGreaterThan(deployStepOffset);
   });
 
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("binds the %s production build to explicit workspace and public buyer configuration", (_provider, workflow) => {
+  ])("binds the %s production build to explicit workspace and safe-off buyer configuration", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const stepsOffset = source.indexOf("\n    steps:");
     const jobConfiguration = source.slice(0, stepsOffset);
@@ -98,11 +110,9 @@ describe("direct production deployment safety", () => {
       /^\s+VITE_DEFAULT_ORGANIZATION_ID:\s*\$\{\{ vars\.VITE_DEFAULT_ORGANIZATION_ID \}\}\s*$/m
     );
     expect(source).toMatch(/^\s+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:\s*"true"\s*$/m);
-    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"true"\s*$/m);
-    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"true"\s*$/m);
-    expect(source).toMatch(
-      /^\s+VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:\s*\$\{\{ vars\.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY \}\}\s*$/m
-    );
+    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"false"\s*$/m);
+    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"false"\s*$/m);
+    expect(source).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
     expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
     expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
     expect(stepsOffset).toBeGreaterThan(0);
@@ -121,7 +131,7 @@ describe("direct production deployment safety", () => {
     expect(source.match(/VITE_DEFAULT_ORGANIZATION_ID:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_ENABLED:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:/g)).toHaveLength(1);
-    expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(1);
+    expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toBeNull();
   });
 
   test.each([
@@ -175,7 +185,7 @@ describe("direct production deployment safety", () => {
     );
   });
 
-  test("promotes authoritative operational staffing only through exact production bindings", () => {
+  test("keeps operational staffing authority safe-off in production", () => {
     const firebaseWorkflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
     const vercelWorkflow = fs.readFileSync(VERCEL_WORKFLOW, "utf8");
     const functionsExample = fs.readFileSync(
@@ -183,9 +193,30 @@ describe("direct production deployment safety", () => {
       "utf8"
     );
 
-    expect(firebaseWorkflow.match(/OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"/g)).toHaveLength(1);
+    expect(firebaseWorkflow.match(/OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false"/g)).toHaveLength(1);
     expect(vercelWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
     expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
+  });
+
+  test("materializes the exact safe-off Functions authority profile", () => {
+    const source = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
+
+    for (const binding of [
+      'NOTIFICATIONS_EMAIL_PROVIDER: none',
+      'NOTIFICATIONS_SMS_PROVIDER: none',
+      'STRIPE_MODE: live',
+      'COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"',
+      'OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false"',
+      'REVENUE_AUTOPILOT_ENABLED: "false"',
+      'REVENUE_AUTOPILOT_SENDS_ENABLED: "false"',
+      'BUYER_ACCESS_ENABLED: "false"',
+      'BUYER_ACCESS_STRIPE_MODE: test'
+    ]) {
+      expect(source).toContain(binding);
+    }
+    expect(source).not.toContain("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
+    expect(source).not.toContain("NOTIFICATIONS_OWNER_PHONE");
+    expect(source).not.toContain("NOTIFICATIONS_OWNER_SMS_CONSENT");
   });
 
   test("explicitly acknowledges retry-policy changes only for Functions deployments", () => {
@@ -197,6 +228,20 @@ describe("direct production deployment safety", () => {
 
     expect(source).toContain('...(selected.functions ? ["--force"] : [])');
     expect(allowedArguments).not.toContain('"--force"');
+  });
+
+  test("requires ephemeral workload identity credentials for Firebase production", () => {
+    const source = fs.readFileSync(FIREBASE_STUB, "utf8");
+    const workflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
+
+    expect(source).toContain("GOOGLE_APPLICATION_CREDENTIALS");
+    expect(source).toContain('credentials?.type !== "external_account"');
+    expect(source).toContain("forbids legacy FIREBASE_TOKEN authentication");
+    expect(source).not.toMatch(/["']--token["']/u);
+    expect(source).toContain("validateFirebaseToolsBinary(process.env.FIREBASE_CLI_PATH)");
+    expect(source).not.toMatch(/run\("npx"/u);
+    expect(workflow).toContain("node ./scripts/firebase-tools-binary.mjs --print-path");
+    expect(workflow).toMatch(/FIREBASE_CLI_PATH:\s*\$\{\{ steps\.firebase_cli\.outputs\.path \}\}/u);
   });
 
   test("does not persist checkout credentials in the UAT attestation job", () => {
@@ -222,10 +267,13 @@ describe("direct production deployment safety", () => {
     expect(runSteps).not.toContain("${{ inputs.");
     expect(source).toMatch(/ORGANIZATION_ID:\s*\$\{\{ inputs\.organization_id \}\}/u);
     expect(source).toMatch(/TENANT_CONFIRMATION:\s*\$\{\{ inputs\.confirmation \}\}/u);
+    expect(source).toMatch(/id-token:\s*write/u);
+    expect(source).toMatch(/google-github-actions\/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093/u);
+    expect(source).toMatch(/service_account:\s*\$\{\{ vars\.FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT \}\}/u);
     expect(source).toMatch(/GOOGLE_OAUTH_ACCESS_TOKEN:\s*\$\{\{ steps\.google_auth\.outputs\.access_token \}\}/u);
-    expect(source).toContain("FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT");
-    expect(source).toContain("https://www.googleapis.com/auth/datastore");
-    expect(source).toContain("id-token: write");
+    expect(source).toMatch(/access_token_scopes:\s*https:\/\/www\.googleapis\.com\/auth\/datastore/u);
+    expect(source).toMatch(/create_credentials_file:\s*false/u);
+    expect(source).toMatch(/export_environment_variables:\s*false/u);
     expect(source).toContain("ref: ${{ github.sha }}");
     expect(source).toContain("DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}");
     expect(source).toContain('git tag --points-at "${DEPLOYED_RELEASE_SHA}"');

@@ -262,6 +262,32 @@ describe("Ambient Conversation intelligent object", () => {
     expect(Object.isFrozen(model.resolutions)).toBe(true);
   });
 
+  test("does not turn the quote-store default follow-up shell into scheduled work", () => {
+    const model = build(quote({
+      workflow: {
+        ...quote().workflow,
+        followUp: {
+          stage: "new",
+          dueDate: "",
+          note: "",
+          completed: false,
+          completedAtISO: "",
+          updatedAtISO: "",
+          updatedByEmail: ""
+        }
+      }
+    }));
+
+    expect(model.followUp).toMatchObject({
+      state: "not_scheduled",
+      stage: ""
+    });
+    expect(model.nextResolution).toMatchObject({
+      id: "open-opportunity-conversation",
+      availability: "available"
+    });
+  });
+
   test("blocks a change-request Workflow handoff when its exact request identity is absent", () => {
     const model = build(quote({
       portalDecision: {

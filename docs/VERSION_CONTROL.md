@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-29 18:56:00 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -24,6 +24,11 @@ git checkout -b feature/<scope>-<topic>
 5. Update canonical docs per `docs/DOC_SYSTEM.md`.
 6. Open PR with validation evidence and doc impact declaration.
 
+Run `npm run status:product` after sync/branch selection and
+`npm run check:product-drift` before opening a PR. The generated digest is a
+source-linked projection, not authority. Its CI job remains advisory until an
+explicit owner promotion after real-run review.
+
 ## Release-Only Main Rule
 - `main` is for production-intent merges only.
 - Feature work lands in topic branches and merges only after required CI and pre-merge UAT evidence are complete.
@@ -33,6 +38,13 @@ git checkout -b feature/<scope>-<topic>
   target-specific rollback ancestor, canonical human dispatch, and current
   protected environment before dependency execution. It repeats that live
   evidence check after building and immediately before provider mutation.
+- The v0.16.0 workflows additionally require the exact `safe-off` release
+  profile. That profile is part of the immutable workflow title and verified
+  arguments, not a descriptive label. It permits the reviewed product
+  presentation while keeping public buyer entry, outbound email/SMS providers,
+  Commercial Change, Revenue Autopilot, and the server staffing authority off.
+  It preserves `STRIPE_MODE=live` solely for the established quote-payment
+  rail; the separate buyer-invoice rail remains disabled with test mode bound.
 - Protect `main` and configure exactly one release approval mode. Team-owned
   repositories use `production` with a directly assigned independent reviewer
   and self-review prevention. Solo-owned repositories use the reviewless
@@ -61,11 +73,45 @@ git checkout -b feature/<scope>-<topic>
 - Commit logical units only.
 - Avoid mixing unrelated refactors and behavior changes.
 - Never commit local state or secrets.
+- Keep local tool scratch outside tracked source. Browser, Lighthouse, emulator,
+  and cloud-runner temporary profiles belong under OS temp paths or ignored
+  cache directories; they must not be committed or used as release evidence.
+- For meaningful local implementation, process, release, or architecture work,
+  use `npm run evidence:task` when a compact handoff record would save future
+  agent/human reconstruction. Its `.cache/development-evidence/` output is
+  ignored local task evidence only; it does not replace commit history, CI,
+  hosted/provider receipts, production deployment proof, or human acceptance.
+- Use `npm run evidence:index` to inspect local task-record trends before
+  adding new process or automation. Repeated friction may justify a script,
+  planner rule, skill, or check; one-off friction should stay as evidence.
 
 ## Release Workflow
 1. Create `release/<version>` from `main`.
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
+   - Candidate secret preflight must accept the pinned Firebase CLI's structured
+     `secret.name` metadata shape, require an enabled version for every exact
+     bound name, and remain metadata-only. A parser mismatch is a fail-closed
+     source defect; fix, republish, and rerun exact-SHA CI rather than bypassing
+     the gate.
+   - Firebase Rules release and ruleset readback must send the fixed staging
+     project as `x-goog-user-project` when using user ADC. Do not mutate the
+     operator's global ADC quota-project setting to compensate for a missing
+     request header.
+   - Before publishing a Firebase candidate, run checksum-pinned Functions
+     manifest discovery in dry-run mode. Keep discovery free of eager optional
+     renderer loads, retain an audited dependency graph compatible with the
+     pinned analyzer, and pass the explicit retry-policy acknowledgement for
+     tracked retry-enabled event functions. Firebase may enable a required API
+     during preflight even under `--dry-run`; record that provider mutation.
+   - Treat the pinned Firebase CLI Hosting result as an exact resource identity.
+     It may use either `sites/<fixed-site>/versions/<id>` or
+     `projects/<fixed-project-number>/sites/<fixed-site>/versions/<id>`; reject
+     every other project, site, or empty version before provider readback.
+     Normalize only the pinned numeric project to the pinned project ID when the
+     live-channel API returns the same immutable version under project-ID form.
+     Allow a short bounded propagation retry for the hosted source manifest,
+     but require complete object equality before any provider-readback claim.
    - If GitHub does not enqueue the normal `pull_request` run, manually
      dispatch `CI Quality` against the exact published PR head and retain that
      run as the CI evidence. Do not substitute a run from another commit.
@@ -95,8 +141,10 @@ git checkout -b feature/<scope>-<topic>
      - `lane:firebase-auth-rules` runs Firestore rules, the disposable owner-SMS
        transaction and signed-event acceptance matrix, and the Firebase browser
        smoke as one indivisible CI path.
-     - The CWV lane builds a fresh production bundle and explicitly selects the
-       installed Playwright Chromium binary before Lighthouse starts.
+     - The CWV lane builds a fresh production bundle, explicitly selects the
+       installed Playwright Chromium binary, and routes Chromium scratch
+       profiles through Linux `/tmp` before Lighthouse starts. Those transient
+       files are local runner artifacts, never repository or release evidence.
    - `Docker Build Smoke`
    - `lane:playwright-smoke`
    - Every `CI Quality` job receives only `contents: read`; checkout credentials
@@ -115,17 +163,35 @@ git checkout -b feature/<scope>-<topic>
    to the isolated Firebase staging identity or the `quoteflow` Vercel preview
    project, requires a SHA-bound confirmation, and records a hosted source/gate
    manifest plus provider deployment id. The receipt path is reserved before
-   mutation and retains failed or partial outcomes. Firebase-all verification
+   mutation and retains failed or partial outcomes. Hosted manifest equality is
+   retried every two seconds for at most one minute to absorb bounded provider
+   propagation; source SHA, CI run, profile, and authority values must still
+   match exactly. A partial provider-mutation receipt is immutable and is not
+   retried; a corrected attempt requires a newly published, newly qualified
+   source SHA. Firebase-all verification
    binds Hosting, active Functions revisions and fail-closed runtime readback,
    and the exact Firestore release/ruleset; Vercel requires the coordinated
-   staging-Functions readback. It cannot promote an alias or enable operational
-   staffing authority.
-   Each candidate manifest and receipt binds the tracked `staging-safe-off`
-   UAT profile. Run
-   `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`
+   staging-Functions readback. It cannot promote an alias. Operational staffing
+   authority may be enabled only in the fixed staging project through the
+   explicit `staging-staffing-authority` profile; the separate tenant gate must
+   still be authorized, enabled for one disposable tenant, exercised, and rolled
+   back. Both candidate profiles bind the staging platform-operator allowlist
+   to the single verified `flightcontrol@quietpilot.us` identity. Candidate
+   dotenv validation and active Functions readback reject an unavailable,
+   additional, or substituted operator before the receipt can become verified.
+   This staging identity does not change production platform administration.
+   GitHub CI verification resolves authentication from
+   `GITHUB_TOKEN`, then `GH_TOKEN`, then the authenticated local GitHub CLI; if
+   none is available, the command stops before provider mutation and never
+   prints credential material.
+   Each candidate manifest and receipt binds exactly one tracked profile:
+   `staging-safe-off` or `staging-staffing-authority`. Run
+   `npm run release:uat:plan -- --target <profile> --candidate-profile <candidate-profile>`
    to obtain the machine-readable applicable/blocked plan. Every target item is
    classified exactly once and every blocked item carries a reason. Applicable
    is not passed; blocked is not N/A and prevents production qualification.
+   Candidate receipt filenames include both target and profile so same-SHA
+   safe-off and bounded positive evidence cannot overwrite one another.
    `npm run release:uat:items -- --target <profile>` remains the all-positive
    target contract. The exact-main attestation accepts only that complete set
    and never accepts a profile plan, blocked item, waiver, or partial result.
@@ -149,23 +215,30 @@ git push origin v<major>.<minor>.<patch>
 ```
 10. Dispatch `Deploy Firebase Production` or `Deploy Vercel Production` with
     the release SHA, exact-SHA CI run id, target rollback SHA, exact scope, and
-    typed confirmation. The provider credential is available only to the final
-    deploy step. Record provider acceptance/READY evidence and update the
+    typed confirmation. Firebase uses GitHub OIDC through the reviewed
+    `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
+    `FIREBASE_DEPLOY_SERVICE_ACCOUNT` repository variables and rejects legacy
+    token or static-key authentication. Its mutation client must be the
+    repository-verified official v15.24.0 Linux artifact; Vercel retains its
+    scoped token. The
+    provider credential is available only to the final deploy step. Record
+    provider acceptance/READY evidence and update the
     target-specific last-known-good receipt only after post-launch verification
     succeeds.
 11. When a reviewed deployed release requires the operational-staffing tenant
     gate, dispatch `Set Operational Staffing Tenant` from current `main` only
-    after the deployed tagged commit's matching Firebase `all` run has
-    succeeded. Bind the deployed release SHA and run id, use the exact
+    after the deployed tagged commit's matching Firebase `all` run succeeds.
+    Bind the deployed release SHA and run id, use the exact
     state-and-organization confirmation, and retain verified readback. The
-    workflow must prove the semantic tag, exact deploy run, and both
-    staffing bindings before its distinct least-privilege WIF identity changes
-    the one tenant field. Its Firestore PATCH must carry
-    `currentDocument.exists=true`, preserving update-only authority and failing
-    closed if the canonical settings document is absent. The reversible data mutation is separate from both
-    application deployment and operator-workflow publication. Workflow inputs
-    must be mapped through step environment variables and never interpolated
-    directly into executable shell bodies that can access provider credentials.
+    workflow proves the semantic tag, exact deploy run, and both staffing
+    bindings before its distinct least-privilege WIF identity changes the one
+    existing tenant field. The PATCH carries `currentDocument.exists=true`, so
+    the operator cannot convert its update into document creation. This
+    reversible data mutation is separate from application deployment and
+    operator-workflow publication. Workflow inputs remain mapped through step
+    environment variables rather than interpolated into credential-bearing
+    shell bodies. The organization input has no default and accepts only the
+    existing bounded numeric form or `mm05366-sandbox`.
 
 If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific deployment runs. Allowed deployment profiles
@@ -175,6 +248,18 @@ Checklist applicability limits each receipt to the selected payload surface and
 observed compatibility; it does not prove an unbound dependency's SHA or
 provider identity. A `firebase-all` staging receipt must bind Hosting,
 Functions, and Firestore rules together before that profile can be operational.
+Candidate provider clients are fixed as part of this contract: all Firebase CLI
+operations use the checksum-verified official v15.24.0 binary, Rules content
+readback uses exact `google-auth-library` 10.5.0 ADC against the public API, and
+Vercel preview uses a deterministic Build Output API v3 artifact plus narrow
+REST upload/deploy/readback. Protected preview manifest reads use exactly one
+existing automation-bypass credential returned by the fixed project preflight;
+the credential remains memory-only and is never persisted in receipts or logs.
+Missing or ambiguous bypass configuration stops before reservation. Both Rules
+and Vercel project access are proven by read-only preflight before receipt
+reservation or provider mutation. Runtime
+`npx`, provider-client discovery, and Git-triggered Vercel deployment are not
+valid release paths.
 
 ## Rollback Control
 If a regression appears in production, use the target-specific signed
@@ -245,12 +330,16 @@ If a topic changes, only update the owning doc and cross-link from others.
     the hosted UAT acceptance pass was deliberately foregone.
   - The August 13, 2026 owner-approved operational-staffing test release binds
     `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` exactly once in both production
-    workflows. Firebase also materializes
-    `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true`; the trusted tenant setting,
-    role checks, direct-browser denials, provider prerequisites, and immutable
-    receipts remain independent. The `.env.example` local default for both
-    presentation flags remains off.
+    workflows. The v0.16.0 `safe-off` profile deliberately materializes
+    `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`, so the browser may explain
+    staffing readiness without receiving server pricing/write authority. The
+    trusted tenant setting, role checks, direct-browser denials, provider
+    prerequisites, and immutable receipts remain independent. The
+    `.env.example` local default for both presentation flags remains off.
 
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`
 - Runbook: `docs/ORCHESTRATION_RUNBOOK.md`
+- Product truth decision: `docs/adr/ADR-0002-product-truth-observability.md`
+- Product truth design: `docs/design/product-truth-observability-design.md`
+- Product truth work plan: `docs/plans/20260828-feature-product-truth-observability.md`

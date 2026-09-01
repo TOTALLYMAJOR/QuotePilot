@@ -353,6 +353,11 @@ export function buildPortalDecisionAttempt({
   });
 }
 
+export function getPortalDecisionDraft(quote) {
+  const decision = normalizedDecisionText(quote?.portalDecision?.decision).toLowerCase();
+  return DECISION_OPTIONS.some(([value]) => value === decision) ? decision : "";
+}
+
 export function reconcilePortalDecisionSnapshot(attempt, snapshot) {
   if (!attempt?.portalKey || snapshot?.portalKey !== attempt.portalKey) {
     return Object.freeze({ phase: "error", reason: "portal_identity_changed" });
@@ -657,7 +662,7 @@ export default function CustomerPortalView({
   onBackToStaff
 }) {
   const [portalKey, setPortalKey] = useState(initialPortalKey);
-  const [decisionDraft, setDecisionDraft] = useState("accepted");
+  const [decisionDraft, setDecisionDraft] = useState("");
   const [decisionMessage, setDecisionMessage] = useState("");
   const [signerName, setSignerName] = useState("");
   const [acceptanceConfirmed, setAcceptanceConfirmed] = useState(false);
@@ -867,7 +872,7 @@ export default function CustomerPortalView({
       }
       if (portalLoadRequestRef.current !== requestId) return;
       setPortalKey(key);
-      setDecisionDraft(quote.portalDecision?.decision || "accepted");
+      setDecisionDraft(getPortalDecisionDraft(quote));
       setDecisionMessage(quote.portalDecision?.message || "");
       setStagedOptionKeys([]);
       setOptionDraftFeedback(null);
@@ -1036,6 +1041,15 @@ export default function CustomerPortalView({
 
   const submitDecision = async () => {
     if (!quote?.portalKey || decisionLocked || state.busy) return;
+    if (!decisionDraft) {
+      setDecisionMutation({
+        phase: "error",
+        validation: true,
+        message: "Choose Accept, Ask for changes, or Decline before submitting."
+      });
+      focusDecisionControl("panel");
+      return;
+    }
     if (decisionDraft === "accepted" && signerName.trim().length < 2) {
       setDecisionMutation({
         phase: "error",
@@ -1279,6 +1293,7 @@ export default function CustomerPortalView({
       }
     }
     setDecisionDraft(value);
+    setAcceptanceConfirmed(false);
     decisionAttemptRef.current = null;
     setDecisionMutation({ phase: "ready" });
   };
@@ -1640,7 +1655,12 @@ export default function CustomerPortalView({
                     </button>
                   ))}
                 </div>
-                <label className="field portal-decision-note">
+                {!decisionDraft && (
+                  <p className="source-note portal-decision-guidance">
+                    Choose the response that matches what you want to do. Nothing is selected or submitted for you.
+                  </p>
+                )}
+                {decisionDraft && <label className="field portal-decision-note">
                   <span>{decisionDraft === "changes_requested"
                     ? "Requested changes"
                     : AMBIENT_DECISION_ROOM_ENABLED
@@ -1661,7 +1681,7 @@ export default function CustomerPortalView({
                     disabled={state.busy}
                     placeholder={decisionDraft === "changes_requested" ? "Describe what should be revised" : "Add any context for the catering team"}
                   />
-                </label>
+                </label>}
                 {decisionDraft === "accepted" && (
                   <div className="portal-signature-fields">
                     <label className="field">
@@ -1704,7 +1724,7 @@ export default function CustomerPortalView({
                     </p>
                   </div>
                 )}
-                <div className="portal-decision-submit">
+                {decisionDraft && <div className="portal-decision-submit">
                   <button
                     type="button"
                     className="cta"
@@ -1724,7 +1744,7 @@ export default function CustomerPortalView({
                           ? "Sign and Accept Proposal"
                           : "Submit Decision"}
                   </button>
-                </div>
+                </div>}
               </section>
             )}
 

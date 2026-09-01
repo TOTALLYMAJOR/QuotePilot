@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-29 18:27:06 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -20,6 +20,16 @@ post-launch evidence.
    registration can still return an existing-email error; retain separate abuse
    controls and registration hardening as required by the production threat
    model.
+6. For the isolated v0.16 staging candidate only, bind the verification-email
+   callback to
+   `https://quotepilot-staging-20260804.web.app/app/auth/action` only after the
+   exact candidate Hosting deployment serves that route. Confirm a newly
+   generated link carries `apiKey`, `mode=verifyEmail`, `oobCode`, and the exact
+   approved `/app` `continueUrl` without recording their values. Exercise the
+   route with a disposable identity, require a deliberate **Verify email**
+   action, then delete the probe. Production keeps its existing callback until
+   an independently reviewed production handler deployment and rollback plan;
+   do not treat staging callback configuration as production readiness.
 
 ## 2) Configure Local Environment
 1. Copy `.env.example` to `.env`.
@@ -47,12 +57,14 @@ exact-main sequence in section 6, manually dispatch one of these workflows from
 
 Both workflows require the full semantically tagged release SHA, the matching
 successful main-push `CI Quality` run id, a target-specific rollback ancestor,
-and an exact typed confirmation. Firebase additionally requires an explicit
-`hosting`, `backend`, or `all` scope. Before installing dependencies, the
-workflow validates the canonical repository and workflow, remotely published
-tagged `main`, all eight CI jobs, protected environment, allowlisted human
-dispatcher, and rollback ancestry. It repeats the live evidence check after
-the build and immediately before provider mutation.
+the exact `safe-off` release profile, and an exact typed confirmation. Firebase
+additionally requires an explicit `hosting`, `backend`, or `all` scope and the
+fixed `none` / `not-applicable` SMS selection. Before installing dependencies,
+the workflow validates the canonical repository and workflow, remotely
+published tagged `main`, all eight CI jobs, protected environment, allowlisted
+human dispatcher, release-profile-bound run title, and rollback ancestry. It
+repeats the live evidence check after the build and immediately before provider
+mutation.
 
 Provider credentials are available only to the final deployment step. Firebase
 runtime configuration is materialized from reviewed repository variables and
@@ -65,8 +77,14 @@ Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` and
 `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` into the frontend build
 environment, so this owner-approved release ships the Ambient Intelligence and
 Staff presentation together. The deployment-safety test requires exactly one
-binding of each per workflow. Firebase additionally binds the global staffing
-authority and the exact tenant setting remains independently required.
+binding of each per workflow. Under `safe-off`, Firebase binds
+`OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`; the UI can present staffing
+readiness and unavailable states, but it has no server staffing pricing/write
+authority. The same profile binds public buyer entry and CTA false, omits the
+Turnstile browser key, sets both notification providers to `none`, and disables
+Commercial Change and Revenue Autopilot authorities/sends. `STRIPE_MODE=live`
+remains required for the established quote-payment rail. The distinct buyer
+invoice rail stays disabled and bound to test mode.
 
 For Vercel, preserve the reviewed SPA contract in `vercel.json`; Git-triggered
 deployments remain disabled. After deployment, verify that `/`, `/app`, and
@@ -88,14 +106,34 @@ Set repository or environment variables used by the deploy workflows:
 - `RELEASE_APPROVAL_MODE`: `independent-review` (default) or `solo-operator`
 - `RELEASE_SOLO_OPERATOR_IDS`: in solo mode, exactly one numeric GitHub user id;
   it must identify the human who dispatches production
-- `FIREBASE_TOKEN` and `VERCEL_TOKEN`: GitHub secrets scoped only to the final
-  provider-deploy steps
+- `FIREBASE_WORKLOAD_IDENTITY_PROVIDER`: GitHub variable containing the full
+  Google Cloud provider resource name for the GitHub-bound production pool
+- `FIREBASE_DEPLOY_SERVICE_ACCOUNT`: GitHub variable containing the reviewed
+  least-privilege deployer identity in the fixed `tonicatering` project
+- `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT`: GitHub variable containing the
+  separate reviewed identity used only for the protected staffing tenant-gate
+  read/patch/readback workflow
+- `VERCEL_TOKEN`: GitHub secret scoped only to the final Vercel deploy step
 - `AUTH_PLATFORM_ADMIN_EMAILS`: GitHub secret used only to materialize the
   ignored Functions runtime configuration during an authorized backend deploy
 
 Stripe, Twilio, Pingram, SMS contact-digest, Resend, Turnstile, and rate-limit
 secrets stay in Firebase Secret Manager and must never enter GitHub variables,
 dotenv artifacts, or logs.
+
+Firebase production uses GitHub OIDC through Google Cloud Workload Identity
+Federation. Do not create or upload a service-account key. The production
+workflows fail closed until the provider, both service accounts, repository
+bindings, least-privilege IAM roles, and all three variables above are
+independently reviewed. After one governed deployment and an authorized tenant
+gate rollback/readback succeed, remove the legacy `FIREBASE_TOKEN` secret; its
+presence does not authorize or satisfy either current workflow.
+
+The Firebase deploy workflow prepares the official Linux v15.24.0 standalone
+CLI before authentication and verifies SHA-256
+`bf964987f095a5fb991cf1c709f640526a4e1b4f9eb1f271f5c09bc693263d33`.
+Do not substitute another binary or bypass `scripts/firebase-tools-binary.mjs`;
+the deploy command independently verifies the artifact again before mutation.
 
 Configure the external release controls before the first promotion:
 
@@ -346,19 +384,16 @@ activation. Before activation:
    readiness evidence. A coverage-confirmed staffing plan proves only the exact
    operator-recorded assignments and schedule-fence check in its receipt.
 
-After an exact tagged release has a successful Firebase `all` deployment, use
-**Set Operational Staffing Tenant** for the separately authorized one-tenant
-promotion. The workflow itself must run from current `main`, but the deployed
-release may be an older tagged commit when it remains the verified production
-runtime. Supply that deployed release SHA, its successful Firebase deployment
-run id, an accepted numeric organization id or the single approved founder
-pilot `mm05366-sandbox`, the requested boolean state, and the exact displayed
-confirmation (`SET operational staffing true for organization
-mm05366-sandbox` for the founder pilot). The protected workflow verifies the
-operator checkout, semantic release tag, exact successful Firebase
-all-scope run, and both staffing bindings in the deployed release workflow. It
-then uses only the tenant-operator WIF identity with Datastore scope, reads the
-current settings document, patches only
+After the exact tagged release passes main CI and the Firebase `all` deployment
+succeeds, use **Set Operational Staffing Tenant** for the one-tenant promotion.
+Supply the same release SHA, the successful Firebase deployment run id, the
+exact organization id, requested boolean state, and the exact displayed
+confirmation. The input has no preselected tenant and accepts a bounded numeric
+id or only the approved founder-pilot id `mm05366-sandbox`; its enable
+confirmation is `SET operational staffing true for organization
+mm05366-sandbox`.
+The protected workflow accepts only an exact successful Firebase all-scope run,
+reads the current settings document, patches only
 `operationalStaffingAuthorityEnabled`, and verifies the readback. Use the same
 workflow with `false` and its matching confirmation for tenant-gate rollback.
 Its success proves only that one configuration field was verified; it does not
@@ -864,14 +899,17 @@ source-acceptance list below also includes the portal backfill tool, which is a
 separate data operation and is deliberately absent from deployment-target UAT.
 
 Candidate assessment and exact-main attestation are distinct evidence stages.
-The fixed candidate declares the machine-enforced `staging-safe-off` UAT
-profile in both its hosted manifest and provider receipt. Print its exact plan
-for a production target with:
+The guarded candidate declares one machine-enforced UAT profile in both its
+hosted manifest and provider receipt. Use `staging-safe-off` for disabled-
+authority verification. Use `staging-staffing-authority` only for a separately
+authorized non-production staffing window; it turns on the global staging
+staffing gate but does not create or enable a tenant. Print the exact plan for a
+production target with:
 
 ```bash
 npm run release:uat:plan -- \
   --target <firebase-hosting|firebase-backend|firebase-all|vercel> \
-  --candidate-profile staging-safe-off
+  --candidate-profile <staging-safe-off|staging-staffing-authority>
 ```
 
 The JSON plan classifies every target-required item exactly once as
@@ -894,36 +932,60 @@ npm run release:candidate:deploy -- \
   --target firebase-all \
   --release-sha <full-release-branch-sha> \
   --ci-run-id <exact-successful-ci-run-id> \
+  --candidate-profile <staging-safe-off|staging-staffing-authority> \
   --confirm "DEPLOY CANDIDATE quotepilot-staging-20260804 <full-release-branch-sha>"
 
 npm run release:candidate:deploy -- \
   --target vercel-preview \
   --release-sha <full-release-branch-sha> \
   --ci-run-id <exact-successful-ci-run-id> \
+  --candidate-profile <staging-safe-off|staging-staffing-authority> \
   --confirm "DEPLOY CANDIDATE quoteflow PREVIEW <full-release-branch-sha>"
 ```
 
 The Firebase candidate requires a git-ignored, mode-`0600`
 `functions/.env.quotepilot-staging-20260804` whose provider/send/buyer gates are
-off, `STRIPE_MODE=test`, and the staffing, Commercial Change, Revenue Autopilot
-preparation, and Revenue Autopilot send authority gates explicitly set to
-`false`. The file must be a real regular file, use the exact staging `/app`
+off, `STRIPE_MODE=test`, and Commercial Change, Revenue Autopilot preparation,
+and Revenue Autopilot send authority gates explicitly set to `false`.
+`OPERATIONAL_STAFFING_AUTHORITY_ENABLED` must exactly match the selected
+candidate profile: `false` for `staging-safe-off`, `true` for
+`staging-staffing-authority`. `AUTH_PLATFORM_ADMIN_EMAILS` must be exactly
+`flightcontrol@quietpilot.us` for either fixed staging candidate profile; the
+policy and active-revision readback reject the unavailable legacy Gmail
+operator or any additional staging platform administrator. The file must be a
+real regular file, use the exact staging `/app`
 callbacks and approved inert identities, contain no plaintext secret or
 disabled-provider residue, and contain no unreviewed variables. Before any
 Firebase mutation, the command checks metadata only—never secret values—for an
 enabled version of every Secret Manager name bound by the tracked Functions.
 Missing metadata is a blocker and this command does not create placeholders.
+Every Firebase CLI operation, including read-only Web config, Functions,
+Hosting, and secret metadata, uses the checksum-verified official v15.24.0
+binary. Exact Firestore Rules content readback uses the public Rules API through
+the repository-pinned `google-auth-library` 10.5.0 client and requires ADC with
+read permission. The command resolves the ADC token and proves release-list
+read access before receipt reservation or mutation; it never searches a local,
+global, or npm-cache Firebase module tree.
 
 Both candidates compile Ambient UI and the staffing browser surface on; that is
 presentation evidence, not staffing or commercial write authority. The Vercel
 preview build uses an explicit exact-staging validation profile; ordinary
 `npm run check:env` remains production-only. Vercel also requires provider
 readback showing the coordinated staging Functions retain every fail-closed
-runtime value before it deploys the browser preview.
+runtime value before it deploys the browser preview. `VERCEL_TOKEN` must resolve
+the fixed linked team/project during a read-only preflight. The command then
+builds a deterministic Build Output API v3 directory locally, rejects symlinks,
+uploads SHA-1-addressed files through `/v2/files`, creates only a preview through
+`/v13/deployments?prebuilt=1`, and waits for immutable `READY` readback. It does
+not install or execute a Vercel CLI.
 
-Use an authenticated local CLI or the provider token environment variable. The
-command never uses a production target/alias. It exclusively reserves
-`artifacts/release/candidates/<sha>/<target>.json` before provider mutation.
+GitHub CI verification resolves authentication in this order:
+`GITHUB_TOKEN`, `GH_TOKEN`, then the authenticated local GitHub CLI session.
+If none is available, the command fails with bounded remediation before any
+provider mutation; it never prints the token. The command never uses a
+production target/alias. It exclusively reserves
+`artifacts/release/candidates/<sha>/<target>.<uatProfile>.json` before provider
+mutation.
 Build/preflight failures remain `failed`; an attempted provider mutation that
 cannot be completely verified remains `partial`, including any deployment URL
 or id already returned. A `verified` Firebase-all receipt binds the Hosting
@@ -934,7 +996,8 @@ candidate evidence, not deployment approval, production mutation,
 provider-business acceptance, or human UAT.
 
 The tracked all-positive item list remains available with
-`npm run release:uat:items -- --target <profile>`. Production qualification
+`npm run release:uat:items -- --target <target> --sms-provider <none|twilio|pingram>`.
+Production qualification
 still requires every printed target item to pass exactly once. The exact-main
 `Release UAT Attestation` accepts only that complete positive set; it accepts no
 candidate profile, blocked item, N/A marker, or partial plan. If the safe-off
@@ -1024,6 +1087,14 @@ does not satisfy these hosted items.
      quote-only or portal-only expiry fails, and `Reopen` restores an eligible
      expired record as a draft with a new portal issuance,
    - quote history row appears and opens,
+   - the stable `operator.authenticated-workspace-journey` matrix records one
+     result per named route/task for the exact release SHA, immutable deployment
+     id, target, organization, authenticated user role, and evidence level. It
+     covers create, save, exact readback/version, export, Workflow, Event
+     Workspace, Customer 360, Messaging Station, Kitchen BEO, Decision Debt,
+     Schedule, Reporting, Operations Audit, payment, and Staffing boundaries;
+     denied-role and cross-tenant attempts fail closed. Source, local automated,
+     provider, and human observations remain separate evidence rows,
    - provider acceptance for the exact current valid issuance records `sent`
      and activates that portal, while acceptance for an invalid or expired
      issuance is retained as `requires_rotation` with the portal inactive,

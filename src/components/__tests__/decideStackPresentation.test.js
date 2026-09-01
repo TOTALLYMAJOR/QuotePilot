@@ -88,12 +88,12 @@ describe("buildStaffingCard", () => {
 describe("buildReadinessGapCards", () => {
   test("surfaces the heaviest proposal gaps first, bounded to two, with honest scope language", () => {
     const cards = buildReadinessGapCards(platedQuote(), { ordinaryEditAllowed: true });
-    expect(cards).toHaveLength(2);
+    expect(cards).toHaveLength(1);
     expect(cards[0].title).toBe("Record the venue");
-    expect(cards[0].impact).toBe("+10 toward Ready to send.");
+    expect(cards[0].impact).toBe("+11 toward Ready to send.");
+    expect(cards[0].sentence).toContain("11 percentage points toward required proposal completeness");
     expect(cards[0].sentence).toContain("This is not operational event readiness.");
-    expect(cards[1].title).toBe("Record the customer phone");
-    expect(cards[1].impact).toBe("+5 toward Ready to send.");
+    expect(cards.some((card) => card.title === "Record the customer phone")).toBe(false);
   });
 
   test("returns nothing once every weighted proposal field is recorded", () => {
@@ -111,7 +111,7 @@ describe("buildDecideStack", () => {
     expect(stack.modelId).toBe(DECIDE_STACK_MODEL);
     expect(stack.suppressed).toBe(false);
     expect(stack.boundsNote).toBe(DECIDE_STACK_BOUNDS_NOTE);
-    expect(stack.cards.map((card) => card.kind)).toEqual(["staffing", "readiness_gap", "readiness_gap"]);
+    expect(stack.cards.map((card) => card.kind)).toEqual(["staffing", "readiness_gap"]);
   });
 
   test("suppresses every advisory card once the quote reaches governed or terminal state", () => {

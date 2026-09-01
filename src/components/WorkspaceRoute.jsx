@@ -8,16 +8,21 @@ import {
 } from "../context/WorkspaceNavigationContext";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useTenantContext } from "../hooks/useTenantContext";
-import { WORKSPACE_PATHS } from "../lib/workspaceRoutes";
+import { WORKSPACE_PATHS, WORKSPACE_ROUTE_IDS } from "../lib/workspaceRoutes";
 import { buildWorkspaceRouteScopeKey } from "../lib/workspaceScope";
+import { mountFirebaseEmailActionPage } from "./FirebaseEmailActionPage";
 
 const QUOTE_WORKSPACE_CONCEPT_PATH = "/app/quote-workspace-concept";
 const QUOTE_WORKSPACE_PATH = "/app/quote-workspace";
 const QUOTE_WORKSPACE_ROLES = new Set(["admin", "sales"]);
-const QuoteWorkspaceConceptPage = lazy(() => import("./QuoteWorkspaceConceptPage"));
+const QuoteWorkspacePage = lazy(() => import("./QuoteWorkspaceConceptPage"));
+
+function envEnabled(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
 
 export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
-  const { route, replace } = useWorkspaceNavigation();
+  const { location, route, replace } = useWorkspaceNavigation();
   const previousAuthenticatedUidRef = useRef("");
   const authenticatedUid = String(authSession.user?.uid || "").trim();
   const authenticatedRole = String(authSession.role || tenantContext?.role || "").trim().toLowerCase();
@@ -25,15 +30,31 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   const normalizedPath = typeof window === "undefined"
     ? ""
     : window.location.pathname.replace(/\/+$/, "") || "/";
-  const conceptRouteRequested = !portalToken
-    && (
-      normalizedPath === QUOTE_WORKSPACE_PATH
-      || normalizedPath === QUOTE_WORKSPACE_CONCEPT_PATH
-    );
-  const conceptRouteReady = conceptRouteRequested
+  const searchParams = new URLSearchParams(location?.search || "");
+  const compatibilityWorkspaceRequested = normalizedPath === QUOTE_WORKSPACE_PATH
+    || normalizedPath === QUOTE_WORKSPACE_CONCEPT_PATH;
+  const exactQuoteWorkspaceRequested = route.routeId === WORKSPACE_ROUTE_IDS.QUOTE_DETAIL;
+  const ambientOpportunityRequested = envEnabled(import.meta.env.VITE_AMBIENT_UI_ENABLED)
+    && exactQuoteWorkspaceRequested;
+  // The approved Ambient Opportunity owns ordinary exact-quote navigation
+  // when that build-selected presentation is enabled. Explicit arrivals and
+  // administration continue through the authoritative app; the connected
+  // Quote Workspace remains a compatibility alias and rollback presentation.
+  const existingAppOwnsArrival = Boolean(location?.state?.ambientArrival);
+  const administrationRequested = searchParams.get("view") === "administration";
+  const quoteWorkspaceRequested = !portalToken
+    && !administrationRequested
+    && !existingAppOwnsArrival
+    && (compatibilityWorkspaceRequested || (
+      exactQuoteWorkspaceRequested && !ambientOpportunityRequested
+    ));
+  const requestedQuoteId = exactQuoteWorkspaceRequested
+    ? String(route.params?.quoteId || "").trim()
+    : String(searchParams.get("quoteId") || "").trim();
+  const quoteWorkspaceReady = quoteWorkspaceRequested
     && Boolean(authenticatedUid)
     && QUOTE_WORKSPACE_ROLES.has(authenticatedRole);
-  const conceptRouteDenied = conceptRouteRequested
+  const quoteWorkspaceDenied = quoteWorkspaceRequested
     && Boolean(authenticatedUid)
     && !QUOTE_WORKSPACE_ROLES.has(authenticatedRole);
   const [committedPortalToken, setCommittedPortalToken] = useState(() => (
@@ -66,19 +87,20 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   return (
     <OrganizationProvider key={workspaceScopeKey}>
       <EventTypeProvider>
-        {conceptRouteReady ? (
-          <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote workspace concept...</div>}>
-            <QuoteWorkspaceConceptPage
+        {quoteWorkspaceReady ? (
+          <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote workspace...</div>}>
+            <QuoteWorkspacePage
               tenantContext={tenantContext}
               authSession={authSession}
+              quoteId={requestedQuoteId}
               onExit={() => replace(WORKSPACE_PATHS.quotes, { preserveSearch: false, preserveHash: false })}
             />
           </Suspense>
-        ) : conceptRouteDenied ? (
+        ) : quoteWorkspaceDenied ? (
           <main className="qp-route-boundary" data-testid="quote-workspace-role-boundary">
             <p>Quote workspace</p>
             <h1>Staff access required</h1>
-            <p>This evaluation surface is limited to authorized sales and administrative staff.</p>
+            <p>This workspace is limited to authorized sales and administrative staff.</p>
             <button
               type="button"
               onClick={() => replace(WORKSPACE_PATHS.home, { preserveSearch: false, preserveHash: false })}
@@ -100,7 +122,7 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   );
 }
 
-export default function WorkspaceRoute() {
+function AuthenticatedWorkspaceRoute() {
   const tenantContext = useTenantContext();
   const authSession = useAuthSession({ tenantContext });
 
@@ -109,4 +131,13 @@ export default function WorkspaceRoute() {
       <ScopedWorkspaceRoute tenantContext={tenantContext} authSession={authSession} />
     </WorkspaceNavigationProvider>
   );
+}
+
+export default function WorkspaceRoute() {
+  const actionRoot = useCallback((node) => {
+    if (node && !node.firstChild) mountFirebaseEmailActionPage(node);
+  }, []);
+  return window.location.pathname === "/app/auth/action"
+    ? <div ref={actionRoot} />
+    : <AuthenticatedWorkspaceRoute />;
 }

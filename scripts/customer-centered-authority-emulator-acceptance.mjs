@@ -205,6 +205,8 @@ const newSalesTarget = await auth.createUser({
   emailVerified: true
 });
 const confirmationAtISO = new Date().toISOString();
+const primarySettingsRef = db.collection("organizations").doc(ORGANIZATION_ID)
+  .collection("settings").doc("config");
 
 await Promise.all([
   db.collection("organizations").doc(ORGANIZATION_ID).set({
@@ -223,8 +225,7 @@ await Promise.all([
     archived: false,
     status: "active"
   }),
-  db.collection("organizations").doc(ORGANIZATION_ID)
-    .collection("settings").doc("config").set({
+  primarySettingsRef.set({
       catalogRevision: 1,
       pricingSetupConfirmed: true,
       pricingConfirmation: {
@@ -284,6 +285,178 @@ assert.equal(created.activeVersionId, "v0001");
 assert.ok(created.id);
 assert.ok(created.customerId);
 const quoteId = created.id;
+
+await primarySettingsRef.update({ commercialChangeAuthorityEnabled: false });
+try {
+  const dormantBaseForm = {
+    ...sourceForm(),
+    name: "Dormant Review Customer",
+    email: "dormant-review@local.test",
+    eventName: "Dormant Commercial Review",
+    date: dateAtOffset(6)
+  };
+  const dormantCreated = await callFunction("createQuoteDraft", primaryAdmin.idToken, {
+    organizationId: ORGANIZATION_ID,
+    form: dormantBaseForm
+  });
+  assert.equal(dormantCreated.activeVersionId, "v0001");
+  const dormantQuoteId = dormantCreated.id;
+  const dormantQuoteRef = db.collection("organizations").doc(ORGANIZATION_ID)
+    .collection("quotes").doc(dormantQuoteId);
+  const dormantChangedForm = { ...dormantBaseForm, style: "plated" };
+  const dormantSimulation = await callFunction(
+    "simulateCommercialQuoteChange",
+    primaryAdmin.idToken,
+    {
+      organizationId: ORGANIZATION_ID,
+      quoteId: dormantQuoteId,
+      expectedActiveVersionId: dormantCreated.activeVersionId,
+      requestId: requestId("change_sim", "7"),
+      form: dormantChangedForm
+    }
+  );
+  assert.equal(dormantSimulation.authorityState, "dormant");
+  assert.equal(dormantSimulation.simulationReceipt.organizationId, ORGANIZATION_ID);
+  assert.equal(dormantSimulation.simulationReceipt.quoteId, dormantQuoteId);
+  assert.equal(dormantSimulation.simulationReceipt.baseRevisionId, "v0001");
+  assert.equal(dormantSimulation.simulationReceipt.policyVersion, "commercial-change-policy-v1");
+  assert.match(dormantSimulation.simulationReceipt.catalogAuthorityDigest, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(
+    dormantSimulation.persistedEffects.pricing,
+    dormantSimulation.simulationReceipt.commercialValues
+  );
+  assert.equal(
+    dormantSimulation.persistedEffects.source,
+    "trusted_quote_edit_material_projection"
+  );
+  assert.deepEqual(dormantSimulation.persistedEffects.identity, {
+    organizationId: ORGANIZATION_ID,
+    quoteId: dormantQuoteId,
+    baseRevisionId: "v0001",
+    projectedRevisionId: "v0002"
+  });
+
+  await expectCallableError(
+    () => callFunction("updateQuoteDraft", primaryAdmin.idToken, {
+      organizationId: ORGANIZATION_ID,
+      quoteId: dormantQuoteId,
+      expectedActiveVersionId: "v0001",
+      form: { ...dormantChangedForm, guests: dormantChangedForm.guests + 1 },
+      commercialChangeAuthority: {
+        simulationReceiptId: dormantSimulation.simulationReceipt.receiptId,
+        authorizationReceiptId: "",
+        applyRequestId: requestId("change_apply", "7")
+      }
+    }),
+    "ALREADY_EXISTS"
+  );
+  assert.equal((await dormantQuoteRef.get()).data()?.activeVersionId, "v0001");
+  assert.equal((await dormantQuoteRef.collection("versions").doc("v0002").get()).exists, false);
+
+  await primarySettingsRef.update({
+    serviceFeePct: 0.16,
+    serviceFeeTiers: [{ id: "authority-standard", minGuests: 0, maxGuests: 9999, pct: 0.16 }]
+  });
+  await expectCallableError(
+    () => callFunction("updateQuoteDraft", primaryAdmin.idToken, {
+      organizationId: ORGANIZATION_ID,
+      quoteId: dormantQuoteId,
+      expectedActiveVersionId: "v0001",
+      form: dormantChangedForm,
+      commercialChangeAuthority: {
+        simulationReceiptId: dormantSimulation.simulationReceipt.receiptId,
+        authorizationReceiptId: "",
+        applyRequestId: requestId("change_apply", "8")
+      }
+    }),
+    "ABORTED"
+  );
+  assert.equal((await dormantQuoteRef.get()).data()?.activeVersionId, "v0001");
+  await primarySettingsRef.update({
+    serviceFeePct: 0.15,
+    serviceFeeTiers: [{ id: "authority-standard", minGuests: 0, maxGuests: 9999, pct: 0.15 }]
+  });
+
+  const dormantAdvancedForm = { ...dormantBaseForm, guests: dormantBaseForm.guests + 1 };
+  const dormantAdvanced = await callFunction("updateQuoteDraft", primaryAdmin.idToken, {
+    organizationId: ORGANIZATION_ID,
+    quoteId: dormantQuoteId,
+    expectedActiveVersionId: "v0001",
+    form: dormantAdvancedForm
+  });
+  assert.equal(dormantAdvanced.activeVersionId, "v0002");
+  assert.equal(dormantAdvanced.commercialChange.authorityState, "dormant");
+
+  await expectCallableError(
+    () => callFunction("updateQuoteDraft", primaryAdmin.idToken, {
+      organizationId: ORGANIZATION_ID,
+      quoteId: dormantQuoteId,
+      expectedActiveVersionId: "v0001",
+      form: dormantChangedForm,
+      commercialChangeAuthority: {
+        simulationReceiptId: dormantSimulation.simulationReceipt.receiptId,
+        authorizationReceiptId: "",
+        applyRequestId: requestId("change_apply", "9")
+      }
+    }),
+    "FAILED_PRECONDITION"
+  );
+  assert.equal((await dormantQuoteRef.get()).data()?.activeVersionId, "v0002");
+  assert.equal((await dormantQuoteRef.collection("versions").doc("v0003").get()).exists, false);
+
+  const dormantFreshForm = { ...dormantAdvancedForm, style: "plated" };
+  const dormantFreshSimulation = await callFunction(
+    "simulateCommercialQuoteChange",
+    primaryAdmin.idToken,
+    {
+      organizationId: ORGANIZATION_ID,
+      quoteId: dormantQuoteId,
+      expectedActiveVersionId: "v0002",
+      requestId: requestId("change_sim", "8"),
+      form: dormantFreshForm
+    }
+  );
+  const dormantApplied = await callFunction("updateQuoteDraft", primaryAdmin.idToken, {
+    organizationId: ORGANIZATION_ID,
+    quoteId: dormantQuoteId,
+    expectedActiveVersionId: "v0002",
+    form: dormantFreshForm,
+    commercialChangeAuthority: {
+      simulationReceiptId: dormantFreshSimulation.simulationReceipt.receiptId,
+      authorizationReceiptId: "",
+      applyRequestId: requestId("change_apply", "a")
+    }
+  });
+  assert.equal(dormantApplied.activeVersionId, "v0003");
+  assert.equal(dormantApplied.commercialChange.authorityState, "dormant");
+  assert.equal(dormantApplied.commercialChange.state, "DORMANT");
+  const dormantReadback = (await dormantQuoteRef.get()).data() || {};
+  assert.equal(dormantReadback.activeVersionId, "v0003");
+  assert.equal(dormantReadback.event?.style, dormantFreshForm.style);
+  assert.equal(
+    dormantReadback.totals?.total,
+    dormantFreshSimulation.persistedEffects.pricing.authoritativeTotal.proposedAfter
+  );
+  assert.equal(
+    dormantReadback.totals?.deposit,
+    dormantFreshSimulation.persistedEffects.pricing.depositRequirement.proposedAfter
+  );
+  assert.deepEqual(
+    {
+      servers: dormantReadback.event?.servers,
+      chefs: dormantReadback.event?.chefs,
+      bartenders: dormantReadback.event?.bartenders
+    },
+    dormantFreshSimulation.persistedEffects.staffing.after
+  );
+  assert.equal((await dormantQuoteRef.collection("versions").doc("v0003").get()).exists, true);
+} finally {
+  await primarySettingsRef.update({
+    commercialChangeAuthorityEnabled: true,
+    serviceFeePct: 0.15,
+    serviceFeeTiers: [{ id: "authority-standard", minGuests: 0, maxGuests: 9999, pct: 0.15 }]
+  });
+}
 
 await expectCallableError(
   () => callFunction("getCommercialDependencyState", otherAdmin.idToken, {

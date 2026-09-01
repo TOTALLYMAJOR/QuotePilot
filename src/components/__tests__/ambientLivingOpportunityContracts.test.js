@@ -285,7 +285,7 @@ describe("Living Opportunity interaction contracts", () => {
     });
 
     expect(inspect.arrivalContract).toMatchObject({
-      object: { id: "conversation", type: "customer-communication-evidence" },
+      object: { id: "quote-contract-alpha", type: "customer-communication-evidence" },
       nextResolutionIds: ["continue-conversation-resolution", "dismiss-conversation-context"]
     });
     expect(resolution.arrivalContract).toMatchObject({

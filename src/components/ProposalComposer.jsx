@@ -10,6 +10,7 @@ import { playCue } from "./soundKit";
 import {
   buildCompositionLine,
   buildExperienceModel,
+  buildExperienceSectionStatus,
   buildGuestChangeConsequences,
   buildHeaderModel,
   buildInvestmentModel,
@@ -102,15 +103,24 @@ function requireCount(min, max, noun) {
   };
 }
 
-function SectionHeading({ id, eyebrow, title, complete }) {
+function SectionHeading({ id, eyebrow, title, complete, status = null }) {
+  const resolvedStatus = status || (complete ? {
+    id: "complete",
+    label: "✓ Complete",
+    ariaLabel: `${eyebrow} section complete`
+  } : null);
   return (
     <header className="pc-section-head">
       <p className="pc-eyebrow" id={id}>{eyebrow}</p>
       <div className="pc-section-title-row">
         {title ? <h3 className="pc-section-title">{title}</h3> : null}
-        {complete ? (
-          <span className="pc-complete" role="img" aria-label={`${eyebrow} section complete`}>
-            ✓ Complete
+        {resolvedStatus ? (
+          <span
+            className="pc-section-status"
+            data-state={resolvedStatus.id}
+            aria-label={resolvedStatus.ariaLabel}
+          >
+            {resolvedStatus.label}
           </span>
         ) : null}
       </div>
@@ -353,6 +363,23 @@ export function buildDraftSaveBlockers({
   return blockers;
 }
 
+export function buildSaveActionModel({
+  saveBlockers = [],
+  saveLabel = "Save draft",
+  saveDisabled = false
+} = {}) {
+  const blockerCount = Array.isArray(saveBlockers)
+    ? saveBlockers.filter((blocker) => blocker && String(blocker.message || "").trim()).length
+    : 0;
+  return blockerCount > 0
+    ? {
+        mode: "review",
+        label: `Review ${blockerCount} blocker${blockerCount === 1 ? "" : "s"}`,
+        disabled: false
+      }
+    : { mode: "save", label: saveLabel, disabled: Boolean(saveDisabled) };
+}
+
 export default function ProposalComposer({
   form,
   totals,
@@ -366,6 +393,7 @@ export default function ProposalComposer({
   eventTemplates = [],
   readiness = null,
   editingQuote = null,
+  touchedFields = {},
   quoteDirty = false,
   saving = false,
   saveLabel = "Save draft",
@@ -407,6 +435,8 @@ export default function ProposalComposer({
   const [activityOpen, setActivityOpen] = useState(true);
   const [activityLog, setActivityLog] = useState([]);
   const activityIdRef = useRef(0);
+  const saveReadinessRef = useRef(null);
+  const pendingSaveReviewFocusRef = useRef(false);
 
   const currentSaveBlockers = Array.isArray(saveBlockers)
     ? saveBlockers.filter((blocker) => blocker && String(blocker.message || "").trim())
@@ -426,6 +456,11 @@ export default function ProposalComposer({
     : currentSaveBlockers.length
       ? "Resolve these known requirements before this draft can be saved."
       : "Known draft requirements are complete. Saving still verifies availability and server authority.";
+  const saveAction = buildSaveActionModel({
+    saveBlockers: currentSaveBlockers,
+    saveLabel,
+    saveDisabled
+  });
 
   const logActivity = (label) => {
     activityIdRef.current += 1;
@@ -439,13 +474,33 @@ export default function ProposalComposer({
 
   const requestSave = () => {
     setPulseOpen(true);
+    if (saveAction.mode === "review") {
+      pendingSaveReviewFocusRef.current = true;
+      return;
+    }
     onSaveQuote?.();
   };
+
+  useEffect(() => {
+    if (!pulseOpen || !pendingSaveReviewFocusRef.current) return;
+    pendingSaveReviewFocusRef.current = false;
+    const frame = window.requestAnimationFrame(() => saveReadinessRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [pulseOpen]);
 
   const header = buildHeaderModel({ form, editingQuote, quoteDirty, saving });
   const completeness = useMemo(
     () => buildSectionCompleteness({ form, totals, catalog }),
     [form, totals, catalog]
+  );
+  const experienceSectionStatus = useMemo(
+    () => buildExperienceSectionStatus({
+      complete: completeness.experience,
+      saved: Boolean(editingQuote?.id),
+      packageReviewed: Boolean(touchedFields?.pkg),
+      styleReviewed: Boolean(touchedFields?.style)
+    }),
+    [completeness.experience, editingQuote?.id, touchedFields?.pkg, touchedFields?.style]
   );
   const staffing = useMemo(() => buildStaffingRecommendation(form), [form]);
   const watching = useMemo(
@@ -949,6 +1004,8 @@ export default function ProposalComposer({
           className="pc-save-readiness"
           data-state={saveReadinessState}
           data-testid="pc-save-readiness"
+          ref={saveReadinessRef}
+          tabIndex={-1}
         >
           <div className="pc-save-readiness-summary">
             <span className="pc-save-readiness-dot" aria-hidden="true" />
@@ -1005,11 +1062,11 @@ export default function ProposalComposer({
           type="button"
           className="pc-cta"
           onClick={requestSave}
-          disabled={saveDisabled}
-          title={saveDisabled && saveDisabledReason ? saveDisabledReason : undefined}
+          disabled={saveAction.disabled}
+          title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
           data-testid="pc-save"
         >
-          {saveLabel}
+          {saveAction.label}
         </button>
         {compareEnabled ? (
           <button
@@ -1055,11 +1112,11 @@ export default function ProposalComposer({
               type="button"
               className="pc-cta pc-compact"
               onClick={requestSave}
-              disabled={saveDisabled}
-              title={saveDisabled && saveDisabledReason ? saveDisabledReason : undefined}
+              disabled={saveAction.disabled}
+              title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
               data-testid="pc-save-header"
             >
-              {saveLabel}
+              {saveAction.label}
             </button>
             <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
               Preview client view
@@ -1273,7 +1330,7 @@ export default function ProposalComposer({
             </section>
 
             <section className="pc-section" aria-labelledby="pc-sec-experience">
-              <SectionHeading id="pc-sec-experience" eyebrow="Experience" complete={completeness.experience} />
+              <SectionHeading id="pc-sec-experience" eyebrow="Experience" status={experienceSectionStatus} />
               <h4 className="pc-experience-title">{experience.title}</h4>
               <p className="pc-experience-blurb">{experience.blurb}</p>
               {experience.facts.length ? (

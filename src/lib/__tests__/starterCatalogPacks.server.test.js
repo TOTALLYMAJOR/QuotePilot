@@ -16,6 +16,7 @@ const {
   validateCatalogForConfirmation
 } = require("../../../functions/starterCatalogPacks.js");
 const manifests = require("../../../functions/data/starterCatalogPacks.json");
+const FAKE_DELETE_FIELD = "__FAKE_FIRESTORE_DELETE_FIELD__";
 
 function clone(value) {
   return structuredClone(value);
@@ -78,7 +79,12 @@ function fakeDb(initial = new Map()) {
           : documentSnapshot(ref),
         set(ref, data, options = {}) {
           const current = options.merge ? store.get(ref.path) || {} : {};
-          store.set(ref.path, { ...current, ...clone(data) });
+          const next = { ...current };
+          Object.entries(clone(data)).forEach(([key, value]) => {
+            if (value === FAKE_DELETE_FIELD) delete next[key];
+            else next[key] = value;
+          });
+          store.set(ref.path, next);
         },
         delete(ref) {
           store.delete(ref.path);
@@ -432,6 +438,71 @@ describe("starter catalog pack safety", () => {
         confirmedCatalogRevision: 1
       }
     });
+  });
+
+  test("server confirmation preserves authoritative minor-unit settings and removes conflicting legacy money", async () => {
+    const { db } = stagedCatalog();
+    const settingsPath = "organizations/acme/settings/config";
+    const settings = db.store.get(settingsPath);
+    db.store.set(settingsPath, {
+      ...settings,
+      perMileRateMinor: 95,
+      perMileRate: 0.7,
+      longDistancePerMileRateMinor: 145,
+      longDistancePerMileRate: 1.1,
+      bartenderRateMinor: 5200,
+      bartenderRate: 30,
+      serverRateMinor: 4800,
+      serverRate: 24,
+      chefRateMinor: 6200,
+      chefRate: 32,
+      bartenderRateTypes: [{
+        id: "standard",
+        name: "Standard bartender",
+        rateMinor: 5600,
+        rate: 30
+      }],
+      staffingRateTypes: [{
+        id: "standard",
+        name: "Standard staffing",
+        serverRateMinor: 4800,
+        serverRate: 24,
+        chefRateMinor: 6200,
+        chefRate: 32
+      }]
+    });
+
+    await confirmCatalogPricing({
+      db,
+      organizationId: "acme",
+      expectedCatalogRevision: 1,
+      actorUid: "owner-1",
+      actorEmail: "owner@example.com",
+      nowISO: "2026-08-05T13:30:00.000Z",
+      deleteField: () => FAKE_DELETE_FIELD
+    });
+
+    const stored = db.store.get(settingsPath);
+    expect(stored).toMatchObject({
+      perMileRateMinor: 95,
+      longDistancePerMileRateMinor: 145,
+      bartenderRateMinor: 5200,
+      serverRateMinor: 4800,
+      chefRateMinor: 6200,
+      bartenderRateTypes: [{ rateMinor: 5600 }],
+      staffingRateTypes: [{ serverRateMinor: 4800, chefRateMinor: 6200 }],
+      pricingSetupConfirmed: true
+    });
+    [
+      "perMileRate",
+      "longDistancePerMileRate",
+      "bartenderRate",
+      "serverRate",
+      "chefRate"
+    ].forEach((key) => expect(stored).not.toHaveProperty(key));
+    expect(stored.bartenderRateTypes[0]).not.toHaveProperty("rate");
+    expect(stored.staffingRateTypes[0]).not.toHaveProperty("serverRate");
+    expect(stored.staffingRateTypes[0]).not.toHaveProperty("chefRate");
   });
 
   test("server confirmation requires an attributed exact-timestamp receipt", async () => {

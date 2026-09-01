@@ -98,12 +98,12 @@ function mount(props = {}) {
 }
 
 describe("QuoteWorkspaceConceptPage", () => {
-  test("keeps the empty state tenant-scoped and hands navigation back to current Quotes", () => {
+  test("keeps the empty state tenant-scoped and hands navigation back to Opportunities", () => {
     const onExit = vi.fn();
     mount({ onExit });
 
     expect(container.textContent).toContain("No saved quote");
-    expect(container.textContent).toContain("Create or save a quote first");
+    expect(container.textContent).toContain("Save a quote, then open its workspace");
     act(() => container.querySelector("button").click());
     expect(onExit).toHaveBeenCalledTimes(1);
   });
@@ -113,7 +113,7 @@ describe("QuoteWorkspaceConceptPage", () => {
     mount();
 
     expect(container.textContent).toContain("Quote unavailable");
-    expect(container.textContent).toContain("No data was changed");
+    expect(container.textContent).toContain("No data changed");
     act(() => container.querySelector("button").click());
     expect(snapshot.refresh).toHaveBeenCalledWith({ force: true });
   });
@@ -124,7 +124,16 @@ describe("QuoteWorkspaceConceptPage", () => {
     mount();
 
     expect(container.textContent).toContain("Quote unavailable");
-    expect(container.textContent).toContain("No different quote was opened");
+    expect(container.textContent).toContain("No alternate quote opened");
+    expect(container.textContent).not.toContain("Morgan wedding");
+  });
+
+  test("uses the canonical route quote identity instead of substituting the first saved quote", () => {
+    snapshot.quotes = [QUOTE, { ...QUOTE, id: "quote-202", quoteNumber: "QP-202", eventName: "Lee gala" }];
+    mount({ quoteId: "quote-202" });
+
+    expect(container.textContent).toContain("QP-202");
+    expect(container.textContent).toContain("Lee gala");
     expect(container.textContent).not.toContain("Morgan wedding");
   });
 
@@ -135,8 +144,14 @@ describe("QuoteWorkspaceConceptPage", () => {
     expect(container.textContent).toContain("QP-101");
     expect(container.textContent).toContain("Morgan wedding");
     expect(container.textContent).toContain("$19,475.00");
-    expect(container.textContent).toContain("Connected preview");
-    expect(container.textContent).toContain("all changes continue in the authoritative quote workspace");
+    expect(container.textContent).toContain("Saved workspace");
+    expect(container.textContent).toContain("Completeness does not grant approval");
+    expect(Array.from(container.querySelectorAll('.qwc-primary-nav a')).map((link) => link.textContent.trim()))
+      .toEqual(["Now", "Opportunities", "Clients", "Library"]);
+    expect(Array.from(container.querySelectorAll('.qwc-operations-nav a')).map((link) => link.textContent.trim()))
+      .toEqual(["New quote", "Operations"]);
+    expect(container.querySelector('[data-testid="quote-workspace"]')).not.toBeNull();
+    expect(container.querySelector(".qwc-title-quote").textContent).toBe("QP-101");
     expect(container.textContent).toContain("Difficult Question Desk");
     expect(container.textContent).toContain("Steward is unavailable; quoting is not");
     expect(container.textContent).toContain("Steward handoff unavailable");
@@ -155,5 +170,13 @@ describe("QuoteWorkspaceConceptPage", () => {
 
     act(() => drawer.querySelector('[aria-label="Close activity and save health"]').click());
     expect(document.body.querySelector('[data-testid="quote-workspace-activity-drawer"]')).toBeNull();
+  });
+
+  test("keeps Library role-safe for sales staff", () => {
+    snapshot.quotes = [QUOTE];
+    mount({ authSession: { ...AUTH_SESSION, role: "sales" } });
+
+    expect(Array.from(container.querySelectorAll('.qwc-primary-nav a')).map((link) => link.textContent.trim()))
+      .toEqual(["Now", "Opportunities", "Clients"]);
   });
 });

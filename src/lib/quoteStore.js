@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   limit as queryLimit,
   orderBy,
@@ -1044,7 +1045,7 @@ function resolvePersistedPricingSnapshot({
   ownerEmail = "",
   reason = ""
 } = {}) {
-  const buildClientPreview = () => buildPricingSnapshotFromClientTotals({
+  const fallbackPricing = buildPricingSnapshotFromClientTotals({
     form,
     totals,
     settings,
@@ -1062,16 +1063,15 @@ function resolvePersistedPricingSnapshot({
   });
 
   if (!pricingSnapshot || typeof pricingSnapshot !== "object") {
-    return buildClientPreview();
+    return fallbackPricing;
   }
 
   const normalized = normalizePricingOutput(pricingSnapshot);
   if (normalized.commercialSnapshot) return normalized;
 
-  const clientPreview = buildClientPreview();
   return {
     ...normalized,
-    commercialSnapshot: clientPreview.commercialSnapshot
+    commercialSnapshot: fallbackPricing.commercialSnapshot
   };
 }
 
@@ -1538,7 +1538,7 @@ function withLegacyReadDefaults(quote) {
   };
 }
 
-async function readQuoteById(quoteId) {
+async function readQuoteById(quoteId, { serverOnly = false } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
@@ -1547,7 +1547,10 @@ async function readQuoteById(quoteId) {
   const nowISO = isoNow();
   if (firebaseReady) {
     const scopedOrgId = requireReadOrganizationId(undefined, "quote read");
-    const quoteSnap = await getDoc(quoteDocRef(id, scopedOrgId));
+    const quoteRef = quoteDocRef(id, scopedOrgId);
+    const quoteSnap = serverOnly
+      ? await getDocFromServer(quoteRef)
+      : await getDoc(quoteRef);
 
     if (!quoteSnap.exists()) {
       throw new Error("Quote not found.");
@@ -1565,6 +1568,10 @@ async function readQuoteById(quoteId) {
     ));
   }
 
+  if (serverOnly) {
+    throw new Error("A server-only quote read requires a connected Firebase workspace.");
+  }
+
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const match = existing.find((quote) => quote.id === id);
   if (!match) {
@@ -1573,8 +1580,8 @@ async function readQuoteById(quoteId) {
   return withLegacyReadDefaults(hydrateQuote(match, nowISO));
 }
 
-export async function getQuoteById(quoteId) {
-  return readQuoteById(quoteId);
+export async function getQuoteById(quoteId, options = {}) {
+  return readQuoteById(quoteId, options);
 }
 
 export function resolveQuotePricingSnapshot(quote) {
@@ -1716,7 +1723,7 @@ export async function saveQuoteVersion(
 ) {
   const quote = await readQuoteById(quoteId);
   const timestamp = isoNow();
-  const snapshot = JSON.parse(JSON.stringify(quote));
+  const localSnapshot = JSON.parse(JSON.stringify(quote));
   const organizationCandidate = organizationId !== undefined ? organizationId : quote.organizationId;
   const resolvedOrganizationId = firebaseReady
     ? requireWriteOrganizationId(organizationCandidate, "saveQuoteVersion")
@@ -1741,6 +1748,10 @@ export async function saveQuoteVersion(
         throw new Error("Quote not found.");
       }
       const data = quoteSnap.data() || {};
+      const snapshot = {
+        ...data,
+        id: quote.id
+      };
       const nextVersionNumber = toVersionNumber(data.latestVersionNumber, 0) + 1;
       const versionId = buildQuoteVersionId(nextVersionNumber);
       const versionMeta = normalizeVersionMetadata({
@@ -1761,14 +1772,14 @@ export async function saveQuoteVersion(
         versionId,
         quoteId: quote.id,
         organizationId: writeOrganizationId,
-        ...(String(quote.customerId || "").trim()
-          ? { customerId: String(quote.customerId).trim() }
+        ...(String(data.customerId || "").trim()
+          ? { customerId: String(data.customerId).trim() }
           : {}),
         versionNumber: versionMeta.versionNumber,
         createdAtISO: timestamp,
         reason: versionMeta.reason,
         createdBy: versionMeta.createdBy,
-        status: normalizeStatus(quote.status),
+        status: normalizeStatus(data.status),
         pricing: resolveQuotePricingSnapshot(snapshot),
         snapshot
       });
@@ -1834,8 +1845,8 @@ export async function saveQuoteVersion(
     ...(String(quote.customerId || "").trim()
       ? { customerId: String(quote.customerId).trim() }
       : {}),
-    snapshot,
-    pricing: resolveQuotePricingSnapshot(snapshot),
+    snapshot: localSnapshot,
+    pricing: resolveQuotePricingSnapshot(localSnapshot),
     timestamp
   });
   localStorage.setItem(LOCAL_QUOTE_HISTORY_KEY, JSON.stringify(history));
@@ -2194,7 +2205,6 @@ export async function recordQuoteIntegrationSync({
       },
       updatedAtISO: entry.occurredAtISO
     });
-    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
     return { ok: true, storage: "firebase", entry };
   }
 
@@ -3233,12 +3243,15 @@ export async function updateQuote({
   ownerUid = "",
   ownerEmail = "",
   organizationId = undefined,
-  commercialChangeAuthority = undefined
+  commercialChangeAuthority = undefined,
+  catalogReviewReceiptId = undefined,
+  expectedActiveVersionId = undefined
 }) {
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
   }
+  const expectedRevisionId = String(expectedActiveVersionId || "").trim();
   const selectedMenuItems = requireMenuSelection(form);
 
   if (firebaseReady) {
@@ -3255,8 +3268,12 @@ export async function updateQuote({
       organizationId: writeOrganizationId,
       quoteId: id,
       form,
+      ...(expectedRevisionId ? { expectedActiveVersionId: expectedRevisionId } : {}),
       ...(exactCommercialChangeAuthority
         ? { commercialChangeAuthority: exactCommercialChangeAuthority }
+        : {}),
+      ...(String(catalogReviewReceiptId || "").trim()
+        ? { catalogReviewReceiptId: String(catalogReviewReceiptId).trim() }
         : {})
     });
     const updated = response?.data && typeof response.data === "object"
@@ -3295,6 +3312,18 @@ export async function updateQuote({
   }
 
   const existing = await readQuoteById(id);
+  if (expectedRevisionId) {
+    const currentRevisionId = String(
+      existing?.activeVersionId || existing?.versionMeta?.versionId || ""
+    ).trim();
+    if (!currentRevisionId || currentRevisionId !== expectedRevisionId) {
+      const error = new Error(
+        "This quote changed after the draft was opened. Reload the current saved version before applying the update."
+      );
+      error.code = "failed-precondition";
+      throw error;
+    }
+  }
   const nowISO = isoNow();
   const normalizedCustomerEmail = normalizeEmail(form.email);
   const customerNameKey = normalizeCustomerNameKey(form.name);

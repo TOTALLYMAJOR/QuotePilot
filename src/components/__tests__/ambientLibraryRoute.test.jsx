@@ -122,12 +122,64 @@ describe("AmbientLibraryRoute", () => {
 
     const library = container.querySelector(".ambient-library");
     expect(library.dataset.surfaceContractId).toBe("ambient-library");
-    expect(container.querySelector("#ambient-library-title").textContent).toBe("Library");
-    expect(container.textContent).toContain("The catalog and event starting points used in new quotes.");
+    expect(library.dataset.libraryContext).toBe("standalone");
+    expect(container.querySelector("#ambient-library-title").textContent).toBe("The choices behind every quote.");
+    expect(container.textContent).toContain("Packages, menus, services, rentals, templates, and pricing");
     expect(container.querySelector('[data-library-section="catalog"]')).not.toBeNull();
     expect(container.querySelector('[data-library-section="templates"]')).not.toBeNull();
     expect(container.querySelector('[data-library-record-kind="event-template"][data-library-record-id="wedding"]')).not.toBeNull();
+    expect(container.querySelector("[data-library-return-context]")).toBeNull();
     expect(container.querySelector("#catalog-admin-title")).toBeNull();
+  });
+
+  test("returns from contextual Library to the exact named opportunity without shortening the action", () => {
+    const onReturn = vi.fn();
+    const contextualOrigin = {
+      label: "Rivera Wedding",
+      quoteId: "quote-rivera",
+      onReturn
+    };
+    mount({ contextualOrigin });
+
+    const library = container.querySelector(".ambient-library");
+    const returnAction = container.querySelector("[data-library-return-context]");
+    expect(library.dataset.libraryContext).toBe("opportunity");
+    expect(container.textContent).toContain("Working with Rivera Wedding");
+    expect(returnAction.textContent).toContain("Return to Rivera Wedding");
+    expect(returnAction.textContent.trim()).not.toBe("Return");
+
+    act(() => returnAction.click());
+    expect(onReturn).toHaveBeenCalledTimes(1);
+    expect(onReturn).toHaveBeenCalledWith(contextualOrigin);
+  });
+
+  test("uses Return to opportunity when contextual origin has no display name", () => {
+    mount({ contextualOrigin: { quoteId: "quote-rivera", onReturn: () => {} } });
+
+    expect(container.querySelector("[data-library-return-context]").textContent)
+      .toContain("Return to opportunity");
+  });
+
+  test("keeps exact opportunity context and return action visible inside a contextual editor", async () => {
+    const onReturn = vi.fn();
+    const contextualOrigin = {
+      label: "Rivera Wedding",
+      quoteId: "quote-rivera",
+      onReturn
+    };
+    mount({ contextualOrigin });
+
+    act(() => container.querySelector('[data-library-action-id="review-library-menu"]').click());
+    await settleEditorOpen();
+
+    const library = container.querySelector(".ambient-library--editing");
+    const returnAction = library.querySelector("[data-library-return-context]");
+    expect(library.dataset.libraryContext).toBe("opportunity");
+    expect(library.textContent).toContain("Working with Rivera Wedding");
+    expect(returnAction.textContent).toContain("Return to Rivera Wedding");
+
+    act(() => returnAction.click());
+    expect(onReturn).toHaveBeenCalledWith(contextualOrigin);
   });
 
   test("acknowledges a section action immediately and opens only its exact editor context", async () => {
@@ -241,5 +293,13 @@ describe("AmbientLibraryRoute", () => {
     expect(container.querySelector("#ambient-library-title")).not.toBeNull();
     expect(container.querySelector("[data-library-acknowledgement]").textContent)
       .toContain("last completed view stays available");
+  });
+
+  test("gives sales one read-only Library main without mounting an editor", () => {
+    mount({ currentUserRole: "sales" });
+    expect(container.querySelectorAll("main")).toHaveLength(1);
+    expect(container.textContent).toContain("Business Setup Center");
+    expect(container.querySelector('[data-library-action-id="review-library-menu"]').disabled).toBe(true);
+    expect(container.querySelector('[data-testid="catalog-editor"]')).toBeNull();
   });
 });

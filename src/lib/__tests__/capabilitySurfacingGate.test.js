@@ -298,7 +298,9 @@ describe("capability surfacing delivery gate", () => {
   });
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
-    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(95);
+    // Keep the production entrypoint inventory exact so newly exported callables
+    // cannot be hidden by a parser that swallows a later declaration.
+    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(101);
 
     const source = [
       "exports.first = onCall(async () => {",

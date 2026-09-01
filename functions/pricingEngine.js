@@ -297,15 +297,21 @@ function resolveLaborRates(input, settings) {
   const bartenderRateOverride = toOptionalRate(input?.labor?.bartenderRateOverride);
   const serverRateOverride = toOptionalRate(input?.labor?.serverRateOverride);
   const chefRateOverride = toOptionalRate(input?.labor?.chefRateOverride);
+  const bartenderRateTypeId = toText(input?.labor?.bartenderRateTypeId);
+  const staffingRateTypeId = toText(input?.labor?.staffingRateTypeId);
+  const bartenderRateType = (settings?.bartenderRateTypes || [])
+    .find((item) => toText(item?.id) === bartenderRateTypeId);
+  const staffingRateType = (settings?.staffingRateTypes || [])
+    .find((item) => toText(item?.id) === staffingRateTypeId);
 
   return {
-    bartenderRateApplied: bartenderRateOverride ?? baseBartenderRate,
-    serverRateApplied: serverRateOverride ?? baseServerRate,
-    chefRateApplied: chefRateOverride ?? baseChefRate,
-    bartenderRateTypeId: "",
-    bartenderRateTypeName: "",
-    staffingRateTypeId: "",
-    staffingRateTypeName: ""
+    bartenderRateApplied: bartenderRateOverride ?? toNumber(bartenderRateType?.rate, baseBartenderRate),
+    serverRateApplied: serverRateOverride ?? toNumber(staffingRateType?.serverRate, baseServerRate),
+    chefRateApplied: chefRateOverride ?? toNumber(staffingRateType?.chefRate, baseChefRate),
+    bartenderRateTypeId: bartenderRateType ? bartenderRateTypeId : "",
+    bartenderRateTypeName: bartenderRateType ? toText(bartenderRateType.name) : "",
+    staffingRateTypeId: staffingRateType ? staffingRateTypeId : "",
+    staffingRateTypeName: staffingRateType ? toText(staffingRateType.name) : ""
   };
 }
 
@@ -502,6 +508,12 @@ function normalizePricingInputPayload(data = {}, staff = {}, {
       }
     },
     labor: {
+      bartenderRateTypeId: toText(
+        source.labor?.bartenderRateTypeId ?? rawForm.bartenderRateTypeId ?? selection.bartenderRateTypeId
+      ),
+      staffingRateTypeId: toText(
+        source.labor?.staffingRateTypeId ?? rawForm.staffingRateTypeId ?? selection.staffingRateTypeId
+      ),
       bartenderRateOverride: source.labor?.bartenderRateOverride ?? rawForm.bartenderRateOverride ?? selection.bartenderRateOverride,
       serverRateOverride: source.labor?.serverRateOverride ?? rawForm.serverRateOverride ?? selection.serverRateOverride,
       chefRateOverride: source.labor?.chefRateOverride ?? rawForm.chefRateOverride ?? selection.chefRateOverride,
@@ -605,6 +617,9 @@ function normalizeMenuSections(sections = []) {
           id,
           name,
           price: moneyValue(item, "priceMinor", "price", 0),
+          cost: Object.prototype.hasOwnProperty.call(item || {}, "costMinor")
+            ? (item.costMinor === null ? null : fromMinorUnits(item.costMinor, null))
+            : toOptionalRate(item?.cost),
           pricingType,
           type: pricingType,
           active: item?.active !== false
@@ -1779,8 +1794,10 @@ async function calculateQuotePricingAuthoritative({
     // from the same authoritative read pricing itself used — so the trusted
     // quote-write flows never do a second, possibly-divergent catalog read.
     catalog: {
+      packages: catalogBundle.packages,
       addons: catalogBundle.addons,
-      rentals: catalogBundle.rentals
+      rentals: catalogBundle.rentals,
+      menuItems: catalogBundle.menuItems
     }
   };
 }

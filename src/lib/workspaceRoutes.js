@@ -1,4 +1,5 @@
 const WORKSPACE_ROOT = "/app";
+const CLIENTS_ALIAS_PATH = `${WORKSPACE_ROOT}/clients`;
 
 export const WORKSPACE_ROUTE_IDS = Object.freeze({
   HOME: "home",
@@ -300,12 +301,31 @@ export function parseWorkspacePath(pathname) {
     });
   }
 
+  if (normalizedPath === CLIENTS_ALIAS_PATH) {
+    return createKnownRoute(WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, normalizedPath, {
+      canonicalPath: WORKSPACE_PATHS.customers,
+      redirectTo: WORKSPACE_PATHS.customers
+    });
+  }
+
   const staticRouteId = STATIC_ROUTES.get(normalizedPath);
   if (staticRouteId) {
     return createKnownRoute(staticRouteId, normalizedPath);
   }
 
   const segments = normalizedPath.split("/");
+  if (segments.length === 4 && segments[1] === "app" && segments[2] === "clients") {
+    const customerId = decodeOpaqueId(segments[3], "customerId", { rejectEmail: true });
+    if (customerId) {
+      const canonicalPath = buildCustomerPath(customerId);
+      return createKnownRoute(WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL, normalizedPath, {
+        canonicalPath,
+        redirectTo: canonicalPath,
+        params: { customerId }
+      });
+    }
+  }
+
   if (segments.length === 4 && segments[1] === "app" && segments[2] === "customers") {
     const customerId = decodeOpaqueId(segments[3], "customerId", { rejectEmail: true });
     if (customerId) {
