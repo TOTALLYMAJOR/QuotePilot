@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-08-29 19:47:18 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -8,6 +8,15 @@ This is a point-in-time release decision record. Capability truth remains in
 remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
 
 ## Candidate Summary
+
+- On 2026-09-01 the owner authorized the fail-closed `safe-off` production
+  profile. It is now an exact workflow/evidence input for both production
+  providers. The profile includes the Business Setup and Ambient presentation
+  but holds public buyer entry, outbound email/SMS, Commercial Change, Revenue
+  Autopilot, and server-authoritative staffing off. It does not disable the
+  established live quote-payment Stripe rail. Focused release-control coverage
+  passes 283 tests; full qualification and every remote/provider gate below
+  still must pass before production can be claimed.
 
 - Comparison range: `origin/main..303eec5237d143fc11398e23f24e86fcb28c2655`.
 - Unpublished commits: 74.

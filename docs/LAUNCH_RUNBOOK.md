@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-08-30 22:36:53 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -57,12 +57,14 @@ exact-main sequence in section 6, manually dispatch one of these workflows from
 
 Both workflows require the full semantically tagged release SHA, the matching
 successful main-push `CI Quality` run id, a target-specific rollback ancestor,
-and an exact typed confirmation. Firebase additionally requires an explicit
-`hosting`, `backend`, or `all` scope. Before installing dependencies, the
-workflow validates the canonical repository and workflow, remotely published
-tagged `main`, all eight CI jobs, protected environment, allowlisted human
-dispatcher, and rollback ancestry. It repeats the live evidence check after
-the build and immediately before provider mutation.
+the exact `safe-off` release profile, and an exact typed confirmation. Firebase
+additionally requires an explicit `hosting`, `backend`, or `all` scope and the
+fixed `none` / `not-applicable` SMS selection. Before installing dependencies,
+the workflow validates the canonical repository and workflow, remotely
+published tagged `main`, all eight CI jobs, protected environment, allowlisted
+human dispatcher, release-profile-bound run title, and rollback ancestry. It
+repeats the live evidence check after the build and immediately before provider
+mutation.
 
 Provider credentials are available only to the final deployment step. Firebase
 runtime configuration is materialized from reviewed repository variables and
@@ -75,8 +77,14 @@ Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` and
 `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` into the frontend build
 environment, so this owner-approved release ships the Ambient Intelligence and
 Staff presentation together. The deployment-safety test requires exactly one
-binding of each per workflow. Firebase additionally binds the global staffing
-authority and the exact tenant setting remains independently required.
+binding of each per workflow. Under `safe-off`, Firebase binds
+`OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`; the UI can present staffing
+readiness and unavailable states, but it has no server staffing pricing/write
+authority. The same profile binds public buyer entry and CTA false, omits the
+Turnstile browser key, sets both notification providers to `none`, and disables
+Commercial Change and Revenue Autopilot authorities/sends. `STRIPE_MODE=live`
+remains required for the established quote-payment rail. The distinct buyer
+invoice rail stays disabled and bound to test mode.
 
 For Vercel, preserve the reviewed SPA contract in `vercel.json`; Git-triggered
 deployments remain disabled. After deployment, verify that `/`, `/app`, and

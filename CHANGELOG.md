@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-01 12:32:29 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added the owner-authorized `safe-off` production release profile for the
+  v0.16.0 promotion. Both manual provider workflows and their live evidence
+  verifier now require that exact profile in the dispatch title and arguments.
+  It ships the Business Setup and Ambient presentation while keeping public
+  buyer entry, outbound email/SMS providers, Commercial Change, Revenue
+  Autopilot, and server-authoritative staffing disabled. The established live
+  quote-payment Stripe rail remains live; the separate buyer-invoice rail
+  remains disabled and in test mode.
 - Closed the Business Setup manual-acceptance blockers found after the first
   exact-head CI pass. **Open Menu Builder** now opens Menu rather than
   Packages; failed catalog-draft synchronization persists a bounded,

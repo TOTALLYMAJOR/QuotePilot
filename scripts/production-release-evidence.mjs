@@ -143,6 +143,7 @@ const RELEASE_UAT_PROFILE_STATE_KEYS = Object.freeze({
 const RELEASE_UAT_PROFILE_PLAN_SCHEMA =
   "com.mbmapps.quotepilot.release-uat-profile-plan/v1";
 export const RELEASE_SMS_PROVIDERS = Object.freeze(["none", "twilio", "pingram"]);
+export const PRODUCTION_RELEASE_PROFILES = Object.freeze(["safe-off"]);
 
 function evidenceError(message) {
   return new Error(`Release evidence rejected: ${message}`);
@@ -154,6 +155,14 @@ export function parseReleaseSmsProvider(value) {
     throw evidenceError("the SMS provider must be none, twilio, or pingram.");
   }
   return provider;
+}
+
+export function parseProductionReleaseProfile(value) {
+  const profile = String(value || "").trim().toLowerCase();
+  if (!PRODUCTION_RELEASE_PROFILES.includes(profile)) {
+    throw evidenceError("the production release profile must be safe-off.");
+  }
+  return profile;
 }
 
 export function parseReleaseSmsConfigurationGeneration(value, smsProviderValue) {
@@ -996,10 +1005,12 @@ export function validateDirectDeploymentRun(
     ciRunId,
     smsProvider: smsProviderValue,
     smsConfigurationGeneration: smsConfigurationGenerationValue,
-    approvalMode = "independent-review"
+    approvalMode = "independent-review",
+    releaseProfile: releaseProfileValue = "safe-off"
   }
 ) {
   const normalizedApprovalMode = parseReleaseApprovalMode(approvalMode);
+  const releaseProfile = parseProductionReleaseProfile(releaseProfileValue);
   validateCanonicalRepository(run, "the deployment run");
   if (Number(run?.id) !== deploymentRunId) {
     throw evidenceError("the deployment response id does not match the current run.");
@@ -1031,8 +1042,9 @@ export function validateDirectDeploymentRun(
   const expectedTitle = firebaseDeployment
     ? [
       "deploy",
-      "v2",
+      "v3",
       normalizedApprovalMode,
+      releaseProfile,
       target,
       releaseSha,
       String(ciRunId),
@@ -1042,8 +1054,9 @@ export function validateDirectDeploymentRun(
     ].join("/")
     : [
       "deploy",
-      "v1",
+      "v2",
       normalizedApprovalMode,
+      releaseProfile,
       target,
       releaseSha,
       String(ciRunId),
@@ -1561,6 +1574,7 @@ export async function verifyDirectProductionReleaseEvidence(
     deploymentRunId: deploymentRunIdValue,
     token,
     approvalMode: approvalModeValue = "independent-review",
+    releaseProfile: releaseProfileValue,
     soloOperatorIds: soloOperatorIdsValue = "",
     root = ROOT
   },
@@ -1570,6 +1584,7 @@ export async function verifyDirectProductionReleaseEvidence(
   const rollbackSha = requireFullSha(rollbackShaValue, "--rollback-sha");
   const ciRunId = requireRunId(ciRunIdValue, "--ci-run-id");
   const deploymentRunId = requireRunId(deploymentRunIdValue, "GITHUB_RUN_ID");
+  const releaseProfile = parseProductionReleaseProfile(releaseProfileValue);
   if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
     throw evidenceError(
       "the deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
@@ -1632,7 +1647,8 @@ export async function verifyDirectProductionReleaseEvidence(
     ciRunId,
     smsProvider,
     smsConfigurationGeneration,
-    approvalMode
+    approvalMode,
+    releaseProfile
   });
   validateCiRun(ciRun, { releaseSha, ciRunId });
   validateCiJobs(ciJobs);
@@ -1676,6 +1692,7 @@ export async function verifyDirectProductionReleaseEvidence(
   return Object.freeze({
     schema: "com.mbmapps.quotepilot.direct-production-release-evidence/v1",
     approvalMode,
+    releaseProfile,
     releaseSha,
     releaseTag: publishedRevision.releaseTag,
     rollbackSha,

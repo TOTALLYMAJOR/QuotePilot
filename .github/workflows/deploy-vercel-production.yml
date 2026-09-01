@@ -1,5 +1,5 @@
 name: Deploy Vercel Production
-run-name: deploy/v1/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.rollback_sha }}
+run-name: deploy/v2/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_profile }}/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.rollback_sha }}
 
 on:
   workflow_dispatch:
@@ -16,6 +16,13 @@ on:
         description: Full Vercel rollback commit SHA
         required: true
         type: string
+      release_profile:
+        description: Fail-closed production authority profile
+        required: true
+        default: safe-off
+        type: choice
+        options:
+          - safe-off
       confirmation:
         description: DEPLOY quotepilot.mbmapps.com via vercel
         required: true
@@ -28,7 +35,7 @@ concurrency:
 jobs:
   deploy_vercel:
     name: Verify + Deploy Vercel
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && inputs.confirmation == 'DEPLOY quotepilot.mbmapps.com via vercel'
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && inputs.release_profile == 'safe-off' && inputs.confirmation == 'DEPLOY quotepilot.mbmapps.com via vercel'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
@@ -59,11 +66,13 @@ jobs:
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          RELEASE_PROFILE: ${{ inputs.release_profile }}
         run: |
           node ./scripts/verify-direct-production-release.mjs \
             --release-sha "${RELEASE_SHA}" \
             --ci-run-id "${CI_RUN_ID}" \
             --rollback-sha "${ROLLBACK_SHA}" \
+            --release-profile "${RELEASE_PROFILE}" \
             --target vercel
 
       - name: Setup Node
@@ -99,18 +108,19 @@ jobs:
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
-          VITE_BUYER_ACCESS_ENABLED: "true"
-          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
-          VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: ${{ vars.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY }}
+          VITE_BUYER_ACCESS_ENABLED: "false"
+          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          RELEASE_PROFILE: ${{ inputs.release_profile }}
         run: |
           node ./scripts/deploy-vercel-production.mjs \
             --confirm "${{ inputs.confirmation }}" \
             --release-sha "${RELEASE_SHA}" \
             --ci-run-id "${CI_RUN_ID}" \
-            --rollback-sha "${ROLLBACK_SHA}"
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --release-profile "${RELEASE_PROFILE}"
 
       - name: Verify public production edge
         run: curl --fail --silent --show-error --retry 5 --retry-all-errors https://quotepilot.mbmapps.com/ >/dev/null
@@ -122,5 +132,6 @@ jobs:
             echo "- Release SHA: ${{ inputs.release_sha }}"
             echo "- CI run: ${{ inputs.ci_run_id }}"
             echo "- Rollback SHA: ${{ inputs.rollback_sha }}"
+            echo "- Release profile: ${{ inputs.release_profile }}"
             echo "- Public edge responded successfully."
           } >> "${GITHUB_STEP_SUMMARY}"

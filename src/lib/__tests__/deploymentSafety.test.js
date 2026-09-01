@@ -61,14 +61,16 @@ describe("direct production deployment safety", () => {
 
     expect(source).toMatch(/name: Deploy .* Production/i);
     expect(source).toMatch(provider === "Firebase"
-      ? /run-name: deploy\/v2\/.+inputs\.sms_provider.+inputs\.sms_configuration_generation/
-      : /run-name: deploy\/v1\//);
+      ? /run-name: deploy\/v3\/.+inputs\.release_profile.+inputs\.sms_provider.+inputs\.sms_configuration_generation/
+      : /run-name: deploy\/v2\/.+inputs\.release_profile/);
     expect(source).toMatch(/workflow_dispatch:/);
     expect(source).toMatch(/github\.sha == inputs\.release_sha/);
     expect(source).toMatch(/environment:.*production-solo/);
     expect(source).toMatch(/persist-credentials:\s*false/);
     expect(source).toMatch(/scripts\/verify-direct-production-release\.mjs/);
     expect(source).toMatch(/scripts\/deploy-(?:firebase|vercel)-production\.mjs/);
+    expect(source).toMatch(/--release-profile "\$\{RELEASE_PROFILE\}"/);
+    expect(source).toMatch(/inputs\.release_profile == 'safe-off'/);
     if (provider === "Firebase") {
       expect(source).toMatch(/--sms-provider "\$\{SMS_PROVIDER\}"/);
       expect(source).toMatch(/--sms-configuration-generation "\$\{SMS_CONFIGURATION_GENERATION\}"/);
@@ -96,7 +98,7 @@ describe("direct production deployment safety", () => {
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("binds the %s production build to explicit workspace and public buyer configuration", (_provider, workflow) => {
+  ])("binds the %s production build to explicit workspace and safe-off buyer configuration", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const stepsOffset = source.indexOf("\n    steps:");
     const jobConfiguration = source.slice(0, stepsOffset);
@@ -108,11 +110,9 @@ describe("direct production deployment safety", () => {
       /^\s+VITE_DEFAULT_ORGANIZATION_ID:\s*\$\{\{ vars\.VITE_DEFAULT_ORGANIZATION_ID \}\}\s*$/m
     );
     expect(source).toMatch(/^\s+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:\s*"true"\s*$/m);
-    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"true"\s*$/m);
-    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"true"\s*$/m);
-    expect(source).toMatch(
-      /^\s+VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:\s*\$\{\{ vars\.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY \}\}\s*$/m
-    );
+    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"false"\s*$/m);
+    expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"false"\s*$/m);
+    expect(source).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
     expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
     expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
     expect(stepsOffset).toBeGreaterThan(0);
@@ -131,7 +131,7 @@ describe("direct production deployment safety", () => {
     expect(source.match(/VITE_DEFAULT_ORGANIZATION_ID:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_ENABLED:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:/g)).toHaveLength(1);
-    expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(1);
+    expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toBeNull();
   });
 
   test.each([
@@ -185,7 +185,7 @@ describe("direct production deployment safety", () => {
     );
   });
 
-  test("promotes authoritative operational staffing only through exact production bindings", () => {
+  test("keeps operational staffing authority safe-off in production", () => {
     const firebaseWorkflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
     const vercelWorkflow = fs.readFileSync(VERCEL_WORKFLOW, "utf8");
     const functionsExample = fs.readFileSync(
@@ -193,9 +193,30 @@ describe("direct production deployment safety", () => {
       "utf8"
     );
 
-    expect(firebaseWorkflow.match(/OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"/g)).toHaveLength(1);
+    expect(firebaseWorkflow.match(/OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false"/g)).toHaveLength(1);
     expect(vercelWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
     expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
+  });
+
+  test("materializes the exact safe-off Functions authority profile", () => {
+    const source = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
+
+    for (const binding of [
+      'NOTIFICATIONS_EMAIL_PROVIDER: none',
+      'NOTIFICATIONS_SMS_PROVIDER: none',
+      'STRIPE_MODE: live',
+      'COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"',
+      'OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false"',
+      'REVENUE_AUTOPILOT_ENABLED: "false"',
+      'REVENUE_AUTOPILOT_SENDS_ENABLED: "false"',
+      'BUYER_ACCESS_ENABLED: "false"',
+      'BUYER_ACCESS_STRIPE_MODE: test'
+    ]) {
+      expect(source).toContain(binding);
+    }
+    expect(source).not.toContain("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
+    expect(source).not.toContain("NOTIFICATIONS_OWNER_PHONE");
+    expect(source).not.toContain("NOTIFICATIONS_OWNER_SMS_CONSENT");
   });
 
   test("explicitly acknowledges retry-policy changes only for Functions deployments", () => {

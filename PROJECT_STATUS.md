@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-01 12:34:23 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 ## Current Production Release
 
@@ -27,6 +27,16 @@ Last updated: 2026-09-01 12:34:23 CDT
   or human acceptance.
 
 ## v0.16 Calm Four Candidate Integration
+
+- The owner authorized a fail-closed `safe-off` production profile for the
+  v0.16.0 promotion. Source now binds that profile into both manual production
+  workflow identities and rejects any other profile. Public buyer entry,
+  outbound notification providers, Commercial Change, Revenue Autopilot, and
+  server-authoritative staffing remain off; the existing live quote-payment
+  Stripe authority is preserved. Focused release-evidence and deployment-safety
+  coverage passes 283 tests. Full local qualification, exact-SHA remote CI,
+  same-SHA candidate proof, merge/tag, provider deployment, and post-deploy
+  verification remain required, so current production is still v0.15.0.
 
 - Release head `fc1352bf6356b30dc4aaf8f4708ce3f0135d01ef` passed all nine
   jobs in exact-head CI run `33467223260`, but the required local click-through

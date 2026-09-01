@@ -8,6 +8,7 @@ import {
   getReleaseUatChecklist,
   getReleaseUatProfilePlan,
   parseAttesterIds,
+  parseProductionReleaseProfile,
   parseReleaseApprovalMode,
   parseSoloOperatorIds,
   parseReleaseEvidenceCliArgs,
@@ -53,6 +54,7 @@ const PREPARATION_RUN_ID = 505;
 const OPERATOR_ID = 606;
 const SMS_PROVIDER = "none";
 const SMS_CONFIGURATION_GENERATION = "not-applicable";
+const PRODUCTION_RELEASE_PROFILE = "safe-off";
 const DEPLOYMENT_PROFILES = [
   "firebase-hosting",
   "firebase-backend",
@@ -303,6 +305,7 @@ function makePreparationOptions(target = "vercel", overrides = {}) {
 
 function makeDirectDeploymentTitle({
   approvalMode = "solo-operator",
+  releaseProfile = PRODUCTION_RELEASE_PROFILE,
   profile = "vercel",
   releaseSha = RELEASE_SHA,
   ciRunId = CI_RUN_ID,
@@ -313,8 +316,9 @@ function makeDirectDeploymentTitle({
   return profile.startsWith("firebase-")
     ? [
       "deploy",
-      "v2",
+      "v3",
       approvalMode,
+      releaseProfile,
       profile,
       releaseSha,
       String(ciRunId),
@@ -324,8 +328,9 @@ function makeDirectDeploymentTitle({
     ].join("/")
     : [
       "deploy",
-      "v1",
+      "v2",
       approvalMode,
+      releaseProfile,
       profile,
       releaseSha,
       String(ciRunId),
@@ -349,6 +354,7 @@ function makeDirectDeploymentOptions(target = "vercel", overrides = {}) {
     deploymentRunId: PREPARATION_RUN_ID,
     ciRunId: CI_RUN_ID,
     approvalMode: "solo-operator",
+    releaseProfile: PRODUCTION_RELEASE_PROFILE,
     ...(target.startsWith("firebase-") ? {
       smsProvider: SMS_PROVIDER,
       smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION
@@ -1158,6 +1164,15 @@ describe("current preparation workflow validator", () => {
 });
 
 describe("direct deployment workflow validator", () => {
+  test("accepts only the fail-closed production release profile", () => {
+    expect(parseProductionReleaseProfile(PRODUCTION_RELEASE_PROFILE)).toBe(
+      PRODUCTION_RELEASE_PROFILE
+    );
+    expect(() => parseProductionReleaseProfile("full-authority")).toThrow(
+      /must be safe-off/i
+    );
+  });
+
   test.each(DEPLOYMENT_PROFILES)(
     "accepts the active exact-evidence human %s dispatch",
     (profile) => {
@@ -1180,6 +1195,19 @@ describe("direct deployment workflow validator", () => {
         smsConfigurationGeneration: "sandbox-2026-08-11-01"
       })
     )).toThrow(/title is not bound to the supplied evidence/i);
+  });
+
+  test("binds deployment evidence to the exact release profile", () => {
+    expect(() => validateDirectDeploymentRun(
+      makeDirectDeploymentRun("vercel"),
+      makeDirectDeploymentOptions("vercel", { releaseProfile: "full-authority" })
+    )).toThrow(/production release profile must be safe-off/i);
+    expect(() => validateDirectDeploymentRun(
+      makeDirectDeploymentRun("vercel", {
+        display_title: makeDirectDeploymentTitle({ releaseProfile: "full-authority" })
+      }),
+      makeDirectDeploymentOptions("vercel")
+    )).toThrow(/title is not bound/i);
   });
 
   test.each([

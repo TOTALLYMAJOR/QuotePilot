@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-08-30 14:53:30 CDT
+Last updated: 2026-09-01 15:31:09 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -38,6 +38,13 @@ explicit owner promotion after real-run review.
   target-specific rollback ancestor, canonical human dispatch, and current
   protected environment before dependency execution. It repeats that live
   evidence check after building and immediately before provider mutation.
+- The v0.16.0 workflows additionally require the exact `safe-off` release
+  profile. That profile is part of the immutable workflow title and verified
+  arguments, not a descriptive label. It permits the reviewed product
+  presentation while keeping public buyer entry, outbound email/SMS providers,
+  Commercial Change, Revenue Autopilot, and the server staffing authority off.
+  It preserves `STRIPE_MODE=live` solely for the established quote-payment
+  rail; the separate buyer-invoice rail remains disabled with test mode bound.
 - Protect `main` and configure exactly one release approval mode. Team-owned
   repositories use `production` with a directly assigned independent reviewer
   and self-review prevention. Solo-owned repositories use the reviewless
@@ -323,11 +330,12 @@ If a topic changes, only update the owning doc and cross-link from others.
     the hosted UAT acceptance pass was deliberately foregone.
   - The August 13, 2026 owner-approved operational-staffing test release binds
     `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` exactly once in both production
-    workflows. Firebase also materializes
-    `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true`; the trusted tenant setting,
-    role checks, direct-browser denials, provider prerequisites, and immutable
-    receipts remain independent. The `.env.example` local default for both
-    presentation flags remains off.
+    workflows. The v0.16.0 `safe-off` profile deliberately materializes
+    `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`, so the browser may explain
+    staffing readiness without receiving server pricing/write authority. The
+    trusted tenant setting, role checks, direct-browser denials, provider
+    prerequisites, and immutable receipts remain independent. The
+    `.env.example` local default for both presentation flags remains off.
 
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`
