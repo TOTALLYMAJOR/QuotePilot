@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 18:45:45 CDT
+Last updated: 2026-08-31 20:21:19 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Fixed catalog travel and staffing prices that appeared to save but reverted
+  after refresh. Firestore minor-unit values are now authoritative on read but
+  no longer leak into the editable major-unit model, changed settings write
+  bounded integer minor units and remove conflicting legacy fields, deliberate
+  zero survives, invalid amounts fail closed, and pricing confirmation cannot
+  restore stale values. Named bartender and staffing rate selections now also
+  reach the same client and server pricing calculation instead of falling back
+  silently to base rates.
 - Fixed the administrator integration-audit workflow so a successful internal
   quote log write no longer attempts an unrelated customer-portal snapshot
   mirror. Integration activity is not customer-facing proposal state; the

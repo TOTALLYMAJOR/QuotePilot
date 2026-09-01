@@ -871,6 +871,18 @@ export function normalizeCatalog(raw) {
     ...DEFAULT_SETTINGS,
     ...inputSettings
   };
+  // Storage-only minor-unit fields are authoritative while reading Firestore,
+  // but they must not leak into the editable major-unit view model. Keeping a
+  // stale `serverRateMinor`, for example, caused a later normalize-before-save
+  // pass to overwrite an operator's edited `serverRate` with the loaded value.
+  const {
+    perMileRateMinor: _perMileRateMinor,
+    longDistancePerMileRateMinor: _longDistancePerMileRateMinor,
+    bartenderRateMinor: _bartenderRateMinor,
+    serverRateMinor: _serverRateMinor,
+    chefRateMinor: _chefRateMinor,
+    ...editableSettings
+  } = rawSettings;
   const packages = (raw.packages || DEFAULT_PACKAGES).map((p) => ({
     id: p.id,
     name: p.name,
@@ -1072,7 +1084,7 @@ export function normalizeCatalog(raw) {
     addons,
     rentals,
     settings: {
-      ...rawSettings,
+      ...editableSettings,
       perMileRate: toNumber(
         pricingMoneyValue("perMileRate", "perMileRateMinor", DEFAULT_SETTINGS.perMileRate, 0),
         0,

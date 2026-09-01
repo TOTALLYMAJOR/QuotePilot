@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doc, getDoc, getDocs, runTransaction, serverTimestamp } from "firebase/firestore";
+import { deleteField, doc, getDoc, getDocs, runTransaction, serverTimestamp } from "firebase/firestore";
 import {
   DEFAULT_ADDONS,
   DEFAULT_PACKAGES,
@@ -245,23 +245,79 @@ const MONEY_SETTING_KEYS = Object.freeze({
   chefRate: "chefRateMinor"
 });
 
-function buildSettingsPatch(nextSettings = {}, baselineSettings = {}) {
+export const MAX_CATALOG_SETTINGS_MONEY_MINOR = 100_000_000;
+
+function settingsMoneyMinor(value, label) {
+  if (value === "" || value === null || value === undefined) {
+    throw new Error(`${label} is required.`);
+  }
+  const amount = Number(value);
+  const minor = Math.round(amount * 100);
+  if (
+    !Number.isFinite(amount)
+    || !Number.isSafeInteger(minor)
+    || amount < 0
+    || Math.abs((amount * 100) - minor) > 1e-8
+    || minor > MAX_CATALOG_SETTINGS_MONEY_MINOR
+  ) {
+    throw new Error(`${label} must be a non-negative amount up to $1,000,000 with no more than two decimal places.`);
+  }
+  return minor;
+}
+
+export function validateCatalogSettingsMoney(settings = {}) {
+  const scalarLabels = {
+    perMileRate: "Standard travel rate",
+    longDistancePerMileRate: "Long-distance travel rate",
+    bartenderRate: "Base bartender rate",
+    serverRate: "Base server rate",
+    chefRate: "Base chef rate"
+  };
+  Object.entries(scalarLabels).forEach(([key, label]) => {
+    if (Object.prototype.hasOwnProperty.call(settings, key)) {
+      settingsMoneyMinor(settings[key], label);
+    }
+  });
+  if (Array.isArray(settings.bartenderRateTypes)) {
+    settings.bartenderRateTypes.forEach((item, index) => {
+      settingsMoneyMinor(item?.rate, `Bartender rate type ${item?.name || index + 1}`);
+    });
+  }
+  if (Array.isArray(settings.staffingRateTypes)) {
+    settings.staffingRateTypes.forEach((item, index) => {
+      const label = item?.name || index + 1;
+      settingsMoneyMinor(item?.serverRate, `Server rate type ${label}`);
+      settingsMoneyMinor(item?.chefRate, `Chef rate type ${label}`);
+    });
+  }
+  return true;
+}
+
+export function buildSettingsPatch(
+  nextSettings = {},
+  baselineSettings = {},
+  { deleteLegacyMoneyField = null } = {}
+) {
+  validateCatalogSettingsMoney(nextSettings);
   return EDITABLE_SETTINGS_KEYS.reduce((patch, key) => {
     if (!valuesMatch(nextSettings[key], baselineSettings[key])) {
       if (MONEY_SETTING_KEYS[key]) {
-        patch[MONEY_SETTING_KEYS[key]] = Math.round(Number(nextSettings[key] || 0) * 100);
+        patch[MONEY_SETTING_KEYS[key]] = settingsMoneyMinor(nextSettings[key], key);
+        if (typeof deleteLegacyMoneyField === "function") {
+          patch[key] = deleteLegacyMoneyField();
+        }
       } else if (key === "bartenderRateTypes") {
         patch[key] = (nextSettings[key] || []).map((item) => ({
           id: item.id,
           name: item.name,
-          rateMinor: Math.round(Number(item.rate || 0) * 100)
+          rateMinor: settingsMoneyMinor(item.rate, `Bartender rate type ${item.name || item.id}`)
         }));
       } else if (key === "staffingRateTypes") {
         patch[key] = (nextSettings[key] || []).map((item) => ({
           id: item.id,
           name: item.name,
-          serverRateMinor: Math.round(Number(item.serverRate || 0) * 100),
-          chefRateMinor: Math.round(Number(item.chefRate || 0) * 100)
+          serverRateMinor: settingsMoneyMinor(item.serverRate, `Server rate type ${item.name || item.id}`),
+          chefRateMinor: settingsMoneyMinor(item.chefRate, `Chef rate type ${item.name || item.id}`)
         }));
       } else {
         patch[key] = nextSettings[key];
@@ -388,7 +444,9 @@ async function saveToFirebase(
     ...change,
     ref: doc(collectionRefs[change.key], change.id)
   }));
-  const settingsPatch = buildSettingsPatch(catalog.settings, baselineCatalog.settings);
+  const settingsPatch = buildSettingsPatch(catalog.settings, baselineCatalog.settings, {
+    deleteLegacyMoneyField: deleteField
+  });
   const transactionReadCount = operations.length + 1;
   if (transactionReadCount > 450) {
     throw new Error("This edit changes too many catalog records at once. Split it into smaller saves.");
@@ -674,6 +732,11 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
     if (firebaseReady && !resolvedOrganizationId) {
       return { ok: false, error: "organizationId is required for catalog writes." };
+    }
+    try {
+      validateCatalogSettingsMoney(nextCatalog?.settings || {});
+    } catch (error) {
+      return { ok: false, error: error?.message || "Catalog pricing contains an invalid amount." };
     }
     const normalized = normalizeCatalog(nextCatalog);
     const hasPricedPackage = normalized.packages.some((item) => {

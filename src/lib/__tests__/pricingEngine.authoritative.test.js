@@ -441,6 +441,75 @@ describe("server-authoritative pricing setup safety", () => {
     });
   });
 
+  test("consumes minor-unit travel and staffing prices when conflicting legacy major values remain", async () => {
+    const request = buildPricingRequest({
+      servers: 1,
+      chefs: 1,
+      bartenders: 1,
+      milesRT: 40
+    });
+    request.pricingInput.labor = {
+      bartenderRateTypeId: "standard",
+      staffingRateTypeId: "standard"
+    };
+    const result = await calculateQuotePricingAuthoritative({
+      db: buildPricingDb({
+        settings: confirmedPricingSettings({
+          serviceFeeTiers: [],
+          taxRegions: [],
+          depositPct: 0,
+          seasonalProfiles: [],
+          perMileRateMinor: 95,
+          perMileRate: 0.7,
+          longDistancePerMileRateMinor: 145,
+          longDistancePerMileRate: 1.1,
+          deliveryThresholdMiles: 30,
+          bartenderRateMinor: 5200,
+          bartenderRate: 30,
+          serverRateMinor: 4800,
+          serverRate: 24,
+          chefRateMinor: 6200,
+          chefRate: 32,
+          bartenderRateTypes: [{
+            id: "standard",
+            name: "Standard bartender",
+            rateMinor: 5600,
+            rate: 30
+          }],
+          defaultBartenderRateType: "standard",
+          staffingRateTypes: [{
+            id: "standard",
+            name: "Standard staffing",
+            serverRateMinor: 4800,
+            serverRate: 24,
+            chefRateMinor: 6200,
+            chefRate: 32
+          }],
+          defaultStaffingRateType: "standard",
+          staffingLaborEnabled: true
+        })
+      }),
+      data: request,
+      staff: pricingStaff
+    });
+
+    expect(result.pricing.rulesSnapshot.travel).toMatchObject({
+      standardTravelRate: 0.95,
+      longDistanceRate: 1.45,
+      baseMiles: 30,
+      longDistanceMiles: 10
+    });
+    expect(result.pricing.rulesSnapshot.laborRateSnapshot).toMatchObject({
+      bartenderRateApplied: 56,
+      serverRateApplied: 48,
+      chefRateApplied: 62,
+      bartenderRateTypeId: "standard",
+      staffingRateTypeId: "standard"
+    });
+    expect(result.pricing.fees.travel).toBe(43);
+    expect(result.pricing.fees.labor).toBe(332);
+  });
+
   test("preserves configured pricing arrays for confirmed tenants", async () => {
     const result = await calculateQuotePricingAuthoritative({
       db: buildPricingDb({

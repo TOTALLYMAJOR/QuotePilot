@@ -1,6 +1,6 @@
 # Business Setup and Revision-Safe Quoting Overhaul
 
-Last updated: 2026-08-31 20:14:17 CDT
+Last updated: 2026-08-31 20:21:19 CDT
 
 - Program recorded at (UTC): `2026-09-01T01:14:17Z`
 - Source candidate: `2d999c422da6aacaad0800eeb498d86a70b74427`
@@ -85,7 +85,7 @@ The existing governed commercial-change path is extended into one review grouped
 ## Slice checklist
 
 - [x] Record the complete program before implementation.
-- [ ] Slice 1 — Characterize and repair travel and staffing price persistence.
+- [x] Slice 1 — Characterize and repair travel and staffing price persistence.
 - [ ] Slice 2 — Add the admin-only catalog setup draft and atomic publisher.
 - [ ] Slice 3 — Add the Business Setup Center, Menu Builder, canonical costs, and readiness truth.
 - [ ] Slice 4 — Add revision-aware quotes and explicit review outcomes.
@@ -106,8 +106,8 @@ Planned checkpoint commits:
 
 | Capability | Required proof | Status | Evidence |
 | --- | --- | --- | --- |
-| Settings money round trip | Standard and long-distance travel; base server, chef, and bartender rates; named staffing/bartender rate types survive save, confirmation, forced reload, rehydration, and server pricing | Pending | Slice 1 |
-| Mixed money records | Minor-unit values win over conflicting legacy majors; zero survives; invalid/negative/non-finite/over-bound values fail closed | Pending | Slice 1 |
+| Settings money round trip | Standard and long-distance travel; base server, chef, and bartender rates; named staffing/bartender rate types survive save, confirmation, forced reload, rehydration, and server pricing | Locally proven | Failing characterization reproduced stale minor shadowing; focused suites cover save planning, forced normalization, confirmation storage, and authoritative pricing |
+| Mixed money records | Minor-unit values win over conflicting legacy majors; zero survives; invalid/negative/non-finite/over-bound values fail closed | Locally proven | `useCatalogData.savePlan`, `starterCatalogPacks.server`, and `pricingEngine.authoritative` focused tests |
 | Old-rate scenario | Saved `$24/$32` quote with current `$48/$62` catalog is not labeled house/current and is not silently repriced | Pending | Slices 1 and 4 |
 | Draft autosave | Rapid edits update locally, coalesce to at most one draft sync, produce no active revision change, and avoid blocking flicker | Pending | Slice 2 |
 | Atomic publication | One revision, confirmation, and receipt; stable IDs; all-or-nothing conflict and dependency failures; at most 400 changes | Pending | Slice 2 |
@@ -146,6 +146,7 @@ Shared readiness and revision-review models carry reason codes, evidence timesta
 | Recorded at (UTC) | Checkpoint | Source/commit | Validation and observation | Residual risk |
 | --- | --- | --- | --- | --- |
 | 2026-09-01T01:14:17Z | Session opened | `2d999c422da6aacaad0800eeb498d86a70b74427` | Original checkout identity and dirty state observed; clean sibling worktree created on dedicated branch; bounded read/write/validation scope locked; initial worktree status clean; task planner recorded `2026-09-01T01:12:29.843Z` | Implementation and all acceptance evidence pending |
+| 2026-09-01T01:21:19Z | Slice 1 money persistence | checkpoint commit created at slice close | Added a failing `$24/$32 → $48/$62` normalize-before-save characterization, then separated storage minor fields from the editor model; changed settings now write validated minor units and delete legacy majors; confirmation removes mixed-record conflicts; named rates reach client/server pricing. Focused result: 5 files, 90 tests passed. | Firebase emulator and hosted hard-refresh proof remain final local/hosted gates; the next publisher must reuse the same contract |
 
 ## Per-slice execution record
 
