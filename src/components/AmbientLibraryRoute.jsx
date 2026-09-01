@@ -5,7 +5,9 @@ import {
   buildAmbientLibrary
 } from "../lib/ambientLibrary";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { useCatalogSetupDraft } from "../hooks/useCatalogSetupDraft";
 import { AdminCatalogView } from "./AdminCatalogModal";
+import BusinessSetupCenter from "./BusinessSetupCenter";
 import "./ambientLibraryRoute.css";
 
 const CATALOG_SECTION_IDS = new Set(["starter", ...AMBIENT_LIBRARY_SECTION_ORDER]);
@@ -288,6 +290,12 @@ export default function AmbientLibraryRoute({
   const editorOpenTimerRef = useRef(null);
   const [acknowledgement, setAcknowledgement] = useState(null);
   const [editorTarget, setEditorTarget] = useState(null);
+  const isAdmin = text(currentUserRole).toLowerCase() === "admin";
+  const setupDraft = useCatalogSetupDraft({
+    enabled: open && isAdmin && Boolean(organizationId),
+    organizationId,
+    baseCatalogRevision: Math.max(0, Number(catalog?.settings?.catalogRevision || 0))
+  });
   const contextualLabel = text(contextualOrigin?.label || contextualOrigin?.eventName);
   const contextualReturn = typeof contextualOrigin?.onReturn === "function"
     ? contextualOrigin.onReturn
@@ -327,11 +335,11 @@ export default function AmbientLibraryRoute({
     },
     currentUserRole,
     capabilities: {
-      openSection: true,
-      openTemplate: true,
+      openSection: isAdmin,
+      openTemplate: isAdmin,
       refresh: typeof onReload === "function"
     }
-  }), [catalog, currentUserRole, onReload, organizationId]);
+  }), [catalog, currentUserRole, isAdmin, onReload, organizationId]);
 
   const announce = (result, message) => {
     setAcknowledgement({ result, message });
@@ -399,6 +407,20 @@ export default function AmbientLibraryRoute({
   const handleAction = (action, trigger) => {
     if (action?.id === "refresh-library") refreshLibrary(action);
     else openAction(action, trigger);
+  };
+
+  const openSetupSection = (sectionId) => {
+    const normalized = sectionId === "eventTemplates" ? "templates"
+      : sectionId === "costs" ? "pricing" : sectionId;
+    const section = model.sections.find((item) => item.id === normalized);
+    if (section?.primaryAction?.enabled) {
+      openAction(section.primaryAction);
+      return;
+    }
+    announce({ kind: "context", nextResolutions: [] },
+      normalized === "users" || normalized === "connections"
+        ? "Use Workspace and tools to review this separately governed setup area."
+        : "Ask an organization administrator to make this change.");
   };
 
   const handleEditorFocusResolution = (resolution) => {
@@ -581,6 +603,14 @@ export default function AmbientLibraryRoute({
       />
 
       {contextualBanner}
+
+      <BusinessSetupCenter
+        catalog={catalog}
+        draftState={setupDraft}
+        currentUserRole={currentUserRole}
+        providerConnected={catalog?.providerConnectionReady === true}
+        onOpenSection={openSetupSection}
+      />
 
       {model.sections.length === 0 ? (
         <LibraryState model={model} onRefresh={refreshLibrary} />

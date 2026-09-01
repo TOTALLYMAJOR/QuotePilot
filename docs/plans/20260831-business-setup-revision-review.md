@@ -1,6 +1,6 @@
 # Business Setup and Revision-Safe Quoting Overhaul
 
-Last updated: 2026-08-31 20:39:36 CDT
+Last updated: 2026-08-31 20:56:39 CDT
 
 - Program recorded at (UTC): `2026-09-01T01:14:17Z`
 - Source candidate: `2d999c422da6aacaad0800eeb498d86a70b74427`
@@ -87,7 +87,7 @@ The existing governed commercial-change path is extended into one review grouped
 - [x] Record the complete program before implementation.
 - [x] Slice 1 — Characterize and repair travel and staffing price persistence.
 - [x] Slice 2 — Add the admin-only catalog setup draft and atomic publisher.
-- [ ] Slice 3 — Add the Business Setup Center, Menu Builder, canonical costs, and readiness truth.
+- [x] Slice 3 — Add the Business Setup Center, Menu Builder, canonical costs, and readiness truth.
 - [ ] Slice 4 — Add revision-aware quotes and explicit review outcomes.
 - [ ] Slice 5 — Unify commercial consequence review.
 - [ ] Final — Run local gates, close canonical documentation, and record residual evidence gaps.
@@ -111,10 +111,10 @@ Planned checkpoint commits:
 | Old-rate scenario | Saved `$24/$32` quote with current `$48/$62` catalog is not labeled house/current and is not silently repriced | Pending | Slices 1 and 4 |
 | Draft autosave | Rapid edits update locally, coalesce to at most one draft sync, produce no active revision change, and avoid blocking flicker | Locally proven | Hook and server characterization cover immediate local buffering, one 800 ms sync, retry, and no active-catalog mutation |
 | Atomic publication | One revision, confirmation, and receipt; stable IDs; all-or-nothing conflict and dependency failures; at most 400 changes | Locally proven | Server unit suite covers one revision/confirmation/receipt, stable IDs, idempotency, baselines, dependency validation, and size bounds |
-| Draft privacy and roles | Direct browser access to draft/receipt collections denied; callable same-org admin enforcement; sales read-only projection | Partial | Private rule assertions and callable same-org admin gates are implemented; sales read-only Setup Center remains Slice 3 |
-| Setup Center | Ordered eight-row readiness surface, one approved status and next action per row, operator terminology, role-safe actions | Pending | Slice 3 |
-| Readiness separation | Business-to-quote, draft-to-publish, quote-to-save, proposal-to-send, margin evidence, and provider connection remain independent | Pending | Slice 3 |
-| Cost truth | Managed menu `costMinor` participates in imports, normalization, publication, setup coverage, and margin from the same authoritative menu source | Pending | Slice 3 |
+| Draft privacy and roles | Direct browser access to draft/receipt collections denied; callable same-org admin enforcement; sales read-only projection | Locally proven | Private rule assertions, callable same-org admin gates, and sales read-only Library component/model tests |
+| Setup Center | Ordered eight-row readiness surface, one approved status and next action per row, operator terminology, role-safe actions | Locally proven | Business readiness model and Setup Center component tests; Workspace Shell exposes read-only Library to sales |
+| Readiness separation | Business-to-quote, draft-to-publish, quote-to-save, proposal-to-send, margin evidence, and provider connection remain independent | Locally proven | Pure readiness projection plus publication receipt projection with reason codes, timestamps, blocking flags, and route-safe actions |
+| Cost truth | Managed menu `costMinor` participates in imports, normalization, publication, setup coverage, and margin from the same authoritative menu source | Locally proven | Managed-menu/import/draft/pricing normalization paths plus missing-cost readiness regression |
 | Revision review | All five states, selected-record comparison, inactive/missing preservation, keep/update outcomes, terminal immutability, stale fences | Pending | Slice 4 |
 | Provenance labels | Quote override, current catalog rate, quoted revision, and unavailable source labels are accurate | Pending | Slice 4 |
 | Consequence review | One governed review with six groups, source labels, apply all/selected/keep, exact simulation, versioning, and invalidation | Pending | Slice 5 |
@@ -148,6 +148,7 @@ Shared readiness and revision-review models carry reason codes, evidence timesta
 | 2026-09-01T01:14:17Z | Session opened | `2d999c422da6aacaad0800eeb498d86a70b74427` | Original checkout identity and dirty state observed; clean sibling worktree created on dedicated branch; bounded read/write/validation scope locked; initial worktree status clean; task planner recorded `2026-09-01T01:12:29.843Z` | Implementation and all acceptance evidence pending |
 | 2026-09-01T01:21:19Z | Slice 1 money persistence | checkpoint commit created at slice close | Added a failing `$24/$32 → $48/$62` normalize-before-save characterization, then separated storage minor fields from the editor model; changed settings now write validated minor units and delete legacy majors; confirmation removes mixed-record conflicts; named rates reach client/server pricing. Focused result: 5 files, 90 tests passed. | Firebase emulator and hosted hard-refresh proof remain final local/hosted gates; the next publisher must reuse the same contract |
 | 2026-09-01T01:39:36Z | Slice 2 catalog draft publisher | checkpoint commit created at slice close | Added six-layer draft authority: private rules, same-org admin callables, bounded normalized change records, generation/revision/baseline fences, 800 ms device buffer sync, and a sticky review/publish state bar. Publication is atomic, advances once, confirms once, receipts once, and closes the draft. Focused result: 5 files, 32 tests passed; capability-surface gate passed. | Setup presets, Import Studio, and direct managed-menu actions are routed through the shared draft in Slice 3; emulator rules and full suite remain final gates |
+| 2026-09-01T01:56:39Z | Slice 3 setup center and menu builder | checkpoint commit created at slice close | Library now starts with six independent readiness signals and the ordered eight-row Setup Center; sales receive read-only evidence. Menu Builder, setup presets, and catalog imports stage through the shared draft. Managed menu `costMinor` reaches import, normalization, publication, coverage, pricing context, and staff margin. Focused UI/model/server suites and the production build passed. | Browser viewport/accessibility acceptance remains a final gate; revision-aware quote behavior begins in Slice 4 |
 
 ## Per-slice execution record
 

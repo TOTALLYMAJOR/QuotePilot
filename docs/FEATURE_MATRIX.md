@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-31 20:31:30 CDT
+Last updated: 2026-08-31 20:56:39 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -26,7 +26,30 @@ release, deployment, provider, risk, and acceptance state.
   authentication boundary, not tenant activation or staffing acceptance proof.
 - **Human acceptance:** a named person completed and accepted the intended
   workflow. This is never inferred from source, tests, CI, deployment, or
-  provider receipts.
+provider receipts.
+
+## Business Setup Center and Menu Builder (August 31, 2026)
+
+- **Setup readiness:** `src/lib/businessReadiness.js` projects business-to-quote,
+  catalog-draft-to-publish, quote-draft-to-save, proposal-to-send, margin
+  evidence, and provider-connection readiness independently. Cost gaps and
+  provider state do not block ordinary quote creation.
+- **Role-safe Library:** `src/components/BusinessSetupCenter.jsx` is the Library
+  landing surface for admins and sales staff. Admins receive exact editing
+  actions; sales staff see the same readiness evidence with administrator-
+  directed next actions and no edit capability.
+- **Menu Builder:** `src/components/AdminCatalogModal.jsx` uses Event type,
+  Menu section, Item, and Price basis language, provides search/filter/bulk
+  operations, and stages stable-ID changes through the private catalog setup
+  draft. Setup presets and `src/components/ImportStudioModal.jsx` use that same
+  staged authority.
+- **Cost truth:** managed menu `costMinor` now round-trips through catalog reads,
+  import preview, server publication, readiness coverage, authoritative pricing
+  context, and the staff-only margin model. Customer proposal, export, and
+  portal projections remain cost-free.
+- **Evidence boundary:** focused unit/component/server tests and a local build
+  qualify source behavior only; responsive human review and hosted readback are
+  still separate acceptance gates.
 
 The chronology below records first-source and release-containment evidence.
 Its `v0.7.0` row is a historical deployment receipt, not a current-runtime

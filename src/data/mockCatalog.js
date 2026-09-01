@@ -659,6 +659,9 @@ function normalizeMenuSections(input) {
           price: Object.prototype.hasOwnProperty.call(item || {}, "priceMinor")
             ? fromMinorUnits(item.priceMinor, 0)
             : toNumber(item?.price, 0, 0),
+          cost: Object.prototype.hasOwnProperty.call(item || {}, "costMinor")
+            ? fromNullableMinorUnits(item.costMinor)
+            : toNullableNumber(item?.cost),
           pricingType,
           type: pricingType,
           active: item?.active !== false

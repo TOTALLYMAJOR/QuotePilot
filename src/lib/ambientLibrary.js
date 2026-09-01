@@ -193,7 +193,7 @@ function normalizeBoundary(state, organizationId, roleAllowed) {
         : "The latest catalog refresh reported an error, so the last completed snapshot may be out of date.";
   const notes = [];
 
-  if (!roleAllowed) notes.push("Library records are available only to administrators.");
+  if (!roleAllowed) notes.push("Library records are available only to organization staff.");
   if (!organizationKnown) notes.push("No exact organization scope was supplied.");
   if (!sourceRecognized) notes.push(sourceBoundary(kind, rawSource));
   if (!completed) notes.push("No completed organization-scoped catalog observation is available.");
@@ -835,7 +835,7 @@ function candidatePriority(candidate) {
 /**
  * Projects a caller-owned useCatalogData-like snapshot into the Ambient
  * Library. Pass `organizationId` inside `state`; catalog records are withheld
- * if it is missing or if currentUserRole is not exactly `admin`.
+ * if it is missing or if currentUserRole is not an organization staff role.
  */
 export function buildAmbientLibrary({
   state = {},
@@ -844,9 +844,14 @@ export function buildAmbientLibrary({
 } = {}) {
   const input = isRecord(state) ? state : {};
   const role = text(currentUserRole, 40).toLowerCase() || "staff";
-  const roleAllowed = role === "admin";
+  const roleAllowed = role === "admin" || role === "sales" || role === "staff";
+  const editAllowed = role === "admin";
   const organizationId = safeId(input.organizationId);
   const normalizedCapabilities = normalizeCapabilities(capabilities);
+  if (!editAllowed) {
+    normalizedCapabilities.openSection = false;
+    normalizedCapabilities.openTemplate = false;
+  }
   const boundary = normalizeBoundary(input, organizationId, roleAllowed);
 
   if (!boundary.recordsUsable) {
@@ -885,7 +890,8 @@ export function buildAmbientLibrary({
       roleBoundary: {
         role,
         allowed: roleAllowed,
-        reason: roleAllowed ? null : "Library is restricted to administrators."
+        editAllowed,
+        reason: roleAllowed ? null : "Library is restricted to organization staff."
       },
       readBoundary: boundary,
       revision: {
@@ -1216,7 +1222,7 @@ export function buildAmbientLibrary({
     modelId: AMBIENT_LIBRARY_MODEL,
     surfaceContract: AMBIENT_LIBRARY_SURFACE_CONTRACT,
     state: outputState,
-    roleBoundary: { role, allowed: true, reason: null },
+    roleBoundary: { role, allowed: true, editAllowed, reason: null },
     readBoundary: boundary,
     revision,
     pricing,

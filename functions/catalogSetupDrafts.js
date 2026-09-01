@@ -1,7 +1,7 @@
 "use strict";
 
 const { createHash } = require("node:crypto");
-const { validateCatalogForConfirmation } = require("./starterCatalogPacks");
+const { buildStarterCatalogPackDocuments, validateCatalogForConfirmation } = require("./starterCatalogPacks");
 
 const CATALOG_SETUP_DRAFT_SCHEMA_VERSION = 1;
 const MAX_CHANGED_RECORDS = 400;
@@ -342,6 +342,73 @@ function currentRevision(settings = {}) {
   return safeInteger(settings.catalogRevision || 0, "Catalog revision");
 }
 
+function buildPublishedReadiness(projected = {}, { revision, confirmedAtISO } = {}) {
+  const settings = projected.settings || {};
+  const collections = projected.collections || {};
+  const activeEntries = (name) => (collections[name] || []).filter((entry) => entry.data?.active !== false);
+  const positivePackage = activeEntries("catalogPackages").some((entry) => (
+    Boolean(text(entry.data?.name)) && Number(entry.data?.pppMinor) > 0
+  ));
+  const eventAndMenu = activeEntries("eventTypes").some((entry) => Boolean(text(entry.data?.name)))
+    && activeEntries("menuItems").length > 0;
+  const percentagesValid = ["serviceFeePct", "taxRate", "depositPct"].every((key) => (
+    Number.isFinite(Number(settings[key])) && Number(settings[key]) >= 0 && Number(settings[key]) <= 1
+  ));
+  const policyMoneyValid = [
+    ["perMileRateMinor", "perMileRate"],
+    ["longDistancePerMileRateMinor", "longDistancePerMileRate"],
+    ["serverRateMinor", "serverRate"],
+    ["chefRateMinor", "chefRate"],
+    ["bartenderRateMinor", "bartenderRate"]
+  ].every(([minorKey, legacyKey]) => {
+    const value = Object.prototype.hasOwnProperty.call(settings, minorKey)
+      ? Number(settings[minorKey])
+      : Number(settings[legacyKey]) * 100;
+    return Number.isSafeInteger(value) && value >= 0 && value <= MONEY_MAX_MINOR;
+  });
+  const businessReady = positivePackage && eventAndMenu && percentagesValid && policyMoneyValid;
+  const costEntries = [
+    ...activeEntries("catalogPackages").map((entry) => entry.data?.costPppMinor),
+    ...activeEntries("catalogAddons").map((entry) => entry.data?.costMinor),
+    ...activeEntries("catalogRentals").map((entry) => entry.data?.costMinor),
+    ...activeEntries("menuItems").map((entry) => entry.data?.costMinor)
+  ];
+  if (settings.staffingLaborEnabled !== false) {
+    costEntries.push(settings.serverCostRateMinor, settings.chefCostRateMinor, settings.bartenderCostRateMinor);
+  }
+  const costRecordedCount = costEntries.filter((value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0).length;
+  const marginComplete = costEntries.length > 0 && costRecordedCount === costEntries.length;
+  const projection = (id, ready, reasonCode, blocking, nextAction) => ({
+    id,
+    ready,
+    reasonCode,
+    evidenceAt: confirmedAtISO || null,
+    blocking,
+    nextAction
+  });
+  return {
+    catalogRevision: Number(revision),
+    businessReadyToQuote: projection(
+      "business-ready-to-quote",
+      businessReady,
+      !positivePackage ? "positive_package_required"
+        : !eventAndMenu ? "event_type_and_menu_required"
+          : !percentagesValid || !policyMoneyValid ? "pricing_policy_invalid" : "ready",
+      true,
+      { route: businessReady ? "opportunities/new" : "library", label: businessReady ? "Start a quote" : "Review setup" }
+    ),
+    catalogDraftReadyToPublish: projection("catalog-draft-ready-to-publish", false, "no_publishable_changes", false, { route: "library", label: "Continue setup" }),
+    quoteDraftReadyToSave: projection("quote-draft-ready-to-save", false, "quote_context_not_open", false, { route: "opportunities", label: "Open a quote" }),
+    proposalReadyToSend: projection("proposal-ready-to-send", false, "proposal_context_not_open", false, { route: "opportunities", label: "Review a proposal" }),
+    marginEvidenceComplete: {
+      ...projection("margin-evidence-complete", marginComplete, marginComplete ? "ready" : "cost_evidence_missing", false, { route: "library", label: "Record missing costs" }),
+      recordedCount: costRecordedCount,
+      totalCount: costEntries.length
+    },
+    providerConnectionReady: projection("provider-connection-ready", false, "connection_state_not_evaluated", false, { route: "settings/connections", label: "Review connections" })
+  };
+}
+
 function draftProjection(draft = null) {
   if (!draft || draft.state !== "open") {
     return {
@@ -514,6 +581,7 @@ async function saveCatalogSetupDraft({
   expectedGeneration = 0,
   baseCatalogRevision,
   patches = [],
+  setupPreset = null,
   actorUid = "",
   actorEmail = "",
   serverTimestamp = null,
@@ -523,7 +591,25 @@ async function saveCatalogSetupDraft({
   const normalizedRequestId = normalizeRequestId(requestId);
   const generationFence = safeInteger(expectedGeneration, "Expected draft generation");
   const revisionFence = safeInteger(baseCatalogRevision, "Base catalog revision");
-  const changes = normalizeChanges(patches);
+  const preset = setupPreset && typeof setupPreset === "object"
+    ? buildStarterCatalogPackDocuments(setupPreset.packId, {
+        packVersion: setupPreset.packVersion,
+        nowISO,
+        actorUid
+      })
+    : null;
+  const presetPatches = preset ? [
+    { collection: "settings", recordId: "config", intent: "update", payload: preset.controlledSettings },
+    ...CATALOG_COLLECTIONS.flatMap((collection) => (
+      (preset.collections[collection] || []).map((entry) => ({
+        collection,
+        recordId: entry.id,
+        intent: "create",
+        payload: entry.data
+      }))
+    ))
+  ] : [];
+  const changes = normalizeChanges([...presetPatches, ...(Array.isArray(patches) ? patches : [])]);
   if (!db || !normalizedOrganizationId || !normalizedRequestId || !text(actorUid)) {
     throw new CatalogSetupDraftError("invalid-argument", "Organization, request id, and actor are required.");
   }
@@ -743,11 +829,10 @@ async function publishCatalogSetupDraft({
       uid: text(actorUid, 160),
       email: text(actorEmail, 320).toLowerCase()
     };
-    const readiness = {
-      businessReadyToQuote: true,
-      catalogDraftReadyToPublish: false,
-      reasonCodes: []
-    };
+    const readiness = buildPublishedReadiness(projected, {
+      revision: revisionAfter,
+      confirmedAtISO: nowISO
+    });
     transaction.set(refs.settingsRef, {
       ...settingsPatch,
       catalogRevision: revisionAfter,

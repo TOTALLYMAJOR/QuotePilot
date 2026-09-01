@@ -4149,7 +4149,7 @@ hr {
 }
 
 .admin-menu-row-managed {
-  grid-template-columns: 1fr 1.4fr 0.9fr 0.8fr 0.7fr 0.65fr auto;
+  grid-template-columns: auto minmax(8rem, 1fr) minmax(10rem, 1.4fr) minmax(7rem, .9fr) minmax(6rem, .75fr) minmax(6rem, .75fr) auto auto auto;
 }
 
 .admin-menu-management-grid {
@@ -4166,7 +4166,18 @@ hr {
 }
 
 .admin-inline-actions-create-item {
-  grid-template-columns: 1.2fr 0.8fr 0.8fr auto auto;
+  grid-template-columns: minmax(10rem, 1.2fr) minmax(6rem, .7fr) minmax(6rem, .7fr) minmax(7rem, .8fr) auto auto;
+}
+
+.admin-menu-builder-tools {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto auto auto minmax(10rem, .75fr) auto;
+  gap: .5rem;
+  align-items: center;
+  padding: .7rem;
+  border: 1px solid var(--border, #d7d2c8);
+  border-radius: .8rem;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
 }
 
 .admin-inline-toggle {
@@ -8830,7 +8841,8 @@ hr {
   }
 
   .admin-menu-management-grid,
-  .admin-inline-actions {
+  .admin-inline-actions,
+  .admin-menu-builder-tools {
     grid-template-columns: 1fr;
   }
 

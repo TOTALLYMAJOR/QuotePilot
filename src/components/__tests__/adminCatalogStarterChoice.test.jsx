@@ -108,7 +108,7 @@ describe("Admin Catalog starter choice", () => {
     }, { initialTab: "starter" });
 
     expect(html).toContain("Existing catalog records were found.");
-    expect(html).toContain("starter packs only populate a blank catalog");
+    expect(html).toContain("Setup presets are staged intent");
     expect(html).toContain(">Packages</button>");
     expect(html).not.toContain("Use Wedding &amp; events");
   });

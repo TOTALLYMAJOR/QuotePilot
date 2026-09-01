@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 20:39:36 CDT
+Last updated: 2026-08-31 20:56:39 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Recast the staff Library landing route as the Business Setup Center. It now
+  separates six readiness questions and presents the ordered Identity,
+  Offerings, Pricing, Costs and margin evidence, Quote starting points,
+  Staffing policy, Users and roles, and Connections checklist with one truthful
+  status and next action per row. Sales staff can inspect readiness but cannot
+  open editing controls. The Menu Builder uses Event type, Menu section, Item,
+  and Price basis language with search, availability filters, bulk availability
+  and dependency-safe movement. Manual menu edits, setup presets, and catalog
+  imports now stage through the shared setup draft instead of mutating active
+  pricing. Managed menu costs use canonical `costMinor` through import,
+  normalization, publication, readiness, and staff-only margin evidence.
 - Added one private, server-backed catalog setup draft per organization. Library
   edits now update locally and coalesce after 800 ms without activating prices;
   failed synchronization retains an explicitly device-only buffer. Same-tenant

@@ -8,25 +8,25 @@ const IMPORT_TYPE_DEFINITIONS = {
   packages: {
     label: "Packages",
     collection: "catalogPackages",
-    fields: ["name", "ppp", "description", "active"],
+    fields: ["name", "ppp", "costPpp", "description", "active"],
     required: ["name"]
   },
   addons: {
     label: "Add-ons",
     collection: "catalogAddons",
-    fields: ["name", "type", "price", "description", "active"],
+    fields: ["name", "type", "price", "cost", "description", "active"],
     required: ["name"]
   },
   rentals: {
     label: "Rentals",
     collection: "catalogRentals",
-    fields: ["name", "price", "qtyPerGuests", "description", "active"],
+    fields: ["name", "price", "cost", "qtyPerGuests", "description", "active"],
     required: ["name"]
   },
   menuItems: {
     label: "Menu items",
     collection: "menuItems",
-    fields: ["name", "eventTypeId", "categoryId", "price", "pricingType", "active"],
+    fields: ["name", "eventTypeId", "categoryId", "price", "cost", "pricingType", "active"],
     required: ["name", "eventTypeId", "categoryId"]
   }
 };
@@ -39,6 +39,8 @@ const FIELD_ALIASES = {
   notes: ["notes", "note", "comments"],
   ppp: ["ppp", "price per person", "per person", "cost pp", "rate per person"],
   price: ["price", "rate", "amount", "cost"],
+  costPpp: ["cost per person", "food cost per person", "cost ppp", "costppp"],
+  cost: ["cost", "unit cost", "item cost", "food cost"],
   type: ["type", "pricing type", "rate type"],
   pricingType: ["pricing type", "price type", "type", "billing type"],
   qtyPerGuests: ["qty per guests", "quantity per guests", "guests per unit", "guest ratio"],
@@ -184,6 +186,7 @@ function mapRecord(source = {}, mapping = {}, importType = "customers") {
     return {
       name: read("name"),
       ppp: parseMoney(read("ppp")),
+      costPpp: parseMoney(read("costPpp")),
       description: read("description"),
       active: parseBoolean(read("active"), true)
     };
@@ -193,6 +196,7 @@ function mapRecord(source = {}, mapping = {}, importType = "customers") {
       name: read("name"),
       type: normalizePricingType(read("type")),
       price: parseMoney(read("price")),
+      cost: parseMoney(read("cost")),
       description: read("description"),
       active: parseBoolean(read("active"), true)
     };
@@ -201,6 +205,7 @@ function mapRecord(source = {}, mapping = {}, importType = "customers") {
     return {
       name: read("name"),
       price: parseMoney(read("price")),
+      cost: parseMoney(read("cost")),
       qtyPerGuests: parseMoney(read("qtyPerGuests")),
       description: read("description"),
       active: parseBoolean(read("active"), true)
@@ -211,6 +216,7 @@ function mapRecord(source = {}, mapping = {}, importType = "customers") {
     eventTypeId: read("eventTypeId"),
     categoryId: read("categoryId"),
     price: parseMoney(read("price")),
+    cost: parseMoney(read("cost")),
     pricingType: normalizePricingType(read("pricingType"), "per_item"),
     type: normalizePricingType(read("pricingType"), "per_item"),
     active: parseBoolean(read("active"), true)
@@ -228,7 +234,7 @@ export function buildImportPreview({ rows = [], mapping = {}, importType = "cust
     if (definition.requiredAny && !definition.requiredAny.some((field) => cleanText(record[field]))) {
       errors.push(`Provide ${definition.requiredAny.join(" or ")}`);
     }
-    ["price", "ppp", "qtyPerGuests"].forEach((field) => {
+    ["price", "ppp", "cost", "costPpp", "qtyPerGuests"].forEach((field) => {
       if (Object.prototype.hasOwnProperty.call(record, field) && record[field] === null) {
         errors.push(`${field} must be a positive number`);
       }

@@ -617,6 +617,9 @@ function normalizeMenuSections(sections = []) {
           id,
           name,
           price: moneyValue(item, "priceMinor", "price", 0),
+          cost: Object.prototype.hasOwnProperty.call(item || {}, "costMinor")
+            ? (item.costMinor === null ? null : fromMinorUnits(item.costMinor, null))
+            : toOptionalRate(item?.cost),
           pricingType,
           type: pricingType,
           active: item?.active !== false

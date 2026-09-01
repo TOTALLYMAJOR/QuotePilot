@@ -7,6 +7,7 @@ import {
   MAX_IMPORT_RECORDS,
   rollbackImportBatch
 } from "../lib/importBatchService";
+import { stageCatalogImportDraft } from "../lib/catalogSetupDraftService";
 import {
   buildImportPreview,
   detectImportType,
@@ -457,16 +458,17 @@ export function ImportStudioView({
         catalogImport
       });
       if (!pendingImportBatchId) setPendingImportBatchId(importBatchId);
-      const result = await createImportBatch({
-        organizationId,
-        organizationName,
-        importType,
-        fileName,
-        records: readyRows,
-        actor: { uid: currentUserUid, email: currentUserEmail },
-        importBatchId,
-        expectedCatalogRevision: catalogImport ? Math.max(0, Number(catalogRevision || 0)) : undefined
-      });
+      const result = catalogImport
+        ? await stageCatalogImportDraft({ organizationId, importType, rows: readyRows, importBatchId })
+        : await createImportBatch({
+            organizationId,
+            organizationName,
+            importType,
+            fileName,
+            records: readyRows,
+            actor: { uid: currentUserUid, email: currentUserEmail },
+            importBatchId
+          });
       setReceipt(result);
       setPendingImportBatchId("");
       setMutationPhase("success");
@@ -723,7 +725,9 @@ export function ImportStudioView({
           <section className="import-receipt" aria-live="polite">
             <p className="import-studio-kicker">Import receipt</p>
             <h3>
-              {receipt.status === "rolled_back"
+              {receipt.status === "staged"
+                ? `${receipt.stagedCount || 0} records added to the setup draft`
+                : receipt.status === "rolled_back"
                 ? "Import safely undone"
                 : Number(receipt.createdCount || 0) > 0
                   ? `${organizationName || organizationId} has new records`
@@ -731,8 +735,8 @@ export function ImportStudioView({
             </h3>
             <div className="import-review-metrics">
               <div>
-                <span>{receipt.status === "rolled_back" ? "Removed" : "Created"}</span>
-                <strong>{receipt.status === "rolled_back" ? (receipt.deletedCount || 0) : (receipt.createdCount || 0)}</strong>
+                <span>{receipt.status === "staged" ? "Staged" : receipt.status === "rolled_back" ? "Removed" : "Created"}</span>
+                <strong>{receipt.status === "staged" ? (receipt.stagedCount || 0) : receipt.status === "rolled_back" ? (receipt.deletedCount || 0) : (receipt.createdCount || 0)}</strong>
               </div>
               <div>
                 <span>
@@ -745,7 +749,9 @@ export function ImportStudioView({
               <div><span>Batch</span><strong className="import-batch-id">{receipt.importBatchId}</strong></div>
             </div>
             <p>
-              {receipt.status === "rolled_back"
+              {receipt.status === "staged"
+                ? "The active catalog is unchanged. Review and publish the shared setup draft to activate these records."
+                : receipt.status === "rolled_back"
                 ? (isCatalogImportType(receipt.importType || importType)
                     ? "Only unchanged records stamped by this batch were removed. Edited records and records still used by packages or templates were protected."
                     : "Only unchanged records stamped by this batch were removed. Records edited after import were protected.")
@@ -756,7 +762,7 @@ export function ImportStudioView({
                     : "No outbound messages were sent. Existing duplicate records were left unchanged.")}
             </p>
             <div className="right-actions">
-              {receipt.status !== "rolled_back" && (
+              {receipt.status !== "rolled_back" && receipt.status !== "staged" && (
                 <button
                   type="button"
                   className="ghost danger"

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-31 20:31:30 CDT
+Last updated: 2026-08-31 20:56:39 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2288,6 +2288,36 @@ success (receipt), a validation error, and a reload-required recovery when
 even reconciliation could not complete — is pre-existing behavior, now
 literally marked for automated coverage; recording a cost uses the exact
 same save path as every other catalog field.
+
+## Business Setup Center and Menu Builder
+
+Open **Library** to answer four immediate questions: whether the business can
+quote, whether unpublished changes exist, whether margin evidence is complete,
+and what to do next. The setup checklist is ordered as Identity, Offerings,
+Pricing, Costs and margin evidence, Quote starting points, Staffing policy,
+Users and roles, and Connections. Each row shows exactly one status and action.
+Costs, optional starting points, additional users, and provider connections do
+not block ordinary quote creation.
+
+Administrators can open the exact setup area. Sales staff receive the same
+readiness summary in read-only form and an instruction to contact an
+administrator when changes are needed. **Draft saved** means unpublished intent
+is durable; it does not mean pricing is active. Only **Review and publish
+catalog** activates a new catalog revision and records pricing confirmation.
+If synchronization fails, **device-only** means those edits have not reached the
+server and must not be treated as saved or published.
+
+The Menu Builder follows **Event type → Menu section → Item**. Search and
+availability filters narrow the visible list; bulk controls can change
+availability or move selected items while preserving their stable identities.
+Price basis appears as **Per guest**, **Per item**, or **Per event**. A **Setup
+preset** and a catalog Import Studio batch stage into the same draft. A **Quote
+starting point** remains optional setup guidance, not active pricing authority.
+
+Managed menu costs participate in the same coverage used by staff margin
+evidence. A missing menu cost is named as a gap even when the business remains
+ready to quote. Costs and margin evidence never appear in customer proposal
+preview, export, or portal surfaces.
 
 ## Connected Quote Workspace compatibility and rollback
 

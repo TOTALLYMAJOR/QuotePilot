@@ -4,13 +4,21 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AdminCatalogView } from "../AdminCatalogModal";
-import { createMenuItem as createMenuItemMock } from "../../lib/menuService";
 
 const setupDraft = vi.hoisted(() => ({ current: null }));
+const setupPreset = vi.hoisted(() => ({ stage: vi.fn() }));
 
 vi.mock("../../hooks/useCatalogSetupDraft", () => ({
   useCatalogSetupDraft: () => setupDraft.current
 }));
+
+vi.mock("../../lib/catalogSetupDraftService", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    stageCatalogSetupPreset: (...args) => setupPreset.stage(...args)
+  };
+});
 
 vi.mock("../../lib/menuService", () => ({
   createCategory: vi.fn(async () => ({ id: "cat-1" })),
@@ -53,6 +61,8 @@ let container;
 let root;
 
 beforeEach(() => {
+  setupPreset.stage.mockReset();
+  setupPreset.stage.mockResolvedValue({ ok: true, draft: { changedRecordCount: 1 } });
   setupDraft.current = {
     status: "idle",
     label: "Draft saved",
@@ -213,13 +223,9 @@ describe("AdminCatalogModal save capability state", () => {
       .toContain("One menu edit is still in progress");
   });
 
-  test("opens manual setup when a starter pack is blocked by existing catalog content", async () => {
+  test("stages a setup preset through the shared durable draft", async () => {
     renderView({
-      catalog: starterCatalog(),
-      onApplyStarterPack: async () => ({
-        ok: false,
-        error: "This organization already has catalog content. Choose replacement only for an untouched staged pack."
-      })
+      catalog: starterCatalog()
     });
     const applyButton = [...container.querySelectorAll("button")]
       .find((button) => button.textContent.trim() === "Use Wedding & events");
@@ -230,11 +236,13 @@ describe("AdminCatalogModal save capability state", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
 
-    expect(container.querySelector(".modal-foot").textContent).toContain(
-      "Manual catalog setup has been opened so you can continue editing."
-    );
-    expect([...container.querySelectorAll("button")]
-      .some((button) => button.textContent.trim() === "Packages")).toBe(true);
+    expect(setupPreset.stage).toHaveBeenCalledWith({
+      organizationId: "test-org",
+      packId: "wedding-events",
+      packVersion: 2
+    });
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("setup preset added to the shared draft");
   });
 
   test("allows adding a menu item while a separate package catalog draft is pending", async () => {
@@ -270,9 +278,15 @@ describe("AdminCatalogModal save capability state", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
 
-    expect(createMenuItemMock).toHaveBeenCalledTimes(1);
+    expect(setupDraft.current.queueChanges).toHaveBeenCalledWith([
+      expect.objectContaining({
+        collection: "menuItems",
+        intent: "create",
+        payload: expect.objectContaining({ name: "Seasonal soup" })
+      })
+    ]);
     expect(container.querySelector(".modal-foot").textContent)
-      .toContain("Menu item added.");
+      .toContain("Menu item added to the setup draft.");
     expect(container.querySelector(".modal-foot").textContent)
       .not.toContain("One Library edit is already in progress. Save or discard it, then try this change again. Nothing changed.");
   });

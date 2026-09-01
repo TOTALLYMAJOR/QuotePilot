@@ -272,7 +272,7 @@ describe("WorkspaceShell", () => {
     expect(container.querySelector('[aria-label="Primary workspace"] [aria-current="page"]')).toBeNull();
   });
 
-  test("keeps Library absent for sales while retaining role-safe ambient orientation", () => {
+  test("gives sales staff read-only Library navigation without Catalog Admin", () => {
     render({
       ambientNavigation: true,
       model: model(WORKSPACE_ROUTE_IDS.HOME, true, false),
@@ -282,8 +282,8 @@ describe("WorkspaceShell", () => {
 
     expect(Array.from(container.querySelectorAll("[data-ambient-orientation]"))
       .map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Clients"]);
-    expect(buttonsByText(container, "Library")).toHaveLength(0);
+      .toEqual(["Now", "Opportunities", "Clients", "Library"]);
+    expect(buttonsByText(container, "Library")).toHaveLength(1);
     expect(buttonsByText(container, "Catalog Admin")).toHaveLength(0);
   });
 

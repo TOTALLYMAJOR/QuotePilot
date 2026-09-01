@@ -10303,6 +10303,7 @@ exports.saveCatalogSetupDraft = functions.region(REGION).https.onCall(async (dat
       expectedGeneration: Number(data?.expectedGeneration),
       baseCatalogRevision: Number(data?.baseCatalogRevision),
       patches: data?.patches,
+      setupPreset: data?.setupPreset,
       actorUid: staff.uid,
       actorEmail: staff.email,
       serverTimestamp: FieldValue.serverTimestamp

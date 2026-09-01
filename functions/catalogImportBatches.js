@@ -153,6 +153,14 @@ function resolveMoneyMinor(source, minorKey, majorKey, label) {
   return scaled;
 }
 
+function resolveOptionalMoneyMinor(source, minorKey, majorKey, label) {
+  const hasMinor = Object.prototype.hasOwnProperty.call(source, minorKey);
+  const hasMajor = Object.prototype.hasOwnProperty.call(source, majorKey);
+  if ((!hasMinor || source[minorKey] === "" || source[minorKey] === null || source[minorKey] === undefined)
+    && (!hasMajor || source[majorKey] === "" || source[majorKey] === null || source[majorKey] === undefined)) return null;
+  return resolveMoneyMinor(source, minorKey, majorKey, label);
+}
+
 function sanitizeCatalogImportRecord(importType, input = {}) {
   const definition = CATALOG_IMPORT_TYPES[importType];
   if (!definition) {
@@ -172,6 +180,7 @@ function sanitizeCatalogImportRecord(importType, input = {}) {
     return {
       name,
       pppMinor: moneyMinor,
+      costPppMinor: resolveOptionalMoneyMinor(source, "costPppMinor", "costPpp", "Package cost"),
       description: text(source.description, 1200),
       active: normalizeBoolean(source.active, true),
       includedMenuItemIds: [],
@@ -184,6 +193,7 @@ function sanitizeCatalogImportRecord(importType, input = {}) {
     return {
       name,
       priceMinor: moneyMinor,
+      costMinor: resolveOptionalMoneyMinor(source, "costMinor", "cost", "Add-on cost"),
       pricingType,
       type: pricingType,
       description: text(source.description, 1200),
@@ -198,6 +208,7 @@ function sanitizeCatalogImportRecord(importType, input = {}) {
     return {
       name,
       priceMinor: moneyMinor,
+      costMinor: resolveOptionalMoneyMinor(source, "costMinor", "cost", "Rental cost"),
       qtyPerGuests,
       pricingType: "per_item",
       type: "per_item",
@@ -211,6 +222,7 @@ function sanitizeCatalogImportRecord(importType, input = {}) {
     eventTypeId: requireIdentifier(source.eventTypeId, "eventTypeId"),
     categoryId: requireIdentifier(source.categoryId, "categoryId"),
     priceMinor: moneyMinor,
+    costMinor: resolveOptionalMoneyMinor(source, "costMinor", "cost", "Menu item cost"),
     pricingType,
     type: pricingType,
     active: normalizeBoolean(source.active, true)

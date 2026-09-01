@@ -6116,19 +6116,22 @@
     },
     {
       "id": "catalog-draft-publish-authority",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "organization_admins"
       ],
-      "summary": "Catalog setup edits auto-save into one private organization draft while the live catalog remains the only pricing authority; one explicit review and atomic publication advances a single revision and creates an attributed confirmation and immutable receipt.",
+      "summary": "The role-safe Business Setup Center separates quote, draft, proposal, margin, and provider readiness while catalog and menu edits auto-save into one private organization draft; one explicit review and atomic publication advances a single live-catalog revision with an attributed confirmation and immutable receipt.",
       "backendPaths": [
         "firestore.rules",
+        "functions/catalogImportBatches.js",
         "functions/catalogSetupDrafts.js",
         "functions/index.js",
         "src/hooks/useCatalogSetupDraft.js",
+        "src/lib/businessReadiness.js",
+        "src/lib/importStudio.js",
         "src/lib/catalogSetupDraftService.js"
       ],
       "backendExports": [
@@ -6144,21 +6147,31 @@
         "functions/index.js#publishCatalogSetupDraft"
       ],
       "frontendPaths": [
+        "src/components/AmbientLibraryRoute.jsx",
         "src/components/AdminCatalogModal.jsx",
+        "src/components/BusinessSetupCenter.jsx",
         "src/components/CatalogDraftStateBar.jsx",
+        "src/components/ImportStudioModal.jsx",
+        "src/lib/businessReadiness.js",
         "src/styles.css"
       ],
       "entryPointLocators": [
+        {
+          "path": "src/components/BusinessSetupCenter.jsx",
+          "locator": "data-capability-id=\"business-setup-readiness\""
+        },
         {
           "path": "src/components/CatalogDraftStateBar.jsx",
           "locator": "data-capability-id=\"catalog-draft-publish-authority\""
         }
       ],
       "testPaths": [
+        "src/components/__tests__/businessSetupCenter.test.jsx",
         "src/components/__tests__/catalogDraftStateBar.test.jsx",
         "src/hooks/__tests__/useCatalogSetupDraft.test.jsx",
         "src/lib/__tests__/catalogSetupDraftService.test.js",
         "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+        "src/lib/__tests__/businessReadiness.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
@@ -6187,10 +6200,14 @@
         {
           "path": "docs/USER_MANUAL.md",
           "locator": "## Catalog draft and publication"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Business Setup Center and Menu Builder"
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The administrator Library now distinguishes local device intent, durable server draft state, read-only review, and published catalog authority. Publication remains explicit and receipt-backed; autosave cannot confirm pricing or mutate active catalog records.",
+      "surfaceReviewNote": "Revision 2 makes Library a role-safe Setup Center with six independent readiness projections and eight ordered next actions, adds the Menu Builder's operator language/search/filter/bulk workflow, and routes manual menu edits, setup presets, and catalog imports into the shared draft. Sales can inspect readiness but cannot edit. Publication remains explicit and receipt-backed; autosave cannot confirm pricing or mutate active catalog records, and missing cost evidence never blocks ordinary quote creation.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -6235,7 +6252,7 @@
           "assertionLocator": "data-capability-state=\"recovery\""
         }
       ],
-      "safeOutcome": "A same-tenant administrator can edit quickly without activating pricing, see whether changes are device-only or server-saved, review exact bounded consequences, and publish at most 400 baseline-fenced changes in one all-or-nothing revision with one attributed confirmation and immutable private receipt."
+      "safeOutcome": "Operators can tell whether the business can quote, whether a draft is publishable, and which optional evidence is missing without collapsing those states. A same-tenant administrator can edit quickly without activating pricing, see whether changes are device-only or server-saved, and publish at most 400 baseline-fenced changes in one all-or-nothing revision with one attributed confirmation and immutable private receipt; sales staff remain read-only and customer surfaces receive no costs, margins, or private receipts."
     }
   ]
 }

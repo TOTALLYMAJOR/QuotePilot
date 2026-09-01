@@ -153,6 +153,73 @@ export function createCatalogSetupRequestId(prefix = "catalog") {
   return `${String(prefix || "catalog").replace(/[^A-Za-z0-9_-]/g, "_")}_${random.replace(/-/g, "")}`;
 }
 
+function importRecordId(batchId, row, index) {
+  const rowNumber = Number.isSafeInteger(Number(row?.rowNumber)) ? Number(row.rowNumber) : index + 1;
+  return `imp_${String(batchId || "catalog").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 180)}_${rowNumber}_${index}`;
+}
+
+function importMoney(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  return Math.round(Number(value) * 100);
+}
+
+export function buildCatalogImportDraftChanges({ importType = "", rows = [], importBatchId = "" } = {}) {
+  const collection = COLLECTION_BY_CATALOG_KEY[importType] || (importType === "menuItems" ? "menuItems" : "");
+  if (!collection) throw new Error("Choose a supported catalog import type.");
+  return (Array.isArray(rows) ? rows : []).map((row, index) => {
+    const record = row?.record || row?.data || row || {};
+    let payload;
+    if (importType === "packages") {
+      payload = {
+        name: String(record.name || "").trim(),
+        pppMinor: importMoney(record.ppp),
+        costPppMinor: importMoney(record.costPpp),
+        description: String(record.description || "").trim(),
+        active: record.active !== false,
+        includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: []
+      };
+    } else if (importType === "addons") {
+      const basis = record.pricingType || record.type || "per_event";
+      payload = { name: String(record.name || "").trim(), priceMinor: importMoney(record.price), costMinor: importMoney(record.cost), pricingType: basis, type: basis, description: String(record.description || "").trim(), active: record.active !== false };
+    } else if (importType === "rentals") {
+      payload = { name: String(record.name || "").trim(), priceMinor: importMoney(record.price), costMinor: importMoney(record.cost), qtyPerGuests: Math.max(1, Number(record.qtyPerGuests || 1)), pricingType: "per_item", type: "per_item", description: String(record.description || "").trim(), active: record.active !== false };
+    } else {
+      const basis = record.pricingType || record.type || "per_item";
+      payload = { name: String(record.name || "").trim(), eventTypeId: String(record.eventTypeId || "").trim(), categoryId: String(record.categoryId || "").trim(), priceMinor: importMoney(record.price), costMinor: importMoney(record.cost), pricingType: basis, type: basis, active: record.active !== false };
+    }
+    return { collection, recordId: importRecordId(importBatchId, row, index), intent: "create", payload };
+  });
+}
+
+export async function stageCatalogImportDraft({
+  organizationId = "",
+  importType = "",
+  rows = [],
+  importBatchId = createCatalogSetupRequestId("import")
+} = {}) {
+  const current = await getCatalogSetupDraft({ organizationId });
+  const draft = current?.draft || {};
+  const patches = buildCatalogImportDraftChanges({ importType, rows, importBatchId });
+  const result = await saveCatalogSetupDraft({
+    organizationId,
+    requestId: createCatalogSetupRequestId("import_sync"),
+    expectedGeneration: Number(draft.generation || 0),
+    baseCatalogRevision: Number(draft.state === "open" ? draft.baseCatalogRevision : current.currentCatalogRevision || 0),
+    patches
+  });
+  return {
+    ok: true,
+    status: "staged",
+    importBatchId,
+    importType,
+    stagedCount: patches.length,
+    createdCount: 0,
+    skippedCount: 0,
+    catalogRevision: Number(current.currentCatalogRevision || 0),
+    draft: result?.draft || null
+  };
+}
+
 async function callCatalogSetup(name, payload) {
   if (E2E_FUNCTION_ADAPTER_ENABLED) {
     const adapter = globalThis.__quotePilotE2eFunctions;
@@ -175,14 +242,29 @@ export function saveCatalogSetupDraft({
   requestId = createCatalogSetupRequestId("draft"),
   expectedGeneration = 0,
   baseCatalogRevision = 0,
-  patches = []
+  patches = [],
+  setupPreset = null
 } = {}) {
   return callCatalogSetup("saveCatalogSetupDraft", {
     organizationId,
     requestId,
     expectedGeneration,
     baseCatalogRevision,
-    patches
+    patches,
+    ...(setupPreset ? { setupPreset } : {})
+  });
+}
+
+export async function stageCatalogSetupPreset({ organizationId = "", packId = "", packVersion = null } = {}) {
+  const current = await getCatalogSetupDraft({ organizationId });
+  const draft = current?.draft || {};
+  return saveCatalogSetupDraft({
+    organizationId,
+    requestId: createCatalogSetupRequestId("setup_preset"),
+    expectedGeneration: Number(draft.generation || 0),
+    baseCatalogRevision: Number(draft.state === "open" ? draft.baseCatalogRevision : current.currentCatalogRevision || 0),
+    patches: [],
+    setupPreset: { packId, packVersion }
   });
 }
 

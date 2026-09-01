@@ -551,7 +551,7 @@ export default function WorkspaceShell({
                     true,
                     "clients"
                   )}
-                  {isAdmin && navButton(
+                  {navButton(
                     "Library",
                     "catalog",
                     actions.onCatalog,

@@ -4866,7 +4866,7 @@ export default function App({
   const catalogTool = {
     surfaceName: AMBIENT_UI_ENABLED ? "Library" : "Catalog Admin",
     component: AdminCatalogView,
-    enabled: authSession.isAdmin,
+    enabled: Boolean(authSession.organizationId),
     onClose: closeCatalogWorkspace,
     surfaceProps: {
       catalog,
@@ -4935,7 +4935,9 @@ export default function App({
       onReload: () => catalog.reload({ background: true }),
       onImported: (result) => {
         catalog.reload({ background: true });
-        if (result?.status === "rolled_back") {
+        if (result?.status === "staged") {
+          pushToast(`Added ${result?.stagedCount || 0} record(s) to the catalog setup draft.`, "success");
+        } else if (result?.status === "rolled_back") {
           pushToast(`Import ${result.importBatchId} was undone.`, "info");
         } else {
           pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");

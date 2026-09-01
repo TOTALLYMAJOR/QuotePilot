@@ -128,6 +128,9 @@ function normalizeMenuSectionsFromEvent(categories = [], items = []) {
       pricingType,
       type: pricingType,
       price: Number(item?.price || 0),
+      cost: item?.cost === null || item?.cost === undefined || item?.cost === ""
+        ? null
+        : Number(item.cost),
       active: item?.active !== false
     });
     itemLookup.set(categoryId, nextItems);
