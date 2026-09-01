@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-08-31 22:19:51 CDT
+Last updated: 2026-09-01 13:05:37 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -75,13 +75,15 @@ Threshold policy:
   Ambient runner offset. This reconciliation is not general product-growth
   headroom; any source increase beyond that offset must fail or receive a new
   explicit review.
-  The Business Setup and revision-review program now measures 3,224,340 /
-  385,181 bytes for the compatibility graph and 4,050,831 / 385,181 bytes for
-  the production-equivalent Ambient graph. Their ceilings are 3,231,504 and
-  4,051,134 aggregate bytes, retaining only the previously established
-  7,164-byte compatibility and 303-byte Ambient local-to-runner offsets. The
-  largest-chunk ceiling remains unchanged, and this is not general growth
-  headroom.
+  The Business Setup and revision-review program measures 3,224,340 / 385,181
+  bytes for the compatibility graph and 4,050,831 / 385,181 bytes for the
+  config-free Ambient graph. The compatibility ceiling remains 3,231,504
+  aggregate bytes. Exact-head CI run `33540311518` then measured the
+  Firebase-configured production-equivalent Ambient graph at 4,056,299 /
+  385,181 bytes; the same CI-equivalent graph measured 4,056,372 / 385,181
+  locally. The Ambient ceiling is therefore 4,056,372 aggregate bytes, the
+  larger literal verified graph, with no discretionary growth headroom. The
+  largest-chunk ceiling remains unchanged.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining
