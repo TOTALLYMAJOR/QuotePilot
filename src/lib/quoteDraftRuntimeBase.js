@@ -179,6 +179,13 @@ export function hydrateSavedQuoteDraftBase({
       activeVersionId: text(quote.activeVersionId || quote.versionMeta?.versionId),
       customerId: text(quote.customerId),
       organizationId: text(quote.organizationId || organizationId),
+      pricingCatalogAuthority: record(quote.pricingCatalogAuthority)
+        ? { ...quote.pricingCatalogAuthority }
+        : null,
+      catalogRevisionReview: record(quote.catalogRevisionReview)
+        ? { ...quote.catalogRevisionReview }
+        : null,
+      selection: record(quote.selection) ? { ...quote.selection } : {},
       rebooking: record(quote.rebooking) ? { ...quote.rebooking } : null,
       portalDecision: record(quote.portalDecision) ? { ...quote.portalDecision } : null
     }

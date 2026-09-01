@@ -3244,6 +3244,7 @@ export async function updateQuote({
   ownerEmail = "",
   organizationId = undefined,
   commercialChangeAuthority = undefined,
+  catalogReviewReceiptId = undefined,
   expectedActiveVersionId = undefined
 }) {
   const id = String(quoteId || "").trim();
@@ -3270,6 +3271,9 @@ export async function updateQuote({
       ...(expectedRevisionId ? { expectedActiveVersionId: expectedRevisionId } : {}),
       ...(exactCommercialChangeAuthority
         ? { commercialChangeAuthority: exactCommercialChangeAuthority }
+        : {}),
+      ...(String(catalogReviewReceiptId || "").trim()
+        ? { catalogReviewReceiptId: String(catalogReviewReceiptId).trim() }
         : {})
     });
     const updated = response?.data && typeof response.data === "object"

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 59,
+  "catalogVersion": 60,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -6253,6 +6253,130 @@
         }
       ],
       "safeOutcome": "Operators can tell whether the business can quote, whether a draft is publishable, and which optional evidence is missing without collapsing those states. A same-tenant administrator can edit quickly without activating pricing, see whether changes are device-only or server-saved, and publish at most 400 baseline-fenced changes in one all-or-nothing revision with one attributed confirmation and immutable private receipt; sales staff remain read-only and customer surfaces receive no costs, margins, or private receipts."
+    },
+    {
+      "id": "quote-catalog-revision-review",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "organization_admins",
+        "organization_sales_staff"
+      ],
+      "summary": "Saved quotes retain exact catalog authority and commercial selections, receive a five-state server comparison against the current catalog, and require a private version-and-revision-fenced keep or governed-update outcome instead of silent repricing.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/pricingEngine.js",
+        "functions/quoteCatalogRevisionReview.js",
+        "functions/quoteCreation.js",
+        "src/lib/quoteCatalogRevisionReview.js",
+        "src/lib/quoteDraftRuntimeBase.js",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getQuoteCatalogRevisionReview",
+        "functions/index.js#recordQuoteCatalogReviewOutcome"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#createQuoteDraft",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#getQuoteCatalogRevisionReview",
+        "functions/index.js#recordQuoteCatalogReviewOutcome"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/QuoteCatalogRevisionReviewPanel.jsx",
+        "src/styles.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteCatalogRevisionReviewPanel.jsx",
+          "locator": "data-capability-id=\"quote-catalog-revision-review\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+        "src/lib/__tests__/quoteCatalogRevisionReview.server.test.js",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/quoteDraftRuntime.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/quoteCatalogRevisionReview.server.test.js",
+          "locator": "requires review for saved 24/32 staffing rates after the catalog moves to 48/62"
+        },
+        {
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "shows saved and current values with exact non-house provenance"
+        },
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "builds one canonical draft, public snapshot, and v0001 from server proof"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Revision-safe quote review"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catalog revision review on saved quotes"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The saved-quote editor now leads with authoritative revision status and explicit quoted/current differences. Loaded missing or inactive selections remain visible. Keep records a private freeze receipt; Review and update stages current rates and reuses governed Change Impact. Terminal quotes expose only duplicate/reopen guidance.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects ready for a current quote",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "shows saved and current values with exact non-house provenance",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects uncertain when current catalog authority is unavailable",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects error for a definitive review failure",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects recovery before a review can be loaded",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects submitting while the review outcome is being recorded",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx",
+          "locator": "projects receipt after an immutable outcome is recorded",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "safeOutcome": "Same-tenant staff can tell whether a saved quote is current, unaffected by a newer revision, materially stale, legacy-unknown, or unavailable. No saved selection is silently removed or repriced; keep and update decisions are tied to the exact active version and current catalog, terminal quotes remain immutable, and customer-safe projections receive neither internal authority nor private receipts."
     }
   ]
 }

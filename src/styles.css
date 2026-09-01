@@ -14327,3 +14327,72 @@ hr {
     gap: 0.2rem;
   }
 }
+.quote-catalog-revision-review {
+  grid-column: 1 / -1;
+  border: 1px solid color-mix(in srgb, var(--tone-gold-2, #9d762f) 38%, var(--border));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--tone-gold-2, #9d762f));
+  padding: clamp(1rem, 2vw, 1.4rem);
+  display: grid;
+  gap: 1rem;
+}
+
+.quote-catalog-revision-review__head,
+.quote-catalog-revision-review__actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.quote-catalog-revision-review__head h3 {
+  margin: 0.15rem 0 0.35rem;
+}
+
+.quote-catalog-revision-review__diffs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.65rem;
+}
+
+.quote-catalog-revision-review__diffs li,
+.quote-catalog-revision-review__rates > div {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.quote-catalog-revision-review__diffs small {
+  overflow-wrap: anywhere;
+}
+
+.quote-catalog-revision-review__rates {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.quote-catalog-revision-review__rates dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.quote-catalog-revision-review__rates dd {
+  margin: 0;
+  font-weight: 650;
+}
+
+@media (max-width: 640px) {
+  .quote-catalog-revision-review__rates {
+    grid-template-columns: 1fr;
+  }
+}

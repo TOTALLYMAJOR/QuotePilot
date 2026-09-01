@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-31 20:56:39 CDT
+Last updated: 2026-08-31 21:07:42 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -50,6 +50,29 @@ provider receipts.
 - **Evidence boundary:** focused unit/component/server tests and a local build
   qualify source behavior only; responsive human review and hosted readback are
   still separate acceptance gates.
+
+## Revision-safe quote review (August 31, 2026)
+
+- **Persisted authority:** trusted quote creation and edits copy the pricing
+  engine's exact `pricingCatalogAuthority` to the canonical quote and immutable
+  version. The customer portal projection explicitly omits it.
+- **Five review states:** `functions/quoteCatalogRevisionReview.js` returns
+  `current`, `newer_catalog_no_selected_impact`, `review_required`,
+  `legacy_unknown`, or `unavailable` from same-tenant server evidence. It
+  compares selected item identity/presentation, availability, price basis,
+  price, staffing rate/policy, and rental quantity rules.
+- **No silent reconciliation:** the edit runtime preserves saved missing and
+  inactive selections. `src/components/QuoteCatalogRevisionReviewPanel.jsx`
+  presents quoted/current differences and exact rate provenance before save.
+- **Explicit outcomes:** Keep quoted values records a private immutable receipt
+  tied to the active quote version and current catalog revision and freezes
+  commercial inputs. Review and update records its own fence, stages current
+  catalog rates, then uses the existing authoritative Change Impact simulation,
+  authorization, and version-write path. Terminal quotes remain immutable.
+- **Evidence boundary:** local server/model/component tests cover the old
+  `$24/$32` versus `$48/$62` scenario, legacy authority, unrelated revisions,
+  inactive/missing records, terminal status, and receipt fences. Hosted and
+  authenticated human acceptance remain unclaimed.
 
 The chronology below records first-source and release-containment evidence.
 Its `v0.7.0` row is a historical deployment receipt, not a current-runtime

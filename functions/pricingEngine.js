@@ -1794,8 +1794,10 @@ async function calculateQuotePricingAuthoritative({
     // from the same authoritative read pricing itself used — so the trusted
     // quote-write flows never do a second, possibly-divergent catalog read.
     catalog: {
+      packages: catalogBundle.packages,
       addons: catalogBundle.addons,
-      rentals: catalogBundle.rentals
+      rentals: catalogBundle.rentals,
+      menuItems: catalogBundle.menuItems
     }
   };
 }

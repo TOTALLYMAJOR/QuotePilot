@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 20:56:39 CDT
+Last updated: 2026-08-31 21:07:42 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added revision-aware quote review. New trusted quotes and immutable versions
+  persist the pricing engine's exact catalog authority; legacy quotes remain
+  explicitly `Legacy revision unknown`. Loaded quotes no longer reconcile away
+  missing or inactive selections. The server compares selected names,
+  availability, price basis, prices, staffing rates/policy, and rental quantity
+  rules into five states. Operators can preserve quoted values with a private
+  version-fenced receipt or stage a current-catalog simulation through the
+  existing governed Change Impact path. Terminal quotes direct operators to
+  duplicate/reopen, and rate labels distinguish overrides, current catalog,
+  quoted revision, and unavailable source without claiming stale values are a
+  house rate.
 - Recast the staff Library landing route as the Business Setup Center. It now
   separates six readiness questions and presents the ordered Identity,
   Offerings, Pricing, Costs and margin evidence, Quote starting points,

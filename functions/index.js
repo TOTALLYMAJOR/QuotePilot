@@ -293,6 +293,11 @@ const {
   saveCatalogSetupDraft: saveCatalogSetupDraftInternal
 } = require("./catalogSetupDrafts");
 const {
+  QuoteCatalogRevisionReviewError,
+  buildQuoteCatalogRevisionReview,
+  buildQuoteCatalogReviewReceipt
+} = require("./quoteCatalogRevisionReview");
+const {
   CatalogImportError,
   createCatalogImportBatch: createCatalogImportBatchInternal,
   rollbackCatalogImportBatch: rollbackCatalogImportBatchInternal
@@ -9437,6 +9442,16 @@ function toCatalogSetupDraftHttpsError(error, fallbackMessage) {
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
 
+function toQuoteCatalogReviewHttpsError(error, fallbackMessage) {
+  if (error instanceof QuoteCatalogRevisionReviewError) {
+    return new functions.https.HttpsError(error.code, error.message, error.details);
+  }
+  functions.logger.error(fallbackMessage, {
+    error: normalizeText(error?.message)
+  });
+  return new functions.https.HttpsError("internal", fallbackMessage);
+}
+
 function toCatalogImportHttpsError(error, fallbackMessage) {
   if (error instanceof CatalogImportError) {
     return new functions.https.HttpsError(error.code, error.message, error.details);
@@ -10349,6 +10364,134 @@ exports.publishCatalogSetupDraft = functions.region(REGION).https.onCall(async (
     });
   } catch (error) {
     throw toCatalogSetupDraftHttpsError(error, "Failed to publish the catalog setup draft.");
+  }
+});
+
+function quoteCatalogReviewRefs(organizationId, quoteId) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    organizationRef,
+    quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+    settingsRef: organizationRef.collection("settings").doc("config"),
+    receiptCollection: organizationRef.collection("quoteCatalogReviewReceipts"),
+    collectionRefs: {
+      catalogPackages: organizationRef.collection("catalogPackages"),
+      catalogAddons: organizationRef.collection("catalogAddons"),
+      catalogRentals: organizationRef.collection("catalogRentals"),
+      eventTypes: organizationRef.collection("eventTypes"),
+      menuCategories: organizationRef.collection("menuCategories"),
+      menuItems: organizationRef.collection("menuItems")
+    }
+  };
+}
+
+function quoteCatalogReviewCollections(snapshots, collectionNames) {
+  return Object.fromEntries(collectionNames.map((name, index) => [
+    name,
+    snapshots[index].docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }))
+  ]));
+}
+
+exports.getQuoteCatalogRevisionReview = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (!organizationId || !quoteId || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError("permission-denied", "Quote revision review requires same-organization staff authority.");
+  }
+  try {
+    const refs = quoteCatalogReviewRefs(organizationId, quoteId);
+    const collectionNames = Object.keys(refs.collectionRefs);
+    const [quoteSnap, settingsSnap, ...collectionSnaps] = await Promise.all([
+      refs.quoteRef.get(),
+      refs.settingsRef.get(),
+      ...collectionNames.map((name) => refs.collectionRefs[name].get())
+    ]);
+    if (!quoteSnap.exists) throw new QuoteCatalogRevisionReviewError("not-found", "Quote not found.");
+    if (!settingsSnap.exists) throw new QuoteCatalogRevisionReviewError("failed-precondition", "Current catalog settings are unavailable.");
+    const review = buildQuoteCatalogRevisionReview({
+      organizationId,
+      quoteId,
+      quote: { id: quoteSnap.id, ...(quoteSnap.data() || {}) },
+      settings: settingsSnap.data() || {},
+      collections: quoteCatalogReviewCollections(collectionSnaps, collectionNames),
+      observedAtISO: new Date().toISOString()
+    });
+    return { ok: true, storage: "firebase", review };
+  } catch (error) {
+    throw toQuoteCatalogReviewHttpsError(error, "Failed to review the quote against the current catalog.");
+  }
+});
+
+exports.recordQuoteCatalogReviewOutcome = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (!organizationId || !quoteId || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError("permission-denied", "Quote revision outcome requires same-organization staff authority.");
+  }
+  const refs = quoteCatalogReviewRefs(organizationId, quoteId);
+  const requestId = normalizeText(data?.requestId);
+  const receiptRef = refs.receiptCollection.doc(requestId || "invalid");
+  const collectionNames = Object.keys(refs.collectionRefs);
+  try {
+    const nowISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [receiptSnap, quoteSnap, settingsSnap, ...collectionSnaps] = await Promise.all([
+        tx.get(receiptRef),
+        tx.get(refs.quoteRef),
+        tx.get(refs.settingsRef),
+        ...collectionNames.map((name) => tx.get(refs.collectionRefs[name]))
+      ]);
+      if (receiptSnap.exists) {
+        const existing = receiptSnap.data() || {};
+        return { receipt: existing, idempotentReplay: true };
+      }
+      if (!quoteSnap.exists) throw new QuoteCatalogRevisionReviewError("not-found", "Quote not found.");
+      if (!settingsSnap.exists) throw new QuoteCatalogRevisionReviewError("failed-precondition", "Current catalog settings are unavailable.");
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      const review = buildQuoteCatalogRevisionReview({
+        organizationId,
+        quoteId,
+        quote,
+        settings: settingsSnap.data() || {},
+        collections: quoteCatalogReviewCollections(collectionSnaps, collectionNames),
+        observedAtISO: nowISO
+      });
+      if (
+        normalizeText(data?.expectedQuoteVersionId) !== review.quoteVersionId
+        || Number(data?.expectedCatalogRevision) !== review.currentCatalogRevision
+      ) {
+        throw new QuoteCatalogRevisionReviewError("aborted", "Quote or catalog revision changed while this outcome was being recorded.");
+      }
+      const receipt = buildQuoteCatalogReviewReceipt({
+        review,
+        outcome: data?.outcome,
+        requestId,
+        actor: staff,
+        recordedAtISO: nowISO
+      });
+      tx.create(receiptRef, { ...receipt, createdAt: FieldValue.serverTimestamp() });
+      if (receipt.freezesCommercialInputs) {
+        tx.update(refs.quoteRef, {
+          catalogRevisionReview: {
+            state: "kept_quoted_values",
+            receiptId: receipt.receiptId,
+            quoteVersionId: receipt.quoteVersionId,
+            reviewedCatalogRevision: receipt.reviewedCatalogRevision,
+            commercialInputsFrozen: true,
+            recordedAtISO: receipt.recordedAtISO,
+            recordedByEmail: receipt.recordedBy.email
+          },
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return { receipt, review, idempotentReplay: false };
+    });
+    return { ok: true, storage: "firebase", organizationId, quoteId, ...result };
+  } catch (error) {
+    throw toQuoteCatalogReviewHttpsError(error, "Failed to record the quote catalog review outcome.");
   }
 });
 
@@ -14311,6 +14454,7 @@ async function createTrustedQuoteDraftInternal({
     staff,
     form: sanitized.form,
     pricing: pricingResult.pricing,
+    pricingCatalogAuthority: pricingResult.catalogAuthority,
     catalogSource: pricingResult.catalogSource,
     catalog: pricingResult.catalog,
     settings: {
@@ -14820,6 +14964,7 @@ async function updateTrustedQuoteDraftInternal({
   staff,
   form,
   commercialChangeAuthorityInput = null,
+  catalogReviewReceiptId = "",
   expectedActiveVersionId = ""
 }) {
   const expectedRevisionId = normalizeText(expectedActiveVersionId);
@@ -14911,12 +15056,55 @@ async function updateTrustedQuoteDraftInternal({
     assertQuoteEditNotDispatching({ ...quote, id: quoteId }, nowISO);
     assertNoInProgressPaymentDispatch(quote, "editing the quote");
 
+    const review = buildQuoteCatalogRevisionReview({
+      organizationId,
+      quoteId,
+      quote: { id: quoteId, ...quote },
+      settings: transactionPricingSettingsSnapshot.data() || {},
+      collections: {
+        catalogPackages: (pricingResult.catalog?.packages || []).map((data) => ({ id: data.id, data })),
+        catalogAddons: (pricingResult.catalog?.addons || []).map((data) => ({ id: data.id, data })),
+        catalogRentals: (pricingResult.catalog?.rentals || []).map((data) => ({ id: data.id, data })),
+        menuItems: (pricingResult.catalog?.menuItems || []).map((data) => ({ id: data.id, data }))
+      },
+      observedAtISO: nowISO
+    });
+    const reviewReceiptId = normalizeText(catalogReviewReceiptId);
+    let catalogReviewReceipt = null;
+    if (["review_required", "legacy_unknown"].includes(review.state)) {
+      if (!reviewReceiptId) {
+        throw new QuoteCatalogRevisionReviewError(
+          "failed-precondition",
+          "Resolve the quote catalog revision review before saving commercial changes."
+        );
+      }
+      const reviewReceiptSnap = await tx.get(
+        organizationRef.collection("quoteCatalogReviewReceipts").doc(reviewReceiptId)
+      );
+      catalogReviewReceipt = reviewReceiptSnap.exists ? reviewReceiptSnap.data() || {} : null;
+      if (
+        !catalogReviewReceipt
+        || catalogReviewReceipt.outcome !== "review_and_update"
+        || normalizeOrganizationId(catalogReviewReceipt.organizationId) !== organizationId
+        || normalizeText(catalogReviewReceipt.quoteId) !== quoteId
+        || normalizeText(catalogReviewReceipt.quoteVersionId) !== review.quoteVersionId
+        || Number(catalogReviewReceipt.reviewedCatalogRevision) !== review.currentCatalogRevision
+        || catalogReviewReceipt.requiresGovernedCurrentCatalogSimulation !== true
+      ) {
+        throw new QuoteCatalogRevisionReviewError(
+          "failed-precondition",
+          "The catalog review receipt does not match this quote version and current catalog revision."
+        );
+      }
+    }
+
     const documents = buildTrustedQuoteEditDocuments({
       quoteId,
       quote,
       staff,
       form: sanitized.form,
       pricing: pricingResult.pricing,
+      pricingCatalogAuthority: pricingResult.catalogAuthority,
       catalogSource: pricingResult.catalogSource,
       catalog: pricingResult.catalog,
       settings: {
@@ -14925,6 +15113,18 @@ async function updateTrustedQuoteDraftInternal({
       },
       nowISO
     });
+    if (catalogReviewReceipt) {
+      documents.quotePatch.catalogRevisionReview = {
+        state: "updated_to_current_catalog",
+        receiptId: reviewReceiptId,
+        sourceQuoteVersionId: review.quoteVersionId,
+        reviewedCatalogRevision: review.currentCatalogRevision,
+        commercialInputsFrozen: false,
+        recordedAtISO: nowISO,
+        recordedByEmail: normalizeEmail(staff.email)
+      };
+      documents.version.snapshot.catalogRevisionReview = documents.quotePatch.catalogRevisionReview;
+    }
     const enforcement = commercialChangeEnforcementState(
       transactionPricingSettingsSnapshot.data() || {}
     );
@@ -15560,6 +15760,7 @@ function quoteCreationFailure(err, {
     || err instanceof QuoteDeliveryError
     || err instanceof CommercialChangeAuthorityError
     || err instanceof CommercialChangeImpactPreviewError
+    || err instanceof QuoteCatalogRevisionReviewError
   ) {
     throw new functions.https.HttpsError(err.code, err.message);
   }
@@ -15826,6 +16027,7 @@ exports.updateQuoteDraft = functions.region(REGION).https.onCall(async (data, co
       staff,
       form: data?.form,
       commercialChangeAuthorityInput: data?.commercialChangeAuthority,
+      catalogReviewReceiptId: data?.catalogReviewReceiptId,
       expectedActiveVersionId: data?.expectedActiveVersionId
     });
   } catch (err) {

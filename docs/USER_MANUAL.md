@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-31 20:56:39 CDT
+Last updated: 2026-08-31 21:07:42 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2318,6 +2318,29 @@ Managed menu costs participate in the same coverage used by staff margin
 evidence. A missing menu cost is named as a gap even when the business remains
 ready to quote. Costs and margin evidence never appear in customer proposal
 preview, export, or portal surfaces.
+
+## Catalog revision review on saved quotes
+
+When a saved quote opens, QuotePilot checks its recorded catalog authority
+against the current confirmed catalog. It does not silently remove an inactive
+choice, replace a missing choice, or change a saved rate. The panel reports one
+of five states: current; newer catalog with no selected impact; review required;
+legacy revision unknown; or unavailable.
+
+When review is required, inspect each quoted/current difference and choose:
+
+- **Keep quoted values** preserves the saved commercial plan for the active
+  quote version. Guests, duration, service style, staffing, and selections are
+  then frozen until you choose current-catalog review.
+- **Review and update** stages current catalog rates and opens the existing
+  authoritative Change Impact flow. Nothing saves until that simulation and
+  any required authorization complete as one new version.
+
+Staffing provenance reads **Quote override**, **Current catalog rate**,
+**Quoted at catalog revision N**, or **Saved rate — source revision
+unavailable**. A legacy quote never receives an invented historical revision.
+Accepted, declined, booked, paid, refunded, cancelled, expired, or void quotes
+remain immutable; duplicate or reopen them to begin a new commercial plan.
 
 ## Connected Quote Workspace compatibility and rollback
 

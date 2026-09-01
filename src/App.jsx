@@ -5,6 +5,7 @@ import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction"
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
+import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
@@ -367,7 +368,19 @@ const EMPTY_EDITING_QUOTE = Object.freeze({
   activeVersionId: "",
   customerId: "",
   organizationId: "",
+  pricingCatalogAuthority: null,
+  catalogRevisionReview: null,
+  selection: {},
   rebooking: null
+});
+
+const EMPTY_CATALOG_REVISION_REVIEW = Object.freeze({
+  loading: false,
+  submitting: false,
+  error: "",
+  review: null,
+  outcome: "",
+  receipt: null
 });
 
 const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
@@ -1354,6 +1367,7 @@ export default function App({
   // change-request version linking").
   const [pendingResolutionLink, setPendingResolutionLink] = useState(null);
   const [changeImpactPreview, setChangeImpactPreview] = useState(EMPTY_CHANGE_IMPACT_PREVIEW);
+  const [catalogRevisionReview, setCatalogRevisionReview] = useState(EMPTY_CATALOG_REVISION_REVIEW);
   const [quoteEditLoadState, setQuoteEditLoadState] = useState({
     quoteId: "",
     loading: false,
@@ -1402,6 +1416,45 @@ export default function App({
     changeImpactPreviewGenerationRef.current += 1;
     setChangeImpactPreview(EMPTY_CHANGE_IMPACT_PREVIEW);
   };
+
+  const loadQuoteCatalogRevisionReview = useCallback(async () => {
+    const organizationId = String(authSession.organizationId || "").trim();
+    const quoteId = String(editingQuote.id || "").trim();
+    if (!organizationId || !quoteId) {
+      setCatalogRevisionReview(EMPTY_CATALOG_REVISION_REVIEW);
+      return;
+    }
+    setCatalogRevisionReview((current) => ({
+      ...current,
+      loading: true,
+      error: ""
+    }));
+    try {
+      const { getQuoteCatalogRevisionReview } = await import("./lib/quoteCatalogRevisionReview");
+      const result = await getQuoteCatalogRevisionReview({ organizationId, quoteId });
+      setCatalogRevisionReview({
+        loading: false,
+        submitting: false,
+        error: "",
+        review: result.review,
+        outcome: "",
+        receipt: null
+      });
+    } catch (error) {
+      setCatalogRevisionReview({
+        loading: false,
+        submitting: false,
+        error: error?.message || "Catalog revision review is unavailable.",
+        review: null,
+        outcome: "",
+        receipt: null
+      });
+    }
+  }, [authSession.organizationId, editingQuote.activeVersionId, editingQuote.id]);
+
+  useEffect(() => {
+    void loadQuoteCatalogRevisionReview();
+  }, [catalog.authoritativeVersion, loadQuoteCatalogRevisionReview]);
 
   useEffect(() => {
     if (
@@ -2133,6 +2186,10 @@ export default function App({
             .filter(Boolean)
         )))
       : null;
+    // Loaded quotes retain their saved commercial plan until the operator
+    // resolves the catalog revision review. Never remove or replace a missing
+    // or inactive saved choice during hydration.
+    if (editingQuote.id) return;
     const result = reconcileCatalogSelections({ form, catalog, menuItemIds });
     if (!result.changed) {
       catalogReconciliationNoticeRef.current = "";
@@ -2160,6 +2217,7 @@ export default function App({
     dynamicMenuLoadedEventTypeId,
     dynamicMenuLoading,
     effectiveMenuSections,
+    editingQuote.id,
     form,
     isUnscopedPlatformOperator,
     pushToast
@@ -2717,11 +2775,11 @@ export default function App({
     }
   });
 
-  const handlePreviewChangeImpact = async ({ recovery = false } = {}) => {
+  const handlePreviewChangeImpact = async ({ recovery = false, candidateForm = form } = {}) => {
     if (!isEditingQuote || !editingQuote.id) return;
     const generation = changeImpactPreviewGenerationRef.current + 1;
     changeImpactPreviewGenerationRef.current = generation;
-    const formKey = JSON.stringify(form);
+    const formKey = JSON.stringify(candidateForm);
     const priorRequestId = recovery ? changeImpactPreview.simulationRequestId : "";
     setChangeImpactPreview((current) => ({
       ...current,
@@ -2751,7 +2809,7 @@ export default function App({
         quoteId: editingQuote.id,
         expectedActiveVersionId: editingQuote.activeVersionId,
         requestId: simulationRequestId,
-        form
+        form: candidateForm
       });
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
@@ -2802,6 +2860,61 @@ export default function App({
         mutationMessage: definitive
           ? "The simulation was definitively rejected. Correct the quote source, then start a new simulation request."
           : "No definitive simulation receipt was returned. The same request identity must be reconciled before another simulation starts."
+      }));
+    }
+  };
+
+  const handleCatalogReviewOutcome = async (outcome) => {
+    const review = catalogRevisionReview.review;
+    if (!review || !editingQuote.id) return;
+    setCatalogRevisionReview((current) => ({ ...current, submitting: true, error: "" }));
+    try {
+      const {
+        createQuoteCatalogReviewRequestId,
+        recordQuoteCatalogReviewOutcome
+      } = await import("./lib/quoteCatalogRevisionReview");
+      const result = await recordQuoteCatalogReviewOutcome({
+        organizationId: authSession.organizationId,
+        quoteId: editingQuote.id,
+        expectedQuoteVersionId: review.quoteVersionId,
+        expectedCatalogRevision: review.currentCatalogRevision,
+        outcome,
+        requestId: createQuoteCatalogReviewRequestId(outcome)
+      });
+      setCatalogRevisionReview((current) => ({
+        ...current,
+        submitting: false,
+        outcome,
+        receipt: result.receipt
+      }));
+      if (outcome === "keep_quoted_values") {
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "Quoted commercial inputs were preserved for this saved version. Change guests, duration, service style, staffing, or selections only through Review and update."
+        }));
+        return;
+      }
+      const savedSelection = editingQuote.selection || {};
+      const currentCatalogForm = {
+        ...form,
+        bartenderRateOverride: savedSelection.bartenderRateOverride ?? "",
+        serverRateOverride: savedSelection.serverRateOverride ?? "",
+        chefRateOverride: savedSelection.chefRateOverride ?? ""
+      };
+      setForm(currentCatalogForm);
+      setQuoteDirty(true);
+      setSubmitState((current) => ({
+        ...current,
+        saving: false,
+        message: "Current-catalog values are staged for authoritative Change Impact review. Nothing has been saved yet."
+      }));
+      await handlePreviewChangeImpact({ candidateForm: currentCatalogForm });
+    } catch (error) {
+      setCatalogRevisionReview((current) => ({
+        ...current,
+        submitting: false,
+        error: error?.message || "The catalog review outcome was not recorded."
       }));
     }
   };
@@ -3230,6 +3343,26 @@ export default function App({
       }
       return;
     }
+    if (!explicitDraft && submissionIsEditing) {
+      const reviewState = catalogRevisionReview.review?.state;
+      const unresolved = ["review_required", "legacy_unknown", "unavailable"].includes(reviewState)
+        && catalogRevisionReview.outcome !== "review_and_update";
+      const keptPlanChanged = catalogRevisionReview.outcome === "keep_quoted_values" && quoteDirty;
+      if (unresolved || keptPlanChanged) {
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: keptPlanChanged
+            ? "The kept commercial plan is frozen. Choose Review and update before changing guests, duration, service style, staffing, or selections."
+            : "Resolve the catalog revision review before saving. No saved values were repriced or removed."
+        }));
+        window.requestAnimationFrame(() => {
+          wizardRef.current?.querySelector('[data-capability-id="quote-catalog-revision-review"]')
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        return null;
+      }
+    }
     if (
       !explicitDraft
       &&
@@ -3447,6 +3580,9 @@ export default function App({
             expectedActiveVersionId: explicitDraft?.expectedActiveVersionId
               || submissionEditingQuote.activeVersionId
               || undefined,
+            catalogReviewReceiptId: catalogRevisionReview.outcome === "review_and_update"
+              ? catalogRevisionReview.receipt?.receiptId
+              : undefined,
             ...(commercialChangeAuthority ? { commercialChangeAuthority } : {})
           })
           : submitQuote({
@@ -5831,6 +5967,19 @@ export default function App({
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
+        {isEditingQuote && (
+          <QuoteCatalogRevisionReviewPanel
+            review={catalogRevisionReview.review}
+            loading={catalogRevisionReview.loading}
+            error={catalogRevisionReview.error}
+            submitting={catalogRevisionReview.submitting}
+            resolvedOutcome={catalogRevisionReview.outcome}
+            receipt={catalogRevisionReview.receipt}
+            onRetry={loadQuoteCatalogRevisionReview}
+            onKeepQuotedValues={() => handleCatalogReviewOutcome("keep_quoted_values")}
+            onReviewAndUpdate={() => handleCatalogReviewOutcome("review_and_update")}
+          />
+        )}
         {PILOT_COMMAND_ENABLED
           && PilotCommandBar
           && pilotCommandSurfaceOpen
