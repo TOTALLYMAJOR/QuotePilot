@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 21:15:42 CDT
+Last updated: 2026-08-31 21:31:11 CDT
 
 All notable project changes are documented in this file.
 
@@ -18,6 +18,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   require a fresh authoritative simulation before the governed version action;
   Keep quoted plan discards only the unsaved proposal. Quote, catalog, or
   simulation fence changes invalidate the review without mutating the quote.
+  The Catalog Admin browser characterization now verifies the matching setup
+  contract: a new item appears immediately in the Menu Builder, coalesces into
+  one server-draft save, reports that active pricing is unchanged, and remains
+  absent from the current quote until publication.
 - Added revision-aware quote review. New trusted quotes and immutable versions
   persist the pricing engine's exact catalog authority; legacy quotes remain
   explicitly `Legacy revision unknown`. Loaded quotes no longer reconcile away

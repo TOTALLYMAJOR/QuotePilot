@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-08-31 21:15:42 CDT
+Last updated: 2026-08-31 21:31:11 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -48,8 +48,9 @@ provider receipts.
   context, and the staff-only margin model. Customer proposal, export, and
   portal projections remain cost-free.
 - **Evidence boundary:** focused unit/component/server tests and a local build
-  qualify source behavior only; responsive human review and hosted readback are
-  still separate acceptance gates.
+  qualify source behavior. Local Playwright proves keyboard focus, axe, and
+  overflow containment at 390, 768, and 1440 pixels plus staged-menu isolation;
+  responsive human review and hosted readback are still separate gates.
 
 ## Revision-safe quote review (August 31, 2026)
 

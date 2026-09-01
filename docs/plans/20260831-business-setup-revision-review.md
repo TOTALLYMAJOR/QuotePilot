@@ -1,8 +1,9 @@
 # Business Setup and Revision-Safe Quoting Overhaul
 
-Last updated: 2026-08-31 21:15:42 CDT
+Last updated: 2026-08-31 21:34:17 CDT
 
 - Program recorded at (UTC): `2026-09-01T01:14:17Z`
+- Completion planner recorded at (UTC): `2026-09-01T02:33:59.842Z`
 - Source candidate: `2d999c422da6aacaad0800eeb498d86a70b74427`
 - Implementation branch: `codex/business-setup-revision-review-20260831`
 - Isolated worktree: `/tmp/quoteflow-business-setup-2d999c4`
@@ -90,7 +91,7 @@ The existing governed commercial-change path is extended into one review grouped
 - [x] Slice 3 — Add the Business Setup Center, Menu Builder, canonical costs, and readiness truth.
 - [x] Slice 4 — Add revision-aware quotes and explicit review outcomes.
 - [x] Slice 5 — Unify commercial consequence review.
-- [ ] Final — Run local gates, close canonical documentation, and record residual evidence gaps.
+- [x] Final — Run local gates, close canonical documentation, and record residual evidence gaps.
 
 Planned checkpoint commits:
 
@@ -119,8 +120,8 @@ Planned checkpoint commits:
 | Provenance labels | Quote override, current catalog rate, quoted revision, and unavailable source labels are accurate | Locally proven | Pure provenance helper plus old-rate/legacy/current/override presentation tests |
 | Consequence review | One governed review with six groups, source labels, apply all/selected/keep, exact simulation, versioning, and invalidation | Locally proven | Unified model/component tests verify exact groups, source labels, non-mutating form construction, three outcomes, and fail-closed quote/catalog/simulation fences; existing governed authority remains the only version-write path |
 | Customer-data boundary | Costs, margins, authorities, and private receipts absent from proposals, exports, portals, and customer projections | Locally proven | Existing customer-safe projection tests plus setup/revision/consequence models keep costs, margins, internal authorities, and receipts on staff/server-only paths; final full suite remains pending |
-| Interaction acceptance | Responsive phone/tablet/desktop behavior; keyboard, focus, overflow, and accessibility checks | Pending | Slices 3–5 |
-| Final local gates | Firestore rules, capability surfaces, unit suite, environment, build, documentation governance, focused browser tests, completion planner | Pending | Final |
+| Interaction acceptance | Responsive phone/tablet/desktop behavior; keyboard, focus, overflow, and accessibility checks | Locally proven | Enabled Ambient Library Playwright cohort passed axe, focus, control-size, collision, and overflow checks at 390, 768, and 1440 pixels; Catalog Admin browser cohort passed 3/3 including one coalesced draft sync and no active-quote mutation |
+| Final local gates | Firestore rules, capability surfaces, unit suite, environment, build, documentation governance, focused browser tests, completion planner | Locally proven | Rules 77/77; unit 4,245 passed with 79 intentional skips; capability, project-state, environment, production build, documentation governance, and both browser cohorts passed; completion planner recorded `2026-09-01T02:33:59.842Z`. |
 
 ## Interface inventory
 
@@ -146,11 +147,12 @@ Shared readiness and revision-review models carry reason codes, evidence timesta
 | Recorded at (UTC) | Checkpoint | Source/commit | Validation and observation | Residual risk |
 | --- | --- | --- | --- | --- |
 | 2026-09-01T01:14:17Z | Session opened | `2d999c422da6aacaad0800eeb498d86a70b74427` | Original checkout identity and dirty state observed; clean sibling worktree created on dedicated branch; bounded read/write/validation scope locked; initial worktree status clean; task planner recorded `2026-09-01T01:12:29.843Z` | Implementation and all acceptance evidence pending |
-| 2026-09-01T01:21:19Z | Slice 1 money persistence | checkpoint commit created at slice close | Added a failing `$24/$32 → $48/$62` normalize-before-save characterization, then separated storage minor fields from the editor model; changed settings now write validated minor units and delete legacy majors; confirmation removes mixed-record conflicts; named rates reach client/server pricing. Focused result: 5 files, 90 tests passed. | Firebase emulator and hosted hard-refresh proof remain final local/hosted gates; the next publisher must reuse the same contract |
-| 2026-09-01T01:39:36Z | Slice 2 catalog draft publisher | checkpoint commit created at slice close | Added six-layer draft authority: private rules, same-org admin callables, bounded normalized change records, generation/revision/baseline fences, 800 ms device buffer sync, and a sticky review/publish state bar. Publication is atomic, advances once, confirms once, receipts once, and closes the draft. Focused result: 5 files, 32 tests passed; capability-surface gate passed. | Setup presets, Import Studio, and direct managed-menu actions are routed through the shared draft in Slice 3; emulator rules and full suite remain final gates |
-| 2026-09-01T01:56:39Z | Slice 3 setup center and menu builder | checkpoint commit created at slice close | Library now starts with six independent readiness signals and the ordered eight-row Setup Center; sales receive read-only evidence. Menu Builder, setup presets, and catalog imports stage through the shared draft. Managed menu `costMinor` reaches import, normalization, publication, coverage, pricing context, and staff margin. Focused UI/model/server suites and the production build passed. | Browser viewport/accessibility acceptance remains a final gate; revision-aware quote behavior begins in Slice 4 |
-| 2026-09-01T02:07:42Z | Slice 4 revision-aware quotes | checkpoint commit created at slice close | Trusted quotes and versions persist exact pricing authority; the five-state server review compares selected commercial inputs and staffing/rental policy without silently reconciling loaded choices. Keep/update outcomes create private version-and-revision-fenced receipts; update reuses governed Change Impact, while terminal and stale work fail closed. Focused 55-test and broader 81-test runs passed; production build passed. | Hosted callable/readback and human workflow acceptance remain final external gates; Slice 5 unifies consequence presentation and selection actions |
-| 2026-09-01T02:15:42Z | Slice 5 unified consequence review | checkpoint commit pending at slice close | Extended the existing Commercial Change Impact presentation into six source-labeled groups. Apply all/selected rebuild exact proposed forms and rerun the existing authoritative simulation; Keep quoted plan restores the loaded base form without writing. Quote, catalog, and simulation fences invalidate stale work. Focused result: 5 files, 44 tests passed; production build passed. | Full repository gates, viewport/accessibility browser acceptance, and external hosted/human evidence remain pending |
+| 2026-09-01T01:21:19Z | Slice 1 money persistence | `faefe9d` | Added a failing `$24/$32 → $48/$62` normalize-before-save characterization, then separated storage minor fields from the editor model; changed settings now write validated minor units and delete legacy majors; confirmation removes mixed-record conflicts; named rates reach client/server pricing. Focused result: 5 files, 90 tests passed. | Firebase emulator and hosted hard-refresh proof remain final local/hosted gates; the next publisher must reuse the same contract |
+| 2026-09-01T01:39:36Z | Slice 2 catalog draft publisher | `1d63eee` | Added six-layer draft authority: private rules, same-org admin callables, bounded normalized change records, generation/revision/baseline fences, 800 ms device buffer sync, and a sticky review/publish state bar. Publication is atomic, advances once, confirms once, receipts once, and closes the draft. Focused result: 5 files, 32 tests passed; capability-surface gate passed. | Setup presets, Import Studio, and direct managed-menu actions are routed through the shared draft in Slice 3; emulator rules and full suite remain final gates |
+| 2026-09-01T01:56:39Z | Slice 3 setup center and menu builder | `394bba6` | Library now starts with six independent readiness signals and the ordered eight-row Setup Center; sales receive read-only evidence. Menu Builder, setup presets, and catalog imports stage through the shared draft. Managed menu `costMinor` reaches import, normalization, publication, coverage, pricing context, and staff margin. Focused UI/model/server suites and the production build passed. | Browser viewport/accessibility acceptance remains a final gate; revision-aware quote behavior begins in Slice 4 |
+| 2026-09-01T02:07:42Z | Slice 4 revision-aware quotes | `eb217f2` | Trusted quotes and versions persist exact pricing authority; the five-state server review compares selected commercial inputs and staffing/rental policy without silently reconciling loaded choices. Keep/update outcomes create private version-and-revision-fenced receipts; update reuses governed Change Impact, while terminal and stale work fail closed. Focused 55-test and broader 81-test runs passed; production build passed. | Hosted callable/readback and human workflow acceptance remain final external gates; Slice 5 unifies consequence presentation and selection actions |
+| 2026-09-01T02:15:42Z | Slice 5 unified consequence review | `efa8271` | Extended the existing Commercial Change Impact presentation into six source-labeled groups. Apply all/selected rebuild exact proposed forms and rerun the existing authoritative simulation; Keep quoted plan restores the loaded base form without writing. Quote, catalog, and simulation fences invalidate stale work. Focused result: 5 files, 44 tests passed; production build passed. | External hosted/human evidence remains pending |
+| 2026-09-01T02:33:59.842Z | Full local qualification and closeout | closing documentation checkpoint | Firestore rules passed 77/77; unit suite passed 4,245 with 79 intentionally skipped; capability, docs-governance, environment, build, and project-state gates passed; the exact existing ignored Firebase environment supplied the isolated check without copying or printing values; responsive/accessibility Library passed 3/3 at 390/768/1440; Catalog Admin passed 3/3. The callable parser inventory was deliberately advanced from 95 to 101 for the six new exports. Completion planner classified the finished scope high-risk/auth-rules at this exact time. | Hosted/provider and authenticated human acceptance remain unproven. A later user request authorized deployment, but the governed candidate path still requires a clean published `release/vX.Y.Z` head and exact successful CI before any provider mutation. |
 
 ## Per-slice execution record
 
@@ -158,4 +160,78 @@ Each slice begins at a clean checkpoint, refreshes the bounded inventory once fo
 
 ## Final evidence boundary
 
-Local source and test evidence can qualify this implementation candidate only. Hosted behavior, provider state, production readiness, and authenticated human acceptance remain separate future gates even if every local check passes.
+Local source and test evidence qualifies this implementation candidate only.
+Hosted behavior, provider state, production readiness, and authenticated human
+acceptance remain separate future gates. The user later requested deployment,
+but repository policy rejects this local topic branch before provider mutation:
+the approved deployer requires a clean, remotely published `release/vX.Y.Z`
+head, its exact successful CI run, the fixed staging profile, and a typed
+SHA-bound confirmation. No ad hoc Vercel CLI deployment, push, merge, provider
+mutation, or production claim was made.
+
+## Changed path inventory
+
+The bounded program owns and changed these exact repository paths:
+
+```text
+CHANGELOG.md
+docs/FEATURE_MATRIX.md
+docs/USER_MANUAL.md
+docs/capability-surfacing-contracts.json
+docs/plans/20260831-business-setup-revision-review.md
+e2e/quote-wizard.smoke.spec.js
+firestore.rules
+functions/catalogImportBatches.js
+functions/catalogSetupDrafts.js
+functions/index.js
+functions/pricingEngine.js
+functions/quoteCatalogRevisionReview.js
+functions/quoteCreation.js
+functions/starterCatalogPacks.js
+src/App.jsx
+src/components/AdminCatalogModal.jsx
+src/components/AmbientLibraryRoute.jsx
+src/components/BusinessSetupCenter.jsx
+src/components/CatalogDraftStateBar.jsx
+src/components/CommercialChangeImpactPanel.jsx
+src/components/ImportStudioModal.jsx
+src/components/QuoteCatalogRevisionReviewPanel.jsx
+src/components/UnifiedCommercialConsequenceReview.jsx
+src/components/WorkspaceShell.jsx
+src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx
+src/components/__tests__/adminCatalogStarterChoice.test.jsx
+src/components/__tests__/businessSetupCenter.test.jsx
+src/components/__tests__/catalogDraftStateBar.test.jsx
+src/components/__tests__/quoteCatalogRevisionReviewPanel.test.jsx
+src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx
+src/components/__tests__/workspaceShell.test.jsx
+src/components/ambientLibraryRoute.css
+src/components/marginPresentation.js
+src/data/mockCatalog.js
+src/hooks/__tests__/useCatalogData.savePlan.test.js
+src/hooks/__tests__/useCatalogSetupDraft.test.jsx
+src/hooks/useCatalogData.js
+src/hooks/useCatalogSetupDraft.js
+src/lib/__tests__/ambientLibrary.test.js
+src/lib/__tests__/businessReadiness.test.js
+src/lib/__tests__/capabilitySurfacingGate.test.js
+src/lib/__tests__/catalogSetupDraftService.test.js
+src/lib/__tests__/catalogSetupDrafts.server.test.js
+src/lib/__tests__/pricingEngine.authoritative.test.js
+src/lib/__tests__/quoteCatalogRevisionReview.server.test.js
+src/lib/__tests__/quoteCreation.server.test.js
+src/lib/__tests__/starterCatalogPacks.server.test.js
+src/lib/__tests__/unifiedCommercialConsequenceReview.test.js
+src/lib/ambientLibrary.js
+src/lib/businessReadiness.js
+src/lib/catalogSetupDraftService.js
+src/lib/importStudio.js
+src/lib/menuService.js
+src/lib/quoteCalculator.js
+src/lib/quoteCatalogRevisionReview.js
+src/lib/quoteDraftRuntimeBase.js
+src/lib/quoteStore.js
+src/lib/unifiedCommercialConsequenceReview.js
+src/rules/__tests__/firestore.rules.test.js
+src/styles.css
+```
