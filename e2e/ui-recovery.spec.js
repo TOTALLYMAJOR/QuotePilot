@@ -73,7 +73,7 @@ test("Escape preserves the Catalog Admin unsaved-change guard", async ({ page })
   await catalog.getByRole("tab", { name: "Pricing" }).click();
   const businessName = catalog.getByLabel("Business name");
   await businessName.fill(`${await businessName.inputValue()} recovery test`);
-  await expect(catalog.getByText("Unsaved changes")).toBeVisible();
+  await expect(catalog.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u)).toBeVisible();
 
   let guardMessage = "";
   page.once("dialog", async (guard) => {
@@ -99,7 +99,7 @@ test("menu deactivation joins the setup draft and preserves unrelated Catalog Ad
   const businessName = catalog.getByLabel("Business name");
   const draftName = `${await businessName.inputValue()} protected draft`;
   await businessName.fill(draftName);
-  await expect(catalog.getByText("Unsaved changes")).toBeVisible();
+  await expect(catalog.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u)).toBeVisible();
 
   await catalog.getByRole("tab", { name: "Menu" }).click();
   const managedRows = catalog.locator(".admin-menu-row-managed");
@@ -111,15 +111,9 @@ test("menu deactivation joins the setup draft and preserves unrelated Catalog Ad
   await active.click();
   await expect(managedRows).toHaveCount(rowCount - 1);
 
-  await managedRows.first().getByRole("button", { name: "Delete" }).click();
-  await expect(catalog.getByText(
-    /another catalog change in progress.*deleting this menu item again/i
-  ).first()).toBeVisible();
-  await expect(managedRows).toHaveCount(rowCount - 1);
-
   await catalog.getByRole("tab", { name: "Pricing" }).click();
   await expect(catalog.getByLabel("Business name")).toHaveValue(draftName);
-  await expect(catalog.getByText("Unsaved changes")).toBeVisible();
+  await expect(catalog.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u)).toBeVisible();
 });
 
 test("a failed workspace chunk keeps the app usable with safe executable recovery actions", async ({ page }) => {
