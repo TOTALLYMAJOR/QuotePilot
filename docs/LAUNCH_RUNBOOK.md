@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-01 16:26:38 CDT
+Last updated: 2026-09-01 18:27:16 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -77,7 +77,9 @@ For a backend/all release, the production deployer derives the exact Functions
 export inventory from tracked source and deploys it in batches of at most 35.
 It waits 65 seconds between batches so the production project's 50-write/minute
 Cloud Functions Admin API quota cannot turn a valid release into a partial
-operation. Do not replace this with one `functions:default` mutation. Firebase
+operation. This is preventative quota headroom, not evidence that a failed
+deployment was quota-rejected. Do not replace this with one
+`functions:default` mutation. Firebase
 CLI may print a create/update failure and still exit zero, so the deployer also
 parses the provider result and then requires `functions:list --json` to prove
 the exact active inventory, `us-central1` location, and safe-off runtime profile
@@ -139,6 +141,14 @@ bindings, least-privilege IAM roles, and all three variables above are
 independently reviewed. After one governed deployment and an authorized tenant
 gate rollback/readback succeed, remove the legacy `FIREBASE_TOKEN` secret; its
 presence does not authorize or satisfy either current workflow.
+
+The dedicated Firebase deployer must have
+`roles/iam.serviceAccountUser` on the exact Functions runtime service account
+and project-scoped `roles/cloudscheduler.admin` when the tracked graph contains
+scheduled functions. Cloud Functions administration alone does not grant
+`iam.serviceAccounts.actAs` or `cloudscheduler.jobs.update`. Verify both
+bindings by provider readback; never grant them to the GitHub principal or a
+general human identity as a deployment workaround.
 
 The Firebase deploy workflow prepares the official Linux v15.24.0 standalone
 CLI before authentication and verifies SHA-256

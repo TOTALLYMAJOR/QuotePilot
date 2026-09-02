@@ -6,9 +6,18 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
+function validTimeZone(value) {
+  try {
+    return Boolean(text(value) && new Intl.DateTimeFormat("en-US", { timeZone: value }));
+  } catch {
+    return false;
+  }
+}
+
 export default function QuoteDecisionDebtPanel({
   organizationId = "",
   quoteId = "",
+  timeZone = "",
   available = true,
   onOpenWorkflow,
   onReadStateChange
@@ -30,7 +39,16 @@ export default function QuoteDecisionDebtPanel({
       setRead({
         loading: false,
         result: null,
-        error: "Decisions to review require a connected quote from this workspace.",
+        error: "Connect this quote to review.",
+        stale: false
+      });
+      return;
+    }
+    if (!validTimeZone(timeZone)) {
+      setRead({
+        loading: false,
+        result: null,
+        error: "Set a valid IANA time zone in Library pricing.",
         stale: false
       });
       return;
@@ -54,11 +72,11 @@ export default function QuoteDecisionDebtPanel({
       setRead((current) => ({
         loading: false,
         result: current.result,
-        error: error?.message || "Decisions to review are unavailable for this quote.",
+        error: error?.message || "Review unavailable.",
         stale: Boolean(current.result)
       }));
     }
-  }, [available, organizationId, quoteId]);
+  }, [available, organizationId, quoteId, timeZone]);
 
   useEffect(() => {
     load();
@@ -109,10 +127,10 @@ export default function QuoteDecisionDebtPanel({
               requestId: text(items[0]?.id)
             })}
           >
-            Open in Workflow
+            Open Workflow
           </button>
           <span className="source-note">
-            Workflow opens the exact quote context; this read does not resolve a dependency.
+            Opens this quote without resolving anything.
           </span>
         </div>
       )}

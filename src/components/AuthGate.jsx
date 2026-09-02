@@ -12,10 +12,10 @@ const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, passwo
 export function friendlyError(err) {
   const text = String(err?.message || "");
   if (text.includes("auth/invalid-credential")) return "Invalid email or password.";
-  if (text.includes("auth/popup-closed-by-user")) return "Google sign-in popup was closed.";
-  if (text.includes("auth/email-already-in-use")) return "This email is already registered.";
+  if (text.includes("auth/popup-closed-by-user")) return "Google sign-in was canceled.";
+  if (text.includes("auth/email-already-in-use")) return "Email already registered.";
   if (text.includes("auth/invalid-email")) return "Enter a valid email address.";
-  if (text.includes("auth/too-many-requests")) return "Too many attempts. Wait a few minutes and try again.";
+  if (text.includes("auth/too-many-requests")) return "Too many attempts. Try again later.";
   return "Sign-in failed. Try again or reset your password.";
 }
 
@@ -25,7 +25,7 @@ export default function AuthGate({ sessionError = "" }) {
   const [password, setPassword] = useState("");
   const [pendingAction, setPendingAction] = useState("");
   const [status, setStatus] = useState("");
-  const busy = Boolean(pendingAction);
+  const busy = !!pendingAction;
 
   const changeMode = (nextMode) => {
     if (busy) return;
@@ -34,13 +34,13 @@ export default function AuthGate({ sessionError = "" }) {
   };
 
   const submit = async (event) => {
-    event?.preventDefault();
+    event.preventDefault();
     setPendingAction(mode === "register" ? "register" : "signin");
     setStatus("");
     try {
       if (mode === "register") {
         await registerWithEmail({ email, password });
-        setStatus("Account created. Check your inbox and verify your email before workspace access is activated.");
+        setStatus("Account created. Verify your email.");
       } else {
         await signInWithEmail({ email, password });
       }
@@ -64,6 +64,7 @@ export default function AuthGate({ sessionError = "" }) {
   };
 
   const submitPasswordReset = async () => {
+    if (!email.trim()) return;
     setPendingAction("password-reset");
     setStatus("");
     try {
@@ -81,7 +82,6 @@ export default function AuthGate({ sessionError = "" }) {
       <section className="panel auth-card">
         <ProductBrandLockup className="auth-product-brand" />
         <h1>Staff Sign In</h1>
-        <p className="muted">Use email/password or Google to access the quote workspace.</p>
         {sessionError && <p className="error-note">{sessionError}</p>}
 
         <div className="auth-mode-switch">
@@ -110,6 +110,7 @@ export default function AuthGate({ sessionError = "" }) {
               type="email"
               autoComplete="email"
               autoFocus
+              required
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -125,6 +126,7 @@ export default function AuthGate({ sessionError = "" }) {
             <input
               type="password"
               autoComplete={mode === "register" ? "new-password" : "current-password"}
+              required
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);

@@ -238,6 +238,81 @@ function normalizePricingType(value, fallback = "per_event") {
   return fallback;
 }
 
+function MenuStructureEditor({
+  kind,
+  addLabel,
+  open,
+  selected,
+  currentValue,
+  newValue,
+  disabled,
+  actionLoading,
+  onCurrentChange,
+  onCurrentSave,
+  onNewChange,
+  onNewSave
+}) {
+  return (
+    <details className="admin-menu-disclosure" open={open}>
+      <summary>Manage {kind}s</summary>
+      <div className="admin-menu-disclosure-body">
+        {selected && (
+          <div className="admin-menu-form-block">
+            <label>Current {kind}</label>
+            <div className="admin-menu-action-row">
+              <input type="text" aria-label={`Selected ${kind} name`} value={currentValue} onChange={onCurrentChange} disabled={disabled} />
+              <button type="button" className="ghost compact" onClick={onCurrentSave} disabled={actionLoading}>Save name</button>
+            </div>
+          </div>
+        )}
+        <div className="admin-menu-form-block">
+          <label>New {kind}</label>
+          <div className="admin-menu-action-row">
+            <input type="text" aria-label={`New ${kind} name`} value={newValue} onChange={onNewChange} disabled={disabled} />
+            <button type="button" className="ghost compact" onClick={onNewSave} disabled={actionLoading || disabled}>{addLabel}</button>
+          </div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+const PRICE_BASIS_OPTIONS = [
+  ["per_event", "Per event"],
+  ["per_person", "Per guest"],
+  ["per_item", "Per item"]
+];
+
+function MenuItemFields({ item, isNew = false, onChange, onBlur, onKeyDown }) {
+  const aria = (field) => isNew ? `New menu item ${field}` : undefined;
+  return (
+    <>
+      <label>
+        <span>Name</span>
+        <input type="text" aria-label={aria("name")} value={item.name || ""} onChange={(event) => onChange("name", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} />
+      </label>
+      <label>
+        <span>Price basis</span>
+        <select aria-label={aria("price basis")} value={item.pricingType || item.type || "per_event"} onChange={(event) => onChange("pricingType", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown}>
+          {PRICE_BASIS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Selling price</span>
+        <input type="number" step="0.01" aria-label={aria("price")} value={Number(item.price || 0)} onChange={(event) => onChange("price", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} />
+      </label>
+      <label>
+        <span>Cost</span>
+        <input type="number" step="0.01" min="0" aria-label={aria("cost")} value={item.cost ?? ""} onChange={(event) => onChange("cost", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} />
+      </label>
+      <label className="admin-inline-toggle admin-menu-item-availability">
+        <input type="checkbox" checked={item.active !== false} onChange={(event) => onChange("active", event.target.checked)} onBlur={onBlur} />
+        <span>Available in new quotes</span>
+      </label>
+    </>
+  );
+}
+
 function normalizeStaffingChargeMode(value, fallback = "per_hour") {
   const raw = String(value || fallback).trim().toLowerCase();
   if (raw === "per_event_per_staff") return "per_event_per_staff";
@@ -447,6 +522,7 @@ export function AdminCatalogView({
   const [menuSearch, setMenuSearch] = useState("");
   const [showUnavailableMenuItems, setShowUnavailableMenuItems] = useState(false);
   const [selectedMenuItemIds, setSelectedMenuItemIds] = useState([]);
+  const [activeMenuItemId, setActiveMenuItemId] = useState("");
   const [bulkTargetSection, setBulkTargetSection] = useState("");
   const menuItemSaveInFlightRef = useRef(new Set());
   const resetOnNextOpenRef = useRef(true);
@@ -1549,6 +1625,7 @@ export function AdminCatalogView({
     const created = { id, eventTypeId: selectedEventType, categoryId: selectedCategory, name, price: Number(newItemDraft.price || 0), cost: newItemDraft.cost === "" ? null : Number(newItemDraft.cost), pricingType, type: pricingType, active: newItemDraft.active !== false };
     setMenuItems((current) => [...current, created]);
     setMenuItemBaselines((current) => ({ ...current, [id]: created }));
+    setActiveMenuItemId(id);
     setNewItemDraft({ name: "", price: 0, cost: "", pricingType: "per_event", active: true });
     catalogSetupDraft.queueChanges([{ collection: "menuItems", recordId: id, intent: "create", payload: { name, eventTypeId: selectedEventType, categoryId: selectedCategory, priceMinor: Math.round(created.price * 100), costMinor: created.cost === null ? null : Math.round(created.cost * 100), pricingType, type: pricingType, active: created.active } }]);
     setStatus("Menu item added to the setup draft.");
@@ -1792,16 +1869,6 @@ export function AdminCatalogView({
         : Number(catalogSetupDraft.changedRecordCount || 0) > 0
           ? "Draft saved"
           : "Published catalog active";
-  const menuItemDraftStateLabel = (itemId) => {
-    if (menuItemSavingId === itemId) return "Saving draft…";
-    if (menuItemDirty[itemId]) return "Unsaved";
-    const staged = catalogSetupDraftChanges.some((change) => (
-      change.collection === "menuItems" && change.recordId === itemId
-    ));
-    if (staged && catalogSetupDraft.deviceOnly) return "Device-only";
-    if (staged) return "Draft saved";
-    return "Published";
-  };
   const catalogFooterStatus = catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
     ? catalogSetupDraft.label
     : status || (hasAnyUnsavedChanges
@@ -1816,11 +1883,17 @@ export function AdminCatalogView({
     && (showUnavailableMenuItems || item.active !== false)
     && (!normalizedMenuSearch || `${item.name || ""} ${item.id || ""}`.toLowerCase().includes(normalizedMenuSearch))
   ));
+  const activeMenuItem = selectedCategoryItems.find((item) => item.id === activeMenuItemId)
+    || selectedCategoryItems[0]
+    || null;
+  const saveActiveMenuItem = () => activeMenuItem && handleManagedMenuItemBlur(activeMenuItem.id);
+  const saveActiveMenuItemOnEnter = (event) => activeMenuItem && handleManagedMenuItemKeyDown(event, activeMenuItem.id);
+  const selectedCategoryItemCount = menuItems.filter((item) => item.categoryId === selectedCategory).length;
   const applyBulkMenuChange = ({ active, categoryId } = {}) => {
     const selected = menuItems.filter((item) => selectedMenuItemIds.includes(item.id));
     if (!selected.length) return;
     if (categoryId && !menuCategories.some((section) => section.id === categoryId)) {
-      setStatus("Choose an available menu section before moving items.");
+      setStatus("Choose a menu section first.");
       return;
     }
     selected.forEach((item) => {
@@ -1832,8 +1905,8 @@ export function AdminCatalogView({
     });
     setSelectedMenuItemIds([]);
     setStatus(categoryId
-      ? `${selected.length} item(s) moved in the setup draft; stable item identities were preserved.`
-      : `${selected.length} item availability changes added to the setup draft.`);
+      ? `${selected.length} items moved in the draft.`
+      : `${selected.length} availability changes saved to the draft.`);
   };
   const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
   const featureFlagsPaid = Array.isArray(draft.settings?.featureFlagsPaid)
@@ -2328,259 +2401,178 @@ export function AdminCatalogView({
         )}
 
         {resolvedActiveTab === "menu" && (
-          <section className="admin-section">
-          <div className="admin-section-head"><h3>Menu Builder</h3><span>Event type → Menu section → Item</span></div>
-          <div className="admin-section-body">
-            <div className="admin-menu-management-grid">
-              <label>
-                Event type
-                <select
-                  value={selectedEventType}
-                  onChange={(e) => setManagedEventType(e.target.value)}
+          <section className="admin-section admin-menu-builder">
+            <h3 className="admin-menu-builder-heading">Menu Builder</h3>
+
+            <div className="admin-section-body admin-menu-workbench">
+              <aside className="admin-menu-context-panel" aria-label="Menu context">
+                <label className="admin-menu-field">
+                  <span>Event type</span>
+                  <select
+                    value={selectedEventType}
+                    onChange={(e) => {
+                      setManagedEventType(e.target.value);
+                      setActiveMenuItemId("");
+                    }}
+                    disabled={menuLoading}
+                  >
+                    <option value="">Choose event type</option>
+                    {menuEventTypes.map((eventType) => (
+                      <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <MenuStructureEditor
+                  kind="event type"
+                  addLabel="Add Event Type"
+                  open={menuEventTypes.length === 0}
+                  selected={selectedEventType}
+                  currentValue={eventTypeEditName}
+                  newValue={newEventTypeName}
                   disabled={menuLoading}
-                >
-                  <option value="">Choose event type</option>
-                  {menuEventTypes.map((eventType) => (
-                    <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="admin-inline-actions">
-                <input
-                  type="text"
-                  placeholder="Edit selected event type"
-                  aria-label="Selected event type name"
-                  value={eventTypeEditName}
-                  onChange={(e) => {
-                    setEventTypeEditName(e.target.value);
+                  actionLoading={menuActionLoading}
+                  onCurrentChange={(event) => {
+                    setEventTypeEditName(event.target.value);
                     setEventTypeRenameTouched(true);
                   }}
-                  disabled={!selectedEventType || menuLoading}
+                  onCurrentSave={handleUpdateEventType}
+                  onNewChange={(event) => setNewEventTypeName(event.target.value)}
+                  onNewSave={handleCreateEventType}
                 />
-                <button
-                  type="button"
-                  className="ghost compact"
-                  onClick={handleUpdateEventType}
-                  disabled={menuActionLoading || !selectedEventType}
-                >
-                  {menuActionLoading ? "Saving..." : "Save Event Type"}
-                </button>
-              </div>
-              <div className="admin-inline-actions">
-                <input
-                  type="text"
-                  placeholder="New event type"
-                  aria-label="New event type name"
-                  value={newEventTypeName}
-                  onChange={(e) => setNewEventTypeName(e.target.value)}
-                />
-                <button type="button" className="ghost compact" onClick={handleCreateEventType} disabled={menuActionLoading}>
-                  {menuActionLoading ? "Saving..." : "Add Event Type"}
-                </button>
-              </div>
-            </div>
 
-            <div className="admin-menu-management-grid">
-              <label>
-                Menu section
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  disabled={!selectedEventType || menuLoading}
-                >
-                  <option value="">Choose menu section</option>
-                  {menuCategories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="admin-inline-actions">
-                <input
-                  type="text"
-                  placeholder="Edit selected menu section"
-                  aria-label="Selected menu section name"
-                  value={categoryEditName}
-                  onChange={(e) => {
-                    setCategoryEditName(e.target.value);
+                <label className="admin-menu-field">
+                  <span>Menu section</span>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      setSelectedCategory(e.target.value);
+                      setActiveMenuItemId("");
+                    }}
+                    disabled={!selectedEventType || menuLoading}
+                  >
+                    <option value="">Choose menu section</option>
+                    {menuCategories.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <MenuStructureEditor
+                  kind="menu section"
+                  addLabel="Add Menu Section"
+                  open={menuCategories.length === 0}
+                  selected={selectedCategory}
+                  currentValue={categoryEditName}
+                  newValue={newCategoryName}
+                  disabled={!selectedEventType}
+                  actionLoading={menuActionLoading}
+                  onCurrentChange={(event) => {
+                    setCategoryEditName(event.target.value);
                     setCategoryRenameTouched(true);
                   }}
-                  disabled={!selectedCategory}
+                  onCurrentSave={handleUpdateCategory}
+                  onNewChange={(event) => setNewCategoryName(event.target.value)}
+                  onNewSave={handleCreateCategory}
                 />
-                <button
-                  type="button"
-                  className="ghost compact"
-                  onClick={handleUpdateCategory}
-                  disabled={menuActionLoading || !selectedCategory}
-                >
-                  {menuActionLoading ? "Saving..." : "Save Menu Section"}
-                </button>
-              </div>
-              <div className="admin-inline-actions">
-                <input
-                  type="text"
-                  placeholder="New menu section"
-                  aria-label="New menu section name"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  disabled={!selectedEventType}
-                />
-                <button type="button" className="ghost compact" onClick={handleCreateCategory} disabled={menuActionLoading || !selectedEventType}>
-                  {menuActionLoading ? "Saving..." : "Add Menu Section"}
-                </button>
-              </div>
+              </aside>
+
+              <section className="admin-menu-items-panel" aria-label="Menu items">
+                <div className="admin-menu-panel-heading">
+                  <h4>{selectedCategoryRecord ? `${selectedCategoryItemCount} items` : "Choose a menu section"}</h4>
+                </div>
+
+                <div className="admin-menu-builder-tools">
+                  <label className="admin-menu-search-field">
+                    <span>Find an item</span>
+                    <input
+                      type="search"
+                      placeholder="Search by name"
+                      value={menuSearch}
+                      onChange={(event) => setMenuSearch(event.target.value)}
+                    />
+                  </label>
+                  <label className="admin-inline-toggle admin-menu-availability-filter">
+                    <input type="checkbox" checked={showUnavailableMenuItems} onChange={(event) => setShowUnavailableMenuItems(event.target.checked)} />
+                    <span>Show unavailable</span>
+                  </label>
+                </div>
+
+                {selectedCategory && (
+                  <details className="admin-menu-add-item" open={selectedCategoryItemCount === 0}>
+                    <summary>+ Add an item to {selectedCategoryRecord?.name || "this menu section"}</summary>
+                    <div className="admin-menu-new-item-grid">
+                      <MenuItemFields
+                        item={newItemDraft}
+                        isNew
+                        onChange={(field, value) => setNewItemDraft((current) => ({ ...current, [field]: value }))}
+                      />
+                      <button type="button" className="ghost compact admin-menu-add-item-action" onClick={handleCreateMenuItem} disabled={menuActionLoading}>
+                        {menuActionLoading ? "Adding..." : "Add Item"}
+                      </button>
+                    </div>
+                  </details>
+                )}
+
+                {selectedMenuItemIds.length > 0 && (
+                  <div className="admin-menu-bulk-bar">
+                    <strong>{selectedMenuItemIds.length} selected</strong>
+                    <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: true })}>Make available</button>
+                    <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: false })}>Make unavailable</button>
+                    <select aria-label="Move selected items to menu section" value={bulkTargetSection} onChange={(event) => setBulkTargetSection(event.target.value)}>
+                      <option value="">Move to menu section…</option>
+                      {menuCategories.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
+                    </select>
+                    <button type="button" className="ghost compact" disabled={!bulkTargetSection} onClick={() => applyBulkMenuChange({ categoryId: bulkTargetSection })}>Move selected</button>
+                  </div>
+                )}
+
+                {menuLoading && <p className="source-note">Loading menu data...</p>}
+                {!menuLoading && selectedCategory && selectedCategoryItems.length === 0 && (
+                  <div className="admin-menu-empty-state">
+                    <strong>No items match this view.</strong>
+                  </div>
+                )}
+
+                {!menuLoading && activeMenuItem && (
+                  <div className="admin-menu-item-workspace">
+                    <div className="admin-menu-item-list">
+                      {selectedCategoryItems.map((item) => {
+                        const priceBasis = normalizePricingType(item.pricingType || item.type, "per_event");
+                        const priceBasisLabel = priceBasis === "per_person" ? "Per guest" : priceBasis === "per_item" ? "Per item" : "Per event";
+                        const isActiveItem = item.id === activeMenuItem.id;
+                        return (
+                          <div className={`admin-menu-item-list-row${isActiveItem ? " is-active" : ""}`} key={item.id}>
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${item.name || "menu item"}`}
+                              checked={selectedMenuItemIds.includes(item.id)}
+                              onChange={(event) => setSelectedMenuItemIds((current) => event.target.checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))}
+                            />
+                            <button type="button" className="admin-menu-item-choice" aria-pressed={isActiveItem} onClick={() => setActiveMenuItemId(item.id)}>
+                              <strong>{item.name || "Unnamed item"}</strong>
+                              <span>${Number(item.price || 0).toFixed(2)} · {priceBasisLabel}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <section className="admin-menu-item-editor" aria-label={`Edit ${activeMenuItem.name || "menu item"}`}>
+                      <div className="admin-menu-item-fields">
+                        <MenuItemFields
+                          item={activeMenuItem}
+                          onChange={(field, value) => patchManagedMenuItem(activeMenuItem.id, field, value)}
+                          onBlur={saveActiveMenuItem}
+                          onKeyDown={saveActiveMenuItemOnEnter}
+                        />
+                      </div>
+                    </section>
+                  </div>
+                )}
+              </section>
             </div>
-
-            <div className="admin-inline-actions admin-inline-actions-create-item">
-                <input
-                  type="text"
-                  placeholder="New item name"
-                  aria-label="New menu item name"
-                value={newItemDraft.name}
-                onChange={(e) => setNewItemDraft((prev) => ({ ...prev, name: e.target.value }))}
-                disabled={!selectedCategory}
-              />
-              <input
-                type="number"
-                step="0.01"
-                aria-label="New menu item price"
-                value={Number(newItemDraft.price || 0)}
-                onChange={(e) => setNewItemDraft((prev) => ({ ...prev, price: Number(e.target.value) }))}
-                disabled={!selectedCategory}
-              />
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Cost"
-                aria-label="New menu item cost"
-                value={newItemDraft.cost}
-                onChange={(e) => setNewItemDraft((prev) => ({ ...prev, cost: e.target.value }))}
-                disabled={!selectedCategory}
-              />
-              <select
-                aria-label="New menu item price basis"
-                value={newItemDraft.pricingType}
-                onChange={(e) =>
-                  setNewItemDraft((prev) => ({
-                    ...prev,
-                    pricingType: normalizePricingType(e.target.value, "per_event")
-                  }))
-                }
-                disabled={!selectedCategory}
-              >
-                <option value="per_event">Per event</option>
-                <option value="per_person">Per guest</option>
-                <option value="per_item">Per item</option>
-              </select>
-              <label className="admin-inline-toggle">
-                <span>Active</span>
-                <input
-                  type="checkbox"
-                  checked={newItemDraft.active !== false}
-                  onChange={(e) => setNewItemDraft((prev) => ({ ...prev, active: e.target.checked }))}
-                  disabled={!selectedCategory}
-                />
-              </label>
-              <button type="button" className="ghost compact" onClick={handleCreateMenuItem} disabled={menuActionLoading || !selectedCategory}>
-                {menuActionLoading ? "Saving..." : "Add Item"}
-              </button>
-            </div>
-
-            <div className="admin-menu-builder-tools" aria-label="Menu Builder tools">
-              <input
-                type="search"
-                aria-label="Search menu items"
-                placeholder="Search items"
-                value={menuSearch}
-                onChange={(event) => setMenuSearch(event.target.value)}
-              />
-              <label className="admin-inline-toggle"><span>Show unavailable</span><input type="checkbox" checked={showUnavailableMenuItems} onChange={(event) => setShowUnavailableMenuItems(event.target.checked)} /></label>
-              <button type="button" className="ghost compact" disabled={!selectedMenuItemIds.length} onClick={() => applyBulkMenuChange({ active: true })}>Make available</button>
-              <button type="button" className="ghost compact" disabled={!selectedMenuItemIds.length} onClick={() => applyBulkMenuChange({ active: false })}>Make unavailable</button>
-              <select aria-label="Move selected items to menu section" value={bulkTargetSection} onChange={(event) => setBulkTargetSection(event.target.value)}>
-                <option value="">Move to menu section…</option>
-                {menuCategories.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
-              </select>
-              <button type="button" className="ghost compact" disabled={!selectedMenuItemIds.length || !bulkTargetSection} onClick={() => applyBulkMenuChange({ categoryId: bulkTargetSection })}>Move selected</button>
-            </div>
-
-            {menuLoading && <p className="source-note">Loading menu data...</p>}
-            {!menuLoading && selectedCategory && selectedCategoryItems.length === 0 && (
-              <p className="source-note">No menu items match this section and filter.</p>
-            )}
-
-            {!menuLoading && selectedCategoryItems.map((item) => (
-              <div className="admin-menu-row admin-menu-row-managed" key={item.id}>
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${item.name || "menu item"}`}
-                  checked={selectedMenuItemIds.includes(item.id)}
-                  onChange={(event) => setSelectedMenuItemIds((current) => event.target.checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))}
-                />
-                <input aria-label={`${item.name || "Menu item"} ID`} value={item.id || ""} disabled />
-                <input
-                  type="text"
-                  aria-label={`${item.name || "Menu item"} name`}
-                  value={item.name || ""}
-                  onChange={(e) => patchManagedMenuItem(item.id, "name", e.target.value)}
-                  onBlur={() => handleManagedMenuItemBlur(item.id)}
-                  onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
-                />
-                <select
-                  aria-label={`${item.name || "Menu item"} price basis`}
-                  value={item.pricingType || item.type || "per_event"}
-                  onChange={(e) => patchManagedMenuItem(item.id, "pricingType", e.target.value)}
-                  onBlur={() => handleManagedMenuItemBlur(item.id)}
-                  onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
-                >
-                  <option value="per_event">Per event</option>
-                  <option value="per_person">Per guest</option>
-                  <option value="per_item">Per item</option>
-                </select>
-                <input
-                  type="number"
-                  step="0.01"
-                  aria-label={`${item.name || "Menu item"} price`}
-                  value={Number(item.price || 0)}
-                  onChange={(e) => patchManagedMenuItem(item.id, "price", e.target.value)}
-                  onBlur={() => handleManagedMenuItemBlur(item.id)}
-                  onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Cost"
-                  aria-label={`${item.name || "Menu item"} cost`}
-                  value={item.cost ?? ""}
-                  onChange={(e) => patchManagedMenuItem(item.id, "cost", e.target.value)}
-                  onBlur={() => handleManagedMenuItemBlur(item.id)}
-                  onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
-                />
-                <label className="admin-inline-toggle">
-                  <span>Active</span>
-                  <input
-                    type="checkbox"
-                    checked={item.active !== false}
-                    onChange={(e) => patchManagedMenuItem(item.id, "active", e.target.checked)}
-                    onBlur={() => handleManagedMenuItemBlur(item.id)}
-                  />
-                </label>
-                <span className="admin-row-state">
-                  {menuItemDraftStateLabel(item.id)}
-                </span>
-                <button
-                  type="button"
-                  className="ghost compact"
-                  onClick={() => handleDeleteManagedMenuItem(item.id)}
-                  disabled={menuActionLoading}
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
+          </section>
         )}
 
         {AMBIENT_UI_ENABLED && EventTemplatesEditor && resolvedActiveTab === "templates" && (

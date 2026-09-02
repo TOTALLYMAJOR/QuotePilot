@@ -1,6 +1,6 @@
 # QuotePilot v0.16.0 Promotion Report
 
-Last updated: 2026-09-01 16:26:38 CDT
+Last updated: 2026-09-01 18:27:16 CDT
 
 This is a point-in-time release decision record. Capability truth remains in
 [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md), current operational truth remains in
@@ -9,21 +9,31 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
 
 ## Candidate Summary
 
-- Production promotion reached a partial provider state on 2026-09-01. Exact
+- Production promotion initially reached a partial provider state on
+  2026-09-01. Exact
   v0.16.0 source `54672a9e414ed5a6099a8332da31d7f56bf8b28a`
   is live at the governed Vercel edge and Firebase Hosting; Firestore rules were
-  released. Firebase Functions did not update: the production project's
-  50-write/minute Admin API quota rejected the first of six new callables in a
-  101-function wave, while Firebase CLI returned exit status zero. Direct
-  readback proves 95 prior functions, none of the six Business Setup/revision
-  callables, and the prior runtime profile. This report does not classify that
-  workflow badge as production completion.
+  released. Firebase Functions did not update: Firebase CLI printed a create
+  failure for the first of six new callables while returning exit status zero.
+  Cloud Audit Logs proved missing `iam.serviceAccounts.actAs` on the runtime
+  service account was the cause, not the project's function-write quota. Direct
+  readback at that boundary proved 95 prior functions, none of the six new
+  callables, and the prior runtime profile; the workflow badge was not treated
+  as production completion.
 - The bounded v0.16.1 release-control repair uses no more than 35-function
   batches with a full quota-window pause, rejects textual Firebase provider
   failures, and requires exact function inventory plus safe-off runtime
-  readback. It must still pass exact-SHA CI and governed backend deployment
-  before the production incident closes; no dormant provider capability is
-  being activated.
+  readback. The owner approved `roles/iam.serviceAccountUser` for the deployer
+  on the runtime service account and project-scoped
+  `roles/cloudscheduler.admin` after the first guarded retry exposed the
+  scheduled-job update prerequisite.
+- Tagged-main v0.16.1 SHA
+  `4af43d2f097f8717357af210bb9ba0be9ef7be8f` passed exact-main CI run
+  `33562592220`; governed backend run `33569585746` then succeeded. Independent
+  readback proves 101 active `us-central1` functions, all six Business Setup and
+  revision-review callables, and the safe-off runtime contract on every
+  function. Edge and origin probes returned HTTP 200. This closes the partial
+  Functions deployment incident without activating dormant provider authority.
 - On 2026-09-01 the owner authorized the fail-closed `safe-off` production
   profile. It is now an exact workflow/evidence input for both production
   providers. The profile includes the Business Setup and Ambient presentation
@@ -31,7 +41,9 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
   Autopilot, and server-authoritative staffing off. It does not disable the
   established live quote-payment Stripe rail. Focused release-control coverage
   passes 283 tests; full qualification and every remote/provider gate below
-  still must pass before production can be claimed.
+  passed for this promotion. Authenticated production-data behavior, external
+  provider outcomes, recipient receipt, and human acceptance remain separate
+  evidence classes and are not claimed by the deployment receipt.
 
 - Comparison range: `origin/main..303eec5237d143fc11398e23f24e86fcb28c2655`.
 - Unpublished commits: 74.
@@ -49,9 +61,10 @@ remains in [`../DEV_TASKS.md`](../DEV_TASKS.md).
   commits. PR #111 is being reconciled with those commits and requires a fresh
   exact-head CI result plus a new same-SHA candidate deployment before hosted
   UI judgment.
-- Current production and rollback baseline: exact `v0.15.0`; target-specific
-  provider receipts in `PROJECT_STATUS.md` remain authoritative until a newer
-  promotion passes post-deploy verification.
+- Current application release: v0.16.0 product source with the v0.16.1 governed
+  backend deployment repair described above. The rollback baseline remains
+  exact v0.15.0; target-specific provider receipts in `PROJECT_STATUS.md` are
+  authoritative.
 
 | Cohort | Files | Insertions | Deletions | Net |
 |---|---:|---:|---:|---:|

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-01 16:26:38 CDT
+Last updated: 2026-09-02 14:11:40 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,15 +9,51 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Consolidated Menu Builder save feedback into its sticky catalog draft bar,
+  removing redundant item-local status and help copy and restoring cross-environment
+  release bundle headroom without changing draft or publication authority. UI
+  recovery smoke coverage now follows the workbench's context selectors, add-item
+  disclosure, focused editor, and availability control.
+- Redesigned Menu Builder as a responsive two-part workbench without changing
+  catalog authority. Event type and Menu section now live in a distinct context
+  rail with progressive structural controls; a compact item chooser opens one
+  focused editor instead of rendering every record as a nine-control row; and
+  bulk controls appear only after selection. Desktop and phone presentations
+  use explicit inset, canvas, selected-row, and draft surfaces so hierarchy no
+  longer depends on white-on-white card boundaries.
+- Reorganized the canonical User Manual around a concise everyday operating
+  guide verified against the authenticated production workspace and the exact
+  local release candidate. It now gives role-safe first setup, daily quote,
+  state-label, and Menu Builder workflows before the detailed reference, and
+  removes stale managed-menu instructions that implied field blur published a
+  catalog change. This documentation update does not change product behavior or
+  broaden production/provider acceptance claims.
+- Hardened the live staff entry and exact-quote Decision Debt recovery paths.
+  Browser-native required email/password constraints now keep empty submissions
+  local, show field-specific guidance, and focus the first missing field instead
+  of calling Firebase Auth; password recovery retains its explicit pending state
+  and privacy-safe confirmation.
+  Exact-quote
+  Decision Debt now recognizes a missing or invalid tenant IANA time zone before
+  invoking its callable and presents the existing Library pricing setup action,
+  avoiding a predictable HTTP 400 while leaving server authority unchanged.
 - Hardened the governed Firebase production deploy after the v0.16.0 provider
-  attempt exposed a false-green Firebase CLI boundary. Production currently
-  permits 50 Cloud Functions Admin API writes per minute; the previous
-  all-at-once 101-function operation stopped on the first new callable while
-  returning exit status zero. The deployer now derives the exact tracked
-  Functions inventory, sends at most 35 functions per batch with a full quota
-  window between batches, treats Firebase's textual create/update failure as
-  fatal, and requires an exact active-inventory plus safe-off runtime-config
-  provider readback before the workflow can report success.
+  attempt exposed a false-green Firebase CLI boundary. Cloud Audit Logs proved
+  that the first new callable failed because the deploy identity lacked
+  `iam.serviceAccounts.actAs` on the Functions runtime service account, not
+  because the 50-write/minute quota rejected the operation. The owner approved
+  that exact runtime-account binding and the Cloud Scheduler administration
+  role required to update existing scheduled functions. Quota-aware 35-function
+  batches remain a preventative control; textual Firebase failures are fatal,
+  and an exact active-inventory plus safe-off runtime-config readback is required
+  before success.
+- Completed the governed v0.16.1 Firebase backend repair in workflow run
+  `33569585746` from tagged-main SHA
+  `4af43d2f097f8717357af210bb9ba0be9ef7be8f`. Independent provider readback
+  proves exactly 101 active `us-central1` functions, all six Business Setup and
+  revision-review callables, and the safe-off runtime contract on every
+  function. Public Vercel edge and Firebase Hosting origin probes returned HTTP
+  200; authenticated production-data and human acceptance remain separate.
 - Added the owner-authorized `safe-off` production release profile for the
   v0.16.0 promotion. Both manual provider workflows and their live evidence
   verifier now require that exact profile in the dispatch title and arguments.

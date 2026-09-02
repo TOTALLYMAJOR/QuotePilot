@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-01 16:26:38 CDT
+Last updated: 2026-09-01 18:27:16 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -52,6 +52,11 @@ explicit owner promotion after real-run review.
   exits zero. A backend/all workflow succeeds only after `functions:list`
   proves the exact inventory active in `us-central1` with every function bound
   to the expected safe-off runtime values and no disabled-provider residue.
+  The dedicated deployer also requires `roles/iam.serviceAccountUser` on the
+  exact Functions runtime service account and project-scoped
+  `roles/cloudscheduler.admin` for scheduled-function lifecycle. Cloud
+  Functions Admin does not include either authority; their provider readback is
+  a release prerequisite, not an emergency bypass.
 - Protect `main` and configure exactly one release approval mode. Team-owned
   repositories use `production` with a directly assigned independent reviewer
   and self-review prevention. Solo-owned repositories use the reviewless

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-01 16:26:38 CDT
+Last updated: 2026-09-01 18:27:16 CDT
 
 ## Current Production Release
 
@@ -10,20 +10,24 @@ Last updated: 2026-09-01 16:26:38 CDT
   deployed that exact source and bound `quotepilot.mbmapps.com` to deployment
   `dpl_JBgY1ozpsUakiWcfzQaXSF9Ape6m` under the authorized `safe-off` profile.
 - Governed Firebase run `33559487588` released the v0.16.0 Hosting artifact and
-  Firestore rules, but did **not** complete Functions. The provider allows 50
-  Cloud Functions Admin API writes per minute; the 101-function operation
-  stopped on `getCatalogSetupDraft`, while Firebase CLI returned exit status
-  zero and the workflow therefore appeared green. Direct readback shows only
-  95 active functions, omits all six Business Setup/revision-review callables,
-  and retains the prior runtime profile on existing functions.
-- Production is consequently partial, not accepted as complete: the public
-  Vercel edge, Firebase origin, and Firestore rules are v0.16.0, while Firebase
-  Functions remain on the preceding revision. The bounded `release/v0.16.1`
-  repair batches no more than 35 writes per quota window, fails on Firebase's
-  textual provider error even when exit status is zero, and requires exact
-  callable inventory plus safe-off runtime readback before success. It must
-  pass local gates, exact-SHA CI, merge/tag, governed backend deployment, and
-  direct post-deploy verification before this incident can close.
+  Firestore rules, but did **not** complete Functions. Firebase CLI printed the
+  `getCatalogSetupDraft` create failure while returning exit status zero. Cloud
+  Audit Logs later proved the cause was missing `iam.serviceAccounts.actAs` on
+  runtime service account
+  `692312452587-compute@developer.gserviceaccount.com`, not the project's
+  50-write/minute function-write quota. A guarded retry then exposed the second
+  least-privilege prerequisite, `cloudscheduler.jobs.update`, on an existing
+  scheduled function.
+- The owner approved both exact repairs for the dedicated deploy identity:
+  `roles/iam.serviceAccountUser` on the runtime service account and
+  project-scoped `roles/cloudscheduler.admin`. Tagged-main v0.16.1 SHA
+  `4af43d2f097f8717357af210bb9ba0be9ef7be8f` passed exact-main CI run
+  `33562592220`; governed backend run `33569585746` then completed under the
+  safe-off profile. Independent provider readback proves exactly 101 active
+  `us-central1` functions, all six Business Setup/revision-review callables,
+  expected safe-off values on every function, and no disabled-provider residue.
+  The public edge and Firebase origin return HTTP 200 for `/`, `/app`, and
+  `/system`. The partial Functions incident is closed.
 - These deployment receipts prove exact source, CI, and provider workflow
   success only. Tenant activation has its own receipt below; neither class of
   receipt proves authenticated staff/portal acceptance,
@@ -41,8 +45,8 @@ Last updated: 2026-09-01 16:26:38 CDT
   coverage passes 283 tests. Full local qualification, exact-SHA remote CI,
   same-SHA candidate proof, merge/tag, provider deployment, and post-deploy
   verification were completed for the source candidate. The Firebase
-  Functions completion defect is now tracked in the Current Production Release
-  section and must close through the v0.16.1 governed repair.
+  Functions completion defect is now closed by the v0.16.1 governed repair and
+  provider readback recorded in the Current Production Release section.
 
 - Release head `fc1352bf6356b30dc4aaf8f4708ce3f0135d01ef` passed all nine
   jobs in exact-head CI run `33467223260`, but the required local click-through
@@ -54,8 +58,9 @@ Last updated: 2026-09-01 16:26:38 CDT
   including price-and-section rehydration and sales read-only access. The full
   local release, Firebase auth/rules, authoritative-pricing, environment,
   build, bundle, Truth Loop, governance, and 4,254-test unit gates now pass.
-  Local repair checkpoint `f5d0c24` records that evidence. A new exact-head CI
-  run remains pending; current production remains `v0.15.0`.
+  Local repair checkpoint `f5d0c24` records that evidence. At that checkpoint,
+  a new exact-head CI run remained pending and production was still v0.15.0;
+  the later v0.16 receipts at the top of this document supersede that state.
 
 - The approved whole-application Calm Four source change is integrated onto the
   `integration/v016-calm-four` source line and has completed its Phase 1 local
@@ -257,7 +262,8 @@ Last updated: 2026-09-01 16:26:38 CDT
 - The tracked `staging-safe-off` UAT plan still has 17 applicable and 21
   blocked items for Firebase-all, and 11 applicable and 7 blocked items for
   Vercel preview. Applicable hosted results and named human review remain
-  separate evidence classes; current production remains exact `v0.15.0`.
+  separate evidence classes. At that candidate checkpoint, production remained
+  exact v0.15.0; the current release is recorded at the top of this document.
 - The `staging-staffing-authority` profile remains separate from
   `staging-safe-off`. Its verified receipt proves the selected profile and
   global staging gates; the exact-tenant gate and positive authenticated
@@ -751,8 +757,8 @@ Last updated: 2026-09-01 16:26:38 CDT
 
 - This retained record describes the governed August 11 deployment of commit
   `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, tagged `v0.7.0`; it was
-  superseded by the exact `v0.15.0` production release identified at the top of
-  this document and must not be read as current runtime state.
+  later superseded by v0.15.0 and then by the v0.16 application release recorded
+  at the top of this document; it must not be read as current runtime state.
 - Exact-main CI run `31528176575` passed all eight required jobs.
 - Firebase `all` deployment run `31529170963` updated Hosting, Firestore rules,
   indexes, and Functions, then verified `https://tonicatering.web.app`.
