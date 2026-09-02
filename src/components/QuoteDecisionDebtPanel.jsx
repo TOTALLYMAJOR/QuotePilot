@@ -6,21 +6,18 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
-function normalizeTimeZone(value) {
-  const candidate = text(value);
-  if (!candidate) return "";
+function validTimeZone(value) {
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format();
-    return candidate;
+    return Boolean(text(value) && new Intl.DateTimeFormat("en-US", { timeZone: value }));
   } catch {
-    return "";
+    return false;
   }
 }
 
 export default function QuoteDecisionDebtPanel({
   organizationId = "",
   quoteId = "",
-  tenantTimeZone = "",
+  timeZone = "",
   available = true,
   onOpenWorkflow,
   onReadStateChange
@@ -36,23 +33,22 @@ export default function QuoteDecisionDebtPanel({
   const load = useCallback(async () => {
     const scopedOrganizationId = text(organizationId);
     const scopedQuoteId = text(quoteId);
-    const scopedTimeZone = normalizeTimeZone(tenantTimeZone);
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     if (!available || !scopedOrganizationId || !scopedQuoteId) {
       setRead({
         loading: false,
         result: null,
-        error: "Decisions to review require a connected quote from this workspace.",
+        error: "Connect this quote to review decisions.",
         stale: false
       });
       return;
     }
-    if (!scopedTimeZone) {
+    if (!validTimeZone(timeZone)) {
       setRead({
         loading: false,
         result: null,
-        error: "Configure an explicit tenant IANA time zone in Library pricing before deriving Decision Debt.",
+        error: "Set a valid IANA time zone in Library pricing.",
         stale: false
       });
       return;
@@ -76,11 +72,11 @@ export default function QuoteDecisionDebtPanel({
       setRead((current) => ({
         loading: false,
         result: current.result,
-        error: error?.message || "Decisions to review are unavailable for this quote.",
+        error: error?.message || "Decision review unavailable.",
         stale: Boolean(current.result)
       }));
     }
-  }, [available, organizationId, quoteId, tenantTimeZone]);
+  }, [available, organizationId, quoteId, timeZone]);
 
   useEffect(() => {
     load();
@@ -131,10 +127,10 @@ export default function QuoteDecisionDebtPanel({
               requestId: text(items[0]?.id)
             })}
           >
-            Open in Workflow
+            Open Workflow
           </button>
           <span className="source-note">
-            Workflow opens the exact quote context; this read does not resolve a dependency.
+            Opens this quote in Workflow without resolving anything.
           </span>
         </div>
       )}

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-01 20:19:52 CDT
+Last updated: 2026-09-01 21:03:36 CDT
 
 All notable project changes are documented in this file.
 
@@ -10,8 +10,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 - Hardened the live staff entry and exact-quote Decision Debt recovery paths.
-  Empty email/password submissions now stay local, show field-specific guidance,
-  and focus the first missing field instead of calling Firebase Auth. Exact-quote
+  Browser-native required email/password constraints now keep empty submissions
+  local, show field-specific guidance, and focus the first missing field instead
+  of calling Firebase Auth. Exact-quote
   Decision Debt now recognizes a missing or invalid tenant IANA time zone before
   invoking its callable and presents the existing Library pricing setup action,
   avoiding a predictable HTTP 400 while leaving server authority unchanged.

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   registerWithEmail,
   requestPasswordReset,
@@ -7,56 +7,40 @@ import {
 } from "../lib/authClient";
 import ProductBrandLockup from "./ProductBrandLockup";
 
-const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, password-reset instructions have been sent.";
+const PASSWORD_RESET_CONFIRMATION = "Reset instructions sent if the account exists.";
 
 export function friendlyError(err) {
   const text = String(err?.message || "");
   if (text.includes("auth/invalid-credential")) return "Invalid email or password.";
-  if (text.includes("auth/popup-closed-by-user")) return "Google sign-in popup was closed.";
-  if (text.includes("auth/email-already-in-use")) return "This email is already registered.";
+  if (text.includes("auth/popup-closed-by-user")) return "Google sign-in was canceled.";
+  if (text.includes("auth/email-already-in-use")) return "Email already registered.";
   if (text.includes("auth/invalid-email")) return "Enter a valid email address.";
-  if (text.includes("auth/too-many-requests")) return "Too many attempts. Wait a few minutes and try again.";
+  if (text.includes("auth/too-many-requests")) return "Too many attempts. Try again later.";
   return "Sign-in failed. Try again or reset your password.";
 }
 
 export default function AuthGate({ sessionError = "" }) {
-  const emailRef = useRef(null);
-  const passwordRef = useRef(null);
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({ email: "", password: "" });
   const [pendingAction, setPendingAction] = useState("");
   const [status, setStatus] = useState("");
-  const busy = Boolean(pendingAction);
+  const busy = !!pendingAction;
 
   const changeMode = (nextMode) => {
     if (busy) return;
     setMode(nextMode);
     setStatus("");
-    setFieldErrors({ email: "", password: "" });
-  };
-
-  const validateCredentials = ({ includePassword = true } = {}) => {
-    const nextErrors = {
-      email: email.trim() ? "" : "Enter your email address.",
-      password: includePassword && !password ? "Enter your password." : ""
-    };
-    setFieldErrors(nextErrors);
-    if (nextErrors.email) emailRef.current?.focus();
-    else if (nextErrors.password) passwordRef.current?.focus();
-    return !nextErrors.email && !nextErrors.password;
   };
 
   const submit = async (event) => {
-    event?.preventDefault();
-    if (!validateCredentials()) return;
+    event.preventDefault();
     setPendingAction(mode === "register" ? "register" : "signin");
     setStatus("");
     try {
       if (mode === "register") {
         await registerWithEmail({ email, password });
-        setStatus("Account created. Check your inbox and verify your email before workspace access is activated.");
+        setStatus("Account created. Verify your email.");
       } else {
         await signInWithEmail({ email, password });
       }
@@ -80,7 +64,7 @@ export default function AuthGate({ sessionError = "" }) {
   };
 
   const submitPasswordReset = async () => {
-    if (!validateCredentials({ includePassword: false })) return;
+    if (!email.trim()) return;
     setPendingAction("password-reset");
     setStatus("");
     try {
@@ -98,7 +82,7 @@ export default function AuthGate({ sessionError = "" }) {
       <section className="panel auth-card">
         <ProductBrandLockup className="auth-product-brand" />
         <h1>Staff Sign In</h1>
-        <p className="muted">Use email/password or Google to access the quote workspace.</p>
+        <p className="muted">Use email or Google.</p>
         {sessionError && <p className="error-note">{sessionError}</p>}
 
         <div className="auth-mode-switch">
@@ -120,11 +104,10 @@ export default function AuthGate({ sessionError = "" }) {
           </button>
         </div>
 
-        <form onSubmit={submit} noValidate>
+        <form onSubmit={submit}>
           <label className="field">
             <span>Email</span>
             <input
-              ref={emailRef}
               type="email"
               autoComplete="email"
               autoFocus
@@ -133,24 +116,15 @@ export default function AuthGate({ sessionError = "" }) {
               onChange={(e) => {
                 setEmail(e.target.value);
                 setStatus("");
-                setFieldErrors((current) => ({ ...current, email: "" }));
               }}
               placeholder="you@business.com"
               disabled={busy}
-              aria-invalid={Boolean(fieldErrors.email)}
-              aria-describedby={fieldErrors.email ? "auth-email-error" : undefined}
             />
-            {fieldErrors.email && (
-              <span id="auth-email-error" className="error-note" role="alert">
-                {fieldErrors.email}
-              </span>
-            )}
           </label>
 
           <label className="field">
             <span>Password</span>
             <input
-              ref={passwordRef}
               type="password"
               autoComplete={mode === "register" ? "new-password" : "current-password"}
               required
@@ -158,18 +132,10 @@ export default function AuthGate({ sessionError = "" }) {
               onChange={(e) => {
                 setPassword(e.target.value);
                 setStatus("");
-                setFieldErrors((current) => ({ ...current, password: "" }));
               }}
               placeholder="At least 8 characters"
               disabled={busy}
-              aria-invalid={Boolean(fieldErrors.password)}
-              aria-describedby={fieldErrors.password ? "auth-password-error" : undefined}
             />
-            {fieldErrors.password && (
-              <span id="auth-password-error" className="error-note" role="alert">
-                {fieldErrors.password}
-              </span>
-            )}
           </label>
 
           <div className="auth-actions">
@@ -187,7 +153,6 @@ export default function AuthGate({ sessionError = "" }) {
                 className="ghost"
                 onClick={submitPasswordReset}
                 disabled={busy}
-                aria-busy={pendingAction === "password-reset"}
               >
                 {pendingAction === "password-reset" ? "Sending..." : "Forgot password?"}
               </button>

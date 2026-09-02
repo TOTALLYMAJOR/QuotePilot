@@ -50,19 +50,19 @@ describe("AuthGate friendlyError", () => {
 
   test("maps too-many-requests errors", () => {
     expect(friendlyError(new Error("Firebase: Error (auth/too-many-requests)."))).toBe(
-      "Too many attempts. Wait a few minutes and try again."
+      "Too many attempts. Try again later."
     );
   });
 
   test("maps google popup closed errors", () => {
     expect(friendlyError(new Error("Firebase: Error (auth/popup-closed-by-user)."))).toBe(
-      "Google sign-in popup was closed."
+      "Google sign-in was canceled."
     );
   });
 
   test("maps email already in use errors", () => {
     expect(friendlyError(new Error("Firebase: Error (auth/email-already-in-use)."))).toBe(
-      "This email is already registered."
+      "Email already registered."
     );
   });
 
@@ -81,7 +81,7 @@ describe("AuthGate friendlyError", () => {
 });
 
 describe("AuthGate required-field validation", () => {
-  test("keeps an empty sign-in local, explains both missing fields, and focuses email", async () => {
+  test("keeps an empty sign-in local through required field constraints", async () => {
     await act(async () => {
       root.render(<AuthGate />);
     });
@@ -95,14 +95,13 @@ describe("AuthGate required-field validation", () => {
     const email = container.querySelector('input[type="email"]');
     const password = container.querySelector('input[type="password"]');
     expect(mocks.signInWithEmail).not.toHaveBeenCalled();
-    expect(email.getAttribute("aria-invalid")).toBe("true");
-    expect(password.getAttribute("aria-invalid")).toBe("true");
-    expect(container.textContent).toContain("Enter your email address.");
-    expect(container.textContent).toContain("Enter your password.");
-    expect(document.activeElement).toBe(email);
+    expect(email.required).toBe(true);
+    expect(password.required).toBe(true);
+    expect(email.checkValidity()).toBe(false);
+    expect(password.checkValidity()).toBe(false);
   });
 
-  test("focuses password when email is present and password is missing", async () => {
+  test("keeps a missing-password sign-in local through the password constraint", async () => {
     await act(async () => {
       root.render(<AuthGate />);
     });
@@ -119,8 +118,7 @@ describe("AuthGate required-field validation", () => {
     });
 
     expect(mocks.signInWithEmail).not.toHaveBeenCalled();
-    expect(email.getAttribute("aria-invalid")).toBe("false");
-    expect(password.getAttribute("aria-invalid")).toBe("true");
-    expect(document.activeElement).toBe(password);
+    expect(email.checkValidity()).toBe(true);
+    expect(password.checkValidity()).toBe(false);
   });
 });

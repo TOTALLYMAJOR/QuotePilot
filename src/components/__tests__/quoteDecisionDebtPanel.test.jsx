@@ -78,7 +78,7 @@ describe("exact quote Decision Debt surface", () => {
         <QuoteDecisionDebtPanel
           organizationId="org-a"
           quoteId="quote-a"
-          tenantTimeZone="America/Chicago"
+          timeZone="America/Chicago"
           onReadStateChange={onReadStateChange}
         />
       );
@@ -115,7 +115,7 @@ describe("exact quote Decision Debt surface", () => {
 
     expect(mocks.getDecisionDebtSnapshot).not.toHaveBeenCalled();
     expect(container.querySelector('[data-capability-state="error"]')).toBeTruthy();
-    expect(container.textContent).toContain("connected quote from this workspace");
+    expect(container.textContent).toContain("Connect this quote to review decisions");
   });
 
   test("shows the configuration action without invoking the callable when tenant time zone is missing", async () => {
@@ -125,7 +125,7 @@ describe("exact quote Decision Debt surface", () => {
         <QuoteDecisionDebtPanel
           organizationId="org-a"
           quoteId="quote-a"
-          tenantTimeZone=""
+          timeZone=""
           onReadStateChange={onReadStateChange}
         />
       );
@@ -133,7 +133,7 @@ describe("exact quote Decision Debt surface", () => {
 
     expect(mocks.getDecisionDebtSnapshot).not.toHaveBeenCalled();
     expect(container.querySelector('[data-capability-state="error"]')).toBeTruthy();
-    expect(container.textContent).toContain("Configure an explicit tenant IANA time zone");
+    expect(container.textContent).toContain("Set a valid IANA time zone");
     expect(onReadStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
       loading: false,
       stale: false,
@@ -165,7 +165,7 @@ describe("exact quote Decision Debt surface", () => {
         <QuoteDecisionDebtPanel
           organizationId="org-a"
           quoteId="quote-a"
-          tenantTimeZone="America/Chicago"
+          timeZone="America/Chicago"
           onOpenWorkflow={onOpenWorkflow}
         />
       );
