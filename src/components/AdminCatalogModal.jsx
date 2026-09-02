@@ -1794,16 +1794,6 @@ export function AdminCatalogView({
         : Number(catalogSetupDraft.changedRecordCount || 0) > 0
           ? "Draft saved"
           : "Published catalog active";
-  const menuItemDraftStateLabel = (itemId) => {
-    if (menuItemSavingId === itemId) return "Saving draft…";
-    if (menuItemDirty[itemId]) return "Unsaved";
-    const staged = catalogSetupDraftChanges.some((change) => (
-      change.collection === "menuItems" && change.recordId === itemId
-    ));
-    if (staged && catalogSetupDraft.deviceOnly) return "Device-only";
-    if (staged) return "Draft saved";
-    return "Published";
-  };
   const catalogFooterStatus = catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
     ? catalogSetupDraft.label
     : status || (hasAnyUnsavedChanges
@@ -2626,7 +2616,6 @@ export function AdminCatalogView({
                           <span>Editing item</span>
                           <h4>{activeMenuItem.name || "Unnamed item"}</h4>
                         </div>
-                        <span className="admin-row-state">{menuItemDraftStateLabel(activeMenuItem.id)}</span>
                       </div>
                       <div className="admin-menu-item-fields">
                         <label>

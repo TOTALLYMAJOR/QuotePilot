@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 13:27:40 CDT
+Last updated: 2026-09-02 13:42:32 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Consolidated Menu Builder save feedback into its sticky catalog draft bar,
+  removing a redundant per-item state badge and restoring cross-environment
+  release bundle headroom without changing draft or publication authority.
 - Redesigned Menu Builder as a responsive two-part workbench without changing
   catalog authority. Event type and Menu section now live in a distinct context
   rail with progressive structural controls; a compact item chooser opens one

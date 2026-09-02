@@ -432,7 +432,6 @@ describe("AdminCatalogModal save capability state", () => {
 
     const itemEditor = container.querySelector('[aria-label="Edit Roasted chicken"]');
     expect(itemEditor.querySelector('input[type="number"]').value).toBe("12.34");
-    expect(container.querySelector('.admin-row-state').textContent).toBe("Device-only");
     expect(container.textContent).toContain("Device-only changes");
     expect(container.textContent).not.toContain("All changes saved");
   });

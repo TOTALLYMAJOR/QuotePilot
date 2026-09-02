@@ -308,7 +308,7 @@ test.describe("Ambient Library", () => {
       .selectOption({ label: "Device buffer section" });
     const reopenedItem = reopened.getByLabel("Edit Device buffer soup");
     await expect(reopenedItem.getByLabel("Selling price", { exact: true })).toHaveValue("12.34");
-    await expect(reopenedItem.getByText("Device-only", { exact: true })).toBeVisible();
+    await expect(reopened.getByText("Device-only changes", { exact: true })).toBeVisible();
     const menuBuilderAudit = await layoutAudit(page);
     expect(menuBuilderAudit.documentOverflow).toBeLessThanOrEqual(1);
     expect(menuBuilderAudit.surfaceOverflow).toBeLessThanOrEqual(1);
