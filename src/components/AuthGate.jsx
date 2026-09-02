@@ -7,7 +7,7 @@ import {
 } from "../lib/authClient";
 import ProductBrandLockup from "./ProductBrandLockup";
 
-const PASSWORD_RESET_CONFIRMATION = "Reset instructions sent if the account exists.";
+const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, password-reset instructions have been sent.";
 
 export function friendlyError(err) {
   const text = String(err?.message || "");
@@ -82,7 +82,6 @@ export default function AuthGate({ sessionError = "" }) {
       <section className="panel auth-card">
         <ProductBrandLockup className="auth-product-brand" />
         <h1>Staff Sign In</h1>
-        <p className="muted">Use email or Google.</p>
         {sessionError && <p className="error-note">{sessionError}</p>}
 
         <div className="auth-mode-switch">
@@ -153,6 +152,7 @@ export default function AuthGate({ sessionError = "" }) {
                 className="ghost"
                 onClick={submitPasswordReset}
                 disabled={busy}
+                aria-busy={pendingAction === "password-reset"}
               >
                 {pendingAction === "password-reset" ? "Sending..." : "Forgot password?"}
               </button>

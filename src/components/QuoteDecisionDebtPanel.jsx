@@ -39,7 +39,7 @@ export default function QuoteDecisionDebtPanel({
       setRead({
         loading: false,
         result: null,
-        error: "Connect this quote to review decisions.",
+        error: "Connect this quote to review.",
         stale: false
       });
       return;
@@ -72,7 +72,7 @@ export default function QuoteDecisionDebtPanel({
       setRead((current) => ({
         loading: false,
         result: current.result,
-        error: error?.message || "Decision review unavailable.",
+        error: error?.message || "Review unavailable.",
         stale: Boolean(current.result)
       }));
     }
@@ -130,7 +130,7 @@ export default function QuoteDecisionDebtPanel({
             Open Workflow
           </button>
           <span className="source-note">
-            Opens this quote in Workflow without resolving anything.
+            Opens this quote without resolving anything.
           </span>
         </div>
       )}

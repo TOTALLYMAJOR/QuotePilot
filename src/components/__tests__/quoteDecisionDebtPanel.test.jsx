@@ -115,7 +115,7 @@ describe("exact quote Decision Debt surface", () => {
 
     expect(mocks.getDecisionDebtSnapshot).not.toHaveBeenCalled();
     expect(container.querySelector('[data-capability-state="error"]')).toBeTruthy();
-    expect(container.textContent).toContain("Connect this quote to review decisions");
+    expect(container.textContent).toContain("Connect this quote to review");
   });
 
   test("shows the configuration action without invoking the callable when tenant time zone is missing", async () => {
