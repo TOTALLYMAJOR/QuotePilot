@@ -1816,7 +1816,7 @@ export function AdminCatalogView({
     const selected = menuItems.filter((item) => selectedMenuItemIds.includes(item.id));
     if (!selected.length) return;
     if (categoryId && !menuCategories.some((section) => section.id === categoryId)) {
-      setStatus("Choose an available menu section before moving items.");
+      setStatus("Choose a menu section first.");
       return;
     }
     selected.forEach((item) => {
@@ -1828,8 +1828,8 @@ export function AdminCatalogView({
     });
     setSelectedMenuItemIds([]);
     setStatus(categoryId
-      ? `${selected.length} item(s) moved in the setup draft; stable item identities were preserved.`
-      : `${selected.length} item availability changes added to the setup draft.`);
+      ? `${selected.length} items moved in the draft.`
+      : `${selected.length} availability changes saved to the draft.`);
   };
   const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
   const featureFlagsPaid = Array.isArray(draft.settings?.featureFlagsPaid)
@@ -2566,7 +2566,7 @@ export function AdminCatalogView({
                 )}
 
                 {selectedMenuItemIds.length > 0 && (
-                  <div className="admin-menu-bulk-bar" role="group" aria-label={`Bulk actions for ${selectedMenuItemIds.length} selected menu items`}>
+                  <div className="admin-menu-bulk-bar" role="group" aria-label="Selected item actions">
                     <strong>{selectedMenuItemIds.length} selected</strong>
                     <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: true })}>Make available</button>
                     <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: false })}>Make unavailable</button>
@@ -2582,13 +2582,12 @@ export function AdminCatalogView({
                 {!menuLoading && selectedCategory && selectedCategoryItems.length === 0 && (
                   <div className="admin-menu-empty-state">
                     <strong>No items match this view.</strong>
-                    <p>Clear the search, show unavailable items, or add a new item above.</p>
                   </div>
                 )}
 
                 {!menuLoading && activeMenuItem && (
                   <div className="admin-menu-item-workspace">
-                    <div className="admin-menu-item-list" role="list" aria-label={`${selectedCategoryRecord?.name || "Menu section"} items`}>
+                    <div className="admin-menu-item-list" role="list" aria-label="Menu section items">
                       {selectedCategoryItems.map((item) => {
                         const priceBasis = normalizePricingType(item.pricingType || item.type, "per_event");
                         const priceBasisLabel = priceBasis === "per_person" ? "Per guest" : priceBasis === "per_item" ? "Per item" : "Per event";
@@ -2675,7 +2674,6 @@ export function AdminCatalogView({
                           <span>Available in new quotes</span>
                         </label>
                       </div>
-                      <p className="admin-menu-draft-note">Edits stay in the setup draft until you review and publish the catalog.</p>
                       <details className="admin-menu-item-details">
                         <summary>Remove item</summary>
                         <div>

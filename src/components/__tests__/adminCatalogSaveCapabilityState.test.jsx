@@ -158,7 +158,6 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector('[aria-label="Edit Cocktail meatballs"]')).toBeTruthy();
     expect(container.querySelector('button[aria-pressed="true"]')?.textContent)
       .toContain("Cocktail meatballs");
-    expect(container.textContent).toContain("Edits stay in the setup draft until you review and publish the catalog.");
   });
 
   test("starts ready with no unsaved changes and no message", () => {
