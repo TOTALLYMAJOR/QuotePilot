@@ -3152,18 +3152,40 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       tabIndex={-1}
       aria-label={`${model.identity.eventName} Living Opportunity`}
     >
-      <div className="ambient-opportunity-orientation">
-        <button
-          type="button"
-          className="ambient-back-link"
-          onClick={returnToOpportunities}
-          data-ambient-action-id={model.actions.backToOpportunities.id}
-        >
-          <ArrowLeft size={17} aria-hidden="true" />
-          Opportunities
-        </button>
-        <span aria-hidden="true">/</span>
-        <strong>{model.identity.eventName}</strong>
+      <div
+        className="ambient-opportunity-context-bar"
+        role="region"
+        aria-label={`${model.identity.eventName} opportunity actions`}
+        data-testid="quick-updates-context-bar"
+      >
+        <div className="ambient-opportunity-orientation">
+          <button
+            type="button"
+            className="ambient-back-link"
+            onClick={returnToOpportunities}
+            data-ambient-action-id={model.actions.backToOpportunities.id}
+          >
+            <ArrowLeft size={17} aria-hidden="true" />
+            Opportunities
+          </button>
+          <span aria-hidden="true">/</span>
+          <strong>{model.identity.eventName}</strong>
+        </div>
+        {quickUpdatesAvailable && (
+          <button
+            ref={quickUpdatesDesktopTriggerRef}
+            type="button"
+            className="ambient-quick-updates-trigger ambient-quick-updates-trigger--context"
+            onClick={() => openQuickUpdates(quickUpdatesDesktopTriggerRef)}
+            aria-haspopup="dialog"
+            aria-expanded={quickUpdatesOpen}
+            aria-controls={quickUpdatesDialogId}
+            data-ambient-action-id="open-quick-updates"
+          >
+            <NotePencil size={19} aria-hidden="true" />
+            Quick Updates
+          </button>
+        )}
       </div>
 
       <section
@@ -3332,21 +3354,6 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           <div className="ambient-title-line">
             <h1 id="ambient-opportunity-title">{model.identity.eventName}</h1>
             <StatusChip {...model.identity.status} />
-            {quickUpdatesAvailable && (
-              <button
-                ref={quickUpdatesDesktopTriggerRef}
-                type="button"
-                className="ambient-quick-updates-trigger"
-                onClick={() => openQuickUpdates(quickUpdatesDesktopTriggerRef)}
-                aria-haspopup="dialog"
-                aria-expanded={quickUpdatesOpen}
-                aria-controls={quickUpdatesDialogId}
-                data-ambient-action-id="open-quick-updates"
-              >
-                <NotePencil size={19} aria-hidden="true" />
-                Quick Updates
-              </button>
-            )}
           </div>
           <div className="ambient-v16-opportunity__event-meta" aria-label="Recorded event context">
             <span><MapPin size={19} aria-hidden="true" />{model.identity.venue}</span>

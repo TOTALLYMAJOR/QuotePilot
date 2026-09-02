@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-08-31 18:45:45 CDT
+Last updated: 2026-09-02 17:02:04 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Moved the opportunity-specific **Quick Updates** launcher from the large
+  desktop title into a sticky breadcrumb action bar that remains available
+  while the selected opportunity scrolls. Desktop and tablet keep one outlined
+  contextual launcher below global chrome; mobile keeps the existing in-flow,
+  full-width launcher and makes the breadcrumb bar non-sticky. The exact-event
+  accessible region, role and identity gates, URL, local draft, review/save
+  authority, dismissal guard, and focus restoration remain unchanged.
 - Fixed the administrator integration-audit workflow so a successful internal
   quote log write no longer attempts an unrelated customer-portal snapshot
   mirror. Integration activity is not customer-facing proposal state; the

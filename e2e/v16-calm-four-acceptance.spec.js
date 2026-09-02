@@ -280,19 +280,94 @@ async function expectNoHorizontalOverflow(page, selector = "html") {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
-async function captureV16Proof(page, filename) {
+async function expectQuickUpdatesLauncherLayout(page, { persistent }) {
+  const opportunity = page.locator(
+    `[data-quote-id="${RIVERA_QUOTE_ID}"].ambient-living-opportunity`
+  );
+  const contextBar = opportunity.getByRole("region", {
+    name: "Rivera Wedding opportunity actions"
+  });
+  const contextTrigger = contextBar.locator(
+    '[data-ambient-action-id="open-quick-updates"]'
+  );
+  const mobileTrigger = opportunity.locator(
+    '.ambient-mobile-remote [data-ambient-action-id="open-quick-updates"]'
+  );
+  const visibleTriggers = opportunity.locator(
+    'button[data-ambient-action-id="open-quick-updates"]:visible'
+  );
+
+  await expect(contextBar).toHaveAttribute("data-testid", "quick-updates-context-bar");
+  await expect(opportunity.locator(
+    '.ambient-title-line [data-ambient-action-id="open-quick-updates"]'
+  )).toHaveCount(0);
+  await expect(visibleTriggers).toHaveCount(1);
+  await expectNoHorizontalOverflow(page);
+
+  if (!persistent) {
+    await expect(contextBar).toHaveCSS("position", "static");
+    await expect(contextTrigger).toBeHidden();
+    await expect(mobileTrigger).toBeVisible();
+    await expect(mobileTrigger).toHaveCSS("position", "static");
+
+    const mobileBox = await mobileTrigger.boundingBox();
+    const bottomNavigationBox = await page.locator(
+      ".ambient-primary-navigation"
+    ).boundingBox();
+    expect(mobileBox).not.toBeNull();
+    expect(bottomNavigationBox).not.toBeNull();
+    expect(mobileBox.y + mobileBox.height).toBeLessThanOrEqual(bottomNavigationBox.y - 8);
+    return { contextBar, trigger: mobileTrigger };
+  }
+
+  await expect(contextBar).toHaveCSS("position", "sticky");
+  await expect(contextTrigger).toBeVisible();
+  await expect(mobileTrigger).toBeHidden();
+
+  const scrollRange = await page.evaluate(() => (
+    document.documentElement.scrollHeight - window.innerHeight
+  ));
+  expect(scrollRange).toBeGreaterThan(500);
+  const firstScrollTop = Math.min(700, scrollRange - 240);
+  await page.evaluate((top) => window.scrollTo({ top, left: 0, behavior: "instant" }), firstScrollTop);
+  await expect.poll(async () => Math.round(await page.evaluate(() => window.scrollY)))
+    .toBe(Math.round(firstScrollTop));
+
+  const firstBox = await contextBar.boundingBox();
+  const viewportWidth = page.viewportSize()?.width || 0;
+  const chrome = viewportWidth >= 1181
+    ? page.locator(".header-quick-cta:visible")
+    : page.locator(".site-header:visible");
+  const chromeBox = await chrome.boundingBox();
+  expect(firstBox).not.toBeNull();
+  expect(chromeBox).not.toBeNull();
+  expect(firstBox.y).toBeGreaterThanOrEqual(chromeBox.y + chromeBox.height + 8);
+
+  const secondScrollTop = Math.min(firstScrollTop + 240, scrollRange);
+  expect(secondScrollTop - firstScrollTop).toBeGreaterThanOrEqual(200);
+  await page.evaluate((top) => window.scrollTo({ top, left: 0, behavior: "instant" }), secondScrollTop);
+  const secondBox = await contextBar.boundingBox();
+  expect(secondBox).not.toBeNull();
+  expect(Math.abs(secondBox.y - firstBox.y)).toBeLessThanOrEqual(2);
+  await expectNoHorizontalOverflow(page);
+  return { contextBar, trigger: contextTrigger };
+}
+
+async function captureV16Proof(page, filename, { resetScroll = true } = {}) {
   if (!CAPTURE_V16_BROWSER_PROOF) return;
   mkdirSync(V16_BROWSER_PROOF_DIR, { recursive: true });
   // Proof must represent a settled route, not an entry animation or retained
   // scroll position from the preceding interaction.
   await page.waitForTimeout(320);
-  await page.evaluate(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  await page.evaluate((shouldResetScroll) => {
+    if (shouldResetScroll) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
     const active = document.activeElement;
     if (active?.matches?.("h1[tabindex='-1'], h2[tabindex='-1'], h3[tabindex='-1']")) {
       active.blur();
     }
-  });
+  }, resetScroll);
   await page.screenshot({
     path: resolve(V16_BROWSER_PROOF_DIR, filename),
     animations: "disabled"
@@ -550,6 +625,10 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await gotoRiveraOpportunity(page);
     const before = await readLocalState(page);
     const beforeUrl = page.url();
+    await expectQuickUpdatesLauncherLayout(page, { persistent: true });
+    await captureV16Proof(page, "03a-desktop-opportunity-sticky-quick-updates.png", {
+      resetScroll: false
+    });
     const { panel, trigger } = await openQuickUpdates(page);
 
     await expect(page.locator(`[data-quote-id="${RIVERA_QUOTE_ID}"].ambient-living-opportunity`)).toBeVisible();
@@ -579,12 +658,31 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     expect(await readLocalState(page)).toEqual(before);
     expect(page.url()).toBe(beforeUrl);
 
+    await page.setViewportSize({ width: 768, height: 900 });
+    await gotoRiveraOpportunity(page);
+    const tabletBeforeUrl = page.url();
+    await expectQuickUpdatesLauncherLayout(page, { persistent: true });
+    await captureV16Proof(page, "03b-tablet-opportunity-sticky-quick-updates.png", {
+      resetScroll: false
+    });
+    const tabletQuickUpdates = await openQuickUpdates(page);
+    await tabletQuickUpdates.panel.getByRole("button", { name: "Close Quick Updates" }).click();
+    await expect(tabletQuickUpdates.panel).toBeHidden();
+    await expect(tabletQuickUpdates.trigger).toBeFocused();
+    expect(page.url()).toBe(tabletBeforeUrl);
+    expect(await readLocalState(page)).toEqual(before);
+
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoRiveraOpportunity(page);
+    const mobileBeforeUrl = page.url();
+    await expectQuickUpdatesLauncherLayout(page, { persistent: false });
     const mobileQuickUpdates = await openQuickUpdates(page);
     await captureV16Proof(page, "15-mobile-quick-updates-open.png");
     await mobileQuickUpdates.panel.getByRole("button", { name: "Close Quick Updates" }).click();
     await expect(mobileQuickUpdates.panel).toBeHidden();
+    await expect(mobileQuickUpdates.trigger).toBeFocused();
+    expect(page.url()).toBe(mobileBeforeUrl);
+    expect(await readLocalState(page)).toEqual(before);
   });
 
   test("4. Quick Updates dirty state is local, durable inside the panel, and never autosaves", async ({ page }) => {
