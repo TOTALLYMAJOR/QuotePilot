@@ -430,7 +430,8 @@ describe("AdminCatalogModal save capability state", () => {
     renderView({ initialTab: "menu" });
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
 
-    expect(container.querySelector('input[aria-label="Roasted chicken price"]').value).toBe("12.34");
+    const itemEditor = container.querySelector('[aria-label="Edit Roasted chicken"]');
+    expect(itemEditor.querySelector('input[type="number"]').value).toBe("12.34");
     expect(container.querySelector('.admin-row-state').textContent).toBe("Device-only");
     expect(container.textContent).toContain("Device-only changes");
     expect(container.textContent).not.toContain("All changes saved");

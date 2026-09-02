@@ -306,8 +306,9 @@ test.describe("Ambient Library", () => {
     const reopened = page.locator("#catalog-admin-title").locator("..").locator("..");
     await reopened.getByRole("combobox", { name: "Menu section", exact: true })
       .selectOption({ label: "Device buffer section" });
-    await expect(reopened.getByLabel("Device buffer soup price", { exact: true })).toHaveValue("12.34");
-    await expect(reopened.getByLabel("Edit Device buffer soup").getByText("Device-only", { exact: true })).toBeVisible();
+    const reopenedItem = reopened.getByLabel("Edit Device buffer soup");
+    await expect(reopenedItem.getByLabel("Selling price", { exact: true })).toHaveValue("12.34");
+    await expect(reopenedItem.getByText("Device-only", { exact: true })).toBeVisible();
     const menuBuilderAudit = await layoutAudit(page);
     expect(menuBuilderAudit.documentOverflow).toBeLessThanOrEqual(1);
     expect(menuBuilderAudit.surfaceOverflow).toBeLessThanOrEqual(1);

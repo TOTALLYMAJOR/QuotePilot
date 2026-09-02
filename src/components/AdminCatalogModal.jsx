@@ -2336,11 +2336,7 @@ export function AdminCatalogView({
         {resolvedActiveTab === "menu" && (
           <section className="admin-section admin-menu-builder">
             <div className="admin-section-head admin-menu-builder-heading">
-              <div>
-                <p className="admin-menu-kicker">Offerings workspace</p>
-                <h3>Menu Builder</h3>
-              </div>
-              <span className="admin-menu-route">Event type <b>→</b> Menu section <b>→</b> Item</span>
+              <h3>Menu Builder</h3>
             </div>
 
             <div className="admin-section-body admin-menu-workbench">
@@ -2349,7 +2345,6 @@ export function AdminCatalogView({
                   <span className="admin-menu-step" aria-hidden="true">1</span>
                   <div>
                     <h4>Choose the context</h4>
-                    <p>Start broad, then narrow the menu.</p>
                   </div>
                 </div>
 
@@ -2406,7 +2401,7 @@ export function AdminCatalogView({
                         <input
                           id="menu-new-event-type"
                           type="text"
-                          placeholder="For example, Wedding"
+                          placeholder="Wedding"
                           aria-label="New event type name"
                           value={newEventTypeName}
                           onChange={(e) => setNewEventTypeName(e.target.value)}
@@ -2471,7 +2466,7 @@ export function AdminCatalogView({
                         <input
                           id="menu-new-section"
                           type="text"
-                          placeholder="For example, Appetizers"
+                          placeholder="Appetizers"
                           aria-label="New menu section name"
                           value={newCategoryName}
                           onChange={(e) => setNewCategoryName(e.target.value)}
@@ -2484,13 +2479,6 @@ export function AdminCatalogView({
                     </div>
                   </div>
                 </details>
-
-                <div className="admin-menu-context-summary" aria-live="polite">
-                  <span>Working in</span>
-                  <strong>{selectedEventTypeRecord?.name || "Choose an event type"}</strong>
-                  <b aria-hidden="true">/</b>
-                  <strong>{selectedCategoryRecord?.name || "Choose a menu section"}</strong>
-                </div>
               </aside>
 
               <section className="admin-menu-items-panel" aria-label="Menu items">
@@ -2498,16 +2486,15 @@ export function AdminCatalogView({
                   <span className="admin-menu-step" aria-hidden="true">2</span>
                   <div>
                     <h4>Edit the items</h4>
-                    <p>{selectedCategoryRecord ? `${selectedCategoryItemCount} item${selectedCategoryItemCount === 1 ? "" : "s"} in ${selectedCategoryRecord.name}` : "Choose a menu section to continue."}</p>
+                    <p>{selectedCategoryRecord ? `${selectedCategoryItemCount} items` : "Choose a menu section."}</p>
                   </div>
                 </div>
 
-                <div className="admin-menu-builder-tools" aria-label="Menu Builder tools">
+                <div className="admin-menu-builder-tools">
                   <label className="admin-menu-search-field">
                     <span>Find an item</span>
                     <input
                       type="search"
-                      aria-label="Search menu items"
                       placeholder="Search by name"
                       value={menuSearch}
                       onChange={(event) => setMenuSearch(event.target.value)}
@@ -2521,8 +2508,7 @@ export function AdminCatalogView({
 
                 {!selectedCategory && !menuLoading && (
                   <div className="admin-menu-empty-state">
-                    <strong>Choose where these items belong.</strong>
-                    <p>Select an event type and menu section on the left before adding or editing items.</p>
+                    <strong>Choose a menu section to continue.</strong>
                   </div>
                 )}
 
@@ -2534,7 +2520,7 @@ export function AdminCatalogView({
                         <span>Item name</span>
                         <input
                           type="text"
-                          placeholder="For example, Cocktail meatballs"
+                          placeholder="Cocktail meatballs"
                           aria-label="New menu item name"
                           value={newItemDraft.name}
                           onChange={(e) => setNewItemDraft((prev) => ({ ...prev, name: e.target.value }))}
@@ -2629,7 +2615,6 @@ export function AdminCatalogView({
                               <strong>{item.name || "Unnamed item"}</strong>
                               <span>${Number(item.price || 0).toFixed(2)} · {priceBasisLabel}</span>
                             </button>
-                            <span className="admin-row-state">{menuItemDraftStateLabel(item.id)}</span>
                           </div>
                         );
                       })}
@@ -2648,7 +2633,6 @@ export function AdminCatalogView({
                           <span>Name</span>
                           <input
                             type="text"
-                            aria-label={`${activeMenuItem.name || "Menu item"} name`}
                             value={activeMenuItem.name || ""}
                             onChange={(e) => patchManagedMenuItem(activeMenuItem.id, "name", e.target.value)}
                             onBlur={() => handleManagedMenuItemBlur(activeMenuItem.id)}
@@ -2658,7 +2642,6 @@ export function AdminCatalogView({
                         <label>
                           <span>Price basis</span>
                           <select
-                            aria-label={`${activeMenuItem.name || "Menu item"} price basis`}
                             value={activeMenuItem.pricingType || activeMenuItem.type || "per_event"}
                             onChange={(e) => patchManagedMenuItem(activeMenuItem.id, "pricingType", e.target.value)}
                             onBlur={() => handleManagedMenuItemBlur(activeMenuItem.id)}
@@ -2674,7 +2657,6 @@ export function AdminCatalogView({
                           <input
                             type="number"
                             step="0.01"
-                            aria-label={`${activeMenuItem.name || "Menu item"} price`}
                             value={Number(activeMenuItem.price || 0)}
                             onChange={(e) => patchManagedMenuItem(activeMenuItem.id, "price", e.target.value)}
                             onBlur={() => handleManagedMenuItemBlur(activeMenuItem.id)}
@@ -2688,7 +2670,6 @@ export function AdminCatalogView({
                             step="0.01"
                             min="0"
                             placeholder="Not recorded"
-                            aria-label={`${activeMenuItem.name || "Menu item"} cost`}
                             value={activeMenuItem.cost ?? ""}
                             onChange={(e) => patchManagedMenuItem(activeMenuItem.id, "cost", e.target.value)}
                             onBlur={() => handleManagedMenuItemBlur(activeMenuItem.id)}
@@ -2707,12 +2688,8 @@ export function AdminCatalogView({
                       </div>
                       <p className="admin-menu-draft-note">Edits stay in the setup draft until you review and publish the catalog.</p>
                       <details className="admin-menu-item-details">
-                        <summary>Item details and removal</summary>
+                        <summary>Remove item</summary>
                         <div>
-                          <label>
-                            <span>Stable item ID</span>
-                            <input aria-label={`${activeMenuItem.name || "Menu item"} ID`} value={activeMenuItem.id || ""} disabled />
-                          </label>
                           <button
                             type="button"
                             className="ghost compact"
