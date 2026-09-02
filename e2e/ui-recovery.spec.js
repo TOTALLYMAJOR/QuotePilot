@@ -102,11 +102,17 @@ test("menu deactivation joins the setup draft and preserves unrelated Catalog Ad
   await expect(catalog.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u)).toBeVisible();
 
   await catalog.getByRole("tab", { name: "Menu" }).click();
-  const managedRows = catalog.locator(".admin-menu-row-managed");
+  const eventType = catalog.getByRole("combobox", { name: "Event type", exact: true });
+  await expect.poll(() => eventType.locator("option").count()).toBeGreaterThan(1);
+  if (!(await eventType.inputValue())) await eventType.selectOption({ index: 1 });
+  const menuSection = catalog.getByRole("combobox", { name: "Menu section", exact: true });
+  await expect.poll(() => menuSection.locator("option").count()).toBeGreaterThan(1);
+  if (!(await menuSection.inputValue())) await menuSection.selectOption({ index: 1 });
+  const managedRows = catalog.locator(".admin-menu-item-list-row");
   await expect.poll(() => managedRows.count()).toBeGreaterThan(0);
   const rowCount = await managedRows.count();
-  const row = managedRows.first();
-  const active = row.getByRole("checkbox", { name: "Active" });
+  const active = catalog.locator(".admin-menu-item-editor")
+    .getByRole("checkbox", { name: "Available in new quotes" });
   await expect(active).toBeChecked();
   await active.click();
   await expect(managedRows).toHaveCount(rowCount - 1);

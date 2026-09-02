@@ -449,10 +449,15 @@ test("a menu item stages immediately without activating the current quote", asyn
   const menuSection = catalogAdmin.getByRole("combobox", { name: "Menu section", exact: true });
   await expect.poll(() => menuSection.locator("option").count()).toBeGreaterThan(1);
   await menuSection.selectOption({ index: 1 });
-  await catalogAdmin.getByPlaceholder("New item name").fill("Immediate Recovery Entree");
-  await catalogAdmin.getByRole("spinbutton", { name: "New menu item price" }).fill("12.34");
+  const addItem = catalogAdmin.locator("details.admin-menu-add-item");
+  if ((await addItem.getAttribute("open")) === null) {
+    await addItem.locator("summary").click();
+  }
+  await addItem.getByLabel("New menu item name").fill("Immediate Recovery Entree");
+  await addItem.getByRole("spinbutton", { name: "New menu item price" }).fill("12.34");
   await catalogAdmin.getByRole("button", { name: "Add Item" }).click();
-  await expect(catalogAdmin.getByLabel("Immediate Recovery Entree name")).toHaveValue("Immediate Recovery Entree");
+  await expect(catalogAdmin.getByLabel("Edit Immediate Recovery Entree").getByLabel("Name", { exact: true }))
+    .toHaveValue("Immediate Recovery Entree");
   await expect(catalogAdmin.getByText("Ready to review", { exact: true })).toBeVisible();
   await expect(catalogAdmin.getByText("1 changed record; active pricing is unchanged.")).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__catalogDraftSaveCalls.length)).toBe(1);
