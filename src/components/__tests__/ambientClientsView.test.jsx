@@ -223,7 +223,14 @@ describe("AmbientClientsView", () => {
     expect(parsedSuccess.querySelector('[role="search"]')).not.toBeNull();
     expect(parsedSuccess.querySelector(".ambient-clients__featured")?.dataset.featuredSource)
       .toBe("recorded-event-date");
-    expect(parsedSuccess.querySelector(".ambient-clients__featured-image")).not.toBeNull();
+    const featured = parsedSuccess.querySelector(".ambient-clients__featured");
+    const featuredImage = featured?.querySelector(".ambient-clients__featured-image");
+    expect(featuredImage).not.toBeNull();
+    expect(featuredImage?.getAttribute("alt")).toBe("");
+    expect([...featured.querySelectorAll("[data-client-summary-part]")]
+      .map((part) => part.dataset.clientSummaryPart))
+      .toEqual(["identity", "contact", "status", "action", "image"]);
+    expect(featured.querySelectorAll(".ambient-client__primary")).toHaveLength(1);
     expect(parsedSuccess.querySelector(".ambient-clients__filter-empty")).toBeNull();
     expect(parsedSuccess.textContent).toMatch(/recorded contact details/iu);
     expect(parsedSuccess.textContent).not.toMatch(/relationship memory|relationships, remembered/iu);
