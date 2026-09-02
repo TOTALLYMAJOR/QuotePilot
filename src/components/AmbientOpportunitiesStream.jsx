@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import StatusChip from "./StatusChip";
 import {
   createAmbientAction,
@@ -119,12 +120,16 @@ function OpportunityRow({ row, onResolve, position }) {
           </span>
         </p>
 
-        <div className="ambient-opportunity__next">
-          <div>
-            <p className="ambient-opportunity__reference">Next useful step</p>
-            <h4>{primaryAction.outcomeLabel}</h4>
-            <p>{primaryAction.arrivalContract.reason}</p>
-          </div>
+        <div
+          className="ambient-opportunity__next"
+          data-layout-audit-group={`opportunity-next-${row.quoteId}`}
+        >
+          <p
+            className="ambient-opportunity__next-reason"
+            data-opportunity-summary-kind={row.queueSummary.kind}
+          >
+            {row.queueSummary.text}
+          </p>
           <button
             type="button"
             className="ambient-opportunity__primary-action"
@@ -143,10 +148,18 @@ function OpportunityRow({ row, onResolve, position }) {
             {primaryAction.disabledReason}
           </p>
         )}
-        <details className="ambient-opportunity__details">
+        <details
+          className="ambient-opportunity__details"
+          data-opportunity-disclosure="details"
+        >
           <summary>
-            <span>Opportunity details</span>
-            <span className="ambient-opportunity__recorded-cue" aria-hidden="true" />
+            <span>Details</span>
+            <ChevronDown
+              className="ambient-opportunity__details-icon"
+              size={16}
+              strokeWidth={1.8}
+              aria-hidden="true"
+            />
           </summary>
           <dl className="ambient-opportunity__momentum" aria-label="Opportunity status by area">
             {Object.entries(row.momentum.domains).map(([domain, value]) => (

@@ -34,13 +34,13 @@
 }
 
 .ambient-opportunities__masthead h2 {
-  max-width: 24ch;
-  margin: 0.18rem 0 0;
+  max-width: 26ch;
+  margin: 1.05rem 0 0;
   font-family: var(--font-editorial);
-  font-size: clamp(2.15rem, 4vw, 3.45rem);
+  font-size: clamp(2.55rem, 5vw, 4.35rem);
   font-weight: 500;
   letter-spacing: -0.045em;
-  line-height: 1;
+  line-height: 0.98;
 }
 
 .ambient-opportunities__masthead > div > p:last-child {
@@ -85,6 +85,8 @@
   border: 0;
   border-radius: 0;
   background: transparent;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .ambient-opportunities__refresh:hover,
@@ -142,7 +144,7 @@
 
 .ambient-opportunities__groups {
   display: grid;
-  gap: clamp(1rem, 2vw, 1.65rem);
+  gap: clamp(1.25rem, 3vw, 2.4rem);
 }
 
 .ambient-opportunities__group {
@@ -190,12 +192,12 @@
 
 .ambient-opportunity > article {
   display: grid;
-  grid-template-columns: 2.4rem minmax(14rem, 1.1fr) minmax(16rem, 1fr);
-  column-gap: clamp(1rem, 2.4vw, 2rem);
-  row-gap: 0.45rem;
+  grid-template-columns: 2.6rem minmax(16rem, 1.3fr) minmax(22rem, 1fr);
+  column-gap: clamp(1.15rem, 2.7vw, 2.4rem);
+  row-gap: 0.55rem;
   align-items: center;
   min-width: 0;
-  padding: clamp(0.72rem, 1.4vw, 1rem) 0;
+  padding: clamp(1rem, 1.8vw, 1.4rem) 0;
 }
 
 .ambient-opportunity[data-needs-attention="true"] > article {
@@ -231,7 +233,7 @@
   margin: 0.25rem 0 0;
   overflow-wrap: anywhere;
   font-family: var(--font-editorial);
-  font-size: clamp(1.12rem, 1.55vw, 1.42rem);
+  font-size: clamp(1.2rem, 1.7vw, 1.68rem);
   font-weight: 500;
   letter-spacing: -0.025em;
 }
@@ -321,13 +323,18 @@
 
 .ambient-opportunity__details > summary {
   display: inline-flex;
-  gap: 0.65rem;
+  gap: 0.45rem;
   align-items: center;
   min-height: 44px;
   color: var(--tone-ink-2, #514d47);
-  font-size: 0.74rem;
+  font-size: 0.78rem;
   font-weight: 700;
+  list-style: none;
   cursor: pointer;
+}
+
+.ambient-opportunity__details > summary::-webkit-details-marker {
+  display: none;
 }
 
 .ambient-opportunity__details > summary:hover,
@@ -337,15 +344,14 @@
   text-underline-offset: 0.25rem;
 }
 
-.ambient-opportunity__recorded-cue::before {
-  content: "Details ↓";
+.ambient-opportunity__details-icon {
+  flex: 0 0 auto;
   color: var(--tone-ink-3, #706b63);
-  font-size: 0.72rem;
-  font-weight: 720;
+  transition: transform 160ms ease;
 }
 
-.ambient-opportunity__details[open] .ambient-opportunity__recorded-cue::before {
-  content: "Close ↑";
+.ambient-opportunity__details[open] .ambient-opportunity__details-icon {
+  transform: rotate(180deg);
 }
 
 .ambient-opportunity__details > .ambient-opportunity__momentum {
@@ -380,29 +386,19 @@
   grid-column: 3;
   grid-row: 1 / span 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.9rem;
+  grid-template-columns: minmax(9rem, 1fr) auto;
+  gap: clamp(1rem, 2.2vw, 2rem);
   align-items: center;
   padding-top: 0.2rem;
 }
 
-.ambient-opportunity__next h4 {
-  margin: 0.2rem 0 0;
-  font-size: 1.05rem;
-}
-
-.ambient-opportunity__next .ambient-opportunity__reference,
-.ambient-opportunity__next h4 {
-  display: none;
-}
-
-.ambient-opportunity__next > div > p:last-child,
+.ambient-opportunity__next-reason,
 .ambient-opportunity__disabled-reason {
-  max-width: 50rem;
-  margin: 0.3rem 0 0;
+  max-width: 19rem;
+  margin: 0;
   color: var(--tone-ink-2, #514d47);
-  font-size: 0.8rem;
-  line-height: 1.4;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .ambient-opportunity__disabled-reason {
@@ -520,6 +516,16 @@
 
   .ambient-opportunity__next {
     grid-row: auto;
+    margin-left: 3.2rem;
+  }
+
+  .ambient-opportunity__details,
+  .ambient-opportunity__disabled-reason {
+    margin-left: 3.2rem;
+  }
+
+  .ambient-opportunity__primary-action {
+    white-space: normal;
   }
 
   .ambient-opportunity__momentum {
@@ -592,8 +598,8 @@
   }
 
   .ambient-opportunity__next {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.65rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
     margin-left: 2.75rem;
   }
 
@@ -635,7 +641,8 @@
     margin: 0 0 0 2.75rem;
   }
 
-  .ambient-opportunity__next > div > p:last-child {
+  .ambient-opportunity__next-reason {
+    max-width: none;
     font-size: 0.78rem;
   }
 
@@ -655,5 +662,9 @@
   .ambient-opportunities *::before,
   .ambient-opportunities *::after {
     scroll-behavior: auto !important;
+  }
+
+  .ambient-opportunity__details-icon {
+    transition: none;
   }
 }

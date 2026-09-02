@@ -342,7 +342,68 @@ function operationalMomentum(workflow) {
   };
 }
 
-function primaryIntent({ quoteId, identity, proposal, workflow, capabilities }) {
+function queueSummary({ proposal, workflow, lifecycle }) {
+  const item = workflow.item;
+  if (item?.type === "change_request") {
+    return {
+      kind: "customer-request",
+      text: item.state === "invalid"
+        ? "Customer request needs review"
+        : "Customer requested changes"
+    };
+  }
+  if (item?.type === "approval") {
+    const count = Math.max(1, Array.isArray(item.pendingRequests) ? item.pendingRequests.length : 0);
+    return {
+      kind: "approval",
+      text: count === 1 ? "Approval is waiting" : `${count} approvals are waiting`
+    };
+  }
+  if (item?.type === "follow_up") {
+    return {
+      kind: "follow-up",
+      text: item.state === "overdue" ? "Follow-up is overdue" : "Follow-up is due today"
+    };
+  }
+  if (item?.type === "post_event_closeout") {
+    return {
+      kind: "closeout",
+      text: ["blocked_source", "blocked_configuration"].includes(item.state)
+        ? "Closeout is blocked"
+        : "Post-event closeout is due"
+    };
+  }
+  if (!proposal.complete) {
+    return {
+      kind: "proposal",
+      text: `${proposal.gaps.length} proposal field${proposal.gaps.length === 1 ? "" : "s"} need review`
+    };
+  }
+  if (!workflow.evaluated) {
+    return { kind: "boundary", text: "Next step needs review" };
+  }
+  if (!lifecycle.available) {
+    return { kind: "lifecycle", text: "Lifecycle needs review" };
+  }
+  if (["sent", "viewed"].includes(lifecycle.raw)) {
+    return { kind: "customer-decision", text: "Customer decision not recorded" };
+  }
+  if (lifecycle.raw === "declined") {
+    return { kind: "closed", text: "Declined — no tracked follow-up" };
+  }
+  if (lifecycle.raw === "expired") {
+    return { kind: "closed", text: "Expired — no tracked follow-up" };
+  }
+  if (lifecycle.raw === "deleted") {
+    return { kind: "closed", text: "Deleted record" };
+  }
+  if (lifecycle.raw === "draft") {
+    return { kind: "proposal", text: "Ready for proposal review" };
+  }
+  return { kind: "current", text: "No tracked follow-up due" };
+}
+
+function primaryIntent({ quoteId, identity, proposal, workflow, lifecycle, capabilities }) {
   const object = { id: quoteId, type: "opportunity", label: identity.eventName };
   const attention = attentionLabel(workflow.item);
   if (attention) {
@@ -383,9 +444,10 @@ function primaryIntent({ quoteId, identity, proposal, workflow, capabilities }) 
 
   const enabled = capabilities.openOpportunity === true;
   const hasProposalGap = !proposal.complete;
+  const lifecycleNeedsReview = ["declined", "expired"].includes(lifecycle.raw);
   const namedOpportunityLabel = identity.eventName === "Event name not recorded"
-    ? "Open opportunity"
-    : `Open ${identity.eventName}`;
+    ? lifecycleNeedsReview ? "Review opportunity" : "Open opportunity"
+    : `${lifecycleNeedsReview ? "Review" : "Open"} ${identity.eventName}`;
   return {
     id: `${hasProposalGap ? "review-opportunity-proposal" : "open-opportunity"}:${quoteId}`,
     label: hasProposalGap ? "Review proposal details" : namedOpportunityLabel,
@@ -394,6 +456,8 @@ function primaryIntent({ quoteId, identity, proposal, workflow, capabilities }) 
     object,
     reason: hasProposalGap
       ? `${proposal.gaps.length} required proposal field${proposal.gaps.length === 1 ? "" : "s"} need review.`
+      : lifecycleNeedsReview
+        ? `This opportunity is recorded as ${lifecycle.value.toLowerCase()}, and no tracked follow-up is due.`
       : "There isn’t a due follow-up or an unfinished proposal detail in this record.",
     consequence: "The exact opportunity opens for review. No quote, customer, payment, booking, or provider state changes through navigation.",
     purpose: hasProposalGap ? "resolve" : "reveal_context",
@@ -420,6 +484,7 @@ function opportunityProjection(quote, options) {
     identity,
     proposal,
     workflow,
+    lifecycle: facts.lifecycle,
     capabilities: options.capabilities
   });
   const momentum = createOpportunityMomentum({
@@ -511,6 +576,11 @@ function opportunityProjection(quote, options) {
       target: intent.workflowTarget,
       reason: workflow.reason
     },
+    queueSummary: queueSummary({
+      proposal,
+      workflow,
+      lifecycle: facts.lifecycle
+    }),
     primaryAction,
     requiresAttention,
     groupId,
