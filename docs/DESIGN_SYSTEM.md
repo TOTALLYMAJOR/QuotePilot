@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-30 23:42:36 CDT
+Last updated: 2026-09-02 17:02:04 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -129,6 +129,15 @@ drawer over the still-visible workspace; on mobile it is a full-height sheet.
 Opening, expanding, collapsing, and closing are write-free. Focus enters the
 surface, remains trapped while it is modal, and returns to the invoking Quick
 Updates control after clean dismissal.
+
+On desktop and tablet, the exact opportunity breadcrumb and the outlined Quick
+Updates launcher share a sticky contextual action bar below the global chrome.
+The bar names the opportunity for assistive technology, remains attached to the
+selected object while its page scrolls, and does not become global navigation or
+compete with the ranked primary next action. At 620px and below, the context bar
+returns to ordinary document flow and hides its launcher; the mobile opportunity
+remote owns the one visible, full-width Quick Updates launcher so neither the
+content nor the fixed bottom navigation is covered.
 
 The common change is progressive: Menu exposes the supported service-style
 control; Staffing and Pricing expose their current summaries and outcome-named
