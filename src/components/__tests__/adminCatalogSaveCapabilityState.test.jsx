@@ -139,6 +139,28 @@ function setInputValue(input, value) {
 }
 
 describe("AdminCatalogModal save capability state", () => {
+  test("organizes Menu Builder as context, item list, and focused editor", async () => {
+    vi.mocked(getMenuItems).mockResolvedValue([{
+      id: "item-1",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      name: "Cocktail meatballs",
+      price: 18,
+      pricingType: "per_event",
+      active: true
+    }]);
+    renderView({ initialTab: "menu" });
+
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    expect(container.querySelector('[aria-label="Menu context"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Menu items"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Edit Cocktail meatballs"]')).toBeTruthy();
+    expect(container.querySelector('button[aria-pressed="true"]')?.textContent)
+      .toContain("Cocktail meatballs");
+    expect(container.textContent).toContain("Edits stay in the setup draft until you review and publish the catalog.");
+  });
+
   test("starts ready with no unsaved changes and no message", () => {
     renderView({ onSave: async () => ({ ok: true }) });
     expect(container.innerHTML).toContain('data-capability-state="ready"');

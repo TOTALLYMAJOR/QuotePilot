@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-01 20:19:52 CDT
+Last updated: 2026-09-02 13:00:46 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -39,18 +39,22 @@ provider receipts.
   actions; sales staff see the same readiness evidence with administrator-
   directed next actions and no edit capability.
 - **Menu Builder:** `src/components/AdminCatalogModal.jsx` uses Event type,
-  Menu section, Item, and Price basis language, provides search/filter/bulk
-  operations, and stages stable-ID changes through the private catalog setup
-  draft. Setup presets and `src/components/ImportStudioModal.jsx` use that same
-  staged authority.
+  Menu section, Item, and Price basis language in a responsive workbench. Its
+  visually distinct context rail progressively discloses structural maintenance;
+  its compact item list opens one focused editor; and bulk operations appear
+  only after selection. All edits retain the private catalog setup draft and
+  stable-ID authority. Setup presets and `src/components/ImportStudioModal.jsx`
+  use that same staged authority.
 - **Cost truth:** managed menu `costMinor` now round-trips through catalog reads,
   import preview, server publication, readiness coverage, authoritative pricing
   context, and the staff-only margin model. Customer proposal, export, and
   portal projections remain cost-free.
 - **Evidence boundary:** focused unit/component/server tests and a local build
-  qualify source behavior. Local Playwright proves keyboard focus, axe, and
-  overflow containment at 390, 768, and 1440 pixels plus staged-menu isolation;
-  responsive human review and hosted readback are still separate gates.
+  qualify source behavior. Local component and Playwright checks cover the
+  context/item/editor hierarchy, focused item switching, progressive bulk
+  actions, keyboard focus, axe, overflow containment at 390, 768, and 1440
+  pixels, and staged-menu isolation. Hosted readback and human acceptance remain
+  separate gates.
 
 ## Revision-safe quote review (August 31, 2026)
 

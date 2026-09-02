@@ -6132,7 +6132,7 @@
     },
     {
       "id": "catalog-draft-publish-authority",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -6183,12 +6183,14 @@
       ],
       "testPaths": [
         "src/components/__tests__/businessSetupCenter.test.jsx",
+        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
         "src/components/__tests__/catalogDraftStateBar.test.jsx",
         "src/hooks/__tests__/useCatalogSetupDraft.test.jsx",
         "src/lib/__tests__/catalogSetupDraftService.test.js",
         "src/lib/__tests__/catalogSetupDrafts.server.test.js",
         "src/lib/__tests__/businessReadiness.test.js",
-        "src/rules/__tests__/firestore.rules.test.js"
+        "src/rules/__tests__/firestore.rules.test.js",
+        "e2e/ambient-library.spec.js"
       ],
       "testLocators": [
         {
@@ -6198,6 +6200,10 @@
         {
           "path": "src/hooks/__tests__/useCatalogSetupDraft.test.jsx",
           "locator": "coalesces rapid local edits into one non-blocking sync after 800 ms"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "organizes Menu Builder as context, item list, and focused editor"
         },
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
@@ -6223,7 +6229,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 2 makes Library a role-safe Setup Center with six independent readiness projections and eight ordered next actions, adds the Menu Builder's operator language/search/filter/bulk workflow, and routes manual menu edits, setup presets, and catalog imports into the shared draft. Sales can inspect readiness but cannot edit. Publication remains explicit and receipt-backed; autosave cannot confirm pricing or mutate active catalog records, and missing cost evidence never blocks ordinary quote creation.",
+      "surfaceReviewNote": "Revision 3 preserves the role-safe Setup Center and private draft authority while reorganizing Menu Builder into a responsive context-and-item workbench. Structural maintenance is progressively disclosed, one compact list controls a focused item editor, and bulk actions appear only after selection. Sales can inspect readiness but cannot edit. Publication remains explicit and receipt-backed; autosave cannot confirm pricing or mutate active catalog records, and missing cost evidence never blocks ordinary quote creation.",
       "stateEvidence": [
         {
           "state": "ready",

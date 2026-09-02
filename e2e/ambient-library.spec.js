@@ -274,11 +274,19 @@ test.describe("Ambient Library", () => {
     await expect.poll(() => menuSection.locator("option").count()).toBeGreaterThan(1);
     await menuSection.selectOption({ index: 1 });
 
+    const menuSectionDisclosure = editor.locator("details.admin-menu-disclosure").nth(1);
+    if ((await menuSectionDisclosure.getAttribute("open")) === null) {
+      await menuSectionDisclosure.locator("summary").click();
+    }
     await editor.getByLabel("New menu section name").fill("Device buffer section");
     await editor.getByRole("button", { name: "Add Menu Section" }).click();
     await expect(menuSection.locator("option", { hasText: "Device buffer section" })).toHaveCount(1);
     await menuSection.selectOption({ index: 1 });
 
+    const addItemDisclosure = editor.locator("details.admin-menu-add-item");
+    if ((await addItemDisclosure.getAttribute("open")) === null) {
+      await addItemDisclosure.locator("summary").click();
+    }
     await editor.getByLabel("New menu item name").fill("Device buffer soup");
     await editor.getByLabel("New menu item price", { exact: true }).fill("12.34");
     await editor.getByRole("button", { name: "Add Item" }).click();
@@ -299,7 +307,15 @@ test.describe("Ambient Library", () => {
     await reopened.getByRole("combobox", { name: "Menu section", exact: true })
       .selectOption({ label: "Device buffer section" });
     await expect(reopened.getByLabel("Device buffer soup price", { exact: true })).toHaveValue("12.34");
-    await expect(reopened.locator(".admin-row-state", { hasText: "Device-only" })).toBeVisible();
+    await expect(reopened.getByLabel("Edit Device buffer soup").getByText("Device-only", { exact: true })).toBeVisible();
+    const menuBuilderAudit = await layoutAudit(page);
+    expect(menuBuilderAudit.documentOverflow).toBeLessThanOrEqual(1);
+    expect(menuBuilderAudit.surfaceOverflow).toBeLessThanOrEqual(1);
+    expect(menuBuilderAudit.collisions).toEqual([]);
+    const menuBuilderAccessibility = await new AxeBuilder({ page })
+      .include(".admin-menu-builder")
+      .analyze();
+    expect(menuBuilderAccessibility.violations).toEqual([]);
     const draftBarAccessibility = await new AxeBuilder({ page })
       .include(".catalog-draft-state-bar")
       .analyze();

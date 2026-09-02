@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 11:30:32 CDT
+Last updated: 2026-09-02 13:00:46 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Redesigned Menu Builder as a responsive two-part workbench without changing
+  catalog authority. Event type and Menu section now live in a distinct context
+  rail with progressive structural controls; a compact item chooser opens one
+  focused editor instead of rendering every record as a nine-control row; and
+  bulk controls appear only after selection. Desktop and phone presentations
+  use explicit inset, canvas, selected-row, and draft surfaces so hierarchy no
+  longer depends on white-on-white card boundaries.
 - Reorganized the canonical User Manual around a concise everyday operating
   guide verified against the authenticated production workspace and the exact
   local release candidate. It now gives role-safe first setup, daily quote,

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-02 11:30:32 CDT
+Last updated: 2026-09-02 13:00:46 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -78,25 +78,26 @@ make and publish catalog changes.
 ### Fastest safe Menu Builder workflow
 
 1. Open **Library → Offerings → Open Menu Builder**.
-2. Select an **Event type**, then a **Menu section**. This context controls the
-   items shown below it.
-3. Use **Search items** before scrolling. Turn on **Show unavailable** only when
-   restoring or reviewing hidden choices.
-4. Add or edit **Name**, **Price basis**, **Selling price**, **Cost**, and
-   **Availability**. Changes appear immediately in the browser and synchronize
-   to the setup draft after a short pause; leaving a field does not publish it.
-5. For repeated changes, select rows and use **Make available**, **Make
-   unavailable**, or **Move selected** once. Stable item identities are
-   preserved and unsafe dependency changes are rejected.
+2. In **Choose the context**, select an **Event type**, then a **Menu section**.
+   Use **Add or rename** only when the menu structure itself needs maintenance.
+3. In **Edit the items**, search by name or turn on **Show unavailable**. Choose
+   an item from the compact list to open its one focused editor.
+4. Edit **Name**, **Price basis**, **Selling price**, **Cost**, and
+   **Availability** in that editor. Changes appear immediately in the browser
+   and synchronize to the setup draft after a short pause; leaving a field does
+   not publish it.
+5. For repeated changes, select items in the list. The bulk-action bar appears
+   only after selection; use it to **Make available**, **Make unavailable**, or
+   **Move selected** once. Stable item identities are preserved and unsafe
+   dependency changes are rejected.
 6. Watch the sticky draft bar. Resolve **Device-only** or **Revision conflict**
    before leaving the session.
 7. Select **Review and publish catalog**, inspect the combined changes, then
    publish once. Existing quotes are never silently repriced.
 
-The present builder is a dense administrative surface, especially on a phone.
-Use one event type and section at a time, search early, and prefer bulk actions
-to repeated row edits. A future presentation improvement can simplify this
-without changing the draft-and-publish authority described above.
+On a phone, the context comes first, followed by a bounded item chooser and one
+editor. Scroll inside the chooser to switch items without expanding every item
+form down the page.
 
 ## Access and Roles
 - **Secure email verification:** open only the newest verification message for
@@ -2405,8 +2406,11 @@ catalog** activates a new catalog revision and records pricing confirmation.
 If synchronization fails, **device-only** means those edits have not reached the
 server and must not be treated as saved or published.
 
-The Menu Builder follows **Event type → Menu section → Item**. Search and
-availability filters narrow the visible list; bulk controls can change
+The Menu Builder follows **Event type → Menu section → Item** in a two-part
+workbench. A distinct context rail holds the event type and menu section;
+infrequent create and rename controls stay collapsed until requested. Search
+and availability filters narrow a compact item list, and one selected item opens
+in the focused editor. Bulk controls appear only after selection and can change
 availability or move selected items while preserving their stable identities.
 Price basis appears as **Per guest**, **Per item**, or **Per event**. A **Setup
 preset** and a catalog Import Studio batch stage into the same draft. A **Quote
