@@ -560,6 +560,8 @@
 
   .qup-body {
     padding: 0 18px;
+    padding-bottom: 24px;
+    scroll-padding-block-end: 28px;
   }
 
   .qup-footer {
@@ -597,6 +599,10 @@
   .qup-accordion-trigger,
   .qup-library-action button {
     padding: 10px 0;
+  }
+
+  .qup-library-action button {
+    scroll-margin-block-end: 28px;
   }
 
   .qup-accordion-trigger,

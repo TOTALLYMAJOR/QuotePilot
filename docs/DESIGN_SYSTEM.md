@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 18:07:27 CDT
+Last updated: 2026-09-02 18:33:59 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -149,6 +149,12 @@ compete with the ranked primary next action. At 620px and below, the context bar
 returns to ordinary document flow and hides its launcher; the mobile opportunity
 remote owns the one visible, full-width Quick Updates launcher so neither the
 content nor the fixed bottom navigation is covered.
+
+The mobile sheet's scroll region reserves at least 24px below its last task
+target and applies matching scroll padding and target margin. Keyboard focus or
+programmatic reveal of **Open full Library** must place the complete 44px target
+above the fixed action footer, including its focus outline; a partly covered
+label or icon is a failed layout state, not a cue that more content exists.
 
 The common change is progressive: Menu exposes the supported service-style
 control; Staffing and Pricing expose their current summaries and outcome-named
