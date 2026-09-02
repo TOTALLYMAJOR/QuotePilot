@@ -2484,6 +2484,7 @@ export function QuoteHistoryView({
             <QuoteDecisionDebtPanel
               organizationId={organizationId}
               quoteId={focusedQuote.id}
+              tenantTimeZone={tenantTimeZone}
               available={Boolean(organizationId)}
               onOpenWorkflow={onOpenWorkflow}
               onReadStateChange={handleFocusedDecisionDebtRead}
@@ -2814,6 +2815,7 @@ export function QuoteHistoryView({
           <QuoteDecisionDebtPanel
             organizationId={organizationId}
             quoteId={focusedQuote.id}
+            tenantTimeZone={tenantTimeZone}
             available={Boolean(organizationId)}
             onOpenWorkflow={onOpenWorkflow}
             onReadStateChange={handleFocusedDecisionDebtRead}

@@ -6,9 +6,21 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
+function normalizeTimeZone(value) {
+  const candidate = text(value);
+  if (!candidate) return "";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format();
+    return candidate;
+  } catch {
+    return "";
+  }
+}
+
 export default function QuoteDecisionDebtPanel({
   organizationId = "",
   quoteId = "",
+  tenantTimeZone = "",
   available = true,
   onOpenWorkflow,
   onReadStateChange
@@ -24,6 +36,7 @@ export default function QuoteDecisionDebtPanel({
   const load = useCallback(async () => {
     const scopedOrganizationId = text(organizationId);
     const scopedQuoteId = text(quoteId);
+    const scopedTimeZone = normalizeTimeZone(tenantTimeZone);
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     if (!available || !scopedOrganizationId || !scopedQuoteId) {
@@ -31,6 +44,15 @@ export default function QuoteDecisionDebtPanel({
         loading: false,
         result: null,
         error: "Decisions to review require a connected quote from this workspace.",
+        stale: false
+      });
+      return;
+    }
+    if (!scopedTimeZone) {
+      setRead({
+        loading: false,
+        result: null,
+        error: "Configure an explicit tenant IANA time zone in Library pricing before deriving Decision Debt.",
         stale: false
       });
       return;
@@ -58,7 +80,7 @@ export default function QuoteDecisionDebtPanel({
         stale: Boolean(current.result)
       }));
     }
-  }, [available, organizationId, quoteId]);
+  }, [available, organizationId, quoteId, tenantTimeZone]);
 
   useEffect(() => {
     load();

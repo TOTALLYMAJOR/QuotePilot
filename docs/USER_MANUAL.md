@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-08-31 21:35:45 CDT
+Last updated: 2026-09-01 20:19:52 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -982,6 +982,10 @@ unchanged.
 - Open `Workflow` and select the Decision Debt view. It appears only from
   server-owned unresolved dependency state; an empty result does not infer that
   every operational task or customer decision is complete.
+- Quote-level Decision Debt checks require the tenant's valid IANA business time
+  zone. When it is missing or invalid, QuotePilot keeps the read local and points
+  an administrator to `Library` → `Pricing`; retry after saving and publishing
+  that configuration. The blocked read does not alter the quote or dependency.
 - Each item shows the exact quote/source revision, event and lock dates, and
   affected dependencies. When authoritative commercial exposure exists, it also
   shows a bounded 0–100 score and the deterministic factors: dependency weight

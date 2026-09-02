@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   registerWithEmail,
   requestPasswordReset,
@@ -20,9 +20,12 @@ export function friendlyError(err) {
 }
 
 export default function AuthGate({ sessionError = "" }) {
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({ email: "", password: "" });
   const [pendingAction, setPendingAction] = useState("");
   const [status, setStatus] = useState("");
   const busy = Boolean(pendingAction);
@@ -31,10 +34,23 @@ export default function AuthGate({ sessionError = "" }) {
     if (busy) return;
     setMode(nextMode);
     setStatus("");
+    setFieldErrors({ email: "", password: "" });
+  };
+
+  const validateCredentials = ({ includePassword = true } = {}) => {
+    const nextErrors = {
+      email: email.trim() ? "" : "Enter your email address.",
+      password: includePassword && !password ? "Enter your password." : ""
+    };
+    setFieldErrors(nextErrors);
+    if (nextErrors.email) emailRef.current?.focus();
+    else if (nextErrors.password) passwordRef.current?.focus();
+    return !nextErrors.email && !nextErrors.password;
   };
 
   const submit = async (event) => {
     event?.preventDefault();
+    if (!validateCredentials()) return;
     setPendingAction(mode === "register" ? "register" : "signin");
     setStatus("");
     try {
@@ -64,6 +80,7 @@ export default function AuthGate({ sessionError = "" }) {
   };
 
   const submitPasswordReset = async () => {
+    if (!validateCredentials({ includePassword: false })) return;
     setPendingAction("password-reset");
     setStatus("");
     try {
@@ -103,36 +120,56 @@ export default function AuthGate({ sessionError = "" }) {
           </button>
         </div>
 
-        <form onSubmit={submit}>
+        <form onSubmit={submit} noValidate>
           <label className="field">
             <span>Email</span>
             <input
+              ref={emailRef}
               type="email"
               autoComplete="email"
               autoFocus
+              required
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
                 setStatus("");
+                setFieldErrors((current) => ({ ...current, email: "" }));
               }}
               placeholder="you@business.com"
               disabled={busy}
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? "auth-email-error" : undefined}
             />
+            {fieldErrors.email && (
+              <span id="auth-email-error" className="error-note" role="alert">
+                {fieldErrors.email}
+              </span>
+            )}
           </label>
 
           <label className="field">
             <span>Password</span>
             <input
+              ref={passwordRef}
               type="password"
               autoComplete={mode === "register" ? "new-password" : "current-password"}
+              required
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
                 setStatus("");
+                setFieldErrors((current) => ({ ...current, password: "" }));
               }}
               placeholder="At least 8 characters"
               disabled={busy}
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? "auth-password-error" : undefined}
             />
+            {fieldErrors.password && (
+              <span id="auth-password-error" className="error-note" role="alert">
+                {fieldErrors.password}
+              </span>
+            )}
           </label>
 
           <div className="auth-actions">
