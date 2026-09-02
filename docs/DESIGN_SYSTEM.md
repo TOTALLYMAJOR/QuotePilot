@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 17:02:04 CDT
+Last updated: 2026-09-02 18:07:27 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -103,6 +103,17 @@ meaningful index on desktop and mobile; groups and ordering come from actual
 attention/current-work state and recorded dates, never fixture position.
 Opening a row preserves the exact opportunity identity and its event, menu,
 staffing, pricing, proposal/activity, and evidence context.
+
+Each populated Opportunities row is one open editorial work-queue line: exact
+identity, lifecycle, recorded event context, one concise state-specific summary,
+one outcome-named primary action, and one plainly named **Details** disclosure.
+The concise summary is a presentation projection only; navigation continues to
+carry the fuller exact-object arrival reason, consequence, and next resolution.
+Desktop and tablet may align summary and action beside identity when space
+allows. At 620px and below they stack in that order so neither copy nor action is
+squeezed into a competing column. Duplicate disclosure labels, generic repeated
+“There isn’t…” paragraphs, and a second equally weighted row action are not part
+of this contract.
 
 **Clients** keeps the approved hierarchy: eyebrow, editorial headline, short
 explanation, hospitality image, opportunity story/action, three relationship

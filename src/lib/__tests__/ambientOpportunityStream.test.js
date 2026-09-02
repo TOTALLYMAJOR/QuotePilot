@@ -130,7 +130,51 @@ describe("buildAmbientOpportunityStream", () => {
       expect(Object.keys(value).join(" ")).not.toMatch(/score|percent|readiness/iu);
     }
     expect(Object.keys(row.momentum).join(" ")).not.toMatch(/score|percent|readiness/iu);
+    expect(row.queueSummary).toEqual({
+      kind: "current",
+      text: "No tracked follow-up due"
+    });
     expect(row.primaryAction.outcomeLabel).toBe("Open Bennett celebration");
+  });
+
+  test("projects concise queue copy without weakening the exact arrival reason", () => {
+    const draft = build({
+      quotes: [completeQuote({ status: "draft" })]
+    }).rows[0];
+    const declined = build({
+      quotes: [completeQuote({ status: "declined" })]
+    }).rows[0];
+    const approval = build({
+      quotes: [completeQuote({
+        workflow: {
+          approvalRequests: [{
+            id: "approval-brief",
+            state: "pending",
+            requestedAtISO: "2026-08-10T12:00:00.000Z"
+          }]
+        }
+      })]
+    }).rows[0];
+
+    expect(draft.queueSummary).toEqual({
+      kind: "proposal",
+      text: "Ready for proposal review"
+    });
+    expect(declined.queueSummary).toEqual({
+      kind: "closed",
+      text: "Declined — no tracked follow-up"
+    });
+    expect(declined.primaryAction.outcomeLabel).toBe("Review Bennett celebration");
+    expect(declined.primaryAction.arrivalContract.reason).toBe(
+      "This opportunity is recorded as declined, and no tracked follow-up is due."
+    );
+    expect(approval.queueSummary).toEqual({
+      kind: "approval",
+      text: "Approval is waiting"
+    });
+    expect(approval.primaryAction.arrivalContract.reason).toBe(
+      "A role-gated approval request is waiting on this exact opportunity."
+    );
   });
 
   test("keeps proposal momentum healthy when only recommended phone enrichment is missing", () => {

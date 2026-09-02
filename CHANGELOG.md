@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 17:02:04 CDT
+Last updated: 2026-09-02 18:07:27 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Recast the populated Opportunities index as the selected concise editorial
+  work queue: each row now pairs exact identity and lifecycle with a short,
+  state-specific summary, one outcome-named action, and one **Details**
+  disclosure. The fuller arrival reason and authority payload remain intact,
+  phone layouts stack the reason above the action, and settled browser proof
+  now waits for fonts and paint before verifying the complete **New quote**
+  label across desktop, tablet, mobile, route changes, and responsive resizing.
 - Moved the opportunity-specific **Quick Updates** launcher from the large
   desktop title into a sticky breadcrumb action bar that remains available
   while the selected opportunity scrolls. Desktop and tablet keep one outlined

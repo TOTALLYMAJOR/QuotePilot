@@ -85,6 +85,9 @@ describe("AmbientOpportunitiesStream", () => {
     const markup = renderToStaticMarkup(
       <AmbientOpportunitiesStream {...baseProps} quotes={[quote(1), quote(2)]} />
     );
+    const parsed = document.createElement("div");
+    parsed.innerHTML = markup;
+    const rows = Array.from(parsed.querySelectorAll(".ambient-opportunity"));
 
     expect(markup).toContain('data-surface-contract-id="ambient-opportunities-stream"');
     expect(markup).toContain('data-surface-purpose="clarify advance resolve reveal_context"');
@@ -94,6 +97,12 @@ describe("AmbientOpportunitiesStream", () => {
     expect(markup).toContain("Customer 2");
     expect(markup.match(/class="ambient-opportunity"/gu)).toHaveLength(2);
     expect(markup.match(/class="ambient-opportunity__primary-action"/gu)).toHaveLength(2);
+    expect(rows.every((row) => (
+      row.querySelectorAll(".ambient-opportunity__primary-action").length === 1
+      && row.querySelector(".ambient-opportunity__next-reason")?.textContent === "No tracked follow-up due"
+      && row.querySelector(".ambient-opportunity__details summary span")?.textContent === "Details"
+    ))).toBe(true);
+    expect(markup).not.toContain("Opportunity details");
     expect(markup).not.toContain("<table");
     expect(markup).not.toContain("Quote readiness");
   });
@@ -314,6 +323,11 @@ describe("AmbientOpportunitiesStream", () => {
 
     expect(css).toMatch(/min-height:\s*44px/u);
     expect(css).toMatch(/@media \(max-width:\s*620px\)/u);
+    expect(css).toMatch(
+      /@media \(max-width:\s*620px\)[\s\S]*?\.ambient-opportunity__next\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/u
+    );
+    expect(css).toMatch(/\.ambient-opportunity__details-icon/u);
+    expect(css).not.toMatch(/content:\s*["'](?:Details|Close)/u);
     expect(css).not.toMatch(/position:\s*(?:fixed|absolute|sticky)/u);
     expect(css).not.toMatch(/\bz-index\s*:/u);
     expect(css).not.toMatch(/transform:\s*translate/u);
