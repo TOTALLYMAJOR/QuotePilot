@@ -606,7 +606,10 @@ export default function QuickUpdatesPanel({
           </button>
         </div>
 
-        <div className="qup-body">
+        <div
+          className="qup-body"
+          data-quick-updates-scroll-region="body"
+        >
           {state.phase === QUICK_UPDATES_PHASE.REVIEW ? (
             <section className="qup-review" aria-labelledby="qup-review-delta-title">
               <h3 id="qup-review-delta-title">Requested change</h3>
@@ -861,7 +864,10 @@ export default function QuickUpdatesPanel({
                   )}
                 </section>
 
-                <div className="qup-library-action">
+                <div
+                  className="qup-library-action"
+                  data-quick-updates-scroll-target="library"
+                >
                 <button
                   type="button"
                   onClick={(event) => requestDismissal("library", () => onOpenQuickUpdatesLibrary?.({
@@ -902,7 +908,10 @@ export default function QuickUpdatesPanel({
           )}
         </div>
 
-        <footer className="qup-footer">
+        <footer
+          className="qup-footer"
+          data-quick-updates-fixed-footer="actions"
+        >
           {busy ? (
             <button type="button" className="qup-primary qup-primary--full" disabled>
               {state.phase === QUICK_UPDATES_PHASE.SAVING ? "Saving…" : "Refreshing…"}

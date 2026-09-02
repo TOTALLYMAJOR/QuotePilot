@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 18:07:27 CDT
+Last updated: 2026-09-02 18:33:59 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reserved explicit mobile scroll clearance between **Open full Library** and
+  the fixed Quick Updates action footer. Focus now reveals the complete Library
+  target above the footer with its outline intact, and the Calm Four browser
+  gate verifies the clearance rather than relying on a screenshot alone.
 - Recast the populated Opportunities index as the selected concise editorial
   work queue: each row now pairs exact identity and lifecycle with a short,
   state-specific summary, one outcome-named action, and one **Details**

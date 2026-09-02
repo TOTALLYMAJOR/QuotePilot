@@ -221,6 +221,9 @@ describe("QuickUpdatesPanel", () => {
     expect(dialog.textContent).toContain("Quick Updates");
     expect(dialog.textContent).toContain("Service style");
     expect(dialog.textContent).not.toContain("Courses");
+    expect(dialog.querySelector('[data-quick-updates-scroll-region="body"]')).not.toBeNull();
+    expect(dialog.querySelector('[data-quick-updates-scroll-target="library"]')).not.toBeNull();
+    expect(dialog.querySelector('[data-quick-updates-fixed-footer="actions"]')).not.toBeNull();
     expect(byButton("Menu").getAttribute("aria-expanded")).toBe("true");
     expect(byButton("Staffing").getAttribute("aria-expanded")).toBe("false");
     expect(byButton("Pricing").getAttribute("aria-expanded")).toBe("false");

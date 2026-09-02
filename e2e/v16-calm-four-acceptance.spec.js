@@ -280,6 +280,42 @@ async function expectNoHorizontalOverflow(page, selector = "html") {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+async function expectQuickUpdatesLibraryFooterClearance(panel) {
+  const library = panel.getByRole("button", { name: "Open full Library" });
+
+  await library.focus();
+  await expect(library).toBeFocused();
+  await expect(library).toBeInViewport({ ratio: 1 });
+
+  const geometry = await panel.evaluate((root) => {
+    const scrollRegion = root.querySelector('[data-quick-updates-scroll-region="body"]');
+    const libraryAction = root.querySelector('[data-quick-updates-scroll-target="library"] button');
+    const actionFooter = root.querySelector('[data-quick-updates-fixed-footer="actions"]');
+    if (!scrollRegion || !libraryAction || !actionFooter) return null;
+    const bodyBox = scrollRegion.getBoundingClientRect();
+    const actionBox = libraryAction.getBoundingClientRect();
+    const footerBox = actionFooter.getBoundingClientRect();
+    const bodyStyle = getComputedStyle(scrollRegion);
+    const actionStyle = getComputedStyle(libraryAction);
+    return {
+      actionTop: actionBox.top,
+      actionBottom: actionBox.bottom,
+      bodyTop: bodyBox.top,
+      bodyBottom: bodyBox.bottom,
+      footerTop: footerBox.top,
+      scrollPaddingBottom: Number.parseFloat(bodyStyle.scrollPaddingBottom || "0"),
+      scrollMarginBottom: Number.parseFloat(actionStyle.scrollMarginBottom || "0")
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry.actionTop).toBeGreaterThanOrEqual(geometry.bodyTop - 1);
+  expect(geometry.actionBottom).toBeLessThanOrEqual(geometry.bodyBottom - 16);
+  expect(geometry.actionBottom).toBeLessThanOrEqual(geometry.footerTop - 16);
+  expect(geometry.scrollPaddingBottom).toBeGreaterThanOrEqual(24);
+  expect(geometry.scrollMarginBottom).toBeGreaterThanOrEqual(24);
+}
+
 async function settleVisualProof(page, { resetScroll = true } = {}) {
   await page.evaluate(async (shouldResetScroll) => {
     await document.fonts?.ready;
@@ -805,6 +841,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     const mobileBeforeUrl = page.url();
     await expectQuickUpdatesLauncherLayout(page, { persistent: false });
     const mobileQuickUpdates = await openQuickUpdates(page);
+    await expectQuickUpdatesLibraryFooterClearance(mobileQuickUpdates.panel);
     await captureV16Proof(page, "15-mobile-quick-updates-open.png");
     await mobileQuickUpdates.panel.getByRole("button", { name: "Close Quick Updates" }).click();
     await expect(mobileQuickUpdates.panel).toBeHidden();
