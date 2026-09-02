@@ -1,9 +1,102 @@
 # User Manual
 
-Last updated: 2026-09-01 20:19:52 CDT
+Last updated: 2026-09-02 11:30:32 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
+
+## Start here: the everyday operating guide
+
+QuotePilot separates active business records from drafts and recommendations.
+Use this short path for routine work; the later sections are the detailed
+reference for each feature.
+
+### Know where to go
+
+| Destination | Use it for | Main action |
+| --- | --- | --- |
+| **Now** | Today's priorities and upcoming work | Open the item that needs attention |
+| **Opportunities** | Active and recent events | Review the next required action or open the event |
+| **Clients** | Contact details and event history | Start or continue an opportunity |
+| **Library** | Business setup, catalog, menus, pricing, and readiness | Follow the first setup row that needs review |
+| **New quote** | A new event or pasted inquiry | Complete the draft blockers, then save |
+| **Search** | A known client, quote, or event | Open the exact matching record |
+| **Operations** | Reporting, schedules, integrations, and admin tools | Choose the role-authorized operational surface |
+
+On a phone, the four primary destinations stay in the bottom navigation. Use
+the workspace/avatar control for Search, Operations, account settings, and
+sign-out.
+
+### Five-minute first setup
+
+1. Sign in and open **Library**.
+2. Read **Business ready to quote** first. If it is blocked, use the one action
+   on the first blocking setup row.
+3. Work down the setup checklist: **Identity → Offerings → Pricing → Costs and
+   margin evidence → Quote starting points → Staffing policy → Users and roles
+   → Connections**.
+4. Treat each readiness measure independently. Missing optional starting
+   points, additional users, provider connections, or cost evidence does not by
+   itself block ordinary quote creation. Missing cost evidence does make margin
+   unavailable for the affected scope.
+5. When catalog editing is complete, confirm the draft bar says **Draft saved**
+   or **Ready to review**, then select **Review and publish catalog**. Review the
+   change set and publish it once. Until publication succeeds, the currently
+   published catalog remains the pricing authority.
+
+Sales staff can read setup status and the next action. An administrator must
+make and publish catalog changes.
+
+### Daily quote workflow
+
+1. Select **New quote**, or open an existing event from **Opportunities**.
+2. Enter the client and event facts. The draft identifies every known blocker;
+   resolve those before saving.
+3. Choose the package, service style, menu, staffing, rentals, and pricing.
+4. Review the live total, deposit, proposal readiness, and any catalog-revision
+   or commercial-consequence review.
+5. Select **Save draft**. Saving does not send the proposal or prove delivery.
+6. Preview the customer view. An administrator may send only through an
+   available provider-backed action; a provider-accepted receipt, not the button
+   click, is delivery evidence.
+7. Return to **Opportunities** to track the next recorded action.
+
+### Read state labels literally
+
+- **Unsaved** means the change exists only in the current browser state.
+- **Saving draft** means QuotePilot is synchronizing staged intent.
+- **Draft saved** means the unpublished setup draft reached the server.
+- **Device-only** means synchronization failed; keep the page open and retry.
+- **Ready to review** means the draft can enter publication review.
+- **Published catalog active** identifies the only catalog used as current
+  pricing authority.
+- **New draft** or **Saved draft** does not mean a quote was sent, viewed,
+  accepted, booked, or paid.
+- **Connection required** is an integration-readiness state, not proof that an
+  outbound message or payment failed.
+
+### Fastest safe Menu Builder workflow
+
+1. Open **Library → Offerings → Open Menu Builder**.
+2. Select an **Event type**, then a **Menu section**. This context controls the
+   items shown below it.
+3. Use **Search items** before scrolling. Turn on **Show unavailable** only when
+   restoring or reviewing hidden choices.
+4. Add or edit **Name**, **Price basis**, **Selling price**, **Cost**, and
+   **Availability**. Changes appear immediately in the browser and synchronize
+   to the setup draft after a short pause; leaving a field does not publish it.
+5. For repeated changes, select rows and use **Make available**, **Make
+   unavailable**, or **Move selected** once. Stable item identities are
+   preserved and unsafe dependency changes are rejected.
+6. Watch the sticky draft bar. Resolve **Device-only** or **Revision conflict**
+   before leaving the session.
+7. Select **Review and publish catalog**, inspect the combined changes, then
+   publish once. Existing quotes are never silently repriced.
+
+The present builder is a dense administrative surface, especially on a phone.
+Use one event type and section at a time, search early, and prefer bulk actions
+to repeated row edits. A future presentation improvement can simplify this
+without changing the draft-and-publish authority described above.
 
 ## Access and Roles
 - **Secure email verification:** open only the newest verification message for
@@ -58,7 +151,7 @@ elsewhere; reload and reconcile instead of assuming either copy won. Sales
 staff may view readiness but cannot edit, review, or publish the private setup
 draft.
 
-## Calm Four workspace (v0.16 source candidate)
+## Primary workspace
 
 The v0.16 candidate keeps four persistent primary destinations:
 
@@ -1278,9 +1371,9 @@ unchanged.
 ## Admin Catalog Operations
 - Open `Catalog` or `/app/catalog` (admin users only). Contextual catalog setup
   from the quote builder may still open the guarded dialog wrapper.
-- In a local build with `VITE_AMBIENT_UI_ENABLED=true`, `/app/catalog` opens as
-  **Library**. The first view shows the current catalog source, observation time,
-  **Catalog version**, pricing-review state, Catalog choices, and Event Templates.
+- `/app/catalog` opens as **Library**. The first view shows independent business
+  readiness, the ordered setup checklist, catalog choices, quote starting
+  points, and pricing state.
   It does not add a catalog read or save path. A sales user receives a role-
   specific explanation and **Return to Now** instead of an empty or generic
   destination.
@@ -1293,7 +1386,7 @@ unchanged.
   isolated to the active organization, say **Catalog saved in this browser**,
   and are not proof of the organization's server catalog, current pricing
   authority, or operational availability.
-- Select a Catalog row or exact Event Template to open that object in the
+- Select a Catalog row or exact Quote starting point to open that object in the
   existing editor. QuotePilot acknowledges the click before the editor mounts,
   focuses the requested tab or template, and never substitutes another record.
   Ordinary movement to Now, Opportunities, Clients, or another staff surface
@@ -1311,43 +1404,45 @@ unchanged.
   hidden until a pack is populated or the admin explicitly chooses
   `Create my own catalog`.
 - Use tabbed sections:
-  - Starter Packs
+  - Setup presets
   - Packages
   - Addons
   - Rentals
   - Menu
   - Templates
   - Pricing
-- In `Templates`, add or update reusable event starting points. A template's
+- In `Templates`, add or update reusable quote starting points. A starting point's
   stable ID does not change after creation. Record its event type, service
   style, hours, package, add-ons, rentals, and menu references. When the menu
   inventory is not fully loaded, saved menu references remain preserved and
   visibly awaiting catalog validation; they are not silently removed or
-  classified as missing. Template edits remain staged until **Save catalog
-  changes**, which uses the existing catalog revision and reconciliation path.
+  classified as missing. Quote-starting-point edits remain staged until
+  **Review and publish catalog** completes against the current catalog revision.
 - Menu management flow:
-  1. Select Event Type
-  2. Select Category
-  3. Add/Edit/Delete items
-  4. Inline edits auto-save on blur or Enter
-- Finish or discard any unsaved Catalog settings before changing managed-menu
-  records, and finish or discard managed-menu work before saving Catalog
-  settings. QuotePilot does not combine these two draft areas into one save.
-- All seven managed-menu operations—create or rename an event type; create or
-  rename a category; and create, update (including deactivate), or delete a menu
-  item—use the catalog revision currently loaded in Catalog Admin. The Firebase
-  transaction and browser-local fallback both compare that revision before any
-  record is written; local fallback checks the active organization's catalog
-  revision. Deactivation or deletion also refuses items still referenced by a
-  package or event template. A successful change advances the revision and
-  reopens pricing review. If another session changes the catalog first,
-  QuotePilot keeps the current work, loads nothing over it silently, and asks
-  the user to refresh or retry instead of overwriting the newer catalog.
+  1. Select an Event type.
+  2. Select a Menu section.
+  3. Search, add, or edit items in that exact context.
+  4. Use selection controls for bulk availability or dependency-safe movement.
+  5. Wait for the setup draft to synchronize.
+  6. Review and publish the combined catalog change once.
+- Menu and other catalog edits use the same server-backed setup draft. Field
+  blur and Enter may finish local editing, but neither activates pricing nor
+  advances the catalog revision. A deliberately entered zero is preserved;
+  invalid, negative, non-finite, or over-bound money values are rejected.
+- Creating or renaming an event type or menu section, and creating, updating,
+  deactivating, moving, or deleting a menu item, preserves stable record IDs.
+  Publication verifies the draft generation, active catalog revision,
+  dependencies, and baselines before applying anything. Deactivation, movement,
+  or deletion is rejected when it would break a package or quote starting point.
+  If another session changes the catalog first, QuotePilot keeps recoverable
+  staged work and reports a revision conflict instead of overwriting newer data.
 - Menu item fields include:
   - Name
-  - Price
-  - `pricingType`
-  - `active` toggle
+  - Price basis
+  - Selling price
+  - Cost
+  - Availability
+  - Menu section
 - In `Packages`, QuotePilot now opens one package workspace instead of a stack
   of permanently expanded forms. Use the package list to switch records
   without saving or discarding the current draft. The selected package leads
@@ -1355,7 +1450,7 @@ unchanged.
   margin state, readiness, and one next action.
 - Current inclusions appear before any candidate list. `Add menu items`,
   `Add add-ons`, and `Add rentals` reveal the searchable selector for that
-  group only. Search or filter by category, select multiple records, then use
+  group only. Search or filter by menu section, select multiple records, then use
   `Apply` to stage that exact group or `Cancel` to leave the package unchanged.
   The menu event-type control narrows menu candidates for these add actions; it
   does not decide package eligibility or quote behavior.
@@ -1371,12 +1466,11 @@ unchanged.
   the quote builder, covered choices remain `Included at no added charge —
   select to add`; unselected choices do not appear in the customer scope, and
   selected choices price at $0 instead of charging twice.
-- The in-flow package workspace save bar still saves the whole catalog draft, not just
-  the selected package. Managed-menu edits remain a separate mutation path and
-  must be finished or discarded before the ordinary catalog save runs.
-- Save overall catalog changes with `Save Catalog`.
+- The in-flow package workspace and Menu Builder stage into the same setup draft.
+  **Review and publish catalog** validates and activates the whole bounded change
+  set, not only the currently selected package or menu section.
 - In `Pricing` → `Proposal Details`, set `Business time zone` to a valid IANA value
-  such as `America/Chicago`, then save the catalog. Revenue timing uses this
+  such as `America/Chicago`, then review and publish the catalog. Revenue timing uses this
   tenant-owned calendar context and fails closed when it is blank or invalid;
   the browser's local clock does not become Revenue Autopilot authority.
 - In `Pricing` → `Proposal Details`, choose `Proposal font size`: Compact,
@@ -1391,7 +1485,7 @@ unchanged.
   rewrite already-saved quote snapshots.
 - In `Pricing` → `Your Customer-facing Brand`, choose Midnight Amber,
   Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
-  select `Save catalog changes` to persist the six existing brand colors for
+  use **Review and publish catalog** to persist the six existing brand colors for
   future quotes. Editing an individual color afterward is treated as a custom
   palette. A theme save uses the same catalog revision check as every other
   settings save and does not replace package, fee, tax, deposit, travel, or

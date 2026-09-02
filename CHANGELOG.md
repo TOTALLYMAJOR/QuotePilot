@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 00:07:26 CDT
+Last updated: 2026-09-02 11:30:32 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reorganized the canonical User Manual around a concise everyday operating
+  guide verified against the authenticated production workspace and the exact
+  local release candidate. It now gives role-safe first setup, daily quote,
+  state-label, and Menu Builder workflows before the detailed reference, and
+  removes stale managed-menu instructions that implied field blur published a
+  catalog change. This documentation update does not change product behavior or
+  broaden production/provider acceptance claims.
 - Hardened the live staff entry and exact-quote Decision Debt recovery paths.
   Browser-native required email/password constraints now keep empty submissions
   local, show field-specific guidance, and focus the first missing field instead
