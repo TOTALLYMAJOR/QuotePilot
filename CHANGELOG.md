@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 18:33:59 CDT
+Last updated: 2026-09-02 18:44:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reflowed the populated Clients summary at phone widths into identity, contact,
+  status, action, then auxiliary-image order. Long email addresses now wrap
+  inside a full-width contact row, the single client action remains 44px and
+  full width, and responsive browser geometry protects the reading order.
 - Reserved explicit mobile scroll clearance between **Open full Library** and
   the fixed Quick Updates action footer. Focus now reveals the complete Library
   target above the footer with its outline intact, and the Calm Four browser

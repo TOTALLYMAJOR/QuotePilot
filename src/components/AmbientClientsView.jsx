@@ -439,31 +439,52 @@ export function AmbientClientsDirectory({
                   data-client-id={customerId}
                   data-featured-source={featuredSelection.source}
                 >
-                  <div className="ambient-clients__featured-heading">
+                  <div
+                    className="ambient-clients__featured-heading"
+                    data-client-summary-part="identity"
+                  >
                     <div className="ambient-clients__featured-identity">
                       <h2>{identity.name}</h2>
                       <p className="ambient-clients__featured-mobile-event">{event.title}<span aria-hidden="true"> · </span>{event.date}</p>
                     </div>
-                    <img className="ambient-clients__featured-image" src="/images/quote-workspace-wedding-table-v1.webp" alt="" />
-                    <button
-                      type="button"
-                      className="ambient-client__primary"
-                      data-ambient-action-id={action.id}
-                      disabled={!action.enabled}
-                      title={action.disabledReason || undefined}
-                      onClick={() => reviewClient(featuredRow)}
-                    >
-                      {action.outcomeLabel}<span aria-hidden="true">→</span>
-                    </button>
                   </div>
                   <dl className="ambient-clients__featured-details">
                     <div className="ambient-clients__featured-event">
                       <dt>Recorded event</dt>
                       <dd>{event.title}<span>{event.date}{event.reference ? ` · ${event.reference}` : ""}</span></dd>
                     </div>
-                    <div><dt>Recorded contact details</dt><dd>{clientRecordedContactDetails(featuredRow)}</dd></div>
-                    <div><dt>Current status</dt><dd>{relationshipState.label}<span>Based on the recorded event and contact details in this view.</span></dd></div>
+                    <div
+                      className="ambient-clients__featured-contact"
+                      data-client-summary-part="contact"
+                    >
+                      <dt>Recorded contact details</dt>
+                      <dd>{clientRecordedContactDetails(featuredRow)}</dd>
+                    </div>
+                    <div
+                      className="ambient-clients__featured-status"
+                      data-client-summary-part="status"
+                    >
+                      <dt>Current status</dt>
+                      <dd>{relationshipState.label}<span>Based on the recorded event and contact details in this view.</span></dd>
+                    </div>
                   </dl>
+                  <button
+                    type="button"
+                    className="ambient-client__primary"
+                    data-ambient-action-id={action.id}
+                    data-client-summary-part="action"
+                    disabled={!action.enabled}
+                    title={action.disabledReason || undefined}
+                    onClick={() => reviewClient(featuredRow)}
+                  >
+                    {action.outcomeLabel}<span aria-hidden="true">→</span>
+                  </button>
+                  <img
+                    className="ambient-clients__featured-image"
+                    data-client-summary-part="image"
+                    src="/images/quote-workspace-wedding-table-v1.webp"
+                    alt=""
+                  />
                 </article>
               );
             })()}

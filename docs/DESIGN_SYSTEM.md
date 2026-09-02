@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 18:33:59 CDT
+Last updated: 2026-09-02 18:44:00 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -125,6 +125,13 @@ next action before the larger directory. The v0.16 candidate renders no
 AI-derived relationship memory. If that capability is introduced later, it
 must be source-labelled, tenant-scoped, and correctable through an authoritative
 Client 360 write path before it may appear as fact.
+
+At 760px and below, the featured populated-client summary uses the same semantic
+and visual order: identity and recorded event, recorded contact details, current
+status, the one supported action, then the auxiliary hospitality image. Contact
+and status become separate full-width rows, long email addresses wrap within
+their own row, and decorative imagery may not narrow or precede the decision.
+Desktop may align the action beside identity while keeping the same source order.
 
 **Library** uses the same organization catalog in two modes. Standalone mode
 contains no opportunity fiction. Contextual mode names the exact opportunity
