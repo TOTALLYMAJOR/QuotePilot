@@ -136,17 +136,48 @@ async function layoutAudit(page) {
       Math.min(left.right, right.right) - Math.max(left.left, right.left) > 1
       && Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top) > 1
     );
-    const groups = [
-      ".ambient-library__masthead",
-      ".ambient-library__ledger",
-      ".ambient-library__content",
-      ".ambient-library__orientation",
-      ".ambient-library__editor .modal-head"
-    ];
+    const editing = Boolean(document.querySelector(".ambient-library--editing"));
+    const requiredGroups = editing
+      ? [
+          ".ambient-library__orientation",
+          ".ambient-library__editor .modal-head",
+          ".ambient-library__editor .admin-tabs"
+        ]
+      : [
+          ".ambient-library__masthead",
+          '[data-library-section="catalog"] .ambient-library__row-list',
+          '[data-library-section="templates"] .ambient-library__row-list'
+        ];
+    const optionalGroups = editing
+      ? [".ambient-library__editor .admin-section-head"]
+      : [
+          ".ambient-library__usage",
+          ".ambient-library__template-list"
+        ];
     const collisions = [];
-    groups.forEach((selector) => {
+    let auditedGroupCount = 0;
+    for (const selector of requiredGroups) {
+      const root = document.querySelector(selector);
+      if (!root) return { setupError: `Missing declared Library layout group ${selector}.` };
+      if (!visible(root)) continue;
+      auditedGroupCount += 1;
+      const children = [...root.children].filter(visible);
+      children.forEach((leftElement, leftIndex) => {
+        children.slice(leftIndex + 1).forEach((rightElement) => {
+          if (overlap(rect(leftElement), rect(rightElement))) {
+            collisions.push({
+              group: selector,
+              left: leftElement.className || leftElement.tagName,
+              right: rightElement.className || rightElement.tagName
+            });
+          }
+        });
+      });
+    }
+    optionalGroups.forEach((selector) => {
       const root = document.querySelector(selector);
       if (!root || !visible(root)) return;
+      auditedGroupCount += 1;
       const children = [...root.children].filter(visible);
       children.forEach((leftElement, leftIndex) => {
         children.slice(leftIndex + 1).forEach((rightElement) => {
@@ -174,6 +205,8 @@ async function layoutAudit(page) {
       });
     const surface = document.querySelector(".ambient-library");
     return {
+      setupError: "",
+      auditedGroupCount,
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       surfaceOverflow: surface ? surface.scrollWidth - surface.clientWidth : null,
       collisions,
@@ -203,6 +236,8 @@ test.describe("Ambient Library", () => {
       await expect(page.locator("body")).not.toContainText("Return to Rivera Wedding");
 
       const audit = await layoutAudit(page);
+      expect(audit.setupError).toBe("");
+      expect(audit.auditedGroupCount).toBeGreaterThanOrEqual(3);
       expect(audit.documentOverflow).toBeLessThanOrEqual(1);
       expect(audit.surfaceOverflow).toBeLessThanOrEqual(1);
       expect(audit.collisions).toEqual([]);
@@ -254,6 +289,8 @@ test.describe("Ambient Library", () => {
     expect(await readPersistedCatalog(page)).toBe(persistedBeforeBrowse);
 
     const audit = await layoutAudit(page);
+    expect(audit.setupError).toBe("");
+    expect(audit.auditedGroupCount).toBeGreaterThanOrEqual(3);
     expect(audit.documentOverflow).toBeLessThanOrEqual(1);
     expect(audit.surfaceOverflow).toBeLessThanOrEqual(1);
     expect(audit.collisions).toEqual([]);
@@ -358,6 +395,8 @@ test.describe("Ambient Library", () => {
     expect(await readPersistedCatalog(page)).toBe(persistedBeforeBrowse);
 
     const audit = await layoutAudit(page);
+    expect(audit.setupError).toBe("");
+    expect(audit.auditedGroupCount).toBeGreaterThanOrEqual(3);
     expect(audit.documentOverflow).toBeLessThanOrEqual(1);
     expect(audit.surfaceOverflow).toBeLessThanOrEqual(1);
     expect(audit.collisions).toEqual([]);

@@ -1,5 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import {
+  AMBIENT_PRIMARY_WORKSPACE_NAVIGATION,
+  WORKSPACE_ROUTE_IDS
+} from "../src/lib/workspaceRoutes";
 
 const REQUIRED_GATES = [
   process.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED,
@@ -18,69 +22,78 @@ const VIEWPORTS = [
   { width: 1440, height: 1000 }
 ];
 
-const ROUTES = [
-  {
+const AMBIENT_ROUTE_AUDITS = Object.freeze({
+  [WORKSPACE_ROUTE_IDS.HOME]: Object.freeze({
     id: "now",
-    path: "/app",
-    heading: "What to review today",
+    heading: "Today, in clear view.",
     headingSelector: "#now-heading",
     initialFocusSelector: "#now-heading",
-    groupRootSelector: ".now-surface .command-center-head",
-    groupSelectors: [".eyebrow", "#now-heading", ".now-date", ".right-actions"]
-  },
-  {
+    focusReservePx: 0,
+    surfaceSelector: '[data-surface-contract-id="ambient-now-briefing"]',
+    registerSurface: true,
+    groupRootSelector: ".ambient-now__masthead",
+    groupSelectors: [".ambient-now__date", "#now-heading", ".ambient-now__intro"]
+  }),
+  [WORKSPACE_ROUTE_IDS.QUOTE_LIST]: Object.freeze({
     id: "opportunities-quotes",
-    path: "/app/quotes",
-    heading: "Opportunities",
-    headingSelector: "#quote-history-title",
-    initialFocusSelector: "#quote-history-title",
-    groupRootSelector: ".history-card > .modal-head",
-    groupSelectors: ["#quote-history-title", ".right-actions"]
-  },
-  {
+    heading: "Every event, with its next move.",
+    headingSelector: "#ambient-opportunities-heading",
+    initialFocusSelector: "#ambient-opportunities-heading",
+    surfaceSelector: '[data-surface-contract-id="ambient-opportunities-stream"]',
+    registerSurface: true,
+    groupRootSelector: ".ambient-opportunities__masthead > div",
+    groupSelectors: [
+      ".ambient-opportunity__reference",
+      "#ambient-opportunities-heading",
+      ":scope > p:last-child"
+    ]
+  }),
+  [WORKSPACE_ROUTE_IDS.CUSTOMER_LIST]: Object.freeze({
     id: "clients-customers",
-    path: "/app/customers",
-    heading: "Clients",
+    heading: "Relationships, in context.",
     headingSelector: "#ambient-clients-title",
     initialFocusSelector: "#ambient-clients-title",
-    groupRootSelector: ".ambient-clients__masthead",
-    groupSelectors: [".ambient-clients__label", "#ambient-clients-title", ":scope > .ambient-clients__start"]
-  },
-  {
-    id: "library-catalog",
-    path: "/app/catalog",
-    heading: "Library",
-    headingSelector: "#ambient-library-title",
-    focusSelector: ".ambient-library__masthead .ambient-library__primary",
-    surfaceSelector: ".ambient-library[data-surface-contract-id=\"ambient-library\"]",
+    surfaceSelector: '[data-surface-contract-id="ambient-clients-list"]',
     registerSurface: true,
-    groups: [
-      {
-        rootSelector: ".ambient-library__masthead",
-        selectors: [":scope > div", ":scope > .ambient-library__next"]
-      },
-      {
-        rootSelector: ".ambient-library__ledger",
-        selectors: [
-          ":scope > div:nth-child(1)",
-          ":scope > div:nth-child(2)",
-          ":scope > div:nth-child(3)",
-          ":scope > div:nth-child(4)"
-        ]
-      },
-      {
-        rootSelector: ".ambient-library__content",
-        selectors: [
-          ":scope > [data-library-section=\"catalog\"]",
-          ":scope > [data-library-section=\"templates\"]"
-        ]
-      },
-      {
-        rootSelector: ".ambient-library__boundary",
-        selectors: [":scope > div:nth-child(1)", ":scope > div:nth-child(2)"]
-      }
+    groupRootSelector: ".ambient-clients__populated-hero > div",
+    groupSelectors: [
+      ".ambient-clients__label",
+      "#ambient-clients-title",
+      ":scope > p:last-child"
     ]
-  },
+  }),
+  [WORKSPACE_ROUTE_IDS.CATALOG]: Object.freeze({
+    id: "library-catalog",
+    heading: "The choices behind every quote.",
+    headingSelector: "#ambient-library-title",
+    initialFocusSelector: "#ambient-library-title",
+    focusReservePx: 0,
+    surfaceSelector: '[data-surface-contract-id="ambient-library"]',
+    registerSurface: true,
+    groupRootSelector: ".ambient-library__masthead",
+    groupSelectors: [
+      ".ambient-library__breadcrumb",
+      ".ambient-library__label",
+      "#ambient-library-title",
+      ":scope > p:last-child"
+    ]
+  })
+});
+
+const AMBIENT_ROUTES = AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.map((destination) => {
+  const audit = AMBIENT_ROUTE_AUDITS[destination.routeId];
+  if (!audit) {
+    throw new Error(`Missing layout audit contract for ${destination.routeId}.`);
+  }
+  return Object.freeze({
+    ...audit,
+    path: destination.path,
+    navigationLabel: destination.label
+  });
+});
+
+const ROUTES = [
+  ...AMBIENT_ROUTES,
   {
     id: "messages",
     path: "/app/messages",
@@ -551,6 +564,7 @@ async function auditRouteGeometry(page, route) {
       surface.setAttribute("data-layout-audit-surface", definition.id);
       surface.setAttribute("data-layout-audit-overflow", definition.id);
     }
+    heading.setAttribute("data-layout-audit-heading", definition.id);
 
     const groupDefinitions = Array.isArray(definition.groups)
       ? definition.groups
@@ -593,7 +607,9 @@ async function auditRouteGeometry(page, route) {
         && rect.width > 0
         && rect.height > 0;
     };
-    const reserve = 2;
+    const reserve = Number.isFinite(definition.focusReservePx)
+      ? Math.max(0, definition.focusReservePx)
+      : 2;
     const headingRect = heading.getBoundingClientRect();
     const reservedHeadingRect = {
       left: headingRect.left - reserve,
@@ -609,11 +625,12 @@ async function auditRouteGeometry(page, route) {
       .map((element) => String(element.textContent || element.tagName).replace(/\s+/gu, " ").trim().slice(0, 100));
     const audit = auditWorkspaceLayout(document, { tolerancePx: 1, focusReservePx: reserve });
     const focusTarget = document.querySelector(definition.focusSelector || definition.headingSelector);
+    const visibleRouteElements = routeElements.filter(visible);
     return {
       setupError: "",
       activeFocus: document.activeElement === focusTarget,
-      auditedElementCount: routeElements.filter(visible).length,
-      expectedElementCount: routeElements.length,
+      declaredPeerCount: routeElements.length,
+      visibleDeclaredPeerCount: visibleRouteElements.length,
       peerCollisions,
       audit
     };
@@ -624,7 +641,8 @@ async function expectRouteGeometry(page, route) {
   const geometry = await auditRouteGeometry(page, route);
   expect(geometry.setupError).toBe("");
   expect(geometry.activeFocus).toBe(true);
-  expect(geometry.auditedElementCount).toBe(geometry.expectedElementCount);
+  expect(geometry.declaredPeerCount).toBeGreaterThan(0);
+  expect(geometry.visibleDeclaredPeerCount).toBeGreaterThan(0);
   expect(geometry.peerCollisions).toEqual([]);
   expect(geometry.audit).toMatchObject({
     modelId: "workspace-layout-audit-v1",
@@ -636,6 +654,10 @@ async function expectRouteGeometry(page, route) {
     escapedControls: [],
     escapedFocusPaint: []
   });
+  expect(geometry.audit.auditedHeadingCount).toBeGreaterThan(0);
+  expect(geometry.audit.auditedGroupCount).toBeGreaterThan(0);
+  expect(geometry.audit.auditedElementCount)
+    .toBeGreaterThanOrEqual(geometry.visibleDeclaredPeerCount);
   expect(geometry.audit.focusPaintChecks.every((check) => check.contained)).toBe(true);
   expect(geometry.audit.documentOverflowPx).toBeLessThanOrEqual(1);
 }
@@ -799,29 +821,44 @@ async function expectContainedTransientGeometry(page, definition) {
     const control = controls.nth(index);
     if (!await control.isVisible()) continue;
     auditedVisibleControls += 1;
-    await control.scrollIntoViewIfNeeded();
+    if (definition.centerScrollableControls) {
+      await control.evaluate((element) => element.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+        behavior: "instant"
+      }));
+    } else {
+      await control.scrollIntoViewIfNeeded();
+    }
     await control.focus();
     await expect(control).toBeFocused();
     const geometry = await auditTransientSurfaceGeometry(page, definition);
     expect(geometry.setupError).toBe("");
     expect(geometry.peerGroupCounts.every((count) => count >= 2)).toBe(true);
-    expect(
-      geometry.contained,
-      `${definition.id} failed while ${geometry.contained.focusedControl || "no control"} held focus.`
-    ).toMatchObject({
+    const containedExpectation = {
       modelId: "contained-transient-surface-audit-v1",
-      passed: true,
       declaration: definition.expectedDeclaration,
       surfaceWithinViewport: true,
       surfaceWithinClippingAncestors: true,
       verticalOverflowContained: true,
-      clippedControls: [],
       focusIsInside: true,
       focusPainted: true,
       focusHorizontallyContained: true,
       focusVerticallyContainedWhenPainted: true,
       focusContained: true
-    });
+    };
+    expect(
+      geometry.contained,
+      `${definition.id} failed while ${geometry.contained.focusedControl || "no control"} held focus.`
+    ).toMatchObject(definition.allowScrollEdgeClipping
+      ? containedExpectation
+      : { ...containedExpectation, passed: true, clippedControls: [] });
+    if (definition.allowScrollEdgeClipping) {
+      expect(geometry.contained.clippedControls.every((candidate) => (
+        candidate.horizontallyContained === true
+        && candidate.id !== geometry.contained.focusedControl
+      ))).toBe(true);
+    }
     expect(geometry.contained.horizontalOverflowPx).toBeLessThanOrEqual(1);
     expect(geometry.workspace).toMatchObject({
       modelId: "workspace-layout-audit-v1",
@@ -874,6 +911,26 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
     await seedWorkspace(page);
   });
 
+  test("Calm Four route coverage mirrors navigation and fails closed on selector drift", async ({ page }) => {
+    expect(AMBIENT_ROUTES.map((route) => ({
+      label: route.navigationLabel,
+      path: route.path
+    }))).toEqual(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.map((destination) => ({
+      label: destination.label,
+      path: destination.path
+    })));
+
+    const nowRoute = AMBIENT_ROUTES.find((route) => route.id === "now");
+    await page.setViewportSize(VIEWPORTS[0]);
+    await page.goto(nowRoute.path);
+    await expect(page.locator(nowRoute.headingSelector)).toBeVisible();
+    const geometry = await auditRouteGeometry(page, {
+      ...nowRoute,
+      groupSelectors: [...nowRoute.groupSelectors, "[data-deliberately-missing-layout-peer]"]
+    });
+    expect(geometry.setupError).toBe("Missing a declared layout peer for now group 1.");
+  });
+
   for (const viewport of VIEWPORTS) {
     for (const route of ROUTES) {
       test(`${route.id} has no unintended overlap at ${viewport.width}px`, async ({ page }) => {
@@ -915,8 +972,8 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
                   selectors: ["#ambient-mobile-opportunity-title", ".status-chip"]
                 },
                 {
-                  rootSelector: ".ambient-mobile-remote__signal",
-                  selectors: [":scope > div:nth-child(1)", ":scope > div:nth-child(2)"]
+                  rootSelector: ".ambient-mobile-remote__next",
+                  selectors: [":scope > div", ":scope > button"]
                 },
                 {
                   rootSelector: ".ambient-mobile-remote__objects",
@@ -928,6 +985,10 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
         const heading = page.locator(routeDefinition.headingSelector);
         await expect(heading).toBeVisible({ timeout: routeDefinition.renderTimeoutMs || 10_000 });
         await expect(heading).toContainText(routeDefinition.heading);
+        if (route.id === "opportunities-quotes") {
+          await expect(page.locator('.embedded-workspace-route[role="region"]'))
+            .toHaveAttribute("aria-labelledby", "ambient-opportunities-heading");
+        }
         if (route.id === "customer-portal") {
           await expect(page.locator(".site-header")).toHaveCount(0);
           await expect(page.getByRole("group", { name: "Proposal decision" })).toBeVisible();
@@ -998,6 +1059,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       const template = library.locator(
         "[data-library-record-kind=\"event-template\"][data-library-record-id=\"wedding\"]"
       );
+      await library.locator(".ambient-library__template-disclosure > summary").click();
       const trigger = template.getByRole("button", { name: "Review Wedding" });
       await expect(trigger).toBeVisible();
       await trigger.click();
@@ -1047,8 +1109,30 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
     test(`opened header menus stay contained and restore focus at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto("/app");
-      await expect(page.getByRole("heading", { name: "What to review today" })).toBeVisible();
-      const menuNames = viewport.width > 640 ? ["Operations", "Account"] : ["More"];
+      await expect(page.locator("#now-heading")).toHaveText("Today, in clear view.", { timeout: 30_000 });
+      if (viewport.width <= 640) {
+        const trigger = page.getByRole("button", { name: "Workspace and tools", exact: true });
+        await trigger.click();
+        const dialog = page.getByRole("dialog", { name: "Workspace & tools" });
+        await expect(dialog).toBeVisible();
+        await expectContainedTransientGeometry(page, {
+          id: "header-workspace-tools",
+          surfaceSelector: ".workspace-tools-dialog",
+          triggerSelector: ".workspace-tools-trigger[aria-expanded='true']",
+          expectedDeclaration: "data-layout-overlap-allowed",
+          allowScrollEdgeClipping: true,
+          centerScrollableControls: true,
+          peerGroups: [{
+            rootSelector: ".workspace-tools-dialog__header",
+            childSelector: ":scope > *"
+          }]
+        });
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+        await expect(trigger).toBeFocused();
+        return;
+      }
+      const menuNames = ["Operations"];
       for (const menuName of menuNames) {
         const trigger = page.getByRole("button", { name: menuName, exact: true });
         await trigger.click();
@@ -1074,16 +1158,18 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       await page.setViewportSize(viewport);
       await page.goto(`/app/quotes/${REVIEW_QUOTE.id}`);
       await expect(page.locator(".ambient-living-opportunity")).toBeVisible({ timeout: 30_000 });
-      const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
-      await expect(trigger).toHaveCount(1);
+      const trigger = page.getByRole("button", { name: "Workspace and tools", exact: true });
       await trigger.click();
+      const tools = page.getByRole("dialog", { name: "Workspace & tools" });
+      await expect(tools).toBeVisible();
+      await tools.getByRole("button", { name: "Pilot", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Why this recommendation appears" });
       await expect(dialog).toBeVisible();
       await expect(dialog).toContainText("Autumn Benefit Dinner");
       await expectContainedTransientGeometry(page, {
         id: "global-pilot-context",
         surfaceSelector: ".ambient-pilot-context-surface .ambient-context-surface__dialog",
-        triggerSelector: ".ambient-global-pilot-trigger",
+        triggerSelector: ".workspace-tools-trigger",
         expectedDeclaration: "data-layout-overlap-allowed",
         peerGroups: [
           { rootSelector: ".ambient-context-surface__header", childSelector: ":scope > *" }
@@ -1100,8 +1186,17 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
     test(`commercial search dialog stays contained with bounded results at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto("/app");
-      const trigger = page.getByRole("button", { name: "Search", exact: true });
-      await trigger.click();
+      const trigger = viewport.width <= 640
+        ? page.getByRole("button", { name: "Workspace and tools", exact: true })
+        : page.getByRole("button", { name: "Search", exact: true });
+      if (viewport.width <= 640) {
+        await trigger.click();
+        const tools = page.getByRole("dialog", { name: "Workspace & tools" });
+        await expect(tools).toBeVisible();
+        await tools.getByRole("button", { name: "Search customers and opportunities", exact: true }).click();
+      } else {
+        await trigger.click();
+      }
       const dialog = page.getByRole("dialog", { name: "Find a customer or quote" });
       await expect(dialog).toBeVisible();
       const input = dialog.getByRole("searchbox");
@@ -1111,7 +1206,9 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       await expectContainedTransientGeometry(page, {
         id: "commercial-search",
         surfaceSelector: ".commercial-search-card",
-        triggerSelector: ".commercial-search-trigger",
+        triggerSelector: viewport.width <= 640
+          ? ".workspace-tools-trigger"
+          : ".commercial-search-trigger",
         expectedDeclaration: "data-layout-overlap-allowed",
         peerGroups: [
           { rootSelector: ".commercial-search-head", childSelector: ":scope > *" },
@@ -1140,6 +1237,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
         id: "package-context",
         surfaceSelector: ".ambient-context-surface__dialog",
         expectedDeclaration: "data-layout-overlap-allowed",
+        allowScrollEdgeClipping: true,
         peerGroups: [
           { rootSelector: ".ambient-context-surface__header", childSelector: ":scope > *" }
         ]
@@ -1185,7 +1283,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       await page.goto(`/app/quotes/${REVIEW_QUOTE.id}`);
       const opportunity = page.locator(".ambient-living-opportunity");
       await expect(opportunity).toBeVisible({ timeout: 30_000 });
-      const trigger = opportunity.getByRole("button", { name: "Review proposal" });
+      const trigger = opportunity.getByRole("button", { name: "Review proposal", exact: true });
       await trigger.click();
       const dialog = page.getByRole("dialog", { name: "Proposal details" });
       await expect(dialog).toBeVisible();

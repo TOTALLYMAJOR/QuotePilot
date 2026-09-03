@@ -1268,7 +1268,9 @@ export default function App({
   const openCommercialSearch = useCallback((returnTarget = null) => {
     if (!commercialSearchAvailable || typeof document === "undefined") return;
     const existingDialog = document.querySelector('[role="dialog"][aria-modal="true"]');
-    if (existingDialog) return;
+    const workspaceToolsTransition = existingDialog?.id === "workspace-tools-dialog"
+      && returnTarget?.matches?.(".workspace-tools-trigger");
+    if (existingDialog && !workspaceToolsTransition) return;
     const activeElement = typeof HTMLElement !== "undefined"
       && document.activeElement instanceof HTMLElement
       ? document.activeElement

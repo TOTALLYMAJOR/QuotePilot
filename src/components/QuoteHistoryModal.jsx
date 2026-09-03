@@ -2529,7 +2529,9 @@ export function QuoteHistoryView({
       data-layout-overlap-allowed={embedded ? undefined : "true"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
-      aria-labelledby="quote-history-title"
+      aria-labelledby={embedded && AMBIENT_UI_ENABLED
+        ? "ambient-opportunities-heading"
+        : "quote-history-title"}
     >
       <div
         className={`modal-card history-card${embedded ? " workspace-route-card" : ""}${

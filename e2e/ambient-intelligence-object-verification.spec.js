@@ -396,6 +396,16 @@ async function openOpportunity(page, quoteId = BASE_QUOTE.id) {
   return surface;
 }
 
+async function openPilotFromWorkspaceTools(page) {
+  const trigger = page.getByRole("button", { name: "Workspace and tools", exact: true });
+  await trigger.click();
+  const tools = page.getByRole("dialog", { name: "Workspace & tools" });
+  await expect(tools).toBeVisible();
+  await tools.getByRole("button", { name: "Pilot", exact: true }).click();
+  await expect(tools).toHaveCount(0);
+  return trigger;
+}
+
 async function expectNoHorizontalOverflow(page, surface) {
   const overflow = await page.evaluate(() => {
     const root = document.querySelector(".ambient-living-opportunity");
@@ -756,7 +766,7 @@ test.describe("Ambient intelligent-object browser verification", () => {
       const surface = await openOpportunity(page);
       const savedBefore = await readPersistedQuote(page);
       const row = surface.locator('[data-intelligent-object="proposal"]');
-      const trigger = surface.getByRole("button", { name: "Review proposal" });
+      const trigger = row.getByRole("button", { name: "Review proposal", exact: true });
 
       await expect(row).toBeVisible();
       await expect(row).toHaveAttribute("data-proposal-state", "local_preview");
@@ -1350,9 +1360,9 @@ test.describe("Ambient intelligent-object browser verification", () => {
     await expect(remote).toContainText("What matters");
     await expect(remote).toContainText("Next");
     await expect(remote.getByRole("button", { name: "Event", exact: true })).toBeVisible();
-    await expect(remote.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
-    await expect(remote.getByRole("button", { name: "Pricing", exact: true })).toBeVisible();
-    await expect(remote.getByRole("button", { name: "Proposal", exact: true })).toBeVisible();
+    await expect(remote.locator('[data-ambient-action-id="inspect-menu"]')).toBeVisible();
+    await expect(remote.locator('[data-ambient-action-id="inspect-pricing"]')).toBeVisible();
+    await expect(remote.locator('[data-ambient-action-id="inspect-proposal"]')).toBeVisible();
 
     const geometry = await page.evaluate(() => {
       const control = document.querySelector(".ambient-mobile-remote");
@@ -1388,15 +1398,15 @@ test.describe("Ambient intelligent-object browser verification", () => {
     expect(geometry.controls.every((control) => control.height >= 44)).toBe(true);
     expect(geometry.controls.every((control) => Boolean(control.actionId))).toBe(true);
 
-    await remote.getByRole("button", { name: "Menu", exact: true }).click();
+    await remote.locator('[data-ambient-action-id="inspect-menu"]').click();
     await expect(page.getByRole("dialog", { name: "Menu details" })).toBeVisible();
     await page.getByRole("button", { name: "Close context" }).click();
 
-    await remote.getByRole("button", { name: "Pricing", exact: true }).click();
+    await remote.locator('[data-ambient-action-id="inspect-pricing"]').click();
     await expect(page.getByRole("dialog", { name: "Pricing details" })).toBeVisible();
     await page.getByRole("button", { name: "Close context" }).click();
 
-    await remote.getByRole("button", { name: "Proposal", exact: true }).click();
+    await remote.locator('[data-ambient-action-id="inspect-proposal"]').click();
     await expect(page.getByRole("dialog", { name: "Proposal details" })).toBeVisible();
     await page.getByRole("button", { name: "Close context" }).click();
 
@@ -1419,10 +1429,7 @@ test.describe("Ambient intelligent-object browser verification", () => {
     test(`opens global Pilot on the exact Living Opportunity and restores focus at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
       const surface = await openOpportunity(page);
-      const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
-      await expect(trigger).toHaveCount(1);
-      await expect(trigger).toBeVisible();
-      await trigger.click();
+      const trigger = await openPilotFromWorkspaceTools(page);
 
       const dialog = page.getByRole("dialog", { name: "Why this recommendation appears" });
       await expect(dialog).toBeVisible();
@@ -1451,8 +1458,7 @@ test.describe("Ambient intelligent-object browser verification", () => {
   test("keeps global Pilot contextual outside an opportunity instead of opening generic chat", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/app");
-    const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
-    await trigger.click();
+    const trigger = await openPilotFromWorkspaceTools(page);
 
     const dialog = page.getByRole("dialog", { name: "Pilot", exact: true });
     await expect(dialog).toBeVisible();
@@ -1469,8 +1475,7 @@ test.describe("Ambient intelligent-object browser verification", () => {
     test.skip(!PILOT_COMMAND_ENABLED, "The exact draft-focus proof needs the independent Pilot command gate.");
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/app/quotes/new");
-    const trigger = page.getByRole("button", { name: "Open Pilot for the current context" });
-    await trigger.click();
+    await openPilotFromWorkspaceTools(page);
 
     const input = page.getByRole("textbox", { name: "Command for this draft" });
     await expect(input).toBeFocused();
