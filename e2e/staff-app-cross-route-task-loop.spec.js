@@ -214,6 +214,9 @@ function expectExactInProgressJourney(stored, taskId, origin) {
     intentId: "review_follow_up",
     proof: null
   });
+  expect(stored.journey.startedAtISO).toMatch(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
+  );
   expect(Object.keys(stored.journey.focus).sort()).toEqual([
     "attentionType",
     "quoteId",
@@ -516,6 +519,115 @@ test.describe("Staff cross-route task journey", () => {
     await expect(panel).toBeHidden();
     await expectExactWorkflowArrival(page, nowSource);
     expect(await readBusinessState(page)).toEqual(businessBefore);
+    expect(mutatingRequests).toEqual([]);
+  });
+
+  test("browser-local follow-up completion stays Needs confirmation without authoritative readback", async ({ page }) => {
+    test.setTimeout(90_000);
+    test.info().annotations.push({
+      type: "evidence-boundary",
+      description: "This proves a named browser-local save fails closed into uncertainty. It is not Firebase, provider, or authoritative completion evidence."
+    });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const nowSource = SOURCE_CASES[0];
+    await gotoWorkspace(page, nowSource.path, nowSource.readySelector);
+    const businessBefore = await readBusinessState(page);
+    const mutatingRequests = observeUnexpectedMutatingRequests(page);
+    await startSourceJourney(page, nowSource);
+
+    await page.getByRole("button", {
+      name: "Review follow-up for QP-RIVERA-250",
+      exact: true
+    }).click();
+    await page.getByLabel("Follow-up complete", { exact: true }).check();
+    await page.getByRole("button", { name: "Save Follow-up", exact: true }).click();
+
+    const uncertainRail = page.getByRole("region", {
+      name: "Current task: Follow-up, Needs confirmation",
+      exact: true
+    });
+    await expect(uncertainRail).toBeVisible();
+    await expect(uncertainRail).toHaveAttribute("data-workspace-task-id", nowSource.taskId);
+    await expect(uncertainRail).toHaveAttribute("data-workspace-task-state", "uncertain");
+    await expect(uncertainRail).toContainText("Outcome not confirmed");
+    await expect(uncertainRail).not.toContainText("Completed");
+    await expect(uncertainRail.getByRole("button", { name: "Continue", exact: true })).toHaveCount(0);
+    await expect(uncertainRail.getByRole("button", { name: "Stop tracking", exact: true })).toBeVisible();
+
+    const confirmation = page.locator('[data-follow-up-confirmation-state="uncertain"]');
+    await expect(confirmation).toBeVisible();
+    await expect(confirmation).toContainText("saved in browser-local data");
+    await expect(confirmation).toContainText("The task remains open");
+    await expect(confirmation.getByRole("button", { name: "Retry confirmation" })).toBeVisible();
+
+    const stored = await readTaskJourney(page);
+    expect(stored.journey).toMatchObject({
+      organizationId: ORGANIZATION_ID,
+      principal: { id: "e2e-admin", role: "admin" },
+      taskId: nowSource.taskId,
+      phase: "uncertain",
+      origin: nowSource.origin,
+      destination: "workflow",
+      object: { id: FOLLOW_UP_ID, type: "workflow-item" },
+      focus: {
+        quoteId: QUOTE_ID,
+        attentionType: "follow_up",
+        requestId: FOLLOW_UP_ID
+      },
+      intentId: "review_follow_up",
+      proof: null
+    });
+
+    const businessAfterSave = await readBusinessState(page);
+    const beforeQuotes = JSON.parse(businessBefore.quotes);
+    const afterQuotes = JSON.parse(businessAfterSave.quotes);
+    const historyAfterSave = JSON.parse(businessAfterSave.history);
+    expect(beforeQuotes).toHaveLength(1);
+    expect(afterQuotes).toHaveLength(1);
+    const beforeQuote = beforeQuotes[0];
+    const afterQuote = afterQuotes[0];
+    expect(afterQuote.id).toBe(beforeQuote.id);
+    expect(afterQuote.organizationId).toBe(beforeQuote.organizationId);
+    expect(afterQuote.activeVersionId).toBe(beforeQuote.activeVersionId);
+    expect(afterQuote.latestVersionNumber).toBe(beforeQuote.latestVersionNumber + 1);
+    expect(afterQuote.versionMeta).toMatchObject({
+      versionId: "v0004",
+      versionNumber: 4,
+      reason: "snapshot"
+    });
+    expect(afterQuote.workflow.followUp).toMatchObject({
+      stage: beforeQuote.workflow.followUp.stage,
+      dueDate: beforeQuote.workflow.followUp.dueDate,
+      note: beforeQuote.workflow.followUp.note,
+      completed: true,
+      updatedByEmail: "e2e-admin@local.test"
+    });
+    expect(afterQuote.workflow.followUp.completedAtISO).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
+    expect(afterQuote.workflow.followUp.updatedAtISO).toBe(
+      afterQuote.workflow.followUp.completedAtISO
+    );
+    expect(afterQuote.updatedAtISO).toBe(afterQuote.workflow.followUp.updatedAtISO);
+    expect(afterQuote.workflow.approvalRequests).toEqual([]);
+    expect(historyAfterSave).toHaveLength(1);
+    expect(historyAfterSave[0]).toMatchObject({
+      quoteId: QUOTE_ID,
+      organizationId: ORGANIZATION_ID,
+      versionId: "v0004",
+      versionNumber: 4,
+      reason: "snapshot"
+    });
+    expect(historyAfterSave[0].snapshot.workflow.followUp.completed).toBe(false);
+    expect(businessAfterSave.catalog).toEqual(businessBefore.catalog);
+    expect(mutatingRequests).toEqual([]);
+
+    await uncertainRail.getByRole("button", { name: "Stop tracking", exact: true }).click();
+    await expect(page.locator(".workspace-task-journey")).toHaveCount(0);
+    expect(await readTaskJourney(page)).toEqual({
+      keys: [],
+      serialized: null,
+      journey: null
+    });
+    expect(await readBusinessState(page)).toEqual(businessAfterSave);
     expect(mutatingRequests).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-02 13:20:39 CDT
+Last updated: 2026-09-02 22:15:58 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -939,6 +939,20 @@ unchanged.
   acknowledged customer change requests, overdue or due-today follow-ups, and
   pending approvals. Use `Review follow-up` or `Review approvals` to move to
   the exact operating view.
+- When `Review follow-up` begins from Now, Opportunities, or Client 360, the
+  **Current task** rail remains **In progress** after the exact Workflow item is
+  opened. Opening or focusing the item does not complete it. If you mark that
+  exact follow-up complete in a connected Firebase workspace, QuotePilot shows
+  **Completed** only after a server-only read of the same organization and
+  quote confirms the returned follow-up fields and current Attention no longer
+  contains it. The confirmation proves only the internal follow-up state; it
+  does not prove customer contact, provider delivery, proposal resolution,
+  payment, or booking.
+- A browser-local save or an unavailable, stale, mismatched, or ambiguous
+  server read shows **Needs confirmation** with no completion proof. Use
+  `Retry confirmation` to read the exact record again; it does not repeat the
+  save. `Stop tracking` clears only this device's session task rail and never
+  changes the saved quote or version history.
 - For a customer change request, `Acknowledge internally` records that staff
   saw the exact current request but keeps it in Attention. `Mark handled
   internally` requires a short internal note and clears only that exact request.

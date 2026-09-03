@@ -56,6 +56,8 @@ describe("WorkspaceTaskJourneyNotice", () => {
       <WorkspaceTaskJourneyNotice
         journey={{ ...JOURNEY, phase: "uncertain", contextState: "recovery" }}
         currentRouteId="home"
+        onContinue={vi.fn()}
+        onStopTracking={vi.fn()}
       />
     );
     const cancelled = renderToStaticMarkup(
@@ -66,6 +68,12 @@ describe("WorkspaceTaskJourneyNotice", () => {
     );
 
     expect(uncertain).toContain("Needs confirmation");
+    expect(uncertain).toContain('data-workspace-task-state="uncertain"');
+    expect(uncertain).toContain('aria-label="Current task: Follow-up, Needs confirmation"');
+    expect(uncertain).toContain("Outcome not confirmed");
+    expect(uncertain).toContain(">Stop tracking</button>");
+    expect(uncertain).not.toContain(">Continue</button>");
+    expect(uncertain).not.toContain("authoritative same-workspace readback");
     expect(uncertain).not.toContain("Completed");
     expect(cancelled).toBe("");
   });
@@ -85,11 +93,12 @@ describe("WorkspaceTaskJourneyNotice", () => {
   });
 
   test("shows a confirmed outcome independently of its last route context", () => {
-    const presentation = buildWorkspaceTaskJourneyPresentation({
+    const resolvedJourney = {
       ...JOURNEY,
       phase: "resolved",
       contextState: "locating"
-    }, "home");
+    };
+    const presentation = buildWorkspaceTaskJourneyPresentation(resolvedJourney, "home");
 
     expect(presentation).toMatchObject({
       phaseLabel: "Completed",
@@ -97,5 +106,20 @@ describe("WorkspaceTaskJourneyNotice", () => {
       canStopTracking: false
     });
     expect(presentation.context).toContain("authoritative same-workspace readback");
+
+    const markup = renderToStaticMarkup(
+      <WorkspaceTaskJourneyNotice
+        journey={resolvedJourney}
+        currentRouteId="home"
+        onContinue={vi.fn()}
+        onStopTracking={vi.fn()}
+      />
+    );
+    expect(markup).toContain('data-workspace-task-state="resolved"');
+    expect(markup).toContain('aria-label="Current task: Follow-up, Completed"');
+    expect(markup).toContain("authoritative same-workspace readback");
+    expect(markup).not.toContain("receipt");
+    expect(markup).not.toContain(">Continue</button>");
+    expect(markup).not.toContain(">Stop tracking</button>");
   });
 });

@@ -12,6 +12,8 @@ export const WORKSPACE_TASK_JOURNEY_MODEL = "workspace-task-journey-v1";
 export const WORKSPACE_TASK_JOURNEY_AUTHORITY = "presentation_only";
 export const WORKSPACE_TASK_JOURNEY_PERSISTENCE = "session_only";
 export const WORKSPACE_TASK_JOURNEY_MAX_SERIALIZED_LENGTH = 4096;
+export const WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID = "quote-follow-up-server-readback";
+export const WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE = "follow-up-completion-confirmation";
 
 export const WORKSPACE_TASK_JOURNEY_PHASES = /* @__PURE__ */ Object.freeze([
   "in_progress",
@@ -38,6 +40,7 @@ const JOURNEY_KEYS = /* @__PURE__ */ Object.freeze([
   "organizationId",
   "principal",
   "taskId",
+  "startedAtISO",
   "phase",
   "contextState",
   "origin",
@@ -52,6 +55,7 @@ const CREATE_KEYS = /* @__PURE__ */ Object.freeze([
   "organizationId",
   "principal",
   "taskId",
+  "startedAtISO",
   "origin",
   "destination",
   "object",
@@ -120,6 +124,14 @@ function allowedRecord(value, keys, code = "invalid_input") {
 function requiredString(value, code = "invalid_input") {
   if (typeof value !== "string" || !value || value !== value.trim()) fail(code);
   return value;
+}
+
+function canonicalInstant(value, code = "invalid_input") {
+  const candidate = requiredString(value, code);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(candidate)) fail(code);
+  const parsed = Date.parse(candidate);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== candidate) fail(code);
+  return candidate;
 }
 
 function looksLikeEmail(value) {
@@ -268,6 +280,7 @@ function canonicalJourney(value) {
   const organizationId = opaqueId(input.organizationId);
   const principal = normalizedPrincipal(input.principal, "invalid_journey");
   const taskId = opaqueId(input.taskId);
+  const startedAtISO = canonicalInstant(input.startedAtISO, "invalid_journey");
   if (!WORKSPACE_TASK_JOURNEY_PHASES.includes(input.phase)) fail("invalid_journey");
   if (!WORKSPACE_TASK_CONTEXT_STATES.includes(input.contextState)) fail("invalid_journey");
   const origin = normalizedOrigin(input.origin);
@@ -288,6 +301,7 @@ function canonicalJourney(value) {
     organizationId,
     principal,
     taskId,
+    startedAtISO,
     phase: input.phase,
     contextState: input.contextState,
     origin,
@@ -309,6 +323,7 @@ function buildJourney(value) {
     organizationId: opaqueId(input.organizationId),
     principal: normalizedPrincipal(input.principal),
     taskId: opaqueId(input.taskId),
+    startedAtISO: canonicalInstant(input.startedAtISO),
     phase: "in_progress",
     contextState: "locating",
     origin: normalizedOrigin(input.origin),

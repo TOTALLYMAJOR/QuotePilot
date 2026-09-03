@@ -1,6 +1,6 @@
 # QuotePilot Staff-App UI Cohesion Acceptance Matrix
 
-Last updated: 2026-09-02 21:29:22 CDT
+Last updated: 2026-09-02 22:15:58 CDT
 
 ## Purpose and verdict
 
@@ -123,22 +123,41 @@ its commit is described as complete:
 Implementation checkpoint: pure contract and component coverage verifies exact
 source identity, principal/role/tenant binding, full-focus matching, visible
 **In progress** presentation, context recovery, and the distinction between
-destination readiness and completion. Four focused Chromium cases now exercise
-Now at 390px, Opportunities at 768px, Client 360 at 1440px, and a desktop
-dirty-draft guard. They verify source-specific action IDs, one exact Rivera
-Workflow focus tuple, acknowledgement within 250ms, principal-bound session
-reload, Back/Forward continuity, 44px controls, no chrome collision or
-horizontal overflow, and byte-equivalent browser-local quote/history/catalog
-state with no non-GET request. The full three-source-by-three-viewport matrix,
-connected authorization/provider proof, authoritative outcome/readback and
-source invalidation, failure fixtures, and assistive-technology comprehension
-remain open.
+destination readiness and completion. The resolved branch is unit-covered only
+after a Firebase result and exact server-only same-organization readback match
+the returned follow-up, yield one bounded internal completion confirmation, and
+remove the exact item from fresh Attention. The failure branch is proofless and
+never retries the write.
+
+Five focused Chromium cases exercise Now at 390px, Opportunities at 768px,
+Client 360 at 1440px, a desktop dirty-draft guard, and one intentional
+browser-local completion. The first four verify source-specific action IDs,
+one exact Rivera Workflow focus tuple, acknowledgement within 250ms,
+principal-bound session reload, Back/Forward continuity, 44px controls, no
+chrome collision or horizontal overflow, and byte-equivalent browser-local
+quote/history/catalog state with no non-GET request. The fifth proves the named
+local quote/version-history save becomes **Needs confirmation**, retains null
+proof and exact task identity, offers a read-only retry, changes no catalog or
+provider state, and never renders **Completed**. The full
+three-source-by-three-viewport matrix, connected authorization/provider proof,
+real authoritative readback, cross-route source invalidation, remaining
+failure fixtures, and assistive-technology comprehension remain open.
 
 - Start exact ranked tasks from Now, Opportunities, and Client 360; each lands
   on the expected opaque object ID and exposes **in progress** within 250ms.
 - Open, cancel, Back, Forward, and inspect produce zero business writes. A task
-  resolves only after the existing authoritative outcome receipt and
-  same-tenant readback; all source projections then update consistently.
+  resolves only after the existing authoritative receipt or confirmation
+  appropriate to that capability plus same-tenant readback; all source
+  projections then update consistently.
+- The exact follow-up adapter accepts only the matching source task, focus,
+  organization, three-field confirmation proof, and a current signed-in
+  principal. Local, failed, denied, stale, mismatched, or malformed readback
+  keeps null proof and **Needs confirmation**. Its retry performs a read only;
+  a second write requires a separate deliberate operator action.
+- Confirmation remains bound to the exact successful Firebase write fields and
+  task generation across retries. A later matching record cannot promote a
+  browser-local save, and a delayed readback cannot resurrect a task after
+  **Stop tracking** or replace the newer task that superseded it.
 - Timeout, conflict, offline, permission, cross-tenant, malformed, and stale
   task fixtures retain the task/draft and show the next safe recovery action.
 - Destination heading focus occurs only after exact-object resolution; one

@@ -133,6 +133,7 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain('} from "./lib/workspaceTaskJourney"');
     expect(appSource).toContain("const beginWorkspaceTaskJourney = useCallback((handoff, actionId) => {");
     expect(appSource).toContain("principal: activeWorkspaceTaskPrincipal");
+    expect(appSource).toContain("startedAtISO: new Date().toISOString(),");
     expect(appSource).toContain("workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)");
     expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
     expect(appSource).toContain("const stored = writeWorkspaceTaskJourney(authSession.organizationId, journey)");
@@ -155,7 +156,53 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("<WorkspaceTaskJourneyNotice");
     expect(appSource).toContain("onContinue={continueWorkspaceTaskJourney}");
     expect(appSource).toContain("onStopTracking={stopTrackingWorkspaceTask}");
+    expect(appSource).toContain("const handleWorkspaceTaskOutcome = useCallback((outcome) => {");
+    expect(appSource).toContain("outcome.taskId === currentWorkspaceTaskJourney.taskId");
+    expect(appSource).toContain("outcome.startedAtISO === currentWorkspaceTaskJourney.startedAtISO");
+    expect(appSource).toContain("outcome.organizationId === currentWorkspaceTaskJourney.organizationId");
+    expect(appSource).toContain("proof.verifierId === WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID");
+    expect(appSource).toContain("proof.proofType === WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE");
+    expect(appSource).toContain("workspaceTaskJourneyMatchesArrival(\n        currentWorkspaceTaskJourney,\n        exactOutcomeArrival");
+    expect(appSource).toContain("persistWorkspaceTaskJourney(transitioned.journey)");
+    expect(appSource).toContain("requestWorkflowAttentionRefresh({ force: true })");
+    expect(appSource).toContain("activeTaskJourney={activeWorkspaceTaskJourney}");
+    expect(appSource).toContain("onTaskOutcome={handleWorkspaceTaskOutcome}");
     expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
     expect(appSource).not.toContain("exactResolution?.status === \"resolved\"\n        ? \"resolved\"");
+  });
+
+  test("revalidates delayed Workflow outcomes against the current principal-bound session task", () => {
+    const callbackStart = appSource.indexOf(
+      "const handleWorkspaceTaskOutcome = useCallback((outcome) => {"
+    );
+    const callbackEnd = appSource.indexOf("const adminMounted =", callbackStart);
+    const callbackSource = appSource.slice(callbackStart, callbackEnd);
+    const sessionReadIndex = callbackSource.indexOf(
+      "readWorkspaceTaskJourney(currentTaskSession.organizationId)"
+    );
+    const transitionIndex = callbackSource.indexOf(
+      "transitionWorkspaceTaskOutcome(\n      currentWorkspaceTaskJourney,"
+    );
+
+    expect(callbackStart).toBeGreaterThan(-1);
+    expect(callbackEnd).toBeGreaterThan(callbackStart);
+    expect(appSource).toContain("const currentWorkspaceTaskSessionRef = useRef(null);");
+    expect(appSource).toContain("currentWorkspaceTaskSessionRef.current = {");
+    expect(callbackSource).toContain(
+      "const currentTaskSession = currentWorkspaceTaskSessionRef.current;"
+    );
+    expect(callbackSource).toContain(
+      "workspaceTaskJourneyBelongsToPrincipal(\n        currentStoredTask.journey,\n        currentTaskSession.principal"
+    );
+    expect(callbackSource).toContain("if (!currentWorkspaceTaskJourney) return { status: \"ignored\" };");
+    expect(callbackSource).toContain("outcome.organizationId === currentTaskSession.organizationId");
+    expect(callbackSource).toContain("outcome.taskId === currentWorkspaceTaskJourney.taskId");
+    expect(callbackSource).toContain("Object.keys(outcome).length === 6");
+    expect(callbackSource).toContain(
+      "outcome.startedAtISO === currentWorkspaceTaskJourney.startedAtISO"
+    );
+    expect(callbackSource).not.toContain("activeWorkspaceTaskJourney");
+    expect(sessionReadIndex).toBeGreaterThan(-1);
+    expect(transitionIndex).toBeGreaterThan(sessionReadIndex);
   });
 });

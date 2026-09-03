@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 20:53:32 CDT
+Last updated: 2026-09-02 22:15:58 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -310,15 +310,25 @@ stopping it changes only browser-session presentation state.
 
 Task phase and route context are independent. `locating`, `ready`, and
 `recovery` describe exact-arrival context; **ready** never changes the task's
-**In progress** phase. A future capability may show **Completed** only after
-its existing outcome authority succeeds and a same-organization authoritative
-readback supplies the bounded confirmation reference required by the journey.
-Where the capability has no immutable receipt, the UI calls that evidence a
-confirmation, not a receipt. The persistent task surface is a labelled region,
-not another live announcement: the source acknowledgement and destination
-arrival retain announcement ownership. It stays sticky inside the desktop and
-tablet workspace, returns to document flow on mobile, exposes 44px controls,
-and remains clear of fixed navigation.
+**In progress** phase. `review_follow_up` is the first closure adapter. An exact
+completion attempt may show **Completed** only when the existing Firebase write
+returns successfully, a server-only read of the same organization and quote
+matches every returned follow-up field, the stored internal completion
+confirmation is present, and that exact follow-up is absent from fresh
+Attention. Its bounded proof is a confirmation reference, not an immutable
+provider receipt. Browser-local saves, unavailable reads, field mismatches,
+foreign scope, invalid timestamps, and ambiguous outcomes become **Needs
+confirmation** with null proof; the recovery control retries only the readback
+and never repeats the write. The retry retains the exact successful Firebase
+write fingerprint; without it, later matching state cannot become confirmation.
+Stopping or replacing the task invalidates every pending readback so an older
+async result cannot restore or overwrite session presentation. A confirmed transition forces the shared
+commercial snapshot to refresh so Now and other consumers cannot retain the
+old due-work projection. The persistent task surface is a labelled region, not
+another live announcement: the source acknowledgement, pending confirmation,
+and destination arrival retain announcement ownership. It stays sticky inside
+the desktop and tablet workspace, returns to document flow on mobile, exposes
+44px controls, and remains clear of fixed navigation.
 
 Ambient read failures use one calm, outcome-led recovery grammar. **Now**,
 **Opportunities**, and **Events** must withhold raw provider text, avoid empty

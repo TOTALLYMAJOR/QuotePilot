@@ -1,6 +1,6 @@
 # QuotePilot Staff-App UI Cohesion Audit
 
-Last updated: 2026-09-02 21:29:22 CDT
+Last updated: 2026-09-02 22:15:58 CDT
 
 Status: point-in-time design recommendation register. This document records
 observations and proposed contracts; it does not grant runtime, persistence,
@@ -69,7 +69,7 @@ or human-accepted.
 | 12 | P2 | Unify search behavior | Open; acceptance contract below. |
 | 13 | P2 | Standardize evidence disclosures | Open; acceptance contract below. |
 | 14 | P1 quality debt | Repair the broad layout gate | Implemented locally in `598d4dd`; current route contract and fail-closed selectors pass 81/81 cases. |
-| 15 | P1 | Close the cross-route task loop | Foundation implemented locally in `b72fe19`; 4/4 focused Chromium cases now prove three-source exact arrival and session continuity. Authoritative follow-up completion and cross-route source refresh remain open. |
+| 15 | P1 | Close the cross-route task loop | Follow-up closure adapter implemented in the current local slice; 5/5 focused Chromium cases prove three-source continuity plus fail-closed browser-local completion. Connected Firebase readback and cross-route invalidation proof remain open. |
 
 ## Ten additional cohesion enhancements
 
@@ -87,20 +87,30 @@ plus same-tenant readback may resolve or replace the task across Now,
 Opportunities, Client 360, and Workflow. When no immutable receipt exists, the
 UI must call the readback evidence a confirmation rather than a receipt.
 
-Implementation checkpoint: the current foundation carries the exact source
+Implementation checkpoint: the current candidate carries the exact source
 action ID into a principal-, role-, and tenant-bound session contract, matches
-the complete canonical arrival focus, keeps exact-context **ready** separate
-from task completion, and fails closed without a business write. Four focused
-Chromium cases exercise Now at 390px, Opportunities at 768px, Client 360 at
-1440px, and a desktop dirty-draft guard. They prove each source-specific action
-ID converges on the same exact Rivera Workflow focus, the task rail appears
-within 250ms, reload and Back/Forward retain the session task, visible controls
-remain at least 44px without chrome overlap or horizontal overflow, and the
-browser-local quote/history/catalog strings remain unchanged. This is not a
-full three-by-three source/viewport matrix and does not prove connected tenant
-authorization, provider non-invocation, authoritative follow-up completion,
-failure fixtures, assistive-technology comprehension, or consistent source
-invalidation; those remain open.
+the complete canonical arrival focus, and keeps exact-context **ready**
+separate from task completion. The first closure adapter is the exact Workflow
+follow-up: only a successful Firebase result followed by a matching server-only
+same-organization read, one bounded internal completion confirmation, and
+absence from fresh Attention may resolve it. Every local, unavailable,
+mismatched, invalid, or ambiguous result remains **Needs confirmation** with
+null proof, retains the exact task, and offers a read-only confirmation retry.
+The implementation never automatically repeats the write and forces the shared
+commercial snapshot to refresh only after confirmation.
+
+Five focused Chromium cases exercise Now at 390px, Opportunities at 768px,
+Client 360 at 1440px, a desktop dirty-draft guard, and an intentional
+browser-local completion. They prove each source-specific action ID converges
+on the same exact Rivera Workflow focus, the task rail appears within 250ms,
+reload and Back/Forward retain the session task, visible controls remain at
+least 44px without chrome overlap or horizontal overflow, and the local save
+changes only its named quote/version history while the task fails closed. This
+is not a full three-by-three source/viewport matrix and does not prove a
+connected Firebase readback, connected tenant authorization, provider
+non-invocation, cross-route invalidation, the full failure fixture family,
+assistive-technology comprehension, hosted behavior, or human acceptance;
+those remain open.
 
 ### 16. P1 — Preserve the operator's place on every round trip
 
