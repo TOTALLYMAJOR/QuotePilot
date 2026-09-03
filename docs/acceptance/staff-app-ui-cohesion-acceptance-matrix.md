@@ -1,13 +1,13 @@
 # QuotePilot Staff-App UI Cohesion Acceptance Matrix
 
-Last updated: 2026-09-02 20:08:21 CDT
+Last updated: 2026-09-02 20:44:56 CDT
 
 ## Purpose and verdict
 
 This is the executable acceptance contract for the open recommendations in the
 [staff-app UI cohesion audit](../design/staff-app-ui-cohesion-audit.md). It is a
-future-delivery gate, not evidence that recommendations 9, 10, 12, 13, or
-15–24 are implemented.
+  future-delivery gate, not evidence that recommendations 9, 10, 12, 13, or
+  the unfinished portions of 15–24 are implemented.
 
 Use only these verdicts:
 
@@ -119,6 +119,14 @@ its commit is described as complete:
   zoom. Formatting or toggling a disclosure performs zero reads or writes.
 
 ### 15. Close the cross-route task loop — P1
+
+Implementation checkpoint: pure contract and component coverage verifies exact
+source identity, principal/role/tenant binding, full-focus matching, visible
+**In progress** presentation, context recovery, and the distinction between
+destination readiness and completion. A current Chromium Opportunities path
+is supporting visual evidence. Guarded-commit timing, session restoration,
+Back/Forward, and all three sources remain unproved until the browser matrix
+and authoritative follow-up outcome/readback criteria below pass.
 
 - Start exact ranked tasks from Now, Opportunities, and Client 360; each lands
   on the expected opaque object ID and exposes **in progress** within 250ms.

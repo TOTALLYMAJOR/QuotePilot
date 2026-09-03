@@ -8,6 +8,7 @@ import CatalogReadNotice from "./components/CatalogReadNotice";
 import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
 import { buildMarginPresentation } from "./components/marginPresentation";
 import ProductBrandLockup from "./components/ProductBrandLockup";
+import WorkspaceTaskJourneyNotice from "./components/WorkspaceTaskJourneyNotice";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
   createRecoverableLazy,
@@ -111,6 +112,16 @@ import {
   createWorkspaceArrivalHandoff,
   parseWorkspaceArrivalHandoff
 } from "./lib/workspaceArrivalContract";
+import {
+  clearWorkspaceTaskJourney,
+  createWorkspaceTaskJourney,
+  readWorkspaceTaskJourney,
+  transitionWorkspaceTaskContext,
+  transitionWorkspaceTaskOutcome,
+  workspaceTaskJourneyBelongsToPrincipal,
+  workspaceTaskJourneyMatchesArrival,
+  writeWorkspaceTaskJourney
+} from "./lib/workspaceTaskJourney";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 import { createRebookQuoteDraft } from "./lib/rebookQuoteClient";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
@@ -810,6 +821,34 @@ function ambientClientArrivalInput(target = {}) {
   };
 }
 
+function ambientTaskActionId(target = {}, options = {}) {
+  return String(
+    target?.actionId
+    || options?.actionId
+    || options?.arrivalContext?.actionId
+    || ""
+  ).trim();
+}
+
+function workspaceTaskPrincipal(authSession = {}) {
+  return {
+    id: String(authSession.user?.uid || "").trim(),
+    role: String(authSession.role || "").trim().toLowerCase()
+  };
+}
+
+const WORKSPACE_TASK_DESTINATION_ROUTE = Object.freeze({
+  client: WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
+  opportunity: WORKSPACE_ROUTE_IDS.QUOTE_DETAIL,
+  administration: WORKSPACE_ROUTE_IDS.QUOTE_LIST,
+  workflow: WORKSPACE_ROUTE_IDS.WORKFLOW,
+  approval: WORKSPACE_ROUTE_IDS.WORKFLOW,
+  messages: WORKSPACE_ROUTE_IDS.MESSAGING,
+  schedule: WORKSPACE_ROUTE_IDS.SCHEDULE,
+  reporting: WORKSPACE_ROUTE_IDS.REPORTING,
+  library: WORKSPACE_ROUTE_IDS.CATALOG
+});
+
 export default function App({
   tenantContext,
   authSession,
@@ -835,6 +874,28 @@ export default function App({
     ? workspaceArrivalHandoff.contract
     : null;
   const [workspaceArrivalResolution, setWorkspaceArrivalResolution] = useState(null);
+  const activeWorkspaceTaskPrincipal = workspaceTaskPrincipal(authSession);
+  const [workspaceTaskJourney, setWorkspaceTaskJourney] = useState(() => {
+    if (!AMBIENT_UI_ENABLED) return null;
+    const stored = readWorkspaceTaskJourney(authSession.organizationId);
+    const principal = workspaceTaskPrincipal(authSession);
+    return stored.ok && workspaceTaskJourneyBelongsToPrincipal(stored.journey, principal)
+      ? stored.journey
+      : null;
+  });
+  const [toasts, setToasts] = useState([]);
+  const pushToast = useCallback((message, tone = "info") => {
+    const id = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    setToasts((prev) => [...prev, { id, message, tone }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 3600);
+  }, []);
+  const activeWorkspaceTaskJourney = workspaceTaskJourney?.organizationId
+    === String(authSession.organizationId || "").trim()
+    && workspaceTaskJourneyBelongsToPrincipal(workspaceTaskJourney, activeWorkspaceTaskPrincipal)
+    ? workspaceTaskJourney
+    : null;
   const [catalogRouteInteraction, setCatalogRouteInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
   const [catalogModalInteraction, setCatalogModalInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
   const [libraryContextualOrigin, setLibraryContextualOrigin] = useState(null);
@@ -851,7 +912,10 @@ export default function App({
     busy: catalogRouteInteraction.busy || catalogModalInteraction.busy
   }), [catalogRouteInteraction, catalogModalInteraction]);
   const workspaceArrivalKey = workspaceArrivalAttempted
-      ? workspaceArrivalContext ? [
+      ? workspaceArrivalContext ? JSON.stringify([
+        "arrival",
+        workspaceArrivalContext.destination,
+        workspaceArrivalContext.routeId,
         workspaceArrivalContext.surfaceId,
         workspaceArrivalContext.intentId,
         workspaceArrivalContext.object?.type,
@@ -865,20 +929,21 @@ export default function App({
         workspaceArrivalContext.focus?.reportSignal,
         workspaceArrivalContext.focus?.sectionId,
         workspaceArrivalContext.focus?.recordId
-      ].filter(Boolean).join(":") : [
+      ]) : JSON.stringify([
         "recovery",
         browserLocation.pathname,
         browserLocation.search,
         workspaceArrivalHandoff?.recovery?.code || "invalid_input"
-      ].join(":")
+      ])
     : "";
   useEffect(() => {
     if (workspaceArrivalContext) {
-      setWorkspaceArrivalResolution({ status: "pending" });
+      setWorkspaceArrivalResolution({ arrivalKey: workspaceArrivalKey, status: "pending" });
       return;
     }
     if (workspaceArrivalAttempted && workspaceArrivalHandoff?.recovery) {
       setWorkspaceArrivalResolution({
+        arrivalKey: workspaceArrivalKey,
         status: "recovery",
         ...workspaceArrivalHandoff.recovery
       });
@@ -886,6 +951,109 @@ export default function App({
     }
     setWorkspaceArrivalResolution(null);
   }, [workspaceArrivalKey]);
+  const handleWorkspaceArrivalResolution = useCallback((resolution) => {
+    if (!workspaceArrivalKey || !resolution || typeof resolution !== "object") return;
+    setWorkspaceArrivalResolution({ ...resolution, arrivalKey: workspaceArrivalKey });
+  }, [workspaceArrivalKey]);
+  useEffect(() => {
+    if (!AMBIENT_UI_ENABLED) return;
+    const stored = readWorkspaceTaskJourney(authSession.organizationId);
+    if (
+      stored.ok
+      && stored.journey
+      && !workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)
+    ) {
+      clearWorkspaceTaskJourney(authSession.organizationId);
+    }
+    setWorkspaceTaskJourney(
+      stored.ok && workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)
+        ? stored.journey
+        : null
+    );
+  }, [
+    activeWorkspaceTaskPrincipal.id,
+    activeWorkspaceTaskPrincipal.role,
+    authSession.organizationId
+  ]);
+  const persistWorkspaceTaskJourney = useCallback((journey) => {
+    const stored = writeWorkspaceTaskJourney(authSession.organizationId, journey);
+    if (stored.ok) setWorkspaceTaskJourney(stored.journey);
+    return stored;
+  }, [authSession.organizationId]);
+  const beginWorkspaceTaskJourney = useCallback((handoff, actionId) => {
+    const taskId = String(actionId || "").trim();
+    if (!taskId) return { ok: true, journey: null };
+    const started = createWorkspaceTaskJourney({
+      organizationId: authSession.organizationId,
+      principal: activeWorkspaceTaskPrincipal,
+      taskId,
+      origin: {
+        routeId: browserRoute.routeId,
+        pathname: browserRoute.pathname
+      },
+      destination: handoff.contract.destination,
+      object: {
+        id: handoff.contract.object.id,
+        type: handoff.contract.object.type
+      },
+      focus: handoff.contract.destination === "approval"
+        ? {
+            quoteId: handoff.contract.focus.quoteId,
+            requestId: handoff.contract.focus.requestId
+          }
+        : handoff.contract.focus,
+      intentId: handoff.contract.intentId
+    });
+    if (!started.ok) return started;
+    return persistWorkspaceTaskJourney(started.journey);
+  }, [
+    authSession.organizationId,
+    activeWorkspaceTaskPrincipal.id,
+    activeWorkspaceTaskPrincipal.role,
+    browserRoute.pathname,
+    browserRoute.routeId,
+    persistWorkspaceTaskJourney
+  ]);
+  useEffect(() => {
+    if (!activeWorkspaceTaskJourney) return;
+    const destinationRouteId = WORKSPACE_TASK_DESTINATION_ROUTE[
+      activeWorkspaceTaskJourney.destination
+    ];
+    if (browserRoute.routeId !== destinationRouteId) return;
+
+    let contextState = "recovery";
+    if (
+      workspaceArrivalAttempted
+      && workspaceTaskJourneyMatchesArrival(activeWorkspaceTaskJourney, workspaceArrivalContext)
+    ) {
+      const exactResolution = workspaceArrivalResolution?.arrivalKey === workspaceArrivalKey
+        ? workspaceArrivalResolution
+        : null;
+      contextState = exactResolution?.status === "resolved"
+        ? "ready"
+        : exactResolution?.status === "recovery"
+          ? "recovery"
+          : "locating";
+    }
+    const transitioned = transitionWorkspaceTaskContext(
+      activeWorkspaceTaskJourney,
+      contextState
+    );
+    if (
+      transitioned.ok
+      && transitioned.journey.contextState !== activeWorkspaceTaskJourney.contextState
+    ) {
+      persistWorkspaceTaskJourney(transitioned.journey);
+    }
+  }, [
+    activeWorkspaceTaskJourney,
+    browserRoute.routeId,
+    persistWorkspaceTaskJourney,
+    workspaceArrivalAttempted,
+    workspaceArrivalContext,
+    workspaceArrivalKey,
+    workspaceArrivalResolution
+  ]);
   useEffect(() => {
     const contextualLibrary = workspaceArrivalContext?.surfaceId === "ambient-library"
       && workspaceArrivalContext?.intentId === "browse_library";
@@ -943,12 +1111,18 @@ export default function App({
     const {
       bypassQuickUpdatesGuard = false,
       quickUpdatesReason = "navigation",
+      beforeCommit = null,
       ...navigationOptions
     } = options;
-    const commitNavigation = () => navigate(destination, {
-      ...navigationOptions,
-      preserveSearch: false
-    });
+    const commitNavigation = () => {
+      const preparation = typeof beforeCommit === "function" ? beforeCommit() : null;
+      if (preparation?.ok === false) return preparation;
+      navigate(destination, {
+        ...navigationOptions,
+        preserveSearch: false
+      });
+      return preparation;
+    };
     if (
       !bypassQuickUpdatesGuard
       && quickUpdatesGuard?.open === true
@@ -958,45 +1132,69 @@ export default function App({
     }
     return commitNavigation();
   }, [navigate, quickUpdatesGuard]);
+  const navigateAmbientTaskHandoff = useCallback((handoff, actionId) => {
+    let startedTask = null;
+    const navigationResult = navigateWorkspace(handoff.navigation.path, {
+      state: handoff.navigation.state,
+      beforeCommit: () => {
+        startedTask = beginWorkspaceTaskJourney(handoff, actionId);
+        if (!startedTask.ok) {
+          pushToast(
+            "Opening the exact context, but task tracking is unavailable in this session. No record changed.",
+            "warning"
+          );
+          return null;
+        }
+        return startedTask;
+      }
+    });
+    if (["blocked", "guarded"].includes(navigationResult?.status)) {
+      return {
+        status: navigationResult.status,
+        contract: handoff.contract,
+        taskJourney: null
+      };
+    }
+    return {
+      status: "pending",
+      contract: handoff.contract,
+      taskJourney: startedTask?.journey || null
+    };
+  }, [beginWorkspaceTaskJourney, navigateWorkspace, pushToast]);
   const navigateAmbientWorkflow = useCallback((target = {}, options = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientWorkflowArrivalInput(target, options));
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
-    return { status: "pending", contract: handoff.contract };
-  }, [navigateWorkspace]);
+    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target, options));
+  }, [navigateAmbientTaskHandoff]);
   const navigateAmbientConversation = useCallback((quoteId, options = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(
       ambientConversationArrivalInput(quoteId, options)
     );
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
-    return { status: "pending", contract: handoff.contract };
-  }, [navigateWorkspace]);
+    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId({}, options));
+  }, [navigateAmbientTaskHandoff]);
   const navigateAmbientOpportunity = useCallback((target = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientOpportunityArrivalInput(target));
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
-    return { status: "pending", contract: handoff.contract };
-  }, [navigateWorkspace]);
+    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target));
+  }, [navigateAmbientTaskHandoff]);
   const navigateAmbientQuoteAdministration = useCallback((quoteId, context = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(
       ambientQuoteAdministrationArrivalInput(quoteId, context)
     );
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
-    return { status: "pending", contract: handoff.contract };
-  }, [navigateWorkspace]);
+    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(context));
+  }, [navigateAmbientTaskHandoff]);
   const navigateAmbientClient = useCallback((target = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientClientArrivalInput(target));
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
-    return { status: "pending", contract: handoff.contract };
-  }, [navigateWorkspace]);
+    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target));
+  }, [navigateAmbientTaskHandoff]);
   const wizardRef = useRef(null);
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
@@ -1384,7 +1582,6 @@ export default function App({
     error: ""
   });
   const [quoteEditRetryToken, setQuoteEditRetryToken] = useState(0);
-  const [toasts, setToasts] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [quoteDirty, setQuoteDirty] = useState(false);
   const [ambientDraftIntentReview, setAmbientDraftIntentReview] = useState(null);
@@ -1533,13 +1730,68 @@ export default function App({
     };
   }, [openHeaderMenu]);
 
-  const pushToast = useCallback((message, tone = "info") => {
-    const id = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-    setToasts((prev) => [...prev, { id, message, tone }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 3600);
-  }, []);
+  const continueWorkspaceTaskJourney = useCallback(() => {
+    if (!activeWorkspaceTaskJourney) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: activeWorkspaceTaskJourney.destination,
+      object: activeWorkspaceTaskJourney.object,
+      focus: activeWorkspaceTaskJourney.focus,
+      intentId: activeWorkspaceTaskJourney.intentId
+    });
+    if (!handoff.ok) {
+      const recovery = transitionWorkspaceTaskContext(activeWorkspaceTaskJourney, "recovery");
+      if (recovery.ok) persistWorkspaceTaskJourney(recovery.journey);
+      pushToast("The exact task context is unavailable. The task remains in progress.", "warning");
+      return { status: "recovery", ...handoff.recovery };
+    }
+    const locating = transitionWorkspaceTaskContext(activeWorkspaceTaskJourney, "locating");
+    if (!locating.ok) {
+      pushToast("The task context could not be restored. No record changed.", "warning");
+      return { status: "recovery", ...locating.recovery };
+    }
+    const navigationResult = navigateWorkspace(handoff.navigation.path, {
+      state: handoff.navigation.state,
+      beforeCommit: () => {
+        const persisted = persistWorkspaceTaskJourney(locating.journey);
+        if (!persisted.ok) {
+          pushToast(
+            "Opening the exact context, but task tracking could not be retained in this session. No record changed.",
+            "warning"
+          );
+          return null;
+        }
+        return persisted;
+      }
+    });
+    if (["blocked", "guarded"].includes(navigationResult?.status)) {
+      return { status: navigationResult.status };
+    }
+    return { status: "pending", contract: handoff.contract };
+  }, [
+    activeWorkspaceTaskJourney,
+    navigateWorkspace,
+    persistWorkspaceTaskJourney,
+    pushToast
+  ]);
+
+  const stopTrackingWorkspaceTask = useCallback(() => {
+    if (!activeWorkspaceTaskJourney) return { status: "idle" };
+    const cancelled = transitionWorkspaceTaskOutcome(activeWorkspaceTaskJourney, {
+      phase: "cancelled"
+    });
+    if (!cancelled.ok) {
+      pushToast("Task tracking could not be stopped. No record changed.", "warning");
+      return { status: "recovery", ...cancelled.recovery };
+    }
+    const cleared = clearWorkspaceTaskJourney(authSession.organizationId);
+    if (!cleared.ok) {
+      pushToast("Task tracking could not be cleared from this session. No record changed.", "warning");
+      return { status: "recovery", ...cleared.recovery };
+    }
+    setWorkspaceTaskJourney(null);
+    pushToast("Stopped tracking this task on this device. No work or record changed.", "info");
+    return { status: "cancelled" };
+  }, [activeWorkspaceTaskJourney, authSession.organizationId, pushToast]);
 
   const canLeaveAmbientLibrary = useCallback((nextPlace) => {
     if (ambientLibraryInteraction.busy) {
@@ -4635,6 +4887,8 @@ export default function App({
     if (!canLeaveAmbientLibrary("sign out")) return;
     try {
       await authSession.signOut();
+      clearWorkspaceTaskJourney(authSession.organizationId);
+      setWorkspaceTaskJourney(null);
     } catch (err) {
       recordDiagnosticError(err, {
         surface: "app",
@@ -5104,7 +5358,7 @@ export default function App({
           ? workspaceArrivalContext
           : null,
         arrivalAttempted: workspaceArrivalAttempted,
-        onArrivalResolution: setWorkspaceArrivalResolution,
+        onArrivalResolution: handleWorkspaceArrivalResolution,
         onInteractionStateChange: setCatalogRouteInteraction,
         contextualOrigin: libraryContextualOrigin ? {
           ...libraryContextualOrigin,
@@ -5173,7 +5427,7 @@ export default function App({
       arrivalContext: workspaceArrivalContext?.surfaceId === "schedule"
         ? workspaceArrivalContext
         : null,
-      onArrivalResolution: setWorkspaceArrivalResolution
+      onArrivalResolution: handleWorkspaceArrivalResolution
     },
     route: { mounted: scheduleRouteMounted, open: scheduleRouteOpen },
     modal: { mounted: scheduleMounted, open: scheduleModalOpen }
@@ -5189,7 +5443,7 @@ export default function App({
       arrivalContext: workspaceArrivalContext?.surfaceId === "reporting"
         ? workspaceArrivalContext
         : null,
-      onArrivalResolution: setWorkspaceArrivalResolution
+      onArrivalResolution: handleWorkspaceArrivalResolution
     },
     route: { mounted: reportingRouteMounted, open: reportingRouteOpen },
     modal: { mounted: dashboardMounted, open: reportingModalOpen }
@@ -5730,6 +5984,15 @@ export default function App({
         </div>
       )}
 
+      {AMBIENT_UI_ENABLED && activeWorkspaceTaskJourney && (
+        <WorkspaceTaskJourneyNotice
+          journey={activeWorkspaceTaskJourney}
+          currentRouteId={browserRoute.routeId}
+          onContinue={continueWorkspaceTaskJourney}
+          onStopTracking={stopTrackingWorkspaceTask}
+        />
+      )}
+
       {AMBIENT_UI_ENABLED && workspaceArrivalAttempted && !workspaceArrivalContext && (
         <WorkspaceArrivalNotice
           context={null}
@@ -5921,7 +6184,7 @@ export default function App({
               ? workspaceArrivalContext
               : null}
             arrivalAttempted={workspaceArrivalAttempted}
-            onArrivalResolution={setWorkspaceArrivalResolution}
+            onArrivalResolution={handleWorkspaceArrivalResolution}
           />
         </WorkspaceLazyRoute>
       )}
@@ -5945,7 +6208,7 @@ export default function App({
                 ? workspaceArrivalContext
                 : null}
               arrivalAttempted={workspaceArrivalAttempted}
-              onArrivalResolution={setWorkspaceArrivalResolution}
+              onArrivalResolution={handleWorkspaceArrivalResolution}
               onSelectQuote={(quoteId) => navigateWorkspace(
                 buildMessagingPath({ quoteId }),
                 { replace: !quoteId }
@@ -6458,7 +6721,7 @@ export default function App({
               || workspaceArrivalContext?.surfaceId === "quote-administration"
               ? workspaceArrivalContext
               : null}
-            onArrivalResolution={setWorkspaceArrivalResolution}
+            onArrivalResolution={handleWorkspaceArrivalResolution}
             onPreviewQuickUpdate={AMBIENT_UI_ENABLED ? handlePreviewQuickUpdate : undefined}
             onSaveQuickUpdate={AMBIENT_UI_ENABLED ? handleSaveQuickUpdate : undefined}
             onOpenQuickUpdatesLibrary={AMBIENT_UI_ENABLED && authSession.isAdmin
@@ -6574,7 +6837,7 @@ export default function App({
             arrivalContext={workspaceArrivalContext?.surfaceId === "workflow"
               ? workspaceArrivalContext
               : null}
-            onArrivalResolution={setWorkspaceArrivalResolution}
+            onArrivalResolution={handleWorkspaceArrivalResolution}
             onEditQuote={(quote) => {
               handleEditQuote(quote);
             }}

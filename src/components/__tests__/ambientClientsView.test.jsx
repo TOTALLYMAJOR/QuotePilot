@@ -584,8 +584,11 @@ describe("AmbientClientsView", () => {
     expect(onOpenConversation).toHaveBeenCalledWith(QUOTE_ID, {
       arrivalContext: {
         object: action.arrivalContract.object,
-        target
+        target,
+        actionId: action.id
       }
     });
+    expect(container.querySelector(".ambient-client-overview__primary")
+      .getAttribute("data-workspace-task-id")).toBe(action.id);
   });
 });

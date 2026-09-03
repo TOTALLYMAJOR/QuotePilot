@@ -114,7 +114,7 @@ describe("workspace interaction recovery wiring", () => {
     expect(callbackSource).toContain("const result = navigateAmbientOpportunity(target);");
     expect(callbackSource).toContain('workspaceArrivalContext?.surfaceId === "living-opportunity"');
     expect(callbackSource).toContain('fallbackSurfaceId="living-opportunity"');
-    expect(callbackSource).toContain("onArrivalResolution={setWorkspaceArrivalResolution}");
+    expect(callbackSource).toContain("onArrivalResolution={handleWorkspaceArrivalResolution}");
     expect(callbackSource).not.toContain('reason: "opportunity_stream"');
   });
 
@@ -124,7 +124,38 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("workspaceArrivalContext.intentId");
     expect(appSource).toContain("workspaceArrivalContext.focus?.reportSignal");
     expect(appSource).toContain('arrivalContext: workspaceArrivalContext?.surfaceId === "schedule"');
-    expect(appSource).toContain("onArrivalResolution: setWorkspaceArrivalResolution");
+    expect(appSource).toContain("onArrivalResolution: handleWorkspaceArrivalResolution");
     expect(appSource).toContain('fallbackSurfaceId="schedule"');
+  });
+
+  test("keeps one presentation-only task attached across exact Ambient route handoffs", () => {
+    expect(appSource).toContain('import WorkspaceTaskJourneyNotice from "./components/WorkspaceTaskJourneyNotice"');
+    expect(appSource).toContain('} from "./lib/workspaceTaskJourney"');
+    expect(appSource).toContain("const beginWorkspaceTaskJourney = useCallback((handoff, actionId) => {");
+    expect(appSource).toContain("principal: activeWorkspaceTaskPrincipal");
+    expect(appSource).toContain("workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)");
+    expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
+    expect(appSource).toContain("const stored = writeWorkspaceTaskJourney(authSession.organizationId, journey)");
+    expect(appSource).toContain("if (stored.ok) setWorkspaceTaskJourney(stored.journey)");
+    expect(appSource).toContain("return persistWorkspaceTaskJourney(started.journey)");
+    expect(appSource).toContain("beforeCommit: () => {");
+    expect(appSource).toContain("startedTask = beginWorkspaceTaskJourney(handoff, actionId)");
+    expect(appSource).toContain("task tracking is unavailable in this session");
+    expect(appSource).not.toContain('return { status: "recovery", ...startedTask.recovery }');
+    expect(appSource).toContain("if ([\"blocked\", \"guarded\"].includes(navigationResult?.status))");
+    expect(appSource).toContain("transitionWorkspaceTaskContext(");
+    expect(appSource).toContain("workspaceTaskJourneyMatchesArrival(activeWorkspaceTaskJourney, workspaceArrivalContext)");
+    expect(appSource).toContain('workspaceArrivalContext ? JSON.stringify([\n        "arrival"');
+    expect(appSource).not.toContain('].filter(Boolean).join(":")');
+    expect(appSource).toContain("setWorkspaceArrivalResolution({ ...resolution, arrivalKey: workspaceArrivalKey })");
+    expect(appSource).toContain("workspaceArrivalResolution?.arrivalKey === workspaceArrivalKey");
+    expect(appSource).toContain('exactResolution?.status === "resolved"');
+    expect(appSource).toContain('? "ready"');
+    expect(appSource).toContain("activeWorkspaceTaskJourney,");
+    expect(appSource).toContain("<WorkspaceTaskJourneyNotice");
+    expect(appSource).toContain("onContinue={continueWorkspaceTaskJourney}");
+    expect(appSource).toContain("onStopTracking={stopTrackingWorkspaceTask}");
+    expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
+    expect(appSource).not.toContain("exactResolution?.status === \"resolved\"\n        ? \"resolved\"");
   });
 });

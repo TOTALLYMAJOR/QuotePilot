@@ -1,6 +1,6 @@
 # QuotePilot Staff-App UI Cohesion Audit
 
-Last updated: 2026-09-02 20:08:21 CDT
+Last updated: 2026-09-02 20:44:56 CDT
 
 Status: point-in-time design recommendation register. This document records
 observations and proposed contracts; it does not grant runtime, persistence,
@@ -68,6 +68,7 @@ or human-accepted.
 | 12 | P2 | Unify search behavior | Open; acceptance contract below. |
 | 13 | P2 | Standardize evidence disclosures | Open; acceptance contract below. |
 | 14 | P1 quality debt | Repair the broad layout gate | Implemented locally in `598d4dd`; current route contract and fail-closed selectors pass 81/81 cases. |
+| 15 | P1 | Close the cross-route task loop | Foundation implemented locally: exact ranked-action identity now persists as one tenant-scoped, session-only presentation journey. Authoritative follow-up completion and cross-route source refresh remain open. |
 
 ## Ten additional cohesion enhancements
 
@@ -80,8 +81,19 @@ superseded work.
 
 Design contract: every ranked action that leaves its source carries a bounded,
 tenant-scoped task identity. Opening acknowledges **in progress** without
-writing business state. Only an authoritative outcome receipt may resolve or
-replace the task across Now, Opportunities, Client 360, and Workflow.
+writing business state. Only the capability's existing authoritative outcome
+plus same-tenant readback may resolve or replace the task across Now,
+Opportunities, Client 360, and Workflow. When no immutable receipt exists, the
+UI must call the readback evidence a confirmation rather than a receipt.
+
+Implementation checkpoint: the current foundation carries the exact source
+action ID into a principal-, role-, and tenant-bound session contract, matches
+the complete canonical arrival focus, keeps exact-context **ready** separate
+from task completion, and fails closed without a business write. The current
+Chromium Opportunities path provides supporting visual evidence only.
+Guarded-commit, restoration, Back/Forward, and full three-source browser proof
+remain open with authoritative follow-up readback and consistent source
+invalidation.
 
 ### 16. P1 — Preserve the operator's place on every round trip
 
