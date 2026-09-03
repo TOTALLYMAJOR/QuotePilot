@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reconciled local-review customer identity precedence so browser acceptance
+  seeds remain authoritative for their exact tenant while the fixed review
+  directory still supplies an empty local workspace. Client lists, pagination,
+  search, and Customer 360 now exercise the intended seeded records without
+  weakening production Firebase reads or cross-tenant filtering.
 - Reconciled the v0.16.3 compatibility bundle exception to the measured
   3,295,659-byte aggregate and 393,459-byte largest chunk after restoring the
   approved staff continuity contracts on current main. The 3,302,684-byte
