@@ -8,6 +8,7 @@ import {
 } from "../lib/commandCenterEvidence";
 import { buildNowCard } from "./nowPresentation";
 import { buildAmbientNowBriefing } from "../lib/ambientNowBriefing";
+import { getWorkflowAttentionFocusId } from "../lib/quoteWorkflow";
 import {
   createAmbientAction,
   createAmbientActionResult,
@@ -354,7 +355,7 @@ export default function AmbientNowView({
     const result = onOpenWorkflow?.({
       quoteId: item.quoteId,
       attentionType: item.type,
-      requestId: item.sourceRequestId || item.requestId || ""
+      requestId: getWorkflowAttentionFocusId(item)
     });
     if (result?.status === "recovery") {
       announce(resultFor(action, "recovery", {

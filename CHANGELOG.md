@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 20:08:21 CDT
+Last updated: 2026-09-02 20:26:48 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Corrected Now-to-Workflow task arrivals to use Workflow's canonical attention
+  identity. Projected follow-ups now carry their stable `follow-up:<quoteId>`
+  focus key instead of an unrelated request fallback, while request-backed
+  items retain their exact source request identity. This navigation-only change
+  performs no business write and aligns Now with Opportunities and Client 360.
 - Added a staff-app cohesion audit that expands the prioritized UI register
   from 14 to 24 recommendations and turns every open item into an executable
   design and acceptance contract. The ten new recommendations cover cross-route
