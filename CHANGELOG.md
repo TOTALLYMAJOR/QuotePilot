@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 15:59:15 CDT
+Last updated: 2026-09-03 16:43:24 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Promoted annotated tag `v0.16.4` at exact-main commit
+  `4f329180f0864ebadb0383930f969a3767f8d9db` to the production Firebase
+  backend with governed run `33808086707` after exact-main CI run
+  `33806999323` passed. Complete workflow and independent readback proved 101
+  active `us-central1` Functions on the `email-active` profile with Resend
+  selected, while SMS, buyer access, Commercial Change, staffing authority,
+  and both Revenue Autopilot gates remain off. Public production routes remain
+  healthy. No outbound email was sent, so provider acceptance, delivery/bounce,
+  inbox receipt, and human review remain separate open evidence gates; the
+  prior secret version and v0.16.3 backend receipt are retained for recovery.
 - Added a fail-closed `email-active` Firebase production release profile for
   the approved Resend sender. It is limited to `backend`/`all`, derives
   `NOTIFICATIONS_EMAIL_PROVIDER=resend` from the immutable workflow input, and

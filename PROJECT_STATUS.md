@@ -1,18 +1,29 @@
 # Project Status
 
-Last updated: 2026-09-03 15:32:05 CDT
+Last updated: 2026-09-03 16:43:24 CDT
 
 ## Current Production Release
 
-- Annotated tag `v0.16.3` resolves to
-  `c8800838c03ce9db49fe1034c529c8363c8bf27c`; exact-main CI Quality run
-  `33797242008` passed, governed Firebase run `33798432693` deployed with
-  rollback SHA `4af43d2f097f8717357af210bb9ba0be9ef7be8f`, and governed Vercel run
+- The production Firebase backend now runs annotated tag `v0.16.4`, exact
+  commit `4f329180f0864ebadb0383930f969a3767f8d9db`. Exact-main CI Quality run
+  `33806999323` passed every required job; governed Firebase backend run
+  `33808086707` completed under `release_profile=email-active` with rollback
+  SHA `c8800838c03ce9db49fe1034c529c8363c8bf27c`. Workflow and independent
+  provider readback proved 101 active `us-central1` Functions with
+  `NOTIFICATIONS_EMAIL_PROVIDER=resend`; SMS, buyer access, Commercial Change,
+  staffing authority, and both Revenue Autopilot gates remain off. The current
+  and prior `RESEND_API_KEY` Secret Manager versions remain enabled pending a
+  separately authorized controlled-delivery acceptance.
+- The public static surfaces remain the v0.16.3 deployment: annotated tag
+  `v0.16.3` resolves to `c8800838c03ce9db49fe1034c529c8363c8bf27c`;
+  exact-main CI Quality run `33797242008` passed, governed Firebase run
+  `33798432693` deployed with rollback SHA
+  `4af43d2f097f8717357af210bb9ba0be9ef7be8f`, and governed Vercel run
   `33799909088` deployed with rollback SHA
-  `54672a9e414ed5a6099a8332da31d7f56bf8b28a`. Firebase provider readback
-  proved 101 active Functions on `NOTIFICATIONS_EMAIL_PROVIDER=none` and
-  `NOTIFICATIONS_SMS_PROVIDER=none`; this release is deployed but does not yet
-  activate Resend.
+  `54672a9e414ed5a6099a8332da31d7f56bf8b28a`. Post-activation probes returned
+  HTTP 200 for `/`, `/app`, and `/system` at `quotepilot.mbmapps.com`, and for
+  the Firebase Hosting origin. No frontend deployment was required for the
+  backend-only email activation.
 - Annotated tag `v0.16.0` resolves to
   `54672a9e414ed5a6099a8332da31d7f56bf8b28a`; exact-main CI Quality run
   `33558167039` passed all required jobs. Governed Vercel run `33560027814`
@@ -70,20 +81,22 @@ Last updated: 2026-09-03 15:32:05 CDT
   rollback, stale/partial evidence, uncontrolled provider recipient, live-mode
   Stripe record, or missing exact-main attestation keeps promotion closed.
 
-## Resend Production Activation Candidate
+## Resend Production Activation Receipt
 
-- Production Secret Manager metadata shows a new enabled `RESEND_API_KEY`
-  version created on September 3, 2026. Metadata proves only installation; the
-  value, permission scope, sender verification, and message delivery are not
-  inferred.
-- Source now offers a distinct `email-active` production profile only for
-  Firebase `backend`/`all`. It switches the email provider to Resend while
-  preserving the complete `safe-off` authority matrix for SMS, buyer access,
-  Commercial Change, staffing authority, and Revenue Autopilot.
-- Promotion still requires review, local qualification, exact-head PR CI,
-  merge, exact-main CI, annotated tag, governed backend deployment, complete
-  Functions runtime readback, and public health checks. No production runtime
-  change is claimed by this candidate.
+- Production Secret Manager metadata shows enabled `RESEND_API_KEY` versions 2
+  and 1; version 2 was created on September 3, 2026. The provider account's
+  domain inventory identifies `quietpilot.us` as verified. No key value entered
+  source, logs, workflow inputs, artifacts, or receipts.
+- Production repository configuration identifies the sender as
+  `QuotePilot by MBMApps <quotepilot@quietpilot.us>`. Governed Firebase run
+  `33808086707` deployed the distinct `email-active` profile from tagged-main
+  commit `4f329180f0864ebadb0383930f969a3767f8d9db`, preserving the complete
+  safe-off authority matrix for SMS, buyer access, Commercial Change, staffing
+  authority, and Revenue Autopilot.
+- The deployment, complete Functions readback, secret metadata, sender-domain
+  verification, and public health checks are complete. This activates the
+  production email transport for authorized QuotePilot workflows across the
+  shared Firebase platform; it is not scoped to one organization record.
 - One real controlled email remains a separate, explicit authorization. A
   successful deploy cannot stand in for QuotePilot provider acceptance, Resend
   delivery/bounce, recipient inbox receipt, or human review.
