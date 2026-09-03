@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 61,
+  "catalogVersion": 62,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -5298,6 +5298,194 @@
       ],
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
       "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, truthful local fallback, and one exact session-only task thread without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Follow-up completion uses the existing guarded quote mutation, confirms only an exact same-tenant server readback, and otherwise remains visibly uncertain without repeating the write. Staff-route Back/Forward may restore only an exact adjacent same-runtime, same-organization, same-principal view; private view and draft state stays memory-only, accepted discard cannot reappear on Forward, and invalid context falls back without selecting another record. The return-context layer adds no write authority and ordinary non-expiry fixtures retain byte-equivalent business state; the existing admin quote-history read may still persist automatic expiry under its unchanged lifecycle authority, including local-fallback normalization and versioning. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, blocked, or Needs confirmation with a safe next resolution."
+    },
+    {
+      "id": "same-runtime-staff-action-feedback",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "The Calm Four staff workspace presents consequential action attempts through one same-runtime, scope-bound feedback registry and continuity rail. Its first adapter reports exact tracked Workflow follow-up completion as pending, confirmed, recovery, uncertain, or cancelled without adding mutation authority or upgrading browser-local state to proof.",
+      "backendPaths": [
+        "src/lib/workspaceActionFeedback.js",
+        "src/context/WorkspaceActionFeedbackContext.jsx"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/WorkspaceRoute.jsx",
+        "src/components/SalesWorkflowModal.jsx",
+        "src/components/WorkspaceActionFeedbackNotice.jsx",
+        "src/components/workspaceActionFeedbackNotice.css",
+        "src/components/workspaceTaskJourneyNotice.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/WorkspaceActionFeedbackNotice.jsx",
+          "locator": "data-testid=\"workspace-action-feedback\""
+        },
+        {
+          "path": "src/components/WorkspaceActionFeedbackNotice.jsx",
+          "locator": "data-testid=\"workspace-action-feedback-announcer\""
+        },
+        {
+          "path": "src/components/WorkspaceRoute.jsx",
+          "locator": "<WorkspaceActionFeedbackProvider"
+        },
+        {
+          "path": "src/components/SalesWorkflowModal.jsx",
+          "locator": "data-follow-up-confirmation-state=\"uncertain\""
+        }
+      ],
+      "testPaths": [
+        "e2e/staff-app-action-feedback.spec.js",
+        "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+        "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+        "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+        "src/context/__tests__/WorkspaceActionFeedbackContext.test.jsx",
+        "src/lib/__tests__/appInteractionRecovery.test.js",
+        "src/lib/__tests__/workspaceActionFeedback.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "fences transitions to the exact scope, attempt, generation, action, and object"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "never reads or writes browser storage"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceActionFeedbackContext.test.jsx",
+          "locator": "clears the registry and announcement immediately when exact scope changes"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "publishes one shared pending-to-succeeded contract only after App accepts exact task closure"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "blocks a second write while an earlier exact-object outcome remains unresolved"
+        },
+        {
+          "path": "src/lib/__tests__/appInteractionRecovery.test.js",
+          "locator": "persists a reconciled exact task before App reports its feedback confirmed"
+        },
+        {
+          "path": "src/lib/__tests__/appInteractionRecovery.test.js",
+          "locator": "reconciles older feedback without changing a newer active task"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "retains uncertainty until authoritative reconciliation and forbids evidence-free recovery"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "rejects acknowledgement while an outcome remains uncertain"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "preserves exact same-runtime feedback across both authorized workspace branches"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "dismisses terminal feedback from the compatibility workspace with its exact revision"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "removes prior staff feedback while auth is unresolved even when identity is retained"
+        },
+        {
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "returns focus to the prior connected control after terminal dismissal removes feedback"
+        },
+        {
+          "path": "e2e/staff-app-action-feedback.spec.js",
+          "locator": "keeps an exact uncertain follow-up outcome durable at"
+        }
+      ],
+      "documentationPaths": [
+        "docs/DESIGN_SYSTEM.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
+        "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
+        "docs/design/staff-app-ui-cohesion-audit.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "#### Durable action feedback foundation"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Dedicated same-runtime staff action-feedback capability"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Durable action feedback (source/local foundation)"
+        },
+        {
+          "path": "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
+          "locator": "### 17. Use one durable action-feedback contract — P1"
+        },
+        {
+          "path": "docs/design/staff-app-ui-cohesion-audit.md",
+          "locator": "### 17. P1 — Use one durable action-feedback contract"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The first bounded review covers the shared presentation registry, staff-only provider placement across authorized workspace branches, one atomic announcer, the responsive continuity stack, and the exact tracked Workflow follow-up adapter. Immutable attempt identity, revision-fenced terminal acknowledgement with deterministic focus return, retained uncertainty, auth-loading scope teardown, late-promise and staff-identity-change cleanup, unresolved-capacity refusal, duplicate-write prevention even with completion unchecked, exact return after task tracking stops, matching-task persistence, and independent older-feedback reconciliation without newer-task mutation are reviewed together. Quick Updates, Catalog, and all other staff mutations remain outside this first adapter.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical ready state before an action begins",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical submitting state for an unresolved write",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical uncertain state without claiming failure or success",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical reconciliation state only while exact readback is in flight",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical receipt state for confirmed evidence",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical error state for a definitive recovery outcome",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical recovery state on the single safe next action",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Authorized staff can identify one exact consequential action attempt, distinguish pending, authoritative confirmation, definitive recovery, ambiguity, and cancellation, and follow one safe resolution without silently repeating a write. Uncertainty cannot be dismissed, directly laundered into recovery, or removed by a stale acknowledgement; it remains a duplicate-write fence until authoritative reconciliation or cancellation. The registry is presentation-only and same-runtime, clears on reload or organization, principal, or role change, is absent from customer, portal, unresolved-auth, and denied-role views, and has no storage, network, provider, or business-record authority. The Workflow adapter supplies product-owned fixed prose and opaque IDs and excludes its raw note, customer or staff email, thrown provider text, token-like material, and raw record. Generic pattern rejection remains defense in depth rather than proof that arbitrary normal prose was not copied, so every future adapter must independently enforce fixed-copy provenance before migration."
     },
     {
       "id": "stripe-connect-runtime-foundation",

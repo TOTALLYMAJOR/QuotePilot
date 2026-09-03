@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-03 00:30:25 CDT
+Last updated: 2026-09-03 02:21:52 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -988,6 +988,91 @@ unchanged.
   `Retry confirmation` to read the exact record again; it does not repeat the
   save. `Stop tracking` clears only this device's session task rail and never
   changes the saved quote or version history.
+
+### Durable action feedback (source/local foundation)
+
+The current source candidate adds one same-runtime action-feedback rail for the
+exact tracked Workflow follow-up completion. It appears with the affected
+follow-up and uses these operator-facing states:
+
+- **In progress** — one exact save or confirmation read is active. The affected
+  area is busy, and the same write cannot be submitted again.
+- **Confirmed** — the owning Workflow authority returned its existing proof
+  and the exact same-workspace record matched. If this attempt still owns the
+  Current task, QuotePilot also persisted that exact task's closure. An older
+  feedback attempt can confirm independently without changing or claiming
+  completion of a newer or missing Current task.
+- **Needs attention** — QuotePilot knows enough to name what changed or stayed
+  unchanged and offers one safe next action.
+- **Needs confirmation** — the write may have happened, but exact evidence is
+  unavailable or mismatched. The save remains disabled; use the offered
+  read-only exact-follow-up review instead of trying the write again. You cannot
+  dismiss this state; it remains a duplicate-write fence until exact
+  reconciliation or authoritative cancellation resolves it.
+- **Cancelled** — the action stopped before dispatch or the owning authority
+  supplied a cancellation basis. Stopping the separate Current task rail does
+  not cancel a save.
+
+The feedback rail and **Current task** rail may appear together, but they answer
+different questions: action feedback describes one attempt, while Current task
+tracks the wider cross-route job. One shared announcement reports the action
+state; the Workflow panel does not repeat the same consequential toast or live
+message. The rail stays available while moving among staff routes in the same
+runtime, including between the standard staff workspace and its authorized
+compatibility view. Reloading the page, signing in as another person, changing
+role, or changing workspace clears it rather than attaching old feedback to a
+new scope. Customer, portal, unresolved-sign-in, and denied-role views never
+mount the staff feedback provider.
+
+For the first adapter, entering or saving a follow-up still uses the established
+Workflow fields and write path. When the same attempt still owns the Current
+task, a server readback alone is not enough if the App rejects task closure:
+Workflow remains unconfirmed and the rail explains that the task did not close.
+If an older feedback attempt is reconciled after a newer task replaced it, the
+exact follow-up may confirm independently while the newer task remains untouched
+and no task-completion fact is shown. Timeout, offline, permission, stale,
+foreign-workspace, malformed, and field-mismatch results never appear as
+**Confirmed**. If the required shared rail cannot begin, Workflow does not send
+the write; it keeps one local accessible recovery message and does not expose
+raw error text. Correct an invalid stage or date at the focused field before
+trying again.
+
+For this Workflow adapter, the rail receives only fixed QuotePilot-written
+action, message, and changed/unchanged copy, a bounded quote-number label, and
+opaque object IDs. The adapter does not supply the follow-up note, customer or
+staff email, thrown provider text, token-like material, or raw record. The
+shared registry also rejects recognizable sensitive/error patterns, unexpected
+fields, deceptive control characters, and oversized content, but that filter
+is a guardrail rather than proof of where arbitrary normal prose originated. Do
+not use this foundation as a transport for notes or other free text; each future
+adapter must establish its own fixed-copy boundary before joining the rail.
+
+When **Needs confirmation** offers **Review exact follow-up**, it returns to and
+focuses that exact follow-up record even if **Stop tracking** already removed the
+separate Current task rail. Once the exact record and focus resolve, the shared
+return control becomes inactive and the local **Retry confirmation** remains.
+The uncertain record itself is retained, so an unchecked completion box or a
+new task generation still cannot repeat the write. That retry reads the exact
+record only; presentation acknowledgement never confirms, cancels, or repeats
+the save.
+
+This foundation does not yet replace Quick Updates, Catalog, or other staff
+mutation feedback. Those surfaces keep their current behavior until a later
+adapter is implemented and separately accepted.
+
+Focused local coverage exercises identity and transition fences, immutable
+attempt ownership, unresolved-capacity refusal, late-result cleanup, scope
+changes, announcement cleanup, and duplicate-write prevention. The dedicated
+Chromium-admin journeys cover phone, tablet, and desktop source routes. Their
+browser-local saves deliberately remain **Needs confirmation**, retain feedback
+across an authorized route change, return to the exact completed follow-up even
+when it is no longer in Attention, and clear only the feedback rail on reload.
+Six matching before/after captures cover the responsive stack; a tablet identity
+wrap found during review was fixed. Final result counts are recorded against the
+immutable candidate after the last lifecycle change. This is local fixture
+evidence, not connected Firebase, hosted, provider, production,
+assistive-technology, or human acceptance.
+
 - For a customer change request, `Acknowledge internally` records that staff
   saw the exact current request but keeps it in Attention. `Mark handled
   internally` requires a short internal note and clears only that exact request.

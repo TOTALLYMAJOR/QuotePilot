@@ -79,6 +79,21 @@
   background: color-mix(in srgb, #f1f8f2 94%, transparent);
 }
 
+.workspace-continuity-stack:has(> .workspace-action-feedback) > .workspace-task-journey {
+  border-color: color-mix(in srgb, var(--tone-ink-3, #5f6268) 20%, #dedbd2);
+  background: color-mix(in srgb, var(--tone-cream-2, #f4f4f2) 96%, transparent);
+  box-shadow: none;
+}
+
+.workspace-continuity-stack:has(
+  > .workspace-action-feedback:is(
+    [data-action-feedback-phase="recovery"],
+    [data-action-feedback-phase="uncertain"]
+  )
+) > .workspace-task-journey > p {
+  display: none;
+}
+
 @media (min-width: 1181px) {
   .workspace-task-journey {
     width: auto;
@@ -87,10 +102,29 @@
   }
 }
 
-@media (max-width: 1180px) {
+@media (min-width: 981px) and (max-width: 1180px) {
   .workspace-task-journey {
     top: 5.25rem;
   }
+}
+
+.app-shell-ambient-navigation:has(.workspace-continuity-stack) [data-follow-up-record-id] {
+  scroll-margin-block-start: calc(clamp(9rem, 24vh, 15rem) + 6rem);
+  scroll-margin-block-end: 2rem;
+}
+
+.app-shell-ambient-navigation [data-follow-up-record-id]:focus {
+  outline: 3px solid color-mix(in srgb, var(--staff-teal, #168a82) 52%, transparent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.app-shell-ambient-navigation [data-follow-up-save-action="true"]:disabled {
+  border-color: color-mix(in srgb, var(--tone-ink-3, #5f6268) 22%, #dedbd2);
+  background: color-mix(in srgb, var(--tone-cream-2, #f4f4f2) 94%, white);
+  color: var(--tone-ink-3, #5f6268);
+  box-shadow: none;
+  opacity: 1;
 }
 
 @media (max-width: 760px) {
@@ -129,21 +163,29 @@
   }
 
   .workspace-task-journey:not([data-workspace-task-context="ready"]) .workspace-task-journey__actions,
-  .workspace-task-journey:is(
-    [data-workspace-task-state="uncertain"],
-    [data-workspace-task-state="superseded"]
-  ) .workspace-task-journey__actions {
+  .workspace-task-journey[data-workspace-task-state="superseded"] .workspace-task-journey__actions {
     grid-row: auto;
     grid-column: 1 / -1;
     justify-content: stretch;
   }
 
   .workspace-task-journey:not([data-workspace-task-context="ready"]) .workspace-task-journey__actions button,
-  .workspace-task-journey:is(
-    [data-workspace-task-state="uncertain"],
-    [data-workspace-task-state="superseded"]
-  ) .workspace-task-journey__actions button {
+  .workspace-task-journey[data-workspace-task-state="superseded"] .workspace-task-journey__actions button {
     flex: 1 1 0;
+  }
+
+  .workspace-continuity-stack:has(> .workspace-action-feedback) > .workspace-task-journey {
+    gap: 0.35rem 0.6rem;
+    padding: 0.52rem 0.65rem;
+  }
+
+  .workspace-continuity-stack:has(> .workspace-action-feedback) .workspace-task-journey__identity {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .app-shell-ambient-navigation:has(.workspace-continuity-stack) [data-follow-up-record-id] {
+    scroll-margin-block-start: 1.25rem;
+    scroll-margin-block-end: 1.25rem;
   }
 }
 

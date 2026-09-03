@@ -3,6 +3,10 @@ import ActiveApp from "quotepilot-active-app";
 import { EventTypeProvider } from "../context/EventTypeContext";
 import { OrganizationProvider } from "../context/OrganizationContext";
 import {
+  useWorkspaceActionFeedback,
+  WorkspaceActionFeedbackProvider
+} from "../context/WorkspaceActionFeedbackContext";
+import {
   useWorkspaceNavigation,
   WorkspaceNavigationProvider
 } from "../context/WorkspaceNavigationContext";
@@ -11,6 +15,9 @@ import { useTenantContext } from "../hooks/useTenantContext";
 import { WORKSPACE_PATHS, WORKSPACE_ROUTE_IDS } from "../lib/workspaceRoutes";
 import { buildWorkspaceRouteScopeKey } from "../lib/workspaceScope";
 import { mountFirebaseEmailActionPage } from "./FirebaseEmailActionPage";
+import WorkspaceActionFeedbackNotice, {
+  resolveWorkspaceActionFeedbackFollowUpAction
+} from "./WorkspaceActionFeedbackNotice";
 
 const QUOTE_WORKSPACE_CONCEPT_PATH = "/app/quote-workspace-concept";
 const QUOTE_WORKSPACE_PATH = "/app/quote-workspace";
@@ -21,8 +28,54 @@ function envEnabled(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
 
+function CompatibilityWorkspaceActionFeedback({ navigate }) {
+  const {
+    currentFeedback,
+    acknowledgeActionFeedback
+  } = useWorkspaceActionFeedback();
+  const handleNextAction = useCallback((nextAction, feedback) => {
+    const selected = feedback || currentFeedback;
+    const nextActionId = String(nextAction?.id || selected?.nextAction?.id || "").trim();
+    const resolution = resolveWorkspaceActionFeedbackFollowUpAction({
+      feedback: selected,
+      nextActionId
+    });
+    if (!resolution.ok) return resolution;
+    const destination = navigate(resolution.navigation.path, {
+      state: resolution.navigation.state,
+      preserveSearch: false,
+      preserveHash: false
+    });
+    return typeof destination === "string"
+      ? { status: "pending", destination }
+      : destination || { status: "recovery" };
+  }, [currentFeedback, navigate]);
+  const handleAcknowledge = useCallback((feedback) => acknowledgeActionFeedback({
+    attemptId: feedback?.attemptId,
+    actionId: feedback?.actionId,
+    generation: feedback?.generation,
+    object: feedback?.object,
+    recordRevision: feedback?.revision
+  }), [acknowledgeActionFeedback]);
+
+  if (!currentFeedback) return null;
+  return (
+    <div
+      className="workspace-continuity-stack"
+      data-workspace-continuity-stack="true"
+      data-compatibility-action-feedback="true"
+    >
+      <WorkspaceActionFeedbackNotice
+        feedback={currentFeedback}
+        onNextAction={handleNextAction}
+        onAcknowledge={handleAcknowledge}
+      />
+    </div>
+  );
+}
+
 export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
-  const { location, route, replace } = useWorkspaceNavigation();
+  const { location, navigate, route, replace } = useWorkspaceNavigation();
   const previousAuthenticatedUidRef = useRef("");
   const authenticatedUid = String(authSession.user?.uid || "").trim();
   const authenticatedRole = String(authSession.role || tenantContext?.role || "").trim().toLowerCase();
@@ -57,6 +110,10 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   const quoteWorkspaceDenied = quoteWorkspaceRequested
     && Boolean(authenticatedUid)
     && !QUOTE_WORKSPACE_ROLES.has(authenticatedRole);
+  const actionFeedbackAuthorized = route.surface === "workspace"
+    && authSession.loading !== true
+    && Boolean(authenticatedUid)
+    && QUOTE_WORKSPACE_ROLES.has(authenticatedRole);
   const [committedPortalToken, setCommittedPortalToken] = useState(() => (
     route.surface === "portal" ? portalToken : ""
   ));
@@ -87,16 +144,7 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   return (
     <OrganizationProvider key={workspaceScopeKey}>
       <EventTypeProvider>
-        {quoteWorkspaceReady ? (
-          <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote workspace...</div>}>
-            <QuoteWorkspacePage
-              tenantContext={tenantContext}
-              authSession={authSession}
-              quoteId={requestedQuoteId}
-              onExit={() => replace(WORKSPACE_PATHS.quotes, { preserveSearch: false, preserveHash: false })}
-            />
-          </Suspense>
-        ) : quoteWorkspaceDenied ? (
+        {quoteWorkspaceDenied ? (
           <main className="qp-route-boundary" data-testid="quote-workspace-role-boundary">
             <p>Quote workspace</p>
             <h1>Staff access required</h1>
@@ -108,6 +156,36 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
               Return to workspace
             </button>
           </main>
+        ) : actionFeedbackAuthorized ? (
+          <WorkspaceActionFeedbackProvider
+            scope={{
+              organizationId: String(authSession.organizationId || "").trim(),
+              principalId: authenticatedUid,
+              role: authenticatedRole
+            }}
+          >
+            {quoteWorkspaceReady ? (
+              <>
+                <CompatibilityWorkspaceActionFeedback navigate={navigate} />
+                <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote workspace...</div>}>
+                  <QuoteWorkspacePage
+                    tenantContext={tenantContext}
+                    authSession={authSession}
+                    quoteId={requestedQuoteId}
+                    onExit={() => replace(WORKSPACE_PATHS.quotes, { preserveSearch: false, preserveHash: false })}
+                  />
+                </Suspense>
+              </>
+            ) : (
+              <ActiveApp
+                tenantContext={tenantContext}
+                authSession={authSession}
+                portalRouteAllowed={portalRouteAllowed}
+                committedPortalToken={committedPortalToken}
+                onPortalScopeCommit={commitPortalScope}
+              />
+            )}
+          </WorkspaceActionFeedbackProvider>
         ) : (
           <ActiveApp
             tenantContext={tenantContext}

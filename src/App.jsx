@@ -8,6 +8,11 @@ import CatalogReadNotice from "./components/CatalogReadNotice";
 import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
 import { buildMarginPresentation } from "./components/marginPresentation";
 import ProductBrandLockup from "./components/ProductBrandLockup";
+import WorkspaceActionFeedbackNotice, {
+  buildWorkspaceActionFeedbackFollowUpIdentity,
+  resolveWorkspaceActionFeedbackFollowUpAction,
+  workspaceActionFeedbackMatchesTaskJourney
+} from "./components/WorkspaceActionFeedbackNotice";
 import WorkspaceTaskJourneyNotice from "./components/WorkspaceTaskJourneyNotice";
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
@@ -42,6 +47,7 @@ import {
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
 import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
+import { useWorkspaceActionFeedback } from "./context/WorkspaceActionFeedbackContext";
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useCatalogData } from "./hooks/useCatalogData";
 import { useCommercialWorkspaceSnapshot } from "./hooks/useCommercialWorkspaceSnapshot";
@@ -851,6 +857,162 @@ const WORKSPACE_TASK_DESTINATION_ROUTE = Object.freeze({
   library: WORKSPACE_ROUTE_IDS.CATALOG
 });
 
+/**
+ * Applies an exact Workflow task outcome against the latest principal-bound
+ * session record. Feedback-owned reconciliation may resolve independently
+ * only when it does not own that active task; an exact matching task must
+ * transition and persist before the UI may report it completed.
+ */
+export function applyWorkspaceTaskOutcome({
+  outcome,
+  currentTaskSession,
+  feedbackIdentity = null,
+  readTaskJourney = readWorkspaceTaskJourney,
+  persistTaskJourney,
+  requestAttentionRefresh = () => {},
+  clearFeedbackReconciliation = () => {}
+} = {}) {
+  if (!outcome || typeof outcome !== "object") {
+    return { status: "ignored" };
+  }
+  if (!currentTaskSession?.organizationId) return { status: "ignored" };
+  const currentStoredTask = readTaskJourney(currentTaskSession.organizationId);
+  const currentWorkspaceTaskJourney = currentStoredTask.ok
+    && workspaceTaskJourneyBelongsToPrincipal(
+      currentStoredTask.journey,
+      currentTaskSession.principal
+    )
+    ? currentStoredTask.journey
+    : null;
+  const outcomeFocus = outcome.focus && typeof outcome.focus === "object"
+    ? outcome.focus
+    : null;
+  const phase = outcome.phase;
+  const proof = outcome.proof;
+  const exactOutcomeArrival = outcomeFocus ? {
+    destination: "workflow",
+    object: {
+      id: outcomeFocus.requestId,
+      type: "workflow-item"
+    },
+    focus: outcomeFocus,
+    intentId: "review_follow_up"
+  } : null;
+  const proofIsAuthoritativeConfirmation = phase === "resolved"
+    && proof
+    && Object.keys(proof).length === 3
+    && proof.verifierId === WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
+    && /^follow-up-completed:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(
+      String(proof.proofId || "")
+    )
+    && proof.proofType === WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE;
+  const proofIsAbsentForUncertainty = phase === "uncertain" && proof === null;
+  const exactFeedbackOwnedOutcome = Boolean(
+    feedbackIdentity
+    && Object.keys(outcome).length === 6
+    && Object.keys(outcomeFocus || {}).length === 3
+    && outcome.organizationId === currentTaskSession.organizationId
+    && outcome.taskId === feedbackIdentity.taskId
+    && outcome.startedAtISO === feedbackIdentity.startedAtISO
+    && exactOutcomeArrival
+    && exactOutcomeArrival.destination === feedbackIdentity.destination
+    && exactOutcomeArrival.intentId === feedbackIdentity.intentId
+    && exactOutcomeArrival.object.id === feedbackIdentity.object.id
+    && exactOutcomeArrival.object.type === feedbackIdentity.object.type
+    && outcomeFocus.quoteId === feedbackIdentity.focus.quoteId
+    && outcomeFocus.attentionType === feedbackIdentity.focus.attentionType
+    && outcomeFocus.requestId === feedbackIdentity.focus.requestId
+    && (proofIsAuthoritativeConfirmation || proofIsAbsentForUncertainty)
+  );
+  const feedbackIdentityMatchesCurrentTask = Boolean(
+    exactFeedbackOwnedOutcome
+    && currentWorkspaceTaskJourney
+    && currentWorkspaceTaskJourney.taskId === feedbackIdentity.taskId
+    && currentWorkspaceTaskJourney.startedAtISO === feedbackIdentity.startedAtISO
+    && workspaceTaskJourneyMatchesArrival(
+      currentWorkspaceTaskJourney,
+      exactOutcomeArrival
+    )
+  );
+  if (exactFeedbackOwnedOutcome && !feedbackIdentityMatchesCurrentTask) {
+    if (phase === "resolved") {
+      requestAttentionRefresh({ force: true });
+      clearFeedbackReconciliation();
+    }
+    return { status: phase, taskState: "independent" };
+  }
+  if (!currentWorkspaceTaskJourney) {
+    if (!feedbackIdentity) return { status: "ignored" };
+    return {
+      status: "recovery",
+      reason: "The reconciliation outcome did not match the exact returned follow-up.",
+      consequence: "No task record was restored or changed.",
+      nextResolution: "Keep the returned follow-up open and reconcile only its exact record."
+    };
+  }
+
+  const exactOutcome = (
+    Object.keys(outcome).length === 6
+    && outcome.organizationId === currentWorkspaceTaskJourney.organizationId
+    && outcome.organizationId === currentTaskSession.organizationId
+    && outcome.taskId === currentWorkspaceTaskJourney.taskId
+    && outcome.startedAtISO === currentWorkspaceTaskJourney.startedAtISO
+    && currentWorkspaceTaskJourney.intentId === "review_follow_up"
+    && currentWorkspaceTaskJourney.destination === "workflow"
+    && exactOutcomeArrival
+    && workspaceTaskJourneyMatchesArrival(
+      currentWorkspaceTaskJourney,
+      exactOutcomeArrival
+    )
+    && (proofIsAuthoritativeConfirmation || proofIsAbsentForUncertainty)
+  );
+  if (!exactOutcome) {
+    return {
+      status: "recovery",
+      reason: "The task outcome did not match the exact active follow-up.",
+      consequence: "Task tracking remains unchanged.",
+      nextResolution: "Return to the exact follow-up and confirm it again without repeating the write."
+    };
+  }
+  if (
+    phase === "uncertain"
+    && currentWorkspaceTaskJourney.phase === "uncertain"
+  ) {
+    return { status: "uncertain", taskState: "retained" };
+  }
+
+  const transitioned = transitionWorkspaceTaskOutcome(
+    currentWorkspaceTaskJourney,
+    phase === "resolved" ? { phase, proof } : { phase }
+  );
+  if (!transitioned.ok) {
+    return {
+      status: "recovery",
+      reason: "The task outcome could not be retained.",
+      consequence: "The business record was not retried.",
+      nextResolution: "Keep the exact task attached and reconcile its current record.",
+      ...transitioned.recovery
+    };
+  }
+  const stored = typeof persistTaskJourney === "function"
+    ? persistTaskJourney(transitioned.journey)
+    : { ok: false, recovery: { code: "storage_unavailable" } };
+  if (!stored.ok) {
+    return {
+      status: "recovery",
+      reason: "The follow-up outcome is recorded, but this device could not retain its task status.",
+      consequence: "The confirmed business record was not retried.",
+      nextResolution: "Inspect the exact follow-up before changing it again.",
+      ...stored.recovery
+    };
+  }
+  if (phase === "resolved") {
+    requestAttentionRefresh({ force: true });
+    if (feedbackIdentityMatchesCurrentTask) clearFeedbackReconciliation();
+  }
+  return { status: phase, taskState: "persisted" };
+}
+
 export default function App({
   tenantContext,
   authSession,
@@ -868,6 +1030,10 @@ export default function App({
     returnToOrigin,
     returnContextStatus
   } = useWorkspaceNavigation();
+  const {
+    currentFeedback: currentWorkspaceActionFeedback,
+    acknowledgeActionFeedback
+  } = useWorkspaceActionFeedback();
   const workspaceArrivalHandoff = useMemo(() => {
     if (!AMBIENT_UI_ENABLED || !browserLocation.state?.ambientArrival) return null;
     return parseWorkspaceArrivalHandoff(browserLocation);
@@ -879,8 +1045,13 @@ export default function App({
     ? workspaceArrivalHandoff.contract
     : null;
   const [workspaceArrivalResolution, setWorkspaceArrivalResolution] = useState(null);
+  const [
+    workspaceActionFeedbackReconciliationContext,
+    setWorkspaceActionFeedbackReconciliationContext
+  ] = useState(null);
   const activeWorkspaceTaskPrincipal = workspaceTaskPrincipal(authSession);
   useEffect(() => {
+    setWorkspaceActionFeedbackReconciliationContext(null);
     setReturnContextScope?.({
       organizationId: authSession.organizationId,
       principalId: authSession.user?.uid,
@@ -1604,97 +1775,22 @@ export default function App({
     commercialSnapshot.refresh({ force: true });
   }, [authSession.organizationId, commercialSnapshot.refresh]);
   const handleWorkspaceTaskOutcome = useCallback((outcome) => {
-    if (!outcome || typeof outcome !== "object") {
-      return { status: "ignored" };
-    }
     const currentTaskSession = currentWorkspaceTaskSessionRef.current;
-    if (!currentTaskSession?.organizationId) return { status: "ignored" };
-    const currentStoredTask = readWorkspaceTaskJourney(currentTaskSession.organizationId);
-    const currentWorkspaceTaskJourney = currentStoredTask.ok
-      && workspaceTaskJourneyBelongsToPrincipal(
-        currentStoredTask.journey,
-        currentTaskSession.principal
+    const feedbackIdentity = workspaceActionFeedbackReconciliationContext?.identity;
+    return applyWorkspaceTaskOutcome({
+      outcome,
+      currentTaskSession,
+      feedbackIdentity,
+      persistTaskJourney: persistWorkspaceTaskJourney,
+      requestAttentionRefresh: requestWorkflowAttentionRefresh,
+      clearFeedbackReconciliation: () => (
+        setWorkspaceActionFeedbackReconciliationContext(null)
       )
-      ? currentStoredTask.journey
-      : null;
-    if (!currentWorkspaceTaskJourney) return { status: "ignored" };
-
-    const outcomeFocus = outcome.focus && typeof outcome.focus === "object"
-      ? outcome.focus
-      : null;
-    const phase = outcome.phase;
-    const proof = outcome.proof;
-    const exactOutcomeArrival = outcomeFocus ? {
-      destination: "workflow",
-      object: {
-        id: outcomeFocus.requestId,
-        type: "workflow-item"
-      },
-      focus: outcomeFocus,
-      intentId: "review_follow_up"
-    } : null;
-    const proofIsAuthoritativeConfirmation = phase === "resolved"
-      && proof
-      && Object.keys(proof).length === 3
-      && proof.verifierId === WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
-      && /^follow-up-completed:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(
-        String(proof.proofId || "")
-      )
-      && proof.proofType === WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE;
-    const proofIsAbsentForUncertainty = phase === "uncertain" && proof === null;
-    const exactOutcome = (
-      Object.keys(outcome).length === 6
-      && outcome.organizationId === currentWorkspaceTaskJourney.organizationId
-      && outcome.organizationId === currentTaskSession.organizationId
-      && outcome.taskId === currentWorkspaceTaskJourney.taskId
-      && outcome.startedAtISO === currentWorkspaceTaskJourney.startedAtISO
-      && currentWorkspaceTaskJourney.intentId === "review_follow_up"
-      && currentWorkspaceTaskJourney.destination === "workflow"
-      && exactOutcomeArrival
-      && workspaceTaskJourneyMatchesArrival(
-        currentWorkspaceTaskJourney,
-        exactOutcomeArrival
-      )
-      && (proofIsAuthoritativeConfirmation || proofIsAbsentForUncertainty)
-    );
-    if (!exactOutcome) {
-      pushToast(
-        "The task outcome did not match the exact active follow-up. Tracking remains unchanged.",
-        "warning"
-      );
-      return { status: "recovery" };
-    }
-    if (
-      phase === "uncertain"
-      && currentWorkspaceTaskJourney.phase === "uncertain"
-    ) {
-      return { status: "uncertain" };
-    }
-
-    const transitioned = transitionWorkspaceTaskOutcome(
-      currentWorkspaceTaskJourney,
-      phase === "resolved" ? { phase, proof } : { phase }
-    );
-    if (!transitioned.ok) {
-      pushToast("The task outcome could not be retained. The business record was not retried.", "warning");
-      return { status: "recovery", ...transitioned.recovery };
-    }
-    const stored = persistWorkspaceTaskJourney(transitioned.journey);
-    if (!stored.ok) {
-      pushToast(
-        "The follow-up outcome is recorded, but this device could not retain its task status.",
-        "warning"
-      );
-      return { status: "recovery", ...stored.recovery };
-    }
-    if (phase === "resolved") {
-      requestWorkflowAttentionRefresh({ force: true });
-    }
-    return { status: phase };
+    });
   }, [
     persistWorkspaceTaskJourney,
-    pushToast,
-    requestWorkflowAttentionRefresh
+    requestWorkflowAttentionRefresh,
+    workspaceActionFeedbackReconciliationContext
   ]);
   const adminMounted = useStickyMount(catalogModalOpen);
   const scheduleMounted = useStickyMount(scheduleModalOpen);
@@ -1945,6 +2041,171 @@ export default function App({
     pushToast("Stopped tracking this task on this device. No work or record changed.", "info");
     return { status: "cancelled" };
   }, [activeWorkspaceTaskJourney, authSession.organizationId, pushToast]);
+
+  const actionFeedbackSelector = useCallback((feedback) => ({
+    attemptId: feedback?.attemptId,
+    actionId: feedback?.actionId,
+    generation: feedback?.generation,
+    recordRevision: feedback?.revision,
+    object: feedback?.object
+      ? {
+          kind: feedback.object.kind,
+          id: feedback.object.id,
+          label: feedback.object.label
+        }
+      : null
+  }), []);
+
+  const acknowledgeWorkspaceActionFeedback = useCallback((feedback) => {
+    const selected = feedback || currentWorkspaceActionFeedback;
+    if (!selected) return { status: "idle" };
+    return acknowledgeActionFeedback(actionFeedbackSelector(selected));
+  }, [
+    acknowledgeActionFeedback,
+    actionFeedbackSelector,
+    currentWorkspaceActionFeedback
+  ]);
+
+  const currentWorkspaceActionFeedbackFollowUp = useMemo(
+    () => buildWorkspaceActionFeedbackFollowUpIdentity(currentWorkspaceActionFeedback),
+    [currentWorkspaceActionFeedback]
+  );
+  const workspaceActionFeedbackReturnIdentity = currentWorkspaceActionFeedbackFollowUp
+    || workspaceActionFeedbackReconciliationContext?.identity
+    || null;
+  const workspaceActionFeedbackReturnOwnsCurrentArrival = Boolean(
+    workspaceActionFeedbackReturnIdentity
+    && browserRoute.routeId === WORKSPACE_ROUTE_IDS.WORKFLOW
+    && workspaceArrivalContext?.destination === "workflow"
+    && workspaceArrivalContext?.intentId === "review_follow_up"
+    && workspaceArrivalContext?.object?.type === "workflow-item"
+    && workspaceArrivalContext?.object?.id
+      === workspaceActionFeedbackReturnIdentity.object.id
+    && workspaceArrivalContext?.focus?.quoteId
+      === workspaceActionFeedbackReturnIdentity.focus.quoteId
+    && workspaceArrivalContext?.focus?.attentionType === "follow_up"
+    && workspaceArrivalContext?.focus?.requestId
+      === workspaceActionFeedbackReturnIdentity.focus.requestId
+  );
+  const workspaceActionFeedbackOwnsCurrentArrival = Boolean(
+    currentWorkspaceActionFeedbackFollowUp
+    && workspaceActionFeedbackReturnIdentity === currentWorkspaceActionFeedbackFollowUp
+    && workspaceActionFeedbackReturnOwnsCurrentArrival
+  );
+  const workspaceActionFeedbackNextActionResolved = Boolean(
+    workspaceActionFeedbackOwnsCurrentArrival
+    && workspaceArrivalResolution?.arrivalKey === workspaceArrivalKey
+    && workspaceArrivalResolution?.status === "resolved"
+    && workspaceArrivalResolution?.itemId
+      === currentWorkspaceActionFeedbackFollowUp.focus.requestId
+  );
+  const activeWorkspaceTaskOwnsCurrentFeedback = Boolean(
+    currentWorkspaceActionFeedback
+    && activeWorkspaceTaskJourney
+    && workspaceActionFeedbackMatchesTaskJourney(
+      currentWorkspaceActionFeedback,
+      activeWorkspaceTaskJourney
+    )
+  );
+  const feedbackOwnedFollowUpTaskContext = useMemo(() => {
+    if (
+      activeWorkspaceTaskOwnsCurrentFeedback
+      || !workspaceActionFeedbackReturnOwnsCurrentArrival
+      || (currentWorkspaceActionFeedback && !currentWorkspaceActionFeedbackFollowUp)
+      || (
+        currentWorkspaceActionFeedback
+        && !["recovery", "uncertain"].includes(currentWorkspaceActionFeedback.phase)
+      )
+    ) {
+      return null;
+    }
+    const identity = workspaceActionFeedbackReturnIdentity;
+    return Object.freeze({
+      organizationId: String(authSession.organizationId || "").trim(),
+      taskId: identity.taskId,
+      startedAtISO: identity.startedAtISO,
+      phase: "uncertain",
+      contextState: workspaceActionFeedbackNextActionResolved ? "ready" : "locating",
+      destination: identity.destination,
+      object: identity.object,
+      focus: identity.focus,
+      intentId: identity.intentId
+    });
+  }, [
+    activeWorkspaceTaskOwnsCurrentFeedback,
+    authSession.organizationId,
+    currentWorkspaceActionFeedback?.phase,
+    currentWorkspaceActionFeedbackFollowUp,
+    workspaceActionFeedbackNextActionResolved,
+    workspaceActionFeedbackReturnIdentity,
+    workspaceActionFeedbackReturnOwnsCurrentArrival
+  ]);
+
+  useEffect(() => {
+    if (
+      !currentWorkspaceActionFeedbackFollowUp
+      || !currentWorkspaceActionFeedback
+      || !["recovery", "uncertain"].includes(currentWorkspaceActionFeedback.phase)
+      || !workspaceActionFeedbackNextActionResolved
+    ) {
+      return;
+    }
+    setWorkspaceActionFeedbackReconciliationContext((current) => (
+      current?.attemptId === currentWorkspaceActionFeedback.attemptId
+      && current?.generation === currentWorkspaceActionFeedback.generation
+        ? current
+        : {
+            attemptId: currentWorkspaceActionFeedback.attemptId,
+            generation: currentWorkspaceActionFeedback.generation,
+            identity: currentWorkspaceActionFeedbackFollowUp
+          }
+    ));
+  }, [
+    currentWorkspaceActionFeedback,
+    currentWorkspaceActionFeedbackFollowUp,
+    workspaceActionFeedbackNextActionResolved
+  ]);
+
+  const handleWorkspaceActionFeedbackNextAction = useCallback((nextAction, feedback) => {
+    const selected = feedback || currentWorkspaceActionFeedback;
+    if (!selected) return { status: "idle" };
+    const nextActionId = String(nextAction?.id || selected.nextAction?.id || "").trim();
+    const resolution = resolveWorkspaceActionFeedbackFollowUpAction({
+      feedback: selected,
+      nextActionId,
+      activeTaskJourney: activeWorkspaceTaskJourney
+    });
+    if (!resolution.ok) return resolution;
+    const { identity } = resolution;
+
+    let navigationResult;
+    if (resolution.strategy === "continue") {
+      navigationResult = continueWorkspaceTaskJourney();
+    } else {
+      navigationResult = navigateWorkspace(resolution.navigation.path, {
+        state: resolution.navigation.state
+      });
+    }
+
+    const navigationAccepted = typeof navigationResult === "string"
+      || navigationResult?.status === "pending";
+    if (!navigationAccepted) return navigationResult || { status: "recovery" };
+    if (["recovery", "uncertain"].includes(selected.phase)) {
+      setWorkspaceActionFeedbackReconciliationContext({
+        attemptId: selected.attemptId,
+        generation: selected.generation,
+        identity
+      });
+    }
+    return typeof navigationResult === "string"
+      ? { status: "pending", destination: navigationResult }
+      : navigationResult;
+  }, [
+    activeWorkspaceTaskJourney,
+    continueWorkspaceTaskJourney,
+    currentWorkspaceActionFeedback,
+    navigateWorkspace
+  ]);
 
   const canLeaveAmbientLibrary = useCallback((nextPlace) => {
     if (ambientLibraryInteraction.busy) {
@@ -6169,13 +6430,28 @@ export default function App({
         </div>
       )}
 
-      {AMBIENT_UI_ENABLED && activeWorkspaceTaskJourney && (
-        <WorkspaceTaskJourneyNotice
-          journey={activeWorkspaceTaskJourney}
-          currentRouteId={browserRoute.routeId}
-          onContinue={continueWorkspaceTaskJourney}
-          onStopTracking={stopTrackingWorkspaceTask}
-        />
+      {AMBIENT_UI_ENABLED && (currentWorkspaceActionFeedback || activeWorkspaceTaskJourney) && (
+        <div
+          className="workspace-continuity-stack"
+          data-workspace-continuity-stack="true"
+        >
+          {currentWorkspaceActionFeedback && (
+            <WorkspaceActionFeedbackNotice
+              feedback={currentWorkspaceActionFeedback}
+              onNextAction={handleWorkspaceActionFeedbackNextAction}
+              onAcknowledge={acknowledgeWorkspaceActionFeedback}
+              nextActionResolved={workspaceActionFeedbackNextActionResolved}
+            />
+          )}
+          {activeWorkspaceTaskJourney && (
+            <WorkspaceTaskJourneyNotice
+              journey={activeWorkspaceTaskJourney}
+              currentRouteId={browserRoute.routeId}
+              onContinue={continueWorkspaceTaskJourney}
+              onStopTracking={stopTrackingWorkspaceTask}
+            />
+          )}
+        </div>
       )}
 
       {AMBIENT_UI_ENABLED && workspaceArrivalAttempted && !workspaceArrivalContext && (
@@ -7023,7 +7299,7 @@ export default function App({
               ? workspaceArrivalContext
               : null}
             onArrivalResolution={handleWorkspaceArrivalResolution}
-            activeTaskJourney={activeWorkspaceTaskJourney}
+            activeTaskJourney={feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney}
             onTaskOutcome={handleWorkspaceTaskOutcome}
             onEditQuote={(quote) => {
               handleEditQuote(quote);

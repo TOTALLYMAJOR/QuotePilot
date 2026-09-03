@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-03 00:30:25 CDT
+Last updated: 2026-09-03 02:21:52 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -381,6 +381,122 @@ another live announcement: the source acknowledgement, pending confirmation,
 and destination arrival retain announcement ownership. It stays sticky inside
 the desktop and tablet workspace, returns to document flow on mobile, exposes
 44px controls, and remains clear of fixed navigation.
+
+#### Durable action feedback foundation
+
+The first recommendation-17 slice introduces
+`workspace-action-feedback-v1`, a presentation-only, same-runtime contract for
+consequential staff actions. It does not perform, authorize, retry, reconcile,
+or persist a mutation. Each attempt is fenced to the exact organization,
+signed-in principal, role, action, attempt, generation, and affected object.
+Changing organization, principal, or role invalidates the registry. Ordinary
+staff-route changes across both authorized workspace branches retain it; a full
+page reload deliberately clears it. Portal, unresolved-auth, customer, and
+denied-role branches never mount its provider.
+
+Privacy is enforced first at the adapter boundary. The tracked Workflow adapter
+supplies product-owned fixed action, message, and outcome copy, a bounded
+quote-number object label, and opaque identifiers; it does not pass its
+follow-up note, customer or staff email, thrown provider text, token-like
+material, or raw record to the registry. The generic registry additionally
+rejects unexpected fields, recognizable sensitive/error patterns, control or
+bidirectional characters, oversized values, and opaque blobs. That classifier
+is defense in depth, not proof that arbitrary otherwise-normal prose was not
+copied from free text. Every later adapter must therefore establish the same
+fixed-copy provenance before it can join the shared contract.
+
+The contract has five states with deliberately different authority:
+
+- `pending` means one exact request or read-only confirmation is in flight. The
+  affected region is busy and duplicate submission remains unavailable.
+- `succeeded` requires bounded definitive evidence already accepted by the
+  owning capability. The feedback layer cannot manufacture a receipt or turn a
+  browser-local observation into connected proof.
+- `recovery` means the outcome is definitive enough to name what changed or did
+  not change and offer one safe acknowledgement, return, inspection, or
+  reconciliation action.
+- `uncertain` means dispatch may have occurred but exact proof is missing or
+  mismatched. The original write remains frozen; any offered action remains
+  presentation-only or read-only. The Workflow adapter uses exact inspection or
+  reconciliation. Uncertainty cannot be dismissed or acknowledged away, and it
+  cannot transition directly to evidence-free `recovery`; authoritative
+  reconciliation or cancellation must resolve the duplicate-write fence.
+- `cancelled` requires either a pre-dispatch cancellation or an authoritative
+  cancellation record. Stopping presentation-only task tracking is not a
+  mutation cancellation.
+
+The visual surface is a compact Calm Four continuity rail attached to the
+affected object. It states the action, object, outcome, changed facts, unchanged
+facts, and at most one safe next action. It joins the existing Current task rail
+inside one sticky desktop/tablet continuity stack so the rails cannot overlap;
+both return to document flow on mobile. The rails remain semantically
+independent: action feedback describes one mutation attempt, while Current task
+describes cross-route task continuity. The feedback region exposes exact
+`data-action-feedback-*` markers and `aria-busy`; one separate atomic polite
+announcer owns the state transition. When the shared announcer is available,
+component-local consequential live regions and success/error toasts are
+suppressed. Terminal acknowledgement carries the exact record revision, clears
+only its exact stale announcement, rejects late controls, and cannot re-announce
+a queued record or erase a newer announcement. Low-consequence toast
+acknowledgement remains allowed. Canonical capability markers translate the
+presentation phases into `ready`, `submitting`, `uncertain`, `reconciliation`,
+`receipt`, `error`, and `recovery` without changing their business authority.
+
+The exact tracked Workflow follow-up completion is the first adapter. It begins
+feedback before the existing save, preserves the entered follow-up values, and
+may transition to `succeeded` only after the existing Firebase result and exact
+same-organization server-only readback. When the attempt still owns the exact
+Current task, App must also persist closure before Workflow renders
+**Confirmed**; rejection leaves task tracking open and renders recovery or
+uncertainty without repeating the write. An older feedback attempt may confirm
+the exact follow-up independently after authoritative reconciliation, but it
+must leave a newer or missing Current task unchanged and omit the
+task-completion fact. Timeout, offline, permission, stale, foreign-scope,
+malformed, or field-mismatch outcomes never become success.
+
+Preflight validation runs before feedback creation or write dispatch and returns
+focus to the invalid field. If required shared feedback cannot begin, the write
+is not sent and Workflow presents one bounded local recovery alert without raw
+error text. Once dispatched, the save owns an immutable operation and feedback
+selector: a task restart, focus change, authorized branch switch, or late
+promise cannot retarget its transition to a newer generation. If Workflow
+unmounts while its scoped provider survives, cleanup leaves the exact dispatched
+attempt `uncertain` and the eventual promise cannot perform readback or call
+task-completion authority. A staff-email change inside the retained provider
+also leaves that exact attempt uncertain and clears its abandoned busy key. A
+full scope teardown clears the registry and likewise prevents late work from
+entering the next scope. The bounded registry
+never evicts `pending` or `uncertain` work; capacity or an unresolved attempt for
+the same action/object fails closed, so a second write cannot begin.
+
+An uncertain feedback record owns its exact Workflow return even after the
+operator selects **Stop tracking** on the independent task rail. **Review exact
+follow-up** must focus the exact completed follow-up record with visible focus
+clearance below the continuity stack. Only then may the shared return action
+become inactive; the uncertain record and duplicate-write fence remain. The
+local read-only **Retry confirmation** is then the sole resolution control and
+never repeats the save.
+
+This is a foundation, not recommendation-17 completion. Quick Updates, Catalog,
+and the remaining staff mutations still use their existing local feedback
+contracts until later bounded adapters are designed and verified.
+
+Focused contract, provider, presentation, Workflow, and route tests cover exact
+identity, strict transitions, unresolved-capacity refusal, late-promise cleanup,
+scope invalidation, announcement ownership, and duplicate-write prevention. The
+dedicated Chromium-admin matrix exercises Now at 390×844, Opportunities at
+768×900, and Client 360 at 1440×1000 with
+`VITE_E2E_LOCAL_REVIEW_FIXTURES=false`: visible `pending` acknowledgement within
+250ms, exact uncertain identity, same-runtime route retention, exact return after
+task tracking stops, reload clearing, intended browser-local quote/history
+change, unchanged Catalog state, 44px controls, at most 1px horizontal overflow,
+and no continuity-stack/global-chrome collision. All six same-context
+before/after captures are part of the acceptance evidence; the tablet identity
+grid stacks at 761–900px to prevent the observed mid-word wrap. Final result
+counts belong to the immutable candidate completion handoff and must be rerun
+after the last lifecycle change. This evidence does not establish 200% zoom,
+forced colors, other browsers, actual assistive technology, connected or hosted
+authority, production behavior, or human comprehension.
 
 Ambient read failures use one calm, outcome-led recovery grammar. **Now**,
 **Opportunities**, and **Events** must withhold raw provider text, avoid empty
