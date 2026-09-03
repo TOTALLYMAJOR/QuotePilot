@@ -1,13 +1,13 @@
 # QuotePilot Staff-App UI Cohesion Acceptance Matrix
 
-Last updated: 2026-09-02 22:15:58 CDT
+Last updated: 2026-09-03 00:30:25 CDT
 
 ## Purpose and verdict
 
 This is the executable acceptance contract for the open recommendations in the
 [staff-app UI cohesion audit](../design/staff-app-ui-cohesion-audit.md). It is a
   future-delivery gate, not evidence that recommendations 9, 10, 12, 13, or
-  the unfinished portions of 15–24 are implemented.
+  recommendations 17–24 are implemented.
 
 Use only these verdicts:
 
@@ -40,12 +40,19 @@ its commit is described as complete:
    44×44px.
 4. **Accessibility:** keyboard order, Escape/back behavior, focus arrival and
    return, labelled regions, live-region count, reduced motion, forced colors,
-   and 200% zoom pass. Axe reports zero violations. Actual screen-reader
-   comprehension remains **HOSTED/MANUAL REQUIRED** until performed.
-5. **State truth:** navigation, inspection, formatting, disclosure, filtering,
-   recovery display, and imagery perform zero quote, client, catalog, history,
-   pricing, workflow, or provider writes. Persisted before/after snapshots and
-   mutation spies prove zero rather than inferring it from the UI.
+   and 200% zoom pass. Axe reports zero violations inside every changed or
+   audited surface; whole-page scans report no serious or critical violations,
+   and any lower-impact pre-existing finding is recorded with no regression.
+   Actual screen-reader comprehension remains **HOSTED/MANUAL REQUIRED** until
+   performed.
+5. **State truth:** the new presentation or return layer adds no quote, client,
+   catalog, history, pricing, workflow, or provider write authority. Ordinary
+   non-expiry fixtures retain byte-equivalent persisted snapshots and issue no
+   unexpected non-GET request. If an existing read owns a lifecycle mutation—
+   currently the admin quote-history read's automatic expiry reconciliation—
+   including local-fallback normalization/versioning, isolate and disclose it,
+   prove its authority is unchanged, and never relabel the overall read path as
+   universally write-free.
 6. **Mutation truth:** where a slice invokes existing mutation authority,
    pending is single-flight, success requires the definitive receipt plus
    authoritative same-tenant readback, and ambiguous outcomes never render as
@@ -165,6 +172,38 @@ failure fixtures, and assistive-technology comprehension remain open.
   remain clear of fixed navigation.
 
 ### 16. Preserve the operator's place — P1
+
+Implementation checkpoint: **17/17** local Chromium-admin scenarios exercise
+the exact Opportunities, Clients, and Library round trip at 390×844, 768×900,
+and 1440×1000, plus real Clients pagination, Client 360, nested contextual
+Library, a three-second delayed quote read, two reload boundaries, invalid and
+foreign recovery, and an adversarial dirty-Library-editor sequence. The nine
+responsive cases assert the exact native Back/Forward entry, opaque object/
+editor identity, originating focus target, disclosure state, settled scroll
+within 8px, allowlisted URL filters, 44px controls, at most 1px horizontal
+overflow, one `main`/H1 with ordered group headings, and zero scoped Axe
+violations on each restored route surface. Destination pages have no serious
+or critical Axe violation.
+
+The reload case proves Clients retains only its allowlisted `view` enum while
+free-text search is absent from the URL, native history token, and non-business
+local/session storage and clears with a quiet explanation. Unit coverage rejects
+forged, non-adjacent, stale-runtime, cross-organization, cross-principal,
+unknown-route, and invalid-query tokens. The Library guard case proves a direct
+browser Back plus **Keep editing** retains the exact editor, entry, and private
+draft; accepted discard returns to Library without a write; Forward reopens the
+exact template from persisted data; and the discarded draft never enters
+history state. Owner-keyed guard coverage proves a temporary overlay cannot
+silently remove the underlying Library guard.
+
+Non-expiry fixtures retain byte-equivalent quote/history/catalog state and issue
+no unexpected non-GET request. The return-context layer adds no write authority;
+the pre-existing admin quote-history read may still persist automatic expiry
+under its existing lifecycle authority, including local-fallback normalization
+and versioning. This checkpoint is local Chromium evidence only. The 200% zoom,
+forced-colors, Firefox, WebKit, real assistive-technology, authenticated hosted-
+data, deployment, and human-comprehension portions of the shared gate remain
+**HOSTED/MANUAL REQUIRED** and are not promoted by these results.
 
 - Round trips from Opportunities, Clients, and Library restore safe structured
   filters, ordering, disclosure, focus target, and scroll within 8px.

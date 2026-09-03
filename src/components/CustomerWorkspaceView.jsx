@@ -4,6 +4,11 @@ import { buildStaffProposalPreview, getCustomerWorkspace } from "../lib/customer
 import { classifyDepositStatus, classifyFinalBalanceDisplayStatus, classifyQuoteStatus } from "../lib/statusSemantics";
 import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import {
+  useOptionalWorkspaceNavigation,
+  useWorkspaceReturnContextAdapter
+} from "../context/WorkspaceNavigationContext";
+import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import { StaffReadContextRail } from "./StaffEvidenceRail";
 import CustomerCommercialTimeline from "./CustomerCommercialTimeline";
 import CustomerCommercialMeasures from "./CustomerCommercialMeasures";
@@ -343,6 +348,7 @@ export default function CustomerWorkspaceView({
   arrivalAttempted = false,
   onArrivalResolution
 }) {
+  const navigation = useOptionalWorkspaceNavigation();
   const [activeTab, setActiveTab] = useState("overview");
   const [previewQuoteId, setPreviewQuoteId] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
@@ -351,9 +357,120 @@ export default function CustomerWorkspaceView({
   const tabRefs = useRef({});
   const recordDisclosureRef = useRef(null);
   const previewTriggerRef = useRef(null);
+  const returnRestoreCancelRef = useRef(null);
   const requestedScopeKey = `${String(organizationId || "").trim()}\u0000${String(customerId || "").trim()}`;
   const workspaceForScope = state.scopeKey === requestedScopeKey ? state.workspace : null;
   const headingRef = useWorkspaceRouteHeadingFocus(Boolean(workspaceForScope));
+
+  const captureClientOverviewReturnView = useCallback((hint = {}) => {
+    const root = headingRef.current?.closest("main");
+    const activeElement = typeof document !== "undefined" ? document.activeElement : null;
+    let focus = hint?.focus && typeof hint.focus === "object" ? hint.focus : null;
+    if (!focus && activeElement && root?.contains(activeElement)) {
+      const actionId = activeElement.dataset?.ambientActionId || "";
+      const opportunityId = activeElement.closest?.("[data-opportunity-id]")?.dataset.opportunityId || "";
+      if (actionId && opportunityId) {
+        focus = {
+          kind: "client-overview-action",
+          objectId: opportunityId,
+          actionId,
+          controlId: activeElement.dataset?.returnFocusControl || ""
+        };
+      } else if (activeElement.getAttribute?.("role") === "tab") {
+        focus = { kind: "client-overview-tab", controlId: activeElement.id?.replace("customer-tab-", "") || activeTab };
+      }
+    }
+    return {
+      routeId: "customer-detail",
+      structured: { activeTab },
+      disclosureIds: recordDisclosureRef.current?.open ? ["client-record"] : [],
+      scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+      focus: focus || { kind: "route-heading" }
+    };
+  }, [activeTab, headingRef]);
+
+  const restoreClientOverviewReturnView = useCallback((view) => {
+    returnRestoreCancelRef.current?.();
+    const requestedTab = TAB_IDS.includes(view?.structured?.activeTab)
+      ? view.structured.activeTab
+      : "overview";
+    setActiveTab(requestedTab);
+    if (recordDisclosureRef.current) {
+      recordDisclosureRef.current.open = view?.disclosureIds?.includes("client-record") || false;
+    }
+    return new Promise((resolve) => {
+      let attempt = 0;
+      let active = true;
+      let settled = false;
+      let frameId = null;
+      let cancelViewport = null;
+      const finish = (status) => {
+        if (settled) return;
+        settled = true;
+        resolve({ status });
+      };
+      const cancel = () => {
+        active = false;
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        cancelViewport?.();
+        finish("cancelled");
+      };
+      returnRestoreCancelRef.current = cancel;
+      const restoreRenderedView = () => {
+        if (!active) return;
+        const root = headingRef.current?.closest("main");
+        const focus = view?.focus || {};
+        let target = null;
+        if (focus.kind === "client-overview-action") {
+          target = Array.from(root?.querySelectorAll("[data-ambient-action-id]") || []).find((element) => (
+            element.dataset.ambientActionId === focus.actionId
+            && element.closest("[data-opportunity-id]")?.dataset.opportunityId === focus.objectId
+            && (!focus.controlId || element.dataset.returnFocusControl === focus.controlId)
+          ));
+        } else if (focus.kind === "client-overview-tab") {
+          target = tabRefs.current[focus.controlId] || null;
+        } else {
+          target = headingRef.current;
+        }
+        const relationshipReady = Boolean(root?.querySelector(".ambient-client-overview"));
+        if (
+          ["client-overview-action", "route-heading"].includes(focus.kind || "route-heading")
+          && !relationshipReady
+        ) {
+          frameId = window.requestAnimationFrame(restoreRenderedView);
+          return;
+        }
+        if (!target && attempt < 30) {
+          attempt += 1;
+          frameId = window.requestAnimationFrame(restoreRenderedView);
+          return;
+        }
+        frameId = null;
+        const exactTarget = Boolean(target);
+        cancelViewport = restoreWorkspaceReturnViewport({
+          focusTarget: target || headingRef.current,
+          scrollY: view?.scrollY
+        });
+        finish(exactTarget ? "restored" : "recovery");
+      };
+      if (typeof window !== "undefined") {
+        frameId = window.requestAnimationFrame(restoreRenderedView);
+      } else {
+        finish("recovery");
+      }
+    });
+  }, [headingRef]);
+
+  useWorkspaceReturnContextAdapter({
+    routeId: "customer-detail",
+    active: Boolean(ambientMode && workspaceForScope),
+    capture: captureClientOverviewReturnView,
+    restore: restoreClientOverviewReturnView
+  });
+
+  useEffect(() => () => {
+    returnRestoreCancelRef.current?.();
+  }, []);
 
   useEffect(() => {
     const generation = generationRef.current + 1;

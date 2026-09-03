@@ -1,6 +1,6 @@
 # QuotePilot Staff-App UI Cohesion Audit
 
-Last updated: 2026-09-02 22:15:58 CDT
+Last updated: 2026-09-03 00:30:25 CDT
 
 Status: point-in-time design recommendation register. This document records
 observations and proposed contracts; it does not grant runtime, persistence,
@@ -34,7 +34,8 @@ Evidence inspected in this run:
   recovery surfaces, and presentation helpers;
 - **10/10** fresh Calm Four browser scenarios, **81/81** cross-app layout
   cases, **4/4** focused task-journey browser cases, **73/73** focused
-  task-journey/component tests, and **4,227/4,227** executed unit tests passing;
+  task-journey/component tests, **17/17** local Chromium return-context cases,
+  and **4,267/4,267** executed unit tests passing (78 skipped);
   and
 - the user-selected Linear benchmark for
   [contextual actions](https://linear.app/docs/select-issues),
@@ -70,6 +71,7 @@ or human-accepted.
 | 13 | P2 | Standardize evidence disclosures | Open; acceptance contract below. |
 | 14 | P1 quality debt | Repair the broad layout gate | Implemented locally in `598d4dd`; current route contract and fail-closed selectors pass 81/81 cases. |
 | 15 | P1 | Close the cross-route task loop | Follow-up closure adapter implemented in the current local slice; 5/5 focused Chromium cases prove three-source continuity plus fail-closed browser-local completion. Connected Firebase readback and cross-route invalidation proof remain open. |
+| 16 | P1 | Preserve the operator's place on every round trip | Implemented in the current local slice; 17/17 Chromium-admin scenarios cover exact, privacy-bounded native Back/Forward at 390, 768, and 1440px, including Client 360, nested Library, delayed reads, reload/recovery boundaries, and the dirty Library guard. Hosted and human acceptance remain open. |
 
 ## Ten additional cohesion enhancements
 
@@ -114,13 +116,41 @@ those remain open.
 
 ### 16. P1 — Preserve the operator's place on every round trip
 
-Observed seam: exact-object arrival is strong, but list filters, disclosure,
-scroll, and focus do not yet share one return-context contract.
+Former seam: exact-object arrival was strong, but list filters, disclosure,
+scroll, and focus did not share one return-context contract.
 
 Design contract: distinguish object/task context from view context. Preserve
 only safe structured filter, ordering, disclosure, scroll, and focus state.
 Free-text search remains session-only and never enters a durable URL or
 cross-session record.
+
+Implementation checkpoint: the current candidate uses native browser history
+as the only route stack. A minimal entry token carries canonical paths,
+allowlisted enum queries, opaque surface IDs, and runtime/organization/
+principal scope; free text, cursors, disclosures, scroll, focus, exact Library
+targets, and drafts remain in tab memory. Only an adjacent exact entry from the
+same scope can restore. Invalid, copied, reloaded, expired, or foreign context
+falls back to the canonical route with one announcement and never substitutes
+a nearby record.
+
+Opportunities, Clients, and Library restore the exact initiating control and
+settled scroll position within 8px; Forward reopens the exact object. Library
+editors receive distinct same-URL entries, preserve route-suspended drafts, and
+share one busy/dirty guard across explicit dismissal and native Back/Forward.
+Declined discard keeps the editor, history entry, and draft; accepted discard
+continues the original traversal, and Forward reads persisted data without
+resurrecting the discarded draft. Seventeen local Chromium-admin scenarios
+cover the three-route 390, 768, and 1440px matrix, real Clients pagination,
+Client 360, nested contextual Library, delayed reads, reload privacy, invalid/
+foreign recovery, 44px targets, semantic structure, and the adversarial dirty-
+editor sequence. Restored route surfaces have zero scoped Axe violations;
+destination pages have no serious or critical violation. Non-expiry fixtures
+retain byte-equivalent quote/history/catalog state with no unexpected non-GET
+request. The return-context layer adds no write authority; the existing admin
+quote-history read may still persist automatic expiry under its pre-existing
+lifecycle authority. This remains source/local Chromium evidence; forced
+colors, 200% zoom, Firefox/WebKit, real assistive technology, hosted data,
+deployment, and human acceptance remain open.
 
 ### 17. P1 — Use one durable action-feedback contract
 

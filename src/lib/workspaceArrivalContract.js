@@ -7,6 +7,10 @@ import {
   WORKSPACE_PATHS,
   WORKSPACE_ROUTE_IDS
 } from "./workspaceRoutes";
+import {
+  readWorkspaceReturnContextToken,
+  WORKSPACE_RETURN_CONTEXT_STATE_KEY
+} from "./workspaceReturnContext";
 
 /**
  * Pure transport contract for object-scoped workspace arrivals.
@@ -871,7 +875,11 @@ export function parseWorkspaceArrivalHandoff(location) {
     if (serializedLength(state, "unexpected_state") > MAX_SERIALIZED_STATE_LENGTH) {
       fail("oversized_state");
     }
-    exactRecord(state, [STATE_KEY], "unexpected_state");
+    exactRecord(state, [STATE_KEY, WORKSPACE_RETURN_CONTEXT_STATE_KEY], "unexpected_state");
+    if (
+      Object.prototype.hasOwnProperty.call(state, WORKSPACE_RETURN_CONTEXT_STATE_KEY)
+      && !readWorkspaceReturnContextToken(state)
+    ) fail("unexpected_state");
     const contract = state[STATE_KEY];
     const input = buildInputFromContract(contract);
     const handoff = buildHandoff(input);

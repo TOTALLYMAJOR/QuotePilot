@@ -303,7 +303,8 @@ test.describe("Ambient Library", () => {
     const persistedBeforeBrowse = await readPersistedCatalog(page);
     await page.locator(".ambient-library__template-disclosure > summary").click();
     const wedding = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"]');
-    await wedding.getByRole("button", { name: /Review Wedding/u }).click();
+    const weddingAction = wedding.getByRole("button", { name: /Review Wedding/u });
+    await weddingAction.click();
 
     const exactRecord = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"]');
     await expect(exactRecord).toBeVisible();
@@ -333,7 +334,8 @@ test.describe("Ambient Library", () => {
     }
 
     await page.getByRole("button", { name: "Back to Library" }).click();
-    await expect(page.locator("#ambient-library-title")).toBeFocused();
+    await expect(page.locator("#ambient-library-title")).toBeVisible();
+    await expect(weddingAction).toBeFocused();
     await expect(page.locator("#catalog-admin-title")).toHaveCount(0);
   });
 
@@ -344,7 +346,8 @@ test.describe("Ambient Library", () => {
     const persistedBeforeDraft = await readPersistedCatalog(page);
     await page.locator(".ambient-library__template-disclosure > summary").click();
     const wedding = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"]');
-    await wedding.getByRole("button", { name: /Review Wedding/u }).click();
+    const weddingAction = wedding.getByRole("button", { name: /Review Wedding/u });
+    await weddingAction.click();
     const name = page.locator('[data-library-record-kind="event-template"][data-library-record-id="wedding"] [data-template-field="name"]');
     await name.fill("Wedding evening");
 
@@ -368,7 +371,8 @@ test.describe("Ambient Library", () => {
 
     page.once("dialog", async (dialog) => dialog.accept());
     await backToLibrary.click();
-    await expect(page.locator("#ambient-library-title")).toBeFocused();
+    await expect(page.locator("#ambient-library-title")).toBeVisible();
+    await expect(weddingAction).toBeFocused();
     expect(await readPersistedCatalog(page)).toBe(persistedBeforeDraft);
     await expect.poll(() => beforeUnloadIsProtected(page)).toBe(false);
   });

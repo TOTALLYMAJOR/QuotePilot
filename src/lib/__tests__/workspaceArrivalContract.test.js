@@ -5,6 +5,11 @@ import {
   parseWorkspaceArrivalHandoff,
   WORKSPACE_ARRIVAL_CONTRACT_MODEL
 } from "../workspaceArrivalContract";
+import {
+  createWorkspaceReturnContextStore,
+  withWorkspaceReturnContextState,
+  WORKSPACE_RETURN_CONTEXT_STATE_KEY
+} from "../workspaceReturnContext";
 
 function locationFor(handoff, overrides = {}) {
   const url = new URL(handoff.navigation.path, "https://quotepilot.local");
@@ -809,6 +814,34 @@ describe("workspace exact-arrival handoff", () => {
     expect(parseWorkspaceArrivalHandoff(locationFor(messages, {
       state: handoff.navigation.state
     }))).toMatchObject({ ok: false, recovery: { code: "route_mismatch" } });
+  });
+
+  test("permits only the validated return-context sibling beside an exact arrival", () => {
+    const handoff = createWorkspaceArrivalHandoff(opportunityInput());
+    const store = createWorkspaceReturnContextStore();
+    store.setScope({ organizationId: "org-1", principalId: "admin-1", role: "admin" });
+    const prepared = store.prepare({
+      entry: { sessionId: "runtime-1", entryId: "entry-1", position: 1 },
+      origin: { routeId: "quote-list", pathname: "/app/quotes", search: "" },
+      destination: { routeId: "quote-detail", pathname: "/app/quotes/quote-42", search: "" },
+      surfaceId: "living-opportunity",
+      view: {
+        routeId: "quote-list",
+        focus: { kind: "opportunity-action", objectId: "quote-42", actionId: "review-quote:quote-42" }
+      }
+    });
+    const state = withWorkspaceReturnContextState(handoff.navigation.state, prepared.token);
+
+    expect(parseWorkspaceArrivalHandoff(locationFor(handoff, { state }))).toEqual(handoff);
+    expect(parseWorkspaceArrivalHandoff(locationFor(handoff, {
+      state: {
+        ...state,
+        [WORKSPACE_RETURN_CONTEXT_STATE_KEY]: {
+          ...state[WORKSPACE_RETURN_CONTEXT_STATE_KEY],
+          clientName: "Private"
+        }
+      }
+    }))).toMatchObject({ ok: false, recovery: { code: "unexpected_state" } });
   });
 
   test("bounds serialized state and rejects cyclic or malformed caller data without throwing", () => {

@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createAmbientActionResult } from "../lib/ambientContracts";
 import {
   AMBIENT_LIBRARY_SECTION_ORDER,
   buildAmbientLibrary
 } from "../lib/ambientLibrary";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import {
+  useOptionalWorkspaceNavigation,
+  useWorkspaceReturnContextAdapter
+} from "../context/WorkspaceNavigationContext";
+import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import { AdminCatalogView } from "./AdminCatalogModal";
 import "./ambientLibraryRoute.css";
 
@@ -280,14 +285,25 @@ export default function AmbientLibraryRoute({
   onInteractionStateChange,
   contextualOrigin = null
 }) {
+  const navigation = useOptionalWorkspaceNavigation();
   const headingRef = useWorkspaceRouteHeadingFocus(open);
   const acknowledgementRef = useRef(null);
   const returnFocusRef = useRef(null);
   const arrivalHandledRef = useRef(null);
   const editorOpenFrameRef = useRef(null);
   const editorOpenTimerRef = useRef(null);
+  const returnRestoreCancelRef = useRef(null);
+  const editorOpenedFromHistoryRef = useRef(false);
   const [acknowledgement, setAcknowledgement] = useState(null);
   const [editorTarget, setEditorTarget] = useState(null);
+  const [templateDisclosureOpen, setTemplateDisclosureOpen] = useState(false);
+  const [boundaryOpen, setBoundaryOpen] = useState(false);
+  const handleEditorDismissGuardChange = useCallback((guard = null) => {
+    navigation?.setHistoryTraversalGuard?.(guard, "ambient-library-editor");
+  }, [navigation?.setHistoryTraversalGuard]);
+  useEffect(() => () => {
+    navigation?.setHistoryTraversalGuard?.(null, "ambient-library-editor");
+  }, [navigation?.setHistoryTraversalGuard]);
   const contextualLabel = text(contextualOrigin?.label || contextualOrigin?.eventName);
   const contextualReturn = typeof contextualOrigin?.onReturn === "function"
     ? contextualOrigin.onReturn
@@ -333,6 +349,114 @@ export default function AmbientLibraryRoute({
     }
   }), [catalog, currentUserRole, onReload, organizationId]);
 
+  const captureLibraryReturnView = useCallback((hint = {}) => {
+    const root = headingRef.current?.closest(".ambient-library");
+    const activeElement = typeof document !== "undefined" ? document.activeElement : null;
+    let focus = hint?.focus && typeof hint.focus === "object" ? hint.focus : null;
+    if (!focus && activeElement && root?.contains(activeElement)) {
+      const record = activeElement.closest?.("[data-library-record-id]");
+      const actionId = activeElement.dataset?.libraryActionId || "";
+      if (record?.dataset.libraryRecordId && actionId) {
+        focus = {
+          kind: "library-action",
+          objectId: record.dataset.libraryRecordId,
+          actionId
+        };
+      } else if (activeElement.closest?.(".ambient-library__template-disclosure")) {
+        focus = { kind: "library-disclosure", controlId: "templates" };
+      } else if (activeElement.closest?.(".ambient-library__boundary")) {
+        focus = { kind: "library-disclosure", controlId: "boundary" };
+      }
+    }
+    return {
+      routeId: "catalog",
+      structured: { order: "library-section" },
+      disclosureIds: [
+        ...(templateDisclosureOpen ? ["templates"] : []),
+        ...(boundaryOpen ? ["boundary"] : [])
+      ],
+      scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+      focus: focus || { kind: "route-heading" }
+    };
+  }, [boundaryOpen, headingRef, templateDisclosureOpen]);
+
+  const restoreLibraryReturnView = useCallback((view) => {
+    returnRestoreCancelRef.current?.();
+    setTemplateDisclosureOpen(view?.disclosureIds?.includes("templates") || false);
+    setBoundaryOpen(view?.disclosureIds?.includes("boundary") || false);
+    return new Promise((resolve) => {
+      let attempt = 0;
+      let active = true;
+      let settled = false;
+      let frameId = null;
+      let cancelViewport = null;
+      const finish = (status) => {
+        if (settled) return;
+        settled = true;
+        resolve({ status });
+      };
+      const cancel = () => {
+        active = false;
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        cancelViewport?.();
+        finish("cancelled");
+      };
+      returnRestoreCancelRef.current = cancel;
+      const restoreRenderedView = () => {
+        if (!active) return;
+        const root = headingRef.current?.closest(".ambient-library");
+        const focus = view?.focus || {};
+        let target = null;
+        if (focus.kind === "library-action") {
+          target = Array.from(root?.querySelectorAll("[data-library-action-id]") || []).find((element) => (
+            element.dataset.libraryActionId === focus.actionId
+            && element.closest("[data-library-record-id]")?.dataset.libraryRecordId === focus.objectId
+          ));
+        } else if (focus.kind === "library-disclosure") {
+          target = focus.controlId === "templates"
+            ? root?.querySelector(".ambient-library__template-disclosure > summary")
+            : root?.querySelector(".ambient-library__boundary > summary");
+        } else {
+          target = headingRef.current;
+        }
+        if (!target && attempt < 30) {
+          attempt += 1;
+          frameId = window.requestAnimationFrame(restoreRenderedView);
+          return;
+        }
+        frameId = null;
+        const exactTarget = Boolean(target);
+        cancelViewport = restoreWorkspaceReturnViewport({
+          focusTarget: target || headingRef.current,
+          scrollY: view?.scrollY
+        });
+        finish(exactTarget ? "restored" : "recovery");
+      };
+      if (typeof window !== "undefined") {
+        frameId = window.requestAnimationFrame(restoreRenderedView);
+      } else {
+        finish("recovery");
+      }
+    });
+  }, [headingRef]);
+
+  useEffect(() => {
+    if (open) return undefined;
+    returnRestoreCancelRef.current?.();
+    returnRestoreCancelRef.current = null;
+    return undefined;
+  }, [open]);
+  useEffect(() => () => {
+    returnRestoreCancelRef.current?.();
+  }, []);
+
+  useWorkspaceReturnContextAdapter({
+    routeId: "catalog",
+    active: Boolean(open && !editorTarget),
+    capture: captureLibraryReturnView,
+    restore: restoreLibraryReturnView
+  });
+
   const announce = (result, message) => {
     setAcknowledgement({ result, message });
     scheduleFrame(() => acknowledgementRef.current?.focus({ preventScroll: true }));
@@ -358,7 +482,7 @@ export default function AmbientLibraryRoute({
     });
   };
 
-  const openAction = (action, trigger = null) => {
+  const openAction = (action, trigger = null, { historyEntry = true } = {}) => {
     if (!action?.enabled) return;
     const target = normalizeEditorTarget(action);
     if (!target) {
@@ -377,6 +501,32 @@ export default function AmbientLibraryRoute({
     }), target.recordId
       ? "Opening this event template with its linked details."
       : `Opening ${action.arrivalContract.object.label}.`);
+    if (historyEntry && typeof navigation?.navigate === "function") {
+      editorOpenedFromHistoryRef.current = true;
+      navigation.navigate(
+        `${navigation.location.pathname}${navigation.location.search || ""}`,
+        {
+          state: navigation.location.state,
+          preserveSearch: false,
+          preserveHash: false,
+          preserveReturnContext: true,
+          returnContextSurfaceId: "library-editor",
+          returnContextHint: {
+            focus: {
+              kind: "library-action",
+              objectId: target.recordId || target.sectionId,
+              actionId: action.id
+            }
+          },
+          returnContextDestination: {
+            kind: "library-editor",
+            sectionId: target.sectionId,
+            recordId: target.recordId,
+            actionId: action.id
+          }
+        }
+      );
+    }
     mountEditorAfterAcknowledgement(target);
   };
 
@@ -431,6 +581,14 @@ export default function AmbientLibraryRoute({
   };
 
   const closeEditor = () => {
+    if (editorOpenedFromHistoryRef.current && typeof navigation?.returnToOrigin === "function") {
+      const result = navigation.returnToOrigin({
+        fallback: "/app/catalog",
+        skipHistoryGuard: true
+      });
+      if (["traversing", "guarded", "blocked"].includes(result?.status)) return;
+      editorOpenedFromHistoryRef.current = false;
+    }
     setEditorTarget(null);
     setAcknowledgement(null);
     scheduleFrame(() => {
@@ -439,6 +597,54 @@ export default function AmbientLibraryRoute({
       target?.focus({ preventScroll: true });
     });
   };
+
+  useEffect(() => {
+    if (!open) return;
+    const destination = navigation?.returnContextDestination;
+    if (destination?.kind === "library-editor") {
+      const section = model.sections.find((item) => item.id === destination.sectionId);
+      const template = model.templates.find((item) => item.id === destination.recordId);
+      const action = destination.recordId ? template?.primaryAction : section?.primaryAction;
+      if (action?.id === destination.actionId) {
+        const target = normalizeEditorTarget(action);
+        if (target) {
+          editorOpenedFromHistoryRef.current = true;
+          setEditorTarget((current) => current?.action?.id === action.id ? current : target);
+          return;
+        }
+      }
+      editorOpenedFromHistoryRef.current = false;
+      setEditorTarget(null);
+      const recovery = {
+        reason: "That exact Library item is no longer available.",
+        consequence: "No other Library item was substituted and nothing changed.",
+        nextResolution: "Review the current Library and choose an available item."
+      };
+      setAcknowledgement({
+        result: arrivalRecoveryResult({
+          object: {
+            id: destination.recordId || destination.sectionId,
+            type: "library-item",
+            label: "Requested Library item"
+          }
+        }, recovery),
+        message: `${recovery.reason} Nothing changed.`
+      });
+      scheduleFrame(() => headingRef.current?.focus({ preventScroll: true }));
+      return;
+    }
+    if (editorOpenedFromHistoryRef.current) {
+      editorOpenedFromHistoryRef.current = false;
+      setEditorTarget(null);
+      setAcknowledgement(null);
+    }
+  }, [
+    headingRef,
+    model.sections,
+    model.templates,
+    navigation?.returnContextDestination,
+    open
+  ]);
 
   useEffect(() => {
     if (!open || !arrivalAttempted || !arrivalContext) return undefined;
@@ -482,7 +688,7 @@ export default function AmbientLibraryRoute({
       onArrivalResolution?.(recovery);
       return undefined;
     }
-    openAction(action);
+    openAction(action, null, { historyEntry: false });
     return undefined;
   }, [arrivalAttempted, arrivalContext, model.sections, model.templates, onArrivalResolution, open, organizationId]);
 
@@ -545,6 +751,7 @@ export default function AmbientLibraryRoute({
             focusRequest={editorTarget}
             onFocusResolution={handleEditorFocusResolution}
             onInteractionStateChange={onInteractionStateChange}
+            onDismissGuardChange={handleEditorDismissGuardChange}
             selectedEventType={selectedEventType}
             onEventTypeChange={onEventTypeChange}
             onToast={onToast}
@@ -624,7 +831,11 @@ export default function AmbientLibraryRoute({
             </ol>
 
             {model.templates.length > 0 && (
-              <details className="ambient-library__template-disclosure">
+              <details
+                className="ambient-library__template-disclosure"
+                open={templateDisclosureOpen}
+                onToggle={(event) => setTemplateDisclosureOpen(event.currentTarget.open)}
+              >
                 <summary>
                   Browse saved templates
                   <span>{model.templates.length}</span>
@@ -673,7 +884,12 @@ export default function AmbientLibraryRoute({
         </>
       )}
 
-      <details className="ambient-library__boundary" aria-labelledby="ambient-library-boundary-title">
+      <details
+        className="ambient-library__boundary"
+        aria-labelledby="ambient-library-boundary-title"
+        open={boundaryOpen}
+        onToggle={(event) => setBoundaryOpen(event.currentTarget.open)}
+      >
         <summary>About this view</summary>
         <div>
           <h2 id="ambient-library-boundary-title">{model.readBoundary.label}</h2>

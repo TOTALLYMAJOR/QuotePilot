@@ -92,6 +92,7 @@ describe("AmbientOpportunitiesStream", () => {
     expect(markup).toContain('data-surface-contract-id="ambient-opportunities-stream"');
     expect(markup).toContain('data-surface-purpose="clarify advance resolve reveal_context"');
     expect(markup).toContain("Every event, with its next move.");
+    expect(markup).toContain('<h1 id="ambient-opportunities-heading"');
     expect(markup).toContain("Active &amp; recent");
     expect(markup).toContain("Event 1");
     expect(markup).toContain("Customer 2");
@@ -136,7 +137,7 @@ describe("AmbientOpportunitiesStream", () => {
     const parsed = document.createElement("div");
     parsed.innerHTML = markup;
 
-    expect(Array.from(parsed.querySelectorAll(".ambient-opportunities__group-heading h3"))
+    expect(Array.from(parsed.querySelectorAll(".ambient-opportunities__group-heading h2"))
       .map((heading) => heading.textContent)).toEqual(["Needs attention", "Active & recent"]);
     expect(Array.from(parsed.querySelectorAll("[data-opportunity-id]"))
       .map((row) => row.dataset.opportunityId)).toEqual(["quote-3", "quote-2", "quote-1"]);

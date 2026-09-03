@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-02 22:15:58 CDT
+Last updated: 2026-09-03 00:30:25 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -83,6 +83,41 @@ schedule, reporting, and administrative actions remain contextual or inside
 Operations. Browser Back and Forward preserve the route and history entry. If
 Quick Updates has an unsaved draft, navigation first asks whether to keep or
 discard it; discarding then continues to the exact requested history entry.
+
+### Returning without losing your place
+
+- In **Opportunities**, your status/event filter, open Details sections,
+  initiating action, and scroll position return with you after opening an exact
+  opportunity. Browser Forward reopens that same opportunity rather than a
+  similarly named or neighboring record.
+- In **Clients**, the selected view can appear in the URL and survive reload.
+  Search text, the active result cursor, open About/details sections, focus,
+  and scroll are private to the current browser tab. They return during an
+  immediate Back/Forward round trip but clear on reload; the page explains
+  this boundary quietly beside search.
+- In **Library**, opening a Catalog choice or Event Template creates a distinct
+  browser-history step even though the address stays `/app/catalog`. Back
+  returns to the exact Library overview and Forward reopens that exact editor
+  from current saved data. Contextual Library also returns to the exact
+  opportunity and restores the action that opened it.
+- QuotePilot restores a return only when the adjacent history entry belongs to
+  the same signed-in person, role, organization, and browser runtime. Copied,
+  reloaded, expired, malformed, or foreign context returns to the canonical
+  route, announces the fallback once, and never guesses another record.
+- The return-context layer itself changes no quote, client, catalog, pricing,
+  history, workflow, or provider record. An administrator opening quote history
+  can still trigger the existing automatic expiry lifecycle update for an
+  already-expired quote, and local fallback may normalize and version that
+  expiry; return navigation does not add or widen that authority. Reload retains
+  only approved URL filters and clears free text, cursor/disclosure position,
+  exact runtime-only editor targets, scroll/focus memory, and unsaved drafts.
+
+If a Library editor has unsaved work, browser Back and **Back to Library** use
+the same confirmation. **Keep editing** leaves the exact editor, history entry,
+and draft intact. **Discard draft** removes only those unsaved values and then
+continues Back; Forward may reopen the same editor, but it reads the current
+saved value and never revives the discarded draft. While a save is busy, both
+paths remain blocked rather than abandoning an uncertain operation.
 
 ### Quick Updates in an opportunity
 
@@ -1290,8 +1325,13 @@ unchanged.
   Ordinary movement to Now, Opportunities, Clients, or another staff surface
   keeps an unsaved Library draft mounted so returning restores the exact work.
   Browser unload, customer-portal, and sign-out transitions remain guarded.
-  **Back to Library** asks before discarding a dirty draft and returns focus to
-  Library when the initiating control is no longer mounted. If newer catalog
+  **Back to Library**, direct browser Back, and browser Forward use the same
+  busy/dirty guard. Declining discard preserves the exact editor, history
+  entry, and draft; accepting removes only the transient draft and continues
+  the original traversal. A later Forward opens the exact editor from current
+  persisted data, not the discarded values. Return focus goes to the exact
+  initiating Library control when it still exists and to Library's canonical
+  heading only when it does not. If newer catalog
   evidence arrives, the editor preserves the draft and requires an explicit
   refresh/reconciliation choice before saving. A customer-portal route does not
   remount the workspace under that portal token until this draft guard accepts

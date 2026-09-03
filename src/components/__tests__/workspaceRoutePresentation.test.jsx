@@ -33,7 +33,7 @@ describe("workspace route presentation", () => {
     const embedded = renderHistory("embedded");
     const modal = renderHistory("modal");
 
-    expect(embedded).toContain('role="region"');
+    expect(embedded).toContain('role="main"');
     expect(embedded).toContain('id="quote-history-title" class="workspace-route-heading" tabindex="-1"');
     expect(embedded).toContain("Back to Home");
     expect(embedded).not.toContain(">Close</button>");

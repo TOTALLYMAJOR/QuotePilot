@@ -36,6 +36,11 @@ import {
 } from "../lib/quoteStore";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { navigateBrowser } from "../hooks/useBrowserLocation";
+import {
+  useOptionalWorkspaceNavigation,
+  useWorkspaceReturnContextAdapter
+} from "../context/WorkspaceNavigationContext";
+import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import { buildQuotePath } from "../lib/workspaceRoutes";
 import {
   buildQuoteHistoryController,
@@ -67,18 +72,69 @@ const AmbientOpportunitiesStream = AMBIENT_UI_ENABLED
   ? lazy(() => import("./AmbientOpportunitiesStream"))
   : null;
 
-function QuoteAdministrationBoundary({ ambient = false, initiallyOpen = false, children }) {
-  const [open, setOpen] = useState(Boolean(initiallyOpen));
+function quoteFiltersFromSearch(search = "") {
+  const rawSearch = String(search || "");
+  const rawQuery = rawSearch.replace(/^\?/u, "");
+  const params = new URLSearchParams(rawQuery);
+  const allowedKeys = new Set(["eventType", "status"]);
+  const eventTypeValues = params.getAll("eventType");
+  const statusValues = params.getAll("status");
+  const eventTypeCandidate = String(eventTypeValues[0] || "").trim();
+  const statusCandidate = String(statusValues[0] || "").trim().toLowerCase();
+  const validShape = [...params.keys()].every((key) => allowedKeys.has(key))
+    && eventTypeValues.length <= 1
+    && statusValues.length <= 1;
+  const validEventType = !eventTypeCandidate
+    || eventTypeCandidate === "all"
+    || (eventTypeCandidate.length <= 160 && !/[\u0000-\u001f\u007f]/u.test(eventTypeCandidate));
+  const validStatus = !statusCandidate
+    || ["all", "draft", "submitted", "archived"].includes(statusCandidate);
+  const accepted = validShape && validEventType && validStatus;
+  const eventTypeFilter = accepted && eventTypeCandidate && eventTypeCandidate !== "all"
+    ? eventTypeCandidate
+    : "all";
+  const statusFilter = accepted && statusCandidate && statusCandidate !== "all"
+    ? statusCandidate
+    : "all";
+  const canonicalParams = new URLSearchParams();
+  if (eventTypeFilter !== "all") canonicalParams.set("eventType", eventTypeFilter);
+  if (statusFilter !== "all") canonicalParams.set("status", statusFilter);
+  canonicalParams.sort();
+  const canonicalQuery = canonicalParams.toString();
+  const canonicalSearch = canonicalQuery ? `?${canonicalQuery}` : "";
+  const currentSearch = rawQuery ? `?${rawQuery}` : "";
+  return {
+    eventTypeFilter,
+    statusFilter,
+    canonicalSearch,
+    needsCanonicalization: currentSearch !== canonicalSearch
+  };
+}
+
+function QuoteAdministrationBoundary({
+  ambient = false,
+  initiallyOpen = false,
+  open: controlledOpen,
+  onOpenChange,
+  children
+}) {
+  const [internalOpen, setInternalOpen] = useState(Boolean(initiallyOpen));
+  const open = typeof controlledOpen === "boolean" ? controlledOpen : internalOpen;
   useEffect(() => {
-    if (initiallyOpen) setOpen(true);
-  }, [initiallyOpen]);
+    if (!initiallyOpen) return;
+    setInternalOpen(true);
+    onOpenChange?.(true);
+  }, [initiallyOpen, onOpenChange]);
   if (!ambient) return children();
   return (
     <details
       className="ambient-opportunities-administration"
       data-quote-administration="true"
       open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onToggle={(event) => {
+        setInternalOpen(event.currentTarget.open);
+        onOpenChange?.(event.currentTarget.open);
+      }}
     >
       <summary>Quote administration</summary>
       <p className="source-note">
@@ -796,6 +852,12 @@ export function assertRebookArtifactReady(quote = {}, options = {}) {
   return true;
 }
 
+function quoteHistoryReadKey({ organizationId = "", focusQuoteId = "", focusAction = "" } = {}) {
+  return [organizationId, focusQuoteId, focusAction]
+    .map((value) => String(value || "").trim())
+    .join("\u0000");
+}
+
 export function QuoteHistoryView({
   open,
   onClose,
@@ -837,6 +899,7 @@ export function QuoteHistoryView({
   onStartOpportunity,
   onToast
 }) {
+  const workspaceNavigation = useOptionalWorkspaceNavigation();
   const embedded = presentation === "embedded";
   const administrationFocusActive = Boolean(
     embedded
@@ -856,8 +919,11 @@ export function QuoteHistoryView({
     truncated: false,
     readComplete: false,
     loadedAtISO: "",
-    organizationId: ""
+    organizationId: "",
+    readKey: ""
   });
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const [emailSetup, setEmailSetup] = useState({
     loading: false,
     checked: false,
@@ -866,9 +932,12 @@ export function QuoteHistoryView({
     error: ""
   });
   const [query, setQuery] = useState("");
-  const [eventTypeFilter, setEventTypeFilter] = useState("all");
+  const initialQuoteFilters = quoteFiltersFromSearch(workspaceNavigation?.location?.search);
+  const [eventTypeFilter, setEventTypeFilter] = useState(initialQuoteFilters.eventTypeFilter);
   const [eventTypes, setEventTypes] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [eventTypesReady, setEventTypesReady] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(initialQuoteFilters.statusFilter);
+  const [administrationOpen, setAdministrationOpen] = useState(Boolean(administrationFocusActive));
   const filterOrganizationIdRef = useRef(String(organizationId || "").trim());
   const [updatingId, setUpdatingId] = useState("");
   const [convertingId, setConvertingId] = useState("");
@@ -906,6 +975,7 @@ export function QuoteHistoryView({
   const loadedFocusQuoteIdRef = useRef("");
   const loadGenerationRef = useRef(0);
   const targetLoadPendingRef = useRef(false);
+  const returnRestoreCancelRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const onCloseBlockedRef = useRef(onCloseBlocked);
   const quoteHistoryCloseGuardRef = useRef(buildQuoteHistoryCloseGuard());
@@ -920,6 +990,38 @@ export function QuoteHistoryView({
     onCloseRef.current = onClose;
     onCloseBlockedRef.current = onCloseBlocked;
   }, [onClose, onCloseBlocked]);
+  useEffect(() => {
+    if (!open || detailMode || workspaceNavigation?.route?.routeId !== "quote-list") return;
+    const next = quoteFiltersFromSearch(workspaceNavigation.location?.search);
+    setEventTypeFilter(next.eventTypeFilter);
+    setStatusFilter(next.statusFilter);
+    if (next.needsCanonicalization && typeof workspaceNavigation?.replace === "function") {
+      workspaceNavigation.replace(`/app/quotes${next.canonicalSearch}`, {
+        state: workspaceNavigation.location?.state ?? null,
+        preserveSearch: false,
+        preserveHash: false
+      });
+    }
+  }, [
+    detailMode,
+    open,
+    workspaceNavigation?.location?.search,
+    workspaceNavigation?.location?.state,
+    workspaceNavigation?.replace,
+    workspaceNavigation?.route?.routeId
+  ]);
+  const updateQuoteFilterLocation = useCallback((nextEventType, nextStatus) => {
+    if (typeof workspaceNavigation?.replace !== "function") return;
+    const params = new URLSearchParams();
+    if (nextEventType && nextEventType !== "all") params.set("eventType", nextEventType);
+    if (nextStatus && nextStatus !== "all") params.set("status", nextStatus);
+    const search = params.toString();
+    workspaceNavigation.replace(`/app/quotes${search ? `?${search}` : "?"}`, {
+      state: workspaceNavigation.location?.state ?? null,
+      preserveSearch: false,
+      preserveHash: false
+    });
+  }, [workspaceNavigation]);
   deliveryReviewStateRef.current = deliveryReview;
   kitchenBeoQuoteRef.current = kitchenBeoQuote;
 
@@ -1094,6 +1196,11 @@ export function QuoteHistoryView({
     loadGenerationRef.current = generation;
     const requestedFocusQuoteId = String(focusQuoteId || "").trim();
     const requestedOrganizationId = String(organizationId || "").trim();
+    const requestedReadKey = quoteHistoryReadKey({
+      organizationId: requestedOrganizationId,
+      focusQuoteId: requestedFocusQuoteId,
+      focusAction
+    });
     const targetingSavedQuote = Boolean(
       requestedFocusQuoteId && targetLoadPendingRef.current
     );
@@ -1110,7 +1217,8 @@ export function QuoteHistoryView({
             truncated: false,
             readComplete: false,
             loadedAtISO: "",
-            organizationId: requestedOrganizationId
+            organizationId: requestedOrganizationId,
+            readKey: ""
           }
     ));
     try {
@@ -1139,7 +1247,8 @@ export function QuoteHistoryView({
         truncated: result.truncated === true,
         readComplete: true,
         loadedAtISO: new Date().toISOString(),
-        organizationId: requestedOrganizationId
+        organizationId: requestedOrganizationId,
+        readKey: requestedReadKey
       });
       return result;
     } catch (err) {
@@ -1149,6 +1258,8 @@ export function QuoteHistoryView({
       setState((prev) => ({
         ...prev,
         loading: false,
+        readComplete: true,
+        readKey: requestedReadKey,
         error: err?.message || "Failed to load quote history.",
         readError: err?.message || "Failed to load quote history.",
         feedback: ""
@@ -1160,19 +1271,42 @@ export function QuoteHistoryView({
   useEffect(() => {
     if (!open) return;
     let alive = true;
+    setEventTypesReady(false);
     getEventTypes({ organizationId })
       .then((items) => {
         if (!alive) return;
         setEventTypes(items);
+        setEventTypesReady(true);
       })
       .catch(() => {
         if (!alive) return;
         setEventTypes([]);
+        setEventTypesReady(false);
       });
     return () => {
       alive = false;
     };
   }, [open, organizationId]);
+
+  useEffect(() => {
+    if (
+      !open
+      || detailMode
+      || !eventTypesReady
+      || eventTypeFilter === "all"
+      || eventTypes.some((item) => String(item.id) === eventTypeFilter)
+    ) return;
+    setEventTypeFilter("all");
+    updateQuoteFilterLocation("all", statusFilter);
+  }, [
+    detailMode,
+    eventTypeFilter,
+    eventTypes,
+    eventTypesReady,
+    open,
+    statusFilter,
+    updateQuoteFilterLocation
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -1223,6 +1357,10 @@ export function QuoteHistoryView({
 
   useEffect(() => {
     if (!open || !focusQuoteId || state.loading) return;
+    const returnStatus = workspaceNavigation?.returnContextStatus;
+    const returnFocusOwnsEntry = ["restoring", "restored"].includes(returnStatus?.state)
+      && returnStatus?.entryId === workspaceNavigation?.location?.historyEntry?.entryId;
+    if (returnFocusOwnsEntry) return;
     const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}`;
     if (focusedHandoffIdRef.current === focusKey) return;
     const normalizedAction = String(focusAction || "").trim();
@@ -1308,7 +1446,9 @@ export function QuoteHistoryView({
     state.quotes,
     conversationQuote,
     arrivalContext,
-    onArrivalResolution
+    onArrivalResolution,
+    workspaceNavigation?.location?.historyEntry?.entryId,
+    workspaceNavigation?.returnContextStatus
   ]);
 
   useEffect(() => {
@@ -1340,6 +1480,194 @@ export function QuoteHistoryView({
     ...ambientOpportunityReadBoundary,
     source: state.source
   }), [ambientOpportunityReadBoundary, state.source]);
+
+  const captureQuoteReturnView = useCallback((hint = {}) => {
+    const root = dialogRef.current;
+    const activeElement = typeof document !== "undefined" ? document.activeElement : null;
+    const hintedFocus = hint?.focus && typeof hint.focus === "object" ? hint.focus : null;
+    if (detailMode) {
+      return {
+        routeId: "quote-detail",
+        scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+        focus: hintedFocus || {
+          kind: "quick-updates",
+          objectId: String(focusQuoteId || ""),
+          actionId: "open-quick-updates"
+        }
+      };
+    }
+    if (
+      eventTypeFilter !== "all"
+      && (
+        !eventTypesReady
+        || !eventTypes.some((item) => String(item.id) === eventTypeFilter)
+      )
+    ) return null;
+    const openOpportunityIds = Array.from(
+      root?.querySelectorAll('[data-opportunity-disclosure="details"][open]') || []
+    ).map((details) => details.closest("[data-opportunity-id]")?.dataset.opportunityId).filter(Boolean);
+    const disclosureIds = [
+      ...openOpportunityIds,
+      ...(root?.querySelector(".ambient-opportunities__boundary[open]") ? ["read-boundary"] : []),
+      ...(administrationOpen ? ["quote-administration"] : [])
+    ];
+    let focus = hintedFocus;
+    if (!focus && activeElement && root?.contains(activeElement)) {
+      const row = activeElement.closest?.("[data-opportunity-id]");
+      const actionId = activeElement.dataset?.ambientActionId || "";
+      if (row?.dataset.opportunityId && actionId) {
+        focus = {
+          kind: "opportunity-action",
+          objectId: row.dataset.opportunityId,
+          actionId
+        };
+      } else if (activeElement.matches?.('[data-opportunity-disclosure="details"] > summary')) {
+        focus = {
+          kind: "opportunity-disclosure",
+          objectId: row?.dataset.opportunityId || ""
+        };
+      }
+    }
+    return {
+      routeId: "quote-list",
+      structured: { eventTypeFilter, statusFilter, order: "priority" },
+      transient: { query },
+      disclosureIds,
+      scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+      focus: focus || { kind: "route-heading" }
+    };
+  }, [
+    administrationOpen,
+    detailMode,
+    eventTypeFilter,
+    eventTypes,
+    eventTypesReady,
+    focusQuoteId,
+    query,
+    statusFilter
+  ]);
+
+  const restoreQuoteReturnView = useCallback((view) => {
+    returnRestoreCancelRef.current?.();
+    if (view?.routeId === "quote-list") {
+      setQuery(String(view.transient?.query || ""));
+      setEventTypeFilter(String(view.structured?.eventTypeFilter || "all"));
+      setStatusFilter(String(view.structured?.statusFilter || "all"));
+      setAdministrationOpen(view.disclosureIds?.includes("quote-administration") || false);
+    }
+    const expectedReadKey = quoteHistoryReadKey({
+      organizationId,
+      focusQuoteId,
+      focusAction
+    });
+    return new Promise((resolve) => {
+      let attempt = 0;
+      let active = true;
+      let settled = false;
+      let frameId = null;
+      let cancelViewport = null;
+      const finish = (status) => {
+        if (settled) return;
+        settled = true;
+        resolve({ status });
+      };
+      const cancel = () => {
+        active = false;
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        cancelViewport?.();
+        finish("cancelled");
+      };
+      returnRestoreCancelRef.current = cancel;
+      const restoreRenderedView = () => {
+        if (!active) return;
+        const root = dialogRef.current;
+        if (!root) {
+          finish("recovery");
+          return;
+        }
+        if (view?.routeId === "quote-list") {
+          const openIds = new Set(view.disclosureIds || []);
+          root.querySelectorAll('[data-opportunity-disclosure="details"]').forEach((details) => {
+            const quoteId = details.closest("[data-opportunity-id]")?.dataset.opportunityId || "";
+            details.open = openIds.has(quoteId);
+          });
+          const boundary = root.querySelector(".ambient-opportunities__boundary");
+          if (boundary) boundary.open = openIds.has("read-boundary");
+        }
+        const focus = view?.focus || {};
+        let target = null;
+        if (focus.kind === "opportunity-action") {
+          target = Array.from(root.querySelectorAll("[data-ambient-action-id]")).find((element) => (
+            element.dataset.ambientActionId === focus.actionId
+            && element.closest("[data-opportunity-id]")?.dataset.opportunityId === focus.objectId
+          ));
+        } else if (focus.kind === "opportunity-disclosure") {
+          target = Array.from(root.querySelectorAll('[data-opportunity-disclosure="details"]')).find((element) => (
+            element.closest("[data-opportunity-id]")?.dataset.opportunityId === focus.objectId
+          ))?.querySelector("summary");
+        } else if (focus.kind === "quick-updates") {
+          const placement = window.matchMedia?.("(max-width: 620px)")?.matches
+            ? "ambient-quick-updates-trigger--mobile"
+            : "ambient-quick-updates-trigger--context";
+          target = Array.from(root.querySelectorAll("[data-ambient-action-id=\"open-quick-updates\"]")).find((element) => (
+            element.classList.contains(placement)
+          ));
+        } else {
+          target = root.querySelector(".workspace-route-heading");
+        }
+        const readSettled = stateRef.current.organizationId === String(organizationId || "").trim()
+          && stateRef.current.readKey === expectedReadKey
+          && stateRef.current.readComplete === true
+          && stateRef.current.loading === false;
+        if (!readSettled) {
+          frameId = window.requestAnimationFrame(restoreRenderedView);
+          return;
+        }
+        if (stateRef.current.readError) {
+          cancelViewport = restoreWorkspaceReturnViewport({
+            focusTarget: root.querySelector(".workspace-route-heading"),
+            scrollY: 0
+          });
+          finish("recovery");
+          return;
+        }
+        if (!target && attempt < 30) {
+          attempt += 1;
+          frameId = window.requestAnimationFrame(restoreRenderedView);
+          return;
+        }
+        frameId = null;
+        const exactTarget = Boolean(target && readSettled);
+        cancelViewport = restoreWorkspaceReturnViewport({
+          focusTarget: target || root.querySelector(".workspace-route-heading"),
+          scrollY: view?.scrollY
+        });
+        finish(exactTarget ? "restored" : "recovery");
+      };
+      if (typeof window !== "undefined") {
+        frameId = window.requestAnimationFrame(restoreRenderedView);
+      } else {
+        finish("recovery");
+      }
+    });
+  }, [focusAction, focusQuoteId, organizationId]);
+
+  useEffect(() => {
+    if (open) return undefined;
+    returnRestoreCancelRef.current?.();
+    returnRestoreCancelRef.current = null;
+    return undefined;
+  }, [open]);
+  useEffect(() => () => {
+    returnRestoreCancelRef.current?.();
+  }, []);
+
+  useWorkspaceReturnContextAdapter({
+    routeId: detailMode ? "quote-detail" : "quote-list",
+    active: Boolean(open),
+    capture: captureQuoteReturnView,
+    restore: restoreQuoteReturnView
+  });
 
   // Keep the child conversation mounted across a blocked route transition so
   // its in-memory request identity cannot be destroyed before /app/quotes is
@@ -1374,6 +1702,7 @@ export function QuoteHistoryView({
     setQuery("");
     setEventTypeFilter("all");
     setStatusFilter("all");
+    updateQuoteFilterLocation("all", "all");
   };
   const quoteHistoryController = buildQuoteHistoryController({
     quotes: state.quotes,
@@ -2526,7 +2855,7 @@ export function QuoteHistoryView({
     <div
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
       data-layout-overlap-allowed={embedded ? undefined : "true"}
-      role={embedded ? "region" : "dialog"}
+      role={embedded ? "main" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby={embedded && AMBIENT_UI_ENABLED
         ? "ambient-opportunities-heading"
@@ -2854,23 +3183,43 @@ export function QuoteHistoryView({
         <QuoteAdministrationBoundary
           ambient={AMBIENT_UI_ENABLED}
           initiallyOpen={administrationFocusActive}
+          open={administrationOpen}
+          onOpenChange={setAdministrationOpen}
         >
           {() => (
           <>
         <div className="history-controls">
           <input
             type="text"
+            aria-label="Search quotes"
+            data-view-filter="quote-search"
             placeholder="Search customer, quote #, or event"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <select value={eventTypeFilter} onChange={(e) => setEventTypeFilter(e.target.value)}>
+          <select
+            aria-label="Event type"
+            data-view-filter="event-type"
+            value={eventTypeFilter}
+            onChange={(e) => {
+              setEventTypeFilter(e.target.value);
+              updateQuoteFilterLocation(e.target.value, statusFilter);
+            }}
+          >
             <option value="all">All event types</option>
             {eventTypes.map((eventType) => (
               <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
             ))}
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select
+            aria-label="Quote status"
+            data-view-filter="quote-status"
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              updateQuoteFilterLocation(eventTypeFilter, e.target.value);
+            }}
+          >
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
             <option value="submitted">Submitted</option>

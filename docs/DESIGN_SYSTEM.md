@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 22:15:58 CDT
+Last updated: 2026-09-03 00:30:25 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -104,6 +104,52 @@ application state; an unsaved contextual draft may temporarily restore the
 current entry only to present its dismissal guard, then replay the exact
 requested traversal after discard.
 
+#### Staff-route return context
+
+Native browser history remains the sole navigation authority; QuotePilot does
+not maintain a second route stack. Each eligible Opportunities, Clients, or
+Library round trip may add a bounded return token to its native history entry.
+That token contains only canonical paths, allowlisted enum query values, opaque
+surface IDs, and runtime, organization, and principal scope. Search text,
+cursor positions, disclosures, scroll, focus, exact Library editor targets,
+and draft values remain in tab memory and never enter a URL, durable browser
+storage, or the history token.
+
+Restoration is exact or it does not happen. The destination accepts only the
+adjacent entry from the same runtime, organization, principal, and supported
+route pair, with an exact key/path/query match. A copied, reloaded, expired,
+malformed, or foreign token falls back to the canonical route, announces that
+fallback once, and never selects a nearby record by name, position, or stale
+memory. When valid, the route restores its structured filter, disclosure,
+focus target, and settled scroll position within 8px; Forward reopens the same
+exact object or runtime-only Library target.
+
+Library gives each editor opening its own same-URL native history entry. Moving
+among staff routes may suspend the mounted editor so its runtime-only draft is
+still present on return. Leaving the editor itself uses one busy/dirty
+dismissal authority for **Back to Library**, browser Back, browser Forward,
+and other guarded exits. **Keep editing** retains the exact editor, history
+entry, focus context, and draft. An accepted discard clears only that transient
+draft, performs the originally requested traversal, and makes a later Forward
+open the target from current persisted data rather than resurrecting discarded
+values. Owner-keyed navigation guards ensure a temporary overlay can close
+without removing the underlying Library guard.
+
+Reload deliberately clears transient return context, free text, cursors,
+disclosures, focus, scroll, exact runtime-only Library targets, and unsaved
+drafts. Only route-approved URL enums such as an Opportunities status/event
+type or Clients view may survive. The visible recovery status is a single live
+announcement. At 390, 768, and 1440px, restored surfaces retain one `main`
+landmark, an H1 followed by ordered H2 groups, AA text/chip contrast, 44px
+targets, contained focus paint, and no unintended horizontal overflow.
+
+Local evidence is 17/17 Chromium-admin cases. The nine responsive restored-
+source checks report zero Axe violations inside the audited Opportunities,
+Clients, or Library surface; destination pages report no serious or critical
+whole-page violations, and the dirty-editor case has a clean whole-page scan.
+Cross-browser, forced-colors, 200% zoom, actual assistive technology, hosted,
+and human acceptance remain open.
+
 **Now** is an editorial home, not a KPI dashboard. It pairs the established
 hospitality image with at most three priorities from existing Workflow order,
 recorded upcoming work, and quiet internal progress. **Opportunities** is a
@@ -144,8 +190,14 @@ Desktop may align the action beside identity while keeping the same source order
 **Library** uses the same organization catalog in two modes. Standalone mode
 contains no opportunity fiction. Contextual mode names the exact opportunity
 and uses an explicit **Return to opportunity** or **Return to [event]** action.
-Browsing is read-only; only the existing guarded catalog or quote save
-authority may persist a change.
+The return-context layer adds no write authority; only existing guarded catalog
+or quote authorities may persist a change. Ordinary non-expiry browsing and
+restoration retain byte-equivalent business state. The existing administrator
+quote-history read remains separately authorized to persist automatic quote
+expiry, including local-fallback normalization and versioning, and is not
+widened or reclassified by this contract. Library editor Back/Forward behavior
+follows the shared native-history and dirty-draft contract above rather than
+introducing a route-local dismissal rule.
 
 ### Quick Updates drawer and sheet
 
