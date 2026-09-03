@@ -374,6 +374,15 @@ const {
   isPortalRecoveryToken,
   resolvePortalRecoveryContact
 } = require("./portalRecovery");
+const {
+  RESEND_ACCEPTANCE_SCHEMA_VERSION,
+  RESEND_ACCEPTANCE_STATES,
+  ResendAcceptanceError,
+  buildResendAcceptancePayload,
+  classifyResendAcceptanceFailure,
+  normalizeResendAcceptanceRequest,
+  projectResendAcceptanceReceipt
+} = require("./resendAcceptanceTest");
 
 initializeApp();
 
@@ -451,6 +460,7 @@ const OWNER_SMS_RATE_LIMITS_COLLECTION = "ownerSmsRateLimits";
 const OWNER_SMS_ORGANIZATION_STATE_COLLECTION = "ownerSmsOrganizationState";
 const OWNER_SMS_PROVIDER_CONTROLS_COLLECTION = "ownerSmsProviderControls";
 const OWNER_SMS_OUTBOX_COLLECTION = "ownerSmsOutbox";
+const RESEND_ACCEPTANCE_RECEIPTS_COLLECTION = "resendAcceptanceReceipts";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
 const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
 const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
@@ -11935,7 +11945,14 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, { expectedOrganizationId: organizationId }));
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(staff.organizationId);
-  const [quotesSnap, executionsSnap, rolesSnap, settingsSnap, roleAuthorityReceiptsSnap] = await Promise.all([
+  const [
+    quotesSnap,
+    executionsSnap,
+    rolesSnap,
+    settingsSnap,
+    roleAuthorityReceiptsSnap,
+    resendAcceptanceReceiptsSnap
+  ] = await Promise.all([
     organizationRef.collection(QUOTES_COLLECTION).limit(500).get(),
     organizationRef.collection(QUOTE_APPROVAL_EXECUTIONS_COLLECTION).limit(200).get(),
     db.collection(ROLES_COLLECTION).where("organizationId", "==", staff.organizationId).limit(200).get(),
@@ -11943,12 +11960,14 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
     db.collection(ORGANIZATION_ROLE_AUTHORITY_RECEIPTS_COLLECTION)
       .where("organizationId", "==", staff.organizationId)
       .limit(200)
-      .get()
+      .get(),
+    organizationRef.collection(RESEND_ACCEPTANCE_RECEIPTS_COLLECTION).limit(200).get()
   ]);
   const sourceTruncated = quotesSnap.size >= 500
     || executionsSnap.size >= 200
     || rolesSnap.size >= 200
-    || roleAuthorityReceiptsSnap.size >= 200;
+    || roleAuthorityReceiptsSnap.size >= 200
+    || resendAcceptanceReceiptsSnap.size >= 200;
   return {
     ok: true,
     source: "firebase",
@@ -11956,10 +11975,13 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
     sampledQuotes: quotesSnap.size,
     sampledExecutions: executionsSnap.size,
     sampledRoleAuthorityReceipts: roleAuthorityReceiptsSnap.size,
+    sampledResendAcceptanceReceipts: resendAcceptanceReceiptsSnap.size,
     ...buildOperationsAuditSnapshot({
       quotes: quotesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       executions: executionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       roleAuthorityReceipts: roleAuthorityReceiptsSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() })),
+      resendAcceptanceReceipts: resendAcceptanceReceiptsSnap.docs
         .map((doc) => ({ id: doc.id, ...doc.data() })),
       roles: rolesSnap.docs.map((doc) => ({ uid: doc.id, ...doc.data() })),
       settings: settingsSnap.exists ? settingsSnap.data() : {},
@@ -22515,6 +22537,163 @@ exports.sendFinalBalanceRequestEmail = functions
   .https.onCall((data, context) => (
     sendApprovedPaymentRequestEmail(data, context, "final_balance")
   ));
+
+exports.sendResendAcceptanceTestEmail = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const staff = await assertStaff(context);
+    if (staff.role !== "admin" || !staff.platformAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Platform administrator authority is required for an email acceptance test."
+      );
+    }
+
+    let request;
+    try {
+      request = normalizeResendAcceptanceRequest(data);
+    } catch (error) {
+      if (error instanceof ResendAcceptanceError) {
+        throw new functions.https.HttpsError(error.code, error.message);
+      }
+      throw error;
+    }
+
+    const emailConfig = getEmailConfig();
+    if (
+      emailConfig.provider !== "resend"
+      || !emailConfig.resendApiKey
+      || !emailConfig.senderApproved
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "The approved Resend sender is not configured."
+      );
+    }
+
+    const requestedAtISO = new Date().toISOString();
+    const receiptRef = db.collection(ORGANIZATIONS_COLLECTION)
+      .doc(staff.organizationId)
+      .collection(RESEND_ACCEPTANCE_RECEIPTS_COLLECTION)
+      .doc(request.requestId);
+    const claim = await db.runTransaction(async (tx) => {
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        const existing = receiptSnap.data() || {};
+        if (
+          normalizeEmail(existing.recipientEmail) !== request.recipientEmail
+          || normalizeText(existing.actorUid) !== staff.uid
+        ) {
+          throw new functions.https.HttpsError(
+            "permission-denied",
+            "This email acceptance request identity does not match the recorded actor and recipient."
+          );
+        }
+        if (normalizeText(existing.state).toLowerCase() === RESEND_ACCEPTANCE_STATES.PROVIDER_ACCEPTED) {
+          return { kind: "receipt", receipt: existing };
+        }
+        throw new functions.https.HttpsError(
+          "aborted",
+          "This email acceptance request is already recorded and will not be sent again. Review its durable receipt before taking further action."
+        );
+      }
+      const receipt = {
+        schemaVersion: RESEND_ACCEPTANCE_SCHEMA_VERSION,
+        requestId: request.requestId,
+        organizationId: staff.organizationId,
+        recipientEmail: request.recipientEmail,
+        state: RESEND_ACCEPTANCE_STATES.DISPATCHING,
+        provider: "resend",
+        providerMessageId: "",
+        requestedAtISO,
+        acceptedAtISO: "",
+        actorUid: staff.uid,
+        actorEmail: staff.email,
+        actorRole: staff.role,
+        safeReason: "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      };
+      tx.create(receiptRef, receipt);
+      return { kind: "send", receipt };
+    });
+
+    if (claim.kind === "receipt") {
+      try {
+        return projectResendAcceptanceReceipt(claim.receipt, { idempotent: true });
+      } catch (error) {
+        if (error instanceof ResendAcceptanceError) {
+          throw new functions.https.HttpsError(error.code, error.message);
+        }
+        throw error;
+      }
+    }
+
+    const payload = buildResendAcceptancePayload({
+      requestId: request.requestId,
+      recipientEmail: request.recipientEmail,
+      actorEmail: staff.email,
+      requestedAtISO
+    });
+    try {
+      const providerResult = await sendEmailViaResend({
+        apiKey: emailConfig.resendApiKey,
+        from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
+        to: payload.toEmail,
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+        idempotencyKey: `quotepilot-resend-acceptance:${staff.organizationId}:${request.requestId}`
+      });
+      const acceptedAtISO = new Date().toISOString();
+      const receipt = {
+        ...claim.receipt,
+        state: RESEND_ACCEPTANCE_STATES.PROVIDER_ACCEPTED,
+        providerMessageId: providerResult.id,
+        acceptedAtISO,
+        safeReason: "provider_request_accepted"
+      };
+      await receiptRef.set({
+        state: receipt.state,
+        providerMessageId: receipt.providerMessageId,
+        acceptedAtISO: receipt.acceptedAtISO,
+        safeReason: receipt.safeReason,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return projectResendAcceptanceReceipt(receipt);
+    } catch (error) {
+      if (error instanceof functions.https.HttpsError) throw error;
+      const failure = classifyResendAcceptanceFailure(error);
+      try {
+        await receiptRef.set({
+          state: failure.state,
+          safeReason: failure.safeReason,
+          failedAtISO: new Date().toISOString(),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (receiptError) {
+        functions.logger.error("Email acceptance test receipt update failed", {
+          organizationId: staff.organizationId,
+          requestId: request.requestId,
+          state: failure.state,
+          error: normalizeText(receiptError?.message)
+        });
+      }
+      functions.logger.error("Email acceptance test failed", {
+        organizationId: staff.organizationId,
+        requestId: request.requestId,
+        state: failure.state,
+        safeReason: failure.safeReason
+      });
+      throw new functions.https.HttpsError(
+        failure.retrySafe ? "failed-precondition" : "aborted",
+        failure.retrySafe
+          ? "Resend rejected the controlled acceptance request before accepting it."
+          : "The Resend acceptance outcome is unknown. Do not retry this request; review provider evidence."
+      );
+    }
+  });
 
 exports.getIntegrationSetupStatus = functions
   .runWith({

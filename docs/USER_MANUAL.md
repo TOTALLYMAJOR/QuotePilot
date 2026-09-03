@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-03 12:00:44 CDT
+Last updated: 2026-09-03 17:48:40 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1375,16 +1375,18 @@ assistive-technology, or human acceptance.
   review quote-delivery retry candidates, outcomes requiring provider review,
   and the last seven days of recorded integration success/error activity.
 - The role totals reflect current authoritative admin and sales assignments.
-  Receipt-backed rows cover final quote-approval executions and organization
-  role changes. They are server-owned, role-stamped, tenant-filtered, and
-  replay-stable. The table never includes principal UIDs, App Check identity,
-  recent-auth timestamps, or raw receipt fields.
+  Receipt-backed rows cover final quote-approval executions, organization role
+  changes, and controlled Resend acceptance tests. They are server-owned,
+  role-stamped, tenant-filtered, and replay-stable. The table never includes
+  principal UIDs, Resend provider message IDs, App Check identity, recent-auth
+  timestamps, or raw receipt fields.
 - Delivery reconciliation and catalog pricing confirmation remain labeled
   `server_projection` legacy observations rather than immutable receipts. A
   provider-derived outcome still requires its own provider evidence.
-- The server samples at most 500 quotes, 200 approval executions, 200 role
-  records, and 200 role-authority receipts, then returns at most 50 action rows.
-  The surface reports a partial state when a source sample reaches its bound.
+- The server samples at most 500 quotes and 200 each of approval executions,
+  role records, role-authority receipts, and Resend acceptance receipts, then
+  returns at most 50 action rows. The surface reports a partial state when a
+  source sample reaches its bound.
 - Browsers cannot export or clear the security receipt history. Role-authority
   receipts are indefinite server records; no receipt-clear workflow is
   implemented in this source candidate.
@@ -1393,6 +1395,32 @@ assistive-technology, or human acceptance.
 - Integration success/error trends summarize operator-recorded audit entries
   until a server-authorized connector is enabled; they do not prove that a CRM
   or accounting provider accepted or applied a change.
+
+## Email Provider Acceptance Test
+
+- This control appears in `Integrations` or `/app/integrations` only for a
+  verified platform administrator. An ordinary organization administrator can
+  review provider status but cannot see or call this production test surface.
+- Select **Check Setup** first. The panel must report provider `resend` and
+  approved sender `configured`; no API key or secret value is shown.
+- Enter an inbox you control on the exact `quietpilot.us` domain. Then type the
+  displayed confirmation exactly, for example
+  `SEND RESEND TEST TO flightcontrol@quietpilot.us`.
+- Select **Send controlled test** once. QuotePilot creates one private durable
+  receipt before contacting Resend and binds the request to a stable provider
+  idempotency key. The subject and body are server-owned and contain no customer
+  or quote data.
+- A successful result shows `provider accepted`, the recipient, acceptance
+  time, and the provider message ID. The controls lock so the same request
+  cannot be sent again. Operations Audit records the action but deliberately
+  omits the provider message ID.
+- If the outcome is uncertain, do not retry. Use **Review durable record** to
+  refresh Operations Audit and investigate the original provider request. A
+  definite pre-acceptance rejection may offer a fresh-request recovery path.
+- `Provider accepted` proves only that Resend accepted the API request. Record
+  the matching Resend `delivered` event and confirm the message in the named
+  inbox before describing delivery as complete. None of these facts alone
+  proves ordinary customer-email readiness or human acceptance.
 
 ## Owner SMS Provider
 

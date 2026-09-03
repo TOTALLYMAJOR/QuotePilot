@@ -1374,6 +1374,29 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }
   });
 
+  test("Resend acceptance receipts are private and immutable in browsers", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    const receiptRef = doc(
+      adminDb,
+      "organizations",
+      "org-a",
+      "resendAcceptanceReceipts",
+      `email_test_${"a".repeat(32)}`
+    );
+
+    await assertFails(getDoc(receiptRef));
+    await assertFails(setDoc(receiptRef, {
+      organizationId: "org-a",
+      recipientEmail: "flightcontrol@quietpilot.us",
+      state: "provider_accepted"
+    }));
+    await assertFails(updateDoc(receiptRef, { state: "definite_failure" }));
+    await assertFails(deleteDoc(receiptRef));
+  });
+
   test("direct quote creation is denied even with draft shape or fabricated authority labels", async () => {
     const draftRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-direct-draft");
     const terminalRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-terminal-create");

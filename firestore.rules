@@ -985,6 +985,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Controlled Resend acceptance requests and provider receipts are owned by
+    // the trusted callable. Browsers receive only the bounded callable result
+    // and Operations Audit projection, never the stored private record.
+    match /organizations/{orgId}/resendAcceptanceReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     // Buyer checkout identity, provider state, and fulfillment evidence are
     // server-owned. Browser clients use owner-scoped callables instead of
     // reading or mutating these records directly.

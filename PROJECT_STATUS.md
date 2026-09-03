@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-03 16:43:24 CDT
+Last updated: 2026-09-03 17:48:40 CDT
 
 ## Current Production Release
 
@@ -97,6 +97,13 @@ Last updated: 2026-09-03 16:43:24 CDT
   verification, and public health checks are complete. This activates the
   production email transport for authorized QuotePilot workflows across the
   shared Firebase platform; it is not scoped to one organization record.
+- A new source/local acceptance surface is ready for release qualification. It
+  is visible only to verified platform administrators in Integrations Ops,
+  accepts only an exactly confirmed controlled `quietpilot.us` recipient,
+  persists a private request before one provider call, returns a bounded Resend
+  provider-message receipt, and projects the action into Operations Audit
+  without the provider identifier. Focused server, audit, and component tests
+  pass 11/11. This source candidate is not yet deployed and has not sent email.
 - One real controlled email remains a separate, explicit authorization. A
   successful deploy cannot stand in for QuotePilot provider acceptance, Resend
   delivery/bounce, recipient inbox receipt, or human review.
