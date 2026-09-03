@@ -119,16 +119,21 @@ function OpportunityRow({ row, onResolve, position }) {
           </span>
         </p>
 
-        <div className="ambient-opportunity__next">
-          <div>
-            <p className="ambient-opportunity__reference">Next useful step</p>
-            <h4>{primaryAction.outcomeLabel}</h4>
-            <p>{primaryAction.arrivalContract.reason}</p>
-          </div>
+        <div
+          className="ambient-opportunity__next"
+          data-layout-audit-group={`opportunity-next-${row.quoteId}`}
+        >
+          <p
+            className="ambient-opportunity__next-reason"
+            data-opportunity-summary-kind={row.queueSummary.kind}
+          >
+            {row.queueSummary.text}
+          </p>
           <button
             type="button"
             className="ambient-opportunity__primary-action"
             data-ambient-action-id={primaryAction.id}
+            data-workspace-task-id={primaryAction.id}
             data-ambient-action-purpose={primaryAction.purpose}
             disabled={!primaryAction.enabled}
             title={primaryAction.disabledReason || undefined}
@@ -143,10 +148,16 @@ function OpportunityRow({ row, onResolve, position }) {
             {primaryAction.disabledReason}
           </p>
         )}
-        <details className="ambient-opportunity__details">
+        <details
+          className="ambient-opportunity__details"
+          data-opportunity-disclosure="details"
+        >
           <summary>
-            <span>Opportunity details</span>
-            <span className="ambient-opportunity__recorded-cue" aria-hidden="true" />
+            <span>Details</span>
+            <span
+              className="ambient-opportunity__details-icon"
+              aria-hidden="true"
+            />
           </summary>
           <dl className="ambient-opportunity__momentum" aria-label="Opportunity status by area">
             {Object.entries(row.momentum.domains).map(([domain, value]) => (
@@ -396,14 +407,14 @@ export default function AmbientOpportunitiesStream({
       <header className="ambient-opportunities__masthead">
         <div>
           <p className="ambient-opportunity__reference">Opportunities</p>
-          <h2
+          <h1
             id="ambient-opportunities-heading"
             ref={headingRef}
             className="workspace-route-heading"
             tabIndex={-1}
           >
             Every event, with its next move.
-          </h2>
+          </h1>
           <p>
             Active and recent opportunities, ordered by what needs attention.
           </p>
@@ -492,7 +503,7 @@ export default function AmbientOpportunitiesStream({
                 key={group.id}
               >
                 <header className="ambient-opportunities__group-heading">
-                  <h3 id={`ambient-opportunities-group-${group.id}`}>{group.label}</h3>
+                  <h2 id={`ambient-opportunities-group-${group.id}`}>{group.label}</h2>
                   <span>{group.rows.length}</span>
                 </header>
                 <ol className="ambient-opportunities__list" aria-label={`${group.label} opportunities`}>

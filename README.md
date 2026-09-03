@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-08-30 23:48:44 CDT
+Last updated: 2026-09-03 13:49:00 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -13,8 +13,9 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
   Firebase staging or Vercel preview only; checksum-verified Firebase binary,
-  ADC Rules readback, direct Vercel APIs, and an explicit safe-off or bounded
-  staffing-authority profile; see the launch runbook)
+  ADC Rules readback, direct Vercel APIs, and an explicit safe-off, bounded
+  staffing-authority, or Firebase-only provider-acceptance profile; see the
+  launch runbook)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Design system: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
@@ -1327,19 +1328,26 @@ platform-admin workflow.
 
 Primary production deployment is manual-workflow-only:
 
-- `npm run release:uat:plan -- --target <profile> --candidate-profile <staging-safe-off|staging-staffing-authority>`
+- `npm run release:uat:plan -- --target <profile> --candidate-profile <staging-safe-off|staging-staffing-authority|staging-provider-acceptance>`
   prints the selected fixed candidate's applicable and blocked checks. The
   staffing profile enables only the global staging staffing gate and still
   requires one separately authorized disposable tenant. Applicable is not
   passed, and blocked checks cannot be waived or supplied to the exact-main
-  all-positive attestation.
+  all-positive attestation. The provider-acceptance profile is Firebase-only,
+  starts from verified safe-off readback, enables Resend plus test-only Stripe,
+  buyer, and staffing paths for controlled records, and requires same-SHA
+  Firebase and Vercel safe-off receipts to close the window. Immutable Vercel
+  preview remains on `staging-safe-off` because its generated hostname cannot
+  be pre-bound to the exact Turnstile hostname allowlist.
 - `Deploy Firebase Production` deploys the explicitly selected `hosting`,
   `backend`, or `all` surface to the fixed `tonicatering` project.
 - `Deploy Vercel Production` builds and promotes the exact release to the fixed
   `mbmapps/quoteflow` project and `quotepilot.mbmapps.com` production edge.
 - `Release UAT Attestation` remains available when a release needs a separately
-  recorded human acceptance receipt, but it is not a prerequisite for the
-  normal solo-operator deployment path.
+  recorded human acceptance receipt. Its v4 receipt binds the exact tracked
+  candidate profile and that profile's fixed SMS provider in addition to the
+  SHA, target, immutable staging id, checklist digest, and human actor. It is
+  not a prerequisite for the normal solo-operator deployment path.
 - Customer-specific Firebase Hosting promotion is not yet supported by the
   primary release path. The legacy tracked customer-site entrypoint
   fails closed without invoking a provider client.

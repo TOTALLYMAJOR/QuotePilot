@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-01 18:27:16 CDT
+Last updated: 2026-09-03 13:49:00 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -187,7 +187,12 @@ explicit owner promotion after real-run review.
    authority may be enabled only in the fixed staging project through the
    explicit `staging-staffing-authority` profile; the separate tenant gate must
    still be authorized, enabled for one disposable tenant, exercised, and rolled
-   back. Both candidate profiles bind the staging platform-operator allowlist
+   back. The third `staging-provider-acceptance` profile is Firebase-only and
+   may open a controlled Resend, test-only Stripe, public buyer, and staffing
+   window only from verified safe-off readback. It keeps SMS, Commercial
+   Change, and both Revenue Autopilot gates off, requires the profile name in
+   its typed confirmation, and must close with same-SHA safe-off Firebase and
+   Vercel receipts. All candidate profiles bind the staging platform-operator allowlist
    to the single verified `flightcontrol@quietpilot.us` identity. Candidate
    dotenv validation and active Functions readback reject an unavailable,
    additional, or substituted operator before the receipt can become verified.
@@ -197,16 +202,21 @@ explicit owner promotion after real-run review.
    none is available, the command stops before provider mutation and never
    prints credential material.
    Each candidate manifest and receipt binds exactly one tracked profile:
-   `staging-safe-off` or `staging-staffing-authority`. Run
+   `staging-safe-off`, `staging-staffing-authority`, or the Firebase-only
+   `staging-provider-acceptance`. Run
    `npm run release:uat:plan -- --target <profile> --candidate-profile <candidate-profile>`
-   to obtain the machine-readable applicable/blocked plan. Every target item is
-   classified exactly once and every blocked item carries a reason. Applicable
+   to obtain the machine-readable applicable/blocked plan. Every target/SMS item
+   is classified exactly once and every blocked item carries a reason. Applicable
    is not passed; blocked is not N/A and prevents production qualification.
    Candidate receipt filenames include both target and profile so same-SHA
    safe-off and bounded positive evidence cannot overwrite one another.
-   `npm run release:uat:items -- --target <profile>` remains the all-positive
-   target contract. The exact-main attestation accepts only that complete set
-   and never accepts a profile plan, blocked item, waiver, or partial result.
+   `npm run release:uat:items -- --target <profile> --sms-provider <provider>`
+   remains the all-positive target contract. The exact-main v4 attestation
+   accepts only an eligible profile's complete set, binds the profile and its
+   fixed SMS provider, and never accepts a blocked item, waiver, or partial
+   result. Provider-enabled acceptance uses Firebase-all; immutable Vercel
+   preview remains safe-off because its generated hostname is not an approved
+   Turnstile hostname.
 5. Set/confirm rollback target:
    - Preserve the current target-specific signed provider receipt, including
      deployment id, source SHA, artifact/configuration digests, and health

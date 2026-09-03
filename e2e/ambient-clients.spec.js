@@ -128,6 +128,65 @@ async function expectFortyFourPixelTargets(surface) {
   expect(undersized).toEqual([]);
 }
 
+async function expectFeaturedClientSummaryLayout(featured, viewportWidth) {
+  const layout = await featured.evaluate((root) => {
+    const part = (name) => root.querySelector(`[data-client-summary-part="${name}"]`);
+    const box = (element) => {
+      const rect = element?.getBoundingClientRect();
+      return rect ? {
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height
+      } : null;
+    };
+    const identity = part("identity");
+    const contact = part("contact");
+    const status = part("status");
+    const action = part("action");
+    const image = part("image");
+    const contactValue = contact?.querySelector("dd");
+    return {
+      domOrder: [...root.querySelectorAll("[data-client-summary-part]")]
+        .map((element) => element.dataset.clientSummaryPart),
+      actionCount: root.querySelectorAll(".ambient-client__primary").length,
+      root: box(root),
+      identity: box(identity),
+      contact: box(contact),
+      status: box(status),
+      action: box(action),
+      image: box(image),
+      imageVisible: image ? getComputedStyle(image).display !== "none" : false,
+      contactOverflowPx: contactValue
+        ? Math.max(0, contactValue.scrollWidth - contactValue.clientWidth)
+        : Number.POSITIVE_INFINITY
+    };
+  });
+
+  expect(layout.domOrder).toEqual(["identity", "contact", "status", "action", "image"]);
+  expect(layout.actionCount).toBe(1);
+  expect(layout.action.height).toBeGreaterThanOrEqual(44);
+  expect(layout.contactOverflowPx).toBeLessThanOrEqual(1);
+
+  if (viewportWidth <= 760) {
+    expect(layout.identity.bottom).toBeLessThanOrEqual(layout.contact.top + 1);
+    expect(layout.contact.bottom).toBeLessThanOrEqual(layout.status.top + 1);
+    expect(layout.status.bottom).toBeLessThanOrEqual(layout.action.top + 1);
+    expect(layout.action.bottom).toBeLessThanOrEqual(layout.image.top + 1);
+    expect(layout.action.width).toBeGreaterThanOrEqual(layout.root.width - 1);
+    expect(layout.imageVisible).toBe(true);
+    return;
+  }
+
+  expect(layout.identity.right).toBeLessThanOrEqual(layout.action.left - 1);
+  expect(layout.contact.top).toBeGreaterThanOrEqual(
+    Math.max(layout.identity.bottom, layout.action.bottom) - 1
+  );
+  expect(layout.imageVisible).toBe(false);
+}
+
 async function expectContainedAmbientLayout(page, surfaceSelector, groupSelectors) {
   const result = await page.evaluate(async ({ selector, groups }) => {
     const { auditWorkspaceLayout } = await import("/src/lib/workspaceLayoutAudit.js");
@@ -135,16 +194,6 @@ async function expectContainedAmbientLayout(page, surfaceSelector, groupSelector
     if (!surface) return { setupError: `Missing ${selector}.` };
     surface.setAttribute("data-layout-audit-surface", selector);
     surface.setAttribute("data-layout-audit-overflow", selector);
-    groups.forEach((groupSelector, groupIndex) => {
-      document.querySelectorAll(groupSelector).forEach((group, instanceIndex) => {
-        [...group.children].forEach((child) => {
-          child.setAttribute(
-            "data-layout-audit-group",
-            `ambient-client-${groupIndex + 1}-${instanceIndex + 1}`
-          );
-        });
-      });
-    });
     const visible = (element) => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
@@ -154,8 +203,25 @@ async function expectContainedAmbientLayout(page, surfaceSelector, groupSelector
         && rect.width > 0
         && rect.height > 0;
     };
+    let visibleDeclaredPeerCount = 0;
+    for (const [groupIndex, groupSelector] of groups.entries()) {
+      const instances = [...document.querySelectorAll(groupSelector)];
+      if (instances.length === 0) {
+        return { setupError: `Missing declared layout group ${groupSelector}.` };
+      }
+      instances.forEach((group, instanceIndex) => {
+        [...group.children].forEach((child) => {
+          child.setAttribute(
+            "data-layout-audit-group",
+            `ambient-client-${groupIndex + 1}-${instanceIndex + 1}`
+          );
+          if (visible(child)) visibleDeclaredPeerCount += 1;
+        });
+      });
+    }
     return {
       setupError: "",
+      visibleDeclaredPeerCount,
       visibleOverlayCount: [...document.querySelectorAll("[role='dialog'], .modal-overlay")]
         .filter(visible).length,
       surfaceOverflowPx: Math.max(0, surface.scrollWidth - surface.clientWidth),
@@ -164,6 +230,7 @@ async function expectContainedAmbientLayout(page, surfaceSelector, groupSelector
   }, { selector: surfaceSelector, groups: groupSelectors });
 
   expect(result.setupError).toBe("");
+  expect(result.visibleDeclaredPeerCount).toBeGreaterThan(0);
   expect(result.visibleOverlayCount).toBe(0);
   expect(result.surfaceOverflowPx).toBeLessThanOrEqual(1);
   expect(result.audit).toMatchObject({
@@ -241,6 +308,7 @@ test.describe("Ambient Clients", () => {
       expect(primaryCounts).toEqual([1]);
       const reviewClient = exactRelationship.getByRole("button", { name: /Review client/u });
       await expect(reviewClient).toHaveCount(1);
+      await expectFeaturedClientSummaryLayout(exactRelationship, viewport.width);
       expect(await readPersistedOpportunityState(page)).toEqual(persistedBeforeBrowse);
 
       await expectFortyFourPixelTargets(directory);
@@ -252,8 +320,8 @@ test.describe("Ambient Clients", () => {
         .analyze();
       expect(directoryAccessibility.violations).toEqual([]);
       await expectContainedAmbientLayout(page, ".ambient-clients", [
-        ".ambient-clients__masthead",
-        ".ambient-client"
+        ".ambient-clients__populated-hero > div",
+        ".ambient-clients__featured"
       ]);
       await capture(page, `ambient-clients-directory-${viewport.width}`);
 

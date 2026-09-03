@@ -12,6 +12,7 @@ import {
 import AttentionBadge from "./AttentionBadge";
 import ProductBrandLockup from "./ProductBrandLockup";
 import { PRODUCT_NAME } from "../lib/productIdentity";
+import { AMBIENT_PRIMARY_WORKSPACE_NAVIGATION } from "../lib/workspaceRoutes";
 
 const EMPTY = {};
 const HEADER_MENUS = [
@@ -40,6 +41,17 @@ const MENU_ICONS = {
   account: UserCircle,
   more: Plus
 };
+
+const WORKSPACE_TOOL_GROUPS = Object.freeze({
+  frequent: ["Workflow", "Messages", "Pilot"],
+  operations: ["Clear the Deck", "Operations", "Events", "Event Schedule", "Staff"],
+  administration: [
+    "Reporting Dashboard",
+    "Integrations Ops",
+    "Import Studio",
+    "Session Diagnostics"
+  ]
+});
 
 const FOCUSABLE_WORKSPACE_TOOL = [
   "button:not([disabled])",
@@ -104,12 +116,17 @@ export default function WorkspaceShell({
   const accountSettingsDialogRef = useRef(null);
   const accountSettingsReturnFocusRef = useRef(null);
   const accountSettingsRequestRef = useRef(0);
+  const [workspaceAdministrationOpen, setWorkspaceAdministrationOpen] = useState(false);
   const [accountSettingsFeedback, setAccountSettingsFeedback] = useState(
     EMPTY_ACCOUNT_SETTINGS_FEEDBACK
   );
   const workspaceToolsOpen = ambientOrientation && openMenu === "more";
   const accountSettingsOpen = openMenu === "account-settings";
   const accountSettingsAvailable = typeof actions.onRequestPasswordReset === "function";
+  const workspaceAdministrationAvailable = capabilities.reportingDashboard !== false
+    || capabilities.integrationsOps !== false
+    || isAdmin
+    || capabilities.diagnostics !== false;
   const closeAccountSettings = () => {
     accountSettingsRequestRef.current += 1;
     setAccountSettingsFeedback(EMPTY_ACCOUNT_SETTINGS_FEEDBACK);
@@ -161,6 +178,7 @@ export default function WorkspaceShell({
     const Icon = NAV_ICONS[ambientDestination || routeSection] || NotePencil;
     return (
       <button
+        key={ambientDestination || routeSection}
         type="button"
         className={`ghost shell-nav-action${ambientDestination ? " ambient-orientation-action" : ""}${
           active && section === routeSection ? " nav-view-active" : ""
@@ -181,7 +199,10 @@ export default function WorkspaceShell({
     : attentionCount > 0
       ? `Workflow, ${attentionCount} ${attentionCount === 1 ? "quote needs" : "quotes need"} attention`
       : "Workflow, no quote follow-ups in this view";
-  const menuContent = (id, { itemRole = "menuitem", showSummary = true } = {}) => {
+  const menuContent = (
+    id,
+    { itemRole = "menuitem", showSummary = true, onlyLabels = null } = {}
+  ) => {
     const operations = id !== "account";
     const account = id !== "operations";
     const items = [
@@ -251,6 +272,9 @@ export default function WorkspaceShell({
       [account, sounds.onToggle, `Sounds: ${sounds.enabled === true ? "On" : "Off"}`, false, true],
       [account, actions.onSignOut, "Sign Out"]
     ];
+    const orderedItems = Array.isArray(onlyLabels)
+      ? onlyLabels.map((label) => items.find((item) => item[2] === label)).filter(Boolean)
+      : items;
     return <>
       {account && showSummary && <div className="header-account-summary" role="presentation">
         <strong>{principal.email || ""}</strong>
@@ -269,7 +293,7 @@ export default function WorkspaceShell({
           Account settings
         </button>
       )}
-      {items.map(([visible, action, label, operation, sound, item = EMPTY]) => visible && (
+      {orderedItems.map(([visible, action, label, operation, sound, item = EMPTY]) => visible && (
         <button
           key={label}
           type="button"
@@ -290,6 +314,10 @@ export default function WorkspaceShell({
       ))}
     </>;
   };
+
+  useEffect(() => {
+    if (!workspaceToolsOpen) setWorkspaceAdministrationOpen(false);
+  }, [workspaceToolsOpen]);
 
   useEffect(() => {
     if (!workspaceToolsOpen) return undefined;
@@ -530,37 +558,18 @@ export default function WorkspaceShell({
             {workspace && (
               ambientOrientation ? (
                 <nav className="ambient-primary-navigation" aria-label="Primary workspace">
-                  {navButton("Now", "home", actions.onHome, undefined, undefined, true, true, "now")}
-                  {navButton(
-                    "Opportunities",
-                    "quotes",
-                    actions.onQuotes,
-                    triggerRefs.quotes,
-                    undefined,
-                    true,
-                    true,
-                    "opportunities"
-                  )}
-                  {navButton(
-                    "Clients",
-                    "customers",
-                    actions.onCustomers,
-                    undefined,
-                    undefined,
-                    true,
-                    true,
-                    "clients"
-                  )}
-                  {navButton(
-                    "Library",
-                    "catalog",
-                    actions.onCatalog,
-                    undefined,
-                    undefined,
-                    true,
-                    true,
-                    "library"
-                  )}
+                  {AMBIENT_PRIMARY_WORKSPACE_NAVIGATION
+                    .filter((destination) => !destination.adminOnly || isAdmin)
+                    .map((destination) => navButton(
+                      destination.label,
+                      destination.section,
+                      actions[destination.action],
+                      destination.triggerRef ? triggerRefs[destination.triggerRef] : undefined,
+                      undefined,
+                      true,
+                      true,
+                      destination.orientation
+                    ))}
                 </nav>
               ) : (
                 <>
@@ -706,7 +715,11 @@ export default function WorkspaceShell({
               </div>
               <button type="button" aria-label="Close workspace and tools" onClick={close}>×</button>
             </header>
-            <section className="workspace-tools-dialog__section workspace-tools-dialog__workspace" aria-labelledby="workspace-tools-workspace-title">
+            <section
+              className="workspace-tools-dialog__section workspace-tools-dialog__workspace"
+              data-workspace-tools-group="workspace"
+              aria-labelledby="workspace-tools-workspace-title"
+            >
               <h3 id="workspace-tools-workspace-title">Current workspace</h3>
               <div
                 className="workspace-tools-dialog__workspace-current"
@@ -735,28 +748,92 @@ export default function WorkspaceShell({
                 </button>
               )}
             </section>
-            <section className="workspace-tools-dialog__section" aria-labelledby="workspace-tools-find-title">
-              <h3 id="workspace-tools-find-title">Find</h3>
-              <button
-                type="button"
-                data-workspace-tools-initial-focus="true"
-                onClick={(event) => {
-                  const returnTarget = triggerRefs.more?.current || event.currentTarget;
-                  close();
-                  call(actions.onSearch, returnTarget);
-                }}
-              >
-                <MagnifyingGlass size={20} aria-hidden="true" />
-                <span>Search customers and opportunities</span>
-              </button>
-            </section>
-            <section className="workspace-tools-dialog__section" aria-labelledby="workspace-tools-operations-title">
-              <h3 id="workspace-tools-operations-title">Operations</h3>
+            <section
+              className="workspace-tools-dialog__section"
+              data-workspace-tools-group="frequent"
+              aria-labelledby="workspace-tools-frequent-title"
+            >
+              <h3 id="workspace-tools-frequent-title">Frequent tools</h3>
               <div className="workspace-tools-dialog__actions">
-                {menuContent("operations", { itemRole: "", showSummary: false })}
+                <button
+                  type="button"
+                  data-workspace-tools-initial-focus="true"
+                  onClick={(event) => {
+                    const returnTarget = triggerRefs.more?.current || event.currentTarget;
+                    close();
+                    call(actions.onSearch, returnTarget);
+                  }}
+                >
+                  <MagnifyingGlass size={20} aria-hidden="true" />
+                  <span>Search customers and opportunities</span>
+                </button>
+                {menuContent("operations", {
+                  itemRole: "",
+                  showSummary: false,
+                  onlyLabels: WORKSPACE_TOOL_GROUPS.frequent
+                })}
               </div>
             </section>
-            <section className="workspace-tools-dialog__section" aria-labelledby="workspace-tools-account-title">
+            <section
+              className="workspace-tools-dialog__section"
+              data-workspace-tools-group="operations"
+              aria-labelledby="workspace-tools-operations-title"
+            >
+              <h3 id="workspace-tools-operations-title">Operations</h3>
+              <div className="workspace-tools-dialog__actions">
+                {menuContent("operations", {
+                  itemRole: "",
+                  showSummary: false,
+                  onlyLabels: WORKSPACE_TOOL_GROUPS.operations
+                })}
+              </div>
+            </section>
+            {workspaceAdministrationAvailable && (
+              <section
+                className="workspace-tools-dialog__section workspace-tools-dialog__administration"
+                data-workspace-tools-group="administration"
+                aria-labelledby="workspace-tools-administration-title"
+              >
+                <div className="workspace-tools-dialog__section-heading">
+                  <h3 id="workspace-tools-administration-title">Administration</h3>
+                  <button
+                    type="button"
+                    className="workspace-tools-dialog__disclosure"
+                    data-workspace-tools-administration-toggle="true"
+                    aria-label={`${workspaceAdministrationOpen ? "Hide" : "Show"} administration tools`}
+                    aria-expanded={workspaceAdministrationOpen}
+                    aria-controls="workspace-tools-administration-actions"
+                    aria-describedby="workspace-tools-administration-description"
+                    onClick={() => setWorkspaceAdministrationOpen((open) => !open)}
+                  >
+                    {workspaceAdministrationOpen ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <p
+                  className="workspace-tools-dialog__section-description"
+                  id="workspace-tools-administration-description"
+                >
+                  Reporting, integrations, import, and diagnostics.
+                </p>
+                {workspaceAdministrationOpen && (
+                  <div
+                    className="workspace-tools-dialog__actions workspace-tools-dialog__administration-actions"
+                    id="workspace-tools-administration-actions"
+                  >
+                    {menuContent("operations", {
+                      itemRole: "",
+                      showSummary: false,
+                      onlyLabels: WORKSPACE_TOOL_GROUPS.administration
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+            <section
+              className="workspace-tools-dialog__section"
+              data-workspace-tools-group="account"
+              aria-labelledby="workspace-tools-account-title"
+            >
               <h3 id="workspace-tools-account-title">Account</h3>
               <div className="workspace-tools-dialog__identity">
                 <small>Signed in as</small>

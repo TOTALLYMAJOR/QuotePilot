@@ -45,14 +45,38 @@
   align-items: center;
 }
 
-.ambient-opportunity-orientation {
+.ambient-opportunity-context-bar {
+  position: sticky;
+  z-index: 8;
+  top: 6rem;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--ambient-hairline);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ambient-paper) 94%, transparent);
+  box-shadow: 0 10px 24px rgba(29, 37, 35, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.ambient-opportunity-orientation {
+  justify-content: flex-start;
+  gap: 1rem;
+  min-width: 0;
   color: var(--ambient-muted);
   font-size: 0.72rem;
   font-weight: 760;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.ambient-opportunity-orientation strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ambient-mobile-remote {
@@ -1316,6 +1340,10 @@ button.ambient-event-logistics-value:focus-visible {
 }
 
 @media (max-width: 900px) {
+  .ambient-opportunity-context-bar {
+    top: 5rem;
+  }
+
   .ambient-opportunity-glance {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1349,6 +1377,20 @@ button.ambient-event-logistics-value:focus-visible {
     min-height: 100%;
     padding: 1rem;
     border-radius: 16px;
+  }
+
+  .ambient-opportunity-context-bar {
+    position: static;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .ambient-opportunity-context-bar .ambient-quick-updates-trigger--context {
+    display: none;
   }
 
   .ambient-mobile-remote {

@@ -76,6 +76,7 @@ beforeEach(() => {
     error: "",
     receipt: null,
     queueChanges: vi.fn(() => true),
+    discardDeviceChanges: vi.fn(() => true),
     syncNow: vi.fn(async () => ({ ok: true })),
     retry: vi.fn(async () => ({ ok: true })),
     review: vi.fn(async () => ({ readyToPublish: true })),
@@ -179,6 +180,90 @@ describe("AdminCatalogModal save capability state", () => {
 
     expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: false, busy: false });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  test("publishes one dismissal authority for browser traversal and explicit close", () => {
+    const onDismissGuardChange = vi.fn();
+    const onInteractionStateChange = vi.fn();
+    const continuation = vi.fn();
+    renderView({
+      onSave: async () => ({ ok: true }),
+      onDismissGuardChange,
+      onInteractionStateChange
+    });
+    makeUnsavedEdit();
+    const guard = onDismissGuardChange.mock.calls
+      .map(([candidate]) => candidate)
+      .filter(Boolean)
+      .at(-1);
+    expect(guard).toMatchObject({
+      modelId: "catalog-editor-navigation-guard-v1",
+      open: true,
+      dirty: true,
+      busy: false
+    });
+
+    vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    expect(guard.requestDismiss("browser_back", continuation)).toEqual({
+      status: "guarded",
+      reason: "dirty",
+      trigger: "browser_back"
+    });
+    expect(continuation).not.toHaveBeenCalled();
+    expect(guard.requestDismiss("browser_back", continuation)).toEqual({
+      status: "dismissed",
+      trigger: "browser_back"
+    });
+    expect(continuation).toHaveBeenCalledOnce();
+    expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: false, busy: false });
+
+    renderView({
+      onSave: async () => ({ ok: true }),
+      onDismissGuardChange,
+      onInteractionStateChange,
+      saving: true
+    });
+    const busyGuard = onDismissGuardChange.mock.calls
+      .map(([candidate]) => candidate)
+      .filter(Boolean)
+      .at(-1);
+    expect(busyGuard).toMatchObject({ open: true, busy: true });
+    expect(busyGuard.requestDismiss("browser_back", continuation)).toMatchObject({
+      status: "blocked",
+      reason: "busy"
+    });
+  });
+
+  test("confirmed dismissal clears device-only setup changes without touching server drafts", () => {
+    const deviceChange = {
+      collection: "settings",
+      recordId: "config",
+      intent: "update",
+      payload: { brandName: "Private draft" }
+    };
+    setupDraft.current = {
+      ...setupDraft.current,
+      changedRecordCount: 2,
+      serverChanges: [{ ...deviceChange, payload: { brandName: "Saved setup draft" } }],
+      deviceChanges: [deviceChange],
+      changes: [deviceChange],
+      deviceOnly: true
+    };
+    const onDismissGuardChange = vi.fn();
+    const continuation = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderView({ onDismissGuardChange });
+
+    const guard = onDismissGuardChange.mock.calls
+      .map(([candidate]) => candidate)
+      .filter(Boolean)
+      .at(-1);
+    expect(guard).toMatchObject({ dirty: true });
+    expect(guard.requestDismiss("browser_back", continuation)).toMatchObject({
+      status: "dismissed"
+    });
+    expect(setupDraft.current.discardDeviceChanges).toHaveBeenCalledWith([deviceChange]);
+    expect(continuation).toHaveBeenCalledOnce();
   });
 
   test("preserves a dirty draft when newer catalog evidence arrives", () => {

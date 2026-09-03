@@ -1,9 +1,65 @@
 import fs from "node:fs";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { applyWorkspaceTaskOutcome } from "../../App";
+import {
+  createWorkspaceTaskJourney,
+  transitionWorkspaceTaskOutcome,
+  WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE,
+  WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
+} from "../workspaceTaskJourney";
 
 const appSource = fs.readFileSync(new URL("../../App.jsx", import.meta.url), "utf8");
 const legacyAppSource = fs.readFileSync(new URL("../../LegacyApp.jsx", import.meta.url), "utf8");
 const wizardSource = fs.readFileSync(new URL("../../components/WizardSteps.jsx", import.meta.url), "utf8");
+
+function followUpJourney({
+  taskId = "review-now-priority:follow-up:quote-42",
+  startedAtISO = "2026-09-03T03:10:00.000Z"
+} = {}) {
+  const created = createWorkspaceTaskJourney({
+    organizationId: "organization-42",
+    principal: { id: "staff-42", role: "sales" },
+    taskId,
+    startedAtISO,
+    origin: { routeId: "home", pathname: "/app" },
+    destination: "workflow",
+    object: { id: "follow-up:quote-42", type: "workflow-item" },
+    focus: {
+      quoteId: "quote-42",
+      attentionType: "follow_up",
+      requestId: "follow-up:quote-42"
+    },
+    intentId: "review_follow_up"
+  });
+  expect(created.ok).toBe(true);
+  return created.journey;
+}
+
+function followUpFeedbackIdentity(journey) {
+  return {
+    taskId: journey.taskId,
+    startedAtISO: journey.startedAtISO,
+    destination: journey.destination,
+    object: journey.object,
+    focus: journey.focus,
+    intentId: journey.intentId
+  };
+}
+
+function resolvedFollowUpOutcome(journey) {
+  return {
+    organizationId: journey.organizationId,
+    startedAtISO: journey.startedAtISO,
+    taskId: journey.taskId,
+    focus: journey.focus,
+    phase: "resolved",
+    proof: {
+      verifierId: WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID,
+      proofId: "follow-up-completed:2026-09-03T03:15:00.000Z",
+      proofType: WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE
+    }
+  };
+}
 
 describe("workspace interaction recovery wiring", () => {
   test("blocked workspace and catalog states expose executing recovery actions", () => {
@@ -114,7 +170,7 @@ describe("workspace interaction recovery wiring", () => {
     expect(callbackSource).toContain("const result = navigateAmbientOpportunity(target);");
     expect(callbackSource).toContain('workspaceArrivalContext?.surfaceId === "living-opportunity"');
     expect(callbackSource).toContain('fallbackSurfaceId="living-opportunity"');
-    expect(callbackSource).toContain("onArrivalResolution={setWorkspaceArrivalResolution}");
+    expect(callbackSource).toContain("onArrivalResolution={handleWorkspaceArrivalResolution}");
     expect(callbackSource).not.toContain('reason: "opportunity_stream"');
   });
 
@@ -124,7 +180,144 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("workspaceArrivalContext.intentId");
     expect(appSource).toContain("workspaceArrivalContext.focus?.reportSignal");
     expect(appSource).toContain('arrivalContext: workspaceArrivalContext?.surfaceId === "schedule"');
-    expect(appSource).toContain("onArrivalResolution: setWorkspaceArrivalResolution");
+    expect(appSource).toContain("onArrivalResolution: handleWorkspaceArrivalResolution");
     expect(appSource).toContain('fallbackSurfaceId="schedule"');
+  });
+
+  test("keeps one presentation-only task attached across exact Ambient route handoffs", () => {
+    expect(appSource).toContain('import WorkspaceTaskJourneyNotice from "./components/WorkspaceTaskJourneyNotice"');
+    expect(appSource).toContain('} from "./lib/workspaceTaskJourney"');
+    expect(appSource).toContain("const beginWorkspaceTaskJourney = useCallback((handoff, actionId) => {");
+    expect(appSource).toContain("principal: activeWorkspaceTaskPrincipal");
+    expect(appSource).toContain("startedAtISO: new Date().toISOString(),");
+    expect(appSource).toContain("workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)");
+    expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
+    expect(appSource).toContain("const stored = writeWorkspaceTaskJourney(authSession.organizationId, journey)");
+    expect(appSource).toContain("if (stored.ok) setWorkspaceTaskJourney(stored.journey)");
+    expect(appSource).toContain("return persistWorkspaceTaskJourney(started.journey)");
+    expect(appSource).toContain("beforeCommit: () => {");
+    expect(appSource).toContain("startedTask = beginWorkspaceTaskJourney(handoff, actionId)");
+    expect(appSource).toContain("task tracking is unavailable in this session");
+    expect(appSource).not.toContain('return { status: "recovery", ...startedTask.recovery }');
+    expect(appSource).toContain("if ([\"blocked\", \"guarded\"].includes(navigationResult?.status))");
+    expect(appSource).toContain("transitionWorkspaceTaskContext(");
+    expect(appSource).toContain("workspaceTaskJourneyMatchesArrival(activeWorkspaceTaskJourney, workspaceArrivalContext)");
+    expect(appSource).toContain('workspaceArrivalContext ? JSON.stringify([\n        "arrival"');
+    expect(appSource).not.toContain('].filter(Boolean).join(":")');
+    expect(appSource).toContain("setWorkspaceArrivalResolution({ ...resolution, arrivalKey: workspaceArrivalKey })");
+    expect(appSource).toContain("workspaceArrivalResolution?.arrivalKey === workspaceArrivalKey");
+    expect(appSource).toContain('exactResolution?.status === "resolved"');
+    expect(appSource).toContain('? "ready"');
+    expect(appSource).toContain("activeWorkspaceTaskJourney,");
+    expect(appSource).toContain("<WorkspaceTaskJourneyNotice");
+    expect(appSource).toContain("onContinue={continueWorkspaceTaskJourney}");
+    expect(appSource).toContain("onStopTracking={stopTrackingWorkspaceTask}");
+    expect(appSource).toContain("const handleWorkspaceTaskOutcome = useCallback((outcome) => {");
+    expect(appSource).toContain("outcome.taskId === currentWorkspaceTaskJourney.taskId");
+    expect(appSource).toContain("outcome.startedAtISO === currentWorkspaceTaskJourney.startedAtISO");
+    expect(appSource).toContain("outcome.organizationId === currentWorkspaceTaskJourney.organizationId");
+    expect(appSource).toContain("proof.verifierId === WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID");
+    expect(appSource).toContain("proof.proofType === WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE");
+    expect(appSource).toContain("workspaceTaskJourneyMatchesArrival(");
+    expect(appSource).toContain("persistTaskJourney(transitioned.journey)");
+    expect(appSource).toContain("requestAttentionRefresh({ force: true })");
+    expect(appSource).toContain(
+      "activeTaskJourney={feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney}"
+    );
+    expect(appSource).toContain("resolveWorkspaceActionFeedbackFollowUpAction({");
+    expect(appSource).toContain('resolution.strategy === "continue"');
+    expect(appSource).toContain("onTaskOutcome={handleWorkspaceTaskOutcome}");
+    expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
+    expect(appSource).not.toContain("exactResolution?.status === \"resolved\"\n        ? \"resolved\"");
+  });
+
+  test("revalidates delayed Workflow outcomes against the current principal-bound session task", () => {
+    const callbackStart = appSource.indexOf(
+      "const handleWorkspaceTaskOutcome = useCallback((outcome) => {"
+    );
+    const callbackEnd = appSource.indexOf("const adminMounted =", callbackStart);
+    const callbackSource = appSource.slice(callbackStart, callbackEnd);
+    const transitionIndex = callbackSource.indexOf(
+      "transitionWorkspaceTaskOutcome(\n      currentWorkspaceTaskJourney,"
+    );
+
+    expect(callbackStart).toBeGreaterThan(-1);
+    expect(callbackEnd).toBeGreaterThan(callbackStart);
+    expect(appSource).toContain("const currentWorkspaceTaskSessionRef = useRef(null);");
+    expect(appSource).toContain("currentWorkspaceTaskSessionRef.current = {");
+    expect(callbackSource).toContain(
+      "const currentTaskSession = currentWorkspaceTaskSessionRef.current;"
+    );
+    expect(callbackSource).toContain("return applyWorkspaceTaskOutcome({");
+    expect(callbackSource).toContain("currentTaskSession,");
+    expect(callbackSource).toContain("feedbackIdentity,");
+    expect(callbackSource).toContain("persistTaskJourney: persistWorkspaceTaskJourney");
+    expect(callbackSource).toContain("requestAttentionRefresh: requestWorkflowAttentionRefresh");
+    expect(callbackSource).toContain("setWorkspaceActionFeedbackReconciliationContext(null)");
+    expect(callbackSource).not.toContain("activeWorkspaceTaskJourney");
+    expect(callbackSource).not.toContain("readWorkspaceTaskJourney(");
+    expect(transitionIndex).toBe(-1);
+  });
+
+  test("persists a reconciled exact task before App reports its feedback confirmed", () => {
+    const initial = followUpJourney();
+    const uncertain = transitionWorkspaceTaskOutcome(initial, { phase: "uncertain" });
+    expect(uncertain.ok).toBe(true);
+    const persistTaskJourney = vi.fn((journey) => ({ ok: true, journey }));
+    const requestAttentionRefresh = vi.fn();
+    const clearFeedbackReconciliation = vi.fn();
+
+    const result = applyWorkspaceTaskOutcome({
+      outcome: resolvedFollowUpOutcome(uncertain.journey),
+      currentTaskSession: {
+        organizationId: uncertain.journey.organizationId,
+        principal: uncertain.journey.principal
+      },
+      feedbackIdentity: followUpFeedbackIdentity(uncertain.journey),
+      readTaskJourney: () => ({ ok: true, journey: uncertain.journey }),
+      persistTaskJourney,
+      requestAttentionRefresh,
+      clearFeedbackReconciliation
+    });
+
+    expect(result).toEqual({ status: "resolved", taskState: "persisted" });
+    expect(persistTaskJourney).toHaveBeenCalledTimes(1);
+    expect(persistTaskJourney.mock.calls[0][0]).toMatchObject({
+      taskId: uncertain.journey.taskId,
+      startedAtISO: uncertain.journey.startedAtISO,
+      phase: "resolved",
+      proof: resolvedFollowUpOutcome(uncertain.journey).proof
+    });
+    expect(requestAttentionRefresh).toHaveBeenCalledWith({ force: true });
+    expect(clearFeedbackReconciliation).toHaveBeenCalledTimes(1);
+  });
+
+  test("reconciles older feedback without changing a newer active task", () => {
+    const older = followUpJourney();
+    const newer = followUpJourney({
+      taskId: "review-now-priority:follow-up:quote-99",
+      startedAtISO: "2026-09-03T03:20:00.000Z"
+    });
+    const persistTaskJourney = vi.fn();
+    const requestAttentionRefresh = vi.fn();
+    const clearFeedbackReconciliation = vi.fn();
+
+    const result = applyWorkspaceTaskOutcome({
+      outcome: resolvedFollowUpOutcome(older),
+      currentTaskSession: {
+        organizationId: newer.organizationId,
+        principal: newer.principal
+      },
+      feedbackIdentity: followUpFeedbackIdentity(older),
+      readTaskJourney: () => ({ ok: true, journey: newer }),
+      persistTaskJourney,
+      requestAttentionRefresh,
+      clearFeedbackReconciliation
+    });
+
+    expect(result).toEqual({ status: "resolved", taskState: "independent" });
+    expect(persistTaskJourney).not.toHaveBeenCalled();
+    expect(requestAttentionRefresh).toHaveBeenCalledWith({ force: true });
+    expect(clearFeedbackReconciliation).toHaveBeenCalledTimes(1);
   });
 });

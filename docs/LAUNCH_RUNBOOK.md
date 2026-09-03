@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-01 18:27:16 CDT
+Last updated: 2026-09-03 13:49:00 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -914,7 +914,7 @@ Session.
 
 Pass all checks before merging a release-intent PR to `main`. For every
 production target intended by the release, use the stable item ids, labels, and
-v3 target applicability in `docs/release-uat-checklist.json`; changes to that
+v4 target/SMS applicability in `docs/release-uat-checklist.json`; changes to that
 file change its SHA-256 digest and invalidate older attestations. The broader
 source-acceptance list below also includes the portal backfill tool, which is a
 separate data operation and is deliberately absent from deployment-target UAT.
@@ -930,7 +930,7 @@ production target with:
 ```bash
 npm run release:uat:plan -- \
   --target <firebase-hosting|firebase-backend|firebase-all|vercel> \
-  --candidate-profile <staging-safe-off|staging-staffing-authority>
+  --candidate-profile <staging-safe-off|staging-staffing-authority|staging-provider-acceptance>
 ```
 
 The JSON plan classifies every target-required item exactly once as
@@ -941,6 +941,16 @@ that the profile exposes the prerequisites for the check; it is not a pass.
 an omission, waiver, not-applicable result, or successful UAT. A safe-off
 candidate may therefore prove its compatible UI, core authority, and disabled
 boundaries without being misrepresented as production-qualified.
+
+`staging-provider-acceptance` is the only fixed provider-enabled profile. It is
+Firebase-only and must begin while active Functions readback still matches
+`staging-safe-off`. It enables the verified Resend sender, generic quote Stripe
+in test mode, the isolated buyer Stripe rail in test mode, public buyer entry,
+and global staffing authority for controlled acceptance records. It keeps SMS,
+Commercial Change, Revenue Autopilot preparation, and Revenue Autopilot sends
+off. Vercel preview remains `staging-safe-off`: its generated immutable
+hostname cannot be pre-bound to the exact Turnstile hostname allowlist, so it
+must not compile the public buyer entry for this window.
 
 Deploy the exact clean, published `release/vX.Y.Z` head only after the canonical
 `CI Quality` run for that SHA has all eight required jobs green. The guarded
@@ -953,7 +963,7 @@ npm run release:candidate:deploy -- \
   --target firebase-all \
   --release-sha <full-release-branch-sha> \
   --ci-run-id <exact-successful-ci-run-id> \
-  --candidate-profile <staging-safe-off|staging-staffing-authority> \
+  --candidate-profile <staging-safe-off|staging-staffing-authority|staging-provider-acceptance> \
   --confirm "DEPLOY CANDIDATE quotepilot-staging-20260804 <full-release-branch-sha>"
 
 npm run release:candidate:deploy -- \
@@ -970,8 +980,16 @@ off, `STRIPE_MODE=test`, and Commercial Change, Revenue Autopilot preparation,
 and Revenue Autopilot send authority gates explicitly set to `false`.
 `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` must exactly match the selected
 candidate profile: `false` for `staging-safe-off`, `true` for
-`staging-staffing-authority`. `AUTH_PLATFORM_ADMIN_EMAILS` must be exactly
-`flightcontrol@quietpilot.us` for either fixed staging candidate profile; the
+`staging-staffing-authority` and `staging-provider-acceptance`.
+`staging-provider-acceptance` additionally requires
+`NOTIFICATIONS_EMAIL_PROVIDER=resend`, `STRIPE_MODE=test`,
+`BUYER_ACCESS_ENABLED=true`,
+`BUYER_ACCESS_STRIPE_MODE=test`, and the exact
+`BUYER_ACCESS_TURNSTILE_HOSTNAMES=quotepilot-staging-20260804.web.app` value.
+Its browser build requires a reviewed non-test
+`VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY`; the typed Firebase confirmation appends
+`PROFILE staging-provider-acceptance`. `AUTH_PLATFORM_ADMIN_EMAILS` must be exactly
+`flightcontrol@quietpilot.us` for any fixed staging candidate profile; the
 policy and active-revision readback reject the unavailable legacy Gmail
 operator or any additional staging platform administrator. The file must be a
 real regular file, use the exact staging `/app`
@@ -1020,12 +1038,97 @@ The tracked all-positive item list remains available with
 `npm run release:uat:items -- --target <target> --sms-provider <none|twilio|pingram>`.
 Production qualification
 still requires every printed target item to pass exactly once. The exact-main
-`Release UAT Attestation` accepts only that complete positive set; it accepts no
-candidate profile, blocked item, N/A marker, or partial plan. If the safe-off
+`Release UAT Attestation` accepts only that complete positive set and binds its
+v4 receipt to the exact eligible candidate profile and that profile's fixed SMS
+provider; it accepts no blocked item, N/A marker, waiver, or partial plan. If the safe-off
 plan blocks a required path, use a separately reviewed immutable acceptance
 deployment whose authority and provider scope can exercise that path, or stop
 the release. Do not enable a gate on the fixed safe-off candidate or edit a
 blocked result into a pass.
+
+#### Provider-enabled acceptance profile — non-negotiable acceptance criteria
+
+The provider window is complete only when every criterion below has retained
+evidence. A green build, successful deployment, provider request acceptance,
+or owner authorization cannot substitute for any later criterion.
+
+1. The clean published release SHA has the exact successful `CI Quality` run,
+   and the candidate manifest, Firebase receipt, Functions tree, Rules digest,
+   Hosting version, and checklist digest all bind that same SHA.
+2. Preflight proves every active staging Function is currently
+   `staging-safe-off` before the provider profile can reserve a receipt or make
+   a provider mutation.
+3. Stripe uses the explicitly selected test-mode account only. Both the quote
+   and buyer keys are test/restricted credentials, every observed Stripe object
+   and event has `livemode=false`, the buyer endpoint uses API version
+   `2024-06-20`, and no live customer or production Stripe object is touched.
+4. Resend uses the approved verified sender and only the named controlled
+   recipient window. Request acceptance, signed delivery/bounce evidence,
+   recipient inbox receipt, and recipient view remain separate observations;
+   no uncontrolled outbound message is permitted.
+5. Turnstile uses one reviewed non-test staging site key/secret pair, the exact
+   Firebase staging hostname and buyer action, and explicit wrong-host,
+   wrong-action, replay, missing-token, and provider-failure denials.
+6. Runtime readback proves Resend, test Stripe, public buyer access, and global
+   staffing authority are on while SMS, Commercial Change, Revenue Autopilot,
+   and Revenue Autopilot sends remain off. No provider secret appears in
+   dotenv, browser output, logs, manifests, screenshots, or receipts.
+7. All data-bearing checks use the authorized disposable tenant and controlled
+   test markers. Cross-tenant, wrong-role, wrong-email, unverified-email,
+   expired, replay, stale-revision, and direct-write attempts fail closed; test
+   orders never enter live revenue or paid-customer counts.
+8. Every item emitted by the Firebase-all
+   `staging-provider-acceptance` plan passes exactly once. Provider acceptance,
+   delivery, portal view, proposal decision, payment, staffing confirmation,
+   and human acceptance remain distinct receipts.
+9. Deposit and final-balance tests cover private-before-acceptance links,
+   idempotent retry, ambiguous recovery, definite-failure neutralization,
+   signed webhook replay, async success/failure/expiry, valid late settlement,
+   reconciliation, cross-rail isolation, and customer-safe projections.
+10. Buyer tests cover one fixed $1 USD test invoice, rate and reservation
+    windows, Hosted Invoice Page truth, paid workspace preparation without
+    access, optional activation-message acceptance, separate Firebase
+    verification delivery, exact-email claim, and permanent denial of mismatch
+    or replay.
+11. Staffing tests use one explicitly enabled disposable tenant, cover admin
+    and sales authority plus cross-tenant denial, and prove immutable receipts
+    without changing quote, portal, payment, contract, booking, BEO,
+    attendance, payroll, or readiness evidence.
+12. Close the window immediately after acceptance: restore the disposable
+    tenant gate to false, deploy the same SHA with `staging-safe-off` to
+    Firebase and Vercel, and retain verified readback that buyer, provider, and
+    staffing authority are off with no disabled-provider residue. Failed or
+    partial rollback blocks merge and production.
+13. Revoke or disable superseded test credentials/webhook overlap only after
+    the new-only safe revision and rollback proof are retained. Preserve the
+    last-known-good production receipts unchanged.
+14. Human UAT is recorded only after the exact-main CI run through the v4
+    workflow with `candidate_profile=staging-provider-acceptance`, the exact
+    Firebase staging deployment id, the current checklist digest, every
+    applicable item id, and the allowlisted human actor. Any missing, stale,
+    partial, blocked, or inferred result stops promotion.
+
+Use this exact provider-window order so the create-only receipt namespace can
+prove both the open state and its closeout:
+
+1. Keep the currently deployed staging backend on a previously verified
+   `staging-safe-off` revision; do not reserve the new SHA's safe-off receipt
+   before the acceptance window.
+2. Bind reviewed test credentials and webhook endpoints through the separate
+   authorized provider/Secret Manager process. Do not expose or print values.
+3. Set the ignored mode-`0600` Functions dotenv to the exact provider profile
+   and supply the reviewed public Turnstile site key only to the build process.
+4. Deploy the new SHA once to Firebase-all as
+   `staging-provider-acceptance` using the confirmation
+   `DEPLOY CANDIDATE quotepilot-staging-20260804 <sha> PROFILE staging-provider-acceptance`.
+5. Enable only the named disposable tenant, execute and record every emitted
+   checklist item, then restore that tenant gate to false.
+6. Restore the ignored Functions dotenv to the exact `staging-safe-off`
+   values. Deploy the same SHA once to Firebase-all as `staging-safe-off`, then
+   once to Vercel preview as `staging-safe-off`.
+7. Verify both closeout receipts, active Functions readback, the Firebase
+   hosted manifest, and the immutable Vercel manifest before any merge or
+   production action. Never delete, replace, or retry a partial receipt.
 
 For any release containing either Stripe collection rail, the applicable
 tracked `payment.*` items are mandatory, not optional spot checks. The exact

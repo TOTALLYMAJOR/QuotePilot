@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   ADMIN_WORKSPACE_NAVIGATION,
+  AMBIENT_PRIMARY_WORKSPACE_NAVIGATION,
   buildEventLivePath,
   buildEventPath,
   buildEventReplayPath,
@@ -156,6 +157,55 @@ describe("workspace route parsing and construction", () => {
   });
 
   test("exposes the persistent primary navigation and separately scoped operational routes", () => {
+    expect(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.map((item) => ({
+      routeId: item.routeId,
+      label: item.label,
+      path: item.path,
+      section: item.section,
+      action: item.action,
+      orientation: item.orientation,
+      adminOnly: item.adminOnly === true
+    }))).toEqual([
+      {
+        routeId: WORKSPACE_ROUTE_IDS.HOME,
+        label: "Now",
+        path: "/app",
+        section: "home",
+        action: "onHome",
+        orientation: "now",
+        adminOnly: false
+      },
+      {
+        routeId: WORKSPACE_ROUTE_IDS.QUOTE_LIST,
+        label: "Opportunities",
+        path: "/app/quotes",
+        section: "quotes",
+        action: "onQuotes",
+        orientation: "opportunities",
+        adminOnly: false
+      },
+      {
+        routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
+        label: "Clients",
+        path: "/app/customers",
+        section: "customers",
+        action: "onCustomers",
+        orientation: "clients",
+        adminOnly: false
+      },
+      {
+        routeId: WORKSPACE_ROUTE_IDS.CATALOG,
+        label: "Library",
+        path: "/app/catalog",
+        section: "catalog",
+        action: "onCatalog",
+        orientation: "library",
+        adminOnly: false
+      }
+    ]);
+    expect(Object.isFrozen(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION)).toBe(true);
+    expect(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.every(Object.isFrozen)).toBe(true);
+
     expect(PRIMARY_WORKSPACE_NAVIGATION.map((item) => item.label))
       .toEqual([
         "Now",

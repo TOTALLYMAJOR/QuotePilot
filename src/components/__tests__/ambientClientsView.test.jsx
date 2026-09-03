@@ -223,7 +223,14 @@ describe("AmbientClientsView", () => {
     expect(parsedSuccess.querySelector('[role="search"]')).not.toBeNull();
     expect(parsedSuccess.querySelector(".ambient-clients__featured")?.dataset.featuredSource)
       .toBe("recorded-event-date");
-    expect(parsedSuccess.querySelector(".ambient-clients__featured-image")).not.toBeNull();
+    const featured = parsedSuccess.querySelector(".ambient-clients__featured");
+    const featuredImage = featured?.querySelector(".ambient-clients__featured-image");
+    expect(featuredImage).not.toBeNull();
+    expect(featuredImage?.getAttribute("alt")).toBe("");
+    expect([...featured.querySelectorAll("[data-client-summary-part]")]
+      .map((part) => part.dataset.clientSummaryPart))
+      .toEqual(["identity", "contact", "status", "action", "image"]);
+    expect(featured.querySelectorAll(".ambient-client__primary")).toHaveLength(1);
     expect(parsedSuccess.querySelector(".ambient-clients__filter-empty")).toBeNull();
     expect(parsedSuccess.textContent).toMatch(/recorded contact details/iu);
     expect(parsedSuccess.textContent).not.toMatch(/relationship memory|relationships, remembered/iu);
@@ -412,6 +419,40 @@ describe("AmbientClientsView", () => {
     expect(container.textContent).not.toContain("Client 1");
   });
 
+  test("exposes controlled safe filter and disclosure state for exact route restoration", () => {
+    const onDirectoryFilterChange = vi.fn();
+    const onAboutOpenChange = vi.fn();
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel({ rows: [directoryRow(1), directoryRow(2)] })}
+        directoryFilter="linked"
+        aboutOpen
+        onDirectoryFilterChange={onDirectoryFilterChange}
+        onAboutOpenChange={onAboutOpenChange}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+
+    const filter = container.querySelector('[data-view-filter="client-relationship"]');
+    const about = container.querySelector('[data-client-disclosure="about"]');
+    expect(filter.value).toBe("linked");
+    expect(about.open).toBe(true);
+    expect(container.querySelector("[data-client-search-boundary]").textContent)
+      .toMatch(/browser tab.*reload/iu);
+
+    act(() => {
+      filter.value = "upcoming";
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onDirectoryFilterChange).toHaveBeenCalledWith("upcoming");
+
+    act(() => {
+      about.open = false;
+      about.dispatchEvent(new Event("toggle"));
+    });
+    expect(onAboutOpenChange).toHaveBeenCalledWith(false);
+  });
+
   test("acknowledges a client selection in context during the same activation that requests navigation", () => {
     const onOpenClient = vi.fn(() => ({ status: "pending" }));
     mount(
@@ -577,8 +618,54 @@ describe("AmbientClientsView", () => {
     expect(onOpenConversation).toHaveBeenCalledWith(QUOTE_ID, {
       arrivalContext: {
         object: action.arrivalContract.object,
-        target
+        target,
+        actionId: action.id
       }
     });
+    expect(container.querySelector(".ambient-client-overview__primary")
+      .getAttribute("data-workspace-task-id")).toBe(action.id);
+  });
+
+  test("distinguishes the prominent opportunity action as the exact return-focus control", () => {
+    const onOpenOpportunity = vi.fn(() => ({ status: "pending" }));
+    const action = createAmbientAction({
+      id: `review-client-opportunity:${QUOTE_ID}`,
+      outcomeLabel: "Review opportunity",
+      purpose: "reveal_context",
+      roles: ["sales"],
+      authorityLevel: "presentation",
+      previewPolicy: "none",
+      executionTarget: { kind: "route", targetId: QUOTE_ID, surfaceId: "living-opportunity" },
+      receiptType: "none",
+      reversibility: { kind: "none" },
+      arrivalContract: {
+        object: { id: QUOTE_ID, type: "opportunity", label: "Opportunity" },
+        reason: "Review the exact active opportunity.",
+        consequence: "Opening it changes nothing.",
+        nextResolutionIds: ["review-living-opportunity"]
+      },
+      primary: true,
+      enabled: true
+    });
+    mount(
+      <AmbientClientRelationship
+        model={relationshipModel({
+          primaryAction: action,
+          primaryTarget: { kind: "opportunity", quoteId: QUOTE_ID }
+        })}
+        currentUserRole="sales"
+        onOpenOpportunity={onOpenOpportunity}
+      />
+    );
+
+    const primary = container.querySelector(".ambient-client-overview__primary");
+    expect(primary.dataset.opportunityId).toBe(QUOTE_ID);
+    expect(primary.dataset.returnFocusControl).toBe("client-next-action");
+    act(() => primary.click());
+    expect(onOpenOpportunity).toHaveBeenCalledWith(expect.objectContaining({
+      quoteId: QUOTE_ID,
+      actionId: action.id,
+      returnFocusControlId: "client-next-action"
+    }));
   });
 });

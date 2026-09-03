@@ -5,14 +5,18 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
 import {
   RELEASE_CANDIDATE_POLICY,
+  RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
   RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
   RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
+  candidateFunctionsRuntimeExpected,
   candidateConfirmation,
+  requireCandidateProfileTarget,
   reserveCandidateReceipt,
   updateCandidateReceipt,
   validateCandidateCiEvidence,
+  validateCandidateBrowserEnvironment,
   validateCandidateFunctionsEnvironment,
   validateFirebaseFunctionsReadback,
   validateFirebaseHostingReadback,
@@ -167,6 +171,25 @@ describe("governed release candidate deployment", () => {
     expect(candidateConfirmation("vercel-preview", SHA)).toContain(`quoteflow PREVIEW ${SHA}`);
     expect(RELEASE_CANDIDATE_UAT_PROFILE).toBe("staging-safe-off");
     expect(RELEASE_CANDIDATE_STAFFING_UAT_PROFILE).toBe("staging-staffing-authority");
+    expect(RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE).toBe("staging-provider-acceptance");
+    expect(candidateConfirmation(
+      "firebase-all",
+      SHA,
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    )).toBe(
+      `DEPLOY CANDIDATE quotepilot-staging-20260804 ${SHA} PROFILE staging-provider-acceptance`
+    );
+    expect(requireCandidateProfileTarget(
+      "firebase-all",
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    )).toEqual({
+      target: "firebase-all",
+      profile: RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    });
+    expect(() => requireCandidateProfileTarget(
+      "vercel-preview",
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    )).toThrow(/Firebase-only.*Turnstile hostname allowlist/i);
   });
 
   test("checks every bound staging secret by metadata without reading or creating values", () => {
@@ -208,6 +231,9 @@ describe("governed release candidate deployment", () => {
   test("prepares the checksum-verified Firebase binary before receipt reservation and mutation", () => {
     const source = fs.readFileSync(SCRIPT, "utf8");
     const prepareOffset = source.lastIndexOf("await prepareFirebaseToolsBinary()");
+    const providerSafeOffOffset = source.lastIndexOf(
+      "readFirebaseFunctions(firebaseCliPath, RELEASE_CANDIDATE_UAT_PROFILE)"
+    );
     const rulesPreflightOffset = source.lastIndexOf("await readFirebaseRulesReleases(firebaseRulesAccessToken)");
     const vercelPreflightOffset = source.lastIndexOf("await validateVercelProjectAccess(vercelToken)");
     const reserveOffset = source.lastIndexOf("reservation = reserveCandidateReceipt");
@@ -216,6 +242,8 @@ describe("governed release candidate deployment", () => {
 
     expect(prepareOffset).toBeGreaterThan(0);
     expect(reserveOffset).toBeGreaterThan(prepareOffset);
+    expect(providerSafeOffOffset).toBeGreaterThan(prepareOffset);
+    expect(reserveOffset).toBeGreaterThan(providerSafeOffOffset);
     expect(reserveOffset).toBeGreaterThan(rulesPreflightOffset);
     expect(reserveOffset).toBeGreaterThan(vercelPreflightOffset);
     expect(firebaseMutation).toContain("capture(firebaseCliPath");
@@ -253,6 +281,52 @@ describe("governed release candidate deployment", () => {
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       TWILIO_ACCOUNT_SID: "disabled-provider-residue"
     }))).toThrow(/must be empty/i);
+  });
+
+  test("opens only the controlled test-provider profile and rejects browser test keys", () => {
+    const providerRuntime = candidateFunctionsRuntimeExpected(
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    );
+    expect(validateCandidateFunctionsEnvironment(
+      providerRuntime,
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    )).toMatchObject({
+      NOTIFICATIONS_EMAIL_PROVIDER: "resend",
+      STRIPE_MODE: "test",
+      BUYER_ACCESS_ENABLED: "true",
+      BUYER_ACCESS_TURNSTILE_HOSTNAMES: "quotepilot-staging-20260804.web.app",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+    });
+    expect(() => validateCandidateFunctionsEnvironment(
+      { ...providerRuntime, STRIPE_MODE: "live" },
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    )).toThrow(/STRIPE_MODE.*test/i);
+    expect(() => validateCandidateFunctionsEnvironment(
+      { ...providerRuntime, NOTIFICATIONS_EMAIL_PROVIDER: "none" },
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    )).toThrow(/NOTIFICATIONS_EMAIL_PROVIDER.*resend/i);
+
+    const browser = {
+      VITE_FIREBASE_API_KEY: "provider-derived-browser-fixture",
+      VITE_FIREBASE_AUTH_DOMAIN: RELEASE_CANDIDATE_POLICY.firebase.authDomain,
+      VITE_FIREBASE_PROJECT_ID: RELEASE_CANDIDATE_POLICY.firebase.projectId,
+      VITE_FIREBASE_STORAGE_BUCKET: RELEASE_CANDIDATE_POLICY.firebase.storageBucket,
+      VITE_FIREBASE_MESSAGING_SENDER_ID: RELEASE_CANDIDATE_POLICY.firebase.messagingSenderId,
+      VITE_FIREBASE_APP_ID: RELEASE_CANDIDATE_POLICY.firebase.appId,
+      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "0x4AAAAAReviewedStagingKey123"
+    };
+    expect(validateCandidateBrowserEnvironment(
+      browser,
+      RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    )).toMatchObject({
+      VITE_BUYER_ACCESS_ENABLED: "true",
+      VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true",
+      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "0x4AAAAAReviewedStagingKey123"
+    });
+    expect(() => validateCandidateBrowserEnvironment({
+      ...browser,
+      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "1x00000000000000000000AA"
+    }, RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE)).toThrow(/non-test staging site key/i);
   });
 
   test("binds Firebase Functions, Hosting, and Firestore Rules provider evidence", () => {
@@ -293,6 +367,30 @@ describe("governed release candidate deployment", () => {
     });
     expect(staffingFunctions.runtimeConfig.OPERATIONAL_STAFFING_AUTHORITY_ENABLED)
       .toBe("true");
+
+    const providerFunctions = validateFirebaseFunctionsReadback({
+      candidateProfile: RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      response: {
+        status: "success",
+        result: [{
+          id: "calculateQuotePricing",
+          region: "us-central1",
+          platform: "gcfv1",
+          project: RELEASE_CANDIDATE_POLICY.firebase.projectId,
+          state: "ACTIVE",
+          hash: "d".repeat(40),
+          environmentVariables: candidateFunctionsRuntimeExpected(
+            RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+          )
+        }]
+      }
+    });
+    expect(providerFunctions.runtimeConfig).toMatchObject({
+      NOTIFICATIONS_EMAIL_PROVIDER: "resend",
+      STRIPE_MODE: "test",
+      BUYER_ACCESS_ENABLED: "true",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+    });
 
     const providerDeploymentId = "sites/quotepilot-staging-20260804/versions/0123456789abcdef";
     expect(validateFirebaseHostingReadback({
@@ -578,7 +676,7 @@ describe("governed release candidate deployment", () => {
 
   test("retries exact hosted manifest equality across bounded propagation", async () => {
     const expected = {
-      schema: "com.mbmapps.quotepilot.release-candidate/v2",
+      schema: "com.mbmapps.quotepilot.release-candidate/v3",
       sourceSha: SHA,
       ciRunId: 123,
       uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
@@ -601,7 +699,7 @@ describe("governed release candidate deployment", () => {
 
   test("allows the default bounded window to absorb a one-minute Hosting propagation lag", async () => {
     const expected = {
-      schema: "com.mbmapps.quotepilot.release-candidate/v2",
+      schema: "com.mbmapps.quotepilot.release-candidate/v3",
       sourceSha: SHA,
       ciRunId: 123,
       uatProfile: RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
@@ -685,7 +783,7 @@ describe("governed release candidate deployment", () => {
     expect(source).toContain('VITE_AMBIENT_UI_ENABLED: "true"');
     expect(source).toContain('VITE_OPERATIONAL_STAFFING_ENABLED: "true"');
     expect(source).toContain("uatProfile: candidateProfile");
-    expect(source).toContain('com.mbmapps.quotepilot.release-candidate/v2');
+    expect(source).toContain('com.mbmapps.quotepilot.release-candidate/v3');
     expect(source).not.toMatch(/"--token",\s*\.\.\.tokenArgs/);
     for (const flag of [
       "VITE_PILOT_NOW_ENABLED",

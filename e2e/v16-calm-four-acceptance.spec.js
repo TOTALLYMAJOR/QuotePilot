@@ -280,19 +280,196 @@ async function expectNoHorizontalOverflow(page, selector = "html") {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
-async function captureV16Proof(page, filename) {
+async function expectQuickUpdatesLibraryFooterClearance(panel) {
+  const library = panel.getByRole("button", { name: "Open full Library" });
+
+  await library.focus();
+  await expect(library).toBeFocused();
+  await expect(library).toBeInViewport({ ratio: 1 });
+
+  const geometry = await panel.evaluate((root) => {
+    const scrollRegion = root.querySelector('[data-quick-updates-scroll-region="body"]');
+    const libraryAction = root.querySelector('[data-quick-updates-scroll-target="library"] button');
+    const actionFooter = root.querySelector('[data-quick-updates-fixed-footer="actions"]');
+    if (!scrollRegion || !libraryAction || !actionFooter) return null;
+    const bodyBox = scrollRegion.getBoundingClientRect();
+    const actionBox = libraryAction.getBoundingClientRect();
+    const footerBox = actionFooter.getBoundingClientRect();
+    const bodyStyle = getComputedStyle(scrollRegion);
+    const actionStyle = getComputedStyle(libraryAction);
+    return {
+      actionTop: actionBox.top,
+      actionBottom: actionBox.bottom,
+      bodyTop: bodyBox.top,
+      bodyBottom: bodyBox.bottom,
+      footerTop: footerBox.top,
+      scrollPaddingBottom: Number.parseFloat(bodyStyle.scrollPaddingBottom || "0"),
+      scrollMarginBottom: Number.parseFloat(actionStyle.scrollMarginBottom || "0")
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry.actionTop).toBeGreaterThanOrEqual(geometry.bodyTop - 1);
+  expect(geometry.actionBottom).toBeLessThanOrEqual(geometry.bodyBottom - 16);
+  expect(geometry.actionBottom).toBeLessThanOrEqual(geometry.footerTop - 16);
+  expect(geometry.scrollPaddingBottom).toBeGreaterThanOrEqual(24);
+  expect(geometry.scrollMarginBottom).toBeGreaterThanOrEqual(24);
+}
+
+async function settleVisualProof(page, { resetScroll = true } = {}) {
+  await page.evaluate(async (shouldResetScroll) => {
+    await document.fonts?.ready;
+    if (shouldResetScroll) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
+    const active = document.activeElement;
+    if (active?.matches?.("h1[tabindex='-1'], h2[tabindex='-1'], h3[tabindex='-1']")) {
+      active.blur();
+    }
+    await new Promise((resolvePaint) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolvePaint));
+    });
+  }, resetScroll);
+}
+
+async function expectNewQuoteVisualIntegrity(page) {
+  const trigger = page.locator('[data-ambient-utility="new-quote"]:visible');
+  await expect(trigger).toHaveCount(1);
+  await expect(trigger).toHaveAccessibleName("New quote");
+  await expect(trigger.locator(":scope > .shell-nav-label")).toHaveText("New quote");
+  await expect(page.locator(
+    '.ambient-primary-navigation [data-ambient-utility="new-quote"]'
+  )).toHaveCount(0);
+  await settleVisualProof(page, { resetScroll: false });
+
+  const geometry = await trigger.evaluate((button) => {
+    const label = button.querySelector(":scope > .shell-nav-label");
+    const icon = button.querySelector(":scope > .shell-nav-icon");
+    const box = button.getBoundingClientRect();
+    const labelBox = label?.getBoundingClientRect();
+    const iconBox = icon?.getBoundingClientRect();
+    const labelRange = label ? document.createRange() : null;
+    labelRange?.selectNodeContents(label);
+    const labelLineCount = labelRange
+      ? new Set(Array.from(labelRange.getClientRects(), (rect) => Math.round(rect.top))).size
+      : 0;
+    const within = (child) => Boolean(child)
+      && child.width > 0
+      && child.height > 0
+      && child.left >= box.left - 1
+      && child.right <= box.right + 1
+      && child.top >= box.top - 1
+      && child.bottom <= box.bottom + 1;
+    return {
+      button: { x: box.x, y: box.y, width: box.width, height: box.height, right: box.right },
+      labelInside: within(labelBox),
+      iconInside: within(iconBox),
+      labelOverflow: label ? label.scrollWidth - label.clientWidth : Number.POSITIVE_INFINITY,
+      labelLineCount,
+      viewportWidth: window.innerWidth
+    };
+  });
+
+  expect(geometry.labelInside).toBe(true);
+  expect(geometry.iconInside).toBe(true);
+  expect(geometry.labelOverflow).toBeLessThanOrEqual(1);
+  expect(geometry.button.height).toBeGreaterThanOrEqual(44);
+  expect(geometry.button.x).toBeGreaterThanOrEqual(0);
+  expect(geometry.button.right).toBeLessThanOrEqual(geometry.viewportWidth);
+  if (geometry.viewportWidth >= 1181) {
+    expect(geometry.button.width).toBeGreaterThanOrEqual(168);
+    expect(geometry.button.height).toBeGreaterThanOrEqual(52);
+    expect(geometry.button.right).toBeLessThanOrEqual(geometry.viewportWidth - 32);
+    expect(geometry.labelLineCount).toBe(1);
+  } else if (geometry.viewportWidth > 620) {
+    expect(geometry.labelLineCount).toBe(1);
+  } else {
+    expect(geometry.labelLineCount).toBeGreaterThanOrEqual(1);
+    expect(geometry.labelLineCount).toBeLessThanOrEqual(2);
+  }
+  await expectNoHorizontalOverflow(page);
+}
+
+async function expectQuickUpdatesLauncherLayout(page, { persistent }) {
+  const opportunity = page.locator(
+    `[data-quote-id="${RIVERA_QUOTE_ID}"].ambient-living-opportunity`
+  );
+  const contextBar = opportunity.getByRole("region", {
+    name: "Rivera Wedding opportunity actions"
+  });
+  const contextTrigger = contextBar.locator(
+    '[data-ambient-action-id="open-quick-updates"]'
+  );
+  const mobileTrigger = opportunity.locator(
+    '.ambient-mobile-remote [data-ambient-action-id="open-quick-updates"]'
+  );
+  const visibleTriggers = opportunity.locator(
+    'button[data-ambient-action-id="open-quick-updates"]:visible'
+  );
+
+  await expect(contextBar).toHaveAttribute("data-testid", "quick-updates-context-bar");
+  await expect(opportunity.locator(
+    '.ambient-title-line [data-ambient-action-id="open-quick-updates"]'
+  )).toHaveCount(0);
+  await expect(visibleTriggers).toHaveCount(1);
+  await expectNoHorizontalOverflow(page);
+
+  if (!persistent) {
+    await expect(contextBar).toHaveCSS("position", "static");
+    await expect(contextTrigger).toBeHidden();
+    await expect(mobileTrigger).toBeVisible();
+    await expect(mobileTrigger).toHaveCSS("position", "static");
+
+    const mobileBox = await mobileTrigger.boundingBox();
+    const bottomNavigationBox = await page.locator(
+      ".ambient-primary-navigation"
+    ).boundingBox();
+    expect(mobileBox).not.toBeNull();
+    expect(bottomNavigationBox).not.toBeNull();
+    expect(mobileBox.y + mobileBox.height).toBeLessThanOrEqual(bottomNavigationBox.y - 8);
+    return { contextBar, trigger: mobileTrigger };
+  }
+
+  await expect(contextBar).toHaveCSS("position", "sticky");
+  await expect(contextTrigger).toBeVisible();
+  await expect(mobileTrigger).toBeHidden();
+
+  const scrollRange = await page.evaluate(() => (
+    document.documentElement.scrollHeight - window.innerHeight
+  ));
+  expect(scrollRange).toBeGreaterThan(500);
+  const firstScrollTop = Math.min(700, scrollRange - 240);
+  await page.evaluate((top) => window.scrollTo({ top, left: 0, behavior: "instant" }), firstScrollTop);
+  await expect.poll(async () => Math.round(await page.evaluate(() => window.scrollY)))
+    .toBe(Math.round(firstScrollTop));
+
+  const firstBox = await contextBar.boundingBox();
+  const viewportWidth = page.viewportSize()?.width || 0;
+  const chrome = viewportWidth >= 1181
+    ? page.locator(".header-quick-cta:visible")
+    : page.locator(".site-header:visible");
+  const chromeBox = await chrome.boundingBox();
+  expect(firstBox).not.toBeNull();
+  expect(chromeBox).not.toBeNull();
+  expect(firstBox.y).toBeGreaterThanOrEqual(chromeBox.y + chromeBox.height + 8);
+
+  const secondScrollTop = Math.min(firstScrollTop + 240, scrollRange);
+  expect(secondScrollTop - firstScrollTop).toBeGreaterThanOrEqual(200);
+  await page.evaluate((top) => window.scrollTo({ top, left: 0, behavior: "instant" }), secondScrollTop);
+  const secondBox = await contextBar.boundingBox();
+  expect(secondBox).not.toBeNull();
+  expect(Math.abs(secondBox.y - firstBox.y)).toBeLessThanOrEqual(2);
+  await expectNoHorizontalOverflow(page);
+  return { contextBar, trigger: contextTrigger };
+}
+
+async function captureV16Proof(page, filename, { resetScroll = true } = {}) {
   if (!CAPTURE_V16_BROWSER_PROOF) return;
   mkdirSync(V16_BROWSER_PROOF_DIR, { recursive: true });
   // Proof must represent a settled route, not an entry animation or retained
   // scroll position from the preceding interaction.
   await page.waitForTimeout(320);
-  await page.evaluate(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    const active = document.activeElement;
-    if (active?.matches?.("h1[tabindex='-1'], h2[tabindex='-1'], h3[tabindex='-1']")) {
-      active.blur();
-    }
-  });
+  await settleVisualProof(page, { resetScroll });
   await page.screenshot({
     path: resolve(V16_BROWSER_PROOF_DIR, filename),
     animations: "disabled"
@@ -338,21 +515,26 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(newQuote).toHaveText(/New quote/u);
     await expect(newQuote).not.toHaveAttribute("aria-current", "page");
     await expect(primary.locator('[data-ambient-utility="new-quote"]')).toHaveCount(0);
+    await expectNewQuoteVisualIntegrity(page);
 
     await primary.getByRole("button", { name: "Opportunities", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/quotes$/u);
     await expect(primary.getByRole("button", { name: "Opportunities", exact: true }))
       .toHaveAttribute("aria-current", "page");
+    await expectNewQuoteVisualIntegrity(page);
     await primary.getByRole("button", { name: "Clients", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/customers$/u);
+    await expectNewQuoteVisualIntegrity(page);
     await primary.getByRole("button", { name: "Library", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/catalog$/u);
+    await expectNewQuoteVisualIntegrity(page);
     await page.goBack();
     await expect(page).toHaveURL(/\/app\/customers$/u);
     await expect(primary.getByRole("button", { name: "Clients", exact: true }))
       .toHaveAttribute("aria-current", "page");
     await page.goForward();
     await expect(page).toHaveURL(/\/app\/catalog$/u);
+    await expectNewQuoteVisualIntegrity(page);
 
     const header = page.locator(".site-header");
     await expect(header.getByRole("button", { name: "Search", exact: true })).toBeVisible();
@@ -366,8 +548,26 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     });
     await desktopToolsTrigger.click();
     const desktopTools = page.getByRole("dialog", { name: "Workspace & tools" });
+    await expect(desktopTools.locator("[data-workspace-tools-group]").evaluateAll((groups) => (
+      groups.map((group) => group.dataset.workspaceToolsGroup)
+    ))).resolves.toEqual(["workspace", "frequent", "operations", "administration", "account"]);
     await expect(desktopTools.getByRole("heading", { name: "Current workspace" })).toBeVisible();
+    await expect(desktopTools.getByRole("heading", { name: "Frequent tools" })).toBeVisible();
+    await expect(desktopTools.getByRole("heading", { name: "Operations" })).toBeVisible();
+    await expect(desktopTools.getByRole("heading", { name: "Administration" })).toBeVisible();
     await expect(desktopTools.getByRole("heading", { name: "Account" })).toBeVisible();
+    const desktopAdministrationToggle = desktopTools.getByRole("button", {
+      name: "Show administration tools"
+    });
+    await expect(desktopAdministrationToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(desktopTools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
+    await desktopAdministrationToggle.click();
+    await expect(desktopTools.getByRole("button", { name: "Reporting Dashboard" })).toBeVisible();
+    await expect(desktopTools.getByRole("button", { name: "Integrations Ops" })).toBeVisible();
+    await expect(desktopTools.getByRole("button", { name: "Import Studio" })).toBeVisible();
+    await expect(desktopTools.getByRole("button", { name: "Session Diagnostics" })).toBeVisible();
+    await desktopTools.getByRole("button", { name: "Hide administration tools" }).click();
+    await expect(desktopTools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
     await expect(desktopTools.getByRole("button", { name: "Sign Out" })).toBeVisible();
     await expect(desktopTools.getByRole("button", { name: "Account settings" })).toBeVisible();
     await expect(desktopTools).toContainText(/admin/iu);
@@ -382,6 +582,10 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await desktopAccountSettings.getByRole("button", { name: "Close account settings" }).click();
     await expect(desktopAccountSettings).toBeHidden();
     await expect(desktopToolsTrigger).toBeFocused();
+
+    await page.setViewportSize({ width: 768, height: 900 });
+    await gotoWorkspace(page, "/app/quotes");
+    await expectNewQuoteVisualIntegrity(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await primary.getByRole("button", { name: "Now", exact: true }).click();
@@ -403,6 +607,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
         name: "Workspace and tools",
         exact: true
       })).toBeVisible();
+      await expectNewQuoteVisualIntegrity(page);
       await expectNoHorizontalOverflow(page);
     }
     await primary.getByRole("button", { name: "Now", exact: true }).click();
@@ -417,8 +622,21 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(tools).toBeVisible();
     await captureV16Proof(page, "11-mobile-workspace-tools.png");
     await expect(tools.getByRole("button", { name: "Search customers and opportunities" })).toBeVisible();
+    await expect(tools.getByRole("heading", { name: "Frequent tools" })).toBeVisible();
     await expect(tools.getByRole("heading", { name: "Operations" })).toBeVisible();
+    await expect(tools.getByRole("heading", { name: "Administration" })).toBeVisible();
     await expect(tools.getByRole("button", { name: "Operations", exact: true })).toBeVisible();
+    const mobileAdministrationToggle = tools.locator(
+      '[data-workspace-tools-administration-toggle="true"]'
+    );
+    await expect(mobileAdministrationToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
+    expect(await mobileAdministrationToggle.evaluate((button) => button.getBoundingClientRect().height))
+      .toBeGreaterThanOrEqual(44);
+    await mobileAdministrationToggle.click();
+    await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toBeVisible();
+    await tools.getByRole("button", { name: "Hide administration tools" }).click();
+    await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
     await expect(tools.getByRole("button", { name: "Account settings" })).toBeVisible();
     await expect(tools.getByRole("button", { name: "Sign Out" })).toBeVisible();
     await tools.getByRole("button", { name: "Account settings" }).click();
@@ -437,10 +655,19 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(tools).toBeHidden();
     expect(page.url()).toBe(mobileRoute);
     await expect(toolsTrigger).toBeFocused();
+
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await gotoWorkspace(page, "/app/quotes");
+    await expectNewQuoteVisualIntegrity(page);
   });
 
   test("2. Opportunities index preserves ordering, object identity, history context, and a mobile landing", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
+    const browserErrors = [];
+    page.on("pageerror", (error) => browserErrors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") browserErrors.push(message.text());
+    });
+    await page.setViewportSize({ width: 1440, height: 1024 });
     await gotoWorkspace(page, "/app/quotes");
 
     const stream = page.locator(".ambient-opportunities");
@@ -448,15 +675,40 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     const rows = stream.locator(".ambient-opportunity");
     await expect(rows).toHaveCount(3);
     await captureV16Proof(page, "02-desktop-opportunities-index.png");
+    await expect(rows.locator(".ambient-opportunity__primary-action")).toHaveCount(3);
+    await expect(rows.locator('[data-opportunity-disclosure="details"] > summary > span:first-child'))
+      .toHaveText(["Details", "Details", "Details"]);
+    await expect(stream).not.toContainText("Opportunity details");
     await expect(rows.evaluateAll((items) => items.map((item) => item.dataset.opportunityId)))
       .resolves.toEqual(["spring-gala-closed", RIVERA_QUOTE_ID, "autumn-benefit"]);
-    await expect(stream.locator('[data-opportunity-id="spring-gala-closed"]'))
-      .toHaveAttribute("data-needs-attention", "true");
+    const springRow = stream.locator('[data-opportunity-id="spring-gala-closed"]');
+    await expect(springRow).toHaveAttribute("data-needs-attention", "true");
+    await expect(springRow.locator(".ambient-opportunity__next-reason"))
+      .toHaveText("Declined — no tracked follow-up");
+    await expect(springRow.locator(".ambient-opportunity__primary-action"))
+      .toHaveText(/Review Spring Gala/u);
     const riveraRow = stream.locator(`[data-opportunity-id="${RIVERA_QUOTE_ID}"]`);
     await expect(riveraRow).toContainText("Rivera Wedding");
     await expect(riveraRow).toContainText("The Glass House");
     await expect(riveraRow).toContainText("96");
-    await riveraRow.locator(".ambient-opportunity__primary-action").click();
+    await expect(riveraRow.locator(".ambient-opportunity__next-reason"))
+      .toHaveText("Ready for proposal review");
+    await expect(rows.evaluateAll((items) => items.every((item) => (
+      item.querySelectorAll(".ambient-opportunity__primary-action").length === 1
+      && item.querySelectorAll('[data-opportunity-disclosure="details"]').length === 1
+    )))).resolves.toBe(true);
+    const riveraDetails = riveraRow.locator('[data-opportunity-disclosure="details"]');
+    await expect(riveraDetails).not.toHaveAttribute("open", "");
+    await riveraDetails.locator("summary").click();
+    await expect(riveraDetails).toHaveAttribute("open", "");
+    await expect(riveraDetails.locator('[data-momentum-domain="proposal"] dt'))
+      .toHaveText("Proposal completeness");
+    await riveraDetails.locator("summary").click();
+    await expect(riveraDetails).not.toHaveAttribute("open", "");
+    const riveraPrimaryAction = riveraRow.locator(".ambient-opportunity__primary-action");
+    await riveraPrimaryAction.focus();
+    await expect(riveraPrimaryAction).toBeFocused();
+    await riveraPrimaryAction.click();
     await expect(page).toHaveURL(new RegExp(`${OPPORTUNITY_PATH}$`, "u"));
 
     const opportunity = page.locator(`[data-quote-id="${RIVERA_QUOTE_ID}"].ambient-living-opportunity`);
@@ -519,6 +771,13 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(page.locator('[data-quote-id="autumn-benefit"]')).toContainText("Autumn Benefit Dinner");
     await expect(page.locator('[data-quote-id="autumn-benefit"]')).not.toContainText("Rivera Wedding");
 
+    await page.setViewportSize({ width: 768, height: 900 });
+    await gotoWorkspace(page, "/app/quotes");
+    await expect(stream).toBeVisible();
+    await expect(rows).toHaveCount(3);
+    await expectNoHorizontalOverflow(page);
+    await captureV16Proof(page, "02a-tablet-opportunities-index.png");
+
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoWorkspace(page, "/app/quotes");
     await expect(stream).toBeVisible();
@@ -529,6 +788,16 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await captureV16Proof(page, "12-mobile-opportunities-index.png");
     const mobileRiveraRow = stream.locator(`[data-opportunity-id="${RIVERA_QUOTE_ID}"]`);
     await mobileRiveraRow.scrollIntoViewIfNeeded();
+    const mobileNextLayout = await mobileRiveraRow.evaluate((row) => {
+      const reason = row.querySelector(".ambient-opportunity__next-reason")?.getBoundingClientRect();
+      const action = row.querySelector(".ambient-opportunity__primary-action")?.getBoundingClientRect();
+      return reason && action
+        ? { reasonBottom: reason.bottom, actionTop: action.top, actionWidth: action.width }
+        : null;
+    });
+    expect(mobileNextLayout).not.toBeNull();
+    expect(mobileNextLayout.actionTop).toBeGreaterThanOrEqual(mobileNextLayout.reasonBottom - 1);
+    expect(mobileNextLayout.actionWidth).toBeGreaterThanOrEqual(44);
     const indexScrollTop = await page.evaluate(() => window.scrollY);
     // A compact three-record fixture can fit without scrolling on this phone.
     // Whether zero or non-zero, the exact practical index position must return.
@@ -543,6 +812,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(rows).toHaveCount(3);
     await expect.poll(async () => Math.abs((await page.evaluate(() => window.scrollY)) - indexScrollTop))
       .toBeLessThanOrEqual(2);
+    expect(browserErrors).toEqual([]);
   });
 
   test("3. Quick Updates opens contextually with zero mutation and restores focus", async ({ page }) => {
@@ -550,6 +820,10 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await gotoRiveraOpportunity(page);
     const before = await readLocalState(page);
     const beforeUrl = page.url();
+    await expectQuickUpdatesLauncherLayout(page, { persistent: true });
+    await captureV16Proof(page, "03a-desktop-opportunity-sticky-quick-updates.png", {
+      resetScroll: false
+    });
     const { panel, trigger } = await openQuickUpdates(page);
 
     await expect(page.locator(`[data-quote-id="${RIVERA_QUOTE_ID}"].ambient-living-opportunity`)).toBeVisible();
@@ -579,12 +853,32 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     expect(await readLocalState(page)).toEqual(before);
     expect(page.url()).toBe(beforeUrl);
 
+    await page.setViewportSize({ width: 768, height: 900 });
+    await gotoRiveraOpportunity(page);
+    const tabletBeforeUrl = page.url();
+    await expectQuickUpdatesLauncherLayout(page, { persistent: true });
+    await captureV16Proof(page, "03b-tablet-opportunity-sticky-quick-updates.png", {
+      resetScroll: false
+    });
+    const tabletQuickUpdates = await openQuickUpdates(page);
+    await tabletQuickUpdates.panel.getByRole("button", { name: "Close Quick Updates" }).click();
+    await expect(tabletQuickUpdates.panel).toBeHidden();
+    await expect(tabletQuickUpdates.trigger).toBeFocused();
+    expect(page.url()).toBe(tabletBeforeUrl);
+    expect(await readLocalState(page)).toEqual(before);
+
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoRiveraOpportunity(page);
+    const mobileBeforeUrl = page.url();
+    await expectQuickUpdatesLauncherLayout(page, { persistent: false });
     const mobileQuickUpdates = await openQuickUpdates(page);
+    await expectQuickUpdatesLibraryFooterClearance(mobileQuickUpdates.panel);
     await captureV16Proof(page, "15-mobile-quick-updates-open.png");
     await mobileQuickUpdates.panel.getByRole("button", { name: "Close Quick Updates" }).click();
     await expect(mobileQuickUpdates.panel).toBeHidden();
+    await expect(mobileQuickUpdates.trigger).toBeFocused();
+    expect(page.url()).toBe(mobileBeforeUrl);
+    expect(await readLocalState(page)).toEqual(before);
   });
 
   test("4. Quick Updates dirty state is local, durable inside the panel, and never autosaves", async ({ page }) => {

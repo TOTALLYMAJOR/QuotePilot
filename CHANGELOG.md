@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 14:11:40 CDT
+Last updated: 2026-09-03 13:49:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,207 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added a Firebase-only `staging-provider-acceptance` release-candidate profile
+  for controlled v0.16.3 qualification. It begins from verified safe-off
+  Functions readback; enables the approved Resend sender, generic and buyer
+  Stripe rails in test mode, public buyer access, and global staffing authority;
+  and keeps SMS, Commercial Change, and both Revenue Autopilot gates off. The
+  provider profile requires a reviewed non-test staging Turnstile key, an exact
+  profile-bound typed confirmation, and a same-SHA safe-off closeout across
+  Firebase and Vercel. UAT checklist v4 now filters conditional SMS items by
+  each profile's fixed provider and binds exact-main human attestation to the
+  candidate profile. The launch runbook records fourteen non-negotiable
+  acceptance criteria; applicable checks remain unpassed until observed, and
+  no production or provider outcome is claimed by this source change. Focused
+  release-safety coverage passes 308/308 tests; the full unit suite passes
+  4,433 tests with 79 intentionally skipped, and the production build plus
+  environment, workflow, secrets, capability, project-state, and documentation
+  governance gates pass.
+- Pinned both v0.16.3 bundle profiles to their larger exact verified flag-matrix
+  measurements. Compatibility is 3,298,166 / 395,862 bytes on exact-head CI and
+  3,298,234 / 395,896 locally; Ambient is 4,164,201 / 429,869 bytes on exact-head
+  CI and 4,164,269 / 429,903 locally. No percentage headroom was added, and the
+  distributed Ambient cost remains explicit optimization debt.
+- Advanced the Customer Directory and Customer 360 capability contract for the
+  development-only seeded-directory precedence repair, including exact browser
+  acceptance coverage and canonical Feature Matrix/User Manual boundaries.
+  Production Firebase reads and provider authority are unchanged.
+- Closed a Library dismissal leak: the shared explicit/native navigation guard
+  now treats buffered device-only setup patches as dirty and removes only those
+  patches after confirmed discard. Browser Forward reopens the persisted
+  catalog baseline instead of reviving private unsaved editor text, while
+  server-saved setup drafts remain untouched.
+- Repaired the last obsolete broad browser selectors against current Calm Four
+  structure: the Opportunities section itself owns its accessible name, the
+  disclosure assertion excludes its decorative chevron, Library Back restores
+  the exact initiating template action, and Pilot scenario review retains its
+  own precise unsaved-draft language. These changes preserve stronger focus and
+  naming contracts instead of accepting nearby substitute elements.
+- Reconciled the broad layout fixture with the current split tenant catalog:
+  package/settings data and event-menu data are now seeded through their
+  respective browser-local stores at one matching revision. Pilot scenario and
+  package-review layout checks therefore exercise valid current catalog
+  evidence instead of failing closed on unrelated canonical menu defaults. The
+  scenario check selects one exact ranked alternative, and the package-review
+  check verifies its authoritative inline draft boundary without claiming the
+  still-unmigrated durable feedback rail.
+- Stabilized return-context browser setup around the exact focused source
+  action. Deep Library and Client controls remain visible when the test records
+  a meaningful non-terminal scroll position, so Back/Forward proof measures the
+  product restoration contract instead of scrolling the initiating control
+  out of view during setup.
+- Updated the cross-route task geometry gate to inspect the continuity stack as
+  the sticky carrier while its child task card remains in normal flow. The gate
+  now matches the composed feedback/task surface at tablet and desktop widths
+  without weakening mobile non-sticky behavior or collision checks.
+- Reconciled local-review customer identity precedence so browser acceptance
+  seeds remain authoritative for their exact tenant while the fixed review
+  directory still supplies an empty local workspace. Client lists, pagination,
+  search, and Customer 360 now exercise the intended seeded records without
+  weakening production Firebase reads or cross-tenant filtering.
+- Reconciled the v0.16.3 compatibility bundle exception to the measured
+  3,295,659-byte aggregate and 393,459-byte largest chunk after restoring the
+  approved staff continuity contracts on current main. The 3,302,684-byte
+  aggregate ceiling retains only the established 7,025-byte runner offset;
+  Ambient remains below its existing ceiling at 4,009,260 / 385,181 bytes.
+- Kept the task-journey unsafe-identifier fixtures effective while assembling
+  their Stripe-shaped sentinel at test runtime, so the repository secret scan
+  can distinguish deliberate validation coverage from a committed credential.
+- Added the first bounded slice of the durable staff action-feedback contract.
+  One same-runtime, presentation-only registry now fences **In progress**,
+  **Confirmed**, **Needs attention**, **Needs confirmation**, and **Cancelled**
+  to the exact organization, principal, role, action, attempt, generation, and
+  affected object. The exact tracked Workflow follow-up is the first adapter:
+  it acknowledges pending work synchronously, blocks duplicate submission,
+  permits success only after the existing authoritative readback. When the
+  attempt still owns Current task, exact App closure must also persist first;
+  older feedback may reconcile independently without changing a newer or
+  missing task or claiming its completion. Ambiguous browser-local or rejected
+  outcomes stay uncertain with one read-only return to the exact follow-up. An
+  uncertain outcome cannot be dismissed, converted directly to evidence-free
+  recovery, or bypassed by unchecking completion; terminal acknowledgement is
+  exact-revision fenced. One
+  atomic announcement replaces duplicate consequential component feedback; the
+  new Calm Four rail shares a non-overlapping continuity stack with Current
+  task, persists across staff routes, clears on reload or scope change, and
+  excludes the fixture's note, email, provider error, tokens, and raw records.
+  Invalid stage/date preflight, unresolved-capacity refusal, late promise,
+  unmount, and staff-identity-change handling, exact focus return after task
+  tracking stops, staff-only provider placement, and stable feedback across
+  both authorized workspace branches all fail closed. The
+  design contract and formidable acceptance matrix preserve one dominant
+  action, visible focus, 44px controls, responsive rail/chrome separation, and
+  explicit evidence boundaries. Final local evidence is 127/127 focused tests,
+  4,360 unit tests passing with 78 intentionally skipped, and 3/3
+  Chromium-admin cases at 390, 768, and 1440px. Twelve fresh state captures and
+  three controlled before/after comparisons passed visual review with no
+  blockers after correcting tablet focus clearance, desktop control overlap,
+  and disabled-action hierarchy. Quick Updates, Catalog, and remaining
+  mutations are not yet migrated, so recommendation 17 remains open;
+  connected, hosted, provider, production, cross-browser, zoom/forced-color,
+  assistive-technology, and human acceptance remain separate and unclaimed.
+- Added privacy-bounded native return context across Opportunities, Clients,
+  and Library. Exact Back/Forward round trips now restore safe filters,
+  disclosures, initiating focus, and settled scroll while free-text search,
+  cursors, exact Library targets, and drafts remain in tab memory instead of
+  URLs, storage, or history tokens. Invalid, reloaded, non-adjacent, foreign-
+  organization, or foreign-principal context falls back without selecting a
+  nearby record. Library editors now receive distinct same-URL history entries
+  and share one busy/dirty dismissal authority across explicit controls and
+  browser traversal: **Keep editing** preserves the exact draft and entry;
+  accepted discard continues the requested traversal; Forward reopens persisted
+  data without reviving the discarded draft. Seventeen local Chromium-admin
+  cases cover the three-route 390/768/1440px matrix, paginated Clients, Client
+  360, nested contextual Library, delayed reads, reload privacy, invalid and
+  foreign recovery, and the adversarial dirty-editor sequence. Non-expiry
+  fixtures retain byte-equivalent quote, history, and catalog state with no
+  unexpected non-GET request; restored route surfaces have zero scoped Axe
+  violations and destination pages have no serious or critical violation. The
+  return-context layer adds no write authority. The pre-existing admin quote-
+  history read may still persist automatic expiry through its existing
+  lifecycle authority, including local-fallback normalization and versioning.
+  Forced colors, 200% zoom, Firefox/WebKit, real assistive technology, hosted
+  data, deployment, and human acceptance remain separate and unclaimed.
+- Closed the first cross-route task outcome adapter for exact staff follow-ups.
+  Now, Opportunities, and Client 360 retain one principal-, role-, and
+  organization-bound task into Workflow; **Completed** is allowed only after a
+  Firebase save and matching server-only same-organization readback produce a
+  bounded internal confirmation and remove the exact item from fresh
+  Attention. Browser-local, unavailable, mismatched, invalid, or ambiguous
+  outcomes stay **Needs confirmation** with null proof and a read-only retry;
+  the write is never repeated automatically. Retry retains the exact Firebase
+  write fingerprint, and stopped or replaced tasks reject delayed results so
+  stale async work cannot resurrect session state. Five focused Chromium cases
+  now include the intentional local-save failure branch. Connected Firebase,
+  provider, hosted, production, assistive-technology, and human acceptance
+  remain separate and unclaimed.
+- Added a focused Chromium acceptance gate for the presentation-only
+  cross-route task journey. The same Rivera follow-up now proves exact,
+  source-specific action identity from Now, Opportunities, and Client 360,
+  convergence on one tenant-scoped Workflow focus, acknowledgement within
+  250ms, responsive task-rail geometry at 390, 768, and 1440 pixels, session
+  reload and Back/Forward continuity, dirty Quick Updates guarding, and
+  browser-local quote/history/catalog immutability. The gate deliberately
+  leaves the task **In progress** after exact arrival; authoritative completion
+  and source refresh remain a separate implementation slice.
+- Added the presentation-only foundation for cross-route task continuity. A
+  ranked action from Now, Opportunities, or Client 360 now carries its exact
+  opaque action and object identity into one tenant-scoped session journey,
+  bound to the signed-in principal and role, appears as **In progress** across
+  routes, and can recover or stop tracking
+  without changing business data. Exact destination readiness remains
+  explicitly separate from completion; authoritative follow-up outcome
+  confirmation and source refresh remain a later bounded slice.
+- Corrected Now-to-Workflow task arrivals to use Workflow's canonical attention
+  identity. Projected follow-ups now carry their stable `follow-up:<quoteId>`
+  focus key instead of an unrelated request fallback, while request-backed
+  items retain their exact source request identity. This navigation-only change
+  performs no business write and aligns Now with Opportunities and Client 360.
+- Added a staff-app cohesion audit that expands the prioritized UI register
+  from 14 to 24 recommendations and turns every open item into an executable
+  design and acceptance contract. The ten new recommendations cover cross-route
+  task completion, return context, durable feedback, independent commercial
+  evidence, relationship and object identity, date/time grammar, status
+  domains, read recovery, and truthful media roles. A separate formidable
+  matrix now requires same-fixture responsive proof, keyboard/accessibility,
+  failure-state coverage, zero-write presentation checks, exact mutation
+  receipts where applicable, and explicit local/hosted/provider/human evidence
+  boundaries. This documentation slice changes no runtime or authority.
+- Repaired the broad Calm Four layout gate against the current navigation and
+  presentation contracts. The four primary staff routes now derive from one
+  frozen route definition, stale headings and selectors fail closed, and all
+  declared groups must resolve visible peers. The resulting 81-case Chromium
+  matrix passes at 390, 768, and 1440px and caught two real regressions: exact
+  opportunity title focus paint now stays within the mobile viewport, and the
+  explicit Workspace-tools-to-search handoff can replace its source modal
+  without weakening unrelated modal guards. Route identity, URL behavior,
+  persistence, tenant boundaries, and mutation authority remain unchanged.
+- Structured **Workspace & tools** into current workspace, frequent tools,
+  operations, progressive administration, and account. Reporting,
+  integrations, import, and diagnostics remain role-gated and are now absent
+  from focus order until the explicit 44px Administration disclosure opens.
+- Reflowed the populated Clients summary at phone widths into identity, contact,
+  status, action, then auxiliary-image order. Long email addresses now wrap
+  inside a full-width contact row, the single client action remains 44px and
+  full width, and responsive browser geometry protects the reading order.
+- Reserved explicit mobile scroll clearance between **Open full Library** and
+  the fixed Quick Updates action footer. Focus now reveals the complete Library
+  target above the footer with its outline intact, and the Calm Four browser
+  gate verifies the clearance rather than relying on a screenshot alone.
+- Recast the populated Opportunities index as the selected concise editorial
+  work queue: each row now pairs exact identity and lifecycle with a short,
+  state-specific summary, one outcome-named action, and one **Details**
+  disclosure. The fuller arrival reason and authority payload remain intact,
+  phone layouts stack the reason above the action, and settled browser proof
+  now waits for fonts and paint before verifying the complete **New quote**
+  label across desktop, tablet, mobile, route changes, and responsive resizing.
+- Moved the opportunity-specific **Quick Updates** launcher from the large
+  desktop title into a sticky breadcrumb action bar that remains available
+  while the selected opportunity scrolls. Desktop and tablet keep one outlined
+  contextual launcher below global chrome; mobile keeps the existing in-flow,
+  full-width launcher and makes the breadcrumb bar non-sticky. The exact-event
+  accessible region, role and identity gates, URL, local draft, review/save
+  authority, dismissal guard, and focus restoration remain unchanged.
 - Consolidated Menu Builder save feedback into its sticky catalog draft bar,
   removing redundant item-local status and help copy and restoring cross-environment
   release bundle headroom without changing draft or publication authority. UI

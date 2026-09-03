@@ -1,5 +1,5 @@
 name: Release UAT Attestation
-run-name: release-uat/v3/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
+run-name: release-uat/v4/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.candidate_profile }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
 
 on:
   workflow_dispatch:
@@ -17,6 +17,14 @@ on:
           - firebase-backend
           - firebase-all
           - vercel
+      candidate_profile:
+        description: Exact tracked candidate profile exercised in the immutable staging deployment
+        required: true
+        type: choice
+        options:
+          - staging-provider-acceptance
+          - staging-safe-off
+          - staging-staffing-authority
       sms_provider:
         description: Exact deployment-owned owner-SMS provider exercised by this UAT pass
         required: true
@@ -103,6 +111,7 @@ jobs:
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
           RELEASE_TARGET: ${{ inputs.target }}
+          CANDIDATE_PROFILE: ${{ inputs.candidate_profile }}
           SMS_PROVIDER: ${{ inputs.sms_provider }}
           SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
@@ -118,6 +127,7 @@ jobs:
           node ./scripts/release-uat-attestation.mjs \
             --release-sha "${RELEASE_SHA}" \
             --target "${RELEASE_TARGET}" \
+            --candidate-profile "${CANDIDATE_PROFILE}" \
             --sms-provider "${SMS_PROVIDER}" \
             --sms-configuration-generation "${SMS_CONFIGURATION_GENERATION}" \
             --rollback-sha "${ROLLBACK_SHA}" \
@@ -139,6 +149,7 @@ jobs:
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
           RELEASE_TARGET: ${{ inputs.target }}
+          CANDIDATE_PROFILE: ${{ inputs.candidate_profile }}
           SMS_PROVIDER: ${{ inputs.sms_provider }}
           SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
           STAGING_ID: ${{ inputs.staging_id }}
@@ -147,6 +158,7 @@ jobs:
             echo "### Release UAT attested"
             echo "- Release SHA: ${RELEASE_SHA}"
             echo "- Target: ${RELEASE_TARGET}"
+            echo "- Candidate profile: ${CANDIDATE_PROFILE}"
             echo "- Owner SMS provider: ${SMS_PROVIDER}"
             echo "- Owner SMS configuration generation: ${SMS_CONFIGURATION_GENERATION}"
             echo "- Immutable staging id: ${STAGING_ID}"

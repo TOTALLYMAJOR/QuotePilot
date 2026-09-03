@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  getQuoteById,
   getQuoteHistory,
   requestQuoteApproval,
   resolveQuoteApprovalRequest,
@@ -23,6 +24,10 @@ import {
   WORKFLOW_TIMING_INPUT_SCAN_LIMIT,
   buildWorkflowTimingCues
 } from "../lib/workflowTimingCues";
+import {
+  WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE,
+  WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
+} from "../lib/workspaceTaskJourney";
 import { buildRevenueAutopilotPreview } from "../lib/revenueAutopilotPreview";
 import {
   acknowledgeRevenueAutopilotReply,
@@ -44,6 +49,7 @@ import {
   resetDefinitiveDecisionDebtPolicyAttempt
 } from "../lib/decisionDebtClient";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { useWorkspaceActionFeedback } from "../context/WorkspaceActionFeedbackContext";
 import DecisionDebtPanel from "./DecisionDebtPanel";
 import RevenueAutopilotOperations from "./RevenueAutopilotOperations";
 import RevenueAutopilotPreviewPanel from "./RevenueAutopilotPreviewPanel";
@@ -65,6 +71,20 @@ const PROVIDER_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
   "send_final_balance_request"
 ]);
+
+export function isCanonicalWorkflowDateOnly(value = "") {
+  const candidate = String(value || "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(candidate);
+  if (!match) return false;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
 
 export function resolveWorkflowFocusTarget({
   focusQuoteId = "",
@@ -107,6 +127,151 @@ export function resolveWorkflowFocusTarget({
   return item
     ? { tab: "attention", itemId: String(item.id || "").trim() }
     : null;
+}
+
+const FOLLOW_UP_CONFIRMATION_FIELDS = Object.freeze([
+  "stage",
+  "dueDate",
+  "note",
+  "completed",
+  "completedAtISO",
+  "updatedAtISO",
+  "updatedByEmail"
+]);
+
+function followUpConfirmationShape(value) {
+  const source = record(value) ? value : {};
+  return {
+    stage: String(source.stage || "").trim(),
+    dueDate: String(source.dueDate || "").trim(),
+    note: String(source.note || "").trim(),
+    completed: source.completed === true,
+    completedAtISO: String(source.completedAtISO || "").trim(),
+    updatedAtISO: String(source.updatedAtISO || "").trim(),
+    updatedByEmail: String(source.updatedByEmail || "").trim().toLowerCase()
+  };
+}
+
+function confirmedInstant(value, nowISO) {
+  const candidate = String(value || "").trim();
+  const nowMs = Date.parse(String(nowISO || ""));
+  if (
+    !/^\d{4}-\d{2}-\d{2}T/u.test(candidate)
+    || !/(?:Z|[+-]\d{2}:\d{2})$/iu.test(candidate)
+    || !Number.isFinite(nowMs)
+  ) return "";
+  const candidateMs = Date.parse(candidate);
+  if (!Number.isFinite(candidateMs) || candidateMs > nowMs) return "";
+  return new Date(candidateMs).toISOString();
+}
+
+/**
+ * Confirms only one exact follow-up completion from a server-only quote read.
+ * This is current-record confirmation, not an immutable provider receipt.
+ */
+export function verifyFollowUpCompletionReadback({
+  organizationId = "",
+  quoteId = "",
+  quote = null,
+  expectedFollowUp = null,
+  nowISO = "",
+  timeZone = "UTC"
+} = {}) {
+  const expectedOrganizationId = String(organizationId || "").trim();
+  const expectedQuoteId = String(quoteId || "").trim();
+  if (!expectedOrganizationId || !expectedQuoteId || !record(quote)) {
+    return { ok: false, code: "invalid_readback" };
+  }
+  if (
+    String(quote.id || "").trim() !== expectedQuoteId
+    || String(quote.organizationId || "").trim() !== expectedOrganizationId
+  ) {
+    return { ok: false, code: "scope_mismatch" };
+  }
+  if (!record(expectedFollowUp)) {
+    return { ok: false, code: "firebase_write_expectation_missing" };
+  }
+
+  const confirmedFollowUp = followUpConfirmationShape(quote.workflow?.followUp);
+  if (!confirmedFollowUp.completed) {
+    return { ok: false, code: "completion_missing" };
+  }
+  const expected = followUpConfirmationShape(expectedFollowUp);
+  if (FOLLOW_UP_CONFIRMATION_FIELDS.some((field) => expected[field] !== confirmedFollowUp[field])) {
+    return { ok: false, code: "write_readback_mismatch" };
+  }
+
+  const completedAtISO = confirmedInstant(confirmedFollowUp.completedAtISO, nowISO);
+  const updatedAtISO = confirmedInstant(confirmedFollowUp.updatedAtISO, nowISO);
+  if (
+    !completedAtISO
+    || !updatedAtISO
+    || Date.parse(updatedAtISO) < Date.parse(completedAtISO)
+    || !/^[^@\s]+@[^@\s]+$/u.test(confirmedFollowUp.updatedByEmail)
+  ) {
+    return { ok: false, code: "invalid_completion_evidence" };
+  }
+
+  try {
+    const attentionSummary = buildWorkflowAttentionSummary([quote], { nowISO });
+    if (attentionSummary.items.some((item) => (
+      item.type === "follow_up" && String(item.quoteId || "").trim() === expectedQuoteId
+    ))) {
+      return { ok: false, code: "attention_still_open" };
+    }
+    const timing = buildWorkflowTimingCues({
+      attentionSummary,
+      quotes: [quote],
+      nowISO,
+      timeZone
+    });
+    const confirmations = timing.receipts.filter((receipt) => (
+      receipt.kind === "follow_up_completed"
+      && receipt.quoteId === expectedQuoteId
+      && receipt.source === "quote.workflow.follow_up"
+      && receipt.completedAtISO === completedAtISO
+    ));
+    if (confirmations.length !== 1) return { ok: false, code: "confirmation_missing" };
+    return {
+      ok: true,
+      proof: {
+        verifierId: WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID,
+        proofId: `follow-up-completed:${confirmations[0].completedAtISO}`,
+        proofType: WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE
+      }
+    };
+  } catch {
+    return { ok: false, code: "invalid_completion_evidence" };
+  }
+}
+
+export function buildFollowUpCompletionChangedFacts(taskOutcome) {
+  return Object.freeze([
+    "Internal follow-up marked complete",
+    ...(taskOutcome?.taskState === "persisted" ? ["Current task marked completed"] : [])
+  ]);
+}
+
+function followUpTaskJourneyForQuote(journey, organizationId, quoteId) {
+  const scopedOrganizationId = String(organizationId || "").trim();
+  const scopedQuoteId = String(quoteId || "").trim();
+  const expectedRequestId = scopedQuoteId ? `follow-up:${scopedQuoteId}` : "";
+  if (
+    !journey
+    || !["in_progress", "uncertain"].includes(journey.phase)
+    || !String(journey.startedAtISO || "").trim()
+    || journey.organizationId !== scopedOrganizationId
+    || journey.destination !== "workflow"
+    || journey.intentId !== "review_follow_up"
+    || journey.object?.type !== "workflow-item"
+    || journey.object?.id !== expectedRequestId
+    || journey.focus?.quoteId !== scopedQuoteId
+    || journey.focus?.attentionType !== "follow_up"
+    || journey.focus?.requestId !== expectedRequestId
+  ) {
+    return null;
+  }
+  return journey;
 }
 
 function fmtDateTime(value) {
@@ -409,12 +574,20 @@ export function SalesWorkflowView({
   focusRequestId = "",
   arrivalContext = null,
   onArrivalResolution = null,
+  activeTaskJourney = null,
+  onTaskOutcome = null,
   organizationId = "",
   currentUserEmail = "",
   currentUserRole = "customer",
   tenantTimeZone = "",
   onToast
 }) {
+  const {
+    available: workspaceActionFeedbackAvailable,
+    feedbackRecords: workspaceActionFeedbackRecords,
+    beginActionFeedback,
+    transitionActionFeedback
+  } = useWorkspaceActionFeedback();
   const embedded = presentation === "embedded";
   const [state, setState] = useState({
     loading: Boolean(open),
@@ -436,6 +609,13 @@ export function SalesWorkflowView({
   const [resolutionNotes, setResolutionNotes] = useState({});
   const [handlingNotes, setHandlingNotes] = useState({});
   const [busyKey, setBusyKey] = useState("");
+  const [followUpConfirmation, setFollowUpConfirmation] = useState({
+    phase: "idle",
+    quoteId: "",
+    reason: "",
+    shared: false
+  });
+  const [followUpValidationField, setFollowUpValidationField] = useState("");
   const [workflowReadError, setWorkflowReadError] = useState("");
   const [autopilotOperations, setAutopilotOperations] = useState({
     loading: false,
@@ -474,19 +654,30 @@ export function SalesWorkflowView({
   const routeHeadingRef = useWorkspaceRouteHeadingFocus(Boolean(open && embedded));
   const detailHeadingRef = useRef(null);
   const attentionEmptyHeadingRef = useRef(null);
+  const followUpStageRef = useRef(null);
+  const followUpDueDateRef = useRef(null);
   const tabRefs = useRef({});
   const returnFocusRef = useRef(null);
   const skipReturnFocusRef = useRef(false);
   const tabInteractedRef = useRef(false);
   const loadGenerationRef = useRef(0);
   const arrivalReportRef = useRef("");
+  const followUpConfirmationGenerationRef = useRef(0);
+  const followUpConfirmationExpectationRef = useRef(null);
+  const followUpSaveOperationRef = useRef(null);
+  const followUpConfirmationOperationRef = useRef(null);
+  const followUpMountedRef = useRef(true);
   const autopilotGenerationRef = useRef(0);
   const decisionDebtGenerationRef = useRef(0);
   const workflowScopeRef = useRef("");
+  const activeFollowUpTaskIdentityRef = useRef("");
   const onCloseRef = useRef(onClose);
   workflowScopeRef.current = [organizationId, currentUserRole, currentUserEmail]
     .map((value) => String(value || "").trim().toLowerCase())
     .join(":");
+  activeFollowUpTaskIdentityRef.current = activeTaskJourney
+    ? `${activeTaskJourney.taskId}:${activeTaskJourney.startedAtISO}`
+    : "";
   const exactArrivalActive = Boolean(
     open
     && arrivalContext?.surfaceId === "workflow"
@@ -524,6 +715,111 @@ export function SalesWorkflowView({
     arrivalReportRef.current = "";
     if (exactArrivalActive) reportArrivalResolution({ status: "pending" });
   }, [exactArrivalActive, exactArrivalKey, reportArrivalResolution]);
+
+  useEffect(() => {
+    followUpConfirmationGenerationRef.current += 1;
+    followUpConfirmationExpectationRef.current = null;
+    const abandonedOperations = [
+      followUpSaveOperationRef.current,
+      followUpConfirmationOperationRef.current
+    ].filter((operation) => (
+      operation
+      && operation.workflowScope !== workflowScopeRef.current
+    ));
+    const abandonedBusyKeys = new Set(
+      abandonedOperations.map((operation) => operation.busyKey)
+    );
+    const abandonedFeedbackAttempts = new Set();
+    abandonedOperations.forEach((operation) => {
+      const selector = operation.feedbackSelector;
+      const attemptKey = selector
+        ? JSON.stringify([selector.attemptId, selector.generation])
+        : "";
+      if (
+        !workspaceActionFeedbackAvailable
+        || !selector
+        || abandonedFeedbackAttempts.has(attemptKey)
+      ) {
+        return;
+      }
+      abandonedFeedbackAttempts.add(attemptKey);
+      transitionActionFeedback({
+        ...selector,
+        phase: "uncertain",
+        message: "The request was sent, but staff identity changed before exact confirmation completed.",
+        changed: ["Follow-up completion remains unconfirmed"],
+        unchanged: [
+          "Current task remains open",
+          "Customer contact was not sent",
+          "Payment and booking evidence did not change",
+          "No provider outcome was inferred"
+        ],
+        dispatchState: "dispatched",
+        nextAction: { id: "reconcile", label: "Review exact follow-up" }
+      });
+    });
+    if (abandonedOperations.includes(followUpSaveOperationRef.current)) {
+      followUpSaveOperationRef.current = null;
+    }
+    if (abandonedOperations.includes(followUpConfirmationOperationRef.current)) {
+      followUpConfirmationOperationRef.current = null;
+    }
+    setBusyKey((current) => {
+      const pendingOperation = followUpConfirmationOperationRef.current
+        || followUpSaveOperationRef.current;
+      if (pendingOperation?.workflowScope === workflowScopeRef.current) {
+        return pendingOperation.busyKey;
+      }
+      if (abandonedBusyKeys.has(current)) return "";
+      return current.startsWith("confirm-followup:") ? "" : current;
+    });
+    setFollowUpConfirmation({ phase: "idle", quoteId: "", reason: "", shared: false });
+    setFollowUpValidationField("");
+    return () => {
+      followUpConfirmationGenerationRef.current += 1;
+      followUpConfirmationExpectationRef.current = null;
+    };
+  }, [
+    activeTaskJourney?.startedAtISO,
+    activeTaskJourney?.taskId,
+    currentUserEmail,
+    currentUserRole,
+    focusAttentionType,
+    focusQuoteId,
+    focusRequestId,
+    organizationId,
+    transitionActionFeedback,
+    workspaceActionFeedbackAvailable
+  ]);
+
+  useEffect(() => {
+    followUpMountedRef.current = true;
+    return () => {
+      followUpMountedRef.current = false;
+      followUpConfirmationGenerationRef.current += 1;
+      followUpConfirmationExpectationRef.current = null;
+      const abandonedOperation = followUpConfirmationOperationRef.current
+        || followUpSaveOperationRef.current;
+      if (workspaceActionFeedbackAvailable && abandonedOperation?.feedbackSelector) {
+        transitionActionFeedback({
+          ...abandonedOperation.feedbackSelector,
+          phase: "uncertain",
+          message: "The request was sent, but this view closed before exact confirmation completed.",
+          changed: ["Follow-up completion remains unconfirmed"],
+          unchanged: [
+            "Current task remains open",
+            "Customer contact was not sent",
+            "Payment and booking evidence did not change",
+            "No provider outcome was inferred"
+          ],
+          dispatchState: "dispatched",
+          nextAction: { id: "reconcile", label: "Review exact follow-up" }
+        });
+      }
+      followUpSaveOperationRef.current = null;
+      followUpConfirmationOperationRef.current = null;
+    };
+  }, [transitionActionFeedback, workspaceActionFeedbackAvailable]);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -694,7 +990,16 @@ export function SalesWorkflowView({
     setApprovalNote("");
     setResolutionNotes({});
     setHandlingNotes({});
-    setBusyKey("");
+    setBusyKey(() => {
+      const pendingOperation = followUpConfirmationOperationRef.current
+        || followUpSaveOperationRef.current;
+      return pendingOperation?.workflowScope === workflowScopeRef.current
+        ? pendingOperation.busyKey
+        : "";
+    });
+    followUpConfirmationGenerationRef.current += 1;
+    followUpConfirmationExpectationRef.current = null;
+    setFollowUpConfirmation({ phase: "idle", quoteId: "", reason: "", shared: false });
     setWorkflowReadError("");
     setAutopilotConfigurationOpen(false);
     setAutopilotOperations({
@@ -762,9 +1067,20 @@ export function SalesWorkflowView({
     () => state.quotes.find((item) => item.id === selectedQuoteId) || null,
     [state.quotes, selectedQuoteId]
   );
+  const selectedFollowUpTaskJourney = useMemo(
+    () => exactArrivalActive
+      ? followUpTaskJourneyForQuote(
+          activeTaskJourney,
+          organizationId,
+          selectedQuote?.id
+        )
+      : null,
+    [activeTaskJourney, exactArrivalActive, organizationId, selectedQuote?.id]
+  );
 
   useEffect(() => {
     setFollowUpDraft(followUpFromQuote(selectedQuote));
+    setFollowUpValidationField("");
   }, [selectedQuote]);
 
   const quoteSummaries = useMemo(
@@ -1045,6 +1361,15 @@ export function SalesWorkflowView({
         focusRequestId,
         attentionItems: attentionSummary.items
       });
+      if (
+        !target?.itemId
+        && focusAttentionType === "follow_up"
+        && followUpTaskJourneyForQuote(activeTaskJourney, organizationId, exactQuote.id)
+      ) {
+        target = { itemId: focusRequestId };
+        tab = "followups";
+        rowKind = "follow_up";
+      }
     }
 
     if (!target?.itemId) {
@@ -1076,13 +1401,81 @@ export function SalesWorkflowView({
             ? Array.from(dialogRef.current?.querySelectorAll("[data-decision-debt-id]") || []).find(
                 (candidate) => candidate.dataset.decisionDebtId === target.itemId
               )
+            : rowKind === "follow_up"
+              ? Array.from(dialogRef.current?.querySelectorAll("[data-follow-up-record-id]") || []).find(
+                  (candidate) => candidate.dataset.followUpRecordId === target.itemId
+                )
             : Array.from(dialogRef.current?.querySelectorAll("[data-attention-id]") || []).find(
                 (candidate) => candidate.dataset.attentionId === target.itemId
               );
-        row?.scrollIntoView({ behavior: "smooth", block: "center" });
+        row?.scrollIntoView({
+          behavior: rowKind === "follow_up" ? "auto" : "smooth",
+          block: rowKind === "follow_up" ? "start" : "center"
+        });
+        const alignExactFollowUpRecord = () => {
+          if (!row || rowKind !== "follow_up") return;
+          const continuityStack = document.querySelector(
+            '[data-workspace-continuity-stack="true"]'
+          );
+          if (
+            !continuityStack
+            || getComputedStyle(continuityStack).position !== "sticky"
+          ) {
+            return;
+          }
+
+          let stackRect = continuityStack.getBoundingClientRect();
+          let rowRect = row.getBoundingClientRect();
+          const requiredRowTop = stackRect.bottom + 8;
+          if (rowRect.top < requiredRowTop - 0.5) {
+            window.scrollBy({
+              top: rowRect.top - requiredRowTop,
+              behavior: "auto"
+            });
+            stackRect = continuityStack.getBoundingClientRect();
+            rowRect = row.getBoundingClientRect();
+          }
+
+          const headerActions = dialogRef.current?.querySelector(
+            ".modal-head .right-actions"
+          );
+          if (!headerActions) return;
+          const headerRect = headerActions.getBoundingClientRect();
+          const overlapsVertically = headerRect.bottom > stackRect.top + 1
+            && headerRect.top < stackRect.bottom - 1;
+          const overlapsHorizontally = headerRect.right > stackRect.left + 1
+            && headerRect.left < stackRect.right - 1;
+          if (overlapsVertically && overlapsHorizontally) {
+            const hideHeaderAboveDelta = headerRect.bottom - (stackRect.top - 8);
+            const maximumSafeDelta = Math.max(
+              0,
+              rowRect.top - (stackRect.bottom + 8)
+            );
+            const scrollDelta = Math.min(hideHeaderAboveDelta, maximumSafeDelta);
+            if (scrollDelta > 0.5) {
+              window.scrollBy({ top: scrollDelta, behavior: "auto" });
+            }
+          }
+        };
+        alignExactFollowUpRecord();
         row?.focus({ preventScroll: true });
         if (row && document.activeElement === row) {
           reportArrivalResolution({ status: "resolved", itemId: target.itemId });
+          if (rowKind === "follow_up") {
+            let remainingAlignmentFrames = 4;
+            const settleExactFollowUpRecord = () => {
+              const frame = window.requestAnimationFrame(() => {
+                alignExactFollowUpRecord();
+                row.focus({ preventScroll: true });
+                remainingAlignmentFrames -= 1;
+                if (remainingAlignmentFrames > 0) {
+                  settleExactFollowUpRecord();
+                }
+              });
+              arrivalFocusFrames.push(frame);
+            };
+            settleExactFollowUpRecord();
+          }
           return;
         }
         reportArrivalResolution({
@@ -1098,6 +1491,7 @@ export function SalesWorkflowView({
     return () => arrivalFocusFrames.forEach((frame) => window.cancelAnimationFrame(frame));
   }, [
     approvalQueue,
+    activeTaskJourney,
     attentionSummary.items,
     autopilotAttentionTruncated,
     autopilotOperations.error,
@@ -1111,6 +1505,7 @@ export function SalesWorkflowView({
     focusAttentionType,
     focusQuoteId,
     focusRequestId,
+    organizationId,
     reportArrivalResolution,
     state.error,
     state.loading,
@@ -1124,6 +1519,7 @@ export function SalesWorkflowView({
       !open
       || state.loading
       || autopilotOperations.loading
+      || exactArrivalActive
       || tabInteractedRef.current
       || activeTab !== "followups"
       || attentionSummary.quoteCount < 1
@@ -1133,6 +1529,7 @@ export function SalesWorkflowView({
     activeTab,
     attentionSummary.quoteCount,
     autopilotOperations.loading,
+    exactArrivalActive,
     open,
     state.loading
   ]);
@@ -1222,19 +1619,386 @@ export function SalesWorkflowView({
     }));
   };
 
+  const reportFollowUpTaskOutcome = (phase, taskJourney, proof = null) => {
+    if (!taskJourney || typeof onTaskOutcome !== "function") return null;
+    return onTaskOutcome({
+      organizationId: String(organizationId || "").trim(),
+      startedAtISO: taskJourney.startedAtISO,
+      taskId: taskJourney.taskId,
+      focus: {
+        quoteId: taskJourney.focus.quoteId,
+        attentionType: taskJourney.focus.attentionType,
+        requestId: taskJourney.focus.requestId
+      },
+      phase,
+      proof: phase === "resolved" ? proof : null
+    });
+  };
+
+  const followUpUnchangedFacts = () => [
+    "Customer contact was not sent",
+    "Payment and booking evidence did not change",
+    "No provider outcome was inferred"
+  ];
+
+  const transitionFollowUpActionFeedback = (selector, phase, fields = {}) => {
+    if (!workspaceActionFeedbackAvailable || !selector) return null;
+    return transitionActionFeedback({
+      ...selector,
+      phase,
+      ...fields
+    });
+  };
+
+  const followUpFeedbackSelectorFromRecord = (feedback) => {
+    if (!feedback) return null;
+    return {
+      attemptId: feedback.attemptId,
+      actionId: feedback.actionId,
+      generation: feedback.generation,
+      object: feedback.object
+    };
+  };
+
+  const findFollowUpFeedbackSelector = ({ quoteId, taskJourney }) => {
+    if (!taskJourney) return null;
+    const generation = `${taskJourney.taskId}:${taskJourney.startedAtISO}`;
+    const feedback = workspaceActionFeedbackRecords.find((candidate) => (
+      candidate.actionId === "complete-follow-up"
+      && candidate.object?.kind === "workflow-item"
+      && candidate.object?.id === `follow-up:${quoteId}`
+      && candidate.generation === generation
+      && candidate.phase === "uncertain"
+    ));
+    return followUpFeedbackSelectorFromRecord(feedback);
+  };
+
+  const followUpOperationIsLive = (operation) => Boolean(
+    operation
+    && followUpMountedRef.current
+    && workflowScopeRef.current === operation.workflowScope
+  );
+
+  const followUpOperationIsCurrent = (operation) => Boolean(
+    followUpOperationIsLive(operation)
+    && followUpConfirmationGenerationRef.current === operation.uiGeneration
+  );
+
+  const followUpOperationOwnsActiveTask = (operation) => Boolean(
+    operation?.taskJourney
+    && activeFollowUpTaskIdentityRef.current
+      === `${operation.taskJourney.taskId}:${operation.taskJourney.startedAtISO}`
+  );
+
+  const beginFollowUpActionFeedback = ({ quoteId, quoteNumber, taskJourney }) => {
+    if (!workspaceActionFeedbackAvailable) return null;
+    return beginActionFeedback({
+      actionId: "complete-follow-up",
+      actionLabel: "Complete follow-up",
+      generation: `${taskJourney.taskId}:${taskJourney.startedAtISO}`,
+      object: {
+        kind: "workflow-item",
+        id: `follow-up:${quoteId}`,
+        label: `${quoteNumber || "Quote"} follow-up`
+      },
+      message: "Saving the internal follow-up and checking the exact workspace record.",
+      changed: ["Internal follow-up completion requested"],
+      unchanged: followUpUnchangedFacts()
+    });
+  };
+
+  const markFollowUpConfirmationUncertain = ({ operation, reason }) => {
+    if (!followUpOperationIsLive(operation)) return { status: "ignored" };
+    const taskOutcome = followUpOperationOwnsActiveTask(operation)
+      ? reportFollowUpTaskOutcome("uncertain", operation.taskJourney)
+      : operation.taskJourney ? { status: "recovery", reason: "task_generation_changed" } : null;
+    const browserLocal = reason === "connected_readback_required";
+    const feedbackResult = transitionFollowUpActionFeedback(operation.feedbackSelector, "uncertain", {
+      message: browserLocal
+        ? "This browser changed its local follow-up, but no exact connected record confirmed the outcome."
+        : "The write may have completed, but the exact same-workspace record did not confirm this outcome.",
+      changed: browserLocal
+        ? ["Browser-local follow-up changed"]
+        : ["Follow-up completion remains unconfirmed"],
+      unchanged: [
+        "Current task remains open",
+        ...followUpUnchangedFacts()
+      ],
+      nextAction: { id: "reconcile", label: "Review exact follow-up" }
+    });
+    if (followUpOperationIsCurrent(operation)) {
+      setFollowUpConfirmation({
+        phase: "uncertain",
+        quoteId: operation.quoteId,
+        reason: String(reason || "readback_unavailable"),
+        shared: Boolean(feedbackResult?.ok)
+      });
+    }
+    return { status: taskOutcome?.status || "uncertain", taskOutcome, feedbackResult };
+  };
+
+  const confirmFollowUpCompletion = async ({
+    quoteId,
+    quoteNumber,
+    taskJourney,
+    expectedFollowUp = null,
+    feedbackSelector = null,
+    uiGeneration = followUpConfirmationGenerationRef.current
+  }) => {
+    if (followUpConfirmationOperationRef.current) return { status: "busy" };
+    const actionScope = workflowScopeRef.current;
+    const confirmationBusyKey = `confirm-followup:${quoteId}`;
+    const selectedFeedback = workspaceActionFeedbackRecords.find((candidate) => (
+      candidate.attemptId === feedbackSelector?.attemptId
+      && candidate.generation === feedbackSelector?.generation
+    ));
+    const reconciling = selectedFeedback?.phase === "uncertain";
+    const operation = Object.freeze({
+      operationId: Symbol("confirm-follow-up"),
+      workflowScope: actionScope,
+      uiGeneration,
+      busyKey: confirmationBusyKey,
+      quoteId,
+      taskJourney,
+      feedbackSelector
+    });
+    followUpConfirmationOperationRef.current = operation;
+    setBusyKey(confirmationBusyKey);
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    const pendingFeedback = transitionFollowUpActionFeedback(feedbackSelector, "pending", {
+      message: "The write returned. Checking the exact same-workspace follow-up before confirming success.",
+      changed: ["Internal follow-up completion requested"],
+      unchanged: followUpUnchangedFacts(),
+      dispatchState: "dispatched",
+      mode: reconciling ? "reconcile" : undefined
+    });
+    if (followUpOperationIsCurrent(operation)) {
+      setFollowUpConfirmation({
+        phase: "pending",
+        quoteId,
+        reason: "readback_pending",
+        shared: Boolean(pendingFeedback?.ok)
+      });
+    }
+    try {
+      const authoritativeQuote = await getQuoteById(quoteId, { serverOnly: true });
+      if (!followUpOperationIsLive(operation)) return { status: "ignored" };
+      const verification = verifyFollowUpCompletionReadback({
+        organizationId,
+        quoteId,
+        quote: authoritativeQuote,
+        expectedFollowUp,
+        nowISO: new Date().toISOString(),
+        timeZone: tenantTimeZone || state.snapshotTimeZone || "UTC"
+      });
+      if (!verification.ok) {
+        return markFollowUpConfirmationUncertain({
+          operation,
+          reason: verification.code
+        });
+      }
+
+      if (followUpOperationIsCurrent(operation)) {
+        const snapshotContext = captureWorkflowSnapshotContext();
+        setState((prev) => ({
+          ...prev,
+          error: "",
+          feedback: "",
+          source: "firebase",
+          quotes: prev.quotes.map((quote) => (
+            quote.id === quoteId ? authoritativeQuote : quote
+          )),
+          ...snapshotContext
+        }));
+        followUpConfirmationExpectationRef.current = null;
+      }
+      const taskOutcome = followUpOperationOwnsActiveTask(operation)
+        ? reportFollowUpTaskOutcome(
+          "resolved",
+          taskJourney,
+          verification.proof
+        )
+        : taskJourney ? { status: "recovery", reason: "task_generation_changed" } : null;
+      if (!taskJourney || taskOutcome?.status === "resolved") {
+        const feedbackResult = transitionFollowUpActionFeedback(feedbackSelector, "succeeded", {
+          message: "The exact same-workspace record confirms this internal follow-up is complete.",
+          changed: buildFollowUpCompletionChangedFacts(taskOutcome),
+          unchanged: followUpUnchangedFacts(),
+          evidence: {
+            kind: "authoritative_readback",
+            id: verification.proof.proofId,
+            source: "quote.workflow.followUp",
+          },
+          nextAction: null
+        });
+        if (followUpOperationIsCurrent(operation)) {
+          setFollowUpConfirmation({
+            phase: "confirmed",
+            quoteId,
+            reason: "",
+            shared: Boolean(feedbackResult?.ok)
+          });
+        }
+        if (!feedbackResult?.ok) {
+          pushToast(`Follow-up completion confirmed for ${quoteNumber}.`, "success");
+        }
+        return { status: "confirmed", verification, taskOutcome, feedbackResult };
+      } else {
+        const feedbackResult = transitionFollowUpActionFeedback(feedbackSelector, "recovery", {
+          message: "The follow-up record is confirmed, but the current task could not be closed on this device.",
+          changed: ["Internal follow-up marked complete"],
+          unchanged: ["Current task tracking remains open", ...followUpUnchangedFacts()],
+          nextAction: { id: "reconcile", label: "Review exact follow-up" }
+        });
+        if (followUpOperationIsCurrent(operation)) {
+          setFollowUpConfirmation({
+            phase: "uncertain",
+            quoteId,
+            reason: "task_outcome_not_retained",
+            shared: Boolean(feedbackResult?.ok)
+          });
+        }
+        return { status: "recovery", verification, taskOutcome, feedbackResult };
+      }
+    } catch {
+      if (!followUpOperationIsLive(operation)) return { status: "ignored" };
+      return markFollowUpConfirmationUncertain({
+        operation,
+        reason: "readback_unavailable"
+      });
+    } finally {
+      if (followUpConfirmationOperationRef.current === operation) {
+        followUpConfirmationOperationRef.current = null;
+      }
+      if (followUpOperationIsLive(operation)) {
+        setBusyKey((current) => (current === confirmationBusyKey ? "" : current));
+      }
+    }
+  };
+
   const handleSaveFollowUp = async () => {
-    if (!selectedQuote?.id || !isStaff) return;
+    if (!selectedQuote?.id || !isStaff || followUpSaveOperationRef.current) return;
+    const normalizedFollowUpDueDate = String(followUpDraft.dueDate || "").trim();
+    const preflightField = !FOLLOW_UP_STAGES.some((stage) => stage.id === followUpDraft.stage)
+      ? "stage"
+      : normalizedFollowUpDueDate && !isCanonicalWorkflowDateOnly(normalizedFollowUpDueDate)
+        ? "dueDate"
+        : "";
+    const preflightError = preflightField === "stage"
+      ? "Choose a valid follow-up stage before saving."
+      : preflightField === "dueDate"
+        ? "Enter a real calendar date in YYYY-MM-DD format before saving."
+        : "";
+    if (preflightError) {
+      setState((prev) => ({ ...prev, error: preflightError, feedback: "" }));
+      setFollowUpValidationField(preflightField);
+      setFollowUpConfirmation({ phase: "idle", quoteId: "", reason: "", shared: false });
+      const invalidField = preflightField === "stage"
+        ? followUpStageRef.current
+        : followUpDueDateRef.current;
+      invalidField?.focus();
+      return;
+    }
+    setFollowUpValidationField("");
+    if (selectedFollowUpTaskJourney?.phase === "uncertain") {
+      setFollowUpConfirmation({
+        phase: "uncertain",
+        quoteId: selectedQuote.id,
+        reason: "retry_readback_only",
+        shared: Boolean(findFollowUpFeedbackSelector({
+          quoteId: selectedQuote.id,
+          taskJourney: selectedFollowUpTaskJourney
+        }))
+      });
+      return;
+    }
     const actionScope = workflowScopeRef.current;
     const actionBusyKey = `followup:${selectedQuote.id}`;
+    const uiGeneration = followUpConfirmationGenerationRef.current;
+    followUpConfirmationExpectationRef.current = null;
+    const unresolvedExistingFeedback = workspaceActionFeedbackRecords.some((candidate) => (
+      candidate.actionId === "complete-follow-up"
+      && candidate.object?.kind === "workflow-item"
+      && candidate.object?.id === `follow-up:${selectedQuote.id}`
+      && ["pending", "uncertain"].includes(candidate.phase)
+    ));
+    if (unresolvedExistingFeedback) {
+      setState((prev) => ({ ...prev, error: "", feedback: "" }));
+      setFollowUpConfirmation({
+        phase: "uncertain",
+        quoteId: selectedQuote.id,
+        reason: "existing_feedback_unresolved",
+        shared: false
+      });
+      return;
+    }
+    const trackedFeedbackRequired = Boolean(
+      selectedFollowUpTaskJourney && followUpDraft.completed
+    );
+    const startedFeedback = trackedFeedbackRequired
+      ? beginFollowUpActionFeedback({
+        quoteId: selectedQuote.id,
+        quoteNumber: selectedQuote.quoteNumber,
+        taskJourney: selectedFollowUpTaskJourney
+      })
+      : null;
+    if (trackedFeedbackRequired && !startedFeedback?.ok) {
+      setState((prev) => ({ ...prev, error: "", feedback: "" }));
+      setFollowUpConfirmation({
+        phase: "uncertain",
+        quoteId: selectedQuote.id,
+        reason: startedFeedback?.reason === "unresolved_feedback_exists"
+          ? "existing_feedback_unresolved"
+          : "feedback_contract_unavailable",
+        shared: false
+      });
+      return;
+    }
+    const feedbackSelector = startedFeedback?.ok && startedFeedback.selector
+      ? startedFeedback.selector
+      : null;
+    const operation = Object.freeze({
+      operationId: Symbol("save-follow-up"),
+      workflowScope: actionScope,
+      uiGeneration,
+      busyKey: actionBusyKey,
+      quoteId: selectedQuote.id,
+      taskJourney: selectedFollowUpTaskJourney,
+      feedbackSelector
+    });
+    followUpSaveOperationRef.current = operation;
+    if (selectedFollowUpTaskJourney && followUpDraft.completed) {
+      setFollowUpConfirmation({
+        phase: "pending",
+        quoteId: selectedQuote.id,
+        reason: "write_pending",
+        shared: Boolean(feedbackSelector)
+      });
+    }
     setBusyKey(actionBusyKey);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
-      const result = await updateQuoteFollowUp({
+      const updatePromise = updateQuoteFollowUp({
         quoteId: selectedQuote.id,
         ...followUpDraft,
         actorEmail: currentUserEmail
       });
-      if (workflowScopeRef.current !== actionScope) return;
+      if (selectedFollowUpTaskJourney && followUpDraft.completed) {
+        const dispatchedFeedback = transitionFollowUpActionFeedback(feedbackSelector, "pending", {
+          message: "The internal follow-up request was sent. Waiting for its exact result.",
+          changed: ["Internal follow-up completion requested"],
+          unchanged: followUpUnchangedFacts(),
+          dispatchState: "dispatched"
+        });
+        if (followUpOperationIsCurrent(operation) && !dispatchedFeedback?.ok) {
+          setFollowUpConfirmation((current) => ({ ...current, shared: false }));
+        }
+      }
+      const result = await updatePromise;
+      if (!followUpOperationIsLive(operation)) return;
+      if (result?.ok !== true || !record(result.followUp)) {
+        throw new Error("Follow-up save did not return its expected result.");
+      }
       applyQuoteLocally(selectedQuote.id, (quote) => ({
         ...quote,
         workflow: {
@@ -1243,15 +2007,93 @@ export function SalesWorkflowView({
           approvalRequests: quote.workflow?.approvalRequests || []
         }
       }));
-      reportSuccess(`Follow-up saved for ${selectedQuote.quoteNumber}.`);
+      if (!result.followUp.completed || !selectedFollowUpTaskJourney) {
+        setFollowUpConfirmation({ phase: "idle", quoteId: "", reason: "", shared: false });
+        reportSuccess(`Follow-up saved for ${selectedQuote.quoteNumber}.`);
+        return;
+      }
+      if (result.storage !== "firebase") {
+        markFollowUpConfirmationUncertain({
+          operation,
+          reason: "connected_readback_required"
+        });
+        return;
+      }
+      const confirmationExpectation = {
+        workflowScope: actionScope,
+        organizationId: String(organizationId || "").trim(),
+        quoteId: selectedQuote.id,
+        startedAtISO: selectedFollowUpTaskJourney.startedAtISO,
+        taskId: selectedFollowUpTaskJourney.taskId,
+        focus: {
+          quoteId: selectedFollowUpTaskJourney.focus.quoteId,
+          attentionType: selectedFollowUpTaskJourney.focus.attentionType,
+          requestId: selectedFollowUpTaskJourney.focus.requestId
+        },
+        followUp: followUpConfirmationShape(result.followUp),
+        feedbackSelector
+      };
+      if (followUpOperationIsCurrent(operation)) {
+        followUpConfirmationExpectationRef.current = confirmationExpectation;
+      }
+      await confirmFollowUpCompletion({
+        quoteId: selectedQuote.id,
+        quoteNumber: selectedQuote.quoteNumber,
+        taskJourney: selectedFollowUpTaskJourney,
+        expectedFollowUp: confirmationExpectation.followUp,
+        feedbackSelector,
+        uiGeneration
+      });
     } catch (err) {
-      if (workflowScopeRef.current !== actionScope) return;
-      setState((prev) => ({ ...prev, error: err?.message || "Failed to save follow-up." }));
+      if (!followUpOperationIsLive(operation)) return;
+      const trackedCompletion = Boolean(selectedFollowUpTaskJourney && followUpDraft.completed);
+      if (followUpOperationIsCurrent(operation)) {
+        setState((prev) => ({
+          ...prev,
+          error: trackedCompletion ? "" : err?.message || "Failed to save follow-up."
+        }));
+      }
+      if (trackedCompletion) {
+        markFollowUpConfirmationUncertain({
+          operation,
+          reason: "write_outcome_unconfirmed"
+        });
+      }
     } finally {
-      if (workflowScopeRef.current === actionScope) {
+      if (followUpSaveOperationRef.current === operation) {
+        followUpSaveOperationRef.current = null;
+      }
+      if (followUpOperationIsLive(operation)) {
         setBusyKey((current) => (current === actionBusyKey ? "" : current));
       }
     }
+  };
+
+  const handleRetryFollowUpConfirmation = () => {
+    if (!selectedQuote?.id || busyKey) return;
+    const expectation = followUpConfirmationExpectationRef.current;
+    const exactExpectation = expectation
+      && expectation.workflowScope === workflowScopeRef.current
+      && expectation.organizationId === String(organizationId || "").trim()
+      && expectation.quoteId === selectedQuote.id
+      && expectation.focus.quoteId === focusQuoteId
+      && expectation.focus.attentionType === focusAttentionType
+      && expectation.focus.requestId === focusRequestId
+      ? expectation
+      : null;
+    const feedbackSelector = exactExpectation?.feedbackSelector
+      || findFollowUpFeedbackSelector({
+        quoteId: selectedQuote.id,
+        taskJourney: selectedFollowUpTaskJourney
+      });
+    void confirmFollowUpCompletion({
+      quoteId: selectedQuote.id,
+      quoteNumber: selectedQuote.quoteNumber,
+      taskJourney: selectedFollowUpTaskJourney,
+      expectedFollowUp: exactExpectation?.followUp || null,
+      feedbackSelector,
+      uiGeneration: followUpConfirmationGenerationRef.current
+    });
   };
 
   const handleRequestApproval = async () => {
@@ -1817,6 +2659,9 @@ export function SalesWorkflowView({
     pendingAttempt: pendingAutopilotPolicyAttempt,
     reviewConfiguration: autopilotReviewRequestConfiguration
   });
+  const followUpValidationErrorId = selectedQuote?.id
+    ? `workflow-follow-up-${safeDomId(selectedQuote.id)}-validation-error`
+    : undefined;
 
   if (!open) return null;
 
@@ -1859,7 +2704,15 @@ export function SalesWorkflowView({
         <p className="visually-hidden" role="status" aria-live="polite">
           {state.loading ? "Loading sales workflow." : ""}
         </p>
-        {state.error && <p className="error-note" role="alert">{state.error}</p>}
+        {state.error && (
+          <p
+            className="error-note"
+            role="alert"
+            id={followUpValidationField ? followUpValidationErrorId : undefined}
+          >
+            {state.error}
+          </p>
+        )}
         {state.feedback && <p className="source-note">{state.feedback}</p>}
 
         <div className="workflow-metrics" aria-label="Sales workflow summary">
@@ -2311,14 +3164,104 @@ export function SalesWorkflowView({
                     )}
                   </section>
 
-                  <section className="workflow-form-section">
-                    <h4>Next follow-up</h4>
+                  <section
+                    className="workflow-form-section"
+                    aria-labelledby={`workflow-follow-up-${safeDomId(selectedQuote.id)}-heading`}
+                    aria-busy={[
+                      `followup:${selectedQuote.id}`,
+                      `confirm-followup:${selectedQuote.id}`
+                    ].includes(busyKey)}
+                    data-follow-up-record-id={`follow-up:${selectedQuote.id}`}
+                    tabIndex={-1}
+                  >
+                    <h4 id={`workflow-follow-up-${safeDomId(selectedQuote.id)}-heading`}>Next follow-up</h4>
+                    {followUpConfirmation.quoteId === selectedQuote.id
+                      && followUpConfirmation.phase === "pending" && (
+                      <p
+                        className="source-note"
+                        role={followUpConfirmation.shared ? undefined : "status"}
+                        aria-live={followUpConfirmation.shared ? undefined : "polite"}
+                        data-follow-up-confirmation-state="pending"
+                      >
+                        {followUpConfirmation.reason === "write_pending"
+                          ? "Saving the internal follow-up before checking the exact same-workspace record."
+                          : "Confirming completion from the exact same-workspace server record before closing this task."}
+                      </p>
+                    )}
+                    {followUpConfirmation.quoteId === selectedQuote.id
+                      && followUpConfirmation.phase === "confirmed" && (
+                      <p
+                        className="source-note"
+                        data-follow-up-confirmation-state="confirmed"
+                      >
+                        Completion confirmed from the exact same-workspace server record. This confirms only the internal follow-up.
+                      </p>
+                    )}
+                    {(
+                      followUpConfirmation.quoteId === selectedQuote.id
+                        && followUpConfirmation.phase === "uncertain"
+                    ) || (
+                      selectedFollowUpTaskJourney?.phase === "uncertain"
+                      && followUpConfirmation.phase === "idle"
+                    ) ? (
+                      <div
+                        className="warning-note"
+                        role={followUpConfirmation.shared ? undefined : "alert"}
+                        data-follow-up-confirmation-state="uncertain"
+                      >
+                        <strong>Completion needs confirmation.</strong>{" "}
+                        {followUpConfirmation.reason === "connected_readback_required"
+                          ? "The follow-up was saved in browser-local data, but no exact server record is available here."
+                          : followUpConfirmation.reason === "existing_feedback_unresolved"
+                            ? "An earlier follow-up attempt for this exact quote still needs confirmation, so no second write was sent."
+                          : followUpConfirmation.reason === "feedback_contract_unavailable"
+                            ? "Action feedback could not start, so the follow-up write was not sent."
+                          : followUpConfirmation.reason === "firebase_write_expectation_missing"
+                            ? "The exact prior connected-write details are no longer available, so this server read alone cannot close the task."
+                            : followUpConfirmation.reason === "task_outcome_not_retained"
+                              ? "The exact follow-up record is confirmed, but this device could not close the attached task."
+                            : "The save returned, but the exact same-workspace server record did not confirm this completion."}
+                        {" "}The task remains open; no customer contact, provider action, payment, or booking was inferred.
+                        <div className="right-actions">
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={followUpConfirmation.reason === "feedback_contract_unavailable"
+                              ? () => setFollowUpConfirmation({
+                                  phase: "idle",
+                                  quoteId: "",
+                                  reason: "",
+                                  shared: false
+                                })
+                              : handleRetryFollowUpConfirmation}
+                            disabled={busyKey === `confirm-followup:${selectedQuote.id}`}
+                          >
+                            {followUpConfirmation.reason === "feedback_contract_unavailable"
+                              ? "Return to save"
+                              : busyKey === `confirm-followup:${selectedQuote.id}`
+                              ? "Checking..."
+                              : "Retry confirmation"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="workflow-form-grid">
                       <label className="field">
                         <span>Stage</span>
                         <select
+                          ref={followUpStageRef}
                           value={followUpDraft.stage}
-                          onChange={(event) => setFollowUpDraft((prev) => ({ ...prev, stage: event.target.value }))}
+                          aria-invalid={followUpValidationField === "stage" || undefined}
+                          aria-describedby={followUpValidationField === "stage"
+                            ? followUpValidationErrorId
+                            : undefined}
+                          onChange={(event) => {
+                            setFollowUpDraft((prev) => ({ ...prev, stage: event.target.value }));
+                            if (followUpValidationField === "stage") {
+                              setFollowUpValidationField("");
+                              setState((prev) => ({ ...prev, error: "" }));
+                            }
+                          }}
                         >
                           {FOLLOW_UP_STAGES.map((item) => (
                             <option key={item.id} value={item.id}>{item.label}</option>
@@ -2328,9 +3271,20 @@ export function SalesWorkflowView({
                       <label className="field">
                         <span>Due date</span>
                         <input
+                          ref={followUpDueDateRef}
                           type="date"
                           value={followUpDraft.dueDate}
-                          onChange={(event) => setFollowUpDraft((prev) => ({ ...prev, dueDate: event.target.value }))}
+                          aria-invalid={followUpValidationField === "dueDate" || undefined}
+                          aria-describedby={followUpValidationField === "dueDate"
+                            ? followUpValidationErrorId
+                            : undefined}
+                          onChange={(event) => {
+                            setFollowUpDraft((prev) => ({ ...prev, dueDate: event.target.value }));
+                            if (followUpValidationField === "dueDate") {
+                              setFollowUpValidationField("");
+                              setState((prev) => ({ ...prev, error: "" }));
+                            }
+                          }}
                         />
                       </label>
                       <label className="workflow-complete-toggle">
@@ -2355,8 +3309,14 @@ export function SalesWorkflowView({
                       <button
                         type="button"
                         className="cta compact"
+                        data-follow-up-save-action="true"
                         onClick={handleSaveFollowUp}
-                        disabled={busyKey === `followup:${selectedQuote.id}`}
+                        disabled={Boolean(busyKey)
+                          || selectedFollowUpTaskJourney?.phase === "uncertain"
+                          || (
+                            followUpConfirmation.quoteId === selectedQuote.id
+                            && followUpConfirmation.phase === "uncertain"
+                          )}
                       >
                         {busyKey === `followup:${selectedQuote.id}` ? "Saving..." : "Save Follow-up"}
                       </button>

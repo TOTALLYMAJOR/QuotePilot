@@ -1,11 +1,12 @@
 {
-  "schema": "com.mbmapps.quotepilot.release-uat-checklist/v3",
-  "version": "2026-08-29.1",
+  "schema": "com.mbmapps.quotepilot.release-uat-checklist/v4",
+  "version": "2026-09-03.1",
   "maximumAttestationAgeHours": 24,
   "candidateProfiles": [
     {
       "id": "staging-safe-off",
       "label": "Fixed isolated release candidate with Ambient and staffing presentation enabled while buyer, outbound provider, Commercial Change, Revenue Autopilot, and operational staffing authority remain fail-closed.",
+      "smsProvider": "none",
       "itemStates": {
         "staging.immutable-release": { "state": "applicable" },
         "security.provider-secret-cutover": {
@@ -113,6 +114,7 @@
     {
       "id": "staging-staffing-authority",
       "label": "Fixed isolated staffing acceptance candidate with presentation and global staffing authority enabled for one explicitly authorized disposable tenant while buyer, outbound provider, Commercial Change, and Revenue Autopilot remain fail-closed.",
+      "smsProvider": "none",
       "itemStates": {
         "staging.immutable-release": { "state": "applicable" },
         "security.provider-secret-cutover": {
@@ -210,6 +212,57 @@
         "sms.twilio-controlled-lifecycle": {
           "state": "blocked",
           "reason": "The profile fixes the SMS provider to none and authorizes no Twilio provider traffic."
+        },
+        "sms.disabled-nonblocking": { "state": "applicable" }
+      }
+    },
+    {
+      "id": "staging-provider-acceptance",
+      "label": "Fixed isolated acceptance sequence with Resend, test-only quote and buyer Stripe rails, public buyer access, and staffing authority enabled for controlled records; Commercial Change, Revenue Autopilot, and SMS remain off, and the window must finish with same-SHA safe-off Firebase and Vercel receipts.",
+      "smsProvider": "none",
+      "itemStates": {
+        "staging.immutable-release": { "state": "applicable" },
+        "security.provider-secret-cutover": { "state": "applicable" },
+        "auth.password-recovery": { "state": "applicable" },
+        "buyer.public-entry-turnstile": { "state": "applicable" },
+        "buyer.public-initiation-controls": { "state": "applicable" },
+        "buyer.hosted-invoice-lifecycle": { "state": "applicable" },
+        "buyer.pending-invite-activation": { "state": "applicable" },
+        "buyer.verified-activation-surface": { "state": "applicable" },
+        "quote.save": { "state": "applicable" },
+        "quote.authoritative-create": { "state": "applicable" },
+        "quote.authoritative-edit": { "state": "applicable" },
+        "quote.terminal-guards": { "state": "applicable" },
+        "quote.legacy-bulk-purge-denied": { "state": "applicable" },
+        "quote.legacy-bulk-purge-ui-absent": { "state": "applicable" },
+        "history.open": { "state": "applicable" },
+        "operator.authenticated-workspace-journey": { "state": "applicable" },
+        "portal.decision": { "state": "applicable" },
+        "delivery.current-issuance": { "state": "applicable" },
+        "delivery.invalid-issuance": { "state": "applicable" },
+        "delivery.link-surface-gating": { "state": "applicable" },
+        "approval.execution-audit-replay": { "state": "applicable" },
+        "contract.approved-conversion": { "state": "applicable" },
+        "payment.deposit-scoped-dispatch": { "state": "applicable" },
+        "payment.final-balance-scoped-dispatch": { "state": "applicable" },
+        "payment.webhook-reconciliation": { "state": "applicable" },
+        "payment.cross-rail-isolation": { "state": "applicable" },
+        "payment.customer-projection-privacy": { "state": "applicable" },
+        "payment.customer-surface": { "state": "applicable" },
+        "staffing.disabled-authority-boundary": { "state": "applicable" },
+        "staffing.authoritative-plan": { "state": "applicable" },
+        "staffing.authoritative-surface": { "state": "applicable" },
+        "proposal.pdf": { "state": "applicable" },
+        "integrations.status": { "state": "applicable" },
+        "sms.deployment-owned-provider": { "state": "applicable" },
+        "sms.owner-alert-surface": { "state": "applicable" },
+        "sms.pingram-signed-lifecycle": {
+          "state": "blocked",
+          "reason": "This acceptance sequence fixes the deployment-owned SMS provider to none and authorizes no Pingram traffic."
+        },
+        "sms.twilio-controlled-lifecycle": {
+          "state": "blocked",
+          "reason": "This acceptance sequence fixes the deployment-owned SMS provider to none and authorizes no Twilio traffic."
         },
         "sms.disabled-nonblocking": { "state": "applicable" }
       }

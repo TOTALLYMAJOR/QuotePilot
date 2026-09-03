@@ -230,6 +230,10 @@ function shouldUseLocalCustomerDirectoryFixture() {
   return ["1", "true", "yes", "on"].includes(String(env.VITE_E2E_BYPASS_AUTH || "").trim().toLowerCase());
 }
 
+function hasExplicitLocalQuoteDirectory() {
+  return globalThis.localStorage?.getItem("quoteWizard.quotes") !== null;
+}
+
 function localCustomersFromQuotes(quotes = []) {
   const records = new Map();
   quotes.forEach((quote) => {
@@ -254,6 +258,23 @@ function localCustomersFromQuotes(quotes = []) {
   return [...records.values()].sort(compareCustomers);
 }
 
+function buildLocalCustomerDirectoryPage({ quotes, search, cursor, pageSize }) {
+  const customers = localCustomersFromQuotes(quotes)
+    .filter((customer) => customerMatchesSearch(customer, search));
+  const cursorIndex = cursor
+    ? customers.findIndex((customer) => customer.id === cursor)
+    : -1;
+  const startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+  const page = customers.slice(startIndex, startIndex + pageSize + 1);
+  const hasMore = page.length > pageSize;
+  const items = page.slice(0, pageSize);
+  return {
+    source: "local",
+    items,
+    nextCursor: hasMore ? encodeCustomerPathId(items.at(-1)?.id) : ""
+  };
+}
+
 export async function getCustomerDirectoryPage({
   organizationId = "",
   search = "",
@@ -267,6 +288,16 @@ export async function getCustomerDirectoryPage({
   const normalizedPageSize = normalizePageSize(pageSize);
 
   if (import.meta.env.DEV && shouldUseLocalCustomerDirectoryFixture()) {
+    const history = await getQuoteHistory({ organizationId: orgId });
+    const tenantQuotes = history.quotes.filter((quote) => text(quote?.organizationId) === orgId);
+    if (hasExplicitLocalQuoteDirectory()) {
+      return buildLocalCustomerDirectoryPage({
+        quotes: tenantQuotes,
+        search: normalizedSearch,
+        cursor: normalizedCursor,
+        pageSize: normalizedPageSize
+      });
+    }
     const { getLocalCustomerDirectoryFixturePage } = await import("./localCustomerDirectoryFixture");
     return getLocalCustomerDirectoryFixturePage({
       organizationId: orgId,
@@ -279,20 +310,12 @@ export async function getCustomerDirectoryPage({
   if (!firebaseReady || !db) {
     const history = await getQuoteHistory({ organizationId: orgId });
     const tenantQuotes = history.quotes.filter((quote) => text(quote?.organizationId) === orgId);
-    const customers = localCustomersFromQuotes(tenantQuotes)
-      .filter((customer) => customerMatchesSearch(customer, normalizedSearch));
-    const cursorIndex = normalizedCursor
-      ? customers.findIndex((customer) => customer.id === normalizedCursor)
-      : -1;
-    const startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
-    const page = customers.slice(startIndex, startIndex + normalizedPageSize + 1);
-    const hasMore = page.length > normalizedPageSize;
-    const items = page.slice(0, normalizedPageSize);
-    return {
-      source: "local",
-      items,
-      nextCursor: hasMore ? encodeCustomerPathId(items.at(-1)?.id) : ""
-    };
+    return buildLocalCustomerDirectoryPage({
+      quotes: tenantQuotes,
+      search: normalizedSearch,
+      cursor: normalizedCursor,
+      pageSize: normalizedPageSize
+    });
   }
 
   const customersRef = collection(db, "organizations", orgId, "customers");
@@ -625,28 +648,38 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
   const id = text(customerId);
   if (!orgId || !id) throw new Error("organizationId and customerId are required for Customer 360.");
 
+  let localReviewHistory = null;
   if (import.meta.env.DEV && shouldUseLocalCustomerDirectoryFixture()) {
-    const { getLocalCustomerWorkspaceFixture } = await import("./localCustomerDirectoryFixture");
-    const fixture = getLocalCustomerWorkspaceFixture({ organizationId: orgId, customerId: id });
-    if (!fixture) return null;
-    return {
-      source: fixture.source,
-      organizationId: orgId,
-      ...buildCustomerWorkspaceDto({
-        customer: fixture.customer,
-        quotes: fixture.quotes,
-        versionsByQuote: fixture.versionsByQuote,
-        revenueAutopilotEmailControls: null,
-        revenueAutopilotEmailControlsError: "Customer email controls are unavailable in local review data.",
-        quotePageInfo: fixture.quotePageInfo,
-        nowISO: "2026-08-15T17:00:00.000Z",
-        todayDate: "2026-08-15"
-      })
-    };
+    localReviewHistory = await getQuoteHistory({ organizationId: orgId });
+    const hasSeededCustomer = localReviewHistory.quotes.some((quote) => (
+      text(quote?.organizationId) === orgId
+      && text(quote?.customerId) === id
+    ));
+    // Browser acceptance seeds exact customer identities. Prefer those records
+    // while retaining the fixed review directory when no explicit seed exists.
+    if (!hasSeededCustomer) {
+      const { getLocalCustomerWorkspaceFixture } = await import("./localCustomerDirectoryFixture");
+      const fixture = getLocalCustomerWorkspaceFixture({ organizationId: orgId, customerId: id });
+      if (!fixture) return null;
+      return {
+        source: fixture.source,
+        organizationId: orgId,
+        ...buildCustomerWorkspaceDto({
+          customer: fixture.customer,
+          quotes: fixture.quotes,
+          versionsByQuote: fixture.versionsByQuote,
+          revenueAutopilotEmailControls: null,
+          revenueAutopilotEmailControlsError: "Customer email controls are unavailable in local review data.",
+          quotePageInfo: fixture.quotePageInfo,
+          nowISO: "2026-08-15T17:00:00.000Z",
+          todayDate: "2026-08-15"
+        })
+      };
+    }
   }
 
-  if (!firebaseReady || !db) {
-    const history = await getQuoteHistory({ organizationId: orgId });
+  if (!firebaseReady || !db || localReviewHistory) {
+    const history = localReviewHistory || await getQuoteHistory({ organizationId: orgId });
     const matchingQuotes = history.quotes.filter((quote) => (
       text(quote?.organizationId) === orgId
       && text(quote?.customerId) === id

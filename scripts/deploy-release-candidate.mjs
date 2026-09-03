@@ -9,6 +9,8 @@ import { GoogleAuth } from "google-auth-library";
 import { prepareFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
 import {
   RELEASE_CANDIDATE_POLICY,
+  RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+  RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   candidateFunctionsRuntimeExpected,
   candidateReceiptRelativePath,
@@ -221,13 +223,19 @@ function readFixedFirebaseWebConfig(firebaseCliPath) {
   };
 }
 
-function candidateBrowserEnvironment(firebaseCliPath) {
+export function candidateBrowserEnvironment(
+  firebaseCliPath,
+  candidateProfile = RELEASE_CANDIDATE_UAT_PROFILE
+) {
   const providerConfig = readFixedFirebaseWebConfig(firebaseCliPath);
-  const fixed = validateCandidateBrowserEnvironment(providerConfig);
+  const fixed = validateCandidateBrowserEnvironment({
+    ...providerConfig,
+    VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:
+      process.env.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY
+  }, candidateProfile);
   return {
     ...process.env,
     ...providerConfig,
-    ...fixed,
     QUOTEPILOT_BUILD_PROFILE: "release-candidate",
     FIREBASE_PROJECT_ID: RELEASE_CANDIDATE_POLICY.firebase.projectId,
     VITE_APP_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`,
@@ -247,12 +255,11 @@ function candidateBrowserEnvironment(firebaseCliPath) {
     VITE_OPERATIONAL_STAFFING_ENABLED: "true",
     VITE_PILOT_MEMORY_ENABLED: "false",
     VITE_PILOT_MODEL_ENABLED: "false",
-    VITE_BUYER_ACCESS_ENABLED: "false",
-    VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false",
     VITE_E2E_BYPASS_AUTH: "false",
     VITE_USE_FIREBASE_EMULATORS: "false",
     VITE_ALLOW_LOCAL_CATALOG_FALLBACK: "false",
-    VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING: "false"
+    VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING: "false",
+    ...fixed
   };
 }
 
@@ -296,14 +303,21 @@ function writeCandidateManifest(
 ) {
   fs.mkdirSync(outputDirectory, { recursive: true });
   const manifest = {
-    schema: "com.mbmapps.quotepilot.release-candidate/v2",
+    schema: "com.mbmapps.quotepilot.release-candidate/v3",
     sourceSha: releaseSha,
     ciRunId: Number(ciRunId),
     uatProfile: candidateProfile,
     ambientUiEnabled: true,
     operationalStaffingBrowserEnabled: true,
     operationalStaffingAuthorityEnabled:
-      functionsGates.OPERATIONAL_STAFFING_AUTHORITY_ENABLED === "true"
+      functionsGates.OPERATIONAL_STAFFING_AUTHORITY_ENABLED === "true",
+    buyerAccessBrowserEnabled:
+      candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+    buyerAccessPublicCtaEnabled:
+      candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+    buyerAccessServerEnabled: functionsGates.BUYER_ACCESS_ENABLED === "true",
+    emailProvider: functionsGates.NOTIFICATIONS_EMAIL_PROVIDER,
+    quotePaymentMode: functionsGates.STRIPE_MODE
   };
   fs.writeFileSync(
     path.join(outputDirectory, "release-candidate.json"),
@@ -586,7 +600,13 @@ async function deployFirebase({
     secretPrerequisites,
     browserFlags: {
       VITE_AMBIENT_UI_ENABLED: true,
-      VITE_OPERATIONAL_STAFFING_ENABLED: true
+      VITE_OPERATIONAL_STAFFING_ENABLED: true,
+      VITE_BUYER_ACCESS_ENABLED:
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY_CONFIGURED:
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
     },
     serverGates: functionsGates
   };
@@ -910,7 +930,13 @@ async function deployVercel({
     sourceShaEvidenceUrl: manifestUrl,
     browserFlags: {
       VITE_AMBIENT_UI_ENABLED: true,
-      VITE_OPERATIONAL_STAFFING_ENABLED: true
+      VITE_OPERATIONAL_STAFFING_ENABLED: true,
+      VITE_BUYER_ACCESS_ENABLED:
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY_CONFIGURED:
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
     },
     dependencies: {
       firebaseFunctions: stagingBackendEvidence
@@ -957,14 +983,20 @@ async function main() {
     const target = requireCandidateTarget(args["--target"]);
     const candidateProfile = requireCandidateUatProfile(args["--candidate-profile"]);
     const releaseSha = requireFullSha(args["--release-sha"]);
-    const expectedConfirmation = candidateConfirmation(target, releaseSha);
+    const expectedConfirmation = candidateConfirmation(target, releaseSha, candidateProfile);
     if (args["--confirm"] !== expectedConfirmation) {
       throw new Error(`Candidate deployment requires --confirm "${expectedConfirmation}".`);
     }
     const branch = validateWorkspace(releaseSha);
     const ciEvidence = await verifyCi(args["--ci-run-id"], releaseSha, branch);
     const firebaseCliPath = await prepareFirebaseToolsBinary();
-    const browserEnv = candidateBrowserEnvironment(firebaseCliPath);
+    const browserEnv = candidateBrowserEnvironment(firebaseCliPath, candidateProfile);
+    if (
+      target === "firebase-all"
+      && candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    ) {
+      readFirebaseFunctions(firebaseCliPath, RELEASE_CANDIDATE_UAT_PROFILE);
+    }
     const functionsGates = target === "firebase-all"
       ? validateFunctionsEnvironmentFile(candidateProfile)
       : candidateFunctionsRuntimeExpected(candidateProfile);

@@ -107,6 +107,7 @@ describe("AmbientNowView", () => {
     expect(markup).toContain("1 more priority remains in Workflow");
     expect(markup.match(/class="ambient-now-priority"/gu)).toHaveLength(3);
     expect(markup.match(/data-ambient-action-id="review-now-priority:/gu)).toHaveLength(3);
+    expect(markup.match(/data-workspace-task-id="review-now-priority:/gu)).toHaveLength(3);
     expect(markup).toContain("Event 0");
     expect(markup).toContain("Customer 0");
     expect(markup).not.toContain("Event 3");
@@ -156,9 +157,35 @@ describe("AmbientNowView", () => {
     expect(onOpenWorkflow).toHaveBeenCalledWith({
       quoteId: "quote-1",
       attentionType: "follow_up",
-      requestId: "request-1"
+      requestId: "follow-up:quote-1",
+      actionId: "review-now-priority:follow-up:quote-1"
     });
     expect(container.querySelector(".ambient-now__acknowledgement").textContent).toContain("Opening follow up");
+  });
+
+  test("uses the shared Workflow focus identity for request-backed priorities", () => {
+    const onOpenWorkflow = vi.fn(() => ({ status: "pending" }));
+    const item = attentionItem(1, {
+      id: "change-request:quote-1",
+      type: "change_request",
+      sourceRequestId: "request-1"
+    });
+    mount({
+      onOpenWorkflow,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [item] },
+        quotes: [quote(1)]
+      })
+    });
+
+    act(() => container.querySelector('[data-ambient-action-id^="review-now-priority:"]').click());
+
+    expect(onOpenWorkflow).toHaveBeenCalledWith({
+      quoteId: "quote-1",
+      attentionType: "change_request",
+      requestId: "request-1",
+      actionId: "review-now-priority:change-request:quote-1"
+    });
   });
 
   test("keeps refresh as an explicit non-mutating view action", () => {

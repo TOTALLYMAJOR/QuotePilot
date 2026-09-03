@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { RELEASE_EVIDENCE_POLICY } from "./production-release-evidence.mjs";
+import {
+  RELEASE_ACCEPTANCE_CANDIDATE_PROFILE,
+  RELEASE_EVIDENCE_POLICY
+} from "./production-release-evidence.mjs";
 
 export const RELEASE_CANDIDATE_POLICY = Object.freeze({
   repository: RELEASE_EVIDENCE_POLICY.repository,
@@ -27,9 +30,12 @@ export const RELEASE_CANDIDATE_POLICY = Object.freeze({
 
 export const RELEASE_CANDIDATE_UAT_PROFILE = "staging-safe-off";
 export const RELEASE_CANDIDATE_STAFFING_UAT_PROFILE = "staging-staffing-authority";
+export const RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE =
+  RELEASE_ACCEPTANCE_CANDIDATE_PROFILE;
 export const RELEASE_CANDIDATE_UAT_PROFILES = Object.freeze([
   RELEASE_CANDIDATE_UAT_PROFILE,
-  RELEASE_CANDIDATE_STAFFING_UAT_PROFILE
+  RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
+  RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
 ]);
 
 const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
@@ -61,10 +67,20 @@ export function candidateFunctionsRuntimeExpected(
   profileValue = RELEASE_CANDIDATE_UAT_PROFILE
 ) {
   const profile = requireCandidateUatProfile(profileValue);
+  const providerAcceptance = profile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE;
   return Object.freeze({
     ...CANDIDATE_FUNCTIONS_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: providerAcceptance ? "resend" : "none",
+    BUYER_ACCESS_ENABLED: providerAcceptance ? "true" : "false",
+    ...(providerAcceptance ? {
+      BUYER_ACCESS_TURNSTILE_HOSTNAMES:
+        new URL(RELEASE_CANDIDATE_POLICY.firebase.hostingUrl).hostname
+    } : {}),
     OPERATIONAL_STAFFING_AUTHORITY_ENABLED:
-      profile === RELEASE_CANDIDATE_STAFFING_UAT_PROFILE ? "true" : "false"
+      [
+        RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
+        RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+      ].includes(profile) ? "true" : "false"
   });
 }
 
@@ -106,12 +122,21 @@ const CANDIDATE_FUNCTIONS_DISABLED_RESIDUE = Object.freeze([
   "TWILIO_ACCOUNT_SID",
   "TWILIO_MESSAGING_SERVICE_SID",
   "NOTIFICATIONS_OWNER_PHONE",
-  "BUYER_ACCESS_ALLOWED_EMAILS",
-  "BUYER_ACCESS_TURNSTILE_HOSTNAMES"
+  "BUYER_ACCESS_ALLOWED_EMAILS"
 ]);
 
 const CANDIDATE_FUNCTIONS_ALLOWED_KEYS = new Set([
-  ...Object.keys(CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED)
+  ...RELEASE_CANDIDATE_UAT_PROFILES.flatMap((profile) => (
+    Object.keys(candidateFunctionsRuntimeExpected(profile))
+  ))
+]);
+
+const CLOUDFLARE_TURNSTILE_TEST_SITE_KEYS = new Set([
+  "1x00000000000000000000AA",
+  "2x00000000000000000000AB",
+  "1x00000000000000000000BB",
+  "2x00000000000000000000BB",
+  "3x00000000000000000000FF"
 ]);
 
 function reject(message) {
@@ -142,12 +167,36 @@ export function requireCandidateTarget(value) {
   return target;
 }
 
-export function candidateConfirmation(target, releaseSha) {
-  const normalizedTarget = requireCandidateTarget(target);
+export function requireCandidateProfileTarget(targetValue, profileValue) {
+  const target = requireCandidateTarget(targetValue);
+  const profile = requireCandidateUatProfile(profileValue);
+  if (
+    profile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    && target !== "firebase-all"
+  ) {
+    reject(
+      "staging-provider-acceptance is Firebase-only because immutable Vercel preview hostnames cannot be pre-bound to the Turnstile hostname allowlist."
+    );
+  }
+  return Object.freeze({ target, profile });
+}
+
+export function candidateConfirmation(
+  target,
+  releaseSha,
+  candidateProfile = RELEASE_CANDIDATE_UAT_PROFILE
+) {
+  const {
+    target: normalizedTarget,
+    profile
+  } = requireCandidateProfileTarget(target, candidateProfile);
   const sha = requireFullSha(releaseSha);
-  return normalizedTarget === "firebase-all"
+  const base = normalizedTarget === "firebase-all"
     ? `DEPLOY CANDIDATE ${RELEASE_CANDIDATE_POLICY.firebase.projectId} ${sha}`
     : `DEPLOY CANDIDATE ${RELEASE_CANDIDATE_POLICY.vercel.projectName} PREVIEW ${sha}`;
+  return profile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    ? `${base} PROFILE ${profile}`
+    : base;
 }
 
 export function validateCandidateCiEvidence({ run, jobs, releaseSha, branch }) {
@@ -196,7 +245,12 @@ export function validateCandidateCiEvidence({ run, jobs, releaseSha, branch }) {
   });
 }
 
-export function validateCandidateBrowserEnvironment(environment = {}) {
+export function validateCandidateBrowserEnvironment(
+  environment = {},
+  candidateProfile = RELEASE_CANDIDATE_UAT_PROFILE
+) {
+  const profile = requireCandidateUatProfile(candidateProfile);
+  const providerAcceptance = profile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE;
   const firebase = RELEASE_CANDIDATE_POLICY.firebase;
   const exact = {
     VITE_FIREBASE_PROJECT_ID: firebase.projectId,
@@ -223,12 +277,30 @@ export function validateCandidateBrowserEnvironment(environment = {}) {
       reject(`${forbidden} must be disabled.`);
     }
   }
+  const turnstileSiteKey = String(
+    environment.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY || ""
+  ).trim();
+  if (
+    providerAcceptance
+    && (
+      !/^[A-Za-z0-9_-]{10,100}$/.test(turnstileSiteKey)
+      || CLOUDFLARE_TURNSTILE_TEST_SITE_KEYS.has(turnstileSiteKey)
+      || /(?:placeholder|example|changeme|test[_-]?key)/i.test(turnstileSiteKey)
+    )
+  ) {
+    reject(
+      "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY must be a reviewed non-test staging site key for provider acceptance."
+    );
+  }
   return Object.freeze({
     ...exact,
     VITE_AMBIENT_UI_ENABLED: "true",
     VITE_OPERATIONAL_STAFFING_ENABLED: "true",
-    VITE_BUYER_ACCESS_ENABLED: "false",
-    VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
+    VITE_BUYER_ACCESS_ENABLED: providerAcceptance ? "true" : "false",
+    VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: providerAcceptance ? "true" : "false",
+    VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: providerAcceptance
+      ? turnstileSiteKey
+      : ""
   });
 }
 
@@ -255,6 +327,7 @@ export function validateCandidateFunctionsEnvironment(
   environment = {},
   candidateProfile = RELEASE_CANDIDATE_UAT_PROFILE
 ) {
+  const profile = requireCandidateUatProfile(candidateProfile);
   const expectedRuntime = candidateFunctionsRuntimeExpected(candidateProfile);
   for (const secretName of CANDIDATE_FUNCTIONS_FORBIDDEN_PLAINTEXT) {
     if (String(environment[secretName] || "").trim()) {
@@ -265,6 +338,14 @@ export function validateCandidateFunctionsEnvironment(
     if (String(environment[residueName] || "").trim()) {
       reject(`${residueName} must be empty while its staging provider or buyer rail is disabled.`);
     }
+  }
+  if (
+    profile !== RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+    && String(environment.BUYER_ACCESS_TURNSTILE_HOSTNAMES || "").trim()
+  ) {
+    reject(
+      "BUYER_ACCESS_TURNSTILE_HOSTNAMES must be empty while the staging buyer rail is disabled."
+    );
   }
   const unknownKeys = Object.keys(environment)
     .filter((name) => String(environment[name] || "").trim())
@@ -300,6 +381,7 @@ export function validateFirebaseFunctionsReadback({
   response,
   candidateProfile = RELEASE_CANDIDATE_UAT_PROFILE
 }) {
+  const profile = requireCandidateUatProfile(candidateProfile);
   const expectedRuntime = candidateFunctionsRuntimeExpected(candidateProfile);
   if (response?.status !== "success" || !Array.isArray(response?.result) || !response.result.length) {
     reject("Firebase Functions provider readback is missing or empty.");
@@ -331,7 +413,10 @@ export function validateFirebaseFunctionsReadback({
     }
     for (const forbidden of [
       ...CANDIDATE_FUNCTIONS_FORBIDDEN_PLAINTEXT,
-      ...CANDIDATE_FUNCTIONS_DISABLED_RESIDUE
+      ...CANDIDATE_FUNCTIONS_DISABLED_RESIDUE,
+      ...(profile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+        ? []
+        : ["BUYER_ACCESS_TURNSTILE_HOSTNAMES"])
     ]) {
       if (String(runtime[forbidden] || "").trim()) {
         reject(`Firebase Functions runtime readback for ${key} contains forbidden plaintext ${forbidden}.`);

@@ -1,14 +1,46 @@
-import React, { isValidElement } from "react";
+// @vitest-environment jsdom
+
+import React, { act, isValidElement, useEffect } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test, vi } from "vitest";
-import { CustomerDirectoryPresentation } from "../CustomerDirectoryView";
-import {
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getCustomerWorkspace: vi.fn()
+}));
+
+vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "true");
+
+vi.mock("../../lib/customerWorkspace", async () => ({
+  ...(await vi.importActual("../../lib/customerWorkspace")),
+  getCustomerWorkspace: mocks.getCustomerWorkspace
+}));
+
+vi.mock("../CustomerRevenueOpportunities", () => ({
+  default: () => null,
+  buildCustomerRevenueOpportunityRead: () => ({ state: "empty", opportunities: [] })
+}));
+
+vi.mock("../CustomerCommercialMeasures", () => ({ default: () => null }));
+vi.mock("../CustomerCommercialTimeline", () => ({ default: () => null }));
+vi.mock("../QuoteVersionComparison", () => ({ default: () => null }));
+vi.mock("../RevenueAutopilotCustomerControls", () => ({ default: () => null }));
+
+const { CustomerDirectoryPresentation } = await import("../CustomerDirectoryView");
+const {
+  default: CustomerWorkspaceView,
   CustomerEventsHeader,
   CustomerRelationshipBriefing,
   CustomerWorkspacePartialNotice,
   CustomerWorkspaceReadState,
   resolveCustomerWorkspaceTabKey
-} from "../CustomerWorkspaceView";
+} = await import("../CustomerWorkspaceView");
+const {
+  GuardedWorkspaceNavigationProvider: WorkspaceNavigationProvider,
+  useWorkspaceNavigation
+} = await import("../../context/WorkspaceNavigationContext");
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const READY_DIRECTORY = {
   loading: false,
@@ -52,6 +84,296 @@ function findElement(node, predicate) {
     if (match) return match;
   }
   return null;
+}
+
+function customerReturnWorkspace({ includeOpportunity = true } = {}) {
+  const opportunity = {
+    id: "quote-exact",
+    organizationId: "org-one",
+    customerId: "customer-one",
+    quoteNumber: "Q-EXACT",
+    status: "draft",
+    createdAtISO: "2026-08-20T14:00:00.000Z",
+    updatedAtISO: "2026-08-21T15:00:00.000Z",
+    event: {
+      name: "Exact client dinner",
+      date: "2026-10-12"
+    }
+  };
+  const quotes = includeOpportunity ? [opportunity] : [];
+  return {
+    organizationId: "org-one",
+    source: "firebase",
+    customer: {
+      id: "customer-one",
+      customerId: "customer-one",
+      organizationId: "org-one",
+      name: "Henderson Events",
+      email: "events@henderson.example"
+    },
+    quotes,
+    activeQuotes: quotes,
+    proposalVersions: [],
+    events: [],
+    money: [],
+    conversations: [],
+    recentActivity: [],
+    attention: { itemCount: 0, items: [] },
+    nextAction: { kind: "none", label: "No immediate staff action" },
+    briefing: {
+      activeQuoteCount: quotes.length,
+      displayedQuoteCount: quotes.length,
+      attentionCount: 0,
+      nextEvent: null,
+      latestActivity: null,
+      nextAction: { kind: "none", label: "No immediate staff action" },
+      scope: { limit: 25, truncated: false }
+    },
+    quotePageInfo: { limit: 25, truncated: false },
+    versionPageInfo: { perQuoteLimit: 10, truncatedQuoteIds: [] }
+  };
+}
+
+function createStackWindow(initialPath = "/app/customers/customer-one") {
+  const origin = "https://quotepilot.test";
+  const listeners = new Map();
+  const location = { origin, pathname: "/", search: "", hash: "" };
+  const entries = [];
+  let index = 0;
+  const applyPath = (path) => {
+    const url = new URL(path, origin);
+    location.pathname = url.pathname;
+    location.search = url.search;
+    location.hash = url.hash;
+  };
+  const dispatch = (type) => {
+    const event = new windowObject.Event(type);
+    for (const listener of listeners.get(type) || []) listener(event);
+  };
+  const initialUrl = new URL(initialPath, origin);
+  entries.push({ path: `${initialUrl.pathname}${initialUrl.search}${initialUrl.hash}`, state: null });
+  applyPath(entries[0].path);
+  const history = {
+    scrollRestoration: "auto",
+    get state() { return entries[index].state; },
+    get length() { return entries.length; },
+    pushState(state, _title, path) {
+      entries.splice(index + 1);
+      entries.push({ path, state });
+      index = entries.length - 1;
+      applyPath(path);
+    },
+    replaceState(state, _title, path) {
+      entries[index] = { path, state };
+      applyPath(path);
+    },
+    go(delta) {
+      const target = index + Number(delta || 0);
+      if (target < 0 || target >= entries.length || target === index) return;
+      index = target;
+      applyPath(entries[index].path);
+      dispatch("popstate");
+    },
+    back() { history.go(-1); },
+    forward() { history.go(1); }
+  };
+  const windowObject = {
+    Event: class FakeEvent {
+      constructor(type) { this.type = type; }
+    },
+    location,
+    history,
+    addEventListener(type, listener) {
+      const callbacks = listeners.get(type) || new Set();
+      callbacks.add(listener);
+      listeners.set(type, callbacks);
+    },
+    removeEventListener(type, listener) {
+      listeners.get(type)?.delete(listener);
+    },
+    dispatchEvent(event) {
+      dispatch(event.type);
+      return true;
+    }
+  };
+  return windowObject;
+}
+
+function CustomerReturnJourney({ onNavigation, onWriteAttempt }) {
+  const navigation = useWorkspaceNavigation();
+  onNavigation(navigation);
+  useEffect(() => {
+    navigation.setReturnContextScope({
+      organizationId: "org-one",
+      principalId: "admin-one",
+      role: "admin"
+    });
+  }, [navigation.setReturnContextScope]);
+
+  const status = (
+    <output data-return-status={navigation.returnContextStatus?.state || ""}>
+      {navigation.returnContextStatus?.message || ""}
+    </output>
+  );
+  if (navigation.route.routeId === "customer-detail") {
+    return (
+      <>
+        <CustomerWorkspaceView
+          organizationId="org-one"
+          organizationName="Northstar Catering"
+          customerId="customer-one"
+          ambientMode
+          currentUserRole="admin"
+          onCreateRebook={onWriteAttempt}
+          onOpenQuoteEdit={onWriteAttempt}
+          onOpenOpportunity={(target) => navigation.navigate(`/app/quotes/${target.quoteId}`, {
+            preserveSearch: false,
+            preserveReturnContext: true,
+            returnContextSurfaceId: "living-opportunity",
+            returnContextHint: {
+              focus: {
+                kind: "client-overview-action",
+                objectId: target.quoteId,
+                actionId: target.actionId,
+                controlId: target.returnFocusControlId
+              }
+            }
+          })}
+        />
+        {status}
+      </>
+    );
+  }
+  if (navigation.route.routeId === "quote-detail") {
+    return (
+      <main>
+        <button
+          type="button"
+          data-return-to-client
+          onClick={() => navigation.returnToOrigin({ fallback: "/app/customers/customer-one" })}
+        >
+          Return to client
+        </button>
+        {status}
+      </main>
+    );
+  }
+  return <main>{status}</main>;
+}
+
+let integrationContainer = null;
+let integrationRoot = null;
+let animationFrames = null;
+let nextAnimationFrameId = 0;
+let originalRequestAnimationFrame;
+let originalCancelAnimationFrame;
+let originalScrollTo;
+
+beforeEach(() => {
+  mocks.getCustomerWorkspace.mockReset().mockResolvedValue(customerReturnWorkspace());
+  animationFrames = new Map();
+  nextAnimationFrameId = 0;
+  originalRequestAnimationFrame = window.requestAnimationFrame;
+  originalCancelAnimationFrame = window.cancelAnimationFrame;
+  originalScrollTo = window.scrollTo;
+  window.requestAnimationFrame = (callback) => {
+    nextAnimationFrameId += 1;
+    animationFrames.set(nextAnimationFrameId, callback);
+    return nextAnimationFrameId;
+  };
+  window.cancelAnimationFrame = (frameId) => animationFrames.delete(frameId);
+  window.scrollTo = vi.fn();
+});
+
+afterEach(() => {
+  if (integrationRoot) act(() => integrationRoot.unmount());
+  integrationContainer?.remove();
+  integrationContainer = null;
+  integrationRoot = null;
+  animationFrames?.clear();
+  window.requestAnimationFrame = originalRequestAnimationFrame;
+  window.cancelAnimationFrame = originalCancelAnimationFrame;
+  window.scrollTo = originalScrollTo;
+});
+
+async function flushAnimationFrames(limit = 80) {
+  let idlePasses = 0;
+  for (let index = 0; index < limit; index += 1) {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    if (!animationFrames.size) {
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      });
+      idlePasses += 1;
+      if (idlePasses >= 3 && !animationFrames.size) return;
+      continue;
+    }
+    idlePasses = 0;
+    const callbacks = [...animationFrames.values()];
+    animationFrames.clear();
+    await act(async () => {
+      callbacks.forEach((callback) => callback(Date.now()));
+      await Promise.resolve();
+    });
+  }
+}
+
+async function mountCustomerReturnJourney({ onWriteAttempt }) {
+  const windowObject = createStackWindow();
+  let navigation = null;
+  integrationContainer = document.createElement("div");
+  document.body.appendChild(integrationContainer);
+  integrationRoot = createRoot(integrationContainer);
+  await act(async () => {
+    integrationRoot.render(
+      <WorkspaceNavigationProvider windowObject={windowObject} preserveSearch={false}>
+        <CustomerReturnJourney
+          onNavigation={(value) => { navigation = value; }}
+          onWriteAttempt={onWriteAttempt}
+        />
+      </WorkspaceNavigationProvider>
+    );
+    await Promise.resolve();
+  });
+  await flushAnimationFrames();
+  return { navigation: () => navigation, windowObject };
+}
+
+async function waitForSelector(selector, attempts = 40) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const target = integrationContainer?.querySelector(selector);
+    if (target) return target;
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+    await flushAnimationFrames(8);
+  }
+  return null;
+}
+
+async function openExactOpportunityFromClient() {
+  const disclosure = integrationContainer.querySelector(".ambient-client-overview__record");
+  expect(disclosure).not.toBeNull();
+  act(() => {
+    disclosure.open = true;
+    disclosure.dispatchEvent(new Event("toggle"));
+  });
+  const quotesTab = integrationContainer.querySelector("#customer-tab-quotes");
+  expect(quotesTab).not.toBeNull();
+  act(() => quotesTab.click());
+  const action = await waitForSelector(
+    '[data-opportunity-id="quote-exact"] [data-ambient-action-id="review-client-opportunity:quote-exact"]'
+  );
+  expect(action).not.toBeNull();
+  await act(async () => {
+    action.focus();
+    action.click();
+    await Promise.resolve();
+  });
+  return action;
 }
 
 describe("customer workspace executable presentation states", () => {
@@ -311,5 +633,75 @@ describe("customer workspace executable presentation states", () => {
     expect(refreshButton.props["data-capability-state"]).toBe("recovery");
     refreshButton.props.onClick();
     expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  test("captures and restores the exact Client 360 tab, record disclosure, and opportunity action through native history", async () => {
+    const writeAttempt = vi.fn();
+    const workspace = customerReturnWorkspace();
+    const workspaceBefore = JSON.stringify(workspace);
+    mocks.getCustomerWorkspace.mockResolvedValue(workspace);
+    const { windowObject } = await mountCustomerReturnJourney({ onWriteAttempt: writeAttempt });
+
+    await openExactOpportunityFromClient();
+
+    expect(windowObject.location.pathname).toBe("/app/quotes/quote-exact");
+    expect(windowObject.history.length).toBe(2);
+    const returnButton = integrationContainer.querySelector("[data-return-to-client]");
+    expect(returnButton).not.toBeNull();
+    await act(async () => {
+      returnButton.click();
+      await Promise.resolve();
+    });
+    await flushAnimationFrames();
+
+    const restoredDisclosure = integrationContainer.querySelector(".ambient-client-overview__record");
+    const restoredTab = integrationContainer.querySelector("#customer-tab-quotes");
+    const restoredAction = integrationContainer.querySelector(
+      '[data-opportunity-id="quote-exact"] [data-ambient-action-id="review-client-opportunity:quote-exact"]'
+    );
+    expect(windowObject.location.pathname).toBe("/app/customers/customer-one");
+    expect(windowObject.history.length).toBe(2);
+    expect(restoredDisclosure?.open).toBe(true);
+    expect(restoredTab?.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(restoredAction);
+    expect(integrationContainer.querySelector("[data-return-status]")?.dataset.returnStatus)
+      .toBe("restored");
+    expect(mocks.getCustomerWorkspace).toHaveBeenCalledTimes(2);
+    expect(mocks.getCustomerWorkspace).toHaveBeenNthCalledWith(2, {
+      organizationId: "org-one",
+      customerId: "customer-one"
+    });
+    expect(writeAttempt).not.toHaveBeenCalled();
+    expect(JSON.stringify(workspace)).toBe(workspaceBefore);
+  });
+
+  test("recovers at the exact Client 360 heading when the captured opportunity action is unavailable", async () => {
+    const writeAttempt = vi.fn();
+    const { windowObject } = await mountCustomerReturnJourney({ onWriteAttempt: writeAttempt });
+
+    await openExactOpportunityFromClient();
+    mocks.getCustomerWorkspace.mockResolvedValue(customerReturnWorkspace({ includeOpportunity: false }));
+    const returnButton = integrationContainer.querySelector("[data-return-to-client]");
+    expect(returnButton).not.toBeNull();
+    await act(async () => {
+      returnButton.click();
+      await Promise.resolve();
+    });
+    await flushAnimationFrames();
+
+    const restoredDisclosure = integrationContainer.querySelector(".ambient-client-overview__record");
+    const restoredTab = integrationContainer.querySelector("#customer-tab-quotes");
+    const recoveryStatus = integrationContainer.querySelector("[data-return-status]");
+    expect(windowObject.location.pathname).toBe("/app/customers/customer-one");
+    expect(restoredDisclosure?.open).toBe(true);
+    expect(restoredTab?.getAttribute("aria-selected")).toBe("true");
+    expect(integrationContainer.querySelector('[data-opportunity-id="quote-exact"]')).toBeNull();
+    expect(document.activeElement).toBe(
+      integrationContainer.querySelector("#ambient-client-overview-title")
+    );
+    expect(recoveryStatus?.dataset.returnStatus).toBe("recovery");
+    expect(recoveryStatus?.textContent).toMatch(/exact previous control is no longer available/i);
+    expect(mocks.getCustomerWorkspace).toHaveBeenCalledTimes(2);
+    expect(writeAttempt).not.toHaveBeenCalled();
   });
 });

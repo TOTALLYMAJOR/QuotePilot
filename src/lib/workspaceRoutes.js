@@ -94,6 +94,42 @@ export const ADMIN_WORKSPACE_NAVIGATION = Object.freeze([
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.DIAGNOSTICS, label: "Diagnostics", path: WORKSPACE_PATHS.diagnostics })
 ]);
 
+export const AMBIENT_PRIMARY_WORKSPACE_NAVIGATION = Object.freeze([
+  Object.freeze({
+    routeId: WORKSPACE_ROUTE_IDS.HOME,
+    label: "Now",
+    path: WORKSPACE_PATHS.home,
+    section: "home",
+    action: "onHome",
+    orientation: "now"
+  }),
+  Object.freeze({
+    routeId: WORKSPACE_ROUTE_IDS.QUOTE_LIST,
+    label: "Opportunities",
+    path: WORKSPACE_PATHS.quotes,
+    section: "quotes",
+    action: "onQuotes",
+    orientation: "opportunities",
+    triggerRef: "quotes"
+  }),
+  Object.freeze({
+    routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
+    label: "Clients",
+    path: WORKSPACE_PATHS.customers,
+    section: "customers",
+    action: "onCustomers",
+    orientation: "clients"
+  }),
+  Object.freeze({
+    routeId: WORKSPACE_ROUTE_IDS.CATALOG,
+    label: "Library",
+    path: WORKSPACE_PATHS.catalog,
+    section: "catalog",
+    action: "onCatalog",
+    orientation: "library"
+  })
+]);
+
 const STATIC_ROUTES = new Map([
   [WORKSPACE_PATHS.home, WORKSPACE_ROUTE_IDS.HOME],
   [WORKSPACE_PATHS.clearDeck, WORKSPACE_ROUTE_IDS.CLEAR_DECK],

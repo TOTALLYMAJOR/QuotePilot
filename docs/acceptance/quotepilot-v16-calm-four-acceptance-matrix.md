@@ -1,6 +1,6 @@
 # QuotePilot v0.16 Calm Four Acceptance Matrix
 
-Last updated: 2026-08-31 00:36:20 CDT
+Last updated: 2026-09-02 20:08:21 CDT
 
 ## Purpose and verdict rule
 
@@ -37,11 +37,12 @@ save, recalculation, and persistence semantics.
 | Evidence | Result | Boundary |
 |---|---|---|
 | Current focused v0.16 component/server/state cohort | **73 passed, 0 failed** on the latest integrated candidate; the preceding broader integrated Quick Updates cohort passed **196/196** | Local source/component/server/state evidence only |
-| Current integrated full `npm run test:unit` | **4,194 passed, 78 skipped; 369 files passed, 3 skipped** | Current broad local regression evidence; the sandboxed attempt could not spawn child processes, so the identical suite was rerun in the permitted host execution context and passed |
+| Current integrated full `npm run test:unit` | **4,197 passed, 78 skipped; 369 files passed, 3 skipped** | Current broad local regression evidence; the sandboxed attempt could not spawn child processes, so the identical suite was rerun in the permitted host execution context and passed |
 | Customer-centered/Ambient-enabled and safe-off `npm run build` | **Pass in both configurations** | Local production compilation only |
-| Current integrated `npm run lane:release` | **PASS**, including project state, environment, secret scan, workflow lint, capability surfacing, **4,194** unit tests, build, documentation governance, bundle, and Truth Loop **127/127** | Current local source/repository gate only; no CI or provider action |
+| Last recorded integrated `npm run lane:release` | **PASS**, including project state, environment, secret scan, workflow lint, capability surfacing, **4,194** unit tests, build, documentation governance, bundle, and Truth Loop **127/127** | Earlier exact-candidate local source/repository gate; it was not rerun for the current documentation slice and is not CI or provider evidence |
 | Bundle budgets | Compatibility **3,214,012 / 385,130 bytes** under the source-approved **3,221,176 / 391,901** ceiling; exact production-equivalent Ambient **4,017,689 / 385,130 bytes** under **4,017,992 / 391,901** | Total JavaScript / largest chunk; the Ambient ceiling is the literal candidate plus only the previously observed 303-byte runner offset, while the largest-chunk ceiling remains unchanged |
-| `e2e/v16-calm-four-acceptance.spec.js` | **10 passed, 0 failed, 0 skipped; 1.1 minutes** | Fresh isolated local ports with Customer-Centered, Ambient, Pilot Now, and release-parity Event Room gates; browser-local authority boundaries are exercised without presenting screenshots as persistence proof |
+| `e2e/v16-calm-four-acceptance.spec.js` | **10 passed, 0 failed, 0 skipped; 1.2 minutes** | Fresh isolated local ports with Customer-Centered, Ambient, Pilot Now, and Pilot Command gates; browser-local authority boundaries are exercised without presenting screenshots as persistence proof |
+| `e2e/workspace-no-unintended-overlap.spec.js` | **81 passed, 0 failed, 0 skipped; 3.1 minutes** | Fresh Chromium-admin local evidence at 390px, 768px, and 1440px; the Calm Four routes derive from the shell navigation contract and stale selectors fail closed |
 | Ambient Clients/Now/Library/Opportunities responsive and accessibility cohort | **26 passed, 0 failed; 1.3 minutes** | Fresh isolated local browser evidence across 390px, 768px, and 1440px representative widths |
 | `npm run test:customer-centered-authority:emulator` | **PASS** — dormant receipt mismatch, catalog drift, and stale revision each produce zero writes; the successful path proves exact save/readback equivalence for total, deposit, staffing, and version | Reproducible local Firebase emulator persistence trace; not a hosted/provider claim |
 | Side-by-side Product Design QA | **PASS; no actionable P0, P1, or P2 findings** | Approved/current visual comparisons recorded in `design-qa.md`; not hosted acceptance |
@@ -68,7 +69,7 @@ save, recalculation, and persistence semantics.
 
 The browser contract is `e2e/v16-calm-four-acceptance.spec.js`. Its latest local
 run passed all ten executable scenarios on fresh isolated ports with the
-Customer-Centered, Ambient, Pilot Now, and release-parity Event Room gates
+Customer-Centered, Ambient, Pilot Now, and Pilot Command gates
 enabled. Existing focused browser suites remain additive,
 especially
 `e2e/ambient-intelligence-accessibility.spec.js`,

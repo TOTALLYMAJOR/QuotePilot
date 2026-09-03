@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 60,
+  "catalogVersion": 63,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -539,14 +539,14 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 7,
+      "reviewRevision": 8,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The v0.16 Ambient presentation reuses that authority in a sparse hospitality-led empty state and a populated relationship view led by client identity, current or recent event, recorded memory, current attention, and one next action; search and filtering appear only for a populated bounded page. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The v0.16 Ambient presentation reuses that authority in a sparse hospitality-led empty state and a populated relationship view led by client identity, current or recent event, recorded memory, current attention, and one next action; search and filtering appear only for a populated bounded page. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
@@ -605,6 +605,7 @@
       "testPaths": [
         "e2e/customer-centered-workspace.spec.js",
         "e2e/ambient-clients.spec.js",
+        "e2e/staff-app-return-context.spec.js",
         "e2e/v16-calm-four-acceptance.spec.js",
         "e2e/workspace-no-unintended-overlap.spec.js",
         "src/components/__tests__/ambientClientsView.test.jsx",
@@ -658,6 +659,10 @@
           "locator": "fails closed across local tenant, customer, quote, and version collisions"
         },
         {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "Client 360 restores its exact opportunity action, tab, disclosure, and scroll"
+        },
+        {
           "path": "src/components/__tests__/customerCommercialMeasuresPresentation.test.jsx",
           "locator": "binds the Customer 360 DTO to a polished, source-bounded successful view"
         },
@@ -689,7 +694,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 7 replaces the dashboard-like empty Clients presentation with the approved sparse hospitality hierarchy, one established Start an opportunity action, three relationship steps, and quiet disclosure; zero metrics, search, refresh, and source chrome are absent until records justify controls. Populated Clients uses the same editorial language and leads with identity, current or recent event, recorded relationship memory, current attention, and one next action before the bounded searchable directory. Existing Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, local_fixture boundary, keyboard behavior, and recovery controls remain intact.",
+      "surfaceReviewNote": "Revision 8 preserves the Revision 7 sparse Clients hierarchy and reconciles development review data precedence: an explicitly seeded tenant quote directory now owns exact populated or empty acceptance state, while the generic local_fixture remains the fallback only when no explicit directory exists. Production Firebase reads, Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, keyboard behavior, and recovery controls remain intact.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -735,7 +740,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff see a truthful sparse starting point when the completed same-tenant read has no clients, or a relationship-led populated view with search and filtering only when records exist. They can open one exact client, correct remembered context through existing Client 360 controls, inspect recorded milestones and immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Browser-local fixture records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
+      "safeOutcome": "Staff see a truthful sparse starting point when the completed same-tenant read has no clients, or a relationship-led populated view with search and filtering only when records exist. They can open one exact client, correct remembered context through existing Client 360 controls, inspect recorded milestones and immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Explicit browser acceptance seeds cannot be replaced by a nearby generic fixture identity. Browser-local records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
     },
     {
       "id": "bounded-commercial-search",
@@ -4510,7 +4515,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 15,
+      "reviewRevision": 17,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4518,7 +4523,7 @@
         "staff",
         "customers"
       ],
-      "summary": "Pure deterministic Ambient NOW, Opportunities, Library, exact-arrival, selection, Money, Proposal, Conversation, global Pilot, voice-preview, and customer decision-room contracts prepare source-only interaction and intelligent-object presentation without adding Firebase, provider, communication, pricing, role, or mutation authority. The default-off Opportunities stream projects the caller-owned, already tenant-scoped bounded quote read into identity and four separate proposal, commercial, customer, and operational momentum domains; only proposal completeness may use a percentage. It keeps quote lifecycle, booking confirmation, deposit, and final balance independent, chooses one recommended next step, preserves local-fallback truth and the legacy controls under Quote administration, and hands the exact opaque opportunity plus its arrival context to the canonical Living Opportunity. The administrator-only Library projects the existing organization-scoped catalog snapshot into Catalog and first-class Event Templates, presents source, observation, Catalog version, pricing-review, and incomplete-menu boundaries in calm task-centered language, shows contextual recovery for unavailable exact arrivals, retains dirty drafts across ordinary workspace navigation, keeps catalog-setting and managed-menu draft domains from advancing together, prevents fresher evidence from silently replacing work, and opens exact objects only through the existing guarded editor and save authority. Its development fallback cache and revision comparison are organization-scoped and remain explicitly non-authoritative. A portal-token provider remount occurs only after the App-level draft guard accepts the transition; direct initial portal precedence remains intact and each distinct token receives a distinct public scope. The default-off Ambient NOW briefing narrows the existing bounded staff snapshot to at most three already-ranked Workflow priorities, withholds caught-up language whenever reads or bounds are incomplete, and shows only timestamp-backed internal workflow receipts as quiet progress. The default-off staff shell's global Pilot trigger resolves only the exact context already in view: it relays a matching Living Opportunity into its populated evidence explanation, focuses the existing deterministic draft command field without executing it when that independent gate is enabled, or presents a nonempty choose-an-opportunity recovery instead of generic chat. In Ambient mode, supported browser speech uses pointer or keyboard hold-to-capture, immediate contextual state, release-to-preview, bounded transcript handling, and exact recovery; the transcript is not persisted or staged, explicit Apply remains required, and the flag-off Pilot retains its existing click-to-toggle behavior. Exact arrivals carry only allowlisted semantics and opaque identifiers and remain pending until a supported destination proves exact focus without substitution. Schedule supports only exact accepted/booked events and complete-current-conflict evidence while refusing to conflate its legacy staff-lead field with authoritative operational staffing. Reporting supports only exact opportunity, bounded pipeline, and Ambient interaction-health targets and keeps its targeted opportunity read outside aggregate denominators. Selection scenarios remain local, reversible, unpriced, and unsaved; Money preserves five payment evidence domains; Proposal separates saved revision, authoritative pricing, customer projection, portal issuance, and provider acceptance; Conversation keeps sent, provider-delivered, portal-viewed, replied, and inferred engagement independent; higher-authority Pilot classes remain blocked. The separately gated customer decision room composes the existing exact-token projection into calm Event, Menu and service, Pricing, Planning assumptions, Terms, Possible additions, Response, and Questions sections. Staff-marked additions stage only reversible ordinary change-request lines, and contextual questions reuse one existing conversation composer with explicit staged, preserved-draft, pending-attempt, read-only, and unavailable acknowledgements. The v0.16 Calm Four shell keeps Now, Opportunities, Clients, and role-safe Library as the only persistent destinations, preserves secondary utilities in a focus-contained mobile Workspace & tools sheet, derives opportunity ordering from current recorded state, and keeps standalone and contextual Library modes on the same catalog authority without making browsing a write.",
+      "summary": "Pure deterministic Ambient NOW, Opportunities, Library, exact-arrival, selection, Money, Proposal, Conversation, global Pilot, voice-preview, and customer decision-room contracts prepare source-only interaction and intelligent-object presentation without adding Firebase, provider, communication, pricing, role, or mutation authority. The default-off Opportunities stream projects the caller-owned, already tenant-scoped bounded quote read into identity and four separate proposal, commercial, customer, and operational momentum domains; only proposal completeness may use a percentage. It keeps quote lifecycle, booking confirmation, deposit, and final balance independent, chooses one recommended next step, preserves local-fallback truth and the legacy controls under Quote administration, and hands the exact opaque opportunity plus its arrival context to the canonical Living Opportunity. The administrator-only Library projects the existing organization-scoped catalog snapshot into Catalog and first-class Event Templates, presents source, observation, Catalog version, pricing-review, and incomplete-menu boundaries in calm task-centered language, shows contextual recovery for unavailable exact arrivals, retains dirty drafts across ordinary workspace navigation, keeps catalog-setting and managed-menu draft domains from advancing together, prevents fresher evidence from silently replacing work, and opens exact objects only through the existing guarded editor and save authority. Its development fallback cache and revision comparison are organization-scoped and remain explicitly non-authoritative. A portal-token provider remount occurs only after the App-level draft guard accepts the transition; direct initial portal precedence remains intact and each distinct token receives a distinct public scope. The default-off Ambient NOW briefing narrows the existing bounded staff snapshot to at most three already-ranked Workflow priorities, withholds caught-up language whenever reads or bounds are incomplete, and shows only timestamp-backed internal workflow receipts as quiet progress. The default-off staff shell's global Pilot trigger resolves only the exact context already in view: it relays a matching Living Opportunity into its populated evidence explanation, focuses the existing deterministic draft command field without executing it when that independent gate is enabled, or presents a nonempty choose-an-opportunity recovery instead of generic chat. In Ambient mode, supported browser speech uses pointer or keyboard hold-to-capture, immediate contextual state, release-to-preview, bounded transcript handling, and exact recovery; the transcript is not persisted or staged, explicit Apply remains required, and the flag-off Pilot retains its existing click-to-toggle behavior. Exact arrivals carry only allowlisted semantics and opaque identifiers and remain pending until a supported destination proves exact focus without substitution. Schedule supports only exact accepted/booked events and complete-current-conflict evidence while refusing to conflate its legacy staff-lead field with authoritative operational staffing. Reporting supports only exact opportunity, bounded pipeline, and Ambient interaction-health targets and keeps its targeted opportunity read outside aggregate denominators. Selection scenarios remain local, reversible, unpriced, and unsaved; Money preserves five payment evidence domains; Proposal separates saved revision, authoritative pricing, customer projection, portal issuance, and provider acceptance; Conversation keeps sent, provider-delivered, portal-viewed, replied, and inferred engagement independent; higher-authority Pilot classes remain blocked. The separately gated customer decision room composes the existing exact-token projection into calm Event, Menu and service, Pricing, Planning assumptions, Terms, Possible additions, Response, and Questions sections. Staff-marked additions stage only reversible ordinary change-request lines, and contextual questions reuse one existing conversation composer with explicit staged, preserved-draft, pending-attempt, read-only, and unavailable acknowledgements. The v0.16 Calm Four shell keeps Now, Opportunities, Clients, and role-safe Library as the only persistent destinations, preserves secondary utilities in a focus-contained mobile Workspace & tools sheet, derives opportunity ordering from current recorded state, and keeps standalone and contextual Library modes on the same catalog authority without making browsing a write. Its session-only Current task rail now preserves one exact staff follow-up task across those routes. Workflow completion reuses the existing quote-write authority and reaches Completed only after a matching server-only same-organization readback; browser-local, unavailable, stale, mismatched, and ambiguous outcomes stay proofless as Needs confirmation, and retry performs only the readback. Its staff-route return context keeps native history authoritative and restores an exact adjacent Opportunities, Clients, or Library view only within the same runtime, organization, and principal; URL-safe enums are separated from memory-only search, disclosure, focus, scroll, exact editor targets, and drafts, while invalid or reloaded context fails to the canonical route without record substitution.",
       "backendPaths": [
         "src/lib/ambientMoneyObject.js",
         "src/lib/ambientProposalObject.js",
@@ -4539,6 +4544,8 @@
         "src/lib/pilotDeterministicCommands.js",
         "src/hooks/usePilotVoiceCapture.js",
         "src/lib/quoteWorkflow.js",
+        "src/lib/workspaceTaskJourney.js",
+        "src/lib/workspaceReturnContext.js",
         "src/lib/workspaceArrivalContract.js",
         "src/lib/workspaceScope.js",
         "src/lib/quoteHistoryController.js",
@@ -4560,6 +4567,10 @@
         "src/components/AmbientGlobalPilotSurface.jsx",
         "src/components/AmbientNowView.jsx",
         "src/components/AmbientOpportunitiesStream.jsx",
+        "src/components/ambientOpportunitiesStream.css",
+        "src/components/AmbientCustomerDirectoryView.jsx",
+        "src/components/AmbientClientsView.jsx",
+        "src/components/CustomerWorkspaceView.jsx",
         "src/components/AmbientLibraryRoute.jsx",
         "src/components/EventTemplatesEditor.jsx",
         "src/components/AdminCatalogModal.jsx",
@@ -4575,10 +4586,15 @@
         "src/components/MessagingStation.jsx",
         "src/components/QuoteConversationPanel.jsx",
         "src/components/SalesWorkflowModal.jsx",
+        "src/components/WorkspaceTaskJourneyNotice.jsx",
         "src/components/EventScheduleModal.jsx",
         "src/components/ReportingDashboardModal.jsx"
       ],
       "entryPointLocators": [
+        {
+          "path": "src/App.jsx",
+          "locator": "data-workspace-return-state={returnContextStatus.state}"
+        },
         {
           "path": "src/components/WorkspaceShell.jsx",
           "locator": "data-ambient-navigation={ambientOrientation ? \"orientation\" : undefined}"
@@ -4600,8 +4616,20 @@
           "locator": "data-surface-contract-id={stream.surfaceContract.id}"
         },
         {
+          "path": "src/components/AmbientClientsView.jsx",
+          "locator": "data-client-search-boundary"
+        },
+        {
           "path": "src/components/AmbientLibraryRoute.jsx",
           "locator": "aria-labelledby=\"ambient-library-title\""
+        },
+        {
+          "path": "src/components/AmbientLibraryRoute.jsx",
+          "locator": "data-ambient-library-state=\"editing\""
+        },
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "modelId: \"catalog-editor-navigation-guard-v1\""
         },
         {
           "path": "src/components/EventTemplatesEditor.jsx",
@@ -4652,6 +4680,10 @@
           "locator": "data-arrival-state={presentation.status}"
         },
         {
+          "path": "src/components/WorkspaceTaskJourneyNotice.jsx",
+          "locator": "data-workspace-task-state={journey.phase}"
+        },
+        {
           "path": "src/components/EventScheduleModal.jsx",
           "locator": "data-schedule-event-id={item.id}"
         },
@@ -4669,9 +4701,15 @@
         "e2e/pilot-voice-capture.spec.js",
         "e2e/v16-calm-four-acceptance.spec.js",
         "e2e/workspace-no-unintended-overlap.spec.js",
+        "e2e/staff-app-cross-route-task-loop.spec.js",
+        "e2e/staff-app-return-context.spec.js",
         "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
         "src/components/__tests__/ambientNowView.test.jsx",
         "src/components/__tests__/ambientOpportunitiesStream.test.jsx",
+        "src/components/__tests__/ambientClientsView.test.jsx",
+        "src/components/__tests__/ambientCustomerDirectoryView.test.jsx",
+        "src/components/__tests__/customerWorkspaceStates.test.jsx",
+        "src/components/__tests__/workspaceRoutePresentation.test.jsx",
         "src/components/__tests__/ambientLibraryRoute.test.jsx",
         "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
         "src/components/__tests__/eventTemplatesEditor.test.jsx",
@@ -4695,6 +4733,7 @@
         "src/components/__tests__/messagingStationArrival.test.jsx",
         "src/components/__tests__/quoteConversationPanelFocus.test.jsx",
         "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+        "src/components/__tests__/workspaceTaskJourneyNotice.test.jsx",
         "src/components/__tests__/eventScheduleArrival.test.jsx",
         "src/components/__tests__/reportingDashboardArrival.test.jsx",
         "src/components/__tests__/workspaceShell.test.jsx",
@@ -4721,6 +4760,9 @@
         "src/lib/__tests__/pilotCommandPolicy.test.js",
         "src/lib/__tests__/pilotDeterministicCommands.test.js",
         "src/lib/__tests__/quoteWorkflow.test.js",
+        "src/lib/__tests__/workspaceTaskJourney.test.js",
+        "src/lib/__tests__/workspaceReturnContext.test.js",
+        "src/lib/__tests__/appInteractionRecovery.test.js",
         "src/lib/__tests__/workspaceArrivalContract.test.js",
         "src/lib/__tests__/quoteHistoryController.test.js",
         "src/lib/__tests__/ambientSurfaceGrammar.test.js",
@@ -4846,8 +4888,144 @@
           "locator": "restores a dirty Back attempt and replays the exact history entry only after discard"
         },
         {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "replays clean traversal immediately and blocks traversal while a save is busy"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "keeps a dirty draft guarded across a same-document stale-session Back entry"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "guards ordinary workspace navigation before committing its preparation"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "captures runtime-only view state and returns through the exact native history entry"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "does not forge a second return origin when eligible navigations race before render"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "replaces with the canonical fallback when a return token is forged"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
+          "locator": "restores the prior owner guard after a temporary overlay guard closes"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "publishes one dismissal authority for browser traversal and explicit close"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceReturnContext.test.js",
+          "locator": "keeps view state runtime-only while native Back resolves the exact adjacent origin"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceReturnContext.test.js",
+          "locator": "fails closed for copied, forged, non-adjacent, cross-principal, and expired runtime tokens"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceReturnContext.test.js",
+          "locator": "allowlists structured values and bounds transient values without inventing nearby focus"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceReturnContext.test.js",
+          "locator": "retains the empty first-page cursor sentinel needed to return from page two"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceReturnContext.test.js",
+          "locator": "rejects a mismatched initiating object and invalid editor surface pairing"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceReturnContext.test.js",
+          "locator": "walks an exact adjacent Library editor chain back to its opportunity"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceReturnContext.test.js",
+          "locator": "pins focus and scroll through late native-history layout settlement"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "Opportunities restores exact view context at"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "Clients restores safe filters and session search at"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "Library makes editor Back and Forward an exact round trip at"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "Client 360 restores its exact opportunity action, tab, disclosure, and scroll"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "nested contextual Library editor returns to its named opportunity without flattening history"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "delayed Quote return stays restoring until the exact source read settles"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "reload retains allowlisted client view only and clears free text"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "reload retains allowlisted Opportunity filters and clears free text"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "foreign return token fails closed to canonical Opportunities without substitution"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "reloaded destination with no runtime context recovers to canonical Opportunities"
+        },
+        {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "dirty Library editor guards explicit and native Back before confirmed discard"
+        },
+        {
           "path": "src/hooks/__tests__/useBrowserLocation.test.js",
           "locator": "seeds and advances private history positions without replacing application route state"
+        },
+        {
+          "path": "src/hooks/__tests__/useBrowserLocation.test.js",
+          "locator": "bounds native history traversal to an explicit non-zero delta"
+        },
+        {
+          "path": "src/components/__tests__/ambientClientsView.test.jsx",
+          "locator": "exposes controlled safe filter and disclosure state for exact route restoration"
+        },
+        {
+          "path": "src/components/__tests__/ambientClientsView.test.jsx",
+          "locator": "distinguishes the prominent opportunity action as the exact return-focus control"
+        },
+        {
+          "path": "src/components/__tests__/ambientCustomerDirectoryView.test.jsx",
+          "locator": "never carries a prior organization's search, cursor, or cursor history into the next organization"
+        },
+        {
+          "path": "src/components/__tests__/ambientCustomerDirectoryView.test.jsx",
+          "locator": "keeps one exact allowlisted Clients view query without replacing its history entry"
+        },
+        {
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "captures and restores the exact Client 360 tab, record disclosure, and opportunity action through native history"
+        },
+        {
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "recovers at the exact Client 360 heading when the captured opportunity action is unavailable"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePresentation.test.jsx",
+          "locator": "Quotes uses route return language and a focusable heading only when embedded"
         },
         {
           "path": "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
@@ -4998,6 +5176,30 @@
           "locator": "reports resolved only after the exact Ambient Workflow item is focused"
         },
         {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "confirms the exact follow-up only after a matching server-only readback"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "keeps browser-local completion uncertain when read-only retry finds a completed server record"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "drops a pending readback when the same task identity restarts with a new generation"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "keeps a connected completion uncertain after remount loses its exact write expectation"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceTaskJourney.test.js",
+          "locator": "retains only the bounded confirmation reference for an exact follow-up outcome"
+        },
+        {
+          "path": "e2e/staff-app-cross-route-task-loop.spec.js",
+          "locator": "browser-local follow-up completion stays Needs confirmation without authoritative readback"
+        },
+        {
           "path": "src/components/__tests__/eventScheduleArrival.test.jsx",
           "locator": "keeps arrival pending until the exact same-tenant event is selected and focused"
         },
@@ -5037,7 +5239,9 @@
       "documentationPaths": [
         "docs/DESIGN_SYSTEM.md",
         "docs/FEATURE_MATRIX.md",
-        "docs/USER_MANUAL.md"
+        "docs/USER_MANUAL.md",
+        "docs/design/staff-app-ui-cohesion-audit.md",
+        "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md"
       ],
       "documentationLocators": [
         {
@@ -5067,10 +5271,226 @@
         {
           "path": "docs/USER_MANUAL.md",
           "locator": "## Admin Catalog Operations"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "review_follow_up` is the first closure adapter"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Session-only cross-route staff task continuity plus the first authoritative closure adapter"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "A browser-local save or an unavailable, stale, mismatched, or ambiguous"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "#### Staff-route return context"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Privacy-bounded native staff-route return context"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Returning without losing your place"
+        },
+        {
+          "path": "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
+          "locator": "### 16. Preserve the operator's place — P1"
         }
       ],
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
-      "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, and truthful local fallback without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, or blocked with a safe next resolution."
+      "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, truthful local fallback, and one exact session-only task thread without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Follow-up completion uses the existing guarded quote mutation, confirms only an exact same-tenant server readback, and otherwise remains visibly uncertain without repeating the write. Staff-route Back/Forward may restore only an exact adjacent same-runtime, same-organization, same-principal view; private view and draft state stays memory-only, accepted discard cannot reappear on Forward, and invalid context falls back without selecting another record. The return-context layer adds no write authority and ordinary non-expiry fixtures retain byte-equivalent business state; the existing admin quote-history read may still persist automatic expiry under its unchanged lifecycle authority, including local-fallback normalization and versioning. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, blocked, or Needs confirmation with a safe next resolution."
+    },
+    {
+      "id": "same-runtime-staff-action-feedback",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "The Calm Four staff workspace presents consequential action attempts through one same-runtime, scope-bound feedback registry and continuity rail. Its first adapter reports exact tracked Workflow follow-up completion as pending, confirmed, recovery, uncertain, or cancelled without adding mutation authority or upgrading browser-local state to proof.",
+      "backendPaths": [
+        "src/lib/workspaceActionFeedback.js",
+        "src/context/WorkspaceActionFeedbackContext.jsx"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/WorkspaceRoute.jsx",
+        "src/components/SalesWorkflowModal.jsx",
+        "src/components/WorkspaceActionFeedbackNotice.jsx",
+        "src/components/workspaceActionFeedbackNotice.css",
+        "src/components/workspaceTaskJourneyNotice.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/WorkspaceActionFeedbackNotice.jsx",
+          "locator": "data-testid=\"workspace-action-feedback\""
+        },
+        {
+          "path": "src/components/WorkspaceActionFeedbackNotice.jsx",
+          "locator": "data-testid=\"workspace-action-feedback-announcer\""
+        },
+        {
+          "path": "src/components/WorkspaceRoute.jsx",
+          "locator": "<WorkspaceActionFeedbackProvider"
+        },
+        {
+          "path": "src/components/SalesWorkflowModal.jsx",
+          "locator": "data-follow-up-confirmation-state=\"uncertain\""
+        }
+      ],
+      "testPaths": [
+        "e2e/staff-app-action-feedback.spec.js",
+        "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+        "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+        "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+        "src/context/__tests__/WorkspaceActionFeedbackContext.test.jsx",
+        "src/lib/__tests__/appInteractionRecovery.test.js",
+        "src/lib/__tests__/workspaceActionFeedback.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "fences transitions to the exact scope, attempt, generation, action, and object"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "never reads or writes browser storage"
+        },
+        {
+          "path": "src/context/__tests__/WorkspaceActionFeedbackContext.test.jsx",
+          "locator": "clears the registry and announcement immediately when exact scope changes"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "publishes one shared pending-to-succeeded contract only after App accepts exact task closure"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "blocks a second write while an earlier exact-object outcome remains unresolved"
+        },
+        {
+          "path": "src/lib/__tests__/appInteractionRecovery.test.js",
+          "locator": "persists a reconciled exact task before App reports its feedback confirmed"
+        },
+        {
+          "path": "src/lib/__tests__/appInteractionRecovery.test.js",
+          "locator": "reconciles older feedback without changing a newer active task"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "retains uncertainty until authoritative reconciliation and forbids evidence-free recovery"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceActionFeedback.test.js",
+          "locator": "rejects acknowledgement while an outcome remains uncertain"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "preserves exact same-runtime feedback across both authorized workspace branches"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "dismisses terminal feedback from the compatibility workspace with its exact revision"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "removes prior staff feedback while auth is unresolved even when identity is retained"
+        },
+        {
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "returns focus to the prior connected control after terminal dismissal removes feedback"
+        },
+        {
+          "path": "e2e/staff-app-action-feedback.spec.js",
+          "locator": "keeps an exact uncertain follow-up outcome durable at"
+        }
+      ],
+      "documentationPaths": [
+        "docs/DESIGN_SYSTEM.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
+        "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
+        "docs/design/staff-app-ui-cohesion-audit.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "#### Durable action feedback foundation"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Dedicated same-runtime staff action-feedback capability"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Durable action feedback (source/local foundation)"
+        },
+        {
+          "path": "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
+          "locator": "### 17. Use one durable action-feedback contract — P1"
+        },
+        {
+          "path": "docs/design/staff-app-ui-cohesion-audit.md",
+          "locator": "### 17. P1 — Use one durable action-feedback contract"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The first bounded review covers the shared presentation registry, staff-only provider placement across authorized workspace branches, one atomic announcer, the responsive continuity stack, and the exact tracked Workflow follow-up adapter. Immutable attempt identity, revision-fenced terminal acknowledgement with deterministic focus return, retained uncertainty, auth-loading scope teardown, late-promise and staff-identity-change cleanup, unresolved-capacity refusal, duplicate-write prevention even with completion unchecked, exact return after task tracking stops, matching-task persistence, and independent older-feedback reconciliation without newer-task mutation are reviewed together. Quick Updates, Catalog, and all other staff mutations remain outside this first adapter.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical ready state before an action begins",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical submitting state for an unresolved write",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical uncertain state without claiming failure or success",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical reconciliation state only while exact readback is in flight",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical receipt state for confirmed evidence",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical error state for a definitive recovery outcome",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/workspaceActionFeedbackNotice.test.jsx",
+          "locator": "exposes canonical recovery state on the single safe next action",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Authorized staff can identify one exact consequential action attempt, distinguish pending, authoritative confirmation, definitive recovery, ambiguity, and cancellation, and follow one safe resolution without silently repeating a write. Uncertainty cannot be dismissed, directly laundered into recovery, or removed by a stale acknowledgement; it remains a duplicate-write fence until authoritative reconciliation or cancellation. The registry is presentation-only and same-runtime, clears on reload or organization, principal, or role change, is absent from customer, portal, unresolved-auth, and denied-role views, and has no storage, network, provider, or business-record authority. The Workflow adapter supplies product-owned fixed prose and opaque IDs and excludes its raw note, customer or staff email, thrown provider text, token-like material, and raw record. Generic pattern rejection remains defense in depth rather than proof that arbitrary normal prose was not copied, so every future adapter must independently enforce fixed-copy provenance before migration."
     },
     {
       "id": "stripe-connect-runtime-foundation",

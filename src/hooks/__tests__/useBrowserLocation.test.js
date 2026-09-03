@@ -7,7 +7,8 @@ import {
   navigateBrowser,
   readBrowserLocation,
   readBrowserHistoryEntry,
-  subscribeToBrowserLocation
+  subscribeToBrowserLocation,
+  traverseBrowserHistory
 } from "../useBrowserLocation";
 
 function createFakeWindow(initialPath = "/app?filter=open#today") {
@@ -178,5 +179,17 @@ describe("History API workspace navigation", () => {
       position: 1
     });
     expect(windowObject.history.state.source).toBe("filtered");
+  });
+
+  test("bounds native history traversal to an explicit non-zero delta", () => {
+    const windowObject = createFakeWindow("/app/quotes/rivera");
+    windowObject.history.go = vi.fn();
+
+    expect(traverseBrowserHistory(-1, { windowObject })).toBe(true);
+    expect(windowObject.history.go).toHaveBeenCalledWith(-1);
+    expect(traverseBrowserHistory(0, { windowObject })).toBe(false);
+    expect(traverseBrowserHistory(33, { windowObject })).toBe(false);
+    expect(traverseBrowserHistory(0.5, { windowObject })).toBe(false);
+    expect(windowObject.history.go).toHaveBeenCalledTimes(1);
   });
 });

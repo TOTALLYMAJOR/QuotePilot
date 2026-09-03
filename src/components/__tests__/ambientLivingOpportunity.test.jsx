@@ -309,8 +309,25 @@ describe("AmbientLivingOpportunity", () => {
       onSaveQuickUpdate
     });
 
-    const trigger = button("Quick Updates");
-    expect(trigger).not.toBeUndefined();
+    const contextBar = container.querySelector('[data-testid="quick-updates-context-bar"]');
+    const trigger = contextBar?.querySelector(
+      '[data-ambient-action-id="open-quick-updates"]'
+    );
+    const mobileTrigger = container.querySelector(
+      '.ambient-mobile-remote [data-ambient-action-id="open-quick-updates"]'
+    );
+    expect(contextBar).not.toBeNull();
+    expect(contextBar.getAttribute("role")).toBe("region");
+    expect(contextBar.getAttribute("aria-label")).toBe(
+      "Autumn Benefit Dinner opportunity actions"
+    );
+    expect(trigger).not.toBeNull();
+    expect(mobileTrigger).not.toBeNull();
+    expect(contextBar.contains(trigger)).toBe(true);
+    expect(trigger.closest(".ambient-title-line")).toBeNull();
+    expect(container.querySelectorAll(
+      '.ambient-title-line [data-ambient-action-id="open-quick-updates"]'
+    )).toHaveLength(0);
     expect(trigger.dataset.ambientActionId).toBe("open-quick-updates");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(trigger.getAttribute("aria-controls")).toBeTruthy();
@@ -352,7 +369,10 @@ describe("AmbientLivingOpportunity", () => {
       onSaveQuickUpdate: vi.fn()
     });
 
-    expect(button("Quick Updates")).toBeUndefined();
+    expect(container.querySelector('[data-testid="quick-updates-context-bar"]')).not.toBeNull();
+    expect(container.querySelectorAll(
+      '[data-ambient-action-id="open-quick-updates"]'
+    )).toHaveLength(0);
   });
 
   test("provides an in-flow mobile remote with exact object and next-action controls", async () => {

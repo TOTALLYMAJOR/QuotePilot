@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-01 18:27:16 CDT
+Last updated: 2026-09-03 13:49:00 CDT
 
 ## Current Production Release
 
@@ -33,6 +33,33 @@ Last updated: 2026-09-01 18:27:16 CDT
   receipt proves authenticated staff/portal acceptance,
   production-data correctness, provider delivery, recipient acknowledgement,
   or human acceptance.
+
+## v0.16.3 Provider-Acceptance Readiness
+
+- Published release head `adf5340c6742edab7bb4566876fe1f1227e19e31`
+  passed all nine jobs in exact-head CI run `33785813890` and produced verified
+  Firebase `staging-staffing-authority`, Firebase `staging-safe-off`, and Vercel
+  `staging-safe-off` candidate receipts. The new acceptance-profile source
+  change supersedes that SHA for promotion and therefore requires a fresh
+  exact-head CI run and fresh immutable receipts before use.
+- The tracked v4 UAT contract adds Firebase-only
+  `staging-provider-acceptance`. Its plan has 36 applicable Firebase-all items
+  and zero blocked items after SMS-provider filtering, but `applicable` is not
+  `passed`. The fixed runtime enables Resend, test-only quote and buyer Stripe,
+  public buyer entry, and global staffing authority while keeping SMS,
+  Commercial Change, and both Revenue Autopilot gates off. Candidate deployment
+  requires active safe-off Functions readback before opening the window.
+- The provider window is not open. No Stripe object, email, Turnstile challenge,
+  tenant mutation, or new candidate deployment has been performed for this
+  profile. The exact test Stripe account, restricted credentials/webhooks,
+  controlled email recipient, reviewed staging Turnstile pair, disposable
+  tenant, and human UAT evidence remain external prerequisites. Production
+  remains unchanged.
+- Completion requires every v4 Firebase-all item to pass against the exact
+  coordinated candidate, followed immediately by tenant rollback and verified
+  same-SHA Firebase and Vercel `staging-safe-off` receipts. A failed or partial
+  rollback, stale/partial evidence, uncontrolled provider recipient, live-mode
+  Stripe record, or missing exact-main attestation keeps promotion closed.
 
 ## v0.16 Calm Four Candidate Integration
 

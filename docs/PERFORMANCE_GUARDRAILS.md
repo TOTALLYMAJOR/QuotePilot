@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-01 13:05:37 CDT
+Last updated: 2026-09-03 12:37:55 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,10 +25,10 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,231,504-byte aggregate
-  and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,051,134-byte aggregate ceiling and
-  the same 391,901-byte largest-chunk ceiling. The pre-authority local
+- The current compatibility graph has a temporary 3,302,684-byte aggregate
+  and 395,896-byte largest-chunk ceiling. The production-equivalent Ambient
+  graph has a separate temporary 4,164,269-byte aggregate ceiling and
+  429,903-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
@@ -84,6 +84,22 @@ Threshold policy:
   locally. The Ambient ceiling is therefore 4,056,372 aggregate bytes, the
   larger literal verified graph, with no discretionary growth headroom. The
   largest-chunk ceiling remains unchanged.
+  The v0.16.3 reconciliation initially measured 3,295,659 / 393,459 bytes for the
+  compatibility graph after restoring the approved staff task continuity,
+  return-context, and durable action-feedback contracts on current main. Its
+  aggregate ceiling retains only the previously established 7,025-byte
+  compatibility runner offset. Exact-head CI run `33782951695` exercised the
+  complete compatibility flag matrix and measured 3,298,166 / 395,862 bytes;
+  the same matrix measured 3,298,234 / 395,896 bytes locally. The
+  largest-chunk ceiling is therefore the larger literal verified measurement,
+  not discretionary headroom. Exact-head CI then measured the complete Ambient
+  production flag matrix at 4,164,201 / 429,869 bytes; its local reproduction
+  measured 4,164,269 / 429,903 bytes. The Ambient ceilings are the larger
+  literal verified graph, not a percentage allowance. The increase is carried
+  by the approved cross-route continuity, return-context, and action-feedback
+  contracts across the shared route and their already-lazy feature surfaces;
+  recovering it is tracked optimization debt rather than a safe reconciliation
+  deletion.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

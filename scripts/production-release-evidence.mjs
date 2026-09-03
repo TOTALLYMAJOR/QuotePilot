@@ -114,7 +114,7 @@ export const RELEASE_APPROVAL_MODES = Object.freeze([
 ]);
 
 const RELEASE_UAT_CHECKLIST_SCHEMA =
-  "com.mbmapps.quotepilot.release-uat-checklist/v3";
+  "com.mbmapps.quotepilot.release-uat-checklist/v4";
 const RELEASE_UAT_TARGETS = Object.freeze([
   "firebase-hosting",
   "firebase-backend",
@@ -135,14 +135,20 @@ const RELEASE_UAT_CONDITIONAL_ITEM_KEYS = Object.freeze([
   "smsProviders",
   "targets"
 ]);
-const RELEASE_UAT_PROFILE_KEYS = Object.freeze(["id", "itemStates", "label"]);
+const RELEASE_UAT_PROFILE_KEYS = Object.freeze([
+  "id",
+  "itemStates",
+  "label",
+  "smsProvider"
+]);
 const RELEASE_UAT_PROFILE_STATE_KEYS = Object.freeze({
   applicable: Object.freeze(["state"]),
   blocked: Object.freeze(["reason", "state"])
 });
 const RELEASE_UAT_PROFILE_PLAN_SCHEMA =
-  "com.mbmapps.quotepilot.release-uat-profile-plan/v1";
+  "com.mbmapps.quotepilot.release-uat-profile-plan/v2";
 export const RELEASE_SMS_PROVIDERS = Object.freeze(["none", "twilio", "pingram"]);
+export const RELEASE_ACCEPTANCE_CANDIDATE_PROFILE = "staging-provider-acceptance";
 export const PRODUCTION_RELEASE_PROFILES = Object.freeze(["safe-off"]);
 
 function evidenceError(message) {
@@ -232,7 +238,7 @@ function readChecklist(root = ROOT) {
     || JSON.stringify(Object.keys(checklist).sort())
       !== JSON.stringify(RELEASE_UAT_CHECKLIST_KEYS)
   ) {
-    throw evidenceError("the release UAT checklist fields do not match the v3 contract.");
+    throw evidenceError("the release UAT checklist fields do not match the v4 contract.");
   }
   if (
     typeof checklist.version !== "string"
@@ -264,7 +270,7 @@ function readChecklist(root = ROOT) {
         JSON.stringify(RELEASE_UAT_CONDITIONAL_ITEM_KEYS)
       ].includes(JSON.stringify(Object.keys(item).sort()))
     ) {
-      throw evidenceError("a release UAT checklist item does not match the v3 contract.");
+      throw evidenceError("a release UAT checklist item does not match the v4 contract.");
     }
     const itemId = typeof item.id === "string" ? item.id : "";
     const label = typeof item.label === "string" ? item.label : "";
@@ -337,10 +343,13 @@ function readChecklist(root = ROOT) {
       || Array.isArray(profile)
       || JSON.stringify(Object.keys(profile).sort()) !== JSON.stringify(RELEASE_UAT_PROFILE_KEYS)
     ) {
-      throw evidenceError("a release UAT candidate profile does not match the v3 contract.");
+      throw evidenceError("a release UAT candidate profile does not match the v4 contract.");
     }
     const profileId = typeof profile.id === "string" ? profile.id : "";
     const label = typeof profile.label === "string" ? profile.label : "";
+    const smsProvider = typeof profile.smsProvider === "string"
+      ? profile.smsProvider
+      : "";
     if (
       profileId !== profileId.trim()
       || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(profileId)
@@ -350,6 +359,11 @@ function readChecklist(root = ROOT) {
     }
     if (!label || label !== label.trim() || label.length > 500) {
       throw evidenceError(`release UAT candidate profile ${profileId} has an invalid label.`);
+    }
+    if (!RELEASE_SMS_PROVIDERS.includes(smsProvider)) {
+      throw evidenceError(
+        `release UAT candidate profile ${profileId} has an invalid SMS provider.`
+      );
     }
     if (
       !profile.itemStates
@@ -400,6 +414,7 @@ function readChecklist(root = ROOT) {
     candidateProfiles.set(profileId, Object.freeze({
       id: profileId,
       label,
+      smsProvider,
       itemStates: Object.freeze(itemStates)
     }));
   }
@@ -455,7 +470,17 @@ export function getReleaseUatProfilePlan(targetValue, candidateProfileValue, roo
   if (!candidateProfile) {
     throw evidenceError(`the UAT candidate profile ${candidateProfileId || "<blank>"} is not tracked.`);
   }
-  const requiredItemIds = checklist.itemIdsByTarget[target];
+  if (
+    candidateProfileId === RELEASE_ACCEPTANCE_CANDIDATE_PROFILE
+    && target === "vercel"
+  ) {
+    throw evidenceError(
+      "the staging-provider-acceptance profile is Firebase-only; use the coordinated Firebase candidate for provider UAT and keep Vercel preview safe-off."
+    );
+  }
+  const requiredItemIds = checklist.itemIdsByTargetAndSmsProvider[target][
+    candidateProfile.smsProvider
+  ];
   const applicableItemIds = [];
   const blockedItems = [];
   for (const itemId of requiredItemIds) {
@@ -476,7 +501,8 @@ export function getReleaseUatProfilePlan(targetValue, candidateProfileValue, roo
     target,
     candidateProfile: Object.freeze({
       id: candidateProfile.id,
-      label: candidateProfile.label
+      label: candidateProfile.label,
+      smsProvider: candidateProfile.smsProvider
     }),
     qualification: blockedItems.length ? "blocked" : "eligible_for_attestation",
     applicableItemIds: Object.freeze(applicableItemIds),
@@ -519,10 +545,11 @@ export function parseSoloOperatorIds(value) {
 
 export function parseReleaseUatRunTitle(value) {
   const parts = String(value || "").split("/");
-  if (parts.length !== 10 || parts[0] !== "release-uat" || parts[1] !== "v3") {
-    throw evidenceError("the UAT workflow title does not match the v3 evidence contract.");
+  if (parts.length !== 11 || parts[0] !== "release-uat" || parts[1] !== "v4") {
+    throw evidenceError("the UAT workflow title does not match the v4 evidence contract.");
   }
-  const [, , approvalModeValue, releaseShaValue, target, smsProviderValue,
+  const [, , approvalModeValue, releaseShaValue, target, candidateProfile,
+    smsProviderValue,
     smsConfigurationGenerationValue, rollbackShaValue, stagingId, checklistDigest] = parts;
   const approvalMode = parseReleaseApprovalMode(approvalModeValue);
   const smsProvider = parseReleaseSmsProvider(smsProviderValue);
@@ -537,6 +564,9 @@ export function parseReleaseUatRunTitle(value) {
       "the UAT target is not firebase-hosting, firebase-backend, firebase-all, or vercel."
     );
   }
+  if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(candidateProfile)) {
+    throw evidenceError("the UAT candidate profile is invalid.");
+  }
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/.test(stagingId)) {
     throw evidenceError("the UAT staging deployment id is invalid.");
   }
@@ -547,6 +577,7 @@ export function parseReleaseUatRunTitle(value) {
     approvalMode,
     releaseSha,
     target,
+    candidateProfile,
     smsProvider,
     smsConfigurationGeneration,
     rollbackSha,
@@ -803,6 +834,7 @@ export function validateUatRun(
     releaseSha,
     rollbackSha,
     target,
+    candidateProfile = RELEASE_ACCEPTANCE_CANDIDATE_PROFILE,
     smsProvider: smsProviderValue,
     smsConfigurationGeneration: smsConfigurationGenerationValue,
     uatRunId,
@@ -867,6 +899,9 @@ export function validateUatRun(
   if (title.target !== target) {
     throw evidenceError("the UAT attestation does not cover this deployment target.");
   }
+  if (title.candidateProfile !== candidateProfile) {
+    throw evidenceError("the UAT attestation covers a different candidate profile.");
+  }
   if (title.smsProvider !== smsProvider) {
     throw evidenceError("the UAT attestation covers a different SMS provider profile.");
   }
@@ -904,6 +939,7 @@ export function validateUatRun(
     completedAt: new Date(uatCompletedMs).toISOString(),
     stagingId: title.stagingId,
     attestedTarget: title.target,
+    candidateProfile,
     smsProvider,
     smsConfigurationGeneration
   };

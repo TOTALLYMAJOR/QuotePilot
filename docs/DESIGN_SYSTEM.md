@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-08-30 23:42:36 CDT
+Last updated: 2026-09-03 02:21:52 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -82,6 +82,14 @@ workspace. It distinguishes three layers and does not trade one for another:
    workspace/avatar trigger to open the focus-contained **Workspace & tools**
    sheet; it does not add another bottom-nav item.
 
+The **Workspace & tools** sheet follows a stable task hierarchy: current
+workspace, frequent tools, operations, administration, then account. Search,
+Workflow, Messages, and Pilot stay exposed as frequent tools; live-event work
+stays exposed under Operations. Reporting, integrations, import, and diagnostics
+are conditionally rendered only after the user expands Administration, so a
+collapsed section cannot leak gated controls into keyboard order. Closing the
+sheet resets that secondary disclosure without changing any route or authority.
+
 v0.16 authorizes one organization per signed-in principal. It therefore does
 not present a same-account **Switch workspace** control that the identity and
 tenant model cannot honor. A person who needs another authorized principal uses
@@ -96,6 +104,52 @@ application state; an unsaved contextual draft may temporarily restore the
 current entry only to present its dismissal guard, then replay the exact
 requested traversal after discard.
 
+#### Staff-route return context
+
+Native browser history remains the sole navigation authority; QuotePilot does
+not maintain a second route stack. Each eligible Opportunities, Clients, or
+Library round trip may add a bounded return token to its native history entry.
+That token contains only canonical paths, allowlisted enum query values, opaque
+surface IDs, and runtime, organization, and principal scope. Search text,
+cursor positions, disclosures, scroll, focus, exact Library editor targets,
+and draft values remain in tab memory and never enter a URL, durable browser
+storage, or the history token.
+
+Restoration is exact or it does not happen. The destination accepts only the
+adjacent entry from the same runtime, organization, principal, and supported
+route pair, with an exact key/path/query match. A copied, reloaded, expired,
+malformed, or foreign token falls back to the canonical route, announces that
+fallback once, and never selects a nearby record by name, position, or stale
+memory. When valid, the route restores its structured filter, disclosure,
+focus target, and settled scroll position within 8px; Forward reopens the same
+exact object or runtime-only Library target.
+
+Library gives each editor opening its own same-URL native history entry. Moving
+among staff routes may suspend the mounted editor so its runtime-only draft is
+still present on return. Leaving the editor itself uses one busy/dirty
+dismissal authority for **Back to Library**, browser Back, browser Forward,
+and other guarded exits. **Keep editing** retains the exact editor, history
+entry, focus context, and draft. An accepted discard clears only that transient
+draft, performs the originally requested traversal, and makes a later Forward
+open the target from current persisted data rather than resurrecting discarded
+values. Owner-keyed navigation guards ensure a temporary overlay can close
+without removing the underlying Library guard.
+
+Reload deliberately clears transient return context, free text, cursors,
+disclosures, focus, scroll, exact runtime-only Library targets, and unsaved
+drafts. Only route-approved URL enums such as an Opportunities status/event
+type or Clients view may survive. The visible recovery status is a single live
+announcement. At 390, 768, and 1440px, restored surfaces retain one `main`
+landmark, an H1 followed by ordered H2 groups, AA text/chip contrast, 44px
+targets, contained focus paint, and no unintended horizontal overflow.
+
+Local evidence is 17/17 Chromium-admin cases. The nine responsive restored-
+source checks report zero Axe violations inside the audited Opportunities,
+Clients, or Library surface; destination pages report no serious or critical
+whole-page violations, and the dirty-editor case has a clean whole-page scan.
+Cross-browser, forced-colors, 200% zoom, actual assistive technology, hosted,
+and human acceptance remain open.
+
 **Now** is an editorial home, not a KPI dashboard. It pairs the established
 hospitality image with at most three priorities from existing Workflow order,
 recorded upcoming work, and quiet internal progress. **Opportunities** is a
@@ -103,6 +157,17 @@ meaningful index on desktop and mobile; groups and ordering come from actual
 attention/current-work state and recorded dates, never fixture position.
 Opening a row preserves the exact opportunity identity and its event, menu,
 staffing, pricing, proposal/activity, and evidence context.
+
+Each populated Opportunities row is one open editorial work-queue line: exact
+identity, lifecycle, recorded event context, one concise state-specific summary,
+one outcome-named primary action, and one plainly named **Details** disclosure.
+The concise summary is a presentation projection only; navigation continues to
+carry the fuller exact-object arrival reason, consequence, and next resolution.
+Desktop and tablet may align summary and action beside identity when space
+allows. At 620px and below they stack in that order so neither copy nor action is
+squeezed into a competing column. Duplicate disclosure labels, generic repeated
+“There isn’t…” paragraphs, and a second equally weighted row action are not part
+of this contract.
 
 **Clients** keeps the approved hierarchy: eyebrow, editorial headline, short
 explanation, hospitality image, opportunity story/action, three relationship
@@ -115,11 +180,24 @@ AI-derived relationship memory. If that capability is introduced later, it
 must be source-labelled, tenant-scoped, and correctable through an authoritative
 Client 360 write path before it may appear as fact.
 
+At 760px and below, the featured populated-client summary uses the same semantic
+and visual order: identity and recorded event, recorded contact details, current
+status, the one supported action, then the auxiliary hospitality image. Contact
+and status become separate full-width rows, long email addresses wrap within
+their own row, and decorative imagery may not narrow or precede the decision.
+Desktop may align the action beside identity while keeping the same source order.
+
 **Library** uses the same organization catalog in two modes. Standalone mode
 contains no opportunity fiction. Contextual mode names the exact opportunity
 and uses an explicit **Return to opportunity** or **Return to [event]** action.
-Browsing is read-only; only the existing guarded catalog or quote save
-authority may persist a change.
+The return-context layer adds no write authority; only existing guarded catalog
+or quote authorities may persist a change. Ordinary non-expiry browsing and
+restoration retain byte-equivalent business state. The existing administrator
+quote-history read remains separately authorized to persist automatic quote
+expiry, including local-fallback normalization and versioning, and is not
+widened or reclassified by this contract. Library editor Back/Forward behavior
+follows the shared native-history and dirty-draft contract above rather than
+introducing a route-local dismissal rule.
 
 ### Quick Updates drawer and sheet
 
@@ -129,6 +207,21 @@ drawer over the still-visible workspace; on mobile it is a full-height sheet.
 Opening, expanding, collapsing, and closing are write-free. Focus enters the
 surface, remains trapped while it is modal, and returns to the invoking Quick
 Updates control after clean dismissal.
+
+On desktop and tablet, the exact opportunity breadcrumb and the outlined Quick
+Updates launcher share a sticky contextual action bar below the global chrome.
+The bar names the opportunity for assistive technology, remains attached to the
+selected object while its page scrolls, and does not become global navigation or
+compete with the ranked primary next action. At 620px and below, the context bar
+returns to ordinary document flow and hides its launcher; the mobile opportunity
+remote owns the one visible, full-width Quick Updates launcher so neither the
+content nor the fixed bottom navigation is covered.
+
+The mobile sheet's scroll region reserves at least 24px below its last task
+target and applies matching scroll padding and target margin. Keyboard focus or
+programmatic reveal of **Open full Library** must place the complete 44px target
+above the fixed action footer, including its focus outline; a partly covered
+label or icon is a failed layout state, not a cue that more content exists.
 
 The common change is progressive: Menu exposes the supported service-style
 control; Staffing and Pricing expose their current summaries and outcome-named
@@ -256,6 +349,154 @@ stays in bounded same-app history state rather than the URL. Missing, stale,
 truncated, mismatched, or unavailable evidence recovers in context and may not
 substitute a nearby item. Schedule and Reporting remain non-primary-ready until
 equivalent consumers exist.
+
+Ranked cross-route actions additionally use `workspace-task-journey-v1` as one
+organization-, signed-in-principal-, and role-scoped session-only presentation
+thread. It carries only the source action's opaque task ID, canonical source
+route, exact destination object/focus, and allowlisted intent; event names,
+customer names, notes,
+search text, and other prose do not enter that record. Tracking begins only
+when the guarded navigation actually commits. It performs no quote, client,
+workflow, history, catalog, payment, or provider write, and replacing or
+stopping it changes only browser-session presentation state.
+
+Task phase and route context are independent. `locating`, `ready`, and
+`recovery` describe exact-arrival context; **ready** never changes the task's
+**In progress** phase. `review_follow_up` is the first closure adapter. An exact
+completion attempt may show **Completed** only when the existing Firebase write
+returns successfully, a server-only read of the same organization and quote
+matches every returned follow-up field, the stored internal completion
+confirmation is present, and that exact follow-up is absent from fresh
+Attention. Its bounded proof is a confirmation reference, not an immutable
+provider receipt. Browser-local saves, unavailable reads, field mismatches,
+foreign scope, invalid timestamps, and ambiguous outcomes become **Needs
+confirmation** with null proof; the recovery control retries only the readback
+and never repeats the write. The retry retains the exact successful Firebase
+write fingerprint; without it, later matching state cannot become confirmation.
+Stopping or replacing the task invalidates every pending readback so an older
+async result cannot restore or overwrite session presentation. A confirmed transition forces the shared
+commercial snapshot to refresh so Now and other consumers cannot retain the
+old due-work projection. The persistent task surface is a labelled region, not
+another live announcement: the source acknowledgement, pending confirmation,
+and destination arrival retain announcement ownership. It stays sticky inside
+the desktop and tablet workspace, returns to document flow on mobile, exposes
+44px controls, and remains clear of fixed navigation.
+
+#### Durable action feedback foundation
+
+The first recommendation-17 slice introduces
+`workspace-action-feedback-v1`, a presentation-only, same-runtime contract for
+consequential staff actions. It does not perform, authorize, retry, reconcile,
+or persist a mutation. Each attempt is fenced to the exact organization,
+signed-in principal, role, action, attempt, generation, and affected object.
+Changing organization, principal, or role invalidates the registry. Ordinary
+staff-route changes across both authorized workspace branches retain it; a full
+page reload deliberately clears it. Portal, unresolved-auth, customer, and
+denied-role branches never mount its provider.
+
+Privacy is enforced first at the adapter boundary. The tracked Workflow adapter
+supplies product-owned fixed action, message, and outcome copy, a bounded
+quote-number object label, and opaque identifiers; it does not pass its
+follow-up note, customer or staff email, thrown provider text, token-like
+material, or raw record to the registry. The generic registry additionally
+rejects unexpected fields, recognizable sensitive/error patterns, control or
+bidirectional characters, oversized values, and opaque blobs. That classifier
+is defense in depth, not proof that arbitrary otherwise-normal prose was not
+copied from free text. Every later adapter must therefore establish the same
+fixed-copy provenance before it can join the shared contract.
+
+The contract has five states with deliberately different authority:
+
+- `pending` means one exact request or read-only confirmation is in flight. The
+  affected region is busy and duplicate submission remains unavailable.
+- `succeeded` requires bounded definitive evidence already accepted by the
+  owning capability. The feedback layer cannot manufacture a receipt or turn a
+  browser-local observation into connected proof.
+- `recovery` means the outcome is definitive enough to name what changed or did
+  not change and offer one safe acknowledgement, return, inspection, or
+  reconciliation action.
+- `uncertain` means dispatch may have occurred but exact proof is missing or
+  mismatched. The original write remains frozen; any offered action remains
+  presentation-only or read-only. The Workflow adapter uses exact inspection or
+  reconciliation. Uncertainty cannot be dismissed or acknowledged away, and it
+  cannot transition directly to evidence-free `recovery`; authoritative
+  reconciliation or cancellation must resolve the duplicate-write fence.
+- `cancelled` requires either a pre-dispatch cancellation or an authoritative
+  cancellation record. Stopping presentation-only task tracking is not a
+  mutation cancellation.
+
+The visual surface is a compact Calm Four continuity rail attached to the
+affected object. It states the action, object, outcome, changed facts, unchanged
+facts, and at most one safe next action. It joins the existing Current task rail
+inside one sticky desktop/tablet continuity stack so the rails cannot overlap;
+both return to document flow on mobile. The rails remain semantically
+independent: action feedback describes one mutation attempt, while Current task
+describes cross-route task continuity. The feedback region exposes exact
+`data-action-feedback-*` markers and `aria-busy`; one separate atomic polite
+announcer owns the state transition. When the shared announcer is available,
+component-local consequential live regions and success/error toasts are
+suppressed. Terminal acknowledgement carries the exact record revision, clears
+only its exact stale announcement, rejects late controls, and cannot re-announce
+a queued record or erase a newer announcement. Low-consequence toast
+acknowledgement remains allowed. Canonical capability markers translate the
+presentation phases into `ready`, `submitting`, `uncertain`, `reconciliation`,
+`receipt`, `error`, and `recovery` without changing their business authority.
+
+The exact tracked Workflow follow-up completion is the first adapter. It begins
+feedback before the existing save, preserves the entered follow-up values, and
+may transition to `succeeded` only after the existing Firebase result and exact
+same-organization server-only readback. When the attempt still owns the exact
+Current task, App must also persist closure before Workflow renders
+**Confirmed**; rejection leaves task tracking open and renders recovery or
+uncertainty without repeating the write. An older feedback attempt may confirm
+the exact follow-up independently after authoritative reconciliation, but it
+must leave a newer or missing Current task unchanged and omit the
+task-completion fact. Timeout, offline, permission, stale, foreign-scope,
+malformed, or field-mismatch outcomes never become success.
+
+Preflight validation runs before feedback creation or write dispatch and returns
+focus to the invalid field. If required shared feedback cannot begin, the write
+is not sent and Workflow presents one bounded local recovery alert without raw
+error text. Once dispatched, the save owns an immutable operation and feedback
+selector: a task restart, focus change, authorized branch switch, or late
+promise cannot retarget its transition to a newer generation. If Workflow
+unmounts while its scoped provider survives, cleanup leaves the exact dispatched
+attempt `uncertain` and the eventual promise cannot perform readback or call
+task-completion authority. A staff-email change inside the retained provider
+also leaves that exact attempt uncertain and clears its abandoned busy key. A
+full scope teardown clears the registry and likewise prevents late work from
+entering the next scope. The bounded registry
+never evicts `pending` or `uncertain` work; capacity or an unresolved attempt for
+the same action/object fails closed, so a second write cannot begin.
+
+An uncertain feedback record owns its exact Workflow return even after the
+operator selects **Stop tracking** on the independent task rail. **Review exact
+follow-up** must focus the exact completed follow-up record with visible focus
+clearance below the continuity stack. Only then may the shared return action
+become inactive; the uncertain record and duplicate-write fence remain. The
+local read-only **Retry confirmation** is then the sole resolution control and
+never repeats the save.
+
+This is a foundation, not recommendation-17 completion. Quick Updates, Catalog,
+and the remaining staff mutations still use their existing local feedback
+contracts until later bounded adapters are designed and verified.
+
+Focused contract, provider, presentation, Workflow, and route tests cover exact
+identity, strict transitions, unresolved-capacity refusal, late-promise cleanup,
+scope invalidation, announcement ownership, and duplicate-write prevention. The
+dedicated Chromium-admin matrix exercises Now at 390×844, Opportunities at
+768×900, and Client 360 at 1440×1000 with
+`VITE_E2E_LOCAL_REVIEW_FIXTURES=false`: visible `pending` acknowledgement within
+250ms, exact uncertain identity, same-runtime route retention, exact return after
+task tracking stops, reload clearing, intended browser-local quote/history
+change, unchanged Catalog state, 44px controls, at most 1px horizontal overflow,
+and no continuity-stack/global-chrome collision. All six same-context
+before/after captures are part of the acceptance evidence; the tablet identity
+grid stacks at 761–900px to prevent the observed mid-word wrap. Final result
+counts belong to the immutable candidate completion handoff and must be rerun
+after the last lifecycle change. This evidence does not establish 200% zoom,
+forced colors, other browsers, actual assistive technology, connected or hosted
+authority, production behavior, or human comprehension.
 
 Ambient read failures use one calm, outcome-led recovery grammar. **Now**,
 **Opportunities**, and **Events** must withhold raw provider text, avoid empty
@@ -601,16 +842,22 @@ retention never crosses organization, quote, source, role, or gate identity.
   other adjacent resolution surfaces. A transient message may be visually
   elevated, but it is not an intentional overlay and may not declare the
   overlap exemption.
-- The expanded Chromium-admin layout lane passes 80 of 80 local cases with 0
-  failed or skipped in 6.3 minutes across 390×844, 768×900, and 1440×1000. Its
-  matrix contains 45 route cases; three Library template-editor cases; 27
-  header, search, context, and Pilot cases; two mobile Live Breakdown cases;
-  and three editor review/feedback cases. It
-  covers declared header popovers, Workspace search, Package, Money, Proposal,
+- The expanded Chromium-admin layout lane passes 81 of 81 local cases with 0
+  failed or skipped in 3.1 minutes across 390×844, 768×900, and 1440×1000. Its
+  matrix contains one fail-closed route-contract drift guard; 45 route cases;
+  three Library template-editor cases; 27 header, search, context, and Pilot
+  cases; two mobile Live Breakdown cases; and three editor review/feedback
+  cases. The four Calm Four primary destinations are derived from the same
+  frozen navigation contract used by the shell, and every declared route must
+  resolve at least one current visible audit peer. The lane covers Workspace &
+  tools, declared header popovers, Workspace search, Package, Money, Proposal,
   and Conversation contexts, deterministic Pilot answers, the normal-flow Pilot
   scenario review, and draft-review/feedback states. Every geometry assertion
   keeps collisions, overflow, escaped controls, escaped focus paint, and
-  undeclared overlays empty; document overflow is at most 1px. The Messages
+  undeclared overlays empty; document overflow is at most 1px. Mobile exact
+  opportunity headings reserve an internal focus-paint perimeter, and the
+  intentional Workspace-tools-to-search transition replaces the first modal
+  before opening the second without weakening other modal guards. The Messages
   heading additionally preserves at least 8px between focused title paint and
   its subtitle; the redundant eyebrow has been removed. Passing this lane is
   not a universal no-overlap claim: sales-role geometry, Firefox/WebKit, zoom
