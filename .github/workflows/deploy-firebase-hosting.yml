@@ -32,6 +32,7 @@ on:
         type: choice
         options:
           - safe-off
+          - email-active
       sms_provider:
         description: Exact deployment-owned owner-SMS provider for this release
         required: true
@@ -56,7 +57,7 @@ concurrency:
 jobs:
   deploy_firebase:
     name: Verify + Deploy Firebase
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && inputs.release_profile == 'safe-off' && inputs.sms_provider == 'none' && inputs.sms_configuration_generation == 'not-applicable'
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && (inputs.release_profile == 'safe-off' || (inputs.release_profile == 'email-active' && (inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'))) && inputs.sms_provider == 'none' && inputs.sms_configuration_generation == 'not-applicable'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
@@ -118,12 +119,27 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Validate deployment-owned SMS release profile
+      - name: Validate deployment-owned release profile
         env:
+          RELEASE_PROFILE: ${{ inputs.release_profile }}
+          FIREBASE_SCOPE: ${{ inputs.firebase_scope }}
+          EXPECTED_EMAIL_PROVIDER: ${{ inputs.release_profile == 'email-active' && 'resend' || 'none' }}
           EXPECTED_SMS_PROVIDER: ${{ inputs.sms_provider }}
           EXPECTED_SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
         run: |
           set -euo pipefail
+          case "${RELEASE_PROFILE}" in
+            safe-off)
+              test "${EXPECTED_EMAIL_PROVIDER}" = "none"
+              ;;
+            email-active)
+              test "${FIREBASE_SCOPE}" = "backend" || test "${FIREBASE_SCOPE}" = "all"
+              test "${EXPECTED_EMAIL_PROVIDER}" = "resend"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
           test "${EXPECTED_SMS_PROVIDER}" = "none"
           test "${EXPECTED_SMS_CONFIGURATION_GENERATION}" = "not-applicable"
 
@@ -134,7 +150,7 @@ jobs:
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           APP_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
           AUTH_PLATFORM_ADMIN_EMAILS: ${{ secrets.AUTH_PLATFORM_ADMIN_EMAILS }}
-          NOTIFICATIONS_EMAIL_PROVIDER: none
+          NOTIFICATIONS_EMAIL_PROVIDER: ${{ inputs.release_profile == 'email-active' && 'resend' || 'none' }}
           EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
           EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
           NOTIFICATIONS_SMS_PROVIDER: none

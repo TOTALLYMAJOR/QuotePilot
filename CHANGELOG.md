@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-03 15:32:05 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added a fail-closed `email-active` Firebase production release profile for
+  the approved Resend sender. It is limited to `backend`/`all`, derives
+  `NOTIFICATIONS_EMAIL_PROVIDER=resend` from the immutable workflow input, and
+  requires complete active-Functions readback against that exact profile.
+  Hosting-only and Vercel releases reject it; SMS, buyer access, Commercial
+  Change, staffing authority, and both Revenue Autopilot gates remain off.
+  The launch contract now separates secret installation, deployment,
+  QuotePilot provider acceptance, Resend delivery/bounce, inbox receipt, and
+  human review through ten non-negotiable acceptance criteria. This source
+  change does not claim a deployment or outbound email occurred.
 - Added a Firebase-only `staging-provider-acceptance` release-candidate profile
   for controlled v0.16.3 qualification. It begins from verified safe-off
   Functions readback; enables the approved Resend sender, generic and buyer

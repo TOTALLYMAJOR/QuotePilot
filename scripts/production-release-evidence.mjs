@@ -149,7 +149,10 @@ const RELEASE_UAT_PROFILE_PLAN_SCHEMA =
   "com.mbmapps.quotepilot.release-uat-profile-plan/v2";
 export const RELEASE_SMS_PROVIDERS = Object.freeze(["none", "twilio", "pingram"]);
 export const RELEASE_ACCEPTANCE_CANDIDATE_PROFILE = "staging-provider-acceptance";
-export const PRODUCTION_RELEASE_PROFILES = Object.freeze(["safe-off"]);
+export const PRODUCTION_RELEASE_PROFILES = Object.freeze([
+  "safe-off",
+  "email-active"
+]);
 
 function evidenceError(message) {
   return new Error(`Release evidence rejected: ${message}`);
@@ -166,7 +169,23 @@ export function parseReleaseSmsProvider(value) {
 export function parseProductionReleaseProfile(value) {
   const profile = String(value || "").trim().toLowerCase();
   if (!PRODUCTION_RELEASE_PROFILES.includes(profile)) {
-    throw evidenceError("the production release profile must be safe-off.");
+    throw evidenceError(
+      `the production release profile must be one of: ${PRODUCTION_RELEASE_PROFILES.join(", ")}.`
+    );
+  }
+  return profile;
+}
+
+export function validateProductionReleaseProfileTarget(profileValue, targetValue) {
+  const profile = parseProductionReleaseProfile(profileValue);
+  const target = String(targetValue || "").trim();
+  if (
+    profile === "email-active"
+    && !new Set(["firebase-backend", "firebase-all"]).has(target)
+  ) {
+    throw evidenceError(
+      "the email-active production profile is restricted to firebase-backend or firebase-all."
+    );
   }
   return profile;
 }
@@ -1046,7 +1065,10 @@ export function validateDirectDeploymentRun(
   }
 ) {
   const normalizedApprovalMode = parseReleaseApprovalMode(approvalMode);
-  const releaseProfile = parseProductionReleaseProfile(releaseProfileValue);
+  const releaseProfile = validateProductionReleaseProfileTarget(
+    releaseProfileValue,
+    target
+  );
   validateCanonicalRepository(run, "the deployment run");
   if (Number(run?.id) !== deploymentRunId) {
     throw evidenceError("the deployment response id does not match the current run.");
@@ -1620,12 +1642,15 @@ export async function verifyDirectProductionReleaseEvidence(
   const rollbackSha = requireFullSha(rollbackShaValue, "--rollback-sha");
   const ciRunId = requireRunId(ciRunIdValue, "--ci-run-id");
   const deploymentRunId = requireRunId(deploymentRunIdValue, "GITHUB_RUN_ID");
-  const releaseProfile = parseProductionReleaseProfile(releaseProfileValue);
   if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
     throw evidenceError(
       "the deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
     );
   }
+  const releaseProfile = validateProductionReleaseProfileTarget(
+    releaseProfileValue,
+    target
+  );
   const firebaseDeployment = String(target).startsWith("firebase-");
   const smsProvider = firebaseDeployment
     ? parseReleaseSmsProvider(smsProviderValue)

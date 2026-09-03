@@ -1211,12 +1211,13 @@ describe("current preparation workflow validator", () => {
 });
 
 describe("direct deployment workflow validator", () => {
-  test("accepts only the fail-closed production release profile", () => {
+  test("accepts only the two fail-closed production release profiles", () => {
     expect(parseProductionReleaseProfile(PRODUCTION_RELEASE_PROFILE)).toBe(
       PRODUCTION_RELEASE_PROFILE
     );
+    expect(parseProductionReleaseProfile("email-active")).toBe("email-active");
     expect(() => parseProductionReleaseProfile("full-authority")).toThrow(
-      /must be safe-off/i
+      /must be one of: safe-off, email-active/i
     );
   });
 
@@ -1248,7 +1249,7 @@ describe("direct deployment workflow validator", () => {
     expect(() => validateDirectDeploymentRun(
       makeDirectDeploymentRun("vercel"),
       makeDirectDeploymentOptions("vercel", { releaseProfile: "full-authority" })
-    )).toThrow(/production release profile must be safe-off/i);
+    )).toThrow(/production release profile must be one of/i);
     expect(() => validateDirectDeploymentRun(
       makeDirectDeploymentRun("vercel", {
         display_title: makeDirectDeploymentTitle({ releaseProfile: "full-authority" })
@@ -1256,6 +1257,36 @@ describe("direct deployment workflow validator", () => {
       makeDirectDeploymentOptions("vercel")
     )).toThrow(/title is not bound/i);
   });
+
+  test.each(["firebase-backend", "firebase-all"])(
+    "allows the email-active profile only for a Functions-bearing %s deployment",
+    (profile) => {
+      expect(validateDirectDeploymentRun(
+        makeDirectDeploymentRun(profile, {
+          display_title: makeDirectDeploymentTitle({
+            profile,
+            releaseProfile: "email-active"
+          })
+        }),
+        makeDirectDeploymentOptions(profile, { releaseProfile: "email-active" })
+      )).toEqual({ operatorId: OPERATOR_ID });
+    }
+  );
+
+  test.each(["firebase-hosting", "vercel"])(
+    "rejects the email-active profile for non-Functions target %s",
+    (profile) => {
+      expect(() => validateDirectDeploymentRun(
+        makeDirectDeploymentRun(profile, {
+          display_title: makeDirectDeploymentTitle({
+            profile,
+            releaseProfile: "email-active"
+          })
+        }),
+        makeDirectDeploymentOptions(profile, { releaseProfile: "email-active" })
+      )).toThrow(/email-active.*firebase-backend or firebase-all/i);
+    }
+  );
 
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, /different repository/i],
