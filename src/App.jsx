@@ -111,6 +111,8 @@ import {
   readWorkspaceTaskJourney,
   transitionWorkspaceTaskContext,
   transitionWorkspaceTaskOutcome,
+  WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE,
+  WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID,
   workspaceTaskJourneyBelongsToPrincipal,
   workspaceTaskJourneyMatchesArrival,
   writeWorkspaceTaskJourney
@@ -854,6 +856,11 @@ export default function App({
     : null;
   const [workspaceArrivalResolution, setWorkspaceArrivalResolution] = useState(null);
   const activeWorkspaceTaskPrincipal = workspaceTaskPrincipal(authSession);
+  const currentWorkspaceTaskSessionRef = useRef(null);
+  currentWorkspaceTaskSessionRef.current = {
+    organizationId: String(authSession.organizationId || "").trim(),
+    principal: activeWorkspaceTaskPrincipal
+  };
   const [workspaceTaskJourney, setWorkspaceTaskJourney] = useState(() => {
     if (!AMBIENT_UI_ENABLED) return null;
     const stored = readWorkspaceTaskJourney(authSession.organizationId);
@@ -966,6 +973,7 @@ export default function App({
       organizationId: authSession.organizationId,
       principal: activeWorkspaceTaskPrincipal,
       taskId,
+      startedAtISO: new Date().toISOString(),
       origin: {
         routeId: browserRoute.routeId,
         pathname: browserRoute.pathname
@@ -1522,6 +1530,99 @@ export default function App({
     if (String(summary?.organizationId || "").trim() !== String(authSession.organizationId || "").trim()) return;
     commercialSnapshot.refresh({ force: true });
   }, [authSession.organizationId, commercialSnapshot.refresh]);
+  const handleWorkspaceTaskOutcome = useCallback((outcome) => {
+    if (!outcome || typeof outcome !== "object") {
+      return { status: "ignored" };
+    }
+    const currentTaskSession = currentWorkspaceTaskSessionRef.current;
+    if (!currentTaskSession?.organizationId) return { status: "ignored" };
+    const currentStoredTask = readWorkspaceTaskJourney(currentTaskSession.organizationId);
+    const currentWorkspaceTaskJourney = currentStoredTask.ok
+      && workspaceTaskJourneyBelongsToPrincipal(
+        currentStoredTask.journey,
+        currentTaskSession.principal
+      )
+      ? currentStoredTask.journey
+      : null;
+    if (!currentWorkspaceTaskJourney) return { status: "ignored" };
+
+    const outcomeFocus = outcome.focus && typeof outcome.focus === "object"
+      ? outcome.focus
+      : null;
+    const phase = outcome.phase;
+    const proof = outcome.proof;
+    const exactOutcomeArrival = outcomeFocus ? {
+      destination: "workflow",
+      object: {
+        id: outcomeFocus.requestId,
+        type: "workflow-item"
+      },
+      focus: outcomeFocus,
+      intentId: "review_follow_up"
+    } : null;
+    const proofIsAuthoritativeConfirmation = phase === "resolved"
+      && proof
+      && Object.keys(proof).length === 3
+      && proof.verifierId === WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
+      && /^follow-up-completed:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(
+        String(proof.proofId || "")
+      )
+      && proof.proofType === WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE;
+    const proofIsAbsentForUncertainty = phase === "uncertain" && proof === null;
+    const exactOutcome = (
+      Object.keys(outcome).length === 6
+      && outcome.organizationId === currentWorkspaceTaskJourney.organizationId
+      && outcome.organizationId === currentTaskSession.organizationId
+      && outcome.taskId === currentWorkspaceTaskJourney.taskId
+      && outcome.startedAtISO === currentWorkspaceTaskJourney.startedAtISO
+      && currentWorkspaceTaskJourney.intentId === "review_follow_up"
+      && currentWorkspaceTaskJourney.destination === "workflow"
+      && exactOutcomeArrival
+      && workspaceTaskJourneyMatchesArrival(
+        currentWorkspaceTaskJourney,
+        exactOutcomeArrival
+      )
+      && (proofIsAuthoritativeConfirmation || proofIsAbsentForUncertainty)
+    );
+    if (!exactOutcome) {
+      pushToast(
+        "The task outcome did not match the exact active follow-up. Tracking remains unchanged.",
+        "warning"
+      );
+      return { status: "recovery" };
+    }
+    if (
+      phase === "uncertain"
+      && currentWorkspaceTaskJourney.phase === "uncertain"
+    ) {
+      return { status: "uncertain" };
+    }
+
+    const transitioned = transitionWorkspaceTaskOutcome(
+      currentWorkspaceTaskJourney,
+      phase === "resolved" ? { phase, proof } : { phase }
+    );
+    if (!transitioned.ok) {
+      pushToast("The task outcome could not be retained. The business record was not retried.", "warning");
+      return { status: "recovery", ...transitioned.recovery };
+    }
+    const stored = persistWorkspaceTaskJourney(transitioned.journey);
+    if (!stored.ok) {
+      pushToast(
+        "The follow-up outcome is recorded, but this device could not retain its task status.",
+        "warning"
+      );
+      return { status: "recovery", ...stored.recovery };
+    }
+    if (phase === "resolved") {
+      requestWorkflowAttentionRefresh({ force: true });
+    }
+    return { status: phase };
+  }, [
+    persistWorkspaceTaskJourney,
+    pushToast,
+    requestWorkflowAttentionRefresh
+  ]);
   const adminMounted = useStickyMount(catalogModalOpen);
   const scheduleMounted = useStickyMount(scheduleModalOpen);
   const integrationsMounted = useStickyMount(integrationsModalOpen);
@@ -6606,6 +6707,8 @@ export default function App({
               ? workspaceArrivalContext
               : null}
             onArrivalResolution={handleWorkspaceArrivalResolution}
+            activeTaskJourney={activeWorkspaceTaskJourney}
+            onTaskOutcome={handleWorkspaceTaskOutcome}
             onEditQuote={(quote) => {
               handleEditQuote(quote);
             }}

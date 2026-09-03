@@ -8,6 +8,8 @@ import {
   transitionWorkspaceTaskOutcome,
   WORKSPACE_TASK_CONTEXT_STATES,
   WORKSPACE_TASK_JOURNEY_AUTHORITY,
+  WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE,
+  WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID,
   WORKSPACE_TASK_JOURNEY_MAX_SERIALIZED_LENGTH,
   WORKSPACE_TASK_JOURNEY_MODEL,
   WORKSPACE_TASK_JOURNEY_PERSISTENCE,
@@ -25,6 +27,7 @@ function validInput(overrides = {}) {
       role: "sales"
     },
     taskId: "task-quote-42-review",
+    startedAtISO: "2026-09-03T03:10:00.000Z",
     origin: {
       routeId: "home",
       pathname: "/app"
@@ -93,6 +96,7 @@ describe("workspace task journey presentation contract", () => {
           role: "sales"
         },
         taskId: "task-quote-42-review",
+        startedAtISO: "2026-09-03T03:10:00.000Z",
         phase: "in_progress",
         contextState: "locating",
         origin: {
@@ -180,6 +184,23 @@ describe("workspace task journey presentation contract", () => {
       id: "operator@example.test",
       role: "sales"
     })).toBe(false);
+  });
+
+  test("binds otherwise identical tasks to one exact start generation", () => {
+    const first = createJourney();
+    const restarted = createJourney({ startedAtISO: "2026-09-03T03:11:00.000Z" });
+
+    expect(first.taskId).toBe(restarted.taskId);
+    expect(first.focus).toEqual(restarted.focus);
+    expect(first.startedAtISO).not.toBe(restarted.startedAtISO);
+    expect(transitionWorkspaceTaskContext(first, "ready").journey.startedAtISO)
+      .toBe(first.startedAtISO);
+    expect(createWorkspaceTaskJourney(validInput({
+      startedAtISO: "2026-09-03T03:11:00Z"
+    }))).toMatchObject({
+      ok: false,
+      recovery: { code: "invalid_input" }
+    });
   });
 
   test("matches the complete canonical arrival focus rather than a nearby item", () => {
@@ -355,6 +376,44 @@ describe("workspace task journey presentation contract", () => {
         journey: null
       });
     }
+  });
+
+  test("retains only the bounded confirmation reference for an exact follow-up outcome", () => {
+    const journey = createJourney({
+      taskId: "review-now-priority:follow-up:quote-42",
+      destination: "workflow",
+      object: { id: "follow-up:quote-42", type: "workflow-item" },
+      focus: {
+        quoteId: "quote-42",
+        attentionType: "follow_up",
+        requestId: "follow-up:quote-42"
+      },
+      intentId: "review_follow_up"
+    });
+    const proof = {
+      verifierId: WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID,
+      proofId: "follow-up-completed:2026-09-03T02:40:00.000Z",
+      proofType: WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE
+    };
+
+    const resolved = transitionWorkspaceTaskOutcome(journey, { phase: "resolved", proof });
+    const uncertain = transitionWorkspaceTaskOutcome(journey, { phase: "uncertain" });
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      journey: {
+        phase: "resolved",
+        focus: journey.focus,
+        proof
+      }
+    });
+    expect(uncertain).toMatchObject({
+      ok: true,
+      journey: { phase: "uncertain", focus: journey.focus, proof: null }
+    });
+    const serialized = JSON.stringify(resolved.journey);
+    expect(serialized).not.toContain("Confirm the final guest count");
+    expect(serialized).not.toContain("sales@example.test");
   });
 
   test("supports uncertainty recovery and terminal presentation outcomes", () => {

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 21:29:22 CDT
+Last updated: 2026-09-02 22:15:58 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,19 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Closed the first cross-route task outcome adapter for exact staff follow-ups.
+  Now, Opportunities, and Client 360 retain one principal-, role-, and
+  organization-bound task into Workflow; **Completed** is allowed only after a
+  Firebase save and matching server-only same-organization readback produce a
+  bounded internal confirmation and remove the exact item from fresh
+  Attention. Browser-local, unavailable, mismatched, invalid, or ambiguous
+  outcomes stay **Needs confirmation** with null proof and a read-only retry;
+  the write is never repeated automatically. Retry retains the exact Firebase
+  write fingerprint, and stopped or replaced tasks reject delayed results so
+  stale async work cannot resurrect session state. Five focused Chromium cases
+  now include the intentional local-save failure branch. Connected Firebase,
+  provider, hosted, production, assistive-technology, and human acceptance
+  remain separate and unclaimed.
 - Added a focused Chromium acceptance gate for the presentation-only
   cross-route task journey. The same Rivera follow-up now proves exact,
   source-specific action identity from Now, Opportunities, and Client 360,
