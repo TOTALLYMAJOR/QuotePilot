@@ -1009,7 +1009,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
         await expect(heading).toBeVisible({ timeout: routeDefinition.renderTimeoutMs || 10_000 });
         await expect(heading).toContainText(routeDefinition.heading);
         if (route.id === "opportunities-quotes") {
-          await expect(page.locator('.embedded-workspace-route[role="region"]'))
+          await expect(page.locator(".ambient-opportunities"))
             .toHaveAttribute("aria-labelledby", "ambient-opportunities-heading");
         }
         if (route.id === "customer-portal") {
@@ -1124,7 +1124,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
 
       await editor.getByRole("button", { name: "Back to Library" }).click();
       await expect(library).toBeVisible();
-      await expect(page.locator("#ambient-library-title")).toBeFocused();
+      await expect(trigger).toBeFocused();
     });
   }
 
@@ -1424,7 +1424,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       await expect(review).toContainText("Focused");
       await expect(review).toContainText("What this option changes");
       await expect(review).toContainText("If you do nothing");
-      await expect(review).toContainText("Draft only. Nothing changes until you save.");
+      await expect(review).toContainText("Draft only. Nothing is saved yet.");
       const apply = review.locator(PILOT_SCENARIO_REVIEW_ROUTE.focusSelector);
       await expect(apply).toBeFocused();
       await expectRouteGeometry(page, PILOT_SCENARIO_REVIEW_ROUTE);

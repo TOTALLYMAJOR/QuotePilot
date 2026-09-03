@@ -676,7 +676,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(rows).toHaveCount(3);
     await captureV16Proof(page, "02-desktop-opportunities-index.png");
     await expect(rows.locator(".ambient-opportunity__primary-action")).toHaveCount(3);
-    await expect(rows.locator('[data-opportunity-disclosure="details"] > summary > span'))
+    await expect(rows.locator('[data-opportunity-disclosure="details"] > summary > span:first-child'))
       .toHaveText(["Details", "Details", "Details"]);
     await expect(stream).not.toContainText("Opportunity details");
     await expect(rows.evaluateAll((items) => items.map((item) => item.dataset.opportunityId)))

@@ -9,6 +9,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Repaired the last obsolete broad browser selectors against current Calm Four
+  structure: the Opportunities section itself owns its accessible name, the
+  disclosure assertion excludes its decorative chevron, Library Back restores
+  the exact initiating template action, and Pilot scenario review retains its
+  own precise unsaved-draft language. These changes preserve stronger focus and
+  naming contracts instead of accepting nearby substitute elements.
 - Reconciled the broad layout fixture with the current split tenant catalog:
   package/settings data and event-menu data are now seeded through their
   respective browser-local stores at one matching revision. Pilot scenario and
