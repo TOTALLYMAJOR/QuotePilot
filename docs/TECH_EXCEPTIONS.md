@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-03 10:55:39 CDT
+Last updated: 2026-09-03 12:22:44 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -78,14 +78,17 @@ Use this log when a change intentionally departs from stable-first policy or req
   385,181 bytes, while the same CI-equivalent graph measured 4,056,372 /
   385,181 locally. The Ambient ceiling is therefore the larger literal
   4,056,372-byte graph with no discretionary growth headroom; the 391,901-byte
-  largest-chunk ceiling remains unchanged. The v0.16.3 reconciliation measures
-  3,295,659 / 393,459 bytes for compatibility after restoring the already
+  largest-chunk ceiling remains unchanged. The v0.16.3 reconciliation initially
+  measured 3,295,659 / 393,459 bytes for compatibility after restoring the already
   approved task continuity, return-context, and durable action-feedback
   contracts on current main. Its exact compatibility ceilings are 3,302,684
   aggregate bytes, retaining only the established 7,025-byte runner offset,
-  and the literal 393,459-byte local largest chunk. Ambient measures 4,009,260
-  / 385,181 bytes and remains below its existing ceilings, so that profile is
-  not widened.
+  and a 395,896-byte largest chunk. Exact-head CI run `33782951695` measured the
+  complete compatibility flag matrix at 3,298,166 / 395,862 bytes; the same
+  matrix measured 3,298,234 / 395,896 bytes locally. The ceiling uses the larger
+  literal verified measurement without discretionary growth headroom. Ambient
+  measures 4,009,260 / 385,181 bytes and remains below its existing ceilings,
+  so that profile is not widened.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -183,12 +186,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   previously established 303-byte Ambient runner offset. It provides no
   discretionary source-growth allowance. Exact-SHA CI, hosted timing, and
   authenticated human acceptance remain separate gates. The v0.16.3
-  reconciliation was rebuilt locally in both detected profiles. Compatibility
-  measured 3,295,659 / 393,459 bytes and Ambient measured 4,009,260 / 385,181
-  bytes. The profile detector selected exactly one graph each time; the
-  compatibility adjustment carries no discretionary source growth beyond the
-  already established runner offset. Exact-head CI remains the confirming
-  remote measurement.
+  reconciliation was rebuilt locally in both detected profiles. The initial
+  compatibility build measured 3,295,659 / 393,459 bytes and Ambient measured
+  4,009,260 / 385,181 bytes. Exact-head CI run `33782951695` then exposed the
+  complete compatibility flag matrix at 3,298,166 / 395,862 bytes, while its
+  local reproduction measured 3,298,234 / 395,896 bytes. The profile detector
+  selected exactly one graph each time; the revised largest-chunk ceiling is
+  the larger literal result rather than a percentage allowance.
 
 ## Superseded Exceptions
 

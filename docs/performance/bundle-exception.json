@@ -11,7 +11,7 @@
     "compatibility": {
       "maxMetrics": {
         "totalJsBytes": 3302684,
-        "largestJsChunkBytes": 393459
+        "largestJsChunkBytes": 395896
       }
     },
     "ambient-production": {

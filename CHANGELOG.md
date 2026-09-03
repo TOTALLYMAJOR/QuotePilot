@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 12:00:44 CDT
+Last updated: 2026-09-03 12:22:44 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Pinned the v0.16.3 compatibility largest-chunk exception to the larger exact
+  verified flag-matrix measurement: 395,862 bytes on exact-head CI run
+  `33782951695` and 395,896 bytes in its local reproduction. The aggregate
+  ceiling and Ambient ceilings are unchanged; no percentage headroom was added.
 - Advanced the Customer Directory and Customer 360 capability contract for the
   development-only seeded-directory precedence repair, including exact browser
   acceptance coverage and canonical Feature Matrix/User Manual boundaries.
