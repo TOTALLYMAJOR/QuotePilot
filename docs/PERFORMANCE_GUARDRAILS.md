@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-03 12:37:55 CDT
+Last updated: 2026-09-03 18:14:25 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,10 +25,10 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,302,684-byte aggregate
-  and 395,896-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,164,269-byte aggregate ceiling and
-  429,903-byte largest-chunk ceiling. The pre-authority local
+- The current compatibility graph has a temporary 3,306,709-byte aggregate
+  and 395,916-byte largest-chunk ceiling. The production-equivalent Ambient
+  graph has a separate temporary 4,172,754-byte aggregate ceiling and
+  429,923-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
@@ -100,6 +100,12 @@ Threshold policy:
   contracts across the shared route and their already-lazy feature surfaces;
   recovering it is tracked optimization debt rather than a safe reconciliation
   deletion.
+  The controlled Resend acceptance surface keeps its client adapter inside the
+  already-lazy Integrations Ops boundary. Exact local CI-flag builds measure
+  3,306,709 / 395,916 bytes for compatibility and 4,172,754 / 429,923 bytes
+  for Ambient. The ceiling changes are pinned to those literal graphs: 4,025
+  and 8,485 aggregate bytes respectively, plus 20 bytes in each largest route
+  chunk. This is reviewed capability cost, not discretionary headroom.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

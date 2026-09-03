@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 64,
+  "catalogVersion": 65,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -12,7 +12,7 @@
         "organization_admins",
         "platform_operators"
       ],
-      "summary": "Operations Audit gives same-tenant organization admins a bounded projection of immutable quote-approval and organization-role-change receipts while labeling delivery reconciliation and catalog confirmation as legacy server projections rather than immutable evidence.",
+      "summary": "Operations Audit gives same-tenant organization admins a bounded projection of immutable quote-approval, organization-role-change, and platform-admin Resend acceptance-test receipts while labeling delivery reconciliation and catalog confirmation as legacy server projections rather than immutable evidence.",
       "backendPaths": [
         ".github/workflows/set-operational-staffing-tenant.yml",
         "firestore.rules",
@@ -77,7 +77,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The existing admin-only Operations Audit now separates immutable receipt evidence from legacy server observations, projects role-change receipts without UID, recent-auth, App Check, or raw receipt fields, reports source truncation, and exposes no browser export or clear control. Role-authority receipts remain indefinite server records because no receipt-clear workflow is implemented.",
+      "surfaceReviewNote": "The existing admin-only Operations Audit now separates immutable receipt evidence from legacy server observations, projects role-change and Resend acceptance-test receipts without UID, provider message ID, recent-auth, App Check, or raw receipt fields, reports source truncation, and exposes no browser export or clear control. Receipt records remain indefinite because no receipt-clear workflow is implemented.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -122,7 +122,7 @@
           "justification": "Operations Audit performs a fresh callable read on open and refresh and does not retain a cached snapshot after failure, so it never presents a stale-data variant."
         }
       },
-      "safeOutcome": "An authenticated same-tenant admin can distinguish immutable role-change and quote-approval receipts from bounded legacy delivery and catalog observations. Replayed role receipts collapse to one row, foreign-tenant rows fail the defense-in-depth filter, failed approval executions remain visible, raw security metadata stays private, the table caps at 50 rows from bounded server samples, and retention is explicitly indefinite with no browser export or implemented clear workflow."
+      "safeOutcome": "An authenticated same-tenant admin can distinguish immutable role-change, quote-approval, and controlled Resend acceptance-test receipts from bounded legacy delivery and catalog observations. Replayed role receipts collapse to one row, foreign-tenant rows fail the defense-in-depth filter, failed approval executions remain visible, Resend provider message IDs and raw security metadata stay private in the audit projection, the table caps at 50 rows from bounded server samples, and retention is explicitly indefinite with no browser export or implemented clear workflow."
     },
     {
       "id": "privacy-bounded-session-diagnostics",
@@ -6822,7 +6822,7 @@
     },
     {
       "id": "production-email-sender-identity",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
@@ -6849,6 +6849,7 @@
         "functions/index.js#resolveQuoteDeliveryOutcome",
         "functions/index.js#sendPaymentRequestEmail",
         "functions/index.js#sendFinalBalanceRequestEmail",
+        "functions/index.js#sendResendAcceptanceTestEmail",
         "functions/index.js#getIntegrationSetupStatus",
         "functions/index.js#buyerAccessStripeWebhook"
       ],
@@ -6883,6 +6884,127 @@
       ],
       "headlessReason": "The sender allowlist is a private deployment and runtime security boundary for existing email actions. It exposes no new browser control and grants no tenant, role, Firestore, pricing, staffing, provider, or production authority.",
       "safeOutcome": "A production email function can use Resend only with the reviewed QuotePilot sender on the provider-verified quietpilot.us domain; a stale LeaguePilot identity, arbitrary address, missing configuration, or credential value in dotenv fails closed before deployment or dispatch."
+    },
+    {
+      "id": "resend-provider-acceptance-test",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "platform_administrators"
+      ],
+      "summary": "Verified platform administrators can send one server-owned production Resend acceptance message to an explicitly confirmed controlled quietpilot.us inbox, receive a durable provider-message receipt, and keep provider acceptance distinct from delivery and inbox confirmation.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/operationsAudit.js",
+        "functions/resendAcceptanceTest.js",
+        "src/lib/resendAcceptanceClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#sendResendAcceptanceTestEmail"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#sendResendAcceptanceTestEmail",
+        "functions/index.js#getOperationsAuditSnapshot"
+      ],
+      "frontendPaths": [
+        "src/components/EmailProviderAcceptancePanel.jsx",
+        "src/components/IntegrationOpsModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EmailProviderAcceptancePanel.jsx",
+          "locator": "data-capability-id=\"resend-provider-acceptance-test\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+        "src/lib/__tests__/operationsAudit.server.test.js",
+        "src/lib/__tests__/resendAcceptanceEmail.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/resendAcceptanceEmail.server.test.js",
+          "locator": "accepts only an exact immutable request for a controlled quietpilot.us recipient"
+        },
+        {
+          "path": "src/lib/__tests__/resendAcceptanceEmail.server.test.js",
+          "locator": "binds only the Resend secret, requires platform authority, and persists before contact"
+        },
+        {
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "requires the exact recipient confirmation before enabling the single send"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "Resend acceptance receipts are private and immutable in browsers"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Production Resend acceptance test (September 3, 2026)"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Email Provider Acceptance Test"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The new Integrations Ops surface appears only for a verified platform administrator, exposes no customer content or custom message fields, requires an exact controlled-domain recipient confirmation, creates a private durable receipt before one provider call, reuses a stable provider idempotency key, locks ambiguous work against retry, and reveals only the bounded acceptance receipt. Operations Audit omits the provider message identifier.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "distinguishes unavailable, submitting, error, and uncertain states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "distinguishes unavailable, submitting, error, and uncertain states",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "distinguishes unavailable, submitting, error, and uncertain states",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "distinguishes unavailable, submitting, error, and uncertain states",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "distinguishes unavailable, submitting, error, and uncertain states",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "distinguishes unavailable, submitting, error, and uncertain states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/emailProviderAcceptancePanel.test.jsx",
+          "locator": "distinguishes unavailable, submitting, error, and uncertain states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "A verified platform administrator can prove that the configured QuotePilot Resend sender accepted one controlled, non-customer test request. The exact request is persisted before provider contact and cannot be resent; ambiguous outcomes remain locked for manual evidence review. The acceptance receipt does not establish a delivered event, inbox receipt, customer email readiness, or human acceptance."
     }
   ]
 }

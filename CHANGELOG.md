@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 16:43:24 CDT
+Last updated: 2026-09-03 18:14:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added a verified-platform-admin Resend acceptance test to Integrations Ops.
+  It accepts only an exactly confirmed controlled `quietpilot.us` recipient,
+  supplies server-owned non-customer content, persists a private request before
+  one provider call, binds a stable provider idempotency key, refuses reuse of
+  the same request, and locks ambiguous outcomes against resend. The direct UI
+  receipt exposes the provider message ID and acceptance time; Operations Audit
+  records the bounded action without that identifier. The User Manual and
+  Launch Runbook now require fourteen explicit source, authority, one-call,
+  privacy, provider, inbox, non-mutation, and evidence criteria. Focused server,
+  audit, and component coverage passes 11/11. Its browser adapter remains in
+  the already-lazy Integrations Ops boundary; exact CI-flag builds pin the
+  reviewed temporary ceilings to 3,306,709 / 395,916 bytes for compatibility
+  and 4,172,754 / 429,923 bytes for Ambient, with no percentage headroom. This
+  source entry does not claim deployment, a provider request, delivery, inbox
+  receipt, or human acceptance.
 - Promoted annotated tag `v0.16.4` at exact-main commit
   `4f329180f0864ebadb0383930f969a3767f8d9db` to the production Firebase
   backend with governed run `33808086707` after exact-main CI run

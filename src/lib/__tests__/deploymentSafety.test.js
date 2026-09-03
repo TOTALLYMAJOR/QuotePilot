@@ -251,9 +251,9 @@ describe("direct production deployment safety", () => {
     );
     const batches = planFunctionDeployBatches(ids);
 
-    expect(ids).toHaveLength(101);
+    expect(ids).toHaveLength(102);
     expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
-    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 31]);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 32]);
     expect(batches.flat()).toEqual(ids);
     expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
     expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(

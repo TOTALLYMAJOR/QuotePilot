@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-03 15:59:15 CDT
+Last updated: 2026-09-03 17:48:40 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -366,16 +366,64 @@ deployment as the last-known-good rollback authority:
     version eligible for revocation. Otherwise execute the recorded rollback
     and verify the restored `safe-off` profile.
 
-After a controlled Resend deployment, send exactly one onboarding test to a
-controlled recipient and capture all three proof layers:
-1. QuotePilot reports that Resend accepted the request and records the provider
-   message id in the provisioning audit.
-2. The Resend dashboard records a `delivered` event for that message.
-3. The recipient confirms the message arrived with the expected sender name,
-   sender address, and `/app` sign-in link.
+After the frontend and Firebase backend containing the dedicated acceptance
+surface are deployed from the same clean tagged-main revision, use
+**Integrations Ops → Email provider acceptance test**. Do not use Customer
+Provisioning, a quote, a customer record, or custom message text for transport
+acceptance.
+
+The controlled acceptance is complete only when every criterion below has an
+exact receipt. Any partial or contradictory result stops the test; an ambiguous
+provider outcome must never be retried with a new request merely to obtain a
+green result.
+
+1. Exact-main CI and both governed frontend and Firebase backend deployments
+   pass for one annotated tag; production source readback matches that tag.
+2. A verified platform administrator can see the panel. A same-tenant admin
+   without platform authority cannot see it, and a direct callable attempt is
+   denied before any provider contact.
+3. **Check Setup** reports provider `resend`, approved sender `configured`, and
+   the masked `quotepilot@quietpilot.us` identity without exposing the API key.
+4. The named recipient is a controlled inbox on the exact `quietpilot.us`
+   domain. The operator confirms access to that inbox before sending.
+5. The operator types the displayed `SEND RESEND TEST TO <exact-address>` token
+   exactly. The server rejects any foreign domain, altered token, custom
+   subject/body, attachment, URL, or unsupported request field.
+6. One cryptographically generated `email_test_…` request ID is used. Network
+   evidence shows one callable mutation and at most one Resend POST for that
+   request; refresh, double-click, timeout, and browser navigation cannot create
+   a second send.
+7. A private organization-scoped receipt exists before provider contact and
+   contains the request, actor, recipient, and `dispatching` state. Browser
+   principals cannot read, create, update, or delete that record directly.
+8. QuotePilot returns `provider_accepted`, `provider=resend`, the exact request
+   and recipient, an acceptance timestamp, and a non-empty provider message ID.
+   No secret, API key, bearer value, customer data, quote data, or raw provider
+   error appears in UI, logs, or the callable response.
+9. The visible controls lock after acceptance. Reusing the same request ID
+   returns the stored receipt or refuses the attempt without provider contact;
+   an ambiguous outcome remains locked and offers evidence review only.
+10. Operations Audit shows one `resend_acceptance_test` immutable-receipt row
+    for the exact actor and recipient while omitting the provider message ID,
+    principal UID, secret fields, and raw receipt data.
+11. Resend provider evidence for the exact message ID reaches `delivered` (or a
+    terminal bounce/failure is recorded explicitly). Provider acceptance alone
+    is never promoted to delivery.
+12. The recipient confirms one message arrived with sender
+    `QuotePilot by MBMApps <quotepilot@quietpilot.us>`, subject
+    `QuotePilot Resend acceptance test`, and the server-owned non-customer body.
+13. The quote count, customer records, proposal/portal state, payment state,
+    staffing state, SMS state, and Revenue Autopilot state are unchanged by the
+    test.
+14. Only after criteria 1–13 pass may the run be called controlled production
+    email acceptance. That label still does not prove every customer mailbox,
+    ordinary quote content, onboarding content, spam placement, or human
+    acceptance of those workflows.
 
 Configuration presence or an accepted API response alone is not delivery
-proof. Keep production customer email disabled if any layer fails.
+proof. If provider or inbox evidence fails, retain the exact receipt, do not
+repeat an ambiguous request, and keep the prior last-known-good rollback
+authority available while the failure is investigated.
 
 ### Commercial Change Authority and trusted Kitchen BEO activation gate
 

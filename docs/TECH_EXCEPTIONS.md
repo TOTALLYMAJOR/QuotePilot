@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-03 12:37:55 CDT
+Last updated: 2026-09-03 18:14:25 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -200,7 +200,16 @@ Use this log when a change intentionally departs from stable-first policy or req
   production flag matrix at 4,164,201 / 429,869 bytes; its local reproduction
   measured 4,164,269 / 429,903 bytes. The profile detector selected exactly one
   graph each time; each revised ceiling is the larger literal result rather
-  than a percentage allowance.
+  than a percentage allowance. The controlled Resend acceptance test then
+  isolates its Firebase callable adapter inside the already-lazy Integrations
+  Ops chunk. Exact local CI-flag builds measure compatibility at 3,306,709 /
+  395,916 bytes and Ambient at 4,172,754 / 429,923 bytes. The revised absolute
+  ceilings equal those literal graphs: 4,025 and 8,485 aggregate bytes above
+  the preceding ceilings, and only 20 bytes above each preceding largest-chunk
+  ceiling. No percentage or future-growth allowance is added. Focused
+  authority tests and both profile builds are local evidence; exact-SHA CI,
+  hosted timing, provider acceptance, inbox receipt, and human acceptance
+  remain separate gates.
 
 ## Superseded Exceptions
 

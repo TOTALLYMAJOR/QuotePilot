@@ -7,6 +7,12 @@ import {
   getOperationsAuditSnapshot,
   sendIntegrationTestSms
 } from "../lib/commerceOps";
+import {
+  buildEmailTestConfirmationToken,
+  createEmailTestRequestId,
+  sendResendAcceptanceTestEmail
+} from "../lib/resendAcceptanceClient";
+import EmailProviderAcceptancePanel from "./EmailProviderAcceptancePanel";
 import SmsProviderPanel, { isSmsProviderAttemptLocked } from "./SmsProviderPanel";
 import {
   archiveOrganizationWorkspace,
@@ -323,6 +329,17 @@ export function IntegrationOpsView({
     status: null,
     testMessage: ""
   });
+  const [emailTestState, setEmailTestState] = useState({
+    testing: false,
+    reconciling: false,
+    recovering: false,
+    uncertain: false,
+    error: "",
+    requestId: "",
+    recipientEmail: "",
+    confirmationToken: "",
+    result: null
+  });
   const [provisionState, setProvisionState] = useState({
     loading: false,
     phase: "",
@@ -500,6 +517,71 @@ export function IntegrationOpsView({
         testRequestId: requestId || prev.testRequestId,
         error: err?.message || "Failed to send integration SMS test."
       }));
+    }
+  };
+
+  const handleSendEmailAcceptanceTest = async () => {
+    if (!canProvisionCustomer) {
+      setEmailTestState((prev) => ({
+        ...prev,
+        error: "Platform administrator authority is required for an email acceptance test."
+      }));
+      return;
+    }
+    if (emailTestState.testing || emailTestState.uncertain || emailTestState.result) return;
+    const requestId = emailTestState.requestId || createEmailTestRequestId();
+    setEmailTestState((prev) => ({
+      ...prev,
+      testing: true,
+      reconciling: false,
+      recovering: false,
+      uncertain: false,
+      error: "",
+      requestId
+    }));
+    try {
+      const result = await sendResendAcceptanceTestEmail({
+        requestId,
+        recipientEmail: emailTestState.recipientEmail,
+        confirmationToken: emailTestState.confirmationToken
+      });
+      setEmailTestState((prev) => ({
+        ...prev,
+        testing: false,
+        recovering: false,
+        uncertain: false,
+        error: "",
+        result
+      }));
+      setFeedback(
+        "Resend accepted the controlled request. Delivery still requires provider and inbox evidence."
+      );
+      await load();
+    } catch (err) {
+      const code = String(err?.code || "").trim().toLowerCase().replace(/^functions\//, "");
+      const uncertain = ["aborted", "deadline-exceeded", "internal", "unavailable", "unknown"]
+        .includes(code) || !code;
+      const recovering = code === "failed-precondition";
+      setEmailTestState((prev) => ({
+        ...prev,
+        testing: false,
+        recovering,
+        uncertain,
+        requestId: uncertain ? prev.requestId : "",
+        error: err?.message || (uncertain
+          ? "The provider outcome is unknown. Do not retry this request."
+          : "The controlled email acceptance request was rejected.")
+      }));
+    }
+  };
+
+  const handleReviewEmailAcceptanceRecord = async () => {
+    if (!emailTestState.uncertain || emailTestState.reconciling) return;
+    setEmailTestState((prev) => ({ ...prev, reconciling: true }));
+    try {
+      await load();
+    } finally {
+      setEmailTestState((prev) => ({ ...prev, reconciling: false }));
     }
   };
 
@@ -941,6 +1023,17 @@ export function IntegrationOpsView({
     setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
     setBuyerRepairState({ loading: false, error: "", result: null });
     setBuyerRepairForm({ orderId: "", confirmationToken: "" });
+    setEmailTestState({
+      testing: false,
+      reconciling: false,
+      recovering: false,
+      uncertain: false,
+      error: "",
+      requestId: "",
+      recipientEmail: "",
+      confirmationToken: "",
+      result: null
+    });
     if (!provisioningOnly) {
       setCleanupState({
         loading: false,
@@ -989,6 +1082,10 @@ export function IntegrationOpsView({
   );
 
   const integrationStatus = setupState.status || {};
+  const emailStatus = integrationStatus.email || {};
+  const expectedEmailTestConfirmation = buildEmailTestConfirmationToken(
+    emailTestState.recipientEmail
+  );
   const operationsAuditCapabilityState = resolveOperationsAuditCapabilityState(auditState);
   const stripeStatus = integrationStatus.stripe || {};
   const stripeMissingFields = Array.isArray(stripeStatus.missingFields) ? stripeStatus.missingFields : [];
@@ -1052,6 +1149,8 @@ export function IntegrationOpsView({
   const closeBlocked = Boolean(
     saving
     || setupState.testing
+    || emailTestState.testing
+    || emailTestState.reconciling
     || provisionState.loading
     || cleanupState.loading
     || buyerRepairState.loading
@@ -1214,6 +1313,36 @@ export function IntegrationOpsView({
           onCopyDisableGuidance={() => handleCopyValue(SMS_DISABLE_GUIDANCE, "SMS disable guidance")}
           setupGuidance={FUNCTIONS_ENV_SETUP_GUIDANCE}
           disableGuidance={SMS_DISABLE_GUIDANCE}
+        />}
+
+        {!provisioningOnly && canProvisionCustomer && <EmailProviderAcceptancePanel
+          emailStatus={emailStatus}
+          recipientEmail={emailTestState.recipientEmail}
+          confirmationToken={emailTestState.confirmationToken}
+          expectedConfirmationToken={expectedEmailTestConfirmation}
+          testing={emailTestState.testing}
+          reconciling={emailTestState.reconciling}
+          recovering={emailTestState.recovering}
+          result={emailTestState.result}
+          error={emailTestState.error}
+          uncertain={emailTestState.uncertain}
+          onRecipientChange={(recipientEmail) => setEmailTestState((prev) => ({
+            ...prev,
+            recipientEmail,
+            confirmationToken: "",
+            requestId: "",
+            result: null,
+            recovering: false,
+            uncertain: false,
+            error: ""
+          }))}
+          onConfirmationChange={(confirmationToken) => setEmailTestState((prev) => ({
+            ...prev,
+            confirmationToken,
+            error: ""
+          }))}
+          onSend={handleSendEmailAcceptanceTest}
+          onReview={handleReviewEmailAcceptanceRecord}
         />}
 
         {!provisioningOnly && canManageProviders && <section className="admin-section">
