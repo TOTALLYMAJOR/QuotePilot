@@ -306,6 +306,13 @@ async function setStableSourceScroll(page, preferredScrollY = 320) {
     const maximum = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     const stableScrollY = Math.min(requestedScrollY, Math.max(0, maximum - 24));
     window.scrollTo({ top: stableScrollY, behavior: "auto" });
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      const bounds = active.getBoundingClientRect();
+      if (bounds.top < 0 || bounds.bottom > window.innerHeight) {
+        active.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      }
+    }
     return window.scrollY;
   }, preferredScrollY);
   expect(scrollY, "the source must have a meaningful, non-terminal scroll position").toBeGreaterThan(100);

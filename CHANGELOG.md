@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Stabilized return-context browser setup around the exact focused source
+  action. Deep Library and Client controls remain visible when the test records
+  a meaningful non-terminal scroll position, so Back/Forward proof measures the
+  product restoration contract instead of scrolling the initiating control
+  out of view during setup.
 - Updated the cross-route task geometry gate to inspect the continuity stack as
   the sticky carrier while its child task card remains in normal flow. The gate
   now matches the composed feedback/task surface at tablet and desktop widths
