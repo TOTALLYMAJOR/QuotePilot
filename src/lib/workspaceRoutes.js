@@ -126,8 +126,7 @@ export const AMBIENT_PRIMARY_WORKSPACE_NAVIGATION = Object.freeze([
     path: WORKSPACE_PATHS.catalog,
     section: "catalog",
     action: "onCatalog",
-    orientation: "library",
-    adminOnly: true
+    orientation: "library"
   })
 ]);
 

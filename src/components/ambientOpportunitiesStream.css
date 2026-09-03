@@ -350,12 +350,17 @@
 
 .ambient-opportunity__details-icon {
   flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 1.8px solid currentColor;
+  border-bottom: 1.8px solid currentColor;
   color: var(--tone-ink-3, #706b63);
+  transform: rotate(45deg);
   transition: transform 160ms ease;
 }
 
 .ambient-opportunity__details[open] .ambient-opportunity__details-icon {
-  transform: rotate(180deg);
+  transform: rotate(225deg);
 }
 
 .ambient-opportunity__details > .ambient-opportunity__momentum {

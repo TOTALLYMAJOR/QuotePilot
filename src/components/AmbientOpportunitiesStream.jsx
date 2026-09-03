@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
 import StatusChip from "./StatusChip";
 import {
   createAmbientAction,
@@ -155,10 +154,8 @@ function OpportunityRow({ row, onResolve, position }) {
         >
           <summary>
             <span>Details</span>
-            <ChevronDown
+            <span
               className="ambient-opportunity__details-icon"
-              size={16}
-              strokeWidth={1.8}
               aria-hidden="true"
             />
           </summary>

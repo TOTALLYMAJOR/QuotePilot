@@ -200,7 +200,7 @@ describe("workspace route parsing and construction", () => {
         section: "catalog",
         action: "onCatalog",
         orientation: "library",
-        adminOnly: true
+        adminOnly: false
       }
     ]);
     expect(Object.isFrozen(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION)).toBe(true);
