@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-08-30 13:37:25 CDT
+Last updated: 2026-09-02 20:08:21 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -419,6 +419,20 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   committed quotes; saving stays intentional and versioned.
 - Continue the plain-language terminology pass on remaining expert labels
   (Decision Debt, Revenue Autopilot, attention projections).
+- Execute the P1 staff-app cohesion contracts in recommendations 15–18 and
+  20–23 of the
+  [staff-app UI cohesion audit](docs/design/staff-app-ui-cohesion-audit.md):
+  close the cross-route task loop, preserve exact return context, unify durable
+  action feedback, keep commercial evidence rails independent, establish one
+  object signature and date/time grammar, label state domains, and use one
+  Calm Four read/recovery contract. Each recommendation is one bounded commit
+  unless the task planner proves an inseparable shared contract.
+- Apply the shared
+  [staff-app cohesion acceptance matrix](docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md)
+  to every slice. Preserve zero-write presentation behavior, exact tenant/role
+  gates, duplicate-name and contradictory-state fixtures, 390/768/1440
+  geometry, keyboard/focus behavior, and separate local, hosted,
+  assistive-technology, provider, and human evidence.
 
 ## P1 - Data Operations
 
@@ -549,6 +563,19 @@ acceptance, and explicitly deferred product work remains listed here.
   and screen-reader acceptance across the routed workspace.
 - Add intentional motion only where it improves state comprehension and remains
   safe under reduced motion.
+
+## P2 - Workspace Cohesion Follow-ups
+
+- Complete recommendations 9, 10, 12, 13, 19, and 24 in the
+  [staff-app UI cohesion audit](docs/design/staff-app-ui-cohesion-audit.md):
+  normalize the four route frames, moderate mobile editorial type, unify search
+  behavior, standardize evidence disclosures, add a selected-object
+  relationship spine, and give imagery a truthful route role.
+- Do not begin a cosmetic restyle in place of these contracts. Reuse the Calm
+  Four tokens and components, and require the corresponding formidable criteria
+  in the
+  [cohesion acceptance matrix](docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md)
+  before marking a recommendation locally complete.
 
 ## P2 - Integrations and Configurability
 
