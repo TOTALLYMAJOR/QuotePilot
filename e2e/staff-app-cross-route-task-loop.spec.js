@@ -347,6 +347,7 @@ async function expectTaskRailGeometry(page, rail, viewportWidth) {
     const overlaps = (left, right) => Boolean(left && right)
       && Math.min(left.right, right.right) - Math.max(left.left, right.left) > 1
       && Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top) > 1;
+    const carrier = element.closest(".workspace-continuity-stack") || element;
     const railBox = box(element);
     const chrome = {
       header: box(document.querySelector(".site-header")),
@@ -365,6 +366,7 @@ async function expectTaskRailGeometry(page, rail, viewportWidth) {
       });
     return {
       position: getComputedStyle(element).position,
+      carrierPosition: getComputedStyle(carrier).position,
       rail: railBox,
       railOverflowPx: Math.max(0, element.scrollWidth - element.clientWidth),
       documentOverflowPx: Math.max(
@@ -380,7 +382,8 @@ async function expectTaskRailGeometry(page, rail, viewportWidth) {
   });
 
   expect(geometry.viewport.width).toBe(viewportWidth);
-  expect(geometry.position).toBe(viewportWidth <= 760 ? "relative" : "sticky");
+  expect(geometry.position).toBe("relative");
+  expect(geometry.carrierPosition).toBe(viewportWidth <= 760 ? "relative" : "sticky");
   expect(geometry.rail.left).toBeGreaterThanOrEqual(-1);
   expect(geometry.rail.right).toBeLessThanOrEqual(geometry.viewport.width + 1);
   expect(geometry.railOverflowPx).toBeLessThanOrEqual(1);

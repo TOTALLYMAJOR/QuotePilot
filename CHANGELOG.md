@@ -9,6 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Updated the cross-route task geometry gate to inspect the continuity stack as
+  the sticky carrier while its child task card remains in normal flow. The gate
+  now matches the composed feedback/task surface at tablet and desktop widths
+  without weakening mobile non-sticky behavior or collision checks.
 - Reconciled local-review customer identity precedence so browser acceptance
   seeds remain authoritative for their exact tenant while the fixed review
   directory still supplies an empty local workspace. Client lists, pagination,
