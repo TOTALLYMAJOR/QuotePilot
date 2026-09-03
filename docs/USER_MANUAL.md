@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-03 02:21:52 CDT
+Last updated: 2026-09-03 12:00:44 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2260,7 +2260,10 @@ receipts for those actions and evidence.
   source rail labels it **This browser**. Selecting one of those exact fixture
   identities opens its matching browser-local relationship overview, including
   locally generated opportunity and conversation context where present. The
-  fixture is never written to Firebase or a provider and is not production
+  fixture is used only when no explicit tenant quote directory exists. Browser
+  acceptance that supplies an exact directory, including an empty list, keeps
+  those supplied identities and state instead of substituting fixture records.
+  The fixture is never written to Firebase or a provider and is not production
   client, engagement, delivery, booking, or payment evidence.
 - **Review client** opens that exact opaque client and focuses a relationship
   overview with identity, active work shown, items needing review, the next

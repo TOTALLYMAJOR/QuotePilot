@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 62,
+  "catalogVersion": 63,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -539,14 +539,14 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 7,
+      "reviewRevision": 8,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The v0.16 Ambient presentation reuses that authority in a sparse hospitality-led empty state and a populated relationship view led by client identity, current or recent event, recorded memory, current attention, and one next action; search and filtering appear only for a populated bounded page. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The v0.16 Ambient presentation reuses that authority in a sparse hospitality-led empty state and a populated relationship view led by client identity, current or recent event, recorded memory, current attention, and one next action; search and filtering appear only for a populated bounded page. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
@@ -605,6 +605,7 @@
       "testPaths": [
         "e2e/customer-centered-workspace.spec.js",
         "e2e/ambient-clients.spec.js",
+        "e2e/staff-app-return-context.spec.js",
         "e2e/v16-calm-four-acceptance.spec.js",
         "e2e/workspace-no-unintended-overlap.spec.js",
         "src/components/__tests__/ambientClientsView.test.jsx",
@@ -658,6 +659,10 @@
           "locator": "fails closed across local tenant, customer, quote, and version collisions"
         },
         {
+          "path": "e2e/staff-app-return-context.spec.js",
+          "locator": "Client 360 restores its exact opportunity action, tab, disclosure, and scroll"
+        },
+        {
           "path": "src/components/__tests__/customerCommercialMeasuresPresentation.test.jsx",
           "locator": "binds the Customer 360 DTO to a polished, source-bounded successful view"
         },
@@ -689,7 +694,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 7 replaces the dashboard-like empty Clients presentation with the approved sparse hospitality hierarchy, one established Start an opportunity action, three relationship steps, and quiet disclosure; zero metrics, search, refresh, and source chrome are absent until records justify controls. Populated Clients uses the same editorial language and leads with identity, current or recent event, recorded relationship memory, current attention, and one next action before the bounded searchable directory. Existing Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, local_fixture boundary, keyboard behavior, and recovery controls remain intact.",
+      "surfaceReviewNote": "Revision 8 preserves the Revision 7 sparse Clients hierarchy and reconciles development review data precedence: an explicitly seeded tenant quote directory now owns exact populated or empty acceptance state, while the generic local_fixture remains the fallback only when no explicit directory exists. Production Firebase reads, Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, keyboard behavior, and recovery controls remain intact.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -735,7 +740,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff see a truthful sparse starting point when the completed same-tenant read has no clients, or a relationship-led populated view with search and filtering only when records exist. They can open one exact client, correct remembered context through existing Client 360 controls, inspect recorded milestones and immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Browser-local fixture records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
+      "safeOutcome": "Staff see a truthful sparse starting point when the completed same-tenant read has no clients, or a relationship-led populated view with search and filtering only when records exist. They can open one exact client, correct remembered context through existing Client 360 controls, inspect recorded milestones and immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Explicit browser acceptance seeds cannot be replaced by a nearby generic fixture identity. Browser-local records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
     },
     {
       "id": "bounded-commercial-search",
