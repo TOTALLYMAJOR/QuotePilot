@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 12:37:55 CDT
+Last updated: 2026-09-03 13:49:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added a Firebase-only `staging-provider-acceptance` release-candidate profile
+  for controlled v0.16.3 qualification. It begins from verified safe-off
+  Functions readback; enables the approved Resend sender, generic and buyer
+  Stripe rails in test mode, public buyer access, and global staffing authority;
+  and keeps SMS, Commercial Change, and both Revenue Autopilot gates off. The
+  provider profile requires a reviewed non-test staging Turnstile key, an exact
+  profile-bound typed confirmation, and a same-SHA safe-off closeout across
+  Firebase and Vercel. UAT checklist v4 now filters conditional SMS items by
+  each profile's fixed provider and binds exact-main human attestation to the
+  candidate profile. The launch runbook records fourteen non-negotiable
+  acceptance criteria; applicable checks remain unpassed until observed, and
+  no production or provider outcome is claimed by this source change. Focused
+  release-safety coverage passes 308/308 tests; the full unit suite passes
+  4,433 tests with 79 intentionally skipped, and the production build plus
+  environment, workflow, secrets, capability, project-state, and documentation
+  governance gates pass.
 - Pinned both v0.16.3 bundle profiles to their larger exact verified flag-matrix
   measurements. Compatibility is 3,298,166 / 395,862 bytes on exact-head CI and
   3,298,234 / 395,896 locally; Ambient is 4,164,201 / 429,869 bytes on exact-head

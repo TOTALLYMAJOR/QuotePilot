@@ -326,7 +326,11 @@ describe("direct production deployment safety", () => {
   });
 
   test("does not persist checkout credentials in the UAT attestation job", () => {
-    expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
+    const source = fs.readFileSync(UAT_WORKFLOW, "utf8");
+    expect(source).toMatch(/persist-credentials:\s*false/);
+    expect(source).toMatch(/run-name: release-uat\/v4\/.+inputs\.candidate_profile/);
+    expect(source).toMatch(/candidate_profile:/);
+    expect(source).toMatch(/--candidate-profile "\$\{CANDIDATE_PROFILE\}"/);
   });
 
   test("keeps tenant activation inputs out of executable workflow text", () => {

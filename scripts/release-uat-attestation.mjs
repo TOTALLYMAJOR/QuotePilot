@@ -101,6 +101,7 @@ export function parseReleaseUatArgs(argv) {
   const allowed = new Set([
     "--release-sha",
     "--target",
+    "--candidate-profile",
     "--sms-provider",
     "--sms-configuration-generation",
     "--rollback-sha",
@@ -138,7 +139,19 @@ export function buildReleaseUatReceipt(
     throw attestationError("the rollback SHA must differ from the release SHA.");
   }
   const target = requireReleaseTarget(args.target);
+  const candidateProfile = String(args["candidate-profile"] || "").trim();
+  const candidatePlan = getReleaseUatProfilePlan(target, candidateProfile, root);
+  if (candidatePlan.qualification !== "eligible_for_attestation") {
+    throw attestationError(
+      `candidate profile ${candidateProfile || "<blank>"} has blocked checklist items and cannot be attested.`
+    );
+  }
   const smsProvider = parseReleaseSmsProvider(args["sms-provider"]);
+  if (candidatePlan.candidateProfile.smsProvider !== smsProvider) {
+    throw attestationError(
+      `--sms-provider must match candidate profile ${candidateProfile}: ${candidatePlan.candidateProfile.smsProvider}.`
+    );
+  }
   const smsConfigurationGeneration = parseReleaseSmsConfigurationGeneration(
     args["sms-configuration-generation"],
     smsProvider
@@ -158,7 +171,7 @@ export function buildReleaseUatReceipt(
     .split(",")
     .map((itemId) => itemId.trim())
     .filter(Boolean);
-  const requiredItemIds = checklist.itemIdsByTargetAndSmsProvider[target][smsProvider];
+  const requiredItemIds = candidatePlan.applicableItemIds;
   if (
     !Array.isArray(requiredItemIds)
     || requiredItemIds.length === 0
@@ -231,10 +244,11 @@ export function buildReleaseUatReceipt(
   }
 
   return Object.freeze({
-    schema: "com.mbmapps.quotepilot.release-uat-attestation/v3",
+    schema: "com.mbmapps.quotepilot.release-uat-attestation/v4",
     approvalMode,
     releaseSha,
     target,
+    candidateProfile,
     smsProvider,
     smsConfigurationGeneration,
     rollbackSha,
