@@ -76,6 +76,7 @@ beforeEach(() => {
     error: "",
     receipt: null,
     queueChanges: vi.fn(() => true),
+    discardDeviceChanges: vi.fn(() => true),
     syncNow: vi.fn(async () => ({ ok: true })),
     retry: vi.fn(async () => ({ ok: true })),
     review: vi.fn(async () => ({ readyToPublish: true })),
@@ -231,6 +232,38 @@ describe("AdminCatalogModal save capability state", () => {
       status: "blocked",
       reason: "busy"
     });
+  });
+
+  test("confirmed dismissal clears device-only setup changes without touching server drafts", () => {
+    const deviceChange = {
+      collection: "settings",
+      recordId: "config",
+      intent: "update",
+      payload: { brandName: "Private draft" }
+    };
+    setupDraft.current = {
+      ...setupDraft.current,
+      changedRecordCount: 2,
+      serverChanges: [{ ...deviceChange, payload: { brandName: "Saved setup draft" } }],
+      deviceChanges: [deviceChange],
+      changes: [deviceChange],
+      deviceOnly: true
+    };
+    const onDismissGuardChange = vi.fn();
+    const continuation = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderView({ onDismissGuardChange });
+
+    const guard = onDismissGuardChange.mock.calls
+      .map(([candidate]) => candidate)
+      .filter(Boolean)
+      .at(-1);
+    expect(guard).toMatchObject({ dirty: true });
+    expect(guard.requestDismiss("browser_back", continuation)).toMatchObject({
+      status: "dismissed"
+    });
+    expect(setupDraft.current.discardDeviceChanges).toHaveBeenCalledWith([deviceChange]);
+    expect(continuation).toHaveBeenCalledOnce();
   });
 
   test("preserves a dirty draft when newer catalog evidence arrives", () => {

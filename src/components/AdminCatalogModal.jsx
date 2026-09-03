@@ -627,6 +627,10 @@ export function AdminCatalogView({
   const hasManagedMenuDraft = hasPendingMenuEditorDraft
     || Object.values(menuItemDirty).some((dirty) => dirty === true);
   const hasAnyUnsavedChanges = hasUnsavedChanges || hasManagedMenuDraft;
+  const hasDeviceOnlySetupChanges = Boolean(
+    catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
+  );
+  const hasDismissableChanges = hasAnyUnsavedChanges || hasDeviceOnlySetupChanges;
   const packageWorkspace = buildPackageWorkspaceCollectionModel({
     catalog: draft,
     menuItems,
@@ -946,14 +950,13 @@ export function AdminCatalogView({
   );
   useEffect(() => {
     onInteractionStateChange?.({
-      dirty: hasAnyUnsavedChanges || (catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0),
+      dirty: hasDismissableChanges,
       busy: closeBlocked
     });
   }, [
     catalogSetupDraftChanges.length,
-    catalogSetupDraft.deviceOnly,
     closeBlocked,
-    hasAnyUnsavedChanges,
+    hasDismissableChanges,
     onInteractionStateChange
   ]);
 
@@ -997,14 +1000,23 @@ export function AdminCatalogView({
       setStatus("Wait for the current catalog action to finish before closing.");
       return { status: "blocked", reason: "busy", trigger: reason };
     }
-    if (hasAnyUnsavedChanges && !window.confirm("Discard unsaved catalog, menu, and branding changes?")) {
+    if (hasDismissableChanges && !window.confirm("Discard unsaved catalog, menu, and branding changes?")) {
       return { status: "guarded", reason: "dirty", trigger: reason };
+    }
+    if (hasDeviceOnlySetupChanges) {
+      catalogSetupDraft.discardDeviceChanges?.(catalogSetupDraft.deviceChanges);
     }
     resetOnNextOpenRef.current = true;
     onInteractionStateChange?.({ dirty: false, busy: false });
     if (typeof continuation === "function") continuation();
     return { status: "dismissed", trigger: reason };
-  }, [closeBlocked, hasAnyUnsavedChanges, onInteractionStateChange]);
+  }, [
+    catalogSetupDraft,
+    closeBlocked,
+    hasDeviceOnlySetupChanges,
+    hasDismissableChanges,
+    onInteractionStateChange
+  ]);
   const handleClose = useCallback(() => {
     requestDismiss("close", onClose);
   }, [onClose, requestDismiss]);
@@ -1017,12 +1029,12 @@ export function AdminCatalogView({
     onDismissGuardChange({
       modelId: "catalog-editor-navigation-guard-v1",
       open: true,
-      dirty: hasAnyUnsavedChanges,
+      dirty: hasDismissableChanges,
       busy: closeBlocked,
       requestDismiss
     });
     return () => onDismissGuardChange(null);
-  }, [closeBlocked, embedded, hasAnyUnsavedChanges, onDismissGuardChange, open, requestDismiss]);
+  }, [closeBlocked, embedded, hasDismissableChanges, onDismissGuardChange, open, requestDismiss]);
   const { dialogRef } = useModalDialog({
     open: open && !embedded,
     onRequestClose: handleClose,

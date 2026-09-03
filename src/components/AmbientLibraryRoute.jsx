@@ -306,6 +306,10 @@ export default function AmbientLibraryRoute({
   });
   const [templateDisclosureOpen, setTemplateDisclosureOpen] = useState(false);
   const [boundaryOpen, setBoundaryOpen] = useState(false);
+  useEffect(() => {
+    if (editorTarget) return;
+    onInteractionStateChange?.({ dirty: false, busy: false });
+  }, [editorTarget, onInteractionStateChange]);
   const handleEditorDismissGuardChange = useCallback((guard = null) => {
     navigation?.setHistoryTraversalGuard?.(guard, "ambient-library-editor");
   }, [navigation?.setHistoryTraversalGuard]);
