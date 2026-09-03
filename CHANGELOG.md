@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 20:44:56 CDT
+Last updated: 2026-09-02 21:29:22 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added a focused Chromium acceptance gate for the presentation-only
+  cross-route task journey. The same Rivera follow-up now proves exact,
+  source-specific action identity from Now, Opportunities, and Client 360,
+  convergence on one tenant-scoped Workflow focus, acknowledgement within
+  250ms, responsive task-rail geometry at 390, 768, and 1440 pixels, session
+  reload and Back/Forward continuity, dirty Quick Updates guarding, and
+  browser-local quote/history/catalog immutability. The gate deliberately
+  leaves the task **In progress** after exact arrival; authoritative completion
+  and source refresh remain a separate implementation slice.
 - Added the presentation-only foundation for cross-route task continuity. A
   ranked action from Now, Opportunities, or Client 360 now carries its exact
   opaque action and object identity into one tenant-scoped session journey,

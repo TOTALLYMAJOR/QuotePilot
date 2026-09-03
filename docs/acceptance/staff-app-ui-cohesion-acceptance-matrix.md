@@ -1,6 +1,6 @@
 # QuotePilot Staff-App UI Cohesion Acceptance Matrix
 
-Last updated: 2026-09-02 20:44:56 CDT
+Last updated: 2026-09-02 21:29:22 CDT
 
 ## Purpose and verdict
 
@@ -123,10 +123,16 @@ its commit is described as complete:
 Implementation checkpoint: pure contract and component coverage verifies exact
 source identity, principal/role/tenant binding, full-focus matching, visible
 **In progress** presentation, context recovery, and the distinction between
-destination readiness and completion. A current Chromium Opportunities path
-is supporting visual evidence. Guarded-commit timing, session restoration,
-Back/Forward, and all three sources remain unproved until the browser matrix
-and authoritative follow-up outcome/readback criteria below pass.
+destination readiness and completion. Four focused Chromium cases now exercise
+Now at 390px, Opportunities at 768px, Client 360 at 1440px, and a desktop
+dirty-draft guard. They verify source-specific action IDs, one exact Rivera
+Workflow focus tuple, acknowledgement within 250ms, principal-bound session
+reload, Back/Forward continuity, 44px controls, no chrome collision or
+horizontal overflow, and byte-equivalent browser-local quote/history/catalog
+state with no non-GET request. The full three-source-by-three-viewport matrix,
+connected authorization/provider proof, authoritative outcome/readback and
+source invalidation, failure fixtures, and assistive-technology comprehension
+remain open.
 
 - Start exact ranked tasks from Now, Opportunities, and Client 360; each lands
   on the expected opaque object ID and exposes **in progress** within 250ms.

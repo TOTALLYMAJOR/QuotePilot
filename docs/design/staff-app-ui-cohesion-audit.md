@@ -1,6 +1,6 @@
 # QuotePilot Staff-App UI Cohesion Audit
 
-Last updated: 2026-09-02 20:44:56 CDT
+Last updated: 2026-09-02 21:29:22 CDT
 
 Status: point-in-time design recommendation register. This document records
 observations and proposed contracts; it does not grant runtime, persistence,
@@ -33,8 +33,9 @@ Evidence inspected in this run:
   Workspace & tools, global search, contextual Library, status semantics,
   recovery surfaces, and presentation helpers;
 - **10/10** fresh Calm Four browser scenarios, **81/81** cross-app layout
-  cases, **61/61** focused route/shell tests, and **4,197/4,197** executed unit
-  tests passing; and
+  cases, **4/4** focused task-journey browser cases, **73/73** focused
+  task-journey/component tests, and **4,227/4,227** executed unit tests passing;
+  and
 - the user-selected Linear benchmark for
   [contextual actions](https://linear.app/docs/select-issues),
   [adjacent details](https://linear.app/docs/project-overview), and
@@ -68,7 +69,7 @@ or human-accepted.
 | 12 | P2 | Unify search behavior | Open; acceptance contract below. |
 | 13 | P2 | Standardize evidence disclosures | Open; acceptance contract below. |
 | 14 | P1 quality debt | Repair the broad layout gate | Implemented locally in `598d4dd`; current route contract and fail-closed selectors pass 81/81 cases. |
-| 15 | P1 | Close the cross-route task loop | Foundation implemented locally: exact ranked-action identity now persists as one tenant-scoped, session-only presentation journey. Authoritative follow-up completion and cross-route source refresh remain open. |
+| 15 | P1 | Close the cross-route task loop | Foundation implemented locally in `b72fe19`; 4/4 focused Chromium cases now prove three-source exact arrival and session continuity. Authoritative follow-up completion and cross-route source refresh remain open. |
 
 ## Ten additional cohesion enhancements
 
@@ -89,11 +90,17 @@ UI must call the readback evidence a confirmation rather than a receipt.
 Implementation checkpoint: the current foundation carries the exact source
 action ID into a principal-, role-, and tenant-bound session contract, matches
 the complete canonical arrival focus, keeps exact-context **ready** separate
-from task completion, and fails closed without a business write. The current
-Chromium Opportunities path provides supporting visual evidence only.
-Guarded-commit, restoration, Back/Forward, and full three-source browser proof
-remain open with authoritative follow-up readback and consistent source
-invalidation.
+from task completion, and fails closed without a business write. Four focused
+Chromium cases exercise Now at 390px, Opportunities at 768px, Client 360 at
+1440px, and a desktop dirty-draft guard. They prove each source-specific action
+ID converges on the same exact Rivera Workflow focus, the task rail appears
+within 250ms, reload and Back/Forward retain the session task, visible controls
+remain at least 44px without chrome overlap or horizontal overflow, and the
+browser-local quote/history/catalog strings remain unchanged. This is not a
+full three-by-three source/viewport matrix and does not prove connected tenant
+authorization, provider non-invocation, authoritative follow-up completion,
+failure fixtures, assistive-technology comprehension, or consistent source
+invalidation; those remain open.
 
 ### 16. P1 — Preserve the operator's place on every round trip
 
