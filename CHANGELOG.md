@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 00:30:25 CDT
+Last updated: 2026-09-03 02:54:22 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,39 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added the first bounded slice of the durable staff action-feedback contract.
+  One same-runtime, presentation-only registry now fences **In progress**,
+  **Confirmed**, **Needs attention**, **Needs confirmation**, and **Cancelled**
+  to the exact organization, principal, role, action, attempt, generation, and
+  affected object. The exact tracked Workflow follow-up is the first adapter:
+  it acknowledges pending work synchronously, blocks duplicate submission,
+  permits success only after the existing authoritative readback. When the
+  attempt still owns Current task, exact App closure must also persist first;
+  older feedback may reconcile independently without changing a newer or
+  missing task or claiming its completion. Ambiguous browser-local or rejected
+  outcomes stay uncertain with one read-only return to the exact follow-up. An
+  uncertain outcome cannot be dismissed, converted directly to evidence-free
+  recovery, or bypassed by unchecking completion; terminal acknowledgement is
+  exact-revision fenced. One
+  atomic announcement replaces duplicate consequential component feedback; the
+  new Calm Four rail shares a non-overlapping continuity stack with Current
+  task, persists across staff routes, clears on reload or scope change, and
+  excludes the fixture's note, email, provider error, tokens, and raw records.
+  Invalid stage/date preflight, unresolved-capacity refusal, late promise,
+  unmount, and staff-identity-change handling, exact focus return after task
+  tracking stops, staff-only provider placement, and stable feedback across
+  both authorized workspace branches all fail closed. The
+  design contract and formidable acceptance matrix preserve one dominant
+  action, visible focus, 44px controls, responsive rail/chrome separation, and
+  explicit evidence boundaries. Final local evidence is 127/127 focused tests,
+  4,360 unit tests passing with 78 intentionally skipped, and 3/3
+  Chromium-admin cases at 390, 768, and 1440px. Twelve fresh state captures and
+  three controlled before/after comparisons passed visual review with no
+  blockers after correcting tablet focus clearance, desktop control overlap,
+  and disabled-action hierarchy. Quick Updates, Catalog, and remaining
+  mutations are not yet migrated, so recommendation 17 remains open;
+  connected, hosted, provider, production, cross-browser, zoom/forced-color,
+  assistive-technology, and human acceptance remain separate and unclaimed.
 - Added privacy-bounded native return context across Opportunities, Clients,
   and Library. Exact Back/Forward round trips now restore safe filters,
   disclosures, initiating focus, and settled scroll while free-text search,

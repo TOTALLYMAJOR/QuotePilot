@@ -1,13 +1,17 @@
 # QuotePilot Staff-App UI Cohesion Acceptance Matrix
 
-Last updated: 2026-09-03 00:30:25 CDT
+Last updated: 2026-09-03 02:54:22 CDT
 
 ## Purpose and verdict
 
-This is the executable acceptance contract for the open recommendations in the
+This is the executable acceptance contract for the recommendations in the
 [staff-app UI cohesion audit](../design/staff-app-ui-cohesion-audit.md). It is a
-  future-delivery gate, not evidence that recommendations 9, 10, 12, 13, or
-  recommendations 17–24 are implemented.
+delivery gate, not evidence by itself. In the current commit, only
+recommendation 17 changes: it adds the same-runtime foundation and the tracked
+Workflow follow-up adapter. Recommendations 15 and 16 are prior branch work;
+9, 10, 12, 13, and 18–24 receive no runtime implementation in this commit.
+Recommendation 17 therefore remains open until the other consequential staff
+mutations are migrated in later bounded commits.
 
 Use only these verdicts:
 
@@ -69,6 +73,19 @@ its commit is described as complete:
 10. **Proof boundaries:** local source, local automated, local connected,
     hosted, production, provider, assistive-technology, and human evidence stay
     separate. No lower evidence class promotes a higher one.
+11. **Post-change freshness:** execute every claimed automated gate after the
+    last source, test, and contract edit. Earlier green runs and screenshots are
+    superseded; they may explain history but cannot confer **PASS** on the final
+    candidate.
+12. **Atomic scope:** the commit contains only the named recommendation slice
+    and its tests/contracts. A partially migrated family cannot be described as
+    the completed recommendation, and unrelated working-tree changes remain
+    outside the candidate.
+
+Any failed or unexecuted applicable criterion blocks **PASS**. A prose review,
+visual approval, broad suite pass, or exact happy-path result cannot waive a
+missing race, failure, authorization, privacy, responsive, or accessibility
+gate.
 
 ## Open recommendation criteria
 
@@ -165,6 +182,12 @@ failure fixtures, and assistive-technology comprehension remain open.
   task generation across retries. A later matching record cannot promote a
   browser-local save, and a delayed readback cannot resurrect a task after
   **Stop tracking** or replace the newer task that superseded it.
+- A deferred write/readback owns an immutable attempt selector. Restarting the
+  same task with a new generation, changing focus, switching an authorized
+  workspace branch, unmounting Workflow, or changing organization/principal/
+  role cannot retarget its transition or task callback. Late work settles only
+  its original attempt when that provider/scope still exists; otherwise it is
+  ignored without readback, task completion, or new-scope feedback.
 - Timeout, conflict, offline, permission, cross-tenant, malformed, and stale
   task fixtures retain the task/draft and show the next safe recovery action.
 - Destination heading focus occurs only after exact-object resolution; one
@@ -218,17 +241,149 @@ data, deployment, and human-comprehension portions of the shared gate remain
 
 ### 17. Use one durable action-feedback contract — P1
 
-- Every applicable mutation renders `pending`, `succeeded`, `recovery`,
-  `uncertain`, or `cancelled` within 250ms and marks its affected region
-  `aria-busy` during a single-flight request.
-- Success appears only after definitive receipt/readback. Conflict, offline,
-  timeout, permission, and ambiguous fixtures never use success styling or
-  copy.
-- Recovery preserves entered values, names what did not change, and keeps one
-  safe retry or return action beside the message.
-- Route-changing handoffs retain the feedback until acknowledged or resolved;
-  one atomic live announcement fires and focus moves only when task completion
-  requires it.
+Implementation boundary: the current candidate establishes the pure
+presentation contract, scope-bound provider, Calm Four visual region, shared
+continuity stack, and the first adapter for exact tracked Workflow follow-up
+completion. It does **not** migrate Quick Updates, Catalog, or the remaining
+staff mutations, so recommendation 17 remains open.
+
+Current post-runtime-edit local evidence is green: the six focused registry,
+provider, presentation, Workflow, authorized-route, and App recovery files pass
+**127/127** assertions; the full unit suite passes **4,360** assertions with 78
+intentional skips; and the dedicated Chromium-admin matrix passes **3/3** cases
+at 390×844, 768×900, and 1440×1000 with
+`VITE_E2E_LOCAL_REVIEW_FIXTURES=false`. Now, Opportunities, and Client 360 are
+the three exact task sources. Twelve fresh state captures and three matching
+before/after comparison boards were inspected after fonts and paint settled;
+the final visual review found no blockers after tablet focus clearance,
+desktop header overlap, focus paint, and disabled-action hierarchy were
+corrected. The immutable SHA, completion-plan timestamp, and post-contract
+repository checks belong to the completion handoff, so this paragraph is not a
+self-referential commit claim. Connected Firebase, hosted/provider,
+production, cross-browser, maximum-copy, 200% zoom, forced colors, reduced
+transparency, actual assistive technology, and human comprehension remain
+separate open evidence classes. Recommendation 17 remains partial until the
+other consequential staff mutations are migrated.
+
+Current verdict: **PARTIAL — local automated candidate only**. The executed
+source, unit, Chromium, visual-comparison, governance, and build gates may be
+reported individually after their final rerun. Under the shared rule above,
+the unexecuted zoom, forced-color, reduced-transparency, cross-browser,
+assistive-technology, hosted, production, and human gates block an overall
+**PASS** and cannot be waived by this commit.
+
+- Starting the adapted follow-up action publishes `pending` synchronously and
+  makes visible plus accessible acknowledgement available within 250ms. The
+  affected Workflow region and shared feedback region expose `aria-busy` while
+  the request is single-flight; a second write cannot start.
+- Invalid stage/date preflight fails before feedback creation and before write
+  dispatch, focuses or identifies the invalid field, and emits exactly one
+  bounded local error. If the shared registry cannot begin, the adapter retains
+  one accessible local feedback path, never renders the thrown provider text,
+  and cannot duplicate the shared announcement.
+- Every registry record and transition must match the exact organization,
+  principal, role, action ID, attempt ID, generation, object kind, and object
+  ID. Acknowledgement additionally carries the exact record revision. A
+  mismatch, stale generation or revision, duplicate attempt, malformed
+  selector, or foreign scope leaves the current record unchanged and never
+  updates a nearby action.
+- The adapter stores one immutable operation identity per dispatch. Task/focus
+  restart cannot replace that selector or unlock another save while it is in
+  flight. A delayed result may update only its originating attempt and may not
+  close, announce, or focus a newer task generation.
+- The only phases are `pending`, `succeeded`, `recovery`, `uncertain`, and
+  `cancelled`. Terminal records cannot be reopened. Only `uncertain` may return
+  to `pending`, and only for read-only reconciliation of the same exact attempt
+  and generation. `uncertain` cannot be acknowledged, dismissed, evicted, or
+  converted directly to evidence-free `recovery`; only authoritative
+  reconciliation or cancellation can remove its duplicate-write fence.
+- The bounded registry may evict only the oldest terminal presentation record.
+  It preserves every `pending` or `uncertain` record; four unresolved records
+  make the next begin fail explicitly. An unresolved `pending` or `uncertain`
+  attempt for the same action/object blocks a new generation and the mutation
+  spy remains at one call.
+- `succeeded` requires the existing capability's bounded definitive evidence.
+  For the first adapter that means the successful Firebase result, matching
+  same-organization server-only follow-up readback, and fresh Attention
+  absence. If the attempt still owns the exact Current task, App must persist
+  its closure before Workflow renders **Confirmed**. An older feedback attempt
+  may reconcile independently after exact proof, but it cannot mutate a newer
+  or missing Current task or claim **Current task marked completed**. A
+  receipt/readback for a different object, task, tenant, generation, or field
+  set is rejected.
+- Timeout, offline, permission denial, conflict, stale or deleted object,
+  mismatched readback, invalid proof, late response, provider-shaped error, and
+  ambiguous dispatch never use success styling or copy. If dispatch may have
+  occurred, the state is `uncertain`, the original write stays frozen, entered
+  values remain intact, and the one offered resolution is a read-only exact
+  inspection or reconciliation—not automatic or manual duplicate submission.
+- If Workflow unmounts while a dispatched attempt is pending but the scoped
+  provider survives, cleanup moves that exact attempt to `uncertain` before the
+  surface disappears. Its eventual promise cannot perform readback or invoke a
+  task callback. A staff-email/actor change inside the retained provider does
+  the same and clears that abandoned attempt's exact busy key before another UI
+  action is considered. If the provider/scope also unmounts, the late promise
+  is simply ignored and cannot leak into the next authenticated scope.
+- `recovery` names what changed and what remained unchanged, preserves the
+  operator's values, and renders at most one safe acknowledge, inspect,
+  reconcile, or return action beside the message. `cancelled` is accepted only
+  for a pre-dispatch cancellation or an authoritative cancellation basis;
+  **Stop tracking** of the independent task rail cannot create cancelled
+  mutation feedback.
+- Same-runtime route changes retain the exact feedback across both authorized
+  workspace branches. Terminal feedback remains until an exact
+  revision-matched acknowledgement; uncertainty remains until authoritative
+  reconciliation or cancellation and cannot be cleared as presentation state.
+  Full reload clears same-runtime feedback. Organization, principal, or role
+  change invalidates the entire prior scope before the new workspace renders,
+  while portal, unresolved-auth, customer, and denied-role branches never mount
+  the provider.
+- An `uncertain` record may expose only `inspect` or `reconcile`; missing or
+  acknowledgement-shaped actions fail closed. A malformed `recovery` without
+  its safe next action also renders no fallback Dismiss. Successful terminal
+  dismissal requires the exact record revision and restores focus to the prior
+  connected control or a stable active workspace target rather than dropping
+  focus to the document body.
+- When an uncertain follow-up is already complete and therefore absent from
+  Attention, **Review exact follow-up** still returns to and focuses its exact
+  `data-follow-up-record-id`, including after the operator chose **Stop
+  tracking**. It never substitutes an Attention row or first visible record.
+  At least 44px of that focused record and its focus paint remain visible below
+  the sticky continuity stack. Only after this exact route, record, and focus
+  resolve may the shared return action become inactive; the unresolved record
+  and duplicate-write fence remain, and the local read-only **Retry
+  confirmation** becomes the sole resolution control.
+- Exactly one `aria-live="polite"`, `aria-atomic="true"` shared announcement is
+  emitted for each accepted state change. The visual feedback region itself is
+  not live, identical transitions deduplicate, and adapted component-local
+  consequential toasts/status/alerts do not repeat the message. The independent
+  Current task rail remains non-live. Exact revision-matched acknowledgement
+  clears its own stale announcement without re-announcing a queued record or
+  erasing a newer live announcement; a late acknowledgement is rejected.
+- The region exposes exact `data-action-feedback-phase`,
+  `data-action-feedback-action-id`, `data-action-feedback-attempt-id`,
+  `data-action-feedback-object-kind`, and `data-action-feedback-object-id`
+  markers. Tests assert the marker identity and `aria-busy` state rather than
+  relying on color or prose alone.
+- At 390×844, 768×900, and 1440×1000, the feedback and Current task rails form
+  one non-overlapping continuity stack; enabled controls and focus paint remain
+  clear of the desktop rail, tablet header, mobile bottom navigation, and each
+  other. The page has at most 1px unintended horizontal overflow, each action is
+  at least 44×44px, long maximum-copy fixtures wrap without mid-word identity
+  breaks, and the contract remains usable at 200% zoom, with forced colors and
+  reduced motion/transparency. Desktop identity stays on one readable line;
+  tablet uses the verified stacked identity treatment; mobile gives the
+  feedback action hierarchy over the compact non-live task rail.
+- The registry is presentation-only and same-runtime. It reads or writes no
+  browser storage, business record, provider, or network endpoint. The Workflow
+  adapter must pass only product-owned fixed labels/messages/facts and opaque
+  IDs; source and rendered-output assertions keep its raw follow-up note,
+  customer/staff email, thrown provider text, token-like values, and raw record
+  absent. The generic registry additionally rejects unexpected fields,
+  recognizable sensitive/error patterns, control/bidirectional characters,
+  oversized values, and opaque blobs. That classifier is defense in depth, not
+  a provenance proof for arbitrary normal prose; every later adapter must earn
+  the same source-level fixed-copy evidence before migration.
 
 ### 18. Preserve independent commercial evidence rails — P1
 
@@ -244,11 +399,17 @@ data, deployment, and human-comprehension portions of the shared gate remain
 - Role, tenant, revision, and receipt gates are rechecked at execution. The
   presentation layer has no mutation authority and cannot promote sent to
   delivered, accepted to booked, requested to paid, or cleared to event-ready.
+- Each rendered rail exposes its domain, raw state, source, freshness, and
+  availability through stable markers and an accessible group label. Pairwise
+  fixture tests vary one rail at a time and assert every other rail and persisted
+  record remains byte-equivalent.
 
 ### 19. Add a selected-object relationship spine — P2
 
-- Exact quote/client/event routes display the verified relationship in no more
-  than two compact mobile lines plus a clearly named current surface.
+- At the default 390px mobile viewport, exact quote/client/event routes display
+  the verified relationship in no more than two compact lines plus a clearly
+  named current surface. At 200% zoom the spine may reflow vertically without a
+  line cap; identity, controls, and text must remain complete and unclipped.
 - Same-name fixtures link only by opaque IDs. Missing, deleted, stale, or
   unauthorized relationships render unavailable and never infer from prose,
   email, list order, or proximity.
@@ -256,6 +417,10 @@ data, deployment, and human-comprehension portions of the shared gate remain
   interactive targets, and remains complete at all widths and 200% zoom.
 - Return behavior obeys recommendation 16 and navigation/inspection produces
   zero writes.
+- Keyboard activation of each relationship resolves and focuses the exact
+  opaque destination before announcing it. A delayed or failed relationship
+  read keeps the current object's signature visible and provides one recovery
+  action without shifting to a sibling record.
 
 ### 20. Establish a canonical object signature — P1
 
@@ -270,6 +435,10 @@ data, deployment, and human-comprehension portions of the shared gate remain
 - Missing-ID, stale, duplicate-name, cross-tenant, and denied-role fixtures
   recover rather than selecting by name or position. Navigation leaves quote,
   history, client, and catalog snapshots byte-equivalent.
+- One shared formatter/component contract owns field order, truncation, and
+  accessible description. Snapshot plus browser assertions compare its exact
+  signature across all route representations; route-local identity assembly is
+  a failing condition.
 
 ### 21. Use one date and time grammar — P1
 
@@ -284,6 +453,10 @@ data, deployment, and human-comprehension portions of the shared gate remain
 - Invalid or missing values say **Not recorded** and never guess a timezone.
   Persisted source strings remain byte-equivalent and formatting triggers no
   save, normalization, repricing, or scheduling mutation.
+- Unit fixtures cover date-only, local-clock, absolute-instant, leap-day, DST
+  boundary, invalid, and absent values. Browser tests assert the accessible
+  `<time>` value and visible grammar, not only a screenshot or locale-dependent
+  substring.
 
 ### 22. Label state domains — P1
 
@@ -292,11 +465,16 @@ data, deployment, and human-comprehension portions of the shared gate remain
 - Every displayed state exposes a machine-readable `data-status-domain` and
   raw state. Unknown values say **Not recorded** or **Needs review**, never an
   inferred classification.
-- Lifecycle, task attention, relationship context, payment, and view
-  availability remain understandable with color disabled, in forced colors,
-  at 200% zoom, and in monochrome captures.
+- The shared registry covers, at minimum, lifecycle, task attention,
+  relationship context, provider acceptance, message delivery, portal view,
+  customer decision, payment, booking, operations readiness, and view
+  availability. Every domain remains understandable with color disabled, in
+  forced colors, at 200% zoom, and in monochrome captures.
 - Presentation changes no record, authorization check, recommendation, or
   lifecycle transition.
+- A finite shared domain/state registry rejects unsupported combinations in
+  component tests. Route-local labels cannot redefine a raw state, and one
+  domain's severity styling cannot become another domain's meaning.
 
 ### 23. Extend one read-state and recovery contract — P1
 
@@ -312,6 +490,10 @@ data, deployment, and human-comprehension portions of the shared gate remain
   speech or raw provider error text.
 - Retry invokes only the existing tenant-scoped read; all mutation spies remain
   zero.
+- Race fixtures resolve requests out of order, navigate during refresh, change
+  scope, and unmount the route. An older or foreign response cannot overwrite a
+  newer complete view, clear its recovery, announce into the next route, or
+  substitute another tenant's data.
 
 ### 24. Give imagery a truthful route role — P2
 
@@ -327,13 +509,20 @@ data, deployment, and human-comprehension portions of the shared gate remain
   preserve complete identity/state/action content, and create no overflow.
 - Selecting, failing, or replacing presentation media performs no upload,
   quote/client mutation, readiness inference, or provider call.
+- A source-level allowlist distinguishes decorative, illustrative, and
+  tenant-recorded media. Recorded media without a tenant-scoped source marker
+  fails closed to the non-evidentiary fallback; CSS background art can never
+  carry unique object identity or required alt content.
 
 ## Completion record required per slice
 
 Each implementation commit must update this matrix with its verdict and exact
 evidence, update the design contract and changelog, and run its focused tests,
 the current Calm Four browser suite, `npm run test:unit`, `npm run check:env`,
-`npm run build`, `npm run check:docs:governance`, and
-`npm run check:project-state`. The completion handoff must record the planner's
-exact UTC `recordedAt`, changed files, test counts, screenshots inspected,
-unproven evidence classes, and residual risks.
+`npm run build`, `npm run check:capability-surfaces`,
+`npm run test:rules:firestore`, `npm run check:docs:governance`,
+`npm run check:project-state`, and `git diff --check`. The completion handoff
+must record the planner's exact UTC `recordedAt`, changed files, test counts,
+screenshots inspected, unproven evidence classes, and residual risks. A check
+run before the final source or contract edit must be rerun; a commit must not
+inherit a green result from its predecessor.
