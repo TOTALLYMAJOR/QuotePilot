@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 10:49:49 CDT
+Last updated: 2026-09-03 10:55:39 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reconciled the v0.16.3 compatibility bundle exception to the measured
+  3,295,659-byte aggregate and 393,459-byte largest chunk after restoring the
+  approved staff continuity contracts on current main. The 3,302,684-byte
+  aggregate ceiling retains only the established 7,025-byte runner offset;
+  Ambient remains below its existing ceiling at 4,009,260 / 385,181 bytes.
 - Kept the task-journey unsafe-identifier fixtures effective while assembling
   their Stripe-shaped sentinel at test runtime, so the repository secret scan
   can distinguish deliberate validation coverage from a committed credential.

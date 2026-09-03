@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-01 13:05:37 CDT
+Last updated: 2026-09-03 10:55:39 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -78,7 +78,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   385,181 bytes, while the same CI-equivalent graph measured 4,056,372 /
   385,181 locally. The Ambient ceiling is therefore the larger literal
   4,056,372-byte graph with no discretionary growth headroom; the 391,901-byte
-  largest-chunk ceiling remains unchanged.
+  largest-chunk ceiling remains unchanged. The v0.16.3 reconciliation measures
+  3,295,659 / 393,459 bytes for compatibility after restoring the already
+  approved task continuity, return-context, and durable action-feedback
+  contracts on current main. Its exact compatibility ceilings are 3,302,684
+  aggregate bytes, retaining only the established 7,025-byte runner offset,
+  and the literal 393,459-byte local largest chunk. Ambient measures 4,009,260
+  / 385,181 bytes and remains below its existing ceilings, so that profile is
+  not widened.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -175,7 +182,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   recalibrated to 4,017,992 bytes: the literal local candidate plus only the
   previously established 303-byte Ambient runner offset. It provides no
   discretionary source-growth allowance. Exact-SHA CI, hosted timing, and
-  authenticated human acceptance remain separate gates.
+  authenticated human acceptance remain separate gates. The v0.16.3
+  reconciliation was rebuilt locally in both detected profiles. Compatibility
+  measured 3,295,659 / 393,459 bytes and Ambient measured 4,009,260 / 385,181
+  bytes. The profile detector selected exactly one graph each time; the
+  compatibility adjustment carries no discretionary source growth beyond the
+  already established runner offset. Exact-head CI remains the confirming
+  remote measurement.
 
 ## Superseded Exceptions
 

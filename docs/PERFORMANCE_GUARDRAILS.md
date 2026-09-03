@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-01 13:05:37 CDT
+Last updated: 2026-09-03 10:55:39 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,9 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,231,504-byte aggregate
-  and 391,901-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,051,134-byte aggregate ceiling and
+- The current compatibility graph has a temporary 3,302,684-byte aggregate
+  and 393,459-byte largest-chunk ceiling. The production-equivalent Ambient
+  graph has a separate temporary 4,056,372-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -84,6 +84,13 @@ Threshold policy:
   locally. The Ambient ceiling is therefore 4,056,372 aggregate bytes, the
   larger literal verified graph, with no discretionary growth headroom. The
   largest-chunk ceiling remains unchanged.
+  The v0.16.3 reconciliation then measures 3,295,659 / 393,459 bytes for the
+  compatibility graph after restoring the approved staff task continuity,
+  return-context, and durable action-feedback contracts on current main. Its
+  aggregate ceiling retains only the previously established 7,025-byte
+  compatibility runner offset; its largest-chunk ceiling is the literal local
+  candidate measurement. The same candidate measures 4,009,260 / 385,181
+  bytes for Ambient and remains below that profile's existing ceilings.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining
