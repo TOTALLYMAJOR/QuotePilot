@@ -1,3 +1,5 @@
+import { compileConfiguredQuoteActions } from "./quoteActionState";
+
 export const QUOTE_HISTORY_CONTROLLER_MODEL = "quote-history-controller-v1";
 
 const STAFF_ROLES = new Set(["admin", "sales"]);
@@ -120,13 +122,19 @@ export function buildRoleSafeQuoteActionController({ quote = null, currentUserRo
             : ""
     })];
   }));
+  const actionState = compileConfiguredQuoteActions({
+    quote,
+    baseActions: actions,
+    source: sourceMode
+  });
   return immutable({
     modelId: "role-safe-quote-action-controller-v1",
     quoteId: quoteId || null,
     quoteStatus,
     source: sourceMode,
     permissions,
-    actions
+    actions,
+    actionState
   });
 }
 
