@@ -12,6 +12,7 @@ import {
 import AttentionBadge from "./AttentionBadge";
 import ProductBrandLockup from "./ProductBrandLockup";
 import { PRODUCT_NAME } from "../lib/productIdentity";
+import { AMBIENT_PRIMARY_WORKSPACE_NAVIGATION } from "../lib/workspaceRoutes";
 
 const EMPTY = {};
 const HEADER_MENUS = [
@@ -177,6 +178,7 @@ export default function WorkspaceShell({
     const Icon = NAV_ICONS[ambientDestination || routeSection] || NotePencil;
     return (
       <button
+        key={ambientDestination || routeSection}
         type="button"
         className={`ghost shell-nav-action${ambientDestination ? " ambient-orientation-action" : ""}${
           active && section === routeSection ? " nav-view-active" : ""
@@ -556,37 +558,18 @@ export default function WorkspaceShell({
             {workspace && (
               ambientOrientation ? (
                 <nav className="ambient-primary-navigation" aria-label="Primary workspace">
-                  {navButton("Now", "home", actions.onHome, undefined, undefined, true, true, "now")}
-                  {navButton(
-                    "Opportunities",
-                    "quotes",
-                    actions.onQuotes,
-                    triggerRefs.quotes,
-                    undefined,
-                    true,
-                    true,
-                    "opportunities"
-                  )}
-                  {navButton(
-                    "Clients",
-                    "customers",
-                    actions.onCustomers,
-                    undefined,
-                    undefined,
-                    true,
-                    true,
-                    "clients"
-                  )}
-                  {isAdmin && navButton(
-                    "Library",
-                    "catalog",
-                    actions.onCatalog,
-                    undefined,
-                    undefined,
-                    true,
-                    true,
-                    "library"
-                  )}
+                  {AMBIENT_PRIMARY_WORKSPACE_NAVIGATION
+                    .filter((destination) => !destination.adminOnly || isAdmin)
+                    .map((destination) => navButton(
+                      destination.label,
+                      destination.section,
+                      actions[destination.action],
+                      destination.triggerRef ? triggerRefs[destination.triggerRef] : undefined,
+                      undefined,
+                      true,
+                      true,
+                      destination.orientation
+                    ))}
                 </nav>
               ) : (
                 <>

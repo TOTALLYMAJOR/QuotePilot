@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 18:55:27 CDT
+Last updated: 2026-09-02 19:51:22 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Repaired the broad Calm Four layout gate against the current navigation and
+  presentation contracts. The four primary staff routes now derive from one
+  frozen route definition, stale headings and selectors fail closed, and all
+  declared groups must resolve visible peers. The resulting 81-case Chromium
+  matrix passes at 390, 768, and 1440px and caught two real regressions: exact
+  opportunity title focus paint now stays within the mobile viewport, and the
+  explicit Workspace-tools-to-search handoff can replace its source modal
+  without weakening unrelated modal guards. Route identity, URL behavior,
+  persistence, tenant boundaries, and mutation authority remain unchanged.
 - Structured **Workspace & tools** into current workspace, frequent tools,
   operations, progressive administration, and account. Reporting,
   integrations, import, and diagnostics remain role-gated and are now absent

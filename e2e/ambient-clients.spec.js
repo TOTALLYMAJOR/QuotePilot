@@ -194,16 +194,6 @@ async function expectContainedAmbientLayout(page, surfaceSelector, groupSelector
     if (!surface) return { setupError: `Missing ${selector}.` };
     surface.setAttribute("data-layout-audit-surface", selector);
     surface.setAttribute("data-layout-audit-overflow", selector);
-    groups.forEach((groupSelector, groupIndex) => {
-      document.querySelectorAll(groupSelector).forEach((group, instanceIndex) => {
-        [...group.children].forEach((child) => {
-          child.setAttribute(
-            "data-layout-audit-group",
-            `ambient-client-${groupIndex + 1}-${instanceIndex + 1}`
-          );
-        });
-      });
-    });
     const visible = (element) => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
@@ -213,8 +203,25 @@ async function expectContainedAmbientLayout(page, surfaceSelector, groupSelector
         && rect.width > 0
         && rect.height > 0;
     };
+    let visibleDeclaredPeerCount = 0;
+    for (const [groupIndex, groupSelector] of groups.entries()) {
+      const instances = [...document.querySelectorAll(groupSelector)];
+      if (instances.length === 0) {
+        return { setupError: `Missing declared layout group ${groupSelector}.` };
+      }
+      instances.forEach((group, instanceIndex) => {
+        [...group.children].forEach((child) => {
+          child.setAttribute(
+            "data-layout-audit-group",
+            `ambient-client-${groupIndex + 1}-${instanceIndex + 1}`
+          );
+          if (visible(child)) visibleDeclaredPeerCount += 1;
+        });
+      });
+    }
     return {
       setupError: "",
+      visibleDeclaredPeerCount,
       visibleOverlayCount: [...document.querySelectorAll("[role='dialog'], .modal-overlay")]
         .filter(visible).length,
       surfaceOverflowPx: Math.max(0, surface.scrollWidth - surface.clientWidth),
@@ -223,6 +230,7 @@ async function expectContainedAmbientLayout(page, surfaceSelector, groupSelector
   }, { selector: surfaceSelector, groups: groupSelectors });
 
   expect(result.setupError).toBe("");
+  expect(result.visibleDeclaredPeerCount).toBeGreaterThan(0);
   expect(result.visibleOverlayCount).toBe(0);
   expect(result.surfaceOverflowPx).toBeLessThanOrEqual(1);
   expect(result.audit).toMatchObject({
@@ -312,8 +320,8 @@ test.describe("Ambient Clients", () => {
         .analyze();
       expect(directoryAccessibility.violations).toEqual([]);
       await expectContainedAmbientLayout(page, ".ambient-clients", [
-        ".ambient-clients__masthead",
-        ".ambient-client"
+        ".ambient-clients__populated-hero > div",
+        ".ambient-clients__featured"
       ]);
       await capture(page, `ambient-clients-directory-${viewport.width}`);
 

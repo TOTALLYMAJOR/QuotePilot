@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 18:55:27 CDT
+Last updated: 2026-09-02 19:51:22 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -642,16 +642,22 @@ retention never crosses organization, quote, source, role, or gate identity.
   other adjacent resolution surfaces. A transient message may be visually
   elevated, but it is not an intentional overlay and may not declare the
   overlap exemption.
-- The expanded Chromium-admin layout lane passes 80 of 80 local cases with 0
-  failed or skipped in 6.3 minutes across 390×844, 768×900, and 1440×1000. Its
-  matrix contains 45 route cases; three Library template-editor cases; 27
-  header, search, context, and Pilot cases; two mobile Live Breakdown cases;
-  and three editor review/feedback cases. It
-  covers declared header popovers, Workspace search, Package, Money, Proposal,
+- The expanded Chromium-admin layout lane passes 81 of 81 local cases with 0
+  failed or skipped in 3.1 minutes across 390×844, 768×900, and 1440×1000. Its
+  matrix contains one fail-closed route-contract drift guard; 45 route cases;
+  three Library template-editor cases; 27 header, search, context, and Pilot
+  cases; two mobile Live Breakdown cases; and three editor review/feedback
+  cases. The four Calm Four primary destinations are derived from the same
+  frozen navigation contract used by the shell, and every declared route must
+  resolve at least one current visible audit peer. The lane covers Workspace &
+  tools, declared header popovers, Workspace search, Package, Money, Proposal,
   and Conversation contexts, deterministic Pilot answers, the normal-flow Pilot
   scenario review, and draft-review/feedback states. Every geometry assertion
   keeps collisions, overflow, escaped controls, escaped focus paint, and
-  undeclared overlays empty; document overflow is at most 1px. The Messages
+  undeclared overlays empty; document overflow is at most 1px. Mobile exact
+  opportunity headings reserve an internal focus-paint perimeter, and the
+  intentional Workspace-tools-to-search transition replaces the first modal
+  before opening the second without weakening other modal guards. The Messages
   heading additionally preserves at least 8px between focused title paint and
   its subtitle; the redundant eyebrow has been removed. Passing this lane is
   not a universal no-overlap claim: sales-role geometry, Firefox/WebKit, zoom
