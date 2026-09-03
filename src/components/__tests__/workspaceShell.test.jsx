@@ -340,29 +340,96 @@ describe("WorkspaceShell", () => {
       menu: { openId: "more", onOpenChange: vi.fn() }
     });
     const tools = container.querySelector('[role="dialog"][aria-labelledby="workspace-tools-title"]');
+    expect(Array.from(tools.querySelectorAll("[data-workspace-tools-group]"))
+      .map((group) => group.dataset.workspaceToolsGroup))
+      .toEqual(["workspace", "frequent", "operations", "administration", "account"]);
+    const frequentTools = tools.querySelector('[data-workspace-tools-group="frequent"]');
+    const operationalTools = tools.querySelector('[data-workspace-tools-group="operations"]');
+    const administration = tools.querySelector('[data-workspace-tools-group="administration"]');
     const mobileOperations = buttonsByText(tools, "Operations")[0];
     const mobileWorkflow = tools.querySelector('button[aria-label="Workflow, 1 quote needs attention"]');
+    const administrationToggle = administration.querySelector(
+      '[data-workspace-tools-administration-toggle="true"]'
+    );
+    expect(frequentTools.querySelector("h3").textContent).toBe("Frequent tools");
+    expect(operationalTools.querySelector("h3").textContent).toBe("Operations");
+    expect(administration.querySelector("h3").textContent).toBe("Administration");
     expect(mobileOperations.dataset.capabilityEntry).toBe("live-operations-planning");
-    expect(buttonsByText(tools, "Clear the Deck")).toHaveLength(1);
-    expect(buttonsByText(tools, "Events")).toHaveLength(1);
-    expect(buttonsByText(tools, "Messages")).toHaveLength(1);
-    expect(buttonsByText(tools, "Pilot")).toHaveLength(1);
-    expect(buttonsByText(tools, "Staff")).toHaveLength(1);
-    expect(buttonsByText(tools, "Integrations Ops")).toHaveLength(1);
-    expect(buttonsByText(tools, "Import Studio")).toHaveLength(1);
+    expect(buttonsByText(operationalTools, "Clear the Deck")).toHaveLength(1);
+    expect(buttonsByText(operationalTools, "Events")).toHaveLength(1);
+    expect(buttonsByText(frequentTools, "Messages")).toHaveLength(1);
+    expect(buttonsByText(frequentTools, "Pilot")).toHaveLength(1);
+    expect(buttonsByText(operationalTools, "Staff")).toHaveLength(1);
+    expect(administrationToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(administrationToggle.getAttribute("aria-controls"))
+      .toBe("workspace-tools-administration-actions");
+    expect(buttonsByText(tools, "Reporting Dashboard")).toHaveLength(0);
+    expect(buttonsByText(tools, "Session Diagnostics")).toHaveLength(0);
+    expect(buttonsByText(tools, "Integrations Ops")).toHaveLength(0);
+    expect(buttonsByText(tools, "Import Studio")).toHaveLength(0);
     expect(mobileWorkflow).not.toBeNull();
+
+    act(() => administrationToggle.click());
+    expect(administrationToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(buttonsByText(administration, "Reporting Dashboard")).toHaveLength(1);
+    expect(buttonsByText(administration, "Integrations Ops")).toHaveLength(1);
+    expect(buttonsByText(administration, "Import Studio")).toHaveLength(1);
+    expect(buttonsByText(administration, "Session Diagnostics")).toHaveLength(1);
     act(() => mobileOperations.click());
-    act(() => buttonsByText(tools, "Messages")[0].click());
+    act(() => buttonsByText(frequentTools, "Messages")[0].click());
     act(() => mobileWorkflow.click());
-    act(() => buttonsByText(tools, "Staff")[0].click());
-    act(() => buttonsByText(tools, "Integrations Ops")[0].click());
-    act(() => buttonsByText(tools, "Import Studio")[0].click());
+    act(() => buttonsByText(operationalTools, "Staff")[0].click());
+    act(() => buttonsByText(administration, "Integrations Ops")[0].click());
+    act(() => buttonsByText(administration, "Import Studio")[0].click());
     expect(currentProps.actions.onOperations).toHaveBeenCalledTimes(1);
     expect(currentProps.actions.onMessages).toHaveBeenCalledTimes(1);
     expect(currentProps.actions.onWorkflow).toHaveBeenCalledTimes(1);
     expect(currentProps.actions.onStaff).toHaveBeenCalledTimes(1);
     expect(currentProps.actions.onIntegrations).toHaveBeenCalledTimes(1);
     expect(currentProps.actions.onImports).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps progressive administration collapsed, unmounted, and role-safe", () => {
+    render({
+      ambientNavigation: true,
+      model: model(WORKSPACE_ROUTE_IDS.HOME, true, false),
+      principal: { email: "sales@smith.test", role: "sales", isAdmin: false },
+      capabilities: {
+        customerPortal: true,
+        eventSchedule: true,
+        staffDirectory: true,
+        reportingDashboard: true,
+        integrationsOps: false,
+        diagnostics: true
+      },
+      menu: { openId: "more", onOpenChange: vi.fn() }
+    });
+
+    const tools = container.querySelector('[role="dialog"][aria-labelledby="workspace-tools-title"]');
+    const administration = tools.querySelector('[data-workspace-tools-group="administration"]');
+    const toggle = administration.querySelector('[data-workspace-tools-administration-toggle="true"]');
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(tools.querySelector("#workspace-tools-administration-actions")).toBeNull();
+    expect(buttonsByText(tools, "Reporting Dashboard")).toHaveLength(0);
+    expect(buttonsByText(tools, "Session Diagnostics")).toHaveLength(0);
+
+    act(() => {
+      toggle.focus();
+      toggle.click();
+    });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(buttonsByText(administration, "Reporting Dashboard")).toHaveLength(1);
+    expect(buttonsByText(administration, "Session Diagnostics")).toHaveLength(1);
+    expect(buttonsByText(administration, "Integrations Ops")).toHaveLength(0);
+    expect(buttonsByText(administration, "Import Studio")).toHaveLength(0);
+
+    act(() => {
+      toggle.focus();
+      toggle.click();
+    });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(tools.querySelector("#workspace-tools-administration-actions")).toBeNull();
+    expect(document.activeElement).toBe(toggle);
   });
 
   test("opens the explicit mobile Workspace and tools dialog with focus containment and restoration", () => {

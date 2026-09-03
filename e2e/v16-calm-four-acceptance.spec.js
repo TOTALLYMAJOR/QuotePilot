@@ -548,8 +548,26 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     });
     await desktopToolsTrigger.click();
     const desktopTools = page.getByRole("dialog", { name: "Workspace & tools" });
+    await expect(desktopTools.locator("[data-workspace-tools-group]").evaluateAll((groups) => (
+      groups.map((group) => group.dataset.workspaceToolsGroup)
+    ))).resolves.toEqual(["workspace", "frequent", "operations", "administration", "account"]);
     await expect(desktopTools.getByRole("heading", { name: "Current workspace" })).toBeVisible();
+    await expect(desktopTools.getByRole("heading", { name: "Frequent tools" })).toBeVisible();
+    await expect(desktopTools.getByRole("heading", { name: "Operations" })).toBeVisible();
+    await expect(desktopTools.getByRole("heading", { name: "Administration" })).toBeVisible();
     await expect(desktopTools.getByRole("heading", { name: "Account" })).toBeVisible();
+    const desktopAdministrationToggle = desktopTools.getByRole("button", {
+      name: "Show administration tools"
+    });
+    await expect(desktopAdministrationToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(desktopTools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
+    await desktopAdministrationToggle.click();
+    await expect(desktopTools.getByRole("button", { name: "Reporting Dashboard" })).toBeVisible();
+    await expect(desktopTools.getByRole("button", { name: "Integrations Ops" })).toBeVisible();
+    await expect(desktopTools.getByRole("button", { name: "Import Studio" })).toBeVisible();
+    await expect(desktopTools.getByRole("button", { name: "Session Diagnostics" })).toBeVisible();
+    await desktopTools.getByRole("button", { name: "Hide administration tools" }).click();
+    await expect(desktopTools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
     await expect(desktopTools.getByRole("button", { name: "Sign Out" })).toBeVisible();
     await expect(desktopTools.getByRole("button", { name: "Account settings" })).toBeVisible();
     await expect(desktopTools).toContainText(/admin/iu);
@@ -604,8 +622,21 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(tools).toBeVisible();
     await captureV16Proof(page, "11-mobile-workspace-tools.png");
     await expect(tools.getByRole("button", { name: "Search customers and opportunities" })).toBeVisible();
+    await expect(tools.getByRole("heading", { name: "Frequent tools" })).toBeVisible();
     await expect(tools.getByRole("heading", { name: "Operations" })).toBeVisible();
+    await expect(tools.getByRole("heading", { name: "Administration" })).toBeVisible();
     await expect(tools.getByRole("button", { name: "Operations", exact: true })).toBeVisible();
+    const mobileAdministrationToggle = tools.locator(
+      '[data-workspace-tools-administration-toggle="true"]'
+    );
+    await expect(mobileAdministrationToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
+    expect(await mobileAdministrationToggle.evaluate((button) => button.getBoundingClientRect().height))
+      .toBeGreaterThanOrEqual(44);
+    await mobileAdministrationToggle.click();
+    await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toBeVisible();
+    await tools.getByRole("button", { name: "Hide administration tools" }).click();
+    await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
     await expect(tools.getByRole("button", { name: "Account settings" })).toBeVisible();
     await expect(tools.getByRole("button", { name: "Sign Out" })).toBeVisible();
     await tools.getByRole("button", { name: "Account settings" }).click();
