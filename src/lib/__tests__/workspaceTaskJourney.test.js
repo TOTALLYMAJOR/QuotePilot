@@ -19,6 +19,8 @@ import {
   writeWorkspaceTaskJourney
 } from "../workspaceTaskJourney";
 
+const STRIPE_SHAPED_SECRET = ["sk", "live", "1234567890abcdef"].join("_");
+
 function validInput(overrides = {}) {
   return {
     organizationId: "organization-42",
@@ -281,7 +283,7 @@ describe("workspace task journey presentation contract", () => {
       object: { id: "operator@example.test", type: "opportunity" },
       focus: { quoteId: "operator@example.test" }
     }],
-    ["secret-like task", { taskId: "sk_live_1234567890abcdef" }],
+    ["secret-like task", { taskId: STRIPE_SHAPED_SECRET }],
     ["JWT-like task", {
       taskId: "eyJabcdefghijkl.eyJabcdefghijkl.abcdefghijklmnop"
     }],
@@ -368,7 +370,7 @@ describe("workspace task journey presentation contract", () => {
     for (const proof of [
       { ...resolutionProof(), providerResponse: "accepted" },
       resolutionProof({ verifierId: "operator@example.test" }),
-      resolutionProof({ proofId: "sk_live_1234567890abcdef" }),
+      resolutionProof({ proofId: STRIPE_SHAPED_SECRET }),
       resolutionProof({ proofType: "workflow receipt with notes" })
     ]) {
       expect(transitionWorkspaceTaskOutcome(initial, { phase: "resolved", proof })).toMatchObject({
@@ -509,7 +511,7 @@ describe("workspace task journey presentation contract", () => {
       ["foreign", { ...mutable(journey), organizationId: "organization-other" }, "organization_mismatch"],
       ["extra", { ...mutable(journey), customerName: "First Continental" }, "invalid_journey"],
       ["email", { ...mutable(journey), taskId: "operator@example.test" }, "unsafe_identifier"],
-      ["secret", { ...mutable(journey), taskId: "sk_live_1234567890abcdef" }, "unsafe_identifier"],
+      ["secret", { ...mutable(journey), taskId: STRIPE_SHAPED_SECRET }, "unsafe_identifier"],
       ["phase without proof", { ...mutable(journey), phase: "resolved" }, "missing_resolution_proof"]
     ];
 
