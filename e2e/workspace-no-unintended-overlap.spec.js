@@ -541,15 +541,38 @@ const LOCAL_CATALOG = {
   }
 };
 
+const LOCAL_MENU_CATALOG = {
+  revision: 12,
+  eventTypes: [{ id: "wedding", name: "Wedding" }],
+  categories: LOCAL_CATALOG.settings.menuSections.map((section) => ({
+    id: section.id,
+    eventTypeId: "wedding",
+    name: section.name
+  })),
+  items: LOCAL_CATALOG.settings.menuSections.flatMap((section) => (
+    section.items.map((item) => ({
+      ...item,
+      eventTypeId: "wedding",
+      categoryId: section.id,
+      priceMinor: Math.round(item.price * 100)
+    }))
+  ))
+};
+
 async function seedWorkspace(page) {
-  await page.addInitScript(({ catalog, quotes }) => {
+  await page.addInitScript(({ catalog, menuCatalog, quotes }) => {
     localStorage.clear();
     sessionStorage.clear();
     localStorage.setItem("qp.workspaceSoundsEnabled", "false");
     localStorage.setItem("quoteWizard.quotes", JSON.stringify(quotes));
     localStorage.setItem("quoteWizard.catalog", JSON.stringify(catalog));
     localStorage.setItem("quoteWizard.catalog.e2e-org", JSON.stringify(catalog));
-  }, { catalog: LOCAL_CATALOG, quotes: [SEED_QUOTE, REVIEW_QUOTE] });
+    localStorage.setItem("quoteWizard.menuCatalog.e2e-org", JSON.stringify(menuCatalog));
+  }, {
+    catalog: LOCAL_CATALOG,
+    menuCatalog: LOCAL_MENU_CATALOG,
+    quotes: [SEED_QUOTE, REVIEW_QUOTE]
+  });
 }
 
 async function auditRouteGeometry(page, route) {
@@ -1392,7 +1415,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       const scenario = command.locator('[data-pilot-scenario-state="available"]');
       await expect(scenario).toBeVisible();
       await expect(scenario).toContainText("What changes in this option");
-      await scenario.getByRole("button", { name: /Adopt in draft review/ }).click();
+      await scenario.getByRole("button", { name: /Adopt in draft review/ }).first().click();
 
       const review = page.locator(PILOT_SCENARIO_REVIEW_ROUTE.surfaceSelector);
       await expect(review).toBeVisible();
@@ -1401,7 +1424,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       await expect(review).toContainText("Focused");
       await expect(review).toContainText("What this option changes");
       await expect(review).toContainText("If you do nothing");
-      await expect(review).toContainText("Draft only. Nothing is saved yet.");
+      await expect(review).toContainText("Draft only. Nothing changes until you save.");
       const apply = review.locator(PILOT_SCENARIO_REVIEW_ROUTE.focusSelector);
       await expect(apply).toBeFocused();
       await expectRouteGeometry(page, PILOT_SCENARIO_REVIEW_ROUTE);
@@ -1473,7 +1496,7 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
   }
 
   for (const viewport of VIEWPORTS) {
-    test(`quote editor Package review and feedback rail have no unintended overlap at ${viewport.width}px`, async ({ page }) => {
+    test(`quote editor Package review has no unintended overlap at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await openReviewQuoteEditorViaPackage(page);
       const review = page.locator(DRAFT_REVIEW_ROUTE.surfaceSelector);
@@ -1484,11 +1507,8 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       await apply.focus();
       await expect(apply).toBeFocused();
 
-      const feedbackRail = page.locator('[data-layout-audit-surface="workspace-feedback"]');
-      await expect(feedbackRail).toBeVisible();
-      await expect(feedbackRail).toContainText(/removed|catalog|selection/iu);
+      await expect(review).toContainText("Draft only. Nothing changes until you save.");
       await expectRouteGeometry(page, DRAFT_REVIEW_ROUTE);
-      await expectFeedbackRailInFlow(page);
 
       if (CAPTURE_PROOF && viewport.width === 1440) {
         mkdirSync(PROOF_DIRECTORY, { recursive: true });

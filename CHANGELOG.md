@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Reconciled the broad layout fixture with the current split tenant catalog:
+  package/settings data and event-menu data are now seeded through their
+  respective browser-local stores at one matching revision. Pilot scenario and
+  package-review layout checks therefore exercise valid current catalog
+  evidence instead of failing closed on unrelated canonical menu defaults. The
+  scenario check selects one exact ranked alternative, and the package-review
+  check verifies its authoritative inline draft boundary without claiming the
+  still-unmigrated durable feedback rail.
 - Stabilized return-context browser setup around the exact focused source
   action. Deep Library and Client controls remain visible when the test records
   a meaningful non-terminal scroll position, so Back/Forward proof measures the
