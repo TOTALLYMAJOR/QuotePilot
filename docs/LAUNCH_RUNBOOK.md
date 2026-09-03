@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-03 15:32:05 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -57,9 +57,14 @@ exact-main sequence in section 6, manually dispatch one of these workflows from
 
 Both workflows require the full semantically tagged release SHA, the matching
 successful main-push `CI Quality` run id, a target-specific rollback ancestor,
-the exact `safe-off` release profile, and an exact typed confirmation. Firebase
-additionally requires an explicit `hosting`, `backend`, or `all` scope and the
-fixed `none` / `not-applicable` SMS selection. Before installing dependencies,
+an allowed release profile, and an exact typed confirmation. `safe-off` is the
+only profile accepted by Vercel and Firebase Hosting-only deployments. Firebase
+backend/all may instead select `email-active`, which changes only
+`NOTIFICATIONS_EMAIL_PROVIDER` from `none` to `resend`; SMS, buyer access,
+Commercial Change, operational staffing authority, and both Revenue Autopilot
+gates remain off. Firebase additionally requires an explicit `hosting`,
+`backend`, or `all` scope and the fixed `none` / `not-applicable` SMS selection.
+Before installing dependencies,
 the workflow validates the canonical repository and workflow, remotely
 published tagged `main`, all eight CI jobs, protected environment, allowlisted
 human dispatcher, release-profile-bound run title, and rollback ancestry. It
@@ -82,9 +87,11 @@ deployment was quota-rejected. Do not replace this with one
 `functions:default` mutation. Firebase
 CLI may print a create/update failure and still exit zero, so the deployer also
 parses the provider result and then requires `functions:list --json` to prove
-the exact active inventory, `us-central1` location, and safe-off runtime profile
-for every function. A Hosting-origin probe without that readback is not a
-successful backend or all-scope deployment.
+the exact active inventory, `us-central1` location, and selected runtime profile
+for every function. `email-active` readback must prove `resend` on every active
+Function while every other protected authority remains identical to
+`safe-off`. A Hosting-origin probe without that readback is not a successful
+backend or all-scope deployment.
 
 Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` and
 `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` into the frontend build
@@ -286,8 +293,11 @@ archive/delete operations.
 The approved interim sender is
 `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`. It deliberately reuses the
 existing verified `leaguepilot.us` Resend domain while the account has a
-single-domain limit. The restricted production key and exact Functions release
-are now deployed. Do not represent an exact delivery attempt as complete until
+single-domain limit. The restricted production key is installed in Firebase
+Secret Manager, but a new key version does not become active in bound Functions
+until an exact tagged release is deployed with
+`release_profile=email-active`. Do not represent an exact delivery attempt as
+complete until
 provider acceptance, delivered/bounced event, and recipient-inbox proof are
 captured. Replacing
 the shared sender with a dedicated QuotePilot domain remains a later migration,
@@ -314,13 +324,48 @@ dashboard sandbox test; it is not an allowed QuotePilot Functions sender
 configuration, customer-ready sender-domain proof, or recipient-inbox proof.
 
 Deploy the Firebase backend only by dispatching `Deploy Firebase Production`
-with `firebase_scope=backend` and the exact tagged-main CI evidence. This scope
-deploys `firestore,functions:default` together. Use `firebase_scope=all` only
+with `firebase_scope=backend`, `release_profile=email-active`,
+`sms_provider=none`, `sms_configuration_generation=not-applicable`, and the
+exact tagged-main CI evidence. This scope deploys
+`firestore,functions:default` together. Use `firebase_scope=all` only
 for an explicitly coordinated Hosting, rules, and default-codebase Functions
 release. The typed confirmations now name `functions:default`; the generic
 `functions` selector is forbidden because it could include the separately
 gated Connect codebase. No current production workflow deploys
 `functions:connect`.
+
+The production email activation is accepted only when all of these criteria
+hold; a partial result stops the rollout and leaves the prior `safe-off`
+deployment as the last-known-good rollback authority:
+
+1. The release is a clean, reviewed, annotated semantic tag on current remote
+   `main`, and the exact main-push CI run passes every required job.
+2. `RESEND_API_KEY` has an enabled production Secret Manager version; its value
+   never enters source, dotenv, logs, workflow inputs, artifacts, or receipts.
+3. Repository variables exactly identify
+   `QuotePilot by MBMApps <quotepilot@leaguepilot.us>` and the canonical app URL.
+4. The manual run uses `firebase_scope=backend`,
+   `release_profile=email-active`, `sms_provider=none`, the exact rollback SHA,
+   and the exact typed confirmation; Hosting-only and Vercel runs reject this
+   profile.
+5. The workflow materializes `NOTIFICATIONS_EMAIL_PROVIDER=resend` from the
+   immutable profile, not from an unbound mutable provider variable.
+6. Provider readback proves the complete expected Functions inventory is
+   active in `us-central1` and every Function reports the `email-active` runtime
+   profile; any missing, extra, failed, or mismatched Function fails the run.
+7. Readback simultaneously proves SMS, buyer access, Commercial Change,
+   staffing authority, Revenue Autopilot, and Revenue Autopilot sends remain
+   off, with no disabled-provider residue.
+8. Public `/`, `/app`, and `/system` probes remain healthy after deployment;
+   authenticated application acceptance remains a separate human check.
+9. Exactly one separately authorized controlled email is used for provider
+   acceptance. QuotePilot acceptance, Resend delivery/bounce, inbox receipt,
+   and human review are recorded as distinct evidence and never inferred from
+   deployment success.
+10. Only after the controlled message succeeds is the new deployment eligible
+    to replace the prior backend last-known-good receipt or an older secret
+    version eligible for revocation. Otherwise execute the recorded rollback
+    and verify the restored `safe-off` profile.
 
 After a controlled Resend deployment, send exactly one onboarding test to a
 controlled recipient and capture all three proof layers:
@@ -1341,6 +1386,8 @@ After the reviewed PR merges:
    - `ci_run_id`: the exact successful main-push CI run id,
    - `rollback_sha`: the full target-specific last-known-good ancestor,
    - `firebase_scope`: `hosting`, `backend`, or `all` when applicable,
+   - `release_profile`: `safe-off`, or `email-active` only for an explicitly
+     authorized Firebase `backend`/`all` Resend activation,
    - `sms_provider`: the exact deployment-owned `none`, `twilio`, or `pingram`
      profile for the release,
    - `sms_configuration_generation`: the exact Pingram generation, or

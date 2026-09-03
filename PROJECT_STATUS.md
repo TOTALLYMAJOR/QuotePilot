@@ -1,9 +1,18 @@
 # Project Status
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-03 15:32:05 CDT
 
 ## Current Production Release
 
+- Annotated tag `v0.16.3` resolves to
+  `c8800838c03ce9db49fe1034c529c8363c8bf27c`; exact-main CI Quality run
+  `33797242008` passed, governed Firebase run `33798432693` deployed with
+  rollback SHA `4af43d2f097f8717357af210bb9ba0be9ef7be8f`, and governed Vercel run
+  `33799909088` deployed with rollback SHA
+  `54672a9e414ed5a6099a8332da31d7f56bf8b28a`. Firebase provider readback
+  proved 101 active Functions on `NOTIFICATIONS_EMAIL_PROVIDER=none` and
+  `NOTIFICATIONS_SMS_PROVIDER=none`; this release is deployed but does not yet
+  activate Resend.
 - Annotated tag `v0.16.0` resolves to
   `54672a9e414ed5a6099a8332da31d7f56bf8b28a`; exact-main CI Quality run
   `33558167039` passed all required jobs. Governed Vercel run `33560027814`
@@ -60,6 +69,24 @@ Last updated: 2026-09-03 13:49:00 CDT
   same-SHA Firebase and Vercel `staging-safe-off` receipts. A failed or partial
   rollback, stale/partial evidence, uncontrolled provider recipient, live-mode
   Stripe record, or missing exact-main attestation keeps promotion closed.
+
+## Resend Production Activation Candidate
+
+- Production Secret Manager metadata shows a new enabled `RESEND_API_KEY`
+  version created on September 3, 2026. Metadata proves only installation; the
+  value, permission scope, sender verification, and message delivery are not
+  inferred.
+- Source now offers a distinct `email-active` production profile only for
+  Firebase `backend`/`all`. It switches the email provider to Resend while
+  preserving the complete `safe-off` authority matrix for SMS, buyer access,
+  Commercial Change, staffing authority, and Revenue Autopilot.
+- Promotion still requires review, local qualification, exact-head PR CI,
+  merge, exact-main CI, annotated tag, governed backend deployment, complete
+  Functions runtime readback, and public health checks. No production runtime
+  change is claimed by this candidate.
+- One real controlled email remains a separate, explicit authorization. A
+  successful deploy cannot stand in for QuotePilot provider acceptance, Resend
+  delivery/bounce, recipient inbox receipt, or human review.
 
 ## v0.16 Calm Four Candidate Integration
 

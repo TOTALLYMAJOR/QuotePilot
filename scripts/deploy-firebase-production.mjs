@@ -5,7 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validateFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
-import { verifyDirectProductionReleaseEvidence } from "./production-release-evidence.mjs";
+import {
+  validateProductionReleaseProfileTarget,
+  verifyDirectProductionReleaseEvidence
+} from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROJECT_ID = "tonicatering";
@@ -13,8 +16,7 @@ const FUNCTIONS_ENV_PATH = path.join(ROOT, "functions", `.env.${PROJECT_ID}`);
 export const FUNCTIONS_DEPLOY_BATCH_SIZE = 35;
 export const FUNCTIONS_DEPLOY_PAUSE_MS = 65_000;
 
-const SAFE_OFF_RUNTIME_EXPECTED = Object.freeze({
-  NOTIFICATIONS_EMAIL_PROVIDER: "none",
+const PRODUCTION_RUNTIME_BASE = Object.freeze({
   NOTIFICATIONS_SMS_PROVIDER: "none",
   STRIPE_MODE: "live",
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",
@@ -23,6 +25,17 @@ const SAFE_OFF_RUNTIME_EXPECTED = Object.freeze({
   REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
   BUYER_ACCESS_ENABLED: "false",
   BUYER_ACCESS_STRIPE_MODE: "test"
+});
+
+const PRODUCTION_RUNTIME_EXPECTED = Object.freeze({
+  "safe-off": Object.freeze({
+    ...PRODUCTION_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: "none"
+  }),
+  "email-active": Object.freeze({
+    ...PRODUCTION_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: "resend"
+  })
 });
 
 const SAFE_OFF_RUNTIME_FORBIDDEN = Object.freeze([
@@ -67,7 +80,16 @@ export function functionsDeployOutputHasFailure(output) {
     || /functions deploy had errors/iu.test(value);
 }
 
-export function validateProductionFunctionsReadback(response, expectedFunctionIds) {
+export function validateProductionFunctionsReadback(
+  response,
+  expectedFunctionIds,
+  releaseProfileValue = "safe-off"
+) {
+  const releaseProfile = validateProductionReleaseProfileTarget(
+    releaseProfileValue,
+    "firebase-backend"
+  );
+  const expectedRuntime = PRODUCTION_RUNTIME_EXPECTED[releaseProfile];
   if (response?.status !== "success" || !Array.isArray(response?.result)) {
     throw new Error("Firebase production Functions provider readback is missing or malformed.");
   }
@@ -94,9 +116,11 @@ export function validateProductionFunctionsReadback(response, expectedFunctionId
       throw new Error(`Firebase production Functions provider state is invalid for ${id || "an unknown function"}.`);
     }
     const runtime = entry.environmentVariables || {};
-    for (const [name, expectedValue] of Object.entries(SAFE_OFF_RUNTIME_EXPECTED)) {
+    for (const [name, expectedValue] of Object.entries(expectedRuntime)) {
       if (String(runtime[name] ?? "").trim() !== expectedValue) {
-        throw new Error(`Firebase production Functions readback does not prove safe-off ${name} for ${id}.`);
+        throw new Error(
+          `Firebase production Functions readback does not prove ${releaseProfile} ${name} for ${id}.`
+        );
       }
     }
     for (const name of SAFE_OFF_RUNTIME_FORBIDDEN) {
@@ -105,7 +129,7 @@ export function validateProductionFunctionsReadback(response, expectedFunctionId
       }
     }
   }
-  return Object.freeze({ functionCount: entries.length, profile: "safe-off" });
+  return Object.freeze({ functionCount: entries.length, profile: releaseProfile });
 }
 
 function readArg(name) {
@@ -195,14 +219,18 @@ function readExpectedFunctionIds() {
   );
 }
 
-function verifyProductionFunctions(firebaseCliPath, expectedFunctionIds) {
+function verifyProductionFunctions(firebaseCliPath, expectedFunctionIds, releaseProfile) {
   const response = parseJsonOutput(capture(firebaseCliPath, [
     "functions:list",
     "--project",
     PROJECT_ID,
     "--json"
   ]), "Firebase production Functions provider readback");
-  const verified = validateProductionFunctionsReadback(response, expectedFunctionIds);
+  const verified = validateProductionFunctionsReadback(
+    response,
+    expectedFunctionIds,
+    releaseProfile
+  );
   console.log(`Verified ${verified.functionCount} active Firebase Functions on the ${verified.profile} profile.`);
 }
 
@@ -315,12 +343,13 @@ const scopes = {
 };
 export async function main() {
   validateArgs();
-  if (readArg("--release-profile") !== "safe-off") {
-    throw new Error('Firebase production deployment requires --release-profile "safe-off".');
-  }
   const scope = readArg("--scope");
   const selected = scopes[scope];
   if (!selected) throw new Error("--scope must be one of: hosting, backend, all.");
+  const releaseProfile = validateProductionReleaseProfileTarget(
+    readArg("--release-profile"),
+    `firebase-${scope}`
+  );
   if (readArg("--confirm") !== selected.confirmation) {
     throw new Error(`Production deployment requires --confirm "${selected.confirmation}".`);
   }
@@ -338,7 +367,7 @@ export async function main() {
     deploymentRunId: process.env.GITHUB_RUN_ID,
     token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
     approvalMode: process.env.RELEASE_APPROVAL_MODE,
-    releaseProfile: readArg("--release-profile"),
+    releaseProfile,
     soloOperatorIds: process.env.RELEASE_SOLO_OPERATOR_IDS,
     root: ROOT
   });
@@ -387,7 +416,7 @@ export async function main() {
   ]);
   const expectedFunctionIds = readExpectedFunctionIds();
   await deployFunctionBatches(firebaseCliPath, expectedFunctionIds, readArg("--release-sha"));
-  verifyProductionFunctions(firebaseCliPath, expectedFunctionIds);
+  verifyProductionFunctions(firebaseCliPath, expectedFunctionIds, releaseProfile);
 }
 
 if (

@@ -79,6 +79,9 @@ describe("direct production deployment safety", () => {
     expect(source).toMatch(/--release-profile "\$\{RELEASE_PROFILE\}"/);
     expect(source).toMatch(/inputs\.release_profile == 'safe-off'/);
     if (provider === "Firebase") {
+      expect(source).toMatch(/inputs\.release_profile == 'email-active'/);
+      expect(source).toMatch(/inputs\.firebase_scope == 'backend'/);
+      expect(source).toMatch(/inputs\.firebase_scope == 'all'/);
       expect(source).toMatch(/--sms-provider "\$\{SMS_PROVIDER\}"/);
       expect(source).toMatch(/--sms-configuration-generation "\$\{SMS_CONFIGURATION_GENERATION\}"/);
       expect(source).toMatch(/EXPECTED_SMS_PROVIDER:\s*\$\{\{ inputs\.sms_provider \}\}/);
@@ -205,11 +208,10 @@ describe("direct production deployment safety", () => {
     expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
   });
 
-  test("materializes the exact safe-off Functions authority profile", () => {
+  test("materializes an explicit email profile while keeping every other authority safe-off", () => {
     const source = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
 
     for (const binding of [
-      'NOTIFICATIONS_EMAIL_PROVIDER: none',
       'NOTIFICATIONS_SMS_PROVIDER: none',
       'STRIPE_MODE: live',
       'COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"',
@@ -221,6 +223,11 @@ describe("direct production deployment safety", () => {
     ]) {
       expect(source).toContain(binding);
     }
+    expect(source).toContain("- email-active");
+    expect(source).toMatch(
+      /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ inputs\.release_profile == 'email-active' && 'resend' \|\| 'none' \}\}/
+    );
+    expect(source).toMatch(/email-active\)[\s\S]*FIREBASE_SCOPE[\s\S]*EXPECTED_EMAIL_PROVIDER[\s\S]*resend/);
     expect(source).not.toContain("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
     expect(source).not.toContain("NOTIFICATIONS_OWNER_PHONE");
     expect(source).not.toContain("NOTIFICATIONS_OWNER_SMS_CONSENT");
@@ -261,7 +268,7 @@ describe("direct production deployment safety", () => {
     expect(functionsDeployOutputHasFailure("Deploy complete!")).toBe(false);
   });
 
-  test("fails closed unless every Function is active on the exact safe-off runtime profile", () => {
+  test("fails closed unless every Function is active on the exact selected runtime profile", () => {
     const expectedIds = ["getCatalogSetupDraft", "saveCatalogSetupDraft"];
     const runtime = {
       NOTIFICATIONS_EMAIL_PROVIDER: "none",
@@ -291,6 +298,26 @@ describe("direct production deployment safety", () => {
       functionCount: 2,
       profile: "safe-off"
     });
+    const emailActiveResponse = {
+      ...response,
+      result: expectedIds.map((id) => entry(id, {
+        ...runtime,
+        NOTIFICATIONS_EMAIL_PROVIDER: "resend"
+      }))
+    };
+    expect(validateProductionFunctionsReadback(
+      emailActiveResponse,
+      expectedIds,
+      "email-active"
+    )).toEqual({
+      functionCount: 2,
+      profile: "email-active"
+    });
+    expect(() => validateProductionFunctionsReadback(
+      response,
+      expectedIds,
+      "email-active"
+    )).toThrow(/does not prove email-active NOTIFICATIONS_EMAIL_PROVIDER/i);
     expect(() => validateProductionFunctionsReadback({
       ...response,
       result: [entry(expectedIds[0])]

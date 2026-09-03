@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-03 15:32:05 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -236,8 +236,14 @@ git tag v<major>.<minor>.<patch>
 git push origin v<major>.<minor>.<patch>
 ```
 10. Dispatch `Deploy Firebase Production` or `Deploy Vercel Production` with
-    the release SHA, exact-SHA CI run id, target rollback SHA, exact scope, and
-    typed confirmation. Firebase uses GitHub OIDC through the reviewed
+    the release SHA, exact-SHA CI run id, target rollback SHA, exact scope,
+    release profile, and typed confirmation. `safe-off` is valid for every
+    production target. `email-active` is valid only for an explicitly
+    authorized Firebase `backend`/`all` deployment and changes only
+    `NOTIFICATIONS_EMAIL_PROVIDER` from `none` to `resend`; Hosting-only and
+    Vercel deployments reject it. SMS, buyer access, Commercial Change,
+    staffing authority, and both Revenue Autopilot gates remain off. Firebase
+    uses GitHub OIDC through the reviewed
     `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
     `FIREBASE_DEPLOY_SERVICE_ACCOUNT` repository variables and rejects legacy
     token or static-key authentication. Its mutation client must be the
@@ -293,6 +299,16 @@ last-known-good provider receipt and provider-native rollback sequence in
 If a topic changes, only update the owning doc and cross-link from others.
 
 ## Production Interface Controls
+- Production release profile: `release_profile`
+  - `safe-off` remains the universal default and proves the email provider is
+    `none` in Firebase Functions readback.
+  - `email-active` is restricted to Firebase `backend`/`all`, materializes the
+    approved Resend provider from the immutable dispatch profile, and requires
+    every active Function to report that exact profile after deployment.
+  - A new Secret Manager version, repository variable, source merge, or green
+    deployment alone is not message-delivery evidence. One separately
+    authorized controlled send must keep QuotePilot provider acceptance,
+    Resend delivery/bounce, recipient inbox receipt, and human review distinct.
 - Firebase workflow input: `firebase_scope`
   - Default operator selection: `hosting`.
   - `backend` deploys `firestore,functions:default`; `backend` and `all` never
