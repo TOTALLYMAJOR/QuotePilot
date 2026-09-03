@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 12:22:44 CDT
+Last updated: 2026-09-03 12:37:55 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,10 +9,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
-- Pinned the v0.16.3 compatibility largest-chunk exception to the larger exact
-  verified flag-matrix measurement: 395,862 bytes on exact-head CI run
-  `33782951695` and 395,896 bytes in its local reproduction. The aggregate
-  ceiling and Ambient ceilings are unchanged; no percentage headroom was added.
+- Pinned both v0.16.3 bundle profiles to their larger exact verified flag-matrix
+  measurements. Compatibility is 3,298,166 / 395,862 bytes on exact-head CI and
+  3,298,234 / 395,896 locally; Ambient is 4,164,201 / 429,869 bytes on exact-head
+  CI and 4,164,269 / 429,903 locally. No percentage headroom was added, and the
+  distributed Ambient cost remains explicit optimization debt.
 - Advanced the Customer Directory and Customer 360 capability contract for the
   development-only seeded-directory precedence repair, including exact browser
   acceptance coverage and canonical Feature Matrix/User Manual boundaries.

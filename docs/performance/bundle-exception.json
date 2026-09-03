@@ -16,8 +16,8 @@
     },
     "ambient-production": {
       "maxMetrics": {
-        "totalJsBytes": 4056372,
-        "largestJsChunkBytes": 391901
+        "totalJsBytes": 4164269,
+        "largestJsChunkBytes": 429903
       }
     }
   }

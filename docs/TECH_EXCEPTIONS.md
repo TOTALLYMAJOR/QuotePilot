@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-03 12:22:44 CDT
+Last updated: 2026-09-03 12:37:55 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -86,9 +86,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   and a 395,896-byte largest chunk. Exact-head CI run `33782951695` measured the
   complete compatibility flag matrix at 3,298,166 / 395,862 bytes; the same
   matrix measured 3,298,234 / 395,896 bytes locally. The ceiling uses the larger
-  literal verified measurement without discretionary growth headroom. Ambient
-  measures 4,009,260 / 385,181 bytes and remains below its existing ceilings,
-  so that profile is not widened.
+  literal verified measurement without discretionary growth headroom.
+  Exact-head CI then measured the complete Ambient production flag matrix at
+  4,164,201 / 429,869 bytes; its local reproduction measured 4,164,269 /
+  429,903 bytes. The Ambient ceilings are advanced to the larger literal graph
+  with no percentage allowance. Source-map inspection kept the major feature
+  surfaces split and located the increase across the approved shared continuity,
+  return-context, and feedback state plus their already-lazy route surfaces;
+  reducing it safely remains explicit optimization debt.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -187,12 +192,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   discretionary source-growth allowance. Exact-SHA CI, hosted timing, and
   authenticated human acceptance remain separate gates. The v0.16.3
   reconciliation was rebuilt locally in both detected profiles. The initial
-  compatibility build measured 3,295,659 / 393,459 bytes and Ambient measured
-  4,009,260 / 385,181 bytes. Exact-head CI run `33782951695` then exposed the
-  complete compatibility flag matrix at 3,298,166 / 395,862 bytes, while its
-  local reproduction measured 3,298,234 / 395,896 bytes. The profile detector
-  selected exactly one graph each time; the revised largest-chunk ceiling is
-  the larger literal result rather than a percentage allowance.
+  compatibility build measured 3,295,659 / 393,459 bytes and the incomplete
+  Ambient graph measured 4,009,260 / 385,181 bytes. Exact-head CI run
+  `33782951695` then exposed the complete compatibility flag matrix at
+  3,298,166 / 395,862 bytes, while its local reproduction measured 3,298,234 /
+  395,896 bytes. Exact-head CI run `33784318353` exposed the complete Ambient
+  production flag matrix at 4,164,201 / 429,869 bytes; its local reproduction
+  measured 4,164,269 / 429,903 bytes. The profile detector selected exactly one
+  graph each time; each revised ceiling is the larger literal result rather
+  than a percentage allowance.
 
 ## Superseded Exceptions
 
