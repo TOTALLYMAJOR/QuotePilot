@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-03 15:32:05 CDT
+Last updated: 2026-09-03 15:59:15 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -194,7 +194,7 @@ values in the approved GitHub variable and Firebase Secret Manager channels:
     restricted sender; provider acceptance, delivery/bounce, and recipient
     evidence still require an exact controlled attempt
   - `EMAIL_FROM_NAME=QuotePilot by MBMApps`
-  - `EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us`
+  - `EMAIL_FROM_EMAIL=quotepilot@quietpilot.us`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until one owner-SMS provider is
     explicitly promoted; the only valid choices are `none`, `twilio`, and
     `pingram`, and current production remains `none`
@@ -290,10 +290,9 @@ archive/delete operations.
 
 ### Resend activation gate
 
-The approved interim sender is
-`QuotePilot by MBMApps <quotepilot@leaguepilot.us>`. It deliberately reuses the
-existing verified `leaguepilot.us` Resend domain while the account has a
-single-domain limit. The restricted production key is installed in Firebase
+The approved sender is
+`QuotePilot by MBMApps <quotepilot@quietpilot.us>`. It uses the verified
+`quietpilot.us` domain owned by the configured Resend account. The restricted production key is installed in Firebase
 Secret Manager, but a new key version does not become active in bound Functions
 until an exact tagged release is deployed with
 `release_profile=email-active`. Do not represent an exact delivery attempt as
@@ -308,7 +307,7 @@ Only after verification, set the trusted runtime configuration to:
 ```dotenv
 NOTIFICATIONS_EMAIL_PROVIDER=resend
 EMAIL_FROM_NAME=QuotePilot by MBMApps
-EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us
+EMAIL_FROM_EMAIL=quotepilot@quietpilot.us
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
 ```
 
@@ -343,7 +342,7 @@ deployment as the last-known-good rollback authority:
 2. `RESEND_API_KEY` has an enabled production Secret Manager version; its value
    never enters source, dotenv, logs, workflow inputs, artifacts, or receipts.
 3. Repository variables exactly identify
-   `QuotePilot by MBMApps <quotepilot@leaguepilot.us>` and the canonical app URL.
+   `QuotePilot by MBMApps <quotepilot@quietpilot.us>` and the canonical app URL.
 4. The manual run uses `firebase_scope=backend`,
    `release_profile=email-active`, `sms_provider=none`, the exact rollback SHA,
    and the exact typed confirmation; Hosting-only and Vercel runs reject this

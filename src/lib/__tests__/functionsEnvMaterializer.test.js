@@ -34,7 +34,7 @@ function runMaterializer(overrides = {}, { existing = "", args = [] } = {}) {
     AUTH_PLATFORM_ADMIN_EMAILS: "operator@mbmapps.com",
     NOTIFICATIONS_EMAIL_PROVIDER: "none",
     EMAIL_FROM_NAME: "QuotePilot by MBMApps",
-    EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us",
+    EMAIL_FROM_EMAIL: "quotepilot@quietpilot.us",
     NOTIFICATIONS_SMS_PROVIDER: "none",
     STRIPE_MODE: "live",
     ...overrides
@@ -348,6 +348,18 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     );
     expect(output).toContain("NOTIFICATIONS_EMAIL_PROVIDER=resend");
     expect(output).not.toContain("RESEND_API_KEY");
+  });
+
+  test("rejects a sender outside the verified QuietPilot Resend domain", () => {
+    const result = runMaterializer({
+      EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us"
+    }).result;
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/approved QuotePilot sender identity/i);
+    expect(FUNCTIONS_INDEX_SOURCE).toContain(
+      'const APPROVED_EMAIL_FROM_EMAIL = "quotepilot@quietpilot.us";'
+    );
   });
 
   test("rejects retained Twilio credentials while SMS delivery is disabled", () => {

@@ -44,7 +44,7 @@ const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
   AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
   NOTIFICATIONS_EMAIL_PROVIDER: "none",
   EMAIL_FROM_NAME: "QuotePilot by MBMApps",
-  EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us",
+  EMAIL_FROM_EMAIL: "quotepilot@quietpilot.us",
   NOTIFICATIONS_SMS_PROVIDER: "none",
   STRIPE_MODE: "test",
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",

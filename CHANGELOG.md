@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 15:32:05 CDT
+Last updated: 2026-09-03 15:59:15 CDT
 
 All notable project changes are documented in this file.
 
@@ -3309,9 +3309,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   rollback evidence, and typed target confirmation. Independent-review mode
   remains available for team-owned repositories.
 
-- QuotePilot email now supports the approved interim sender
-  `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`, reusing the existing
-  provider-verified Resend domain without deleting or disrupting that domain.
+- QuotePilot email now supports the approved sender
+  `QuotePilot by MBMApps <quotepilot@quietpilot.us>`, using the
+  provider-verified `quietpilot.us` Resend domain.
   The restricted production key is held in Firebase Secret Manager; live email
   remains disabled until the governed Functions release and accepted,
   delivered, and inbox evidence are complete.

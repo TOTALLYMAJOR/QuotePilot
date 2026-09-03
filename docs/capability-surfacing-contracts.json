@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 63,
+  "catalogVersion": 64,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -6819,6 +6819,70 @@
         }
       ],
       "safeOutcome": "Same-tenant staff can tell whether a saved quote is current, unaffected by a newer revision, materially stale, legacy-unknown, or unavailable. No saved selection is silently removed or repriced; keep and update decisions are tied to the exact active version and current catalog, terminal quotes remain immutable, and customer-safe projections receive neither internal authority nor private receipts."
+    },
+    {
+      "id": "production-email-sender-identity",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "security_private",
+      "audiences": [
+        "release operators",
+        "security reviewers"
+      ],
+      "summary": "Production email activation is fail-closed to the exact QuotePilot display name, the quotepilot@quietpilot.us sender, and the verified quietpilot.us domain owned by the configured Resend account.",
+      "backendPaths": [
+        "functions/index.js",
+        "scripts/materialize-functions-env.mjs",
+        "scripts/release-candidate-policy.mjs"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [
+        "functions/index.js#provisionCustomerOrder",
+        "functions/index.js#repairCustomerProvisioningOrder",
+        "functions/index.js#dispatchStaffInvitation",
+        "functions/index.js#getRevenueAutopilotOperations",
+        "functions/index.js#materializeRevenueAutopilotJobs",
+        "functions/index.js#reconcileRevenueAutopilotJob",
+        "functions/index.js#runRevenueAutopilotSchedule",
+        "functions/index.js#sendQuoteToCustomer",
+        "functions/index.js#resolveQuoteDeliveryOutcome",
+        "functions/index.js#sendPaymentRequestEmail",
+        "functions/index.js#sendFinalBalanceRequestEmail",
+        "functions/index.js#getIntegrationSetupStatus",
+        "functions/index.js#buyerAccessStripeWebhook"
+      ],
+      "frontendPaths": [],
+      "testPaths": [
+        "src/lib/__tests__/functionsEnvMaterializer.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/functionsEnvMaterializer.test.js",
+          "locator": "rejects a sender outside the verified QuietPilot Resend domain"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/LAUNCH_RUNBOOK.md",
+        "docs/VERSION_CONTROL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Production email sender identity"
+        },
+        {
+          "path": "docs/LAUNCH_RUNBOOK.md",
+          "locator": "The approved sender is"
+        },
+        {
+          "path": "docs/VERSION_CONTROL.md",
+          "locator": "quotepilot@quietpilot.us"
+        }
+      ],
+      "headlessReason": "The sender allowlist is a private deployment and runtime security boundary for existing email actions. It exposes no new browser control and grants no tenant, role, Firestore, pricing, staffing, provider, or production authority.",
+      "safeOutcome": "A production email function can use Resend only with the reviewed QuotePilot sender on the provider-verified quietpilot.us domain; a stale LeaguePilot identity, arbitrary address, missing configuration, or credential value in dotenv fails closed before deployment or dispatch."
     }
   ]
 }
