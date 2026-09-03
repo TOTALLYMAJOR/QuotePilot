@@ -210,6 +210,8 @@ describe("AmbientOpportunitiesStream", () => {
     const actions = row.querySelectorAll(".ambient-opportunity__primary-action");
     expect(actions).toHaveLength(1);
     expect(actions[0].textContent).toContain("Review pending approval");
+    expect(actions[0].getAttribute("data-workspace-task-id"))
+      .toBe("review-opportunity-workflow:quote-1:approval-42");
 
     act(() => actions[0].click());
 

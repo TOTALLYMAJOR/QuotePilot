@@ -134,6 +134,7 @@ function OpportunityRow({ row, onResolve, position }) {
             type="button"
             className="ambient-opportunity__primary-action"
             data-ambient-action-id={primaryAction.id}
+            data-workspace-task-id={primaryAction.id}
             data-ambient-action-purpose={primaryAction.purpose}
             disabled={!primaryAction.enabled}
             title={primaryAction.disabledReason || undefined}

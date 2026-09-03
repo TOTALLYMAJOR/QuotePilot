@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 19:51:22 CDT
+Last updated: 2026-09-02 20:53:32 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -297,6 +297,28 @@ stays in bounded same-app history state rather than the URL. Missing, stale,
 truncated, mismatched, or unavailable evidence recovers in context and may not
 substitute a nearby item. Schedule and Reporting remain non-primary-ready until
 equivalent consumers exist.
+
+Ranked cross-route actions additionally use `workspace-task-journey-v1` as one
+organization-, signed-in-principal-, and role-scoped session-only presentation
+thread. It carries only the source action's opaque task ID, canonical source
+route, exact destination object/focus, and allowlisted intent; event names,
+customer names, notes,
+search text, and other prose do not enter that record. Tracking begins only
+when the guarded navigation actually commits. It performs no quote, client,
+workflow, history, catalog, payment, or provider write, and replacing or
+stopping it changes only browser-session presentation state.
+
+Task phase and route context are independent. `locating`, `ready`, and
+`recovery` describe exact-arrival context; **ready** never changes the task's
+**In progress** phase. A future capability may show **Completed** only after
+its existing outcome authority succeeds and a same-organization authoritative
+readback supplies the bounded confirmation reference required by the journey.
+Where the capability has no immutable receipt, the UI calls that evidence a
+confirmation, not a receipt. The persistent task surface is a labelled region,
+not another live announcement: the source acknowledgement and destination
+arrival retain announcement ownership. It stays sticky inside the desktop and
+tablet workspace, returns to document flow on mobile, exposes 44px controls,
+and remains clear of fixed navigation.
 
 Ambient read failures use one calm, outcome-led recovery grammar. **Now**,
 **Opportunities**, and **Events** must withhold raw provider text, avoid empty

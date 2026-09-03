@@ -150,6 +150,7 @@ function PriorityRow({ priority, card, index, role, onResolve }) {
           type="button"
           className="ambient-now-priority__action"
           data-ambient-action-id={action.id}
+          data-workspace-task-id={action.id}
           disabled={!action.enabled}
           title={!action.enabled ? action.disabledReason : undefined}
           onClick={() => onResolve({ action, card, priority })}
@@ -355,7 +356,8 @@ export default function AmbientNowView({
     const result = onOpenWorkflow?.({
       quoteId: item.quoteId,
       attentionType: item.type,
-      requestId: getWorkflowAttentionFocusId(item)
+      requestId: getWorkflowAttentionFocusId(item),
+      actionId: action.id
     });
     if (result?.status === "recovery") {
       announce(resultFor(action, "recovery", {

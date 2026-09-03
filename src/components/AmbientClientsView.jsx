@@ -786,14 +786,15 @@ export function AmbientClientRelationship({
       let response = null;
       const destination = text(target.destination || target.kind || action.executionTarget?.surfaceId);
       if (["workflow", "approval"].includes(destination)) {
-        response = onOpenWorkflow?.(target);
+        response = onOpenWorkflow?.({ ...target, actionId: action.id });
       } else if (["conversation", "messages"].includes(destination)) {
         response = onOpenConversation?.(
           text(target.quoteId || action.executionTarget?.targetId),
           {
             arrivalContext: {
               object: action.arrivalContract.object,
-              target
+              target,
+              actionId: action.id
             }
           }
         );
@@ -979,6 +980,7 @@ export function AmbientClientRelationship({
               type="button"
               className="ambient-client-overview__primary"
               data-ambient-action-id={primaryAction.id}
+              data-workspace-task-id={primaryAction.id}
               onClick={() => resolveAction(primaryAction, primaryTarget)}
             >
               {primaryAction.outcomeLabel}
