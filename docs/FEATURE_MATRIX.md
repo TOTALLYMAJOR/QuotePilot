@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-03 12:00:44 CDT
+Last updated: 2026-09-03 15:59:15 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -27,6 +27,16 @@ release, deployment, provider, risk, and acceptance state.
 - **Human acceptance:** a named person completed and accepted the intended
   workflow. This is never inferred from source, tests, CI, deployment, or
 provider receipts.
+
+## Production email sender identity (September 3, 2026)
+
+- **Exact provider identity:** the default-off Resend activation path accepts
+  only `QuotePilot by MBMApps <quotepilot@quietpilot.us>`, matching the
+  provider-verified `quietpilot.us` domain. The Functions runtime, environment
+  materializer, and release-candidate policy share that allowlist; a stale
+  LeaguePilot identity or arbitrary sender fails closed. This is source and
+  provider-domain metadata evidence, not deployment, delivery, inbox receipt,
+  or human acceptance.
 
 ## Business Setup Center and Menu Builder (August 31, 2026)
 

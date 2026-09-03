@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-03 15:32:05 CDT
+Last updated: 2026-09-03 15:59:15 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -304,7 +304,10 @@ If a topic changes, only update the owning doc and cross-link from others.
     `none` in Firebase Functions readback.
   - `email-active` is restricted to Firebase `backend`/`all`, materializes the
     approved Resend provider from the immutable dispatch profile, and requires
-    every active Function to report that exact profile after deployment.
+    every active Function to report that exact profile after deployment. The
+    source allowlist and repository configuration must identify
+    `QuotePilot by MBMApps <quotepilot@quietpilot.us>`, matching the verified
+    `quietpilot.us` domain returned by the configured Resend account.
   - A new Secret Manager version, repository variable, source merge, or green
     deployment alone is not message-delivery evidence. One separately
     authorized controlled send must keep QuotePilot provider acceptance,

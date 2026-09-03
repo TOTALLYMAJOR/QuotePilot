@@ -107,7 +107,7 @@ if (emailFromName !== "QuotePilot by MBMApps") {
 }
 
 const emailFromEmail = required("EMAIL_FROM_EMAIL").toLowerCase();
-if (emailFromEmail !== "quotepilot@leaguepilot.us") {
+if (emailFromEmail !== "quotepilot@quietpilot.us") {
   throw new Error(
     "EMAIL_FROM_EMAIL must use the approved QuotePilot sender identity; enable Resend only after provider and DNS verification."
   );
