@@ -463,6 +463,39 @@ button.workspace-brand:focus-visible {
   text-transform: uppercase;
 }
 
+.workspace-tools-dialog__section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.workspace-tools-dialog__section-heading h3 {
+  margin: 0;
+}
+
+.workspace-tools-dialog__section-description {
+  margin: 0.3rem 0 0;
+  color: #6b6e74;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.workspace-tools-dialog__disclosure {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #dedbd2;
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: #1f2023;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
 .workspace-tools-dialog__section > button,
 .workspace-tools-dialog__actions button {
   width: 100%;
@@ -486,6 +519,8 @@ button.workspace-brand:focus-visible {
 .workspace-tools-dialog__section > button:focus-visible,
 .workspace-tools-dialog__actions button:hover,
 .workspace-tools-dialog__actions button:focus-visible,
+.workspace-tools-dialog__disclosure:hover,
+.workspace-tools-dialog__disclosure:focus-visible,
 .workspace-tools-dialog__header > button:hover,
 .workspace-tools-dialog__header > button:focus-visible {
   outline: 2px solid rgba(141, 97, 26, 0.62);
@@ -496,6 +531,12 @@ button.workspace-brand:focus-visible {
 .workspace-tools-dialog__actions {
   display: grid;
   gap: 0.15rem;
+}
+
+.workspace-tools-dialog__administration-actions {
+  margin-top: 0.65rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid #e4e4e0;
 }
 
 .workspace-tools-dialog__workspace-current {

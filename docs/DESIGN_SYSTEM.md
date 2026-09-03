@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-02 18:44:00 CDT
+Last updated: 2026-09-02 18:55:27 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -81,6 +81,14 @@ workspace. It distinguishes three layers and does not trade one for another:
    Desktop uses the secondary header/bottom controls. Mobile uses the standard
    workspace/avatar trigger to open the focus-contained **Workspace & tools**
    sheet; it does not add another bottom-nav item.
+
+The **Workspace & tools** sheet follows a stable task hierarchy: current
+workspace, frequent tools, operations, administration, then account. Search,
+Workflow, Messages, and Pilot stay exposed as frequent tools; live-event work
+stays exposed under Operations. Reporting, integrations, import, and diagnostics
+are conditionally rendered only after the user expands Administration, so a
+collapsed section cannot leak gated controls into keyboard order. Closing the
+sheet resets that secondary disclosure without changing any route or authority.
 
 v0.16 authorizes one organization per signed-in principal. It therefore does
 not present a same-account **Switch workspace** control that the identity and

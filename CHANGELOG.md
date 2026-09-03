@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 18:44:00 CDT
+Last updated: 2026-09-02 18:55:27 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Structured **Workspace & tools** into current workspace, frequent tools,
+  operations, progressive administration, and account. Reporting,
+  integrations, import, and diagnostics remain role-gated and are now absent
+  from focus order until the explicit 44px Administration disclosure opens.
 - Reflowed the populated Clients summary at phone widths into identity, contact,
   status, action, then auxiliary-image order. Long email addresses now wrap
   inside a full-width contact row, the single client action remains 44px and
