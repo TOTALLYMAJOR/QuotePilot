@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-02 22:15:58 CDT
+Last updated: 2026-09-03 00:30:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,28 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added privacy-bounded native return context across Opportunities, Clients,
+  and Library. Exact Back/Forward round trips now restore safe filters,
+  disclosures, initiating focus, and settled scroll while free-text search,
+  cursors, exact Library targets, and drafts remain in tab memory instead of
+  URLs, storage, or history tokens. Invalid, reloaded, non-adjacent, foreign-
+  organization, or foreign-principal context falls back without selecting a
+  nearby record. Library editors now receive distinct same-URL history entries
+  and share one busy/dirty dismissal authority across explicit controls and
+  browser traversal: **Keep editing** preserves the exact draft and entry;
+  accepted discard continues the requested traversal; Forward reopens persisted
+  data without reviving the discarded draft. Seventeen local Chromium-admin
+  cases cover the three-route 390/768/1440px matrix, paginated Clients, Client
+  360, nested contextual Library, delayed reads, reload privacy, invalid and
+  foreign recovery, and the adversarial dirty-editor sequence. Non-expiry
+  fixtures retain byte-equivalent quote, history, and catalog state with no
+  unexpected non-GET request; restored route surfaces have zero scoped Axe
+  violations and destination pages have no serious or critical violation. The
+  return-context layer adds no write authority. The pre-existing admin quote-
+  history read may still persist automatic expiry through its existing
+  lifecycle authority, including local-fallback normalization and versioning.
+  Forced colors, 200% zoom, Firefox/WebKit, real assistive technology, hosted
+  data, deployment, and human acceptance remain separate and unclaimed.
 - Closed the first cross-route task outcome adapter for exact staff follow-ups.
   Now, Opportunities, and Client 360 retain one principal-, role-, and
   organization-bound task into Workflow; **Completed** is allowed only after a

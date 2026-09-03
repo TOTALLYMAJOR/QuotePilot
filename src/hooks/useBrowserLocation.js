@@ -40,6 +40,15 @@ function normalizeHistoryEntry(value) {
   return Object.freeze({ sessionId, position, entryId });
 }
 
+function isQuotePilotHistoryEntry(value) {
+  return Boolean(
+    value
+    && /^qphs_[a-z0-9_]+$/u.test(value.sessionId)
+    && /^qpe_[a-z0-9_]+$/u.test(value.entryId)
+    && Math.abs(value.position) <= 1_000_000
+  );
+}
+
 export function readBrowserHistoryEntry(windowObject = defaultWindow()) {
   return normalizeHistoryEntry(windowObject?.history?.state?.[BROWSER_HISTORY_STATE_KEY]);
 }
@@ -65,7 +74,10 @@ export function ensureBrowserHistoryEntry(windowObject = defaultWindow()) {
   if (current?.sessionId === runtime.sessionId) return current;
   const entry = Object.freeze({
     sessionId: runtime.sessionId,
-    position: 0,
+    // Preserve the prior app entry's relative position across a reload. The
+    // runtime ID still invalidates return context, while the position lets an
+    // active dirty guard safely bounce a same-document stale-session traversal.
+    position: isQuotePilotHistoryEntry(current) ? current.position : 0,
     entryId: randomHistoryId("qpe")
   });
   windowObject.history.replaceState(
@@ -254,6 +266,22 @@ export function navigateBasicBrowser(destination, {
   return target;
 }
 
+export function traverseBrowserHistory(delta, {
+  windowObject = defaultWindow()
+} = {}) {
+  const normalizedDelta = Number(delta);
+  if (
+    !Number.isSafeInteger(normalizedDelta)
+    || normalizedDelta === 0
+    || Math.abs(normalizedDelta) > 32
+    || typeof windowObject?.history?.go !== "function"
+  ) {
+    return false;
+  }
+  windowObject.history.go(normalizedDelta);
+  return true;
+}
+
 function locationsMatch(left, right) {
   return left.pathname === right.pathname
     && left.search === right.search
@@ -284,7 +312,9 @@ export function useBasicBrowserLocation(windowObject = defaultWindow()) {
 }
 
 export function useBrowserLocation(windowObject = defaultWindow(), {
-  historyTraversalGuardRef = null
+  historyTraversalGuardRef = null,
+  historyTraversalAuthorizationRef = null,
+  historyTraversalCaptureRef = null
 } = {}) {
   const [location, setLocation] = useState(() => readBrowserLocation(windowObject));
   const acceptedLocationRef = useRef(location);
@@ -307,14 +337,19 @@ export function useBrowserLocation(windowObject = defaultWindow(), {
     };
     const completeRestoration = (attempt) => {
       traversalRef.current = { phase: "idle" };
+      try {
+        historyTraversalCaptureRef?.current?.();
+      } catch {
+        // View capture is best-effort presentation state. Navigation and
+        // dismissal authority must remain available if a surface disappears.
+      }
       const guard = historyTraversalGuardRef?.current;
       if (!guard?.open || typeof guard.requestDismiss !== "function") {
         replayTraversal(attempt);
         return;
       }
       const reason = attempt.delta < 0 ? "browser_back" : "browser_forward";
-      const result = guard.requestDismiss(reason, () => replayTraversal(attempt));
-      if (result?.status === "dismissed" && !attempt.replayed) replayTraversal(attempt);
+      guard.requestDismiss(reason, () => replayTraversal(attempt));
     };
     const updateLocation = (event = null) => {
       const nextLocation = readBrowserLocation(windowObject);
@@ -326,6 +361,21 @@ export function useBrowserLocation(windowObject = defaultWindow(), {
       const traversal = traversalRef.current;
       const acceptedEntry = acceptedLocationRef.current?.historyEntry || null;
       const nextEntry = nextLocation.historyEntry || null;
+      const authorization = historyTraversalAuthorizationRef?.current;
+      const authorizedTraversal = Boolean(
+        authorization
+        && acceptedEntry
+        && nextEntry
+        && authorization.sourceEntryId === acceptedEntry.entryId
+        && authorization.sessionId === acceptedEntry.sessionId
+        && authorization.sessionId === nextEntry.sessionId
+        && authorization.targetPosition === nextEntry.position
+      );
+      if (authorizedTraversal) {
+        historyTraversalAuthorizationRef.current = null;
+        acceptLocation(nextLocation);
+        return;
+      }
 
       if (traversal.phase === "replaying") {
         acceptLocation(nextLocation);
@@ -355,13 +405,25 @@ export function useBrowserLocation(windowObject = defaultWindow(), {
       }
 
       const guard = historyTraversalGuardRef?.current;
-      const canRestore = Boolean(
+      const canCaptureReturnView = typeof historyTraversalCaptureRef?.current === "function";
+      const guardedTraversal = Boolean(
         guard?.open
         && typeof guard.requestDismiss === "function"
         && acceptedEntry
         && nextEntry
+        && isQuotePilotHistoryEntry(acceptedEntry)
+        && isQuotePilotHistoryEntry(nextEntry)
+        && acceptedEntry.position !== nextEntry.position
+      );
+      const capturableTraversal = Boolean(
+        canCaptureReturnView
+        && acceptedEntry
+        && nextEntry
         && acceptedEntry.sessionId === nextEntry.sessionId
         && acceptedEntry.position !== nextEntry.position
+      );
+      const canRestore = Boolean(
+        (guardedTraversal || capturableTraversal)
         && typeof windowObject.history.go === "function"
       );
       if (!canRestore) {
@@ -381,10 +443,16 @@ export function useBrowserLocation(windowObject = defaultWindow(), {
     const unsubscribe = subscribeToBrowserLocation(windowObject, updateLocation);
     return () => {
       active = false;
+      if (historyTraversalAuthorizationRef) historyTraversalAuthorizationRef.current = null;
       traversalRef.current = { phase: "idle" };
       unsubscribe();
     };
-  }, [historyTraversalGuardRef, windowObject]);
+  }, [
+    historyTraversalAuthorizationRef,
+    historyTraversalCaptureRef,
+    historyTraversalGuardRef,
+    windowObject
+  ]);
 
   return location;
 }

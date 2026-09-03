@@ -410,14 +410,14 @@ export default function AmbientOpportunitiesStream({
       <header className="ambient-opportunities__masthead">
         <div>
           <p className="ambient-opportunity__reference">Opportunities</p>
-          <h2
+          <h1
             id="ambient-opportunities-heading"
             ref={headingRef}
             className="workspace-route-heading"
             tabIndex={-1}
           >
             Every event, with its next move.
-          </h2>
+          </h1>
           <p>
             Active and recent opportunities, ordered by what needs attention.
           </p>
@@ -506,7 +506,7 @@ export default function AmbientOpportunitiesStream({
                 key={group.id}
               >
                 <header className="ambient-opportunities__group-heading">
-                  <h3 id={`ambient-opportunities-group-${group.id}`}>{group.label}</h3>
+                  <h2 id={`ambient-opportunities-group-${group.id}`}>{group.label}</h2>
                   <span>{group.rows.length}</span>
                 </header>
                 <ol className="ambient-opportunities__list" aria-label={`${group.label} opportunities`}>

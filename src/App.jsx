@@ -863,7 +863,10 @@ export default function App({
     location: browserLocation,
     navigate,
     replace,
-    setHistoryTraversalGuard
+    setHistoryTraversalGuard,
+    setReturnContextScope,
+    returnToOrigin,
+    returnContextStatus
   } = useWorkspaceNavigation();
   const workspaceArrivalHandoff = useMemo(() => {
     if (!AMBIENT_UI_ENABLED || !browserLocation.state?.ambientArrival) return null;
@@ -877,6 +880,19 @@ export default function App({
     : null;
   const [workspaceArrivalResolution, setWorkspaceArrivalResolution] = useState(null);
   const activeWorkspaceTaskPrincipal = workspaceTaskPrincipal(authSession);
+  useEffect(() => {
+    setReturnContextScope?.({
+      organizationId: authSession.organizationId,
+      principalId: authSession.user?.uid,
+      role: authSession.role
+    });
+    return () => setReturnContextScope?.(null);
+  }, [
+    authSession.organizationId,
+    authSession.role,
+    authSession.user?.uid,
+    setReturnContextScope
+  ]);
   const currentWorkspaceTaskSessionRef = useRef(null);
   currentWorkspaceTaskSessionRef.current = {
     organizationId: String(authSession.organizationId || "").trim(),
@@ -906,13 +922,24 @@ export default function App({
   const [catalogRouteInteraction, setCatalogRouteInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
   const [catalogModalInteraction, setCatalogModalInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
   const [libraryContextualOrigin, setLibraryContextualOrigin] = useState(null);
-  const [quickUpdatesGuard, setQuickUpdatesGuard] = useState(null);
+  useEffect(() => {
+    setLibraryContextualOrigin(null);
+  }, [authSession.organizationId, authSession.role, authSession.user?.uid]);
   const handleQuickUpdatesGuardChange = useCallback((guard = null) => {
-    setQuickUpdatesGuard(guard);
-    if (typeof setHistoryTraversalGuard === "function") setHistoryTraversalGuard(guard);
+    if (typeof setHistoryTraversalGuard === "function") {
+      setHistoryTraversalGuard(guard, "quick-updates");
+    }
+  }, [setHistoryTraversalGuard]);
+  const handleWorkspaceToolsGuardChange = useCallback((guard = null) => {
+    if (typeof setHistoryTraversalGuard === "function") {
+      setHistoryTraversalGuard(guard, "workspace-tools");
+    }
   }, [setHistoryTraversalGuard]);
   useEffect(() => () => {
-    if (typeof setHistoryTraversalGuard === "function") setHistoryTraversalGuard(null);
+    if (typeof setHistoryTraversalGuard === "function") {
+      setHistoryTraversalGuard(null, "quick-updates");
+      setHistoryTraversalGuard(null, "workspace-tools");
+    }
   }, [setHistoryTraversalGuard]);
   const ambientLibraryInteraction = useMemo(() => ({
     dirty: catalogRouteInteraction.dirty || catalogModalInteraction.dirty,
@@ -1070,7 +1097,10 @@ export default function App({
       : "";
     const organizationId = String(authSession.organizationId || "").trim();
     const requestedOrganizationId = String(workspaceArrivalContext?.object?.id || "").trim();
-    if (!quoteId || !organizationId || requestedOrganizationId !== organizationId) return undefined;
+    if (!quoteId || !organizationId || requestedOrganizationId !== organizationId) {
+      setLibraryContextualOrigin(null);
+      return undefined;
+    }
 
     const sectionId = String(workspaceArrivalContext?.focus?.sectionId || "overview").trim() || "overview";
     let cancelled = false;
@@ -1122,28 +1152,28 @@ export default function App({
       beforeCommit = null,
       ...navigationOptions
     } = options;
-    const commitNavigation = () => {
-      const preparation = typeof beforeCommit === "function" ? beforeCommit() : null;
-      if (preparation?.ok === false) return preparation;
-      navigate(destination, {
-        ...navigationOptions,
-        preserveSearch: false
-      });
-      return preparation;
-    };
-    if (
-      !bypassQuickUpdatesGuard
-      && quickUpdatesGuard?.open === true
-      && typeof quickUpdatesGuard.requestDismiss === "function"
-    ) {
-      return quickUpdatesGuard.requestDismiss(quickUpdatesReason, commitNavigation);
+    return navigate(destination, {
+      ...navigationOptions,
+      preserveSearch: false,
+      beforeNavigationCommit: beforeCommit,
+      historyGuardReason: quickUpdatesReason,
+      skipHistoryGuard: bypassQuickUpdatesGuard
+    });
+  }, [navigate]);
+  const returnToWorkspaceOrigin = useCallback((fallback, options = {}) => {
+    if (typeof returnToOrigin === "function") {
+      return returnToOrigin({ fallback, ...options });
     }
-    return commitNavigation();
-  }, [navigate, quickUpdatesGuard]);
-  const navigateAmbientTaskHandoff = useCallback((handoff, actionId) => {
+    return navigateWorkspace(fallback);
+  }, [navigateWorkspace, returnToOrigin]);
+  const navigateAmbientTaskHandoff = useCallback((handoff, actionId, options = {}) => {
     let startedTask = null;
     const navigationResult = navigateWorkspace(handoff.navigation.path, {
       state: handoff.navigation.state,
+      preserveReturnContext: Boolean(options.preserveReturnContext),
+      returnContextSurfaceId: options.returnContextSurfaceId || handoff.contract.surfaceId,
+      returnContextHint: options.returnContextHint || null,
+      returnContextDestination: options.returnContextDestination || null,
       beforeCommit: () => {
         startedTask = beginWorkspaceTaskJourney(handoff, actionId);
         if (!startedTask.ok) {
@@ -1187,8 +1217,21 @@ export default function App({
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientOpportunityArrivalInput(target));
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target));
-  }, [navigateAmbientTaskHandoff]);
+    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target), {
+      preserveReturnContext: true,
+      returnContextSurfaceId: "living-opportunity",
+      returnContextHint: {
+        focus: {
+          kind: browserRoute.routeId === WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL
+            ? "client-overview-action"
+            : "opportunity-action",
+          objectId: handoff.contract.focus.quoteId,
+          actionId: ambientTaskActionId(target),
+          controlId: String(target.returnFocusControlId || "").trim()
+        }
+      }
+    });
+  }, [browserRoute.routeId, navigateAmbientTaskHandoff]);
   const navigateAmbientQuoteAdministration = useCallback((quoteId, context = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(
@@ -1201,7 +1244,17 @@ export default function App({
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientClientArrivalInput(target));
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target));
+    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target), {
+      preserveReturnContext: true,
+      returnContextSurfaceId: "client-overview",
+      returnContextHint: {
+        focus: {
+          kind: "client-action",
+          objectId: handoff.contract.focus.customerId,
+          actionId: ambientTaskActionId(target)
+        }
+      }
+    });
   }, [navigateAmbientTaskHandoff]);
   const wizardRef = useRef(null);
   const stepperRef = useRef(null);
@@ -1532,8 +1585,7 @@ export default function App({
   } = {}) => {
     if (CUSTOMER_CENTERED_WORKSPACE_ENABLED) {
       setOpenHeaderMenu("");
-      beforeOpen?.();
-      navigateWorkspace(path);
+      navigateWorkspace(path, { beforeCommit: beforeOpen });
       return;
     }
     openWorkspaceTool(setOpen, { menuTriggerRef, beforeOpen });
@@ -4681,7 +4733,16 @@ export default function App({
     navigateWorkspace(arrival.navigation.path, {
       state: arrival.navigation.state,
       bypassQuickUpdatesGuard: true,
-      quickUpdatesReason: "library"
+      quickUpdatesReason: "library",
+      preserveReturnContext: true,
+      returnContextSurfaceId: "ambient-library",
+      returnContextHint: {
+        focus: {
+          kind: "quick-updates",
+          objectId: quoteId,
+          actionId: "open-quick-updates"
+        }
+      }
     });
     return { status: "pending", contract: arrival.contract };
   };
@@ -5461,14 +5522,20 @@ export default function App({
         arrivalAttempted: workspaceArrivalAttempted,
         onArrivalResolution: handleWorkspaceArrivalResolution,
         onInteractionStateChange: setCatalogRouteInteraction,
-        contextualOrigin: libraryContextualOrigin ? {
-          ...libraryContextualOrigin,
-          onReturn: (context = libraryContextualOrigin) => {
-            const quoteId = String(context?.quoteId || libraryContextualOrigin.quoteId || "").trim();
-            setLibraryContextualOrigin(null);
-            if (quoteId) navigateWorkspace(buildQuotePath(quoteId));
-          }
-        } : null
+        contextualOrigin: libraryContextualOrigin
+          && libraryContextualOrigin.organizationId === String(authSession.organizationId || "").trim()
+          && workspaceArrivalContext?.surfaceId === "ambient-library"
+          && workspaceArrivalContext?.intentId === "browse_library" ? {
+            ...libraryContextualOrigin,
+            onReturn: (context = libraryContextualOrigin) => {
+              const quoteId = String(context?.quoteId || libraryContextualOrigin.quoteId || "").trim();
+              if (quoteId) {
+                returnToWorkspaceOrigin(buildQuotePath(quoteId), {
+                  targetRouteId: WORKSPACE_ROUTE_IDS.QUOTE_DETAIL
+                });
+              }
+            }
+          } : null
       }
     },
     modal: {
@@ -6010,7 +6077,7 @@ export default function App({
         onRequestPasswordReset: () => requestPasswordReset({
           email: authSession.user?.email || ""
         }),
-        onWorkspaceToolsGuardChange: setHistoryTraversalGuard,
+        onWorkspaceToolsGuardChange: handleWorkspaceToolsGuardChange,
         onSignOut: handleSignOut
       }}
       searchSurface={commercialSearchAvailable && commercialSearchOpen ? (
@@ -6082,6 +6149,23 @@ export default function App({
               {toast.message}
             </div>
           ))}
+        </div>
+      )}
+
+      {AMBIENT_UI_ENABLED && returnContextStatus && (
+        <div
+          className={returnContextStatus.state === "restoring"
+            ? "sr-only"
+            : "workspace-arrival-context source-note"}
+          data-workspace-return-state={returnContextStatus.state}
+          data-arrival-state={returnContextStatus.state === "restored" ? "resolved" : returnContextStatus.state}
+          role="status"
+          aria-live="polite"
+          data-surface-purpose="clarify reveal_context"
+        >
+          {returnContextStatus.message || (returnContextStatus.state === "restoring"
+            ? "Restoring your previous place."
+            : "")}
         </div>
       )}
 
@@ -6263,7 +6347,7 @@ export default function App({
             organizationId={authSession.organizationId}
             organizationName={organizationName}
             customerId={browserRoute.params?.customerId || ""}
-            onBack={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
+            onBack={() => returnToWorkspaceOrigin(WORKSPACE_PATHS.customers)}
             onOpenQuotes={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             onOpenOpportunity={navigateAmbientOpportunity}
@@ -6842,7 +6926,7 @@ export default function App({
                 }}
             onBackToQuotes={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
-              navigateWorkspace(WORKSPACE_PATHS.quotes);
+              returnToWorkspaceOrigin(WORKSPACE_PATHS.quotes);
             }}
             onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
             scheduleAvailable={eventScheduleEnabled}

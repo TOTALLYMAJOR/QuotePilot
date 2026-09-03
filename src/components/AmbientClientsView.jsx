@@ -186,6 +186,10 @@ export function AmbientClientsDirectory({
   model = {},
   searchDraft = "",
   cursorHistoryLength = 0,
+  directoryFilter: controlledDirectoryFilter,
+  onDirectoryFilterChange,
+  aboutOpen: controlledAboutOpen,
+  onAboutOpenChange,
   currentUserRole = "staff",
   onSearchDraftChange,
   onApplySearch,
@@ -199,7 +203,14 @@ export function AmbientClientsDirectory({
 }) {
   const acknowledgementRef = useRef(null);
   const [acknowledgement, setAcknowledgement] = useState(null);
-  const [directoryFilter, setDirectoryFilter] = useState("all");
+  const [internalDirectoryFilter, setInternalDirectoryFilter] = useState("all");
+  const [internalAboutOpen, setInternalAboutOpen] = useState(false);
+  const directoryFilter = controlledDirectoryFilter ?? internalDirectoryFilter;
+  const aboutOpen = controlledAboutOpen ?? internalAboutOpen;
+  const changeDirectoryFilter = (value) => {
+    setInternalDirectoryFilter(value);
+    onDirectoryFilterChange?.(value);
+  };
   const rows = directoryRows(model);
   const boundary = directoryBoundary(model);
   const state = text(model.state) || (rows.length ? "success" : "empty");
@@ -508,10 +519,17 @@ export function AmbientClientsDirectory({
                   <button type="submit" className="ghost">Search</button>
                   {searchDraft ? <button type="button" className="ghost" onClick={onClear}>Clear</button> : null}
                 </form>
-                {rows.length > 1 && (
+                <p className="source-note" data-client-search-boundary>
+                  Search stays in this browser tab and clears after a reload.
+                </p>
+                {(rows.length > 1 || directoryFilter !== "all") && (
                   <label className="ambient-clients__filter-select">
                     <span className="visually-hidden">Filter clients</span>
-                    <select value={directoryFilter} onChange={(event) => setDirectoryFilter(event.target.value)}>
+                    <select
+                      data-view-filter="client-relationship"
+                      value={directoryFilter}
+                      onChange={(event) => changeDirectoryFilter(event.target.value)}
+                    >
                       <option value="all">All clients</option>
                       <option value="linked">With linked work</option>
                       <option value="upcoming">Upcoming events</option>
@@ -555,7 +573,7 @@ export function AmbientClientsDirectory({
                 <div className="ambient-clients__filter-empty">
                   <strong>No clients match this view yet.</strong>
                   <span>Try another view—your current client page is unchanged.</span>
-                  <button type="button" className="ghost" onClick={() => setDirectoryFilter("all")}>Show all clients</button>
+                  <button type="button" className="ghost" onClick={() => changeDirectoryFilter("all")}>Show all clients</button>
                 </div>
               ) : null}
             </section>
@@ -573,7 +591,15 @@ export function AmbientClientsDirectory({
           </nav>
         )}
 
-        <details className="ambient-clients__about">
+        <details
+          className="ambient-clients__about"
+          data-client-disclosure="about"
+          open={aboutOpen}
+          onToggle={(event) => {
+            setInternalAboutOpen(event.currentTarget.open);
+            onAboutOpenChange?.(event.currentTarget.open);
+          }}
+        >
           <summary>About this view</summary>
           <div>
             <h2 id="ambient-clients-boundary-title">{boundary.sourceLabel || "Client records"}</h2>
@@ -704,6 +730,10 @@ export function AmbientClientRelationship({
   const boundary = model.boundary || model.readBoundary || {};
   const primaryAction = relationshipPrimaryAction(model);
   const primaryTarget = relationshipTarget(model);
+  const primaryDestination = text(primaryTarget.destination || primaryTarget.kind);
+  const primaryOpportunityId = ["opportunity", "living-opportunity"].includes(primaryDestination)
+    ? text(primaryTarget.quoteId || primaryAction?.executionTarget?.targetId)
+    : "";
   const rootHeadingRef = headingRef || localHeadingRef;
   const caughtUp = model.caughtUp === true
     || model.caughtUp?.eligible === true
@@ -814,6 +844,7 @@ export function AmbientClientRelationship({
         response = onOpenOpportunity?.({
           quoteId: text(target.quoteId || action.executionTarget?.targetId),
           actionId: action.id,
+          returnFocusControlId: text(target.returnFocusControlId),
           object: action.arrivalContract.object,
           reason: action.arrivalContract.reason,
           consequence: action.arrivalContract.consequence,
@@ -864,7 +895,11 @@ export function AmbientClientRelationship({
       enabled: Boolean(quoteId && typeof onOpenOpportunity === "function"),
       ...(!(quoteId && typeof onOpenOpportunity === "function") ? { disabledReason: "This opportunity has no exact available destination." } : {})
     });
-    resolveAction(action, { destination: "opportunity", quoteId });
+    resolveAction(action, {
+      destination: "opportunity",
+      quoteId,
+      returnFocusControlId: "client-opportunity-row"
+    });
   };
 
   const reviewConversation = (conversation) => {
@@ -980,8 +1015,12 @@ export function AmbientClientRelationship({
               type="button"
               className="ambient-client-overview__primary"
               data-ambient-action-id={primaryAction.id}
+              data-opportunity-id={primaryOpportunityId || undefined}
+              data-return-focus-control={primaryOpportunityId ? "client-next-action" : undefined}
               data-workspace-task-id={primaryAction.id}
-              onClick={() => resolveAction(primaryAction, primaryTarget)}
+              onClick={() => resolveAction(primaryAction, primaryOpportunityId
+                ? { ...primaryTarget, returnFocusControlId: "client-next-action" }
+                : primaryTarget)}
             >
               {primaryAction.outcomeLabel}
               <span aria-hidden="true">→</span>
@@ -1003,7 +1042,7 @@ export function AmbientClientRelationship({
               const quoteId = text(opportunity.quoteId || opportunity.id);
               const status = classifyQuoteStatus(opportunity.status);
               return (
-                <li key={quoteId}>
+                <li key={quoteId} data-opportunity-id={quoteId}>
                   <div>
                     <h3>{formatWorkspaceText(opportunity.eventName || opportunity.event?.name || opportunity.quoteNumber, { emptyLabel: "Untitled opportunity" })}</h3>
                     <p>
@@ -1012,7 +1051,13 @@ export function AmbientClientRelationship({
                     </p>
                     <StatusChip family={status.family} label={status.label} />
                   </div>
-                  <button type="button" className="ambient-client-overview__secondary" onClick={() => reviewOpportunity(opportunity)}>
+                  <button
+                    type="button"
+                    className="ambient-client-overview__secondary"
+                    data-ambient-action-id={`review-client-opportunity:${quoteId}`}
+                    data-return-focus-control="client-opportunity-row"
+                    onClick={() => reviewOpportunity(opportunity)}
+                  >
                     Review opportunity
                   </button>
                 </li>

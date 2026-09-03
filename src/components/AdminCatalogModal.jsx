@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { firebaseReady, storage } from "../lib/firebase";
 import { STARTER_CATALOG_PACKS } from "../data/starterCatalogPacks";
@@ -480,6 +480,7 @@ export function AdminCatalogView({
   focusRequest = null,
   onFocusResolution,
   onInteractionStateChange,
+  onDismissGuardChange,
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
   onToast,
@@ -991,18 +992,37 @@ export function AdminCatalogView({
     setSelectedPackageId(packageWorkspace.selectedPackageId);
   }, [open, packageWorkspace.selectedPackageId, selectedPackageId]);
 
-  const handleClose = () => {
+  const requestDismiss = useCallback((reason = "close", continuation = null) => {
     if (closeBlocked) {
       setStatus("Wait for the current catalog action to finish before closing.");
-      return;
+      return { status: "blocked", reason: "busy", trigger: reason };
     }
     if (hasAnyUnsavedChanges && !window.confirm("Discard unsaved catalog, menu, and branding changes?")) {
-      return;
+      return { status: "guarded", reason: "dirty", trigger: reason };
     }
     resetOnNextOpenRef.current = true;
     onInteractionStateChange?.({ dirty: false, busy: false });
-    onClose();
-  };
+    if (typeof continuation === "function") continuation();
+    return { status: "dismissed", trigger: reason };
+  }, [closeBlocked, hasAnyUnsavedChanges, onInteractionStateChange]);
+  const handleClose = useCallback(() => {
+    requestDismiss("close", onClose);
+  }, [onClose, requestDismiss]);
+  useEffect(() => {
+    if (typeof onDismissGuardChange !== "function") return undefined;
+    if (!open || !embedded) {
+      onDismissGuardChange(null);
+      return undefined;
+    }
+    onDismissGuardChange({
+      modelId: "catalog-editor-navigation-guard-v1",
+      open: true,
+      dirty: hasAnyUnsavedChanges,
+      busy: closeBlocked,
+      requestDismiss
+    });
+    return () => onDismissGuardChange(null);
+  }, [closeBlocked, embedded, hasAnyUnsavedChanges, onDismissGuardChange, open, requestDismiss]);
   const { dialogRef } = useModalDialog({
     open: open && !embedded,
     onRequestClose: handleClose,
