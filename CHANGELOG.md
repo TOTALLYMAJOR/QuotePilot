@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 18:14:25 CDT
+Last updated: 2026-09-03 20:20:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Released annotated tag `v0.16.5` at exact commit
+  `ad3517b39109b91dd735ee3700e8c79a4e2ca956` after exact-main CI run
+  `33818617920` passed. Governed Firebase production run `33820173249`
+  deployed 102 active `us-central1` Functions on the `email-active` profile;
+  governed Vercel production run `33822596844` deployed the same release to
+  `quotepilot.mbmapps.com`. One verified platform administrator then used the
+  deployed Integrations Ops control exactly once for the controlled
+  `flightcontrol@quietpilot.us` recipient. QuotePilot returned
+  `provider_accepted`, locked the request, and recorded one bounded Operations
+  Audit receipt; independent Resend readback for the exact provider message
+  reported `delivered`. Recipient inbox confirmation, message-content review,
+  ordinary quote/onboarding email behavior, and human acceptance remain open.
+  Firebase rollback authority remains
+  `4f329180f0864ebadb0383930f969a3767f8d9db`; Vercel rollback authority remains
+  `c8800838c03ce9db49fe1034c529c8363c8bf27c`.
 - Added a verified-platform-admin Resend acceptance test to Integrations Ops.
   It accepts only an exactly confirmed controlled `quietpilot.us` recipient,
   supplies server-owned non-customer content, persists a private request before

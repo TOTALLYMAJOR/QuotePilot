@@ -1,29 +1,28 @@
 # Project Status
 
-Last updated: 2026-09-03 17:48:40 CDT
+Last updated: 2026-09-03 20:20:30 CDT
 
 ## Current Production Release
 
-- The production Firebase backend now runs annotated tag `v0.16.4`, exact
-  commit `4f329180f0864ebadb0383930f969a3767f8d9db`. Exact-main CI Quality run
-  `33806999323` passed every required job; governed Firebase backend run
-  `33808086707` completed under `release_profile=email-active` with rollback
-  SHA `c8800838c03ce9db49fe1034c529c8363c8bf27c`. Workflow and independent
-  provider readback proved 101 active `us-central1` Functions with
-  `NOTIFICATIONS_EMAIL_PROVIDER=resend`; SMS, buyer access, Commercial Change,
-  staffing authority, and both Revenue Autopilot gates remain off. The current
-  and prior `RESEND_API_KEY` Secret Manager versions remain enabled pending a
-  separately authorized controlled-delivery acceptance.
-- The public static surfaces remain the v0.16.3 deployment: annotated tag
-  `v0.16.3` resolves to `c8800838c03ce9db49fe1034c529c8363c8bf27c`;
-  exact-main CI Quality run `33797242008` passed, governed Firebase run
-  `33798432693` deployed with rollback SHA
-  `4af43d2f097f8717357af210bb9ba0be9ef7be8f`, and governed Vercel run
-  `33799909088` deployed with rollback SHA
-  `54672a9e414ed5a6099a8332da31d7f56bf8b28a`. Post-activation probes returned
-  HTTP 200 for `/`, `/app`, and `/system` at `quotepilot.mbmapps.com`, and for
-  the Firebase Hosting origin. No frontend deployment was required for the
-  backend-only email activation.
+- Production now runs annotated tag `v0.16.5`, exact commit
+  `ad3517b39109b91dd735ee3700e8c79a4e2ca956`. Exact-main CI Quality run
+  `33818617920` passed every required job. Governed Firebase production run
+  `33820173249` completed under `release_profile=email-active`; independent
+  readback proved 102 active `us-central1` Functions, including the Resend
+  acceptance callable, with rollback SHA
+  `4f329180f0864ebadb0383930f969a3767f8d9db`. SMS, buyer access, Commercial
+  Change, staffing authority, and both Revenue Autopilot gates remain off.
+- Governed Vercel production run `33822596844` deployed the same exact v0.16.5
+  release to immutable deployment
+  `https://quoteflow-b8kcxv0k2-mbmapps.vercel.app` and rebound
+  `https://quotepilot.mbmapps.com`; the public asset contains the deployed
+  Email Provider Acceptance surface. Vercel rollback authority is
+  `c8800838c03ce9db49fe1034c529c8363c8bf27c`. The Firebase Hosting
+  origin/fallback remains on the prior v0.16.3 static release; it is not the
+  current public Vercel edge.
+
+## Superseded v0.16.0 and v0.16.1 Production Receipts
+
 - Annotated tag `v0.16.0` resolves to
   `54672a9e414ed5a6099a8332da31d7f56bf8b28a`; exact-main CI Quality run
   `33558167039` passed all required jobs. Governed Vercel run `33560027814`
@@ -89,24 +88,32 @@ Last updated: 2026-09-03 17:48:40 CDT
   source, logs, workflow inputs, artifacts, or receipts.
 - Production repository configuration identifies the sender as
   `QuotePilot by MBMApps <quotepilot@quietpilot.us>`. Governed Firebase run
-  `33808086707` deployed the distinct `email-active` profile from tagged-main
-  commit `4f329180f0864ebadb0383930f969a3767f8d9db`, preserving the complete
+  `33820173249` deployed the distinct `email-active` profile from tagged-main
+  commit `ad3517b39109b91dd735ee3700e8c79a4e2ca956`, preserving the complete
   safe-off authority matrix for SMS, buyer access, Commercial Change, staffing
   authority, and Revenue Autopilot.
 - The deployment, complete Functions readback, secret metadata, sender-domain
   verification, and public health checks are complete. This activates the
   production email transport for authorized QuotePilot workflows across the
   shared Firebase platform; it is not scoped to one organization record.
-- A new source/local acceptance surface is ready for release qualification. It
-  is visible only to verified platform administrators in Integrations Ops,
-  accepts only an exactly confirmed controlled `quietpilot.us` recipient,
-  persists a private request before one provider call, returns a bounded Resend
-  provider-message receipt, and projects the action into Operations Audit
-  without the provider identifier. Focused server, audit, and component tests
-  pass 11/11. This source candidate is not yet deployed and has not sent email.
-- One real controlled email remains a separate, explicit authorization. A
-  successful deploy cannot stand in for QuotePilot provider acceptance, Resend
-  delivery/bounce, recipient inbox receipt, or human review.
+- The acceptance surface is deployed and remained visible only to the verified
+  platform administrator `mm05366@gmail.com`. The same-tenant administrator
+  `flightcontrol@quietpilot.us`, which is not on the production platform-admin
+  allowlist, did not receive the panel. The production allowlist was not
+  changed for this test.
+- On September 3, 2026 at 20:16 CDT, the platform administrator submitted one
+  exactly confirmed test to `flightcontrol@quietpilot.us`. QuotePilot returned
+  `provider_accepted` at `2026-09-04T01:16:03.496Z`, exposed a non-empty
+  provider message ID in the direct private receipt, disabled the accepted
+  control, and projected exactly one `resend_acceptance_test` row into
+  Operations Audit without that provider ID. No retry was performed.
+- Independent Resend readback for the exact provider message reported
+  `last_event=delivered`. This closes provider acceptance and provider delivery
+  for that one server-authored non-customer message only. Recipient inbox
+  confirmation, sender/subject/body review, full business-state non-mutation
+  proof, ordinary quote/onboarding email behavior, spam placement, and human
+  acceptance remain open; therefore the run is not yet labeled controlled
+  production email acceptance under Launch Runbook criterion 14.
 
 ## v0.16 Calm Four Candidate Integration
 
@@ -1069,8 +1076,12 @@ route evidence are complete.
    Stripe credential. Replace it with a dedicated test-mode restricted key,
    verify the exact webhook endpoint/events, then run the coordinated Turnstile,
    invoice, signed-webhook, activation, and negative-path acceptance window.
-3. Resend configuration and historical domain verification do not prove an
-   exact current provider acceptance, delivered event, or recipient inbox.
+3. One controlled Resend message has exact current `provider_accepted` and
+   provider `delivered` receipts. Recipient inbox confirmation, content review,
+   ordinary quote/onboarding email behavior, and human acceptance remain
+   unverified. The test recipient also retains the administrator role the owner
+   assigned in MBMapps; review that standing access under ordinary least-
+   privilege operations when the role is no longer needed.
 4. Commercial Change enforcement has no production tenant enabled. Keep it off
    until role-specific hosted acceptance and exact tenant authorization close.
 5. Revenue Autopilot outbound sends lack independently verified provider webhook
@@ -1189,8 +1200,10 @@ route evidence are complete.
 3. Verify the Revenue Autopilot Resend webhook in the provider dashboard, then
    promote preparation-only mode first; keep outbound sends disabled until a
    separate provider-delivery acceptance.
-4. Capture one controlled Resend quote-delivery attempt with provider accepted,
-   delivered/bounced reconciliation, and recipient-inbox evidence kept distinct.
+4. Confirm the exact controlled message in the recipient inbox and review its
+   sender, subject, and server-owned body; then capture an ordinary quote-email
+   attempt with provider, webhook/reconciliation, and recipient evidence kept
+   distinct from this non-customer transport test.
 5. Prepare, but do not yet execute, the Pingram owner-SMS promotion record:
    Secret Manager bindings, exact regional origin, new configuration generation,
    sender/A2P and owner-consent evidence, registered signed endpoint, rollback,
