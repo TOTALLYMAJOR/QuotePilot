@@ -3799,7 +3799,7 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
       }))
       : [],
     menuItemDetails: Array.isArray(sourceSelection.menuItemDetails)
-      ? sourceWithoutIdentity.selection.menuItemDetails.map((item) => ({
+      ? sourceSelection.menuItemDetails.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3852,7 +3852,6 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     acceptanceReceipt: undefined,
     status: "draft",
     deletedAtISO: "",
-    selection,
     payment: {
       depositLink: "",
       depositStatus: "unpaid",
