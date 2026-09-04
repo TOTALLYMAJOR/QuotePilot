@@ -1,0 +1,20 @@
+import commercialPlatformCore from "commercial-platform-core";
+
+export const CATERING_VERTICAL_PACK = commercialPlatformCore.CATERING_VERTICAL_PACK;
+export const COMMERCIAL_PLATFORM_SCHEMA_VERSION = commercialPlatformCore.COMMERCIAL_PLATFORM_SCHEMA_VERSION;
+export const COMMERCIAL_TEMPLATE_VERSION = commercialPlatformCore.COMMERCIAL_TEMPLATE_VERSION;
+export const CONFIGURABLE_OFFER_VERSION = commercialPlatformCore.CONFIGURABLE_OFFER_VERSION;
+export const CONFIGURATION_RULE_VERSION = commercialPlatformCore.CONFIGURATION_RULE_VERSION;
+export const VERTICAL_PACK_VERSION = commercialPlatformCore.VERTICAL_PACK_VERSION;
+export const CommercialPlatformError = commercialPlatformCore.CommercialPlatformError;
+export const adaptEventTemplateToCommercialTemplate = commercialPlatformCore.adaptEventTemplateToCommercialTemplate;
+export const adaptPackageToConfigurableOffer = commercialPlatformCore.adaptPackageToConfigurableOffer;
+export const applyCommercialTemplate = commercialPlatformCore.applyCommercialTemplate;
+export const composeCommercialTemplate = commercialPlatformCore.composeCommercialTemplate;
+export const detectRuleConflicts = commercialPlatformCore.detectRuleConflicts;
+export const evaluateConfigurationRules = commercialPlatformCore.evaluateConfigurationRules;
+export const evaluateOfferConfiguration = commercialPlatformCore.evaluateOfferConfiguration;
+export const validateCommercialPublication = commercialPlatformCore.validateCommercialPublication;
+export const validateConfigurableOffer = commercialPlatformCore.validateConfigurableOffer;
+export const validateConfigurationRule = commercialPlatformCore.validateConfigurationRule;
+export const validateVerticalPack = commercialPlatformCore.validateVerticalPack;

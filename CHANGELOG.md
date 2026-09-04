@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 13:06:37 CDT
+Last updated: 2026-09-04 13:12:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added one shared commercial-platform core used by the browser and deployable
+  Functions graph. Existing Packages now adapt to Configurable Offers with
+  optional bounded choice groups; server pricing validates every choice and
+  rejects browser-only selection claims. Existing Event Templates adapt to
+  Commercial Templates with explicit-field preservation and deterministic
+  shallow-module collision reporting. Bounded declarative Configuration Rules
+  accept only enumerated condition/effect operators, detect conflicting
+  mandatory outcomes, and never mutate quotes. Library catalog editing can
+  stage rule JSON, while the existing revision and pricing-confirmation path
+  remains the only publication boundary.
 - Began the reconciled Commercial Platform refinement on the existing UX
   convergence branch. Added the accepted Kernel -> Vertical Pack -> Tenant
   Configuration -> Contextual UX decision, the canonical Pricing Constitution,

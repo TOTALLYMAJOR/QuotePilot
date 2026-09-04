@@ -29,6 +29,7 @@ import {
 } from "../lib/catalogSetupDraftService";
 import PackageWorkspace from "./PackageWorkspace";
 import CatalogDraftStateBar, { catalogDraftCapabilityState } from "./CatalogDraftStateBar";
+import { validateCommercialPublication } from "../lib/commercialPlatform";
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -73,6 +74,11 @@ const JSON_FIELD_META = [
     hint: "Array of defaults used by template picker in Step 1."
   },
   {
+    key: "configurationRules",
+    label: "Configuration Rules JSON",
+    hint: "Bounded declarative rules only: id, type, conditions, effect, reason, severity, verticalScope, enabled, and provenance."
+  },
+  {
     key: "seasonalProfiles",
     label: "Seasonal Profiles JSON",
     hint: "Array of { id, name, startMonth, startDay, endMonth, endDay, multipliers }."
@@ -97,6 +103,7 @@ const ADMIN_TABS = [
   { id: "rentals", label: "Rentals" },
   { id: "menu", label: "Menu" },
   ...(AMBIENT_UI_ENABLED ? [{ id: "templates", label: "Templates" }] : []),
+  { id: "rules", label: "Rules" },
   { id: "pricing", label: "Pricing" }
 ];
 
@@ -349,6 +356,7 @@ function buildJsonDrafts(catalog) {
     serviceFeeTiers: JSON.stringify(settings.serviceFeeTiers || [], null, 2),
     taxRegions: JSON.stringify(settings.taxRegions || [], null, 2),
     eventTemplates: JSON.stringify(settings.eventTemplates || [], null, 2),
+    configurationRules: JSON.stringify(settings.configurationRules || [], null, 2),
     seasonalProfiles: JSON.stringify(settings.seasonalProfiles || [], null, 2),
     brandCrew: JSON.stringify(settings.brandCrew || [], null, 2)
   };
@@ -363,7 +371,7 @@ function buildPersistableCatalogDraft(draft, jsonDrafts) {
   const featureFlagsLocked = draft?.settings?.featureFlagsLocked === true;
   const featureFlags = { ...(draft?.settings?.featureFlags || {}) };
   if (!featureFlagsLocked && featureFlags.aiAssist === false) featureFlags.aiAutopilot = false;
-  return {
+  const nextCatalog = {
     ...draft,
     settings: {
       ...(draft?.settings || {}),
@@ -373,10 +381,13 @@ function buildPersistableCatalogDraft(draft, jsonDrafts) {
       serviceFeeTiers: parseArray("serviceFeeTiers", "Service Fee Tiers JSON"),
       taxRegions: parseArray("taxRegions", "Tax Regions JSON"),
       eventTemplates: parseEventTemplateDrafts(jsonDrafts?.eventTemplates),
+      configurationRules: parseArray("configurationRules", "Configuration Rules JSON"),
       seasonalProfiles: parseArray("seasonalProfiles", "Seasonal Profiles JSON"),
       brandCrew: parseArray("brandCrew", "Brand Crew JSON")
     }
   };
+  validateCommercialPublication({ ...nextCatalog, menuInventoryComplete: false });
+  return nextCatalog;
 }
 
 function cloneCatalogSnapshot(catalog = {}) {
@@ -2634,6 +2645,27 @@ export function AdminCatalogView({
           </Suspense>
         )}
 
+        {resolvedActiveTab === "rules" && (
+          <section className="admin-section" data-commercial-library-section="rules">
+            <div className="admin-section-head"><h3>Configuration Rules</h3></div>
+            <div className="admin-section-body">
+              <p className="source-note">
+                Rules evaluate and explain requirements, recommendations, selections, and exclusions. They never run code or silently change a quote. Publication rejects unknown operators, unavailable references, and conflicting mandatory rules.
+              </p>
+              <label className="json-label">
+                <span>Rules JSON</span>
+                <textarea
+                  className="json-editor"
+                  data-configuration-rules-editor
+                  value={jsonDrafts.configurationRules}
+                  onChange={(event) => patchJsonDraft("configurationRules", event.target.value)}
+                />
+                <small>Changes remain staged until the existing catalog publication and pricing-confirmation flow succeeds.</small>
+              </label>
+            </div>
+          </section>
+        )}
+
         {resolvedActiveTab === "pricing" && (
           <>
             <section className="admin-section">
@@ -3311,7 +3343,7 @@ export function AdminCatalogView({
             <section className="admin-section">
           <div className="admin-section-head"><h3>Advanced Settings (JSON)</h3></div>
           <div className="admin-section-body">
-            {JSON_FIELD_META.map((field) => (
+            {JSON_FIELD_META.filter((field) => field.key !== "configurationRules").map((field) => (
               <label key={field.key} className="json-label">
                 <span>{field.label}</span>
                 <textarea

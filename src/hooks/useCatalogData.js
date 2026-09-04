@@ -31,6 +31,7 @@ import {
   applyStarterCatalogPackWithCompatibility,
   confirmCatalogPricing
 } from "../lib/catalogStarterPackService";
+import { validateCommercialPublication } from "../lib/commercialPlatform";
 
 const LEGACY_LOCAL_KEY = "quoteWizard.catalog";
 const EDITABLE_SETTINGS_KEYS = Object.freeze(Object.keys(DEFAULT_SETTINGS));
@@ -738,8 +739,9 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     }
     try {
       validateCatalogSettingsMoney(nextCatalog?.settings || {});
+      validateCommercialPublication({ ...nextCatalog, menuInventoryComplete: false });
     } catch (error) {
-      return { ok: false, error: error?.message || "Catalog pricing contains an invalid amount." };
+      return { ok: false, error: error?.message || "Catalog commercial configuration is invalid." };
     }
     const normalized = normalizeCatalog(nextCatalog);
     const hasPricedPackage = normalized.packages.some((item) => {

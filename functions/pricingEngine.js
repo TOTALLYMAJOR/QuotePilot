@@ -1,4 +1,9 @@
 const { createHash } = require("node:crypto");
+const {
+  CommercialPlatformError,
+  evaluateOfferConfiguration,
+  validateConfigurableOffer
+} = require("./commercialPlatformCore.cjs");
 
 const PRICING_VERSION = "pricing-v1";
 const PRICING_AUTHORITY = "server_authoritative";
@@ -196,6 +201,16 @@ function normalizeQuantityMap(input) {
     if (!key) return acc;
     acc[key] = Math.max(1, toInt(rawValue, 1));
     return acc;
+  }, {});
+}
+
+function normalizeOfferChoiceSelections(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return Object.entries(input).slice(0, 100).reduce((result, [groupId, ids]) => {
+    const normalizedGroupId = toCatalogId(groupId);
+    if (!normalizedGroupId || !Array.isArray(ids) || ids.length > 100) return result;
+    result[normalizedGroupId] = [...new Set(ids.map((id) => toCatalogId(id)).filter(Boolean))];
+    return result;
   }, {});
 }
 
@@ -505,7 +520,10 @@ function normalizePricingInputPayload(data = {}, staff = {}, {
         addonQuantities,
         rentalQuantities,
         menuItemQuantities
-      }
+      },
+      offerChoiceSelections: normalizeOfferChoiceSelections(
+        selection.offerChoiceSelections || rawForm.offerChoiceSelections
+      )
     },
     labor: {
       bartenderRateTypeId: toText(
@@ -543,6 +561,11 @@ function normalizeCatalogPackage(item = {}) {
     includedMenuItemIds: stableIds(item.includedMenuItemIds),
     includedAddonIds: stableIds(item.includedAddonIds),
     includedRentalIds: stableIds(item.includedRentalIds),
+    choiceGroups: Array.isArray(item.choiceGroups) ? item.choiceGroups.map((group) => ({ ...group })) : [],
+    quantityPolicyRefs: stableIds(item.quantityPolicyRefs),
+    ruleRefs: stableIds(item.ruleRefs),
+    offerVersion: toText(item.offerVersion, "configurable-offer-v1"),
+    verticalType: toText(item.verticalType, "catering"),
     active: item.active !== false
   };
 }
@@ -1201,6 +1224,43 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
     throw new PricingEngineError("failed-precondition", `Package ${selectedPkg.id} is inactive.`);
   }
   const packageInclusions = resolveAuthoritativePackageInclusions(selectedPkg, maps, menuItemById);
+  let offerConfiguration;
+  try {
+    validateConfigurableOffer(selectedPkg, { ...catalog, menuItems: [...menuItemById.values()] });
+    offerConfiguration = evaluateOfferConfiguration(
+      selectedPkg,
+      input.selection.offerChoiceSelections,
+      { ...catalog, menuItems: [...menuItemById.values()] }
+    );
+  } catch (error) {
+    if (error instanceof CommercialPlatformError) {
+      throw new PricingEngineError("failed-precondition", error.message);
+    }
+    throw error;
+  }
+  if (!offerConfiguration.valid) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      offerConfiguration.violations.map((violation) => violation.reason).join(" ")
+    );
+  }
+  const selectedComponentIds = {
+    menu_item: new Set(input.selection.menuItems.map((item) => item.id)),
+    addon: new Set(input.selection.addons.map((item) => item.id)),
+    rental: new Set(input.selection.rentals.map((item) => item.id)),
+    resource: new Set()
+  };
+  const selectedChoiceMissingFromQuote = (selectedPkg.choiceGroups || []).flatMap((group) => (
+    (offerConfiguration.selections[group.id] || [])
+      .filter((componentId) => !selectedComponentIds[group.componentType]?.has(componentId))
+      .map((componentId) => `${group.componentType} ${componentId}`)
+  ));
+  if (selectedChoiceMissingFromQuote.length) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      `Offer choices must be present in the authoritative quote selection: ${selectedChoiceMissingFromQuote.join(", ")}.`
+    );
+  }
   const includedAddonIds = new Set(packageInclusions.addons.map((item) => item.id));
   const includedRentalIds = new Set(packageInclusions.rentals.map((item) => item.id));
   const includedMenuItemIds = new Set(packageInclusions.menuItems.map((item) => item.id));
@@ -1616,7 +1676,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         addonQuantities: addonQuantityMap,
         rentalQuantities: rentalQuantityMap,
         menuItemQuantities: menuItemQuantityMap
-      }
+      },
+      offerChoiceSelections: { ...offerConfiguration.selections }
     },
     labor: {
       bartenderRateOverride: input.labor?.bartenderRateOverride ?? "",
@@ -1729,6 +1790,7 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         longDistanceRate
       },
       missingReferences: Array.from(missingReferences),
+      offerConfiguration,
       pricingModeDefaults: {
         package: "per_person",
         addons: "per_person",

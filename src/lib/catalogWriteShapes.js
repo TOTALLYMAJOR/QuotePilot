@@ -35,6 +35,20 @@ export function packageWriteShape(item = {}) {
     includedMenuItemIds: stableIds(item.includedMenuItemIds),
     includedAddonIds: stableIds(item.includedAddonIds),
     includedRentalIds: stableIds(item.includedRentalIds),
+    ...((Array.isArray(item.choiceGroups) && item.choiceGroups.length) ? {
+      choiceGroups: item.choiceGroups.map((group) => ({
+        id: String(group?.id || "").trim(),
+        label: String(group?.label || group?.name || "").trim(),
+        componentType: String(group?.componentType || group?.type || "").trim().toLowerCase(),
+        componentIds: stableIds(group?.componentIds),
+        minChoices: Number(group?.minChoices ?? (group?.required === true ? 1 : 0)),
+        maxChoices: Number(group?.maxChoices ?? (Array.isArray(group?.componentIds) ? group.componentIds.length : 0))
+      }))
+    } : {}),
+    ...(stableIds(item.quantityPolicyRefs).length ? { quantityPolicyRefs: stableIds(item.quantityPolicyRefs) } : {}),
+    ...(stableIds(item.ruleRefs).length ? { ruleRefs: stableIds(item.ruleRefs) } : {}),
+    ...(item.offerVersion && item.offerVersion !== "configurable-offer-v1" ? { offerVersion: String(item.offerVersion) } : {}),
+    ...(item.verticalType && item.verticalType !== "catering" ? { verticalType: String(item.verticalType) } : {}),
     active: item.active !== false
   };
 }
