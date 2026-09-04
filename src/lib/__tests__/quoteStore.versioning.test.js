@@ -7,6 +7,7 @@ vi.mock("../firebase", () => ({
 
 import {
   deleteQuote,
+  duplicateQuote,
   ensureLegacyQuoteCompatibility,
   getActiveQuoteVersion,
   getQuoteHistory,
@@ -778,6 +779,69 @@ describe("quoteStore versioning and delete behavior", () => {
     const updated = quotes.quotes.find((quote) => quote.id === "legacy-upgrade-1");
     expect(updated.activeVersionId).toBe("v0001");
     expect(updated.latestVersionNumber).toBe(1);
+  });
+
+  test("local alternate draft keeps presentation while clearing source proof", async () => {
+    seedQuotes([
+      makeQuote({
+        id: "q-duplicate-proof",
+        status: "booked",
+        acceptanceReceipt: { receiptId: "acceptance-source" },
+        rebooking: { state: "draft_created_for_staff_review", sourceQuoteId: "older-source" },
+        workflow: {
+          quoteDelivery: {
+            revisionId: "v0003@2026-03-10T12:00:00.000Z",
+            state: "provider_accepted",
+            providerMessageId: "provider-source"
+          }
+        },
+        payment: {
+          depositLink: "https://checkout.stripe.com/c/pay/cs_test_source",
+          depositStatus: "paid",
+          depositConfirmedAtISO: "2026-03-12T12:00:00.000Z",
+          stripeSessionId: "cs_test_source",
+          finalBalance: {
+            amountCents: 588000,
+            status: "paid",
+            paymentLink: "https://checkout.stripe.com/c/pay/cs_test_balance",
+            stripeSessionId: "cs_test_balance",
+            confirmedAtISO: "2026-03-15T12:00:00.000Z"
+          }
+        },
+        booking: {
+          contractNumber: "C-SOURCE",
+          contractConvertedAtISO: "2026-03-11T12:00:00.000Z",
+          bookedAtISO: "2026-03-11T12:00:00.000Z"
+        }
+      })
+    ]);
+
+    const created = await duplicateQuote("q-duplicate-proof", {
+      ownerUid: "staff-new",
+      ownerEmail: "staff-new@example.com"
+    });
+    const stored = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]")
+      .find((item) => item.id === created.id);
+
+    expect(stored.status).toBe("draft");
+    expect(stored.duplicatedFromQuoteId).toBe("q-duplicate-proof");
+    expect(stored).not.toHaveProperty("acceptanceReceipt");
+    expect(stored).not.toHaveProperty("rebooking");
+    expect(stored.payment).toMatchObject({
+      depositLink: "",
+      depositStatus: "unpaid",
+      depositConfirmedAtISO: "",
+      finalBalance: {
+        status: "unpaid",
+        paymentLink: "",
+        confirmedAtISO: "",
+        stripeSessionId: ""
+      }
+    });
+    expect(stored.payment).not.toHaveProperty("stripeSessionId");
+    expect(stored.workflow).not.toHaveProperty("quoteDelivery");
+    expect(stored.booking.contractNumber).toBe("");
+    expect(stored.booking.bookedAtISO).toBe("");
   });
 
   test("getActiveQuoteVersion resolves legacy quote without persisted version docs", async () => {

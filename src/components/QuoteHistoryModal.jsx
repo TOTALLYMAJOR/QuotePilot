@@ -44,6 +44,7 @@ import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import { buildQuotePath } from "../lib/workspaceRoutes";
 import {
   buildQuoteHistoryController,
+  buildRoleSafeQuoteActionController,
   getQuoteActionPermissions
 } from "../lib/quoteHistoryController";
 import {
@@ -1857,6 +1858,10 @@ export function QuoteHistoryView({
 
   const handleDuplicateQuote = async (quote) => {
     if (!quote?.id) return;
+    const confirmed = window.confirm(
+      "Create a separate alternate draft from this quote? The client, event, and quote configuration carry forward. The current quote stays unchanged, and delivery, acceptance, payment, booking, and rebooking proof do not transfer."
+    );
+    if (!confirmed) return;
     setDuplicatingId(quote.id);
     setState((prev) => ({ ...prev, error: "" }));
     try {
@@ -1866,10 +1871,11 @@ export function QuoteHistoryView({
       });
       setState((prev) => ({
         ...prev,
-        feedback: `Quote duplicated as ${result.quoteNumber}.`
+        feedback: `Alternate draft created as ${result.quoteNumber}.`
       }));
-      pushToast(`Quote duplicated as ${result.quoteNumber}.`, "success");
+      pushToast(`Alternate draft created as ${result.quoteNumber}.`, "success");
       await load();
+      openQuoteWorkspace(result.id);
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -3403,6 +3409,15 @@ export function QuoteHistoryView({
                 const canReconcileFinalBalance = permissions.canReconcileFinalBalance
                   && finalBalanceRequestEligible
                   && Boolean(String(finalBalance.stripeSessionId || "").trim());
+                const configuredActionState = buildRoleSafeQuoteActionController({
+                  quote,
+                  currentUserRole: permissions.role,
+                  source: state.source
+                }).actionState;
+                const configuredPrimaryActionId = configuredActionState.primaryAction?.id || "";
+                const rowActionClassName = (actionId) => (
+                  configuredPrimaryActionId === actionId ? "cta compact" : "ghost compact"
+                );
                 return (
                   <tr
                     key={quote.id}
@@ -3512,7 +3527,7 @@ export function QuoteHistoryView({
                             <button
                               type="button"
                               data-approval-action="convert_to_contract"
-                              className="cta compact"
+                              className={rowActionClassName("convert_contract")}
                               onClick={() => handleConvertToContract(quote, {
                                 reconcile: contractConversionState.phase === "uncertain"
                               })}
@@ -3540,7 +3555,7 @@ export function QuoteHistoryView({
                                   ? "Converting..."
                                   : contractConversionState.phase === "uncertain"
                                     ? "Reconcile conversion"
-                                    : "Convert"}
+                                    : configuredActionState.actions.convert_contract.label}
                             </button>
                           )}
                         {permissions.canConvertToContract
@@ -3563,7 +3578,7 @@ export function QuoteHistoryView({
                             onClick={() => handleConfirmationUpdate(quote.id, "confirmed")}
                             disabled={updatingConfirmationId === quote.id || deliveryUnresolved}
                           >
-                            Confirm
+                            Record customer confirmation
                           </button>
                         )}
                         {quote?.id && (
@@ -3579,32 +3594,33 @@ export function QuoteHistoryView({
                         {permissions.canEditQuote && canEditQuoteStatus(normalizedQuoteStatus) && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("edit")}
                             onClick={() => handleEditQuote(quote)}
                             disabled={deliveryUnresolved}
+                            title={configuredActionState.actions.edit.consequence}
                           >
-                            Edit
+                            {configuredActionState.actions.edit.label}
                           </button>
                         )}
                         {permissions.canReopenQuote && normalizedQuoteStatus === "expired" && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("reopen")}
                             onClick={() => handleReopenQuote(quote)}
                             disabled={deliveryUnresolved || reopeningQuoteId === quote.id}
                             title="Restore the last nonterminal version as a draft with a new portal issuance."
                           >
-                            {reopeningQuoteId === quote.id ? "Reopening..." : "Reopen"}
+                            {reopeningQuoteId === quote.id ? "Restoring..." : configuredActionState.actions.reopen.label}
                           </button>
                         )}
                         {permissions.canDuplicateQuote && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("duplicate")}
                             onClick={() => handleDuplicateQuote(quote)}
                             disabled={duplicatingId === quote.id}
                           >
-                            {duplicatingId === quote.id ? "Duplicating..." : "Duplicate"}
+                            {duplicatingId === quote.id ? "Creating draft..." : configuredActionState.actions.duplicate.label}
                           </button>
                         )}
                         {permissions.canExportProposal && (
@@ -3637,7 +3653,7 @@ export function QuoteHistoryView({
                             disabled={!rebookDeliveryGate.ready}
                             title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : "Open default email app"}
                           >
-                            Email app
+                            Manual email
                           </button>
                         )}
                         {permissions.canExportBeo && (
@@ -3656,15 +3672,22 @@ export function QuoteHistoryView({
                           && deliveryUi.reviewRequired ? (
                           <button
                             type="button"
-                            className="cta compact"
+                            className={rowActionClassName("review_delivery")}
                             onClick={() => openDeliveryReview(quote, quoteRevisionId)}
                           >
-                            Review Delivery
+                            {configuredActionState.actions.review_delivery.label}
                           </button>
+                        ) : deliveryRecorded ? (
+                          <small
+                            className="source-note"
+                            data-quote-delivery-evidence="provider_accepted"
+                          >
+                            Delivery: Provider accepted
+                          </small>
                         ) : permissions.canSendQuoteEmail ? (
                           <button
                             type="button"
-                            className="cta compact"
+                            className={rowActionClassName("send_quote")}
                             onClick={() => handleSendQuoteEmail(quote)}
                             disabled={sendingQuoteEmailId === quote.id || !canDeliverCurrentQuote}
                             title={state.source !== "firebase"
@@ -3685,13 +3708,11 @@ export function QuoteHistoryView({
                           >
                             {sendingQuoteEmailId === quote.id
                               ? "Sending..."
-                              : deliveryRecorded
-                                ? "Provider accepted"
-                                : deliveryUi.freshAttemptAvailable
+                              : deliveryUi.freshAttemptAvailable
                                   ? "Start New Quote Email"
                                 : deliveryUi.retryAvailable
                                   ? "Retry Quote Email"
-                                  : "Send Quote Email"}
+                                  : configuredActionState.actions.send_quote.label}
                           </button>
                         ) : null}
                         {permissions.canSendQuoteEmail
@@ -3710,7 +3731,7 @@ export function QuoteHistoryView({
                           <button
                             type="button"
                             data-approval-action="send_payment_request"
-                            className="cta compact"
+                            className={rowActionClassName("request_deposit")}
                             onClick={() => handleSendPaymentRequestEmail(quote)}
                             disabled={
                               deliveryUnresolved
@@ -3725,7 +3746,7 @@ export function QuoteHistoryView({
                           >
                             {sendingPaymentEmailId === quote.id
                               ? paymentRequestInProgress ? "Resuming..." : "Sending..."
-                              : paymentRequestInProgress ? "Resume Pay Request" : "Send Pay Request"}
+                              : configuredActionState.actions.request_deposit.label}
                           </button>
                         )}
                         {permissions.canSendFinalBalanceRequest
@@ -3734,7 +3755,7 @@ export function QuoteHistoryView({
                           <button
                             type="button"
                             data-approval-action="send_final_balance_request"
-                            className="cta compact"
+                            className={rowActionClassName("request_balance")}
                             onClick={() => handleSendFinalBalanceRequestEmail(quote)}
                             disabled={
                               deliveryUnresolved
@@ -3750,8 +3771,8 @@ export function QuoteHistoryView({
                             {sendingFinalBalanceEmailId === quote.id
                               ? finalBalanceRequestInProgress ? "Resuming..." : "Sending..."
                               : finalBalanceRequestInProgress
-                                ? "Resume Balance Request"
-                                : "Send Balance Request"}
+                                ? "Resume final balance request"
+                                : configuredActionState.actions.request_balance.label}
                           </button>
                         )}
                         {permissions.canRotatePortalLink && canRotatePortalForStatus && (
@@ -3763,7 +3784,7 @@ export function QuoteHistoryView({
                             disabled={deliveryUnresolved || rotatingPortalId === quote.id || (approvalRequired && !portalRotationApproval)}
                             title={approvalRequired && !portalRotationApproval ? "Approve portal rotation in Workflow first." : ""}
                           >
-                            {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
+                            {rotatingPortalId === quote.id ? "Renewing..." : configuredActionState.actions.rotate_portal.label}
                           </button>
                         )}
                         {permissions.canCopyArtifacts && (
@@ -3773,7 +3794,7 @@ export function QuoteHistoryView({
                               && portalShareable && (
                               <button
                                 type="button"
-                                className="ghost compact"
+                                className={rowActionClassName("open_conversation")}
                                 data-capability-action="open-quote-conversation"
                                 onClick={() => onOpenConversation
                                   ? onOpenConversation(quote.id)
@@ -3793,7 +3814,7 @@ export function QuoteHistoryView({
                               disabled={!rebookDeliveryGate.ready}
                               title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
                             >
-                              Copy Email
+                              Copy email text
                             </button>
                             <button
                               type="button"
@@ -3806,7 +3827,7 @@ export function QuoteHistoryView({
                                   : "Customer portal sharing requires an active delivered status and valid future expiry."
                                 : ""}
                             >
-                              Copy Portal
+                              Copy customer link
                             </button>
                             {permissions.canCopyPaymentLink && publishedPaymentLink && (
                               <button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>

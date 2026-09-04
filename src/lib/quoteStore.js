@@ -3776,7 +3776,6 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     portalIssuedAtISO,
     nowISO
   );
-  const payment = hydratePayment(source.payment);
   const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";
   const { id: _sourceId, createdAt: _createdAt, ...sourceWithoutIdentity } = source;
 
@@ -3815,13 +3814,17 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     ownerUid: ownerUid || source.ownerUid || "",
     ownerEmail: normalizedOwnerEmail,
     organizationId,
+    duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),
+    rebooking: undefined,
+    acceptanceReceipt: undefined,
     status: "draft",
     deletedAtISO: "",
     selection,
     payment: {
-      ...payment,
-      depositStatus: payment.depositLink ? "sent" : "unpaid",
-      depositConfirmedAtISO: ""
+      depositLink: "",
+      depositStatus: "unpaid",
+      depositConfirmedAtISO: "",
+      finalBalance: hydrateFinalBalance({}, sourceWithoutIdentity.totals || {})
     },
     booking: {
       bookedAtISO: "",
