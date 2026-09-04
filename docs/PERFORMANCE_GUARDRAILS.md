@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-03 18:14:25 CDT
+Last updated: 2026-09-04 15:23:00 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,7 +25,7 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,306,709-byte aggregate
+- The current compatibility graph has a temporary 3,331,404-byte aggregate
   and 395,916-byte largest-chunk ceiling. The production-equivalent Ambient
   graph has a separate temporary 4,172,754-byte aggregate ceiling and
   429,923-byte largest-chunk ceiling. The pre-authority local
@@ -106,6 +106,13 @@ Threshold policy:
   for Ambient. The ceiling changes are pinned to those literal graphs: 4,025
   and 8,485 aggregate bytes respectively, plus 20 bytes in each largest route
   chunk. This is reviewed capability cost, not discretionary headroom.
+  The shared commercial kernel subsequently moved the exact compatibility
+  ceiling to 3,330,544 bytes. Promoting Calendar-first Operations into the
+  existing Ambient orientation adds 860 aggregate compatibility bytes and does
+  not grow the largest chunk; the current ceiling is pinned to the measured
+  3,331,404 / 394,674-byte graph with no percentage headroom. The separately
+  detected Ambient ceiling remains unchanged because that graph stays below its
+  existing absolute limit.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

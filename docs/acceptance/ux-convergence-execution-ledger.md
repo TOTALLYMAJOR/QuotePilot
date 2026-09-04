@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 14:48:01 CDT
+Last updated: 2026-09-04 15:25:00 CDT
 
 ## Authority
 
@@ -29,6 +29,25 @@ separate.
 | COMPOSE | Event, Customer, Experience, Staffing, and Commercials compose one proposal document; People and Reporting remain role-safe Operations continuations. |
 | RETIRE | The flat Ambient Operations menu inventory is removed while every capability and route remains reachable through its intended daily, Frequent, Administration, contextual, or direct path. The old Operations switchboard presentation may leave the route only because every capability entry remains independently reachable. Broader navigation retirement still requires the separate role-aware parity gate. |
 | NEW | Pure workbench outputs, mobile agenda presentation derived from existing models, stable evidence markers, focused Workbench/Operations browser suites, and this ledger. No business-state, pricing, persistence, lifecycle, staffing, catalog, provider, or Firebase authority is new. |
+
+## Change-budget architecture review
+
+The budget review separates this UX program from the independently authorized
+commercial-platform commits that share the branch. Initial convergence work is
+3,976 additions and 62 deletions from `8f2d2dc..2d4bc90`; refinement after the
+commercial-platform checkpoint is 1,695 additions and 551 deletions from
+`dbf3516..c098b71`. Removing the 2,490-line frozen contract copy leaves 3,181
+UX additions and 613 deletions, net +2,568: the contract's expected
+"several thousand" band. The whole mixed-purpose branch is +8,460/-469 and
+therefore remains below the 10k smoke-detector threshold even before separating
+the commercial work.
+
+The required duplication audit found one Proposal Composer/form/save path, one
+calculation authority, one existing Schedule/Calendar capability, one shared
+Workspace shell, and one mobile agenda derived from the same schedule model.
+The zero-consumer Operations switchboard and dead CSS were removed. No duplicate
+state, selector system, editor, Menu, Schedule engine, navigation shell, mobile
+authority, or unnecessary transitional layer remains from this convergence.
 
 ## Repository corrections
 
@@ -178,8 +197,8 @@ separate.
 | AC-109 | AC-109 — Bundle budget passes or any exception is explicitly justified | PASS | Local `check:perf:bundle` passes against an exact 3,311,120-byte temporary ceiling; the 1,120-byte CI delta is documented with no percentage headroom. |
 | AC-110 | AC-110 — Existing useful lazy boundaries retained | PASS | This slice changes only mounted Proposal Composer presentation/CSS/models/tests; route-level and existing editor lazy boundaries are untouched. |
 | AC-111 | AC-111 — Domain switching causes no unnecessary persistence/network work | PASS | `openDomain` changes local active-domain/editor presentation state and focus only; continuity coverage crosses domains without save or identity creation. |
-| AC-112 | AC-112 — Material LOC overrun triggers architecture review | PENDING | No evidence recorded at contract checkpoint. |
-| AC-113 | AC-113 — Major unexpected implementation-scale increase requires explicit explanation before continuation | PENDING | No evidence recorded at contract checkpoint. |
+| AC-112 | AC-112 — Material LOC overrun triggers architecture review | PASS | The explicit architecture-budget review above separates unrelated commercial work, measures net UX growth at +2,568 after removing the frozen contract copy, and finds no duplicate state, editor, Menu, Schedule, shell, mobile authority, or transitional layer. |
+| AC-113 | AC-113 — Major unexpected implementation-scale increase requires explicit explanation before continuation | NOT APPLICABLE | UX work remains in the planned several-thousand-line band. The larger +8,460/-469 branch total includes the separate commercial-platform program and the 2,490-line frozen contract; even that mixed total remains below the 10k smoke-detector threshold. |
 | AC-114 | AC-114 — Operations menu is no longer an undifferentiated 10+ item feature inventory | PASS | Focused shell units and real-route browser coverage prove the Ambient Operations menu contains only Operations, Clear the Deck, and role-gated Staff. |
 | AC-115 | AC-115 — Daily execution has one obvious operational entry | PASS | Operations is the single Calendar-first daily index; Clear the Deck and Staff are bounded continuations rather than duplicate event indexes. |
 | AC-116 | AC-116 — Calendar/Schedule is reused rather than replaced | PASS | Both `/app/operations` and compatibility `/app/schedule` render the existing `EventScheduleView`. |
@@ -244,16 +263,16 @@ separate.
 | AC-175 | AC-175 — No live issue claim without issue records | PASS | Event/Calendar surfaces expose planning conflicts only; no live issue state or issue-record substitute exists. |
 | AC-176 | AC-176 — No staff check-in claim without authoritative check-in data | PASS | Staff assignment remains a planning record and no attendance/check-in claim is rendered. |
 | AC-177 | AC-177 — No Replay claim without immutable operational evidence | PASS | Event tests prove Replay is not offered as an active control and the exact replay route states it is unavailable until immutable ledger evidence exists. |
-| AC-178 | AC-178 — Primary navigation remains intentionally small | PENDING | No evidence recorded at contract checkpoint. |
+| AC-178 | AC-178 — Primary navigation remains intentionally small | PASS | Route/shell units and real-browser coverage require exactly five primary destinations in the frozen order: Now, Opportunities, Operations, Clients, Library. New quote, Search, Pilot, and Administration remain outside it. |
 | AC-179 | AC-179 — New Quote remains a global action rather than a permanent content destination if current design supports this | PASS | Shell browser/unit evidence keeps New quote as the standalone global CTA, outside primary content navigation. |
 | AC-180 | AC-180 — Search remains global/secondary | PASS | Search remains a global desktop utility and the first action in mobile Workspace tools. |
 | AC-181 | AC-181 — Pilot remains global/secondary | PASS | Pilot remains in Frequent tools and its shared global surface; it is absent from Operations. |
 | AC-182 | AC-182 — System/Admin capabilities do not inflate primary navigation | PASS | Reporting, Integrations, Import, and Diagnostics remain inside collapsed Administration rather than primary navigation. |
-| AC-183 | AC-183 — Mobile navigation remains focused and accessible | PENDING | No evidence recorded at contract checkpoint. |
+| AC-183 | AC-183 — Mobile navigation remains focused and accessible | PASS | Exact-source 390px browser evidence shows the five-item bottom rail with textual labels, current-page semantics, no horizontal document overflow, and no serious/critical axe violation in the Operations surface. |
 | AC-184 | AC-184 — Canonical quote composition surface documented | PASS | Feature Matrix classifies Commercial Workbench/`ProposalComposer` as canonical and names its preserved one-form/save authority. |
 | AC-185 | AC-185 — Guided classified as alternate mode | PASS | Feature Matrix and User Manual classify Guided as an alternate mode over the same draft and save authority. |
 | AC-186 | AC-186 — Legacy/flag-off quote path classified compatibility/rollback | PASS | Feature Matrix classifies the flag-off wizard and connected Quote Workspace as compatibility/rollback. |
-| AC-187 | AC-187 — Calendar-first Operations documented as canonical operational index if promoted | PASS | README, User Manual, and Feature Matrix identify `/app/operations` as the local canonical operational index candidate and withhold promotion claims. |
+| AC-187 | AC-187 — Calendar-first Operations documented as canonical operational index if promoted | PASS | README, User Manual, Design System, and Feature Matrix identify `/app/operations` as the local canonical operational index candidate and fifth primary destination while withholding hosted/deployment claims. |
 | AC-188 | AC-188 — Exact Events route classified contextual/deep-link if removed from permanent nav | PASS | Canonical docs classify Event Focus as contextual/direct and browser-test exact `/app/events/:quoteId`. |
 | AC-189 | AC-189 — Workflow route classified correctly | PASS | Canonical matrix classifies Workflow as Frequent global attention plus exact contextual continuation. |
 | AC-190 | AC-190 — Messages route classified correctly | PASS | Canonical matrix classifies Messages as Frequent aggregate review plus exact opportunity/client continuation. |
@@ -261,7 +280,7 @@ separate.
 | AC-192 | AC-192 — Superseded presentation explicitly identified | PASS | Canonical matrix and `ambientLegacyRetirement` name the legacy Operations switchboard and its Calendar-first replacement. |
 | AC-193 | AC-193 — Dead duplicate components removed or documented with retirement condition | PASS | Zero-consumer `OperationsSwitchboardView` and its CSS are removed; the retirement registry records the mechanical condition and preserved-route disposition. |
 | AC-194 | AC-194 — New quote golden path | PASS | Dedicated browser coverage completes a valid Event, Customer, Experience/Menu, Staffing, and Commercial draft and saves it through the shared Workbench action. |
-| AC-195 | AC-195 — Existing quote edit golden path | PASS | The saved quote reopens from Quotes, edits through existing authority, and persists as the same quote/portal identity with `v0001` → `v0002` and exactly two history entries. |
+| AC-195 | AC-195 — Existing quote edit golden path | PASS | The saved quote lands in its Living Opportunity, reopens through Opportunities, enters the existing editor, and persists as the same quote/portal identity with `v0001` → `v0002` and exactly two history entries. |
 | AC-196 | AC-196 — Guided golden path | PASS | Workbench browser coverage enters Guided, edits the shared draft, returns to Workbench, and retains the same supported state and save authority. |
 | AC-197 | AC-197 — AI-assisted quote path | PASS | Flag-on Pilot coverage previews the exact dirty-draft mutation before explicit Apply and leaves ordinary save blockers authoritative. |
 | AC-198 | AC-198 — Scenario path | PASS | Browser coverage opens Compare Scenarios, changes isolated scenario inputs, proves the draft remains unchanged, then applies only the explicit chosen scenario. |
@@ -276,10 +295,10 @@ separate.
 | AC-207 | AC-207 — Opportunity-to-Calendar path | PASS | Living Opportunity component test proves booked quote ID and exact Calendar action; App routes it through the arrival contract. |
 | AC-208 | AC-208 — Now-to-Calendar path | PASS | Real-route browser test clicks Now's exact Calendar action and verifies exact focused event. |
 | AC-209 | AC-209 — Calendar-to-Opportunity path | PASS | Same browser test opens exact Opportunity ID from Calendar. |
-| AC-210 | AC-210 — Calendar usable at 1440 | PASS | Exact-SHA 1440 Playwright and screenshot evidence pass at `30b6fcd48aa881d83150149eeb942e2d07dd89f8`. |
-| AC-211 | AC-211 — Calendar usable at 768 | PASS | Exact-SHA 768 Playwright and screenshot evidence pass at `30b6fcd48aa881d83150149eeb942e2d07dd89f8`. |
+| AC-210 | AC-210 — Calendar usable at 1440 | PASS | Exact-source Playwright and screenshot evidence pass at `c098b71ad8f1ab25f765704341965f6495ae1f81`; screenshot SHA-256 is `a99c1c70240e7da1a32bae078f405aa300ff9ee7d7c7f8c24580650173d65946`. |
+| AC-211 | AC-211 — Calendar usable at 768 | PASS | Exact-source Playwright and screenshot evidence pass at `c098b71ad8f1ab25f765704341965f6495ae1f81`; screenshot SHA-256 is `a032feec521fc429f64aefd5db15417e29fa9efc8bb750f8df82d10d61965b8a`. |
 | AC-212 | AC-212 — Calendar usable at 390 or has an intentional mobile agenda/list adaptation | PASS | 390px renders agenda groups derived from Month/Week day/event/conflict models and hides the desktop grid. |
-| AC-213 | AC-213 — Mobile Operations preserves event date/time/context | PASS | 390px screenshot and assertions show dated groups, exact event identity, time, and event name. |
+| AC-213 | AC-213 — Mobile Operations preserves event date/time/context | PASS | Exact-source 390px screenshot and assertions show dated groups, exact event identity, time, and event name; screenshot SHA-256 is `7745c4c2329c27f1b93538e5dde949c57fd8db87637911931fc675857dd16d7b`. |
 | AC-214 | AC-214 — Mobile event conflict remains understandable | PASS | 390px agenda renders textual Time overlap and Capacity risk for each exact event. |
 | AC-215 | AC-215 — No horizontal page overflow | PASS | Operations Playwright asserts document scroll width at 390, 768, and 1440. |
 | AC-216 | AC-216 — Calendar navigation keyboard accessible | PASS | Reused Prev/Next/Today/Month/Week/day controls remain native buttons; full schedule unit regression passes. |
@@ -291,17 +310,17 @@ separate.
 | AC-222 | AC-222 — Every route intentionally removed from primary/Operations navigation remains reachable through its new intended path | PASS | Real-route coverage proves Workflow/Messages/Pilot in Frequent tools, Reporting/Integrations/Import/Diagnostics in progressive Administration, direct exact Event Focus, and Schedule compatibility after menu consolidation. |
 | AC-223 | AC-223 — Browser Back/Forward remains correct | PASS | Local real-route coverage navigates Operations → exact Opportunity → Back to Operations → Forward to the same exact Opportunity identity. Hosted authenticated history acceptance remains separately unclaimed. |
 | AC-224 | AC-224 — Direct deep links remain correct | PASS | `/app/operations`, `/app/schedule`, `/app/events/operations-event-a`, and exact Calendar→Opportunity routes are exercised locally. |
-| AC-225 | AC-225 — Auth/role restrictions unchanged | TRANSITIONAL | Source gates are unchanged and unit tests pass; authenticated admin/sales hosted matrix remains unverified. |
-| AC-226 | AC-226 — Mobile Workspace/tools navigation remains accessible | PASS | Pre-promotion Calm Four/mobile utility structure is unchanged and 390px axe/overflow checks pass. |
+| AC-225 | AC-225 — Auth/role restrictions unchanged | PASS | Existing source gates are unchanged. Focused Ambient and rollback browser profiles exercise admin and sales origins: both reach Operations; sales still lacks Staff and Import Studio while admin retains gated Administration. Hosted authenticated acceptance remains separately unclaimed. |
+| AC-226 | AC-226 — Mobile Workspace/tools navigation remains accessible | PASS | The five-item mobile primary rail and Workspace & tools dialog pass 390px containment, focus restoration, role-aware grouping, and no-overflow coverage. |
 | AC-227 | AC-227 — No route silently aliases to semantically wrong destination | PASS | Schedule arrivals intentionally target Calendar-first Operations while `/app/schedule` remains the same named compatibility capability. |
-| AC-228 | AC-228 — Focused unit/component tests pass | PASS | 35 focused Workbench tests and 76 focused Operations/arrival tests pass. |
-| AC-229 | AC-229 — Relevant pre-existing tests remain green or have evidence-backed expectation updates | PASS | Proposal Composer regression was updated for explicit domain selection and supported saved-quote reopening; combined 19/19 browser cases and full 4,472-unit suite pass. |
-| AC-230 | AC-230 — Quote workbench real-route Playwright passes | PASS | All 22 resolved Workbench cases have passing local evidence; the Pilot case is exercised in its required Ambient flag-on lane and the new save/version path passes. Final exact-head aggregate refresh remains part of local qualification. |
-| AC-231 | AC-231 — Operations/Calendar real-route Playwright passes | PASS | `e2e/ux-convergence-operations.spec.js` passes 9/9 with the required Ambient, Now, and staffing presentation gates enabled. |
+| AC-228 | AC-228 — Focused unit/component tests pass | PASS | Current route/shell coverage passes 59/59; focused Workbench, Operations, retirement, contextual-capability, and arrival suites also pass. |
+| AC-229 | AC-229 — Relevant pre-existing tests remain green or have evidence-backed expectation updates | PASS | The full suite passes 4,499 tests across 394 files with only 80/3 intentional skips. Proposal Composer passes 13/13 in its compatibility profile; Workbench expectations follow the canonical New quote → Living Opportunity → Opportunities → editor continuation without weakening authority. |
+| AC-230 | AC-230 — Quote workbench real-route Playwright passes | PASS | All 22 dedicated Workbench cases pass at exact source `c098b71`, including the Living Opportunity save/reopen/version path and required Ambient Pilot lane. |
+| AC-231 | AC-231 — Operations/Calendar real-route Playwright passes | PASS | All 9 dedicated Operations cases pass at exact source `c098b71` with the required Ambient, Now, and staffing presentation gates enabled. |
 | AC-232 | AC-232 — Responsive matrix passes | PASS | Workbench and Operations dedicated tests pass at 390, 768, and 1440. |
 | AC-233 | AC-233 — Accessibility matrix passes | PASS | Dedicated serious/critical axe scans pass at all required widths; targeted color-contrast regressions pass. |
-| AC-234 | AC-234 — Build passes | PASS | Local production build and exact-head CI build at `30b6fcd` pass. |
-| AC-235 | AC-235 — Bundle/governance passes | PASS | Local `lane:release:cwv` passes project-state, environment, secret, workflow, capability, 4,472-unit, build, docs, bundle, Truth Loop, and Lighthouse CWV gates. |
-| AC-236 | AC-236 — Exact-head CI passes | PENDING | Future program-complete local head will remain unpushed until separately authorized, so exact-head CI cannot yet exist. |
-| AC-237 | AC-237 — Screenshots/visual evidence correspond to exact candidate SHA | PASS | Local screenshots for 390/768/1440 are named with exact pre-promotion SHA `30b6fcd48aa8` and have recorded SHA-256 hashes. |
+| AC-234 | AC-234 — Build passes | PASS | Final local production build passes after transforming 528 modules with the five-primary navigation and capability-contract review included. |
+| AC-235 | AC-235 — Bundle/governance passes | PASS | Final local release qualification passes project-state, env, secret, Ambient-release, Stripe-isolation, workflow, capability-surfacing, 4,499-unit, build, docs, exact 3,331,404/394,674-byte bundle, 127-test Truth Loop, and Lighthouse CWV gates. The isolated worktree consumed the primary checkout's ignored env only in-process; no secret was copied or committed. |
+| AC-236 | AC-236 — Exact-head CI passes | UNVERIFIABLE | The completed local branch is intentionally unpushed by owner instruction. No exact-head remote CI run can exist without a separately authorized future push. |
+| AC-237 | AC-237 — Screenshots/visual evidence correspond to exact candidate SHA | PASS | Local 390/768/1440 screenshots are named for exact UI source `c098b71ad8f1`; their SHA-256 hashes are recorded in AC-210, AC-211, and AC-213. The later evidence-only commit does not alter rendered source. |
 | AC-238 | AC-238 — Source/CI evidence is not reported as hosted/human acceptance | PASS | Changelog, Project Status, manuals, PR text, and this ledger explicitly withhold hosted, production, provider, assistive-technology, and human claims. |

@@ -1,44 +1,53 @@
 # Project Status
 
-Last updated: 2026-09-04 13:41:00 CDT
+Last updated: 2026-09-04 15:25:00 CDT
 
 ## UX Convergence Draft Candidate
 
-- The owner has now authorized completion of the QuotePilot UX Convergence
-  Execution Refinement through local commits and one final branch push. The
+- The owner has authorized completion of the QuotePilot UX Convergence
+  Execution Refinement through local commits only. No push, merge, deployment,
+  provider mutation, or production change is authorized. The
   active candidate adds Configurable Offers, Commercial Templates, bounded
   Configuration Rules, pricing-v2 exact money and waterfalls, exact payment
   amount provenance, expanded Library presentation, and starter-pack adapters
   without creating a second quote/catalog/pricing authority. Local source
-  qualification is in progress; exact-head CI remains required after that one
-  push. This does not authorize merge, deployment, provider mutation, or
-  production claims.
+  local qualification is complete; exact-head CI remains unavailable until a
+  future, separately authorized push. This source state makes no hosted or
+  production claim.
 
-- Draft PR #129 at exact remote head
-  `30b6fcd48aa881d83150149eeb942e2d07dd89f8` contains the frozen AC-001–AC-238
-  contract, its execution ledger, the Commercial Workbench, and Calendar-first
-  Operations. The work was created in an isolated sibling worktree from remote
-  `main`; the integration checkout and its unrelated work remain untouched.
-- The pre-promotion source keeps Now, Opportunities, Clients, and Library as
-  the four persistent destinations. Operations remains secondary until its
-  exact-head critical gate passes. No Workflow, Messages, Events, Schedule,
-  Staff, Reporting, Integrations, Import, Diagnostics, Clear the Deck, or
-  Library entry has been retired or demoted.
+- Draft PR #129 remains frozen at exact remote head
+  `dbf35164e77c1d441c254b110f0a5372f60ac162`. The local convergence branch is
+  ahead and intentionally unpushed; it contains the completed Workbench and
+  Calendar-first Operations refinement. The work remains isolated from the
+  integration checkout and its unrelated changes.
+- The local source candidate keeps exactly five primary destinations: Now,
+  Opportunities, Operations, Clients, and role-gated Library. Operations opens
+  the reused Calendar directly, while Workspace & tools preserves Operations,
+  Clear the Deck, Staff, Frequent tools, and progressive Administration without
+  a duplicate Operations header menu. Contextual/direct routes remain intact.
 - Focused local evidence passes for the Workbench model and Proposal Composer
   browser regression, the existing schedule/arrival models, exact handoffs,
   the `/app/schedule` compatibility route, responsive Calendar presentations
   at 390/768/1440, serious/critical axe checks, and the production build.
-  Exact-head run `33902068474` passed the full unit suite, production build,
+  Earlier exact-head run `33902068474` passed the full unit suite, production build,
   capability gate, and documentation governance, then failed the compatibility
   bundle ceiling by 1,120 bytes. Local-only commit
   `2b2b54b44324fcdc5e07a3cec502b6a6f78ec8a3` pins that exact measurement and
   passes the complete local `lane:release:cwv` gate, including 4,472 unit tests,
   production build, governance, bundle, Truth Loop, and Lighthouse CWV, but is
-  intentionally unpushed and therefore has no exact-head CI evidence.
-  Operations is not eligible for promotion.
-- The earlier local-only publication restriction is superseded only for this
-  one final branch push. Role-aware hosted parity remains unproven, so no
-  navigation retirement, merge, or deployment is eligible from source evidence.
+  intentionally unpushed and therefore has no exact-head CI evidence. The
+  subsequent local promotion is supported by focused unit, admin/sales route,
+  and 390/768/1440 browser evidence; it is not a deployment qualification.
+- Final local qualification passes project-state, environment, secret,
+  Ambient-release, Stripe-isolation, workflow, capability-surfacing,
+  documentation, exact bundle, production-build, 4,499-unit, 127 Truth Loop,
+  and Lighthouse CWV gates. Dedicated browser evidence passes 22/22 Workbench,
+  13/13 compatibility Proposal Composer, and 9/9 Calendar-first Operations
+  cases. The 238-row ledger closes locally as 236 PASS, one NOT APPLICABLE, and
+  AC-236 UNVERIFIABLE solely because no authorized push exists to create
+  exact-head CI.
+- The local-only publication restriction remains in force. Exact-head CI,
+  hosted role parity, merge, and deployment require separate future authority.
 - No merge, deployment, provider activation, production behavior, authenticated
   hosted role matrix, assistive-technology acceptance, or human acceptance is
   claimed by this source candidate.

@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-03 18:14:25 CDT
+Last updated: 2026-09-04 15:23:00 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -94,6 +94,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   surfaces split and located the increase across the approved shared continuity,
   return-context, and feedback state plus their already-lazy route surfaces;
   reducing it safely remains explicit optimization debt.
+  The later commercial-platform candidate advanced the exact compatibility
+  ceiling to 3,330,544 bytes. The five-primary UX convergence presentation then
+  measures 3,331,404 aggregate bytes with a 394,674-byte largest chunk: an exact
+  860-byte aggregate increase for the shared Operations orientation, direct
+  current-state route, and preserved rollback classification. The compatibility
+  ceiling is pinned to that literal local graph with no percentage headroom;
+  the Ambient ceiling remains unchanged because its separately detected graph
+  remains within the existing absolute limit.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 15:14:30 CDT
+Last updated: 2026-09-04 15:25:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -17,8 +17,16 @@ This changelog is backfilled from git history and will be maintained going forwa
   Administration groups remain unchanged. Focused unit and local browser
   coverage verifies the direct current route, desktop/mobile grouping,
   responsive overflow and accessibility boundaries, compatibility navigation,
-  and admin/sales visibility. This is a local source candidate only: it has not
-  been pushed, deployed, accepted in a hosted tenant, or reviewed by a human.
+  and admin/sales visibility. The existing compatibility bundle exception is
+  pinned to the exact 3,331,404-byte measured graph, an 860-byte aggregate
+  increase with no largest-chunk growth or percentage padding. Final local
+  qualification passes 4,499 unit tests, production build, project/env/secret/
+  workflow/capability/document governance, bundle, 127 Truth Loop tests,
+  Lighthouse CWV, 22 Workbench browser cases, 13 compatibility Proposal
+  Composer cases, and 9 Operations cases. The 238-criterion ledger resolves to
+  236 PASS, one NOT APPLICABLE, and exact-head CI UNVERIFIABLE. This local
+  source candidate has not been pushed, deployed, accepted in a hosted tenant,
+  or reviewed by a human.
 - Added a positive Workbench persistence golden path: a complete supported
   draft saves into its Living Opportunity, reopens through Opportunities, edits
   through the existing authority,
