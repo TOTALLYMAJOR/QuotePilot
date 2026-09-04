@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 13:41:00 CDT
+Last updated: 2026-09-04 14:02:31 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Continued the full 238-criterion UX convergence program as local-commit-only
+  work. Focused Workbench browser coverage now certifies unsaved Event/Menu
+  continuity across domains, canonical guest repricing and undo, retained
+  validation, explicit staffing recommendations, Rentals and Enhancements,
+  honest unsaved client preview with focus restoration, and collapsed-but-
+  retained advanced pricing. Publication, merge, deployment, and final
+  exact-head qualification remain outside this slice.
 - Completed the local commercial-platform source candidate: new authoritative
   calculations use integer-minor-unit pricing-v2 with deterministic half-up
   line, service-fee, tax, deposit, and balance reconciliation; exact price

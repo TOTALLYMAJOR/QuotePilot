@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 12:55:44 CDT
+Last updated: 2026-09-04 14:01:45 CDT
 
 ## Authority
 
@@ -49,17 +49,12 @@ separate.
 
 ## Promotion and retirement gates
 
-- Operations surface candidate: exact-SHA local browser and visual evidence is
-  PASS at pushed candidate `30b6fcd48aa881d83150149eeb942e2d07dd89f8`;
-  exact-head CI remains FAIL because runs `33901254618` and `33901478188`
-  stopped on successively discovered governance omissions and run
-  `33902068474` stopped on the prior compatibility bundle ceiling after all
-  unit, build, capability, and docs checks passed. Calm Four remains unchanged.
-  The exact measured 1,120-byte ceiling correction is committed at local-only
-  SHA `2b2b54b44324fcdc5e07a3cec502b6a6f78ec8a3` and is intentionally unpushed
-  by user instruction, so it has no qualifying exact-head CI evidence. The
-  complete local `lane:release:cwv` passes against that correction, including
-  4,472 unit tests, build, governance, bundle, Truth Loop, and Lighthouse CWV.
+- Operations surface candidate: the incomplete program was accidentally pushed
+  at interim SHA `dbf35164e77c1d441c254b110f0a5372f60ac162`. That publication is not a
+  program-completion claim and does not authorize another push. All subsequent
+  convergence work is local-commit-only until the full 238-item contract is
+  complete and publication is separately authorized. The interim SHA passed
+  local release qualification, but cannot qualify the future local candidate.
 - Fifth-primary promotion: CLOSED until every named critical Operations item
   is PASS at the exact candidate SHA.
 - Navigation retirement: CLOSED. Every current Workflow, Messages, Events,
@@ -81,8 +76,8 @@ separate.
 | AC-009 | AC-009 — One AI mutation path | PASS | Pilot command wiring was not duplicated or moved; full unit suite passes 4,472 tests. |
 | AC-010 | AC-010 — New components presentation-only | PASS | `buildCommercialWorkbenchModel` returns derived domain outputs only; no write/network API is present. |
 | AC-011 | AC-011 — Domain switching is non-mutating | PASS | `openDomain` changes presentation focus/editor visibility only; focused model tests and source inspection pass. |
-| AC-012 | AC-012 — Unsaved Event edits survive context switching | PENDING | No evidence recorded at contract checkpoint. |
-| AC-013 | AC-013 — Menu state survives context switching | PENDING | No evidence recorded at contract checkpoint. |
+| AC-012 | AC-012 — Unsaved Event edits survive context switching | PASS | Focused Workbench browser coverage edits Event name, crosses Customer/Experience, and reads the same unsaved value on return. |
+| AC-013 | AC-013 — Menu state survives context switching | PASS | Focused Workbench browser coverage selects a Menu item, crosses domains, and verifies the same selected item and checked state on return. |
 | AC-014 | AC-014 — Scenario inspection does not silently mutate quote | PENDING | No evidence recorded at contract checkpoint. |
 | AC-015 | AC-015 — Guided ↔ Workbench preserves all supported unsaved state | PASS | `e2e/ux-convergence-workbench.spec.js` exercises Workbench → Guided → Workbench with the same unsaved value. |
 | AC-016 | AC-016 — Existing quote identity/version semantics preserved | PASS | Updated Proposal Composer regression reopens a saved quote through the existing collection and verifies change-impact editing. |
@@ -97,25 +92,25 @@ separate.
 | AC-025 | AC-025 — Exact blockers focus the correct domain where possible | PASS | Pure blocker-target tests cover field domains and Commercials fallback for non-field authority blockers. |
 | AC-026 | AC-026 — Every domain keyboard reachable | PASS | Domains are native buttons in a named navigation landmark. |
 | AC-027 | AC-027 — Event first presents readable summary | PENDING | No evidence recorded at contract checkpoint. |
-| AC-028 | AC-028 — Existing validation retained | PENDING | No evidence recorded at contract checkpoint. |
-| AC-029 | AC-029 — Price-affecting Event changes update through existing pricing path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-030 | AC-030 — Customer fields round-trip unchanged | PENDING | No evidence recorded at contract checkpoint. |
+| AC-028 | AC-028 — Existing validation retained | PASS | Focused browser coverage proves the existing inline email validator rejects an invalid address without committing it. |
+| AC-029 | AC-029 — Price-affecting Event changes update through existing pricing path | PASS | Focused browser coverage changes Guests, observes the canonical Pulse total move, and verifies Undo restores the exact prior total. |
+| AC-030 | AC-030 — Customer fields round-trip unchanged | PASS | Workbench-to-Guided browser coverage carries the same unsaved Client name through both presentation modes and back. |
 | AC-031 | AC-031 — Missing/invalid email remains exact blocker | PENDING | No evidence recorded at contract checkpoint. |
 | AC-032 | AC-032 — Missing identity is not fabricated | PENDING | No evidence recorded at contract checkpoint. |
 | AC-033 | AC-033 — Package, Service style, Menu, Rentals and Enhancements are organized under Experience | PASS | Real-route Experience test asserts all five existing capability triggers in the active domain. |
-| AC-034 | AC-034 — Package semantics unchanged | PENDING | No evidence recorded at contract checkpoint. |
+| AC-034 | AC-034 — Package semantics unchanged | PASS | Existing Package IDs, selection callback, catalog price ownership, and what-if preview remain in the shared form; focused model/browser tests cover selection and repricing. |
 | AC-035 | AC-035 — Service-style semantics unchanged | PENDING | No evidence recorded at contract checkpoint. |
-| AC-036 | AC-036 — Closed Menu presents meaningful summary | PENDING | No evidence recorded at contract checkpoint. |
-| AC-037 | AC-037 — Detailed Menu only opens intentionally | PENDING | No evidence recorded at contract checkpoint. |
-| AC-038 | AC-038 — Existing Menu functionality retained | PENDING | No evidence recorded at contract checkpoint. |
-| AC-039 | AC-039 — Menu close restores Experience context and focus | PENDING | No evidence recorded at contract checkpoint. |
+| AC-036 | AC-036 — Closed Menu presents meaningful summary | PASS | Selected items remain visible in the grouped Menu summary while the editor is closed. |
+| AC-037 | AC-037 — Detailed Menu only opens intentionally | PASS | The editor is closed by default and focused browser coverage opens it only through the explicit Edit Menu control. |
+| AC-038 | AC-038 — Existing Menu functionality retained | PASS | Focused browser coverage loads the event-type Menu, selects an existing item, and preserves the governed shared selection. |
+| AC-039 | AC-039 — Menu close restores Experience context and focus | PASS | Focused browser coverage closes Menu, verifies focus on its toggle, and verifies Experience remains the current domain. |
 | AC-040 | AC-040 — Realistically long Menu remains usable | PENDING | No evidence recorded at contract checkpoint. |
-| AC-041 | AC-041 — Current and recommended staffing visibly distinct | PENDING | No evidence recorded at contract checkpoint. |
-| AC-042 | AC-042 — No silent recommendation application | PENDING | No evidence recorded at contract checkpoint. |
+| AC-041 | AC-041 — Current and recommended staffing visibly distinct | PASS | Focused browser coverage simultaneously shows current `0 servers` and the separately labelled Recommended card. |
+| AC-042 | AC-042 — No silent recommendation application | PASS | Current staffing remains unchanged while the recommendation is displayed; mutation still requires Use recommendation. |
 | AC-043 | AC-043 — Existing staffing financial consequence retained | PENDING | No evidence recorded at contract checkpoint. |
-| AC-044 | AC-044 — Existing Rentals capability retained | PENDING | No evidence recorded at contract checkpoint. |
-| AC-045 | AC-045 — Rental suggestions remain explicit proposals | PENDING | No evidence recorded at contract checkpoint. |
-| AC-046 | AC-046 — Existing Enhancements capability retained | PENDING | No evidence recorded at contract checkpoint. |
+| AC-044 | AC-044 — Existing Rentals capability retained | PASS | Focused browser coverage selects an existing rental inside Experience and observes it in the proposal summary. |
+| AC-045 | AC-045 — Rental suggestions remain explicit proposals | PASS | Pure model tests prove only explicit lagging quantities produce suggestions and no quantity changes without the existing Apply action. |
+| AC-046 | AC-046 — Existing Enhancements capability retained | PASS | Focused browser coverage selects an existing enhancement and observes it in the proposal list. |
 | AC-047 | AC-047 — Total remains discoverable while editing any desktop domain | PASS | 1440px Workbench keeps Commercial Truth visible and asserts the existing `pc-pulse-total`. |
 | AC-048 | AC-048 — Deposit remains discoverable | PASS | Existing pulse deposit remains directly below the canonical total; full component/unit regressions pass. |
 | AC-049 | AC-049 — Rail total originates from canonical totals | PASS | Commercial Truth reuses the prior pulse model and `totals`; no alternate calculation was introduced. |
@@ -138,8 +133,8 @@ separate.
 | AC-066 | AC-066 — Existing Compare Scenarios remains available | PENDING | No evidence recorded at contract checkpoint. |
 | AC-067 | AC-067 — Scenario detail is contextual rather than permanently expanded | PENDING | No evidence recorded at contract checkpoint. |
 | AC-068 | AC-068 — Internal-only evidence excluded | PASS | Workbench browser test opens client Preview and asserts no margin, blocker, or staff-only copy. |
-| AC-069 | AC-069 — Unsaved preview remains honestly labelled | PENDING | No evidence recorded at contract checkpoint. |
-| AC-070 | AC-070 — Preview focus management preserved | PENDING | No evidence recorded at contract checkpoint. |
+| AC-069 | AC-069 — Unsaved preview remains honestly labelled | PASS | Focused browser coverage verifies the client surface says Draft preview and explains that the final proposal follows save/send. |
+| AC-070 | AC-070 — Preview focus management preserved | PASS | Preview focuses Close on entry, closes with Escape, and restores focus to the invoking Preview control. |
 | AC-071 | AC-071 — Guided uses same form state | PASS | Real-route shared-value test passes. |
 | AC-072 | AC-072 — Guided behavior retained | PASS | Legacy Proposal Composer regression enters the existing wizard and returns. |
 | AC-073 | AC-073 — Supported flag-off/rollback path remains coherent if still required | PASS | Default Playwright lane remains flag-off and the full 4,472-test unit suite is green. |
@@ -150,8 +145,8 @@ separate.
 | AC-078 | AC-078 — Version behavior remains intact | PENDING | No evidence recorded at contract checkpoint. |
 | AC-079 | AC-079 — UI presents saved success only from real successful save state | PENDING | No evidence recorded at contract checkpoint. |
 | AC-080 | AC-080 — Failed save preserves unsaved work where current architecture permits | PENDING | No evidence recorded at contract checkpoint. |
-| AC-081 | AC-081 — Advanced pricing collapsed by default | PENDING | No evidence recorded at contract checkpoint. |
-| AC-082 | AC-082 — Existing advanced pricing capabilities retained | PENDING | No evidence recorded at contract checkpoint. |
+| AC-081 | AC-081 — Advanced pricing collapsed by default | PASS | Focused browser coverage verifies the native details region is closed on arrival. |
+| AC-082 | AC-082 — Existing advanced pricing capabilities retained | PASS | Opening Advanced pricing exposes the retained Event template, Tax region, Season profile, travel, payment, and disposables controls. |
 | AC-083 | AC-083 — Unsupported arbitrary per-quote price override remains absent | PENDING | No evidence recorded at contract checkpoint. |
 | AC-084 | AC-084 — Activity remains inspectable | PASS | Updated browser regression opens the activity toggle and verifies session changes. |
 | AC-085 | AC-085 — Activity secondary while healthy | PASS | Activity now starts collapsed and remains available through its existing toggle. |
@@ -167,7 +162,7 @@ separate.
 | AC-095 | AC-095 — Heading hierarchy valid | PENDING | No evidence recorded at contract checkpoint. |
 | AC-096 | AC-096 — Selected/current/attention state not color-only | PENDING | No evidence recorded at contract checkpoint. |
 | AC-097 | AC-097 — Visible keyboard focus | PENDING | No evidence recorded at contract checkpoint. |
-| AC-098 | AC-098 — Focus returns after closing Menu/Preview/Scenario/context | PENDING | No evidence recorded at contract checkpoint. |
+| AC-098 | AC-098 — Focus returns after closing Menu/Preview/Scenario/context | PENDING | Menu and Preview focus return now pass; Scenario/context focus return still requires focused evidence. |
 | AC-099 | AC-099 — Field errors remain associated with controls | PENDING | No evidence recorded at contract checkpoint. |
 | AC-100 | AC-100 — Reduced-motion respected | PENDING | No evidence recorded at contract checkpoint. |
 | AC-101 | AC-101 — Zero new serious/critical axe violations | PASS | Workbench Playwright axe checks pass at 390, 768, and 1440. |
@@ -305,6 +300,6 @@ separate.
 | AC-233 | AC-233 — Accessibility matrix passes | PASS | Dedicated serious/critical axe scans pass at all required widths; targeted color-contrast regressions pass. |
 | AC-234 | AC-234 — Build passes | PASS | Local production build and exact-head CI build at `30b6fcd` pass. |
 | AC-235 | AC-235 — Bundle/governance passes | PASS | Local `lane:release:cwv` passes project-state, environment, secret, workflow, capability, 4,472-unit, build, docs, bundle, Truth Loop, and Lighthouse CWV gates. |
-| AC-236 | AC-236 — Exact-head CI passes | FAIL | Remote head `30b6fcd` run `33902068474` passed unit/build/capability/docs but failed the prior bundle ceiling; local repair `2b2b54b` is intentionally unpushed and therefore has no exact-head CI. |
+| AC-236 | AC-236 — Exact-head CI passes | PENDING | Future program-complete local head will remain unpushed until separately authorized, so exact-head CI cannot yet exist. |
 | AC-237 | AC-237 — Screenshots/visual evidence correspond to exact candidate SHA | PASS | Local screenshots for 390/768/1440 are named with exact pre-promotion SHA `30b6fcd48aa8` and have recorded SHA-256 hashes. |
 | AC-238 | AC-238 — Source/CI evidence is not reported as hosted/human acceptance | PASS | Changelog, Project Status, manuals, PR text, and this ledger explicitly withhold hosted, production, provider, assistive-technology, and human claims. |
