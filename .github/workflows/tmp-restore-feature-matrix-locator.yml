@@ -1,0 +1,50 @@
+name: Temporary Restore Feature Matrix Capability Locator
+
+on:
+  push:
+    branches:
+      - feat/configured-quote-action-state
+    paths:
+      - .github/workflows/tmp-restore-feature-matrix-locator.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/configured-quote-action-state
+          fetch-depth: 0
+      - name: Restore canonical row title and retain candidate detail
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const workflowPath = '.github/workflows/tmp-restore-feature-matrix-locator.yml';
+          const path = 'docs/FEATURE_MATRIX.md';
+          let source = fs.readFileSync(path, 'utf8');
+          const before = '| 8 | Quote management UI (list, sort, filters, state-aware configured-quote action compilation with one ranked primary/recovery action and progressively disclosed secondary capabilities, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing and conversation with bounded same-session unresolved-request restoration, isolated Stripe deposit and final-balance request/reconciliation rails, provider-owned payment status) | Implemented in source candidate (prior quote-management baseline deployed; this action-state migration still requires hosted and human acceptance) |';
+          const after = '| 8 | Quote management UI (list, sort, filters, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing and conversation with bounded same-session unresolved-request restoration, isolated Stripe deposit and final-balance request/reconciliation rails, provider-owned payment status) | Implemented in source candidate (prior quote-management baseline deployed; state-aware primary/recovery action ranking and progressive **More** disclosure are added in this candidate; hosted and human acceptance pending) |';
+          if (!source.includes(before)) throw new Error('Expected modified row-8 title was not found.');
+          source = source.replace(before, after);
+          const now = new Date();
+          const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short'
+          }).formatToParts(now);
+          const value = (type) => parts.find((part) => part.type === type)?.value || '';
+          const stamp = `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} ${value('timeZoneName')}`;
+          source = source.replace(/^Last updated: .+$/m, `Last updated: ${stamp}`);
+          fs.writeFileSync(path, source);
+          fs.rmSync(workflowPath);
+          NODE
+
+          git config user.name "QuotePilot bounded migration"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/FEATURE_MATRIX.md .github/workflows/tmp-restore-feature-matrix-locator.yml
+          git diff --cached --check
+          git commit -m "docs(quotes): preserve canonical feature locator"
+          git push origin HEAD:feat/configured-quote-action-state
