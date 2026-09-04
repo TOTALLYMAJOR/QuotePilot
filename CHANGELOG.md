@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 12:55:44 CDT
+Last updated: 2026-09-04 13:06:37 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Began the reconciled Commercial Platform refinement on the existing UX
+  convergence branch. Added the accepted Kernel -> Vertical Pack -> Tenant
+  Configuration -> Contextual UX decision, the canonical Pricing Constitution,
+  an ordered compatibility-first delivery program, and an 80-case named
+  pricing-v1 Golden Corpus with a frozen output digest. This slice changes no
+  runtime pricing, catalog, payment, provider, or quote authority; it records
+  the current v1 behavior and known policy defects before pricing-v2 semantics.
 - Added the frozen QuotePilot UX Convergence Contract repository copy and an
   AC-001–AC-238 execution-evidence ledger. The ledger records verdicts and
   implementation classifications without changing any frozen claim.

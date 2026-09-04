@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-08-28 20:18:30 CDT
+Last updated: 2026-09-04 13:06:37 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -15,6 +15,10 @@ Each major topic has one source of truth. Other docs should link to that source 
   next proof event; it links to, rather than replaces, the authorities above.
 - `.project/state.json`: machine-readable lifecycle, evidence, dependency,
   blocker, and proof-event ledger for representative cross-functional cohorts.
+- `docs/COMMERCIAL_PLATFORM_PROGRAM.md`: commercial-kernel, vertical-pack,
+  tenant-configuration, contextual-UX, migration, and delivery-slice authority.
+- `docs/PRICING_CONSTITUTION.md`: pricing policy, version, exact-money,
+  waterfall, historical-compatibility, and payment-provenance authority.
 
 ## Update Triggers
 - Code or behavior changes: update `CHANGELOG.md`.
@@ -24,6 +28,10 @@ Each major topic has one source of truth. Other docs should link to that source 
 - Product-truth observability contract or drift-policy changes: update the
   accepted ADR/design, orchestration workflow, and `PROJECT_STATUS.md`; do not
   copy a generated digest into another canonical status authority.
+- Commercial kernel, offer, template, rule, vertical-pack, or migration changes:
+  update `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and its accepted ADR.
+- Pricing policy, arithmetic, rounding, receipt, waterfall, or payment amount
+  provenance changes: update `docs/PRICING_CONSTITUTION.md`.
 
 ## Update Timestamps
 Every changed canonical Markdown document, every Markdown file under `docs/`,
@@ -100,6 +108,8 @@ as separate claims.
 | Cross-repository architecture adoption evidence | `docs/QUIETPILOT_ARCHITECTURE_ADOPTION_REPORT.md` | Point-in-time, read-only comparison and bounded adoption recommendations. It is not runtime, release, provider, or product authority. |
 | Development task evidence capture | `docs/DEVELOPMENT_EVIDENCE_COMPILER.md` | Local ignored evidence-record contract for request, validation, proof-boundary, residual-risk, and learning capture. |
 | Product truth observability and drift policy | `docs/adr/ADR-0002-product-truth-observability.md`, `docs/design/product-truth-observability-design.md` | Accepted decision and implementation contract for the read-only owner digest and advisory drift gate. `PROJECT_STATUS.md`, the Feature Matrix, release receipts, and other named inputs retain authority; generated digests are projections only. |
+| Commercial kernel, vertical packs, offers, templates, rules, and compatibility migration | `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and `docs/adr/ADR-0003-commercial-platform-vertical-pack.md` | Catering remains the reference vertical and natural UX; shared contracts cannot replace quote, catalog, server-pricing, or payment authority. |
+| Pricing policy, v1/v2 semantics, exact money, waterfalls, and payment amount provenance | `docs/PRICING_CONSTITUTION.md` | Historical v1 receipts stay immutable; v2 behavior changes require Golden Corpus and differential evidence. |
 | Task classification, model tier, dependency reads, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. The external runner owns actual model switching. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |

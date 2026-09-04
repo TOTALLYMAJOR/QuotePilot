@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-04 13:06:37 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -11,6 +11,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
+- Commercial platform program: [docs/COMMERCIAL_PLATFORM_PROGRAM.md](docs/COMMERCIAL_PLATFORM_PROGRAM.md)
+- Pricing Constitution: [docs/PRICING_CONSTITUTION.md](docs/PRICING_CONSTITUTION.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
   Firebase staging or Vercel preview only; checksum-verified Firebase binary,
   ADC Rules readback, direct Vercel APIs, and an explicit safe-off, bounded
@@ -186,6 +188,13 @@ Tenant safety mode:
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
 - Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
+- Commercial architecture: shared Commercial / Operations Kernel -> Catering
+  Vertical Pack -> organization-scoped Tenant Configuration -> contextual
+  QuotePilot UX. Package and Event Template remain the natural catering terms;
+  Configurable Offer and Commercial Template are shared kernel contracts.
+- Pricing authority: browser preview plus revision-fenced server certification;
+  pricing-v1 remains historical evidence and pricing-v2 introduces exact
+  integer-minor-unit receipts and immutable price waterfalls.
 - Reconciliation tier: Python 3.11+ (`truthloop/`), standard library only, read-only,
   no credentials and no write path; see `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
