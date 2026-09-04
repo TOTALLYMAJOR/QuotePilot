@@ -266,4 +266,56 @@ describe("configured quote action state", () => {
     expect(sales.actions.review_delivery.visible).toBe(false);
     expect(sales.primaryAction).toBeNull();
   });
+  test("does not surface admin-only actions as disabled alternatives to sales", () => {
+    const result = controller(quote("accepted", {
+      workflow: { quoteDelivery: providerAcceptedDelivery() }
+    }), "sales").actionState;
+
+    expect(result.actions.convert_contract.visible).toBe(false);
+    expect(result.actions.request_deposit.visible).toBe(false);
+    expect(result.actions.delete.visible).toBe(false);
+  });
+
+  test("ranks provider reconciliation above normal payment progression only when provider evidence is unresolved", () => {
+    const result = controller(quote("booked", {
+      payment: {
+        depositStatus: "sent",
+        depositConfirmedAtISO: "",
+        stripeSessionId: "cs_test_pending",
+        stripeCheckoutState: "unknown",
+        finalBalance: { amountCents: 75000, status: "unpaid" }
+      },
+      booking: {
+        contractNumber: "C-1",
+        contractConvertedAtISO: "2099-08-03T12:05:00.000Z",
+        confirmationStatus: "pending"
+      },
+      workflow: {
+        quoteDelivery: providerAcceptedDelivery(),
+        approvalRequests: [approval("send_payment_request")]
+      }
+    })).actionState;
+
+    expect(result.state.depositNeedsReconciliation).toBe(true);
+    expect(result.primaryAction).toMatchObject({
+      id: "reconcile_deposit",
+      label: "Check payment outcome",
+      enabled: true
+    });
+  });
+
+  test("offers expiry as an explicit administrative outcome only for expirable lifecycle states", () => {
+    const draft = controller(quote("draft")).actionState;
+    const accepted = controller(quote("accepted", {
+      workflow: { quoteDelivery: providerAcceptedDelivery() }
+    })).actionState;
+
+    expect(draft.actions.change_status).toMatchObject({
+      visible: true,
+      enabled: true,
+      label: "Expire quote"
+    });
+    expect(accepted.actions.change_status.visible).toBe(false);
+  });
+
 });

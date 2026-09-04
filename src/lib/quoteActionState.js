@@ -101,7 +101,7 @@ function decorate(baseActions, id, overrides = {}) {
   const source = baseAction(baseActions, id);
   const roleAllowed = source.enabled === true;
   const stateAllowed = overrides.stateAllowed !== false;
-  const visible = overrides.visible !== false && (roleAllowed || overrides.showWhenDisabled === true);
+  const visible = overrides.visible !== false && roleAllowed;
   const disabledReason = !roleAllowed
     ? source.disabledReason || "This action is not available to the current actor or source."
     : !stateAllowed
@@ -132,6 +132,14 @@ function firstVisible(actions, ids) {
   return null;
 }
 
+function firstEnabled(actions, ids) {
+  for (const id of ids) {
+    const action = actions[id];
+    if (action?.visible && action?.enabled) return action;
+  }
+  return null;
+}
+
 function choosePrimary({
   actions,
   status,
@@ -139,12 +147,16 @@ function choosePrimary({
   depositSettled,
   finalBalanceDue,
   contractPresent,
+  depositNeedsReconciliation,
+  finalBalanceNeedsReconciliation,
   acceptedProgressionPolicy
 }) {
   if (["outcome_ambiguous", "outcome_unknown"].includes(delivery)) {
     return firstVisible(actions, ["review_delivery"]);
   }
   if (delivery === "sending") return null;
+  if (depositNeedsReconciliation) return firstVisible(actions, ["reconcile_deposit"]);
+  if (finalBalanceNeedsReconciliation) return firstVisible(actions, ["reconcile_balance"]);
 
   if (status === "expired") return firstVisible(actions, ["reopen"]);
   if (status === "declined") return firstVisible(actions, ["duplicate"]);
@@ -154,7 +166,7 @@ function choosePrimary({
     return firstVisible(actions, ["send_quote", "edit"]);
   }
   if (["sent", "viewed"].includes(status)) {
-    return firstVisible(actions, ["open_conversation", "edit"]);
+    return firstEnabled(actions, ["open_conversation"]);
   }
   if (status === "accepted") {
     const order = acceptedProgressionPolicy === "deposit_first"
@@ -165,7 +177,7 @@ function choosePrimary({
   if (status === "booked") {
     if (!depositSettled) return firstVisible(actions, ["request_deposit"]);
     if (finalBalanceDue) return firstVisible(actions, ["request_balance"]);
-    if (contractPresent) return firstVisible(actions, ["open_conversation"]);
+    if (contractPresent) return firstEnabled(actions, ["open_conversation"]);
   }
   return null;
 }
@@ -209,6 +221,16 @@ export function compileConfiguredQuoteActions({
     && depositSettled
     && finalBalanceCents > 0
     && finalBalanceStatus !== "paid";
+  const depositCheckoutState = normalized(quote?.payment?.stripeCheckoutState);
+  const depositSessionId = text(quote?.payment?.stripeSessionId);
+  const depositNeedsReconciliation = Boolean(depositSessionId)
+    && !depositSettled
+    && ["processing", "failed", "expired", "unknown"].includes(depositCheckoutState);
+  const finalBalanceSessionId = text(finalBalance.stripeSessionId);
+  const finalBalanceCheckoutState = normalized(finalBalance.stripeCheckoutState);
+  const finalBalanceNeedsReconciliation = finalBalanceDue
+    && Boolean(finalBalanceSessionId)
+    && ["processing", "failed", "expired", "unknown"].includes(finalBalanceCheckoutState);
 
   const depositApproval = approvalFor(quote, "send_payment_request");
   const balanceApproval = approvalFor(quote, "send_final_balance_request");
@@ -409,6 +431,74 @@ export function compileConfiguredQuoteActions({
     priority: portalIsExpired ? 15 : 80
   });
 
+  actions.review_beo = decorate(baseActions, "review_beo", {
+    label: "Review Kitchen BEO",
+    visible: status !== "deleted",
+    stateAllowed: status !== "deleted",
+    category: "operations",
+    consequence: "Open the Kitchen BEO authority without changing quote or payment state.",
+    priority: 85
+  });
+
+  actions.reconcile_deposit = decorate(baseActions, "reconcile_deposit", {
+    label: "Check payment outcome",
+    visible: Boolean(depositSessionId) && !depositSettled,
+    stateAllowed: Boolean(depositSessionId) && !depositSettled && !deliveryLocked,
+    disabledReason: deliveryLocked
+      ? "Resolve the current quote-delivery attempt before reconciling payment."
+      : "",
+    category: "recovery",
+    consequence: "Ask Stripe for the authoritative outcome of the existing deposit checkout without creating another checkout.",
+    evidenceProduced: "The existing payment record is reconciled only from provider evidence.",
+    presentation: depositNeedsReconciliation ? "recovery" : "secondary",
+    priority: depositNeedsReconciliation ? 1 : 75
+  });
+
+  actions.reconcile_balance = decorate(baseActions, "reconcile_balance", {
+    label: "Check final-balance outcome",
+    visible: Boolean(finalBalanceSessionId) && finalBalanceStatus !== "paid",
+    stateAllowed: Boolean(finalBalanceSessionId) && finalBalanceStatus !== "paid" && !deliveryLocked,
+    disabledReason: deliveryLocked
+      ? "Resolve the current quote-delivery attempt before reconciling the final balance."
+      : "",
+    category: "recovery",
+    consequence: "Ask Stripe for the authoritative outcome of the existing final-balance checkout without creating another checkout.",
+    evidenceProduced: "The existing final-balance record is reconciled only from provider evidence.",
+    presentation: finalBalanceNeedsReconciliation ? "recovery" : "secondary",
+    priority: finalBalanceNeedsReconciliation ? 1 : 75
+  });
+
+  actions.change_status = decorate(baseActions, "change_status", {
+    label: "Expire quote",
+    visible: ["draft", "sent", "viewed"].includes(status),
+    stateAllowed: ["draft", "sent", "viewed"].includes(status) && !deliveryLocked,
+    disabledReason: deliveryLocked
+      ? "Resolve the current delivery attempt before expiring this quote."
+      : "",
+    category: "administration",
+    consequence: "Mark this quote expired. This does not create customer acceptance, payment, or booking evidence.",
+    requiresConfirmation: true,
+    priority: 95
+  });
+
+  actions.copy_payment_link = decorate(baseActions, "copy_payment_link", {
+    label: "Copy deposit link",
+    visible: Boolean(text(quote?.payment?.depositLink)) && depositStatus === "sent",
+    stateAllowed: Boolean(text(quote?.payment?.depositLink)) && depositStatus === "sent",
+    category: "manual_handoff",
+    consequence: "Copy the already-created deposit checkout link. No payment or delivery evidence changes.",
+    priority: 90
+  });
+
+  actions.copy_balance_link = decorate(baseActions, "copy_balance_link", {
+    label: "Copy final-balance link",
+    visible: Boolean(text(finalBalance.paymentLink)) && finalBalanceStatus === "sent",
+    stateAllowed: Boolean(text(finalBalance.paymentLink)) && finalBalanceStatus === "sent",
+    category: "manual_handoff",
+    consequence: "Copy the already-created final-balance checkout link. No settlement evidence changes.",
+    priority: 90
+  });
+
   actions.export_proposal = decorate(baseActions, "export_proposal", {
     label: "Download PDF",
     visible: status !== "deleted",
@@ -456,6 +546,15 @@ export function compileConfiguredQuoteActions({
     priority: 100
   });
 
+  Object.keys(baseActions || {}).forEach((actionId) => {
+    if (actions[actionId]) return;
+    actions[actionId] = decorate(baseActions, actionId, {
+      visible: false,
+      stateAllowed: false,
+      disabledReason: "This capability is not a direct configured-quote action in the current state."
+    });
+  });
+
   const primaryAction = choosePrimary({
     actions,
     status,
@@ -463,6 +562,8 @@ export function compileConfiguredQuoteActions({
     depositSettled,
     finalBalanceDue,
     contractPresent,
+    depositNeedsReconciliation,
+    finalBalanceNeedsReconciliation,
     acceptedProgressionPolicy
   });
 
@@ -520,7 +621,9 @@ export function compileConfiguredQuoteActions({
       portalShareable,
       depositSettled,
       contractPresent,
-      finalBalanceDue
+      finalBalanceDue,
+      depositNeedsReconciliation,
+      finalBalanceNeedsReconciliation
     },
     primaryAction: primaryAction || null,
     secondaryActions,

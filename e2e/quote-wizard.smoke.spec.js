@@ -108,9 +108,7 @@ async function createQuoteToHistory(page, { guests = 72, eventName, venue, date 
 }
 
 function quoteRows(page) {
-  return page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy email text" })
-  });
+  return page.locator(".history-table-wrap tbody tr[data-quote-id]");
 }
 
 async function setQuoteStatus(row, status) {
@@ -760,9 +758,7 @@ test("draft saves land on the exact canonical workspace and stay truthful across
   await expect(page.locator(".portal-link-row")).toHaveCount(0);
   expect(firstQuoteId).toBeTruthy();
   const history = await openQuoteHistoryFromWorkspace(page);
-  const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy email text" })
-  }).first();
+  const firstQuoteRow = page.locator(".history-table-wrap tbody tr[data-quote-id]").first();
   await expect(firstQuoteRow).toContainText("E2E Staff");
   await expect(firstQuoteRow).toContainText("110");
   await expect(history.locator(`tr[data-quote-id="${firstQuoteId}"]`)).toBeVisible();
@@ -846,30 +842,29 @@ test("unresolved quote delivery locks conflicting mutations but keeps read-only 
   for (const control of await row.locator("select").all()) {
     await expect(control).toBeDisabled();
   }
-  for (const name of ["Edit", "Rotate Portal", "Delete"]) {
+  await row.locator("details.configured-quote-more-actions > summary").click();
+  for (const name of ["Edit draft", "Renew customer link", "Delete quote", "Create alternate draft"]) {
     await expect(row.getByRole("button", { name })).toBeDisabled();
   }
   await expect(row.getByRole("button", { name: "Request deposit" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Create alternate draft" })).toBeEnabled();
-  await expect(row.getByRole("button", { name: "PDF" })).toBeEnabled();
+  await expect(row.getByRole("button", { name: "Download PDF" })).toBeEnabled();
   await expect(row.getByRole("button", { name: "Copy email text" })).toBeEnabled();
 });
 
 test("quote history supports export and hides an unapproved payment link", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 84 });
 
-  const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy email text" })
-  }).first();
+  const firstQuoteRow = page.locator(".history-table-wrap tbody tr[data-quote-id]").first();
   await expect(firstQuoteRow).toBeVisible();
 
+  await firstQuoteRow.locator("details.configured-quote-more-actions > summary").click();
   await firstQuoteRow.getByRole("button", { name: "Copy email text" }).click();
   await expect(page.getByRole("dialog").getByText(/Email template copied/i).first()).toContainText(/remains a draft/i);
   await expect(firstQuoteRow.getByRole("combobox").first()).toHaveValue("draft");
   await expect(firstQuoteRow.getByRole("button", { name: "Copy customer link" })).toBeDisabled();
 
   const downloadPromise = page.waitForEvent("download");
-  await firstQuoteRow.getByRole("button", { name: "PDF" }).click();
+  await firstQuoteRow.getByRole("button", { name: "Download PDF" }).click();
   const pdfDownload = await downloadPromise;
   expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/i);
 
@@ -1432,6 +1427,7 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   const originalQuoteId = await quoteRows.first().getAttribute("data-quote-id");
   expect(originalQuoteId).toBeTruthy();
 
+  await quoteRows.first().locator("details.configured-quote-more-actions > summary").click();
   await quoteRows.first().getByRole("button", { name: "Edit draft" }).click();
   await expect(page.getByText(/Editing quote/i)).toBeVisible();
 
@@ -1454,6 +1450,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
   await createQuoteToHistory(page, { guests: 70, eventName: "Admin Isolation Quote" });
 
   const row = quoteRows(page).first();
+  await row.locator("details.configured-quote-more-actions > summary").click();
   await row.getByRole("button", { name: "Edit draft" }).click();
   const quoteEventType = page.getByLabel(/Event type/i);
   const originalEventType = await quoteEventType.inputValue();

@@ -101,6 +101,8 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(row).toBeVisible();
 
   await expect(row.getByRole("button", { name: "Edit draft" })).toBeVisible();
+  const more = row.locator("details.configured-quote-more-actions");
+  await more.locator("summary").click();
   await expect(row.getByRole("button", { name: "Create alternate draft" })).toBeVisible();
   await expect(row.getByRole("button", { name: "PDF" })).toBeVisible();
   await expect(row.getByRole("button", { name: "Send proposal" })).toHaveCount(0);
@@ -117,7 +119,7 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(row.getByRole("button", { name: "Copy Pay Link" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Create Stripe Link" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Request deposit" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Convert" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Create contract" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Renew customer link" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await expect(row.getByRole("combobox")).toHaveCount(0);

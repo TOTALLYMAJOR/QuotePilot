@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 19:09:32 CDT
+Last updated: 2026-09-03 19:21:52 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,7 +9,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
-- Added a state-aware configured-quote action compiler and migrated the quote administration row onto one ranked primary/recovery action while preserving subordinate capabilities. Draft edits now read **Edit draft**, sent/viewed changes read **Revise quote**, tracked provider dispatch reads **Send proposal**, provider acceptance is evidence rather than a disabled command, and payment/contract/recovery actions use outcome language. **Create alternate draft** now declares its separate-record consequence before creation, opens the created draft, and the browser-local fallback clears acceptance, rebooking, delivery, payment-provider, and booking proof instead of cloning it. Existing Firebase, Stripe, portal, approval, and contract authority is unchanged; local/CI evidence does not claim hosted, provider, production, or human acceptance.
+- Added a state-aware configured-quote action compiler and migrated the quote administration row onto one ranked primary/recovery action while grouping subordinate capabilities under **More**. Draft edits now read **Edit draft**, sent/viewed changes read **Revise quote**, tracked provider dispatch reads **Send proposal**, provider acceptance is evidence rather than a disabled command, and payment/contract/recovery actions use outcome language. **Create alternate draft** now declares its separate-record consequence before creation, opens the created draft, and the browser-local fallback clears acceptance, rebooking, delivery, payment-provider, and booking proof instead of cloning it. The quote number now opens its workspace, Firebase lifecycle management exposes explicit **Expire quote** instead of a generic selector, and exact workflow deep links open **More** before focusing a secondary approved action. Existing Firebase, Stripe, portal, approval, and contract authority is unchanged; local/CI evidence does not claim hosted, provider, production, or human acceptance.
 - Added a verified-platform-admin Resend acceptance test to Integrations Ops.
   It accepts only an exactly confirmed controlled `quietpilot.us` recipient,
   supplies server-owned non-customer content, persists a private request before
