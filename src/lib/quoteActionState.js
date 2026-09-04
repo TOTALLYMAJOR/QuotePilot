@@ -17,6 +17,7 @@ const PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
   "send_final_balance_request"
 ]);
+const DELIVERY_LOCK_REASON = "Resolve the current delivery attempt first.";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -275,9 +276,7 @@ export function compileConfiguredQuoteActions({
     label: status === "draft" ? "Edit draft" : "Revise quote",
     visible: ["draft", "sent", "viewed"].includes(status),
     stateAllowed: ["draft", "sent", "viewed"].includes(status) && !deliveryLocked,
-    disabledReason: deliveryLocked
-      ? "Resolve the current delivery attempt before changing quote content."
-      : "",
+    disabledReason: deliveryLocked ? DELIVERY_LOCK_REASON : "",
     consequence: status === "draft"
       ? "Open the current saved draft for changes."
       : "Create a new draft version while preserving the previously sent or viewed version.",
@@ -287,9 +286,7 @@ export function compileConfiguredQuoteActions({
     label: "Create alternate draft",
     visible: status !== "deleted",
     stateAllowed: status !== "deleted" && !deliveryLocked,
-    disabledReason: deliveryLocked
-      ? "Resolve the current delivery attempt before creating a related draft."
-      : "",
+    disabledReason: deliveryLocked ? DELIVERY_LOCK_REASON : "",
     consequence: "Create a separate draft using this client, event, and quote configuration. The current quote remains unchanged.",
     requiresConfirmation: true
   });
@@ -308,7 +305,7 @@ export function compileConfiguredQuoteActions({
       : portalIsExpired
         ? "Renew customer portal access before sending."
         : deliveryLocked
-          ? "Resolve the current delivery attempt before starting another send."
+          ? DELIVERY_LOCK_REASON
           : providerAccepted
             ? "Provider acceptance is already recorded for this saved revision."
             : "",
@@ -350,7 +347,7 @@ export function compileConfiguredQuoteActions({
       : !portalShareable
         ? "Deliver the current customer portal before requesting the deposit."
         : deliveryLocked
-          ? "Resolve the current delivery attempt before requesting payment."
+          ? DELIVERY_LOCK_REASON
           : "",
     consequence: "Send the approved Stripe deposit request for the exact customer and commercial scope.",
     presentation: "primary_candidate"
@@ -366,7 +363,7 @@ export function compileConfiguredQuoteActions({
     disabledReason: !contractApproval
       ? "Approve contract conversion in Workflow first."
       : deliveryLocked
-        ? "Resolve the current delivery attempt before creating a contract."
+        ? DELIVERY_LOCK_REASON
         : "",
     consequence: "Convert the accepted quote through the trusted contract workflow and availability check.",
     presentation: "primary_candidate"
@@ -376,9 +373,7 @@ export function compileConfiguredQuoteActions({
     label: "Record customer confirmation",
     visible: status === "booked" && contractPresent,
     stateAllowed: status === "booked" && contractPresent && !deliveryLocked,
-    disabledReason: deliveryLocked
-      ? "Resolve the current delivery attempt before changing booking confirmation evidence."
-      : "",
+    disabledReason: deliveryLocked ? DELIVERY_LOCK_REASON : "",
     consequence: "Record operator-observed booking confirmation state. This does not send a customer message."
   });
 
@@ -396,7 +391,7 @@ export function compileConfiguredQuoteActions({
       : !portalShareable
         ? "Deliver the current customer portal before requesting the final balance."
         : deliveryLocked
-          ? "Resolve the current delivery attempt before requesting the final balance."
+          ? DELIVERY_LOCK_REASON
           : "",
     consequence: "Send the approved final-balance request for the booked contract and verified paid deposit scope.",
     presentation: "primary_candidate"
@@ -406,9 +401,7 @@ export function compileConfiguredQuoteActions({
     label: "Restore as draft",
     visible: status === "expired",
     stateAllowed: status === "expired" && !deliveryLocked,
-    disabledReason: deliveryLocked
-      ? "Resolve the current delivery attempt before restoring this quote."
-      : "",
+    disabledReason: deliveryLocked ? DELIVERY_LOCK_REASON : "",
     consequence: "Restore the last eligible nonterminal commercial snapshot as a draft with new portal issuance.",
     presentation: "primary_candidate"
   });
@@ -422,7 +415,7 @@ export function compileConfiguredQuoteActions({
     disabledReason: firebaseBacked && !portalApproval
       ? "Approve customer-link renewal in Workflow first."
       : deliveryLocked
-        ? "Resolve the current delivery attempt before renewing customer access."
+        ? DELIVERY_LOCK_REASON
         : "",
     consequence: "Issue new customer portal access; the previous portal identity is no longer current."
   });
@@ -438,9 +431,7 @@ export function compileConfiguredQuoteActions({
     label: "Check payment outcome",
     visible: Boolean(depositSessionId) && !depositSettled,
     stateAllowed: Boolean(depositSessionId) && !depositSettled && !deliveryLocked,
-    disabledReason: deliveryLocked
-      ? "Resolve the current quote-delivery attempt before reconciling payment."
-      : "",
+    disabledReason: deliveryLocked ? DELIVERY_LOCK_REASON : "",
     consequence: "Ask Stripe for the authoritative outcome of the existing deposit checkout without creating another checkout.",
     presentation: depositNeedsReconciliation ? "recovery" : "secondary"
   });
@@ -449,9 +440,7 @@ export function compileConfiguredQuoteActions({
     label: "Check final-balance outcome",
     visible: Boolean(finalBalanceSessionId) && finalBalanceStatus !== "paid",
     stateAllowed: Boolean(finalBalanceSessionId) && finalBalanceStatus !== "paid" && !deliveryLocked,
-    disabledReason: deliveryLocked
-      ? "Resolve the current quote-delivery attempt before reconciling the final balance."
-      : "",
+    disabledReason: deliveryLocked ? DELIVERY_LOCK_REASON : "",
     consequence: "Ask Stripe for the authoritative outcome of the existing final-balance checkout without creating another checkout.",
     presentation: finalBalanceNeedsReconciliation ? "recovery" : "secondary"
   });
@@ -460,9 +449,7 @@ export function compileConfiguredQuoteActions({
     label: "Expire quote",
     visible: ["draft", "sent", "viewed"].includes(status),
     stateAllowed: ["draft", "sent", "viewed"].includes(status) && !deliveryLocked,
-    disabledReason: deliveryLocked
-      ? "Resolve the current delivery attempt before expiring this quote."
-      : "",
+    disabledReason: deliveryLocked ? DELIVERY_LOCK_REASON : "",
     consequence: "Mark this quote expired. This does not create customer acceptance, payment, or booking evidence.",
     requiresConfirmation: true
   });
@@ -514,7 +501,7 @@ export function compileConfiguredQuoteActions({
     disabledReason: firebaseBacked && !deleteApproval
       ? "Approve quote deletion in Workflow first."
       : deliveryLocked
-        ? "Resolve the current delivery attempt before deleting this quote."
+        ? DELIVERY_LOCK_REASON
         : "",
     consequence: "Permanently delete this quote after the required approval and confirmation boundary.",
     requiresConfirmation: true

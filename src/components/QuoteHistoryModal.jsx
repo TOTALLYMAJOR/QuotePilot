@@ -169,6 +169,7 @@ const DEFINITIVE_CONTRACT_CONVERSION_ERROR_CODES = new Set([
   "permission-denied",
   "unauthenticated"
 ]);
+const DELIVERY_LOCK_REASON = "Resolve the current delivery attempt first.";
 
 function contractConversionErrorMessage(error, fallback = "Contract conversion could not be completed.") {
   const message = String(error?.message || fallback)
@@ -3439,7 +3440,7 @@ export function QuoteHistoryView({
                         || Boolean(contractApproval)
                       ),
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current delivery attempt before creating a contract."
+                      ? DELIVERY_LOCK_REASON
                       : contractConversionBusy || convertingId === quote.id
                         ? "Contract conversion is already in progress."
                         : approvalRequired && !contractApproval
@@ -3461,7 +3462,7 @@ export function QuoteHistoryView({
                     visible: canTrackConfirmation && confirmationStatus !== "confirmed",
                     enabled: updatingConfirmationId !== quote.id && !deliveryUnresolved,
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current delivery attempt before recording confirmation."
+                      ? DELIVERY_LOCK_REASON
                       : "Booking confirmation is already being updated."
                   },
                   change_status: {
@@ -3470,26 +3471,26 @@ export function QuoteHistoryView({
                       && statusOptions.includes("expired"),
                     enabled: updatingId !== quote.id && !deliveryUnresolved,
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current delivery attempt before expiring this quote."
+                      ? DELIVERY_LOCK_REASON
                       : "Quote status is already being updated."
                   },
                   edit: {
                     visible: canEditQuoteStatus(normalizedQuoteStatus),
                     enabled: !deliveryUnresolved,
-                    disabledReason: "Resolve the current delivery attempt before changing quote content."
+                    disabledReason: DELIVERY_LOCK_REASON
                   },
                   reopen: {
                     visible: normalizedQuoteStatus === "expired",
                     enabled: !deliveryUnresolved && reopeningQuoteId !== quote.id,
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current delivery attempt before restoring this quote."
+                      ? DELIVERY_LOCK_REASON
                       : "This quote is already being restored.",
                     label: reopeningQuoteId === quote.id ? "Restoring..." : ""
                   },
                   duplicate: {
                     enabled: duplicatingId !== quote.id && !deliveryUnresolved,
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current delivery attempt before creating a related draft."
+                      ? DELIVERY_LOCK_REASON
                       : "An alternate draft is already being created.",
                     label: duplicatingId === quote.id ? "Creating draft..." : ""
                   },
@@ -3579,7 +3580,7 @@ export function QuoteHistoryView({
                       && rotatingPortalId !== quote.id
                       && (!approvalRequired || Boolean(portalRotationApproval)),
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current delivery attempt before renewing customer access."
+                      ? DELIVERY_LOCK_REASON
                       : rotatingPortalId === quote.id
                         ? "Customer access is already being renewed."
                         : approvalRequired && !portalRotationApproval
@@ -3610,7 +3611,7 @@ export function QuoteHistoryView({
                       && updatingId !== quote.id
                       && (!approvalRequired || Boolean(deleteApproval)),
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current delivery attempt before deleting this quote."
+                      ? DELIVERY_LOCK_REASON
                       : updatingId === quote.id
                         ? "This quote is already being deleted."
                         : approvalRequired && !deleteApproval
@@ -3622,7 +3623,7 @@ export function QuoteHistoryView({
                     visible: canReconcilePayment,
                     enabled: reconcilingPaymentId !== quote.id && !deliveryUnresolved,
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current quote-delivery attempt before reconciling payment."
+                      ? DELIVERY_LOCK_REASON
                       : "The deposit outcome is already being checked.",
                     label: reconcilingPaymentId === quote.id ? "Checking..." : ""
                   },
@@ -3630,7 +3631,7 @@ export function QuoteHistoryView({
                     visible: canReconcileFinalBalance,
                     enabled: reconcilingFinalBalanceId !== quote.id && !deliveryUnresolved,
                     disabledReason: deliveryUnresolved
-                      ? "Resolve the current quote-delivery attempt before reconciling the final balance."
+                      ? DELIVERY_LOCK_REASON
                       : "The final-balance outcome is already being checked.",
                     label: reconcilingFinalBalanceId === quote.id ? "Checking..." : ""
                   }
