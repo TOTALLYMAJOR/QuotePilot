@@ -3760,16 +3760,19 @@ export async function rotateQuotePortalKey({
 const ALTERNATE_DRAFT_CUSTOMER_FIELDS = "name email phone organization";
 const ALTERNATE_DRAFT_EVENT_FIELDS = "name date time venue venueAddress guests hours servers chefs bartenders dietaryRestrictions style eventTypeId";
 const ALTERNATE_DRAFT_SELECTION_FIELDS = "packageId packageName packageInclusions addons rentals addonQuantities rentalQuantities menuItemQuantities addonSnapshots rentalSnapshots menuItems menuItemsSnapshot menuItemNames menuItemDetails milesRT payMethod eventTemplateId eventTypeId taxRegion seasonProfileId laborRateSnapshot bartenderRateTypeId staffingRateTypeId bartenderRateOverride serverRateOverride serverRateMixCsv chefRateMixCsv chefRateOverride";
-const ALTERNATE_DRAFT_TOTAL_FIELDS = "base addons rentals menu labor serverLabor chefLabor bartenderLabor bartenderRateApplied serverRateApplied serverRatesApplied chefRateApplied chefRatesApplied bartenderRateTypeId bartenderRateTypeName staffingRateTypeId staffingRateTypeName travel serviceFee tax total deposit serviceFeePctApplied taxRateApplied taxRegionId taxRegionName seasonProfileId seasonProfileName packageMultiplier addonMultiplier rentalMultiplier";
-const ALTERNATE_DRAFT_QUOTE_META_FIELDS = "organizationName quotePreparedBy proposalIntroTitle proposalIntroMessage proposalClosingMessage brandName brandTagline brandLogoUrl documentFontScale brandPrimaryColor brandAccentColor brandDarkAccentColor brandBackgroundStart brandBackgroundMid brandBackgroundEnd brandCrew businessPhone businessEmail businessAddress acceptanceEmail includeDisposables disposablesNote depositNotice quoteValidityDays pricingSettingsVersion pricingSettingsUpdatedAtISO";
+const ALTERNATE_DRAFT_TOTAL_FIELDS = "base addons rentals menu labor travel serviceFee tax total deposit serviceFeePctApplied taxRateApplied taxRegionId seasonProfileId";
+const ALTERNATE_DRAFT_QUOTE_META_FIELDS = "organizationName quotePreparedBy proposalIntroTitle proposalIntroMessage proposalClosingMessage brandName brandTagline brandLogoUrl documentFontScale brandPrimaryColor brandAccentColor brandDarkAccentColor brandBackgroundStart brandBackgroundMid brandBackgroundEnd brandCrew businessPhone businessEmail businessAddress acceptanceEmail includeDisposables disposablesNote depositNotice quoteValidityDays";
 const ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS = "schemaVersion organizationId catalogSource catalogRevision confirmedCatalogRevision settingsFingerprintSha256";
 
 function cloneAllowedRecord(source, allowedFields) {
   const record = source && typeof source === "object" && !Array.isArray(source) ? source : {};
-  return Object.fromEntries(allowedFields.split(" ").flatMap((field) => {
-    if (!Object.hasOwn(record, field) || record[field] === undefined) return [];
-    return [[field, JSON.parse(JSON.stringify(record[field]))]];
-  }));
+  const cloned = {};
+  allowedFields.split(" ").forEach((field) => {
+    if (Object.hasOwn(record, field) && record[field] !== undefined) {
+      cloned[field] = JSON.parse(JSON.stringify(record[field]));
+    }
+  });
+  return cloned;
 }
 
 export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" } = {}) {
@@ -3792,12 +3795,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     nowISO
   );
   const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";
-  const sourceSelection = source.selection && typeof source.selection === "object"
-    ? source.selection
-    : {};
-  const sourceIntegrations = source.integrations && typeof source.integrations === "object"
-    ? source.integrations
-    : {};
+  const sourceSelection = source.selection || {};
+  const sourceIntegrations = source.integrations || {};
 
   const selection = {
     ...cloneAllowedRecord(sourceSelection, ALTERNATE_DRAFT_SELECTION_FIELDS),
@@ -3830,31 +3829,23 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     ...(String(source.customerId || "").trim()
       ? { customerId: String(source.customerId).trim() }
       : {}),
-    customer: source.customer && typeof source.customer === "object"
-      ? cloneAllowedRecord(source.customer, ALTERNATE_DRAFT_CUSTOMER_FIELDS)
-      : {},
+    customer: cloneAllowedRecord(source.customer, ALTERNATE_DRAFT_CUSTOMER_FIELDS),
     customerEmailKey: String(source.customerEmailKey || source.customer?.email || "").trim().toLowerCase(),
     customerNameKey: normalizeCustomerNameKey(source.customerNameKey || source.customer?.name || ""),
     eventTypeId: String(source.eventTypeId || sourceSelection.eventTypeId || source.event?.eventTypeId || "").trim(),
-    event: source.event && typeof source.event === "object"
-      ? cloneAllowedRecord(source.event, ALTERNATE_DRAFT_EVENT_FIELDS)
-      : {},
+    event: cloneAllowedRecord(source.event, ALTERNATE_DRAFT_EVENT_FIELDS),
     selection,
     decidableOptionsProjection: Array.isArray(source.decidableOptionsProjection)
       ? normalizeDecisionRoomOptions(source.decidableOptionsProjection)
       : [],
-    totals: source.totals && typeof source.totals === "object"
-      ? cloneAllowedRecord(source.totals, ALTERNATE_DRAFT_TOTAL_FIELDS)
-      : {},
+    totals: cloneAllowedRecord(source.totals, ALTERNATE_DRAFT_TOTAL_FIELDS),
     pricing: source.pricing && typeof source.pricing === "object"
       ? normalizePricingOutput(source.pricing)
       : undefined,
-    pricingCatalogAuthority: source.pricingCatalogAuthority && typeof source.pricingCatalogAuthority === "object"
+    pricingCatalogAuthority: source.pricingCatalogAuthority
       ? cloneAllowedRecord(source.pricingCatalogAuthority, ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS)
       : null,
-    quoteMeta: source.quoteMeta && typeof source.quoteMeta === "object"
-      ? cloneAllowedRecord(source.quoteMeta, ALTERNATE_DRAFT_QUOTE_META_FIELDS)
-      : {},
+    quoteMeta: cloneAllowedRecord(source.quoteMeta, ALTERNATE_DRAFT_QUOTE_META_FIELDS),
     source: String(source.source || "local").trim() || "local",
     portalKey,
     portalIssuedAtISO,

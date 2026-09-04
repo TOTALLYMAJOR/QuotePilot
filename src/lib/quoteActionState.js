@@ -136,21 +136,12 @@ function decorate(baseActions, id, overrides = {}) {
     ...sourceAction,
     id,
     label: text(runtime.label || overrides.label || source.outcomeLabel || id),
-    category: text(runtime.category || overrides.category || "secondary"),
-    priority: Number.isFinite(Number(runtime.priority))
-      ? Number(runtime.priority)
-      : Number.isFinite(Number(overrides.priority))
-        ? Number(overrides.priority)
-        : 100,
     visible,
     enabled: Boolean(visible && sourceAllowed && stateAllowed && runtimeAllowed),
     disabledReason,
     consequence: text(runtime.consequence || overrides.consequence),
-    evidenceProduced: text(runtime.evidenceProduced || overrides.evidenceProduced),
     requiresConfirmation: runtime.requiresConfirmation === true || overrides.requiresConfirmation === true,
-    presentation: text(runtime.presentation || overrides.presentation || "secondary"),
-    stateReason: text(runtime.stateReason || overrides.stateReason),
-    showWhenDisabled: runtime.showWhenDisabled === true || overrides.showWhenDisabled === true
+    presentation: text(runtime.presentation || overrides.presentation || "secondary")
   });
 }
 
@@ -287,12 +278,9 @@ export function compileConfiguredQuoteActions({
     disabledReason: deliveryLocked
       ? "Resolve the current delivery attempt before changing quote content."
       : "",
-    category: "quote",
     consequence: status === "draft"
       ? "Open the current saved draft for changes."
       : "Create a new draft version while preserving the previously sent or viewed version.",
-    evidenceProduced: "A trusted save creates a new immutable quote version.",
-    priority: 40
   });
 
   actions.duplicate = decorate(baseActions, "duplicate", {
@@ -302,11 +290,8 @@ export function compileConfiguredQuoteActions({
     disabledReason: deliveryLocked
       ? "Resolve the current delivery attempt before creating a related draft."
       : "",
-    category: "quote",
     consequence: "Create a separate draft using this client, event, and quote configuration. The current quote remains unchanged.",
-    evidenceProduced: "The new quote receives its own identity, version, portal issuance, and proof state.",
-    requiresConfirmation: true,
-    priority: 70
+    requiresConfirmation: true
   });
 
   actions.send_quote = decorate(baseActions, "send_quote", {
@@ -327,22 +312,16 @@ export function compileConfiguredQuoteActions({
           : providerAccepted
             ? "Provider acceptance is already recorded for this saved revision."
             : "",
-    category: "delivery",
     consequence: "Submit the exact saved proposal revision through QuotePilot's tracked email provider path.",
-    evidenceProduced: "A successful provider response records provider acceptance for the exact revision; recipient delivery remains separate evidence.",
-    presentation: status === "draft" ? "primary_candidate" : "secondary",
-    priority: 20
+    presentation: status === "draft" ? "primary_candidate" : "secondary"
   });
 
   actions.review_delivery = decorate(baseActions, "review_delivery", {
     label: "Resolve delivery outcome",
     visible: ["outcome_ambiguous", "outcome_unknown"].includes(delivery),
     stateAllowed: ["outcome_ambiguous", "outcome_unknown"].includes(delivery),
-    category: "recovery",
     consequence: "Review provider evidence for the exact saved revision without assuming whether delivery occurred.",
-    evidenceProduced: "An audited resolution records either provider acceptance or confirmed not sent.",
-    presentation: "recovery",
-    priority: 0
+    presentation: "recovery"
   });
 
   actions.open_conversation = decorate(baseActions, "open_conversation", {
@@ -352,9 +331,7 @@ export function compileConfiguredQuoteActions({
     disabledReason: !portalShareable
       ? "Conversation requires current customer portal access for this quote."
       : "",
-    category: "communication",
-    consequence: "Open the quote-scoped customer conversation without changing commercial state.",
-    priority: 50
+    consequence: "Open the quote-scoped customer conversation without changing commercial state."
   });
 
   actions.request_deposit = decorate(baseActions, "request_deposit", {
@@ -375,12 +352,8 @@ export function compileConfiguredQuoteActions({
         : deliveryLocked
           ? "Resolve the current delivery attempt before requesting payment."
           : "",
-    showWhenDisabled: ["accepted", "booked"].includes(status) && !depositSettled && depositAmountCents > 0,
-    category: "payment",
     consequence: "Send the approved Stripe deposit request for the exact customer and commercial scope.",
-    evidenceProduced: "The request can create provider checkout evidence; payment settlement remains separate evidence.",
-    presentation: "primary_candidate",
-    priority: 10
+    presentation: "primary_candidate"
   });
 
   actions.convert_contract = decorate(baseActions, "convert_contract", {
@@ -395,12 +368,8 @@ export function compileConfiguredQuoteActions({
       : deliveryLocked
         ? "Resolve the current delivery attempt before creating a contract."
         : "",
-    showWhenDisabled: status === "accepted" && !contractPresent,
-    category: "booking",
     consequence: "Convert the accepted quote through the trusted contract workflow and availability check.",
-    evidenceProduced: "A successful trusted receipt records the contract identity and booked lifecycle state.",
-    presentation: "primary_candidate",
-    priority: 10
+    presentation: "primary_candidate"
   });
 
   actions.manage_confirmation = decorate(baseActions, "manage_confirmation", {
@@ -410,10 +379,7 @@ export function compileConfiguredQuoteActions({
     disabledReason: deliveryLocked
       ? "Resolve the current delivery attempt before changing booking confirmation evidence."
       : "",
-    category: "booking",
-    consequence: "Record operator-observed booking confirmation state. This does not send a customer message.",
-    evidenceProduced: "Booking confirmation status and timestamp are recorded as staff-entered evidence.",
-    priority: 60
+    consequence: "Record operator-observed booking confirmation state. This does not send a customer message."
   });
 
   actions.request_balance = decorate(baseActions, "request_balance", {
@@ -432,12 +398,8 @@ export function compileConfiguredQuoteActions({
         : deliveryLocked
           ? "Resolve the current delivery attempt before requesting the final balance."
           : "",
-    showWhenDisabled: finalBalanceDue,
-    category: "payment",
     consequence: "Send the approved final-balance request for the booked contract and verified paid deposit scope.",
-    evidenceProduced: "The request can create provider checkout evidence; final settlement remains separate evidence.",
-    presentation: "primary_candidate",
-    priority: 10
+    presentation: "primary_candidate"
   });
 
   actions.reopen = decorate(baseActions, "reopen", {
@@ -447,11 +409,8 @@ export function compileConfiguredQuoteActions({
     disabledReason: deliveryLocked
       ? "Resolve the current delivery attempt before restoring this quote."
       : "",
-    category: "quote",
     consequence: "Restore the last eligible nonterminal commercial snapshot as a draft with new portal issuance.",
-    evidenceProduced: "A trusted reopen records a new draft state and portal issuance while preserving prior history.",
-    presentation: "primary_candidate",
-    priority: 10
+    presentation: "primary_candidate"
   });
 
   actions.rotate_portal = decorate(baseActions, "rotate_portal", {
@@ -465,19 +424,14 @@ export function compileConfiguredQuoteActions({
       : deliveryLocked
         ? "Resolve the current delivery attempt before renewing customer access."
         : "",
-    category: "access",
-    consequence: "Issue new customer portal access; the previous portal identity is no longer current.",
-    evidenceProduced: "A trusted rotation records a new portal key and validity window.",
-    priority: portalIsExpired ? 15 : 80
+    consequence: "Issue new customer portal access; the previous portal identity is no longer current."
   });
 
   actions.review_beo = decorate(baseActions, "review_beo", {
     label: "Review Kitchen BEO",
     visible: status !== "deleted",
     stateAllowed: status !== "deleted",
-    category: "operations",
-    consequence: "Open the Kitchen BEO authority without changing quote or payment state.",
-    priority: 85
+    consequence: "Open the Kitchen BEO authority without changing quote or payment state."
   });
 
   actions.reconcile_deposit = decorate(baseActions, "reconcile_deposit", {
@@ -487,11 +441,8 @@ export function compileConfiguredQuoteActions({
     disabledReason: deliveryLocked
       ? "Resolve the current quote-delivery attempt before reconciling payment."
       : "",
-    category: "recovery",
     consequence: "Ask Stripe for the authoritative outcome of the existing deposit checkout without creating another checkout.",
-    evidenceProduced: "The existing payment record is reconciled only from provider evidence.",
-    presentation: depositNeedsReconciliation ? "recovery" : "secondary",
-    priority: depositNeedsReconciliation ? 1 : 75
+    presentation: depositNeedsReconciliation ? "recovery" : "secondary"
   });
 
   actions.reconcile_balance = decorate(baseActions, "reconcile_balance", {
@@ -501,11 +452,8 @@ export function compileConfiguredQuoteActions({
     disabledReason: deliveryLocked
       ? "Resolve the current quote-delivery attempt before reconciling the final balance."
       : "",
-    category: "recovery",
     consequence: "Ask Stripe for the authoritative outcome of the existing final-balance checkout without creating another checkout.",
-    evidenceProduced: "The existing final-balance record is reconciled only from provider evidence.",
-    presentation: finalBalanceNeedsReconciliation ? "recovery" : "secondary",
-    priority: finalBalanceNeedsReconciliation ? 1 : 75
+    presentation: finalBalanceNeedsReconciliation ? "recovery" : "secondary"
   });
 
   actions.change_status = decorate(baseActions, "change_status", {
@@ -515,46 +463,36 @@ export function compileConfiguredQuoteActions({
     disabledReason: deliveryLocked
       ? "Resolve the current delivery attempt before expiring this quote."
       : "",
-    category: "administration",
     consequence: "Mark this quote expired. This does not create customer acceptance, payment, or booking evidence.",
-    requiresConfirmation: true,
-    priority: 95
+    requiresConfirmation: true
   });
 
   actions.copy_payment_link = decorate(baseActions, "copy_payment_link", {
     label: "Copy deposit link",
     visible: Boolean(text(quote?.payment?.depositLink)) && depositStatus === "sent",
     stateAllowed: Boolean(text(quote?.payment?.depositLink)) && depositStatus === "sent",
-    category: "manual_handoff",
-    consequence: "Copy the already-created deposit checkout link. No payment or delivery evidence changes.",
-    priority: 90
+    consequence: "Copy the already-created deposit checkout link. No payment or delivery evidence changes."
   });
 
   actions.copy_balance_link = decorate(baseActions, "copy_balance_link", {
     label: "Copy final-balance link",
     visible: Boolean(text(finalBalance.paymentLink)) && finalBalanceStatus === "sent",
     stateAllowed: Boolean(text(finalBalance.paymentLink)) && finalBalanceStatus === "sent",
-    category: "manual_handoff",
-    consequence: "Copy the already-created final-balance checkout link. No settlement evidence changes.",
-    priority: 90
+    consequence: "Copy the already-created final-balance checkout link. No settlement evidence changes."
   });
 
   actions.export_proposal = decorate(baseActions, "export_proposal", {
     label: "Download PDF",
     visible: status !== "deleted",
     stateAllowed: status !== "deleted",
-    category: "artifact",
-    consequence: "Generate a proposal artifact without changing quote or delivery state.",
-    priority: 90
+    consequence: "Generate a proposal artifact without changing quote or delivery state."
   });
 
   actions.copy_email = decorate(baseActions, "copy_email", {
     label: "Copy email text",
     visible: status !== "deleted",
     stateAllowed: status !== "deleted",
-    category: "manual_handoff",
-    consequence: "Copy prepared email text for manual use. QuotePilot records no send or delivery evidence.",
-    priority: 90
+    consequence: "Copy prepared email text for manual use. QuotePilot records no send or delivery evidence."
   });
 
   actions.copy_portal = decorate(baseActions, "copy_portal", {
@@ -564,9 +502,7 @@ export function compileConfiguredQuoteActions({
     disabledReason: !portalShareable
       ? "Customer link sharing requires current provider-accepted portal access."
       : "",
-    category: "manual_handoff",
-    consequence: "Copy the current customer portal URL without changing commercial state.",
-    priority: 90
+    consequence: "Copy the current customer portal URL without changing commercial state."
   });
 
   actions.delete = decorate(baseActions, "delete", {
@@ -580,10 +516,8 @@ export function compileConfiguredQuoteActions({
       : deliveryLocked
         ? "Resolve the current delivery attempt before deleting this quote."
         : "",
-    category: "administration",
     consequence: "Permanently delete this quote after the required approval and confirmation boundary.",
-    requiresConfirmation: true,
-    priority: 100
+    requiresConfirmation: true
   });
 
   Object.keys(baseActions || {}).forEach((actionId) => {

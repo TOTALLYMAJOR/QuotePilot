@@ -805,13 +805,19 @@ describe("quoteStore versioning and delete behavior", () => {
           menuItemNames: ["Salad"],
           deliveryEvidence: { id: "must-not-copy" }
         },
-        totals: { total: 8400, deposit: 2520, providerReceiptId: "must-not-copy" },
+        totals: {
+          total: 8400,
+          deposit: 2520,
+          serverRatesApplied: [42, 44],
+          providerReceiptId: "must-not-copy"
+        },
         pricing: { authority: "legacy_derived", grandTotal: 8400, providerReceiptId: "must-not-copy" },
         pricingCatalogAuthority: { schemaVersion: 1, catalogRevision: 7, secret: "must-not-copy" },
         quoteMeta: {
           quoteValidityDays: 30,
           integrationRetryLimit: 4,
           integrationAuditRetention: 60,
+          pricingSettingsVersion: "source-calculation-internal",
           crmBridgeAuthToken: "must-not-copy",
           providerReceiptId: "must-not-copy"
         },
@@ -901,10 +907,12 @@ describe("quoteStore versioning and delete behavior", () => {
     expect(stored.event).not.toHaveProperty("settlementEvidence");
     expect(stored.selection).not.toHaveProperty("deliveryEvidence");
     expect(stored.totals).not.toHaveProperty("providerReceiptId");
+    expect(stored.totals).not.toHaveProperty("serverRatesApplied");
     expect(stored.pricing).not.toHaveProperty("providerReceiptId");
     expect(stored.pricingCatalogAuthority).not.toHaveProperty("secret");
     expect(stored.quoteMeta).not.toHaveProperty("crmBridgeAuthToken");
     expect(stored.quoteMeta).not.toHaveProperty("providerReceiptId");
+    expect(stored.quoteMeta).not.toHaveProperty("pricingSettingsVersion");
     expect(stored.decidableOptionsProjection[0]).not.toHaveProperty("providerReceiptId");
     expect(stored.booking.contractNumber).toBe("");
     expect(stored.booking.bookedAtISO).toBe("");
