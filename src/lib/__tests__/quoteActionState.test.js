@@ -335,4 +335,56 @@ describe("configured quote action state", () => {
     expect(result.actions.send_quote.enabled).toBe(false);
   });
 
+  test("does not infer final-balance eligibility from refunded or incomplete deposit evidence", () => {
+    const refunded = controller(quote("booked", {
+      payment: {
+        depositStatus: "refunded",
+        depositConfirmedAtISO: "2099-08-03T12:10:00.000Z",
+        stripeSessionId: "cs_test_refunded",
+        finalBalance: { amountCents: 75000, status: "unpaid" }
+      },
+      booking: {
+        contractNumber: "C-1",
+        contractConvertedAtISO: "2099-08-03T12:05:00.000Z"
+      },
+      workflow: { quoteDelivery: providerAcceptedDelivery() }
+    })).actionState;
+
+    const missingAmount = controller(quote("booked", {
+      payment: {
+        depositStatus: "paid",
+        depositConfirmedAtISO: "2099-08-03T12:10:00.000Z",
+        stripeSessionId: "cs_test_paid",
+        finalBalance: { status: "unpaid" }
+      },
+      booking: {
+        contractNumber: "C-1",
+        contractConvertedAtISO: "2099-08-03T12:05:00.000Z"
+      },
+      workflow: { quoteDelivery: providerAcceptedDelivery() }
+    })).actionState;
+
+    expect(refunded.state.depositPaid).toBe(false);
+    expect(refunded.state.finalBalanceDue).toBe(false);
+    expect(refunded.actions.request_balance.visible).toBe(false);
+    expect(missingAmount.state.depositPaid).toBe(true);
+    expect(missingAmount.state.finalBalanceDue).toBe(false);
+    expect(missingAmount.evidence.finalBalance.amountCents).toBe(0);
+  });
+
+  test("makes resend the next recovery for sent records missing current delivery evidence", () => {
+    const result = controller(quote("sent", {
+      workflow: { quoteDelivery: {} }
+    })).actionState;
+
+    expect(result.state.providerAccepted).toBe(false);
+    expect(result.actions.open_conversation.visible).toBe(false);
+    expect(result.primaryAction).toMatchObject({
+      id: "send_quote",
+      label: "Send proposal",
+      visible: true,
+      enabled: true
+    });
+  });
+
 });

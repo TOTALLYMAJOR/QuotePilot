@@ -171,7 +171,8 @@ function choosePrimary({
     return firstVisible(actions, ["send_quote", "edit"]);
   }
   if (["sent", "viewed"].includes(status)) {
-    return firstEnabled(actions, ["open_conversation"]);
+    return firstEnabled(actions, ["open_conversation"])
+      || firstVisible(actions, ["send_quote"]);
   }
   if (status === "accepted") {
     const order = acceptedProgressionPolicy === "deposit_first"
@@ -206,28 +207,28 @@ export function compileConfiguredQuoteActions({
     && !portalIsExpired
     && (!firebaseBacked || providerAccepted);
   const depositStatus = normalized(quote?.payment?.depositStatus) || "unpaid";
+  const depositConfirmedAtISO = text(quote?.payment?.depositConfirmedAtISO);
+  const depositSessionId = text(quote?.payment?.stripeSessionId);
+  const depositPaid = depositStatus === "paid"
+    && /^cs_[A-Za-z0-9_]+$/.test(depositSessionId)
+    && Boolean(depositConfirmedAtISO);
   const depositSettled = ["paid", "refunded"].includes(depositStatus)
-    || Boolean(text(quote?.payment?.depositConfirmedAtISO));
+    || Boolean(depositConfirmedAtISO);
   const depositAmountCents = moneyCents(quote?.totals?.deposit);
   const contractPresent = Boolean(text(quote?.booking?.contractNumber))
     && Boolean(text(quote?.booking?.contractConvertedAtISO));
   const finalBalance = quote?.payment?.finalBalance || {};
   const finalBalanceStatus = normalized(finalBalance.status) || "unpaid";
-  const derivedBalanceCents = Math.max(
-    0,
-    moneyCents(quote?.totals?.total) - moneyCents(quote?.totals?.deposit)
-  );
   const storedBalanceCents = Number(finalBalance.amountCents);
-  const finalBalanceCents = Number.isSafeInteger(storedBalanceCents) && storedBalanceCents >= 0
+  const finalBalanceCents = Number.isSafeInteger(storedBalanceCents) && storedBalanceCents > 0
     ? storedBalanceCents
-    : derivedBalanceCents;
+    : 0;
   const finalBalanceDue = status === "booked"
     && contractPresent
-    && depositSettled
+    && depositPaid
     && finalBalanceCents > 0
     && finalBalanceStatus !== "paid";
   const depositCheckoutState = normalized(quote?.payment?.stripeCheckoutState);
-  const depositSessionId = text(quote?.payment?.stripeSessionId);
   const depositNeedsReconciliation = Boolean(depositSessionId)
     && !depositSettled
     && ["processing", "failed", "expired", "unknown"].includes(depositCheckoutState);
@@ -626,6 +627,7 @@ export function compileConfiguredQuoteActions({
       portalExpired: portalIsExpired,
       portalShareable,
       depositSettled,
+      depositPaid,
       contractPresent,
       finalBalanceDue,
       depositNeedsReconciliation,
