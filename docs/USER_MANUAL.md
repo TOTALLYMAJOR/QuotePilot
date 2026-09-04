@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-04 13:30:00 CDT
+Last updated: 2026-09-04 13:41:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.

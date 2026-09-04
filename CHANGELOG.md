@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 13:30:00 CDT
+Last updated: 2026-09-04 13:41:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -26,8 +26,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   fences, and the required post-install pricing review.
 - Split commercial publication validation from the startup route graph. The
   compatibility profile remains below its prior largest-chunk ceiling; its
-  temporary total-JavaScript exception is widened by exactly 19,106 bytes to
-  the measured 3,330,226-byte candidate for the shared commercial kernel.
+  temporary total-JavaScript exception is widened by exactly 19,424 bytes to
+  the measured 3,330,544-byte candidate for the shared commercial kernel.
 - Added one shared commercial-platform core used by the browser and deployable
   Functions graph. Existing Packages now adapt to Configurable Offers with
   optional bounded choice groups; server pricing validates every choice and
