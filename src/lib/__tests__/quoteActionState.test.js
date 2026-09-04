@@ -76,6 +76,7 @@ describe("configured quote action state", () => {
   test("makes tracked proposal delivery the primary action for a saved draft", () => {
     const result = controller(quote("draft")).actionState;
 
+    expect(result.modelId).toBe("configured-quote-action-state-v1");
     expect(result.primaryAction).toMatchObject({
       id: "send_quote",
       label: "Send proposal",
