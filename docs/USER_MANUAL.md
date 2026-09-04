@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-03 22:45:00 CDT
+Last updated: 2026-09-04 12:43:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -60,6 +60,28 @@ make and publish catalog changes.
    available provider-backed action; a provider-accepted receipt, not the button
    click, is delivery evidence.
 7. Return to **Opportunities** to track the next recorded action.
+
+### Commercial Workbench (source candidate)
+
+When Proposal Composer is enabled, use **Quote plan** to move among Event,
+Customer, Experience, Staffing, and Commercials. These are views of one draft,
+not separate records. Experience contains the existing package, service style,
+Menu, rentals, and enhancements editors. **Commercial truth** keeps the current
+total, deposit, blockers, consequences, available margin evidence, scenarios,
+client Preview, and save state together. Switching a domain does not save or
+change pricing; use the explicit save action when the draft is ready. Guided
+mode edits the same draft and uses the same save authority.
+
+### Calendar-first Operations (source candidate)
+
+Open secondary **Operations** to use the existing accepted/booked Event
+Schedule as the default operational lens. Month and Week retain the same event,
+conflict, capacity, staff-lead, checklist, and run-of-show models. On a phone,
+the Calendar becomes an agenda derived from those models. **Open in Calendar**
+keeps the exact Opportunity identity; **Open opportunity** returns to that exact
+record. `/app/schedule` remains a compatibility path to the same Calendar.
+Planning and checklist details are not live attendance, issue, payment,
+inventory, or readiness telemetry.
 
 ### Read state labels literally
 

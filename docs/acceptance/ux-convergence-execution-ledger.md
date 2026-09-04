@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 12:18:00 CDT
+Last updated: 2026-09-04 12:43:00 CDT
 
 ## Authority
 
@@ -49,8 +49,10 @@ separate.
 
 ## Promotion and retirement gates
 
-- Operations surface candidate: PENDING exact-head CI and exact-SHA visual
-  evidence. Calm Four remains unchanged at this checkpoint.
+- Operations surface candidate: exact-SHA local browser and visual evidence is
+  PASS at `850cdabe101c66579392035a7136404d6745427c`; exact-head CI remains
+  FAIL because runs `33901254618` and `33901478188` stopped on successively
+  discovered governance omissions. Calm Four remains unchanged.
 - Fifth-primary promotion: CLOSED until every named critical Operations item
   is PASS at the exact candidate SHA.
 - Navigation retirement: CLOSED. Every current Workflow, Messages, Events,

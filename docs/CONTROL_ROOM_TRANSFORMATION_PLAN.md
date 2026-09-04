@@ -1,5 +1,21 @@
 # Live Briefing + Control Room — Transformation Plan
 
+Last updated: 2026-09-04 12:43:00 CDT
+
+## Calendar-first Operations execution refinement
+
+Draft PR #129 replaces only the `/app/operations` switchboard presentation with
+the existing `EventScheduleView`. Its accepted/booked projection, Month/Week
+models, conflict/capacity logic, staff-lead mutation, production checklist,
+kitchen checkpoints, and run-of-show remain the authority. The 390px agenda is
+derived from those same models; `/app/schedule` remains compatible, and exact
+Now/Opportunity/Calendar handoffs use the existing arrival contract.
+
+This source slice does not implement Control Room live telemetry, a second
+Event entity, staff check-ins, issue records, or actual-stage claims. Operations
+promotion and navigation retirement remain separate later gates; every existing
+entry remains reachable until role-aware parity is proven.
+
 Status: evaluated and phased (Aug 13, 2026); first source/local planning and
 Staff People presentation slice added Aug 14, 2026. Source brief: "QuotePilot
 UI/UX Transformation Prompt — Live Briefing + Control Room System"

@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-03 02:21:52 CDT
+Last updated: 2026-09-04 12:43:00 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -44,6 +44,23 @@ human visual acceptance.
   terms wherever softer language would blur a consequential boundary.
 - Customer-facing surfaces (portal, proposal PDFs, marketing) keep their
   tenant-branded hospitality treatment and are NOT covered by this system.
+
+## UX Convergence surfaces (source candidate)
+
+- **Commercial Workbench:** retain the sheet-on-bone proposal as the living
+  object. Desktop uses Quote Plan / proposal / Commercial Truth; tablet and
+  phone progressively collapse the same regions. Domain summaries stay visible
+  in Quote Plan while only one domain body is expanded. Guided mode, client
+  Preview, and saved-proposal continuations remain part of the same object.
+- **Calendar-first Operations:** the established calendar grid remains at 768
+  and 1440. At 390, use an agenda derived from the identical scheduled-event
+  and conflict models; never shrink the month grid into an unusable miniature.
+  Selected state and conflicts need text, exact event identity stays stable,
+  and planning language must not imply live actuals.
+- **Staged navigation:** Operations remains a secondary utility until its
+  critical exact-head gate passes. Navigation retirement follows only after a
+  separate authenticated role/reachability matrix; unproven paths remain
+  visibly Transitional.
 
 ## Ambient Intelligence extension (source proof, release-profile enabled)
 

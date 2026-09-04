@@ -1,6 +1,27 @@
 # Project Status
 
-Last updated: 2026-09-04 10:46:13 CDT
+Last updated: 2026-09-04 12:43:00 CDT
+
+## UX Convergence Draft Candidate
+
+- Draft PR #129 contains the frozen AC-001–AC-238 contract, its execution
+  ledger, the Commercial Workbench, and Calendar-first Operations. The work was
+  created in an isolated sibling worktree from remote `main`; the integration
+  checkout and its unrelated work remain untouched.
+- The pre-promotion source keeps Now, Opportunities, Clients, and Library as
+  the four persistent destinations. Operations remains secondary until its
+  exact-head critical gate passes. No Workflow, Messages, Events, Schedule,
+  Staff, Reporting, Integrations, Import, Diagnostics, Clear the Deck, or
+  Library entry has been retired or demoted.
+- Focused local evidence passes for the Workbench model and Proposal Composer
+  browser regression, the existing schedule/arrival models, exact handoffs,
+  the `/app/schedule` compatibility route, responsive Calendar presentations
+  at 390/768/1440, serious/critical axe checks, and the production build.
+  Exact-head PR CI is still a promotion prerequisite; the first two candidate
+  runs correctly stopped on governance omissions and do not qualify promotion.
+- No merge, deployment, provider activation, production behavior, authenticated
+  hosted role matrix, assistive-technology acceptance, or human acceptance is
+  claimed by this source candidate.
 
 ## Current Production Release
 

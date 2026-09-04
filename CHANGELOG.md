@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 10:46:13 CDT
+Last updated: 2026-09-04 12:43:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added the frozen QuotePilot UX Convergence Contract repository copy and an
+  AC-001–AC-238 execution-evidence ledger. The ledger records verdicts and
+  implementation classifications without changing any frozen claim.
+- Evolved the existing Proposal Composer into a presentation-only Commercial
+  Workbench with Event, Customer, Experience, Staffing, and Commercials
+  domains and a reordered Commercial Truth rail. The same App-owned form,
+  calculation, Menu/staffing editors, Guided mode, explicit save/version path,
+  and client-safe Preview remain authoritative. Replaced the `/app/operations`
+  switchboard presentation with the existing Calendar capability, added a
+  same-model mobile agenda, retained `/app/schedule`, and added exact
+  Now/Living Opportunity/Calendar handoffs. No Firebase, pricing, persistence,
+  lifecycle, staffing, catalog, provider, or live-telemetry authority changed.
+  Operations remains secondary and every existing navigation entry remains
+  reachable until the separate exact-head promotion and role-parity retirement
+  gates pass. Local and CI evidence do not claim deployment, hosted behavior,
+  production readiness, or human acceptance.
 - Released annotated tag `v0.16.6` at exact commit
   `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
   `33889897821` passed every required job. Governed Vercel production run
