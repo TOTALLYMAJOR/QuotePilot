@@ -190,7 +190,7 @@ function QuietProgress({ receipts = [] }) {
   );
 }
 
-function UpcomingEventRow({ quote }) {
+function UpcomingEventRow({ quote, onOpenCalendar }) {
   const date = eventDateParts(quote?.event?.date);
   const detail = [
     String(quote?.event?.time || "").trim(),
@@ -214,11 +214,21 @@ function UpcomingEventRow({ quote }) {
         <span>{guestCopy}</span>
         <span>{formatWorkspaceText(quote?.customer?.name || quote?.customer?.email, { emptyLabel: "Client not set" })}</span>
       </div>
+      {typeof onOpenCalendar === "function" ? (
+        <button
+          type="button"
+          className="ambient-now-horizon__calendar"
+          onClick={() => onOpenCalendar(String(quote?.id || ""))}
+          data-exact-event-id={String(quote?.id || "")}
+        >
+          Open in Calendar
+        </button>
+      ) : null}
     </li>
   );
 }
 
-function Horizon({ upcomingEvents, moneyRows }) {
+function Horizon({ upcomingEvents, moneyRows, onOpenCalendar }) {
   if (!upcomingEvents.length && !moneyRows.length) return null;
   return (
     <section className="ambient-now-horizon" aria-labelledby="ambient-now-horizon-title">
@@ -230,7 +240,7 @@ function Horizon({ upcomingEvents, moneyRows }) {
       {upcomingEvents.length > 0 && (
         <ul className="ambient-now-horizon__events" aria-label="Upcoming events">
           {upcomingEvents.slice(0, 3).map((quote) => (
-            <UpcomingEventRow key={quote.id} quote={quote} />
+            <UpcomingEventRow key={quote.id} quote={quote} onOpenCalendar={onOpenCalendar} />
           ))}
         </ul>
       )}
@@ -279,6 +289,7 @@ export default function AmbientNowView({
   tenantTimeZone = "UTC",
   onRefresh,
   onOpenWorkflow,
+  onOpenCalendar,
   onNewQuote,
   nowDate = null
 }) {
@@ -564,7 +575,13 @@ export default function AmbientNowView({
         </section>
       </div>}
 
-      {!unavailable && <Horizon upcomingEvents={upcomingEvents} moneyRows={moneyRows} />}
+      {!unavailable && (
+        <Horizon
+          upcomingEvents={upcomingEvents}
+          moneyRows={moneyRows}
+          onOpenCalendar={onOpenCalendar}
+        />
+      )}
       {!unavailable && <QuietProgress receipts={briefing.quietProgress.items} />}
 
       {!unavailable && <div className="ambient-now__about-row">

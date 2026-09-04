@@ -74,3 +74,83 @@
     opacity: 0;
   }
 }
+
+.schedule-mobile-agenda {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  .schedule-desktop-calendar {
+    display: none;
+  }
+
+  .schedule-mobile-agenda {
+    display: grid;
+    gap: 0;
+  }
+
+  .schedule-agenda-group {
+    border-top: 1px solid var(--tone-border, #e4e4e0);
+    padding: 0.35rem 0;
+  }
+
+  .schedule-agenda-group:last-child {
+    border-bottom: 1px solid var(--tone-border, #e4e4e0);
+  }
+
+  .schedule-agenda-day,
+  .schedule-agenda-group li > button {
+    width: 100%;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+  }
+
+  .schedule-agenda-day {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.4rem;
+  }
+
+  .schedule-agenda-day[aria-current="date"] {
+    border-left: 3px solid var(--tone-gold-3, #8d611a);
+    background: color-mix(in srgb, var(--tone-gold-3, #8d611a) 8%, transparent);
+  }
+
+  .schedule-agenda-day span,
+  .schedule-agenda-group small {
+    color: var(--tone-ink-3, #5f6268);
+    font-size: 0.78rem;
+  }
+
+  .schedule-agenda-group ul {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0.4rem;
+  }
+
+  .schedule-agenda-group li > button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .schedule-agenda-group li > button span {
+    min-width: 0;
+    display: grid;
+    gap: 0.12rem;
+  }
+
+  .schedule-agenda-group li > button em {
+    color: var(--tone-danger, #9c4033);
+    font-size: 0.72rem;
+    font-style: normal;
+    text-align: right;
+  }
+}

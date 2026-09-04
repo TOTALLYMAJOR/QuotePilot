@@ -207,6 +207,23 @@ afterEach(() => {
 });
 
 describe("AmbientLivingOpportunity", () => {
+  test("hands an accepted opportunity to the exact Calendar event without mutating it", () => {
+    const onOpenCalendar = vi.fn();
+    mount({
+      quote: { ...QUOTE, status: "booked" },
+      onOpenCalendar
+    });
+
+    const calendarAction = button("Open Calendar");
+    expect(calendarAction).toBeTruthy();
+    expect(calendarAction.dataset.exactEventId).toBe("quote-alpha");
+    act(() => calendarAction.click());
+
+    expect(onOpenCalendar).toHaveBeenCalledWith("quote-alpha", {
+      actionId: "open-opportunity-calendar:quote-alpha"
+    });
+  });
+
   test("resolves only an exact canonical Living Opportunity arrival after focusing its object", async () => {
     const onArrivalResolution = vi.fn();
     mount({

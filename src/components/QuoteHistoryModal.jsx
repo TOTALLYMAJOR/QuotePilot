@@ -2770,6 +2770,7 @@ export function QuoteHistoryView({
                   : undefined}
                 onQuickUpdatesGuardChange={onQuickUpdatesGuardChange}
                 onOpenWorkflow={onOpenWorkflow}
+                onOpenCalendar={() => onOpenSchedule?.(focusedQuote.id)}
                 onOpenLegacyWorkspace={(context = {}) => (
                   typeof onOpenQuoteAdministration === "function"
                     ? onOpenQuoteAdministration(focusedQuote.id, context)

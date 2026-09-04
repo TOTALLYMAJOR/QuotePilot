@@ -382,15 +382,21 @@ export function EventScheduleView({
   open,
   onClose,
   presentation = "embedded",
+  surfaceTitle = "Event Schedule",
+  surfaceEyebrow = "",
   organizationId = "",
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
   arrivalContext = null,
   onArrivalResolution = null,
+  onOpenOpportunity = null,
+  onOpenPeople = null,
+  onOpenReporting = null,
   returnFocusRef = null
 }) {
   const embedded = presentation === "embedded";
+  const operationsMode = String(surfaceTitle || "").trim().toLowerCase() === "operations";
   const todayIso = toIsoDate(new Date());
   const routeHeadingRef = useRef(null);
   const loadGenerationRef = useRef(0);
@@ -802,6 +808,26 @@ export function EventScheduleView({
     });
   }, [anchorDate, eventsByDate, reasonsById, dayConflicts]);
 
+  const mobileAgendaDays = useMemo(() => {
+    const sourceDays = viewMode === "week"
+      ? weekDays
+      : monthCells.filter((cell) => cell.inMonth);
+    return sourceDays.map((day) => {
+      const events = (day.events || eventsByDate.get(day.iso) || []).map((event) => ({
+        ...event,
+        conflictReasons: Array.isArray(event.conflictReasons)
+          ? event.conflictReasons
+          : Array.from(reasonsById.get(event.id) || [])
+      }));
+      return {
+        iso: day.iso,
+        date: day.date,
+        events,
+        conflicts: day.conflicts || dayConflicts.get(day.iso) || EMPTY_DAY_CONFLICT
+      };
+    }).filter((day) => day.events.length > 0 || day.iso === selectedIso);
+  }, [dayConflicts, eventsByDate, monthCells, reasonsById, selectedIso, viewMode, weekDays]);
+
   const shift = (amount) => {
     const next = viewMode === "month" ? addMonths(anchorDate, amount) : addDays(anchorDate, amount * 7);
     setAnchorIso(toIsoDate(next));
@@ -1107,6 +1133,8 @@ export function EventScheduleView({
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="event-schedule-title"
+      data-operations-mode={operationsMode ? "calendar-first" : undefined}
+      data-testid={operationsMode ? "operations-calendar" : undefined}
     >
       <div
         ref={dialogRef}
@@ -1114,14 +1142,23 @@ export function EventScheduleView({
         tabIndex={-1}
       >
         <div className="modal-head">
-          <h2
-            id="event-schedule-title"
-            ref={routeHeadingRef}
-            tabIndex={embedded ? -1 : undefined}
-          >
-            Event Schedule
-          </h2>
+          <div>
+            {surfaceEyebrow ? <p className="eyebrow">{surfaceEyebrow}</p> : null}
+            <h2
+              id="event-schedule-title"
+              ref={routeHeadingRef}
+              tabIndex={embedded ? -1 : undefined}
+            >
+              {surfaceTitle}
+            </h2>
+          </div>
           <div className="right-actions">
+            {typeof onOpenPeople === "function" ? (
+              <button type="button" className="ghost" onClick={onOpenPeople}>People</button>
+            ) : null}
+            {typeof onOpenReporting === "function" ? (
+              <button type="button" className="ghost" onClick={onOpenReporting}>Reporting</button>
+            ) : null}
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
             </button>
@@ -1173,6 +1210,39 @@ export function EventScheduleView({
 
         <div className="schedule-layout">
           <section className="schedule-grid-panel">
+            <section className="schedule-mobile-agenda" aria-label={`${viewMode} agenda`} data-testid="operations-mobile-agenda">
+              {mobileAgendaDays.length === 0 ? (
+                <p className="muted">No accepted or booked events in this {viewMode}.</p>
+              ) : mobileAgendaDays.map((day) => (
+                <article key={day.iso} className="schedule-agenda-group" data-agenda-date={day.iso}>
+                  <button
+                    type="button"
+                    className="schedule-agenda-day"
+                    aria-current={day.iso === selectedIso ? "date" : undefined}
+                    onClick={() => setSelectedIso(day.iso)}
+                  >
+                    <strong>{formatScheduleDayLabel(day.iso)}</strong>
+                    <span>{day.events.length} event{day.events.length === 1 ? "" : "s"}</span>
+                  </button>
+                  {day.events.length ? (
+                    <ul>
+                      {day.events.map((item) => (
+                        <li key={item.id} data-exact-event-id={item.id}>
+                          <button type="button" onClick={() => setSelectedIso(day.iso)}>
+                            <span>
+                              <strong>{item.time || "Time not set"}</strong>
+                              <small>{formatWorkspaceText(item.eventName || item.quoteNumber, { emptyLabel: "Untitled event" })}</small>
+                            </span>
+                            {item.conflictReasons.length ? <em>{item.conflictReasons.map(reasonLabel).join(" · ")}</em> : null}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ))}
+            </section>
+            <div className="schedule-desktop-calendar">
             {viewMode === "month" ? (
               <>
                 <div className="schedule-weekday-row">
@@ -1263,6 +1333,7 @@ export function EventScheduleView({
                 })}
               </div>
             )}
+            </div>
           </section>
 
           <aside className="schedule-day-panel">
@@ -1295,6 +1366,7 @@ export function EventScheduleView({
                         key={item.id}
                         id={scheduleEventDetailId(item.id)}
                         data-schedule-event-id={item.id}
+                        data-exact-event-id={item.id}
                         tabIndex={-1}
                         className={[
                           "schedule-event-card",
@@ -1307,6 +1379,16 @@ export function EventScheduleView({
                       >
                         <header>
                           <strong>{formatWorkspaceText(item.quoteNumber, { emptyLabel: "Quote number pending" })}</strong>
+                          {typeof onOpenOpportunity === "function" ? (
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={() => onOpenOpportunity(item.id)}
+                              data-exact-event-id={item.id}
+                            >
+                              Open opportunity
+                            </button>
+                          ) : null}
                         </header>
                         <div className="right-actions" aria-label="Quote and booking confirmation status">
                           <StatusChip family={quoteStatus.family} label={`Quote: ${quoteStatus.label}`} />

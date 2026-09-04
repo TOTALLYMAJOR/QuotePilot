@@ -306,12 +306,30 @@
 
 .ambient-now-horizon__event {
   display: grid;
-  grid-template-columns: 7rem minmax(14rem, 1.25fr) minmax(12rem, 0.75fr);
+  grid-template-columns: 7rem minmax(14rem, 1.25fr) minmax(12rem, 0.75fr) auto;
   gap: clamp(1rem, 2.6vw, 2rem);
   align-items: center;
   min-height: 4.75rem;
   padding: 0.65rem 0;
   border-bottom: 1px solid var(--ambient-now-hairline);
+}
+
+.ambient-now-horizon__calendar {
+  min-height: 44px;
+  border: 1px solid var(--ambient-now-hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tone-ink-1);
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ambient-now-horizon__calendar:hover {
+  border-color: var(--tone-gold-3);
 }
 
 .ambient-now-horizon__date {
@@ -477,7 +495,7 @@
   }
 
   .ambient-now-horizon__event {
-    grid-template-columns: 6rem minmax(0, 1fr) minmax(10rem, 0.6fr);
+    grid-template-columns: 6rem minmax(0, 1fr) minmax(10rem, 0.6fr) auto;
   }
 }
 
@@ -579,6 +597,11 @@
     grid-template-columns: 1fr;
     gap: 0.1rem;
     text-align: left;
+  }
+
+  .ambient-now-horizon__calendar {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .ambient-now-horizon__payments,
