@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 14:01:45 CDT
+Last updated: 2026-09-04 14:05:11 CDT
 
 ## Authority
 
@@ -78,7 +78,7 @@ separate.
 | AC-011 | AC-011 — Domain switching is non-mutating | PASS | `openDomain` changes presentation focus/editor visibility only; focused model tests and source inspection pass. |
 | AC-012 | AC-012 — Unsaved Event edits survive context switching | PASS | Focused Workbench browser coverage edits Event name, crosses Customer/Experience, and reads the same unsaved value on return. |
 | AC-013 | AC-013 — Menu state survives context switching | PASS | Focused Workbench browser coverage selects a Menu item, crosses domains, and verifies the same selected item and checked state on return. |
-| AC-014 | AC-014 — Scenario inspection does not silently mutate quote | PENDING | No evidence recorded at contract checkpoint. |
+| AC-014 | AC-014 — Scenario inspection does not silently mutate quote | PASS | Focused browser coverage edits an isolated scenario, closes it, and verifies the shared draft is unchanged until Use Custom Scenario is explicitly invoked. |
 | AC-015 | AC-015 — Guided ↔ Workbench preserves all supported unsaved state | PASS | `e2e/ux-convergence-workbench.spec.js` exercises Workbench → Guided → Workbench with the same unsaved value. |
 | AC-016 | AC-016 — Existing quote identity/version semantics preserved | PASS | Updated Proposal Composer regression reopens a saved quote through the existing collection and verifies change-impact editing. |
 | AC-017 | AC-017 — Desktop clearly communicates Quote Plan / Living Object / Commercial Truth | PASS | 1440px real-route test asserts all three stable regions; exact labels and markers are in `ProposalComposer`. |
@@ -95,7 +95,7 @@ separate.
 | AC-028 | AC-028 — Existing validation retained | PASS | Focused browser coverage proves the existing inline email validator rejects an invalid address without committing it. |
 | AC-029 | AC-029 — Price-affecting Event changes update through existing pricing path | PASS | Focused browser coverage changes Guests, observes the canonical Pulse total move, and verifies Undo restores the exact prior total. |
 | AC-030 | AC-030 — Customer fields round-trip unchanged | PASS | Workbench-to-Guided browser coverage carries the same unsaved Client name through both presentation modes and back. |
-| AC-031 | AC-031 — Missing/invalid email remains exact blocker | PENDING | No evidence recorded at contract checkpoint. |
+| AC-031 | AC-031 — Missing/invalid email remains exact blocker | PASS | Save-readiness units preserve `client-email` and `client-email-format`; browser coverage verifies email remains an exact visible blocker. |
 | AC-032 | AC-032 — Missing identity is not fabricated | PENDING | No evidence recorded at contract checkpoint. |
 | AC-033 | AC-033 — Package, Service style, Menu, Rentals and Enhancements are organized under Experience | PASS | Real-route Experience test asserts all five existing capability triggers in the active domain. |
 | AC-034 | AC-034 — Package semantics unchanged | PASS | Existing Package IDs, selection callback, catalog price ownership, and what-if preview remain in the shared form; focused model/browser tests cover selection and repricing. |
@@ -118,11 +118,11 @@ separate.
 | AC-051 | AC-051 — Margin remains properly gated | PENDING | No evidence recorded at contract checkpoint. |
 | AC-052 | AC-052 — Healthy margin evidence compresses | PENDING | No evidence recorded at contract checkpoint. |
 | AC-053 | AC-053 — Margin uncertainty expands | PENDING | No evidence recorded at contract checkpoint. |
-| AC-054 | AC-054 — Blocker count exact | PENDING | No evidence recorded at contract checkpoint. |
-| AC-055 | AC-055 — Exact blocker reasons retained | PENDING | No evidence recorded at contract checkpoint. |
-| AC-056 | AC-056 — Review blockers never saves/mutates by itself | PENDING | No evidence recorded at contract checkpoint. |
-| AC-057 | AC-057 — Blocked save cannot be bypassed by alternative workbench control | PENDING | No evidence recorded at contract checkpoint. |
-| AC-058 | AC-058 — Special existing blockers remain enforceable | PENDING | No evidence recorded at contract checkpoint. |
+| AC-054 | AC-054 — Blocker count exact | PASS | Browser coverage derives the count from Review N blockers and verifies exactly N rendered blocker records. |
+| AC-055 | AC-055 — Exact blocker reasons retained | PASS | Readiness renders the unchanged blocker messages; focused units assert the complete blocker ID order and governed authorization reason. |
+| AC-056 | AC-056 — Review blockers never saves/mutates by itself | PASS | Clicking blocker review only opens/focuses readiness; the same unsaved draft and dirty state remain. |
+| AC-057 | AC-057 — Blocked save cannot be bypassed by alternative workbench control | PASS | Header and Truth-rail save controls expose the identical blocker action and neither produces an editing/saved identity. |
+| AC-058 | AC-058 — Special existing blockers remain enforceable | PASS | Focused units prove quote-read, Pilot-review, intent-review, impact-review, and impact-authorization blockers remain in the common save gate. |
 | AC-059 | AC-059 — Guest changes preserve before/after consequence view | PENDING | No evidence recorded at contract checkpoint. |
 | AC-060 | AC-060 — Automatic pricing versus recommendations versus unchanged state clearly distinguished | PENDING | No evidence recorded at contract checkpoint. |
 | AC-061 | AC-061 — Existing explicit Apply / Keep / Undo outcomes retained where currently supported | PENDING | No evidence recorded at contract checkpoint. |
@@ -130,8 +130,8 @@ separate.
 | AC-063 | AC-063 — AI changes inspectable before governed commit | PENDING | No evidence recorded at contract checkpoint. |
 | AC-064 | AC-064 — AI cannot bypass ordinary blockers/authority | PENDING | No evidence recorded at contract checkpoint. |
 | AC-065 | AC-065 — Idle Pilot footprint is restrained | PENDING | No evidence recorded at contract checkpoint. |
-| AC-066 | AC-066 — Existing Compare Scenarios remains available | PENDING | No evidence recorded at contract checkpoint. |
-| AC-067 | AC-067 — Scenario detail is contextual rather than permanently expanded | PENDING | No evidence recorded at contract checkpoint. |
+| AC-066 | AC-066 — Existing Compare Scenarios remains available | PASS | Focused browser coverage opens the existing Scenario Compare surface from Workbench. |
+| AC-067 | AC-067 — Scenario detail is contextual rather than permanently expanded | PASS | Scenario configuration exists only in the invoked modal and closes back to the same draft. |
 | AC-068 | AC-068 — Internal-only evidence excluded | PASS | Workbench browser test opens client Preview and asserts no margin, blocker, or staff-only copy. |
 | AC-069 | AC-069 — Unsaved preview remains honestly labelled | PASS | Focused browser coverage verifies the client surface says Draft preview and explains that the final proposal follows save/send. |
 | AC-070 | AC-070 — Preview focus management preserved | PASS | Preview focuses Close on entry, closes with Escape, and restores focus to the invoking Preview control. |
@@ -139,15 +139,15 @@ separate.
 | AC-072 | AC-072 — Guided behavior retained | PASS | Legacy Proposal Composer regression enters the existing wizard and returns. |
 | AC-073 | AC-073 — Supported flag-off/rollback path remains coherent if still required | PASS | Default Playwright lane remains flag-off and the full 4,472-test unit suite is green. |
 | AC-074 | AC-074 — No dual canonical editor | PASS | Workbench is implemented inside `ProposalComposer`; Guided remains an alternate mode over the same form. |
-| AC-075 | AC-075 — Save state labels truthful | PENDING | No evidence recorded at contract checkpoint. |
-| AC-076 | AC-076 — No accidental continuous autosave introduced | PENDING | No evidence recorded at contract checkpoint. |
-| AC-077 | AC-077 — Firebase authoritative pricing remains intact | PENDING | No evidence recorded at contract checkpoint. |
-| AC-078 | AC-078 — Version behavior remains intact | PENDING | No evidence recorded at contract checkpoint. |
+| AC-075 | AC-075 — Save state labels truthful | PASS | A changed draft stays labelled Unsaved changes and `data-state=dirty`; existing successful-save coverage is tied to the real save return. |
+| AC-076 | AC-076 — No accidental continuous autosave introduced | PASS | Field and scenario edits remain dirty and do not create a saved/editing identity without the explicit shared save action. Local recovery remains labelled recovery, not server save. |
+| AC-077 | AC-077 — Firebase authoritative pricing remains intact | PASS | No pricing authority moved into Workbench; the unchanged Firebase authoritative-pricing and trusted-write suites passed in the last exact runtime qualification. |
+| AC-078 | AC-078 — Version behavior remains intact | PASS | Existing quote edit/version suites passed unchanged; Workbench continues to invoke the single App save/version callback. |
 | AC-079 | AC-079 — UI presents saved success only from real successful save state | PENDING | No evidence recorded at contract checkpoint. |
 | AC-080 | AC-080 — Failed save preserves unsaved work where current architecture permits | PENDING | No evidence recorded at contract checkpoint. |
 | AC-081 | AC-081 — Advanced pricing collapsed by default | PASS | Focused browser coverage verifies the native details region is closed on arrival. |
 | AC-082 | AC-082 — Existing advanced pricing capabilities retained | PASS | Opening Advanced pricing exposes the retained Event template, Tax region, Season profile, travel, payment, and disposables controls. |
-| AC-083 | AC-083 — Unsupported arbitrary per-quote price override remains absent | PENDING | No evidence recorded at contract checkpoint. |
+| AC-083 | AC-083 — Unsupported arbitrary per-quote price override remains absent | PASS | Workbench retains only supported staffing-rate overrides and governed pricing context; no arbitrary line, subtotal, or total override control or authority exists. |
 | AC-084 | AC-084 — Activity remains inspectable | PASS | Updated browser regression opens the activity toggle and verifies session changes. |
 | AC-085 | AC-085 — Activity secondary while healthy | PASS | Activity now starts collapsed and remains available through its existing toggle. |
 | AC-086 | AC-086 — Actionable recovery evidence may promote through Attention | PENDING | No evidence recorded at contract checkpoint. |
@@ -162,7 +162,7 @@ separate.
 | AC-095 | AC-095 — Heading hierarchy valid | PENDING | No evidence recorded at contract checkpoint. |
 | AC-096 | AC-096 — Selected/current/attention state not color-only | PENDING | No evidence recorded at contract checkpoint. |
 | AC-097 | AC-097 — Visible keyboard focus | PENDING | No evidence recorded at contract checkpoint. |
-| AC-098 | AC-098 — Focus returns after closing Menu/Preview/Scenario/context | PENDING | Menu and Preview focus return now pass; Scenario/context focus return still requires focused evidence. |
+| AC-098 | AC-098 — Focus returns after closing Menu/Preview/Scenario/context | PASS | Focused browser coverage verifies return to the invoking Menu, Preview, and Scenario controls; domain context moves focus to its named panel. |
 | AC-099 | AC-099 — Field errors remain associated with controls | PENDING | No evidence recorded at contract checkpoint. |
 | AC-100 | AC-100 — Reduced-motion respected | PENDING | No evidence recorded at contract checkpoint. |
 | AC-101 | AC-101 — Zero new serious/critical axe violations | PASS | Workbench Playwright axe checks pass at 390, 768, and 1440. |

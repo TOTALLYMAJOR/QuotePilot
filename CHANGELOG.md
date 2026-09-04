@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:02:31 CDT
+Last updated: 2026-09-04 14:05:11 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Certified the existing Compare Scenarios and common save-readiness paths
+  without widening runtime authority: scenario inspection remains isolated
+  until explicit application, focus returns to its invoker, both Workbench save
+  controls expose the same exact blockers, and quote-read, Pilot, intent,
+  impact-review, and authorization blockers remain fail-closed. This is a
+  focused local test/evidence slice only.
 - Continued the full 238-criterion UX convergence program as local-commit-only
   work. Focused Workbench browser coverage now certifies unsaved Event/Menu
   continuity across domains, canonical guest repricing and undo, retained

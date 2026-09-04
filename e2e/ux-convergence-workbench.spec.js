@@ -165,6 +165,53 @@ test("labels unsaved Preview honestly, restores focus, and keeps advanced pricin
   await expect(previewTrigger).toBeFocused();
 });
 
+test("keeps scenario inspection isolated until the operator explicitly applies it", async ({ page }) => {
+  const compareTrigger = page.locator(".pc-header-actions")
+    .getByRole("button", { name: "Compare scenarios", exact: true });
+  const guests = page.getByRole("button", { name: "Change Guests", exact: true });
+  const originalGuests = await guests.textContent();
+
+  await compareTrigger.click();
+  const dialog = page.getByRole("dialog", { name: "Scenario Compare", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await dialog.getByLabel("Guests", { exact: true }).fill("125");
+  await expect(guests).toHaveText(String(originalGuests || ""));
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(compareTrigger).toBeFocused();
+  await expect(guests).toHaveText(String(originalGuests || ""));
+
+  await compareTrigger.click();
+  await dialog.getByLabel("Guests", { exact: true }).fill("75");
+  await dialog.getByRole("button", { name: "Use Custom Scenario", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(guests).toContainText("75");
+});
+
+test("keeps exact blockers on both save controls without creating a saved-success claim", async ({ page }) => {
+  await commitInline(page, "Event name", "Blocked Draft Continuity");
+  const pulseSave = page.getByTestId("pc-save");
+  const headerSave = page.getByTestId("pc-save-header");
+  const label = String(await pulseSave.textContent());
+  const expectedCount = Number(label.match(/Review (\d+) blocker/)?.[1] || 0);
+  expect(expectedCount).toBeGreaterThan(0);
+  await expect(headerSave).toHaveText(label);
+
+  await pulseSave.click();
+  const readiness = page.getByTestId("pc-save-readiness");
+  await expect(readiness).toBeFocused();
+  await expect(readiness.getByTestId("pc-save-blocker")).toHaveCount(expectedCount);
+  await expect(readiness).toContainText(/email/i);
+  await expect(page.locator(".pc-save-state")).toHaveText("Unsaved changes");
+
+  await headerSave.click();
+  await expect(readiness.getByTestId("pc-save-blocker")).toHaveCount(expectedCount);
+  await expect(page.getByRole("heading", { name: "Blocked Draft Continuity", exact: true })).toBeVisible();
+  await expect(page.getByText(/Editing quote/i)).toHaveCount(0);
+  await expect(page.locator(".pc-save-state")).toHaveAttribute("data-state", "dirty");
+});
+
 for (const viewport of [
   { width: 390, height: 844 },
   { width: 768, height: 900 },

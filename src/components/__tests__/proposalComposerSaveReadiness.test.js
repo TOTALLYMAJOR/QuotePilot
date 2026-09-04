@@ -48,6 +48,33 @@ describe("Proposal Composer save readiness", () => {
     }).map((blocker) => blocker.id)).toEqual(["change-impact-review"]);
   });
 
+  test("keeps every governed review as an explicit save blocker", () => {
+    const common = {
+      form: COMPLETE_FORM,
+      totals: { guests: 120 },
+      selectedMenuItemCount: 1
+    };
+    expect(buildDraftSaveBlockers({
+      ...common,
+      quoteEditUnavailable: true,
+      pilotScenarioReviewPending: true,
+      draftIntentReviewPending: true,
+      changeImpactReviewRequired: true
+    }).map((blocker) => blocker.id)).toEqual([
+      "quote-edit-loading",
+      "pilot-scenario-review",
+      "draft-intent-review",
+      "change-impact-review"
+    ]);
+    expect(buildDraftSaveBlockers({
+      ...common,
+      changeImpactAuthorizationRequired: true
+    })).toEqual([{
+      id: "change-impact-authorization",
+      message: "Authorize and apply governed dependencies from Change Impact."
+    }]);
+  });
+
   test("turns a blocked save into an exact blocker-review action", () => {
     expect(buildSaveActionModel({
       saveBlockers: [
