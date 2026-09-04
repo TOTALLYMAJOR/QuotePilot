@@ -37,6 +37,7 @@ describe("ConfiguredQuoteActionRail", () => {
       </ConfiguredQuoteActionRail>
     );
 
+    expect(markup).toContain('data-configured-quote-actions="v1"');
     expect(markup).toContain('data-primary-action="send_quote"');
     expect(markup).toContain('aria-label="Recommended next action"');
     expect(markup).toContain('aria-label="Quote action evidence"');
