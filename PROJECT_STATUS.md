@@ -1,13 +1,14 @@
 # Project Status
 
-Last updated: 2026-09-04 12:43:00 CDT
+Last updated: 2026-09-04 12:55:44 CDT
 
 ## UX Convergence Draft Candidate
 
-- Draft PR #129 contains the frozen AC-001–AC-238 contract, its execution
-  ledger, the Commercial Workbench, and Calendar-first Operations. The work was
-  created in an isolated sibling worktree from remote `main`; the integration
-  checkout and its unrelated work remain untouched.
+- Draft PR #129 at exact remote head
+  `30b6fcd48aa881d83150149eeb942e2d07dd89f8` contains the frozen AC-001–AC-238
+  contract, its execution ledger, the Commercial Workbench, and Calendar-first
+  Operations. The work was created in an isolated sibling worktree from remote
+  `main`; the integration checkout and its unrelated work remain untouched.
 - The pre-promotion source keeps Now, Opportunities, Clients, and Library as
   the four persistent destinations. Operations remains secondary until its
   exact-head critical gate passes. No Workflow, Messages, Events, Schedule,
@@ -17,8 +18,17 @@ Last updated: 2026-09-04 12:43:00 CDT
   browser regression, the existing schedule/arrival models, exact handoffs,
   the `/app/schedule` compatibility route, responsive Calendar presentations
   at 390/768/1440, serious/critical axe checks, and the production build.
-  Exact-head PR CI is still a promotion prerequisite; the first two candidate
-  runs correctly stopped on governance omissions and do not qualify promotion.
+  Exact-head run `33902068474` passed the full unit suite, production build,
+  capability gate, and documentation governance, then failed the compatibility
+  bundle ceiling by 1,120 bytes. Local-only commit
+  `2b2b54b44324fcdc5e07a3cec502b6a6f78ec8a3` pins that exact measurement and
+  passes the complete local `lane:release:cwv` gate, including 4,472 unit tests,
+  production build, governance, bundle, Truth Loop, and Lighthouse CWV, but is
+  intentionally unpushed and therefore has no exact-head CI evidence.
+  Operations is not eligible for promotion.
+- Per owner instruction, subsequent qualification work is local-commit only:
+  no further branch push or PR update is authorized. Role-aware hosted parity
+  also remains unproven, so no navigation retirement is eligible.
 - No merge, deployment, provider activation, production behavior, authenticated
   hosted role matrix, assistive-technology acceptance, or human acceptance is
   claimed by this source candidate.

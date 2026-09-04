@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 12:50:00 CDT
+Last updated: 2026-09-04 12:55:44 CDT
 
 All notable project changes are documented in this file.
 
@@ -29,6 +29,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   3,311,120 total JavaScript bytes (largest chunk 393,416 bytes), a 1,120-byte
   increase for the new presentation and handoff surfaces with no percentage
   headroom; the existing removal plan and expiry remain unchanged.
+  The correction is local-only by owner instruction. The draft PR remains at
+  pre-correction SHA `30b6fcd48aa881d83150149eeb942e2d07dd89f8`, whose
+  exact-head run `33902068474` failed that prior ceiling; consequently
+  Operations remains secondary and no navigation retirement is authorized.
+  The complete local `lane:release:cwv` passes against the corrected ceiling,
+  but local success does not substitute for the contract's exact-head CI gate.
 - Released annotated tag `v0.16.6` at exact commit
   `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
   `33889897821` passed every required job. Governed Vercel production run
