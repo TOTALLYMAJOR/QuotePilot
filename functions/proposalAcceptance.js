@@ -40,6 +40,20 @@ function moneyToMinor(value, fieldName) {
   return minor;
 }
 
+function exactMinorOrMoney(source, minorKey, majorKey, fieldName, code = "failed-precondition") {
+  if (Object.prototype.hasOwnProperty.call(source || {}, minorKey) && source?.[minorKey] !== undefined) {
+    const value = Number(source[minorKey]);
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new ProposalAcceptanceError(code, `The proposal ${fieldName} exact amount is invalid.`);
+    }
+    if (moneyToMinor(source?.[majorKey] || 0, fieldName) !== value) {
+      throw new ProposalAcceptanceError(code, `The proposal ${fieldName} amounts are inconsistent.`);
+    }
+    return value;
+  }
+  return moneyToMinor(source?.[majorKey] || 0, fieldName);
+}
+
 function normalizeStringList(value, maxItems = 200) {
   return (Array.isArray(value) ? value : [])
     .slice(0, maxItems)
@@ -141,8 +155,8 @@ function buildSignedProposalSnapshot({ quoteId, quote, portal, revisionId, porta
       travel: moneyToMinor(totals.travel || 0, "travel amount"),
       serviceFee: moneyToMinor(totals.serviceFee || 0, "service fee"),
       tax: moneyToMinor(totals.tax || 0, "tax amount"),
-      total: moneyToMinor(totals.total, "total"),
-      deposit: moneyToMinor(totals.deposit || 0, "deposit")
+      total: exactMinorOrMoney(totals, "totalCents", "total", "total"),
+      deposit: exactMinorOrMoney(totals, "depositCents", "deposit", "deposit")
     }
   };
 }
@@ -187,8 +201,20 @@ function buildPortalProposalSnapshot({ quoteId, portal, revisionId, portalIssued
       travel: moneyToMinor(totals.travel || 0, "travel amount"),
       serviceFee: moneyToMinor(totals.serviceFee || 0, "service fee"),
       tax: moneyToMinor(totals.tax || 0, "tax amount"),
-      total: moneyToMinor(portal?.total, "total"),
-      deposit: moneyToMinor(portal?.deposit || 0, "deposit")
+      total: exactMinorOrMoney(
+        { ...totals, total: portal?.total, totalCents: portal?.totalCents ?? totals.totalCents },
+        "totalCents",
+        "total",
+        "total",
+        "aborted"
+      ),
+      deposit: exactMinorOrMoney(
+        { ...totals, deposit: portal?.deposit, depositCents: portal?.depositCents ?? totals.depositCents },
+        "depositCents",
+        "deposit",
+        "deposit",
+        "aborted"
+      )
     }
   };
 }

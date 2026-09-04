@@ -8,6 +8,9 @@ const COMMERCIAL_DEPENDENCY_GRAPH_CORE = fileURLToPath(
 const COMMERCIAL_PLATFORM_CORE = fileURLToPath(
   new URL("./src/lib/commercialPlatformCore.cjs", import.meta.url)
 );
+const PRICING_V2_CORE = fileURLToPath(
+  new URL("./src/lib/pricingV2Core.cjs", import.meta.url)
+);
 
 function environmentFlagEnabled(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
@@ -89,6 +92,7 @@ export default defineConfig(({ mode }) => {
     alias: {
       "commercial-dependency-graph-core": COMMERCIAL_DEPENDENCY_GRAPH_CORE,
       "commercial-platform-core": COMMERCIAL_PLATFORM_CORE,
+      "pricing-v2-core": PRICING_V2_CORE,
       "quotepilot-active-firebase-app-check": activeFirebaseAppCheck,
       "quotepilot-active-app": activeApp,
       "quotepilot-active-workspace-shell": activeWorkspaceShell,
@@ -111,7 +115,7 @@ export default defineConfig(({ mode }) => {
     }
   },
   optimizeDeps: {
-    include: ["commercial-dependency-graph-core", "commercial-platform-core"]
+    include: ["commercial-dependency-graph-core", "commercial-platform-core", "pricing-v2-core"]
   },
   build: {
     minify: "terser",

@@ -603,6 +603,15 @@ function sumLineItems(lineItems, categories) {
   }, 0);
 }
 
+function sumLineItemMinor(lineItems, categories) {
+  const accepted = new Set(categories);
+  return (Array.isArray(lineItems) ? lineItems : []).reduce((sum, line) => {
+    if (!accepted.has(text(line?.category, 40).toLowerCase())) return sum;
+    const explicit = line?.lineTotalMinor ?? line?.totalMinor;
+    return sum + integerInRange(explicit, Math.round(numberInRange(line?.total, 0) * 100));
+  }, 0);
+}
+
 function sanitizeSelectedItem(item = {}, fallbackMode = "per_event") {
   const id = sanitizeIdentifier(item?.id);
   const mode = text(item?.pricingMode, 32).toLowerCase();
@@ -712,7 +721,17 @@ function buildTotals(pricing) {
     seasonProfileName: text(rules.seasonProfileName, 160),
     packageMultiplier: numberInRange(rules.packageMultiplier, 1, 0, 100),
     addonMultiplier: numberInRange(rules.addonMultiplier, 1, 0, 100),
-    rentalMultiplier: numberInRange(rules.rentalMultiplier, 1, 0, 100)
+    rentalMultiplier: numberInRange(rules.rentalMultiplier, 1, 0, 100),
+    baseCents: sumLineItemMinor(lineItems, ["package"]),
+    addonsCents: sumLineItemMinor(lineItems, ["addon", "addons"]),
+    rentalsCents: sumLineItemMinor(lineItems, ["rental", "rentals"]),
+    menuCents: sumLineItemMinor(lineItems, ["menu_item", "menu_items", "menu"]),
+    laborCents: integerInRange(fees.laborMinor, Math.round(numberInRange(fees.labor, 0) * 100)),
+    travelCents: integerInRange(fees.travelMinor, Math.round(numberInRange(fees.travel, 0) * 100)),
+    serviceFeeCents: integerInRange(fees.serviceFeeMinor, Math.round(numberInRange(fees.serviceFee, 0) * 100)),
+    taxCents: integerInRange(tax.amountMinor, Math.round(numberInRange(tax.amount, 0) * 100)),
+    totalCents: integerInRange(pricing.grandTotalMinor, Math.round(numberInRange(pricing.grandTotal, 0) * 100)),
+    depositCents: integerInRange(deposit.amountMinor, Math.round(numberInRange(deposit.amount, 0) * 100))
   };
 }
 
@@ -1102,6 +1121,8 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
     dietaryRestrictions: text(event.dietaryRestrictions, 1_200),
     total: numberInRange(totals.total, 0, 0, 1_000_000_000),
     deposit: numberInRange(totals.deposit, 0, 0, 1_000_000_000),
+    totalCents: integerInRange(totals.totalCents, Math.round(numberInRange(totals.total, 0) * 100)),
+    depositCents: integerInRange(totals.depositCents, Math.round(numberInRange(totals.deposit, 0) * 100)),
     totals: {
       base: numberInRange(totals.base, 0, 0, 1_000_000_000),
       addons: numberInRange(totals.addons, 0, 0, 1_000_000_000),
@@ -1115,7 +1136,9 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
         : {}),
       tax: numberInRange(totals.tax, 0, 0, 1_000_000_000),
       total: numberInRange(totals.total, 0, 0, 1_000_000_000),
-      deposit: numberInRange(totals.deposit, 0, 0, 1_000_000_000)
+      deposit: numberInRange(totals.deposit, 0, 0, 1_000_000_000),
+      totalCents: integerInRange(totals.totalCents, Math.round(numberInRange(totals.total, 0) * 100)),
+      depositCents: integerInRange(totals.depositCents, Math.round(numberInRange(totals.deposit, 0) * 100))
     },
     selection: {
       packageName: text(selection.packageName, 200),

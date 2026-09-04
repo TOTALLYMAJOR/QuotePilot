@@ -26,8 +26,18 @@ function amountToCents(value, label) {
 }
 
 function quotePaymentAmounts(quote = {}) {
-  const totalCents = amountToCents(quote?.totals?.total, "Quote total");
-  const depositCents = amountToCents(quote?.totals?.deposit, "Quote deposit");
+  const totals = quote?.totals || {};
+  const hasExact = Object.prototype.hasOwnProperty.call(totals, "totalCents")
+    || Object.prototype.hasOwnProperty.call(totals, "depositCents");
+  if (hasExact && (!Number.isSafeInteger(totals.totalCents) || !Number.isSafeInteger(totals.depositCents))) {
+    throw new PaymentLedgerError("Quote totalCents and depositCents must be supplied together as safe integers.");
+  }
+  const totalCents = hasExact ? totals.totalCents : amountToCents(totals.total, "Quote total");
+  const depositCents = hasExact ? totals.depositCents : amountToCents(totals.deposit, "Quote deposit");
+  if (hasExact && (amountToCents(totals.total, "Quote total") !== totalCents
+    || amountToCents(totals.deposit, "Quote deposit") !== depositCents)) {
+    throw new PaymentLedgerError("Quote dollar and exact-minor payment amounts are inconsistent.");
+  }
   if (depositCents <= 0 || depositCents >= totalCents) {
     throw new PaymentLedgerError(
       "Final balance requires a positive deposit below the authoritative quote total."
@@ -178,7 +188,8 @@ function buildFinalBalanceStripeScopeQuote(quote = {}, checkoutPayment = null) {
     ...quote,
     totals: {
       ...(quote?.totals || {}),
-      deposit: amounts.finalBalanceCents / 100
+      deposit: amounts.finalBalanceCents / 100,
+      depositCents: amounts.finalBalanceCents
     },
     payment: {
       ...(quote?.payment || {}),
