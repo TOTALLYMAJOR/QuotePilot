@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-03 17:48:40 CDT
+Last updated: 2026-09-03 20:20:30 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -419,6 +419,36 @@ green result.
     email acceptance. That label still does not prove every customer mailbox,
     ordinary quote content, onboarding content, spam placement, or human
     acceptance of those workflows.
+
+#### September 3, 2026 v0.16.5 production receipt
+
+- Criterion 1 passed for exact tag `v0.16.5`, commit
+  `ad3517b39109b91dd735ee3700e8c79a4e2ca956`: CI run `33818617920`, Firebase
+  production run `33820173249`, and Vercel production run `33822596844`
+  completed, with production source/readback tied to that release.
+- The platform-admin positive UI path and same-tenant non-platform-admin
+  negative visibility path were observed. **Check Setup** reported provider
+  `resend`, approved sender `configured`, and the masked sender. The production
+  platform-admin allowlist was not changed.
+- One exact-confirmation submission was made to the controlled
+  `flightcontrol@quietpilot.us` address. QuotePilot returned
+  `provider_accepted` at `2026-09-04T01:16:03.496Z`, supplied a non-empty
+  provider message ID in the direct private receipt, locked the accepted
+  control, and added one bounded `resend_acceptance_test` Operations Audit row
+  without the provider ID. No retry was performed.
+- Independent Resend readback for that exact message reported
+  `last_event=delivered`. This satisfies the provider-delivery portion of
+  criterion 11 for this single non-customer message; it is not inbox evidence.
+- Criterion 12 remains open pending recipient confirmation of one inbox message
+  and review of the exact sender, subject, and body. Criterion 13 remains open
+  because a complete before/after proof across every named business-state
+  surface was not captured. Live network chronology for criteria 6–7 was not
+  independently packet-captured; the source contract, focused tests, locked UI,
+  direct receipt, and durable audit row are retained as supporting evidence
+  without promoting them beyond what was observed.
+- Because criteria 1–13 are not all closed, criterion 14 is **not satisfied**.
+  This run may be described only as one controlled production Resend transport
+  with QuotePilot provider acceptance and a Resend `delivered` event.
 
 Configuration presence or an accepted API response alone is not delivery
 proof. If provider or inbox evidence fails, retain the exact receipt, do not

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "lastReconciled": "2026-08-30",
-  "reconciliationHead": "bc495c8c948d440b12363d5da34209a11ff151fd",
+  "lastReconciled": "2026-09-03",
+  "reconciliationHead": "ad3517b39109b91dd735ee3700e8c79a4e2ca956",
   "project": {
     "id": "quote-pilot",
     "name": "QuotePilot by MBMApps",
@@ -10,7 +10,7 @@
     "archetype": "commercial_saas",
     "primaryActors": ["catering owner", "administrator", "sales operator", "event operator", "customer"],
     "economicBuyer": "catering business owner or operating administrator",
-    "stage": "v0.15.0 deployed to both governed production targets with incomplete production acceptance"
+    "stage": "v0.16.5 deployed to Firebase Functions and the Vercel production edge with incomplete production acceptance"
   },
   "canonicalSources": {
     "capabilities": "docs/FEATURE_MATRIX.md",
@@ -198,18 +198,18 @@
     {"id": "int-firebase", "name": "Firebase Auth, Firestore, Functions, and Hosting", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["tenant 250 provisioning and staffing activation", "authenticated human acceptance"]},
     {"id": "int-vercel", "name": "Vercel public production edge", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["authenticated human acceptance"]},
     {"id": "int-stripe", "name": "Stripe payments and isolated Connect program", "state": "PARTIAL", "evidence": "docs/STRIPE_CONNECT_PROGRAM.md", "unknowns": ["coordinated hosted rail acceptance", "Connect Sandbox runtime"]},
-    {"id": "int-resend", "name": "Resend email", "state": "CONFIGURED", "evidence": "PROJECT_STATUS.md", "unknowns": ["exact current provider acceptance", "delivery or bounce", "recipient receipt"]},
+    {"id": "int-resend", "name": "Resend email", "state": "PARTIAL", "evidence": "PROJECT_STATUS.md", "unknowns": ["recipient inbox confirmation for the controlled delivered message", "ordinary quote and onboarding email acceptance"]},
     {"id": "int-turnstile", "name": "Cloudflare Turnstile", "state": "IMPLEMENTED", "evidence": "DEV_TASKS.md", "unknowns": ["both approved production hostname checks"]}
   ],
   "risks": [
-    {"id": "risk-acceptance-drift", "severity": "HIGH", "statement": "Exact v0.15.0 deployment can be mistaken for tenant availability, provider outcomes, recipient behavior, human acceptance, or commercial proof.", "mitigation": "Keep the exact deployment receipts separate and leave each missing downstream evidence class UNVERIFIED."},
+    {"id": "risk-acceptance-drift", "severity": "HIGH", "statement": "Exact v0.16.5 deployment and one controlled delivered Resend message can be mistaken for tenant availability, recipient behavior, ordinary customer-email readiness, human acceptance, or commercial proof.", "mitigation": "Keep deployment, provider, inbox, workflow, human, and commercial receipts separate and leave each missing downstream evidence class UNVERIFIED."},
     {"id": "risk-proof-inflation", "severity": "HIGH", "statement": "Large source and test coverage can be mistaken for provider, production, human, or commercial proof.", "mitigation": "Keep evidence types explicit and fail unverified claims closed."},
     {"id": "risk-program-sprawl", "severity": "MEDIUM", "statement": "Many gated source programs increase reconciliation and adoption cost.", "mitigation": "Fund work through one observable next proof event and retire or defer programs that do not reduce its uncertainty."}
   ],
   "blockers": [
     {"id": "block-tenant-250-provisioning", "priority": "P0", "status": "OPEN", "statement": "Tenant 250 lacks organizations/250/settings/config, so the protected staffing activation workflow failed closed without mutation.", "source": "PROJECT_STATUS.md"},
     {"id": "block-authenticated-production-acceptance", "priority": "P0", "status": "OPEN", "statement": "No current authenticated end-to-end production staff acceptance receipt exists.", "source": "DEV_TASKS.md"},
-    {"id": "block-provider-acceptance", "priority": "P0", "status": "OPEN", "statement": "Exact email and coordinated payment provider acceptance remain unverified.", "source": "DEV_TASKS.md"},
+    {"id": "block-provider-acceptance", "priority": "P0", "status": "OPEN", "statement": "One controlled email transport reached provider delivered; recipient inbox confirmation, ordinary customer-email acceptance, and coordinated payment provider acceptance remain unverified.", "source": "DEV_TASKS.md"},
     {"id": "block-buyer-safety", "priority": "P0", "status": "OPEN", "statement": "Buyer access needs a dedicated restricted test key, webhook checks, Turnstile checks, and bounded hosted acceptance.", "source": "DEV_TASKS.md"},
     {"id": "block-connect-hosted-sandbox", "priority": "P1", "status": "OPEN", "statement": "Connect lacks an approved applied staging foundation, trusted runtime binding, and hosted Sandbox proof.", "source": "DEV_TASKS.md"},
     {"id": "block-steward-pilot-proof", "priority": "P1", "status": "OPEN", "statement": "Steward lacks a reviewed provider transport and consenting silent-pilot human comparison evidence.", "source": "docs/STEWARD_ADR.md"},
@@ -219,8 +219,8 @@
     {
       "id": "proof-current-production-journey",
       "isNext": true,
-      "title": "Exact v0.15.0 authenticated quote-to-operations production journey",
-      "hypothesis": "After reviewed tenant provisioning and protected staffing activation, one authorized operator can complete the primary quote-to-operations journey on exact v0.15.0 without authority or evidence gaps.",
+      "title": "Exact v0.16.5 authenticated quote-to-operations production journey",
+      "hypothesis": "After reviewed tenant provisioning and protected staffing activation, one authorized operator can complete the primary quote-to-operations journey on exact v0.16.5 without authority or evidence gaps.",
       "preconditions": ["run an approved tenant-250 provisioning migration and activate staffing only after verified readback"],
       "observableEvent": "One authorized tenant-250 operator creates and saves an exact quote revision, reopens it, issues the current proposal, records a customer decision, and generates the revision-bound BEO while role and cross-tenant denials remain intact.",
       "acceptanceCriteria": ["exact release SHA and Firebase deployment receipt", "authenticated role-safe journey receipts", "exact saved revision readback", "cross-tenant and invalid portal paths fail closed", "provider and recipient outcomes remain separately labeled when absent"],
@@ -236,8 +236,8 @@
     {"id": "commercial-outcome", "claim": "QuotePilot measurably improves conversion, speed, margin, or operational quality.", "verdict": "UNVERIFIED", "evidence": [], "note": "No before-and-after customer outcome evidence is present."}
   ],
   "nextActions": [
-    {"id": "action-next-proof", "priority": 1, "action": "Complete the single next proof event after approved tenant provisioning and protected staffing activation on exact v0.15.0.", "owner": "release owner and authorized tenant operator"},
-    {"id": "action-provider-receipts", "priority": 2, "action": "Capture provider acceptance only through exact provider receipts; do not infer delivery or recipient behavior.", "owner": "operations owner"},
+    {"id": "action-next-proof", "priority": 1, "action": "Complete the single next proof event after approved tenant provisioning and protected staffing activation on exact v0.16.5.", "owner": "release owner and authorized tenant operator"},
+    {"id": "action-provider-receipts", "priority": 2, "action": "Confirm the exact controlled inbox arrival, then capture ordinary quote-email provider, reconciliation, and recipient receipts separately.", "owner": "operations owner"},
     {"id": "action-commercial-proof", "priority": 3, "action": "Collect buyer, paid-customer, usage, revenue, retention, and outcome evidence or leave each claim UNVERIFIED.", "owner": "product owner"}
   ]
 }
