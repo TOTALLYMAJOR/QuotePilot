@@ -1,0 +1,403 @@
+name: Temporary Configured Quote Action-State Migration
+
+on:
+  push:
+    branches:
+      - feat/configured-quote-action-state
+    paths:
+      - .github/workflows/tmp-configured-quote-action-state.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/configured-quote-action-state
+          fetch-depth: 0
+      - name: Apply governed action-state migration
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const branch = 'feat/configured-quote-action-state';
+          const workflowPath = '.github/workflows/tmp-configured-quote-action-state.yml';
+
+          function read(path) {
+            return fs.readFileSync(path, 'utf8');
+          }
+
+          function write(path, content) {
+            fs.writeFileSync(path, content.endsWith('\n') ? content : `${content}\n`);
+          }
+
+          function replaceOnce(source, before, after, label) {
+            const index = source.indexOf(before);
+            if (index < 0) throw new Error(`Missing migration anchor: ${label}`);
+            if (source.indexOf(before, index + before.length) >= 0) {
+              throw new Error(`Ambiguous migration anchor: ${label}`);
+            }
+            return source.slice(0, index) + after + source.slice(index + before.length);
+          }
+
+          function chicagoTimestamp(now = new Date()) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Chicago',
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit',
+              hourCycle: 'h23', timeZoneName: 'short'
+            }).formatToParts(now);
+            const value = (type) => parts.find((part) => part.type === type)?.value || '';
+            return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} ${value('timeZoneName')}`;
+          }
+
+          function updateTimestamp(content, timestamp) {
+            if (!/^Last updated: .+$/m.test(content)) throw new Error('Governed markdown is missing Last updated header.');
+            return content.replace(/^Last updated: .+$/m, `Last updated: ${timestamp}`);
+          }
+
+          // 1) Harden browser-local alternate-draft creation so proof does not clone.
+          {
+            const path = 'src/lib/quoteStore.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  const payment = hydratePayment(source.payment);\n  const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";',
+              '  const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";',
+              'remove inherited duplicate payment hydration'
+            );
+            source = replaceOnce(
+              source,
+              '    organizationId,\n    status: "draft",\n    deletedAtISO: "",\n    selection,\n    payment: {\n      ...payment,\n      depositStatus: payment.depositLink ? "sent" : "unpaid",\n      depositConfirmedAtISO: ""\n    },',
+              '    organizationId,\n    duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),\n    rebooking: undefined,\n    acceptanceReceipt: undefined,\n    status: "draft",\n    deletedAtISO: "",\n    selection,\n    payment: {\n      depositLink: "",\n      depositStatus: "unpaid",\n      depositConfirmedAtISO: "",\n      finalBalance: hydrateFinalBalance({}, sourceWithoutIdentity.totals || {})\n    },',
+              'reset alternate-draft proof state'
+            );
+            write(path, source);
+          }
+
+          // 2) Add local-fallback proof-reset acceptance coverage.
+          {
+            const path = 'src/lib/__tests__/quoteStore.versioning.test.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  deleteQuote,\n  ensureLegacyQuoteCompatibility,',
+              '  deleteQuote,\n  duplicateQuote,\n  ensureLegacyQuoteCompatibility,',
+              'import duplicateQuote'
+            );
+            const closing = '\n  test("getActiveQuoteVersion resolves legacy quote without persisted version docs", async () => {';
+            if (!source.includes(closing)) throw new Error('Missing quoteStore test insertion anchor.');
+            const testBlock = `\n  test("local alternate draft keeps presentation while clearing source proof", async () => {\n    seedQuotes([\n      makeQuote({\n        id: "q-duplicate-proof",\n        status: "booked",\n        acceptanceReceipt: { receiptId: "acceptance-source" },\n        rebooking: { state: "draft_created_for_staff_review", sourceQuoteId: "older-source" },\n        workflow: {\n          quoteDelivery: {\n            revisionId: "v0003@2026-03-10T12:00:00.000Z",\n            state: "provider_accepted",\n            providerMessageId: "provider-source"\n          }\n        },\n        payment: {\n          depositLink: "https://checkout.stripe.com/c/pay/cs_test_source",\n          depositStatus: "paid",\n          depositConfirmedAtISO: "2026-03-12T12:00:00.000Z",\n          stripeSessionId: "cs_test_source",\n          finalBalance: {\n            amountCents: 588000,\n            status: "paid",\n            paymentLink: "https://checkout.stripe.com/c/pay/cs_test_balance",\n            stripeSessionId: "cs_test_balance",\n            confirmedAtISO: "2026-03-15T12:00:00.000Z"\n          }\n        },\n        booking: {\n          contractNumber: "C-SOURCE",\n          contractConvertedAtISO: "2026-03-11T12:00:00.000Z",\n          bookedAtISO: "2026-03-11T12:00:00.000Z"\n        }\n      })\n    ]);\n\n    const created = await duplicateQuote("q-duplicate-proof", {\n      ownerUid: "staff-new",\n      ownerEmail: "staff-new@example.com"\n    });\n    const stored = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]")\n      .find((item) => item.id === created.id);\n\n    expect(stored.status).toBe("draft");\n    expect(stored.duplicatedFromQuoteId).toBe("q-duplicate-proof");\n    expect(stored).not.toHaveProperty("acceptanceReceipt");\n    expect(stored).not.toHaveProperty("rebooking");\n    expect(stored.payment).toMatchObject({\n      depositLink: "",\n      depositStatus: "unpaid",\n      depositConfirmedAtISO: "",\n      finalBalance: {\n        status: "unpaid",\n        paymentLink: "",\n        confirmedAtISO: "",\n        stripeSessionId: ""\n      }\n    });\n    expect(stored.payment).not.toHaveProperty("stripeSessionId");\n    expect(stored.workflow).not.toHaveProperty("quoteDelivery");\n    expect(stored.booking.contractNumber).toBe("");\n    expect(stored.booking.bookedAtISO).toBe("");\n  });\n`;
+            source = source.replace(closing, `${testBlock}${closing}`);
+            write(path, source);
+          }
+
+          // 3) Migrate configured-quote presentation onto the compiler without changing mutation authority.
+          {
+            const path = 'src/components/QuoteHistoryModal.jsx';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              'import {\n  buildQuoteHistoryController,\n  getQuoteActionPermissions\n} from "../lib/quoteHistoryController";',
+              'import {\n  buildQuoteHistoryController,\n  buildRoleSafeQuoteActionController,\n  getQuoteActionPermissions\n} from "../lib/quoteHistoryController";',
+              'quote history controller import'
+            );
+
+            source = replaceOnce(
+              source,
+              '  const handleDuplicateQuote = async (quote) => {\n    if (!quote?.id) return;\n    setDuplicatingId(quote.id);',
+              '  const handleDuplicateQuote = async (quote) => {\n    if (!quote?.id) return;\n    const confirmed = window.confirm(\n      "Create a separate alternate draft from this quote? The client, event, and quote configuration carry forward. The current quote stays unchanged, and delivery, acceptance, payment, booking, and rebooking proof do not transfer."\n    );\n    if (!confirmed) return;\n    setDuplicatingId(quote.id);',
+              'alternate draft consequence confirmation'
+            );
+            source = replaceOnce(
+              source,
+              '        feedback: `Quote duplicated as ${result.quoteNumber}.`\n      }));\n      pushToast(`Quote duplicated as ${result.quoteNumber}.`, "success");\n      await load();',
+              '        feedback: `Alternate draft created as ${result.quoteNumber}.`\n      }));\n      pushToast(`Alternate draft created as ${result.quoteNumber}.`, "success");\n      await load();\n      openQuoteWorkspace(result.id);',
+              'alternate draft completion handoff'
+            );
+
+            const rowMarker = '                const canReconcileFinalBalance = permissions.canReconcileFinalBalance';
+            const rowStart = source.indexOf(rowMarker);
+            if (rowStart < 0) throw new Error('Missing row action-state insertion marker.');
+            const returnMarker = '                return (\n                  <tr';
+            const returnIndex = source.indexOf(returnMarker, rowStart);
+            if (returnIndex < 0) throw new Error('Missing row return insertion marker.');
+            const actionStateBlock = `                const configuredActionState = buildRoleSafeQuoteActionController({\n                  quote,\n                  currentUserRole: permissions.role,\n                  source: state.source\n                }).actionState;\n                const configuredPrimaryActionId = configuredActionState.primaryAction?.id || "";\n                const rowActionClassName = (actionId) => (\n                  configuredPrimaryActionId === actionId ? "cta compact" : "ghost compact"\n                );\n`;
+            source = source.slice(0, returnIndex) + actionStateBlock + source.slice(returnIndex);
+
+            const replacements = [
+              [
+                'data-approval-action="convert_to_contract"\n                              className="cta compact"',
+                'data-approval-action="convert_to_contract"\n                              className={rowActionClassName("convert_contract")}'
+              ],
+              [
+                'className="cta compact"\n                            onClick={() => openDeliveryReview(quote, quoteRevisionId)}',
+                'className={rowActionClassName("review_delivery")}\n                            onClick={() => openDeliveryReview(quote, quoteRevisionId)}'
+              ],
+              [
+                'className="cta compact"\n                            onClick={() => handleSendQuoteEmail(quote)}',
+                'className={rowActionClassName("send_quote")}\n                            onClick={() => handleSendQuoteEmail(quote)}'
+              ],
+              [
+                'data-approval-action="send_payment_request"\n                            className="cta compact"',
+                'data-approval-action="send_payment_request"\n                            className={rowActionClassName("request_deposit")}'
+              ],
+              [
+                'data-approval-action="send_final_balance_request"\n                            className="cta compact"',
+                'data-approval-action="send_final_balance_request"\n                            className={rowActionClassName("request_balance")}'
+              ],
+              [
+                'className="ghost compact"\n                            onClick={() => handleReopenQuote(quote)}',
+                'className={rowActionClassName("reopen")}\n                            onClick={() => handleReopenQuote(quote)}'
+              ],
+              [
+                'className="ghost compact"\n                            onClick={() => handleDuplicateQuote(quote)}',
+                'className={rowActionClassName("duplicate")}\n                            onClick={() => handleDuplicateQuote(quote)}'
+              ],
+              [
+                'className="ghost compact"\n                                data-capability-action="open-quote-conversation"',
+                'className={rowActionClassName("open_conversation")}\n                                data-capability-action="open-quote-conversation"'
+              ]
+            ];
+            for (const [before, after] of replacements) {
+              source = replaceOnce(source, before, after, before.slice(0, 60));
+            }
+
+            source = replaceOnce(
+              source,
+              '{permissions.canEditQuote && canEditQuoteStatus(normalizedQuoteStatus) && (\n                          <button\n                            type="button"\n                            className="ghost compact"\n                            onClick={() => handleEditQuote(quote)}\n                            disabled={deliveryUnresolved}\n                          >\n                            Edit\n                          </button>\n                        )}',
+              '{permissions.canEditQuote && canEditQuoteStatus(normalizedQuoteStatus) && (\n                          <button\n                            type="button"\n                            className={rowActionClassName("edit")}\n                            onClick={() => handleEditQuote(quote)}\n                            disabled={deliveryUnresolved}\n                            title={configuredActionState.actions.edit.consequence}\n                          >\n                            {configuredActionState.actions.edit.label}\n                          </button>\n                        )}',
+              'edit/revise label'
+            );
+            source = replaceOnce(
+              source,
+              '{duplicatingId === quote.id ? "Duplicating..." : "Duplicate"}',
+              '{duplicatingId === quote.id ? "Creating draft..." : configuredActionState.actions.duplicate.label}',
+              'alternate draft label'
+            );
+            source = replaceOnce(
+              source,
+              '{reopeningQuoteId === quote.id ? "Reopening..." : "Reopen"}',
+              '{reopeningQuoteId === quote.id ? "Restoring..." : configuredActionState.actions.reopen.label}',
+              'restore as draft label'
+            );
+            source = replaceOnce(
+              source,
+              ': "Convert"}',
+              ': configuredActionState.actions.convert_contract.label}',
+              'create contract label'
+            );
+            source = replaceOnce(
+              source,
+              '>\n                            Confirm\n                          </button>',
+              '>\n                            Record customer confirmation\n                          </button>',
+              'record confirmation label'
+            );
+            source = replaceOnce(
+              source,
+              '>\n                            Email app\n                          </button>',
+              '>\n                            Manual email\n                          </button>',
+              'manual email label'
+            );
+            source = replaceOnce(
+              source,
+              '>\n                            Review Delivery\n                          </button>',
+              '>\n                            {configuredActionState.actions.review_delivery.label}\n                          </button>',
+              'delivery recovery label'
+            );
+            source = replaceOnce(
+              source,
+              '                        ) : permissions.canSendQuoteEmail ? (\n                          <button',
+              '                        ) : deliveryRecorded ? (\n                          <small\n                            className="source-note"\n                            data-quote-delivery-evidence="provider_accepted"\n                          >\n                            Delivery: Provider accepted\n                          </small>\n                        ) : permissions.canSendQuoteEmail ? (\n                          <button',
+              'provider acceptance evidence presentation'
+            );
+            source = replaceOnce(
+              source,
+              '                              : deliveryRecorded\n                                ? "Provider accepted"\n                                : deliveryUi.freshAttemptAvailable',
+              '                              : deliveryUi.freshAttemptAvailable',
+              'remove provider acceptance from command label'
+            );
+            source = replaceOnce(
+              source,
+              '                                  : "Send Quote Email"}',
+              '                                  : configuredActionState.actions.send_quote.label}',
+              'send proposal label'
+            );
+            source = replaceOnce(
+              source,
+              '                              : paymentRequestInProgress ? "Resume Pay Request" : "Send Pay Request"}',
+              '                              : configuredActionState.actions.request_deposit.label}',
+              'deposit request label'
+            );
+            source = replaceOnce(
+              source,
+              '                                ? "Resume Balance Request"\n                                : "Send Balance Request"}',
+              '                                ? "Resume final balance request"\n                                : configuredActionState.actions.request_balance.label}',
+              'final balance request label'
+            );
+            source = replaceOnce(
+              source,
+              '{rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}',
+              '{rotatingPortalId === quote.id ? "Renewing..." : configuredActionState.actions.rotate_portal.label}',
+              'renew customer link label'
+            );
+            source = replaceOnce(
+              source,
+              '>\n                              Copy Email\n                            </button>',
+              '>\n                              Copy email text\n                            </button>',
+              'copy email label'
+            );
+            source = replaceOnce(
+              source,
+              '>\n                              Copy Portal\n                            </button>',
+              '>\n                              Copy customer link\n                            </button>',
+              'copy portal label'
+            );
+            write(path, source);
+          }
+
+          // 4) Update browser acceptance selectors for the truthful labels.
+          for (const path of [
+            'e2e/quote-history-role-permissions.spec.js',
+            'e2e/quote-wizard.smoke.spec.js'
+          ]) {
+            let source = read(path);
+            source = source
+              .replaceAll('name: "Edit"', 'name: "Edit draft"')
+              .replaceAll('name: "Duplicate"', 'name: "Create alternate draft"')
+              .replaceAll('name: "Send Quote Email"', 'name: "Send proposal"')
+              .replaceAll('name: "Copy Email"', 'name: "Copy email text"')
+              .replaceAll('name: "Copy Portal"', 'name: "Copy customer link"')
+              .replaceAll('name: "Send Pay Request"', 'name: "Request deposit"')
+              .replaceAll('name: "Send Balance Request"', 'name: "Request final balance"')
+              .replaceAll('name: "Rotate Portal"', 'name: "Renew customer link"');
+            write(path, source);
+          }
+
+          // 5) Advance the existing capability contract that already owns quoteHistoryController.
+          {
+            const path = 'docs/capability-surfacing-contracts.json';
+            const manifest = JSON.parse(read(path));
+            const owning = manifest.contracts.filter((contract) => (
+              Array.isArray(contract.testPaths)
+              && contract.testPaths.includes('src/lib/__tests__/quoteHistoryController.test.js')
+            ));
+            if (owning.length !== 1) {
+              throw new Error(`Expected exactly one quote-history capability owner, found ${owning.length}.`);
+            }
+            const contract = owning[0];
+            manifest.catalogVersion = Number(manifest.catalogVersion || 0) + 1;
+            contract.reviewRevision = Number(contract.reviewRevision || 0) + 1;
+            const uniquePush = (field, values) => {
+              contract[field] = Array.isArray(contract[field]) ? contract[field] : [];
+              for (const value of values) {
+                if (!contract[field].includes(value)) contract[field].push(value);
+              }
+            };
+            uniquePush('backendPaths', [
+              'src/lib/quoteActionState.js',
+              'src/lib/quoteHistoryController.js',
+              'src/lib/quoteStore.js'
+            ]);
+            uniquePush('frontendPaths', ['src/components/QuoteHistoryModal.jsx']);
+            uniquePush('testPaths', [
+              'src/lib/__tests__/quoteActionState.test.js',
+              'src/lib/__tests__/quoteStore.versioning.test.js',
+              'e2e/quote-history-role-permissions.spec.js',
+              'e2e/quote-wizard.smoke.spec.js'
+            ]);
+            contract.testLocators = Array.isArray(contract.testLocators) ? contract.testLocators : [];
+            const locators = [
+              {
+                path: 'src/lib/__tests__/quoteActionState.test.js',
+                locator: 'recovery overrides routine quote-changing actions when delivery is uncertain'
+              },
+              {
+                path: 'src/lib/__tests__/quoteActionState.test.js',
+                locator: 'does not treat provider acceptance for an older revision as current delivery evidence'
+              },
+              {
+                path: 'src/lib/__tests__/quoteStore.versioning.test.js',
+                locator: 'local alternate draft keeps presentation while clearing source proof'
+              }
+            ];
+            for (const locator of locators) {
+              if (!contract.testLocators.some((entry) => entry.path === locator.path && entry.locator === locator.locator)) {
+                contract.testLocators.push(locator);
+              }
+            }
+            contract.surfaceReview = 'changed';
+            const note = 'Configured quote actions now compile the loaded quote, exact current delivery revision, role/source authority, approval state, payment evidence, contract state, and recovery state into one ranked primary action plus subordinate capabilities. Existing provider, payment, Firestore, and contract authorities are unchanged; stale delivery evidence is not promoted, manual handoffs remain untracked, and alternate-draft creation resets proof in both authoritative and browser-local paths.';
+            contract.surfaceReviewNote = contract.surfaceReviewNote
+              ? `${contract.surfaceReviewNote} ${note}`
+              : note;
+            if (!String(contract.summary || '').includes('configured quote')) {
+              contract.summary = `${contract.summary} The configured quote surface now consumes a deterministic state-aware action compiler so one valid next outcome or recovery action outranks secondary utilities without creating new mutation authority.`;
+            }
+            write(path, `${JSON.stringify(manifest, null, 2)}\n`);
+          }
+
+          // 6) Required canonical documentation sync.
+          const timestamp = chicagoTimestamp();
+          {
+            const path = 'CHANGELOG.md';
+            let source = updateTimestamp(read(path), timestamp);
+            const bullet = '- Added a state-aware configured-quote action compiler and migrated the quote administration row onto one ranked primary/recovery action while preserving subordinate capabilities. Draft edits now read **Edit draft**, sent/viewed changes read **Revise quote**, tracked provider dispatch reads **Send proposal**, provider acceptance is evidence rather than a disabled command, and payment/contract/recovery actions use outcome language. **Create alternate draft** now declares its separate-record consequence before creation, opens the created draft, and the browser-local fallback clears acceptance, rebooking, delivery, payment-provider, and booking proof instead of cloning it. Existing Firebase, Stripe, portal, approval, and contract authority is unchanged; local/CI evidence does not claim hosted, provider, production, or human acceptance.\n';
+            if (!source.includes('state-aware configured-quote action compiler')) {
+              const marker = '### Changed\n';
+              if (!source.includes(marker)) throw new Error('CHANGELOG Changed section not found.');
+              source = source.replace(marker, `${marker}${bullet}`);
+            }
+            write(path, source);
+          }
+          {
+            const path = 'docs/FEATURE_MATRIX.md';
+            let source = updateTimestamp(read(path), timestamp);
+            const lines = source.split('\n');
+            const rowIndex = lines.findIndex((line) => line.startsWith('| 8 | Quote management UI'));
+            if (rowIndex < 0) throw new Error('Feature Matrix quote-management row not found.');
+            let row = lines[rowIndex];
+            if (!row.includes('state-aware configured-quote action')) {
+              row = row.replace(
+                'Quote management UI (list, sort, filters,',
+                'Quote management UI (list, sort, filters, state-aware configured-quote action compilation with one ranked primary/recovery action,'
+              );
+            }
+            if (!row.includes('src/lib/quoteActionState.js')) {
+              row = row.replace(
+                '`src/components/QuoteHistoryModal.jsx`',
+                '`src/components/QuoteHistoryModal.jsx`, `src/lib/quoteActionState.js`, `src/lib/__tests__/quoteActionState.test.js`, `src/lib/__tests__/quoteStore.versioning.test.js`'
+              );
+            }
+            lines[rowIndex] = row;
+            write(path, lines.join('\n'));
+          }
+          {
+            const path = 'docs/USER_MANUAL.md';
+            let source = updateTimestamp(read(path), timestamp);
+            const section = `\n## Configured quote actions\n\nThe configured quote view now ranks one next action from the quote's recorded lifecycle, exact current delivery revision, approval state, payment evidence, contract state, portal validity, and recovery state. Other permitted utilities remain secondary; an unresolved delivery or transaction recovery replaces normal progression until it is reconciled.\n\n- **Edit draft** changes a current draft. **Revise quote** means a sent or viewed quote will return to a new draft version while the prior version remains historical evidence.\n- **Send proposal** is the tracked QuotePilot provider path. **Manual email** and **Copy email text** are manual handoffs and do not establish QuotePilot send or delivery evidence. Provider acceptance is shown as delivery evidence rather than as a disabled button.\n- **Create alternate draft** creates a separate quote after an explicit consequence confirmation. Client, event, and quote configuration carry forward; the source quote remains unchanged, and delivery, acceptance, rebooking, payment-provider, and booking proof do not transfer. On success, QuotePilot opens the created draft.\n- **Request deposit**, **Create contract**, **Request final balance**, **Record customer confirmation**, **Restore as draft**, and **Renew customer link** retain their existing approval, provider, portal, payment, and role boundaries. The action ranking does not change whether the organization's workflow treats contract creation before or after deposit settlement.\n`;
+            if (!source.includes('## Configured quote actions')) source += section;
+            write(path, source);
+          }
+
+          // Self-delete so the final PR contains no maintenance workflow.
+          fs.rmSync(workflowPath);
+          NODE
+
+          git config user.name "QuotePilot governed migration"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/lib/quoteStore.js \
+            src/lib/__tests__/quoteStore.versioning.test.js \
+            src/components/QuoteHistoryModal.jsx \
+            e2e/quote-history-role-permissions.spec.js \
+            e2e/quote-wizard.smoke.spec.js \
+            docs/capability-surfacing-contracts.json \
+            CHANGELOG.md docs/FEATURE_MATRIX.md docs/USER_MANUAL.md \
+            .github/workflows/tmp-configured-quote-action-state.yml
+          git diff --cached --check
+          git commit -m "feat(quotes): migrate configured quote action experience"
+          git push origin HEAD:${branch}
