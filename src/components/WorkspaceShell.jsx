@@ -216,7 +216,7 @@ export default function WorkspaceShell({
         { capability: "live-operations-planning" }
       ],
       [
-        ambientOrientation && operations,
+        ambientOrientation && operations && capabilities.eventSchedule !== false,
         actions.onOperations,
         "Operations",
         false,
@@ -560,7 +560,10 @@ export default function WorkspaceShell({
               ambientOrientation ? (
                 <nav className="ambient-primary-navigation" aria-label="Primary workspace">
                   {AMBIENT_PRIMARY_WORKSPACE_NAVIGATION
-                    .filter((destination) => !destination.adminOnly || isAdmin)
+                    .filter((destination) => (
+                      (!destination.adminOnly || isAdmin)
+                      && (!destination.capability || capabilities[destination.capability] !== false)
+                    ))
                     .map((destination) => navButton(
                       destination.label,
                       destination.section,

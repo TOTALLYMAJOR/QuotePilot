@@ -212,7 +212,9 @@ export function EventPlanningView({
                 {state.loading ? "Refreshing..." : "Refresh"}
               </button>
             )}
-            <button type="button" className="ghost" onClick={onOpenOperations}>Operations</button>
+            {typeof onOpenOperations === "function" && (
+              <button type="button" className="ghost" onClick={onOpenOperations}>Operations</button>
+            )}
           </div>
         </div>
 

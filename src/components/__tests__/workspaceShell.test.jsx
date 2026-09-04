@@ -241,6 +241,32 @@ describe("WorkspaceShell", () => {
     expect(props.actions.onPilot).not.toHaveBeenCalled();
   });
 
+  test("removes primary and secondary Operations entry points when Calendar is unavailable", () => {
+    render({
+      ambientNavigation: true,
+      capabilities: {
+        customerPortal: true,
+        staffDirectory: true,
+        eventSchedule: false,
+        reportingDashboard: true,
+        integrationsOps: true,
+        diagnostics: true
+      },
+      menu: { openId: "more", onOpenChange: vi.fn() }
+    });
+
+    expect(Array.from(container.querySelectorAll("[data-ambient-orientation]"))
+      .map((button) => button.textContent.trim()))
+      .toEqual(["Now", "Opportunities", "Clients", "Library"]);
+    const tools = container.querySelector('[role="dialog"][aria-labelledby="workspace-tools-title"]');
+    const operationalTools = tools.querySelector('[data-workspace-tools-group="operations"]');
+    expect(buttonsByText(operationalTools, "Operations")).toHaveLength(0);
+    expect(buttonsByText(operationalTools, "Clear the Deck")).toHaveLength(1);
+    expect(buttonsByText(operationalTools, "Staff")).toHaveLength(1);
+    expect(currentProps.triggerRefs.operations.current).toBeNull();
+    expect(currentProps.actions.onOperations).not.toHaveBeenCalled();
+  });
+
   test("removes redundant ambient workspace labeling while retaining contextual quote status", () => {
     render({ ambientNavigation: true });
     expect(container.querySelector(".workspace-intro")).toBeNull();

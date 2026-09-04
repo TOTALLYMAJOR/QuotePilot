@@ -1,5 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import {
+  DEFAULT_ADDONS,
+  DEFAULT_EVENT_TEMPLATES,
+  DEFAULT_PACKAGES,
+  DEFAULT_RENTALS,
+  DEFAULT_SETTINGS
+} from "../src/data/mockCatalog";
 
 const ENABLED = [
   "VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED",
@@ -12,6 +19,45 @@ const ENABLED = [
   ));
 
 test.skip(!ENABLED, "Calendar-first Operations requires the Ambient workspace graph.");
+
+async function resetViewportScroll(page) {
+  await page.evaluate(async () => {
+    const reset = () => {
+      const scrollableNodes = [document.scrollingElement, document.documentElement, document.body, ...document.querySelectorAll("*")];
+      scrollableNodes.forEach((node) => {
+        if (!node || typeof node.scrollTo !== "function") return;
+        node.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      });
+    };
+    reset();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    reset();
+  });
+}
+
+const CAPABILITY_GATE_CATALOG = {
+  packages: DEFAULT_PACKAGES,
+  addons: DEFAULT_ADDONS,
+  rentals: DEFAULT_RENTALS,
+  settings: {
+    ...DEFAULT_SETTINGS,
+    catalogRevision: 41,
+    pricingSetupConfirmed: true,
+    pricingConfirmation: {
+      actorUid: "operations-gate-admin",
+      actorEmail: "operations-gate-admin@example.test",
+      confirmedAtISO: "2026-09-04T20:00:00.000Z",
+      confirmedCatalogRevision: 41
+    },
+    menuSections: [],
+    eventTemplates: DEFAULT_EVENT_TEMPLATES,
+    featureFlags: {
+      ...(DEFAULT_SETTINGS.featureFlags || {}),
+      eventSchedule: false,
+      reportingDashboard: false
+    }
+  }
+};
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -62,9 +108,14 @@ test.beforeEach(async ({ page }) => {
 for (const viewport of [
   { width: 390, height: 844 },
   { width: 768, height: 900 },
-  { width: 1440, height: 1000 }
+  { width: 1440, height: 1000 },
+  { width: 1487, height: 1058 }
 ]) {
   test(`renders the same Calendar authority at ${viewport.width}px`, async ({ page }, testInfo) => {
+    const consoleErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
     await page.setViewportSize(viewport);
     await page.goto("/app/operations");
 
@@ -74,33 +125,236 @@ for (const viewport of [
     await expect(operations.getByRole("heading", { name: "Operations", exact: true })).toBeVisible();
     await expect(operations.getByRole("button", { name: "Month", exact: true })).toBeVisible();
     await expect(operations.getByRole("button", { name: "Week", exact: true })).toBeVisible();
+    await expect(operations.locator(".schedule-layout")).toHaveAttribute("data-view-mode", "month");
+    const eventContext = operations.getByTestId("operations-event-context");
+    await expect(eventContext).toHaveAttribute("data-context-placement", "below-calendar");
 
     if (viewport.width === 390) {
       await expect(operations.getByTestId("operations-mobile-agenda")).toBeVisible();
       await expect(operations.locator(".schedule-desktop-calendar")).toBeHidden();
-      await expect(operations.locator("[data-exact-event-id='operations-event-a']").first()).toBeVisible();
+      await expect(operations.getByTestId("operations-month-calendar")).toBeHidden();
+      await operations.locator("[data-exact-event-id='operations-event-a'] button").first().click();
     } else {
       await expect(operations.getByTestId("operations-mobile-agenda")).toBeHidden();
       await expect(operations.locator(".schedule-desktop-calendar")).toBeVisible();
+      await expect(operations.getByTestId("operations-month-calendar")).toBeVisible();
+      await expect(operations.locator(".schedule-weekday-row span")).toHaveCount(7);
+      await operations.locator("button.schedule-day-cell.has-conflict").first().click();
+    }
+
+    const focusedEvent = operations.getByTestId("operations-focused-event");
+    await expect(focusedEvent).toHaveAttribute("data-exact-event-id", "operations-event-a");
+    await expect(operations.getByTestId("operations-conflict-workflow")).toContainText("Q-OPS-2");
+    await expect(operations).not.toContainText("Mark as resolved");
+    for (const label of ["Run of show", "Production", "Kitchen timing", "Staffing"]) {
+      await expect(
+        operations.locator("details.schedule-operational-disclosure").filter({ hasText: label }).first()
+      ).not.toHaveAttribute("open", "");
+    }
+
+    if (viewport.width >= 1400) {
+      const monthPanel = operations.locator(".schedule-grid-panel");
+      const [monthPanelBox, contextBox] = await Promise.all([
+        monthPanel.boundingBox(),
+        eventContext.boundingBox()
+      ]);
+      expect(monthPanelBox).not.toBeNull();
+      expect(contextBox).not.toBeNull();
+      expect(contextBox.y).toBeGreaterThanOrEqual(monthPanelBox.y + monthPanelBox.height - 1);
+      expect(Math.abs(contextBox.x - monthPanelBox.x)).toBeLessThanOrEqual(2);
+      expect(Math.abs(contextBox.width - monthPanelBox.width)).toBeLessThanOrEqual(2);
+      expect(await eventContext.evaluate((node) => getComputedStyle(node).position)).not.toBe("sticky");
     }
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
       .toBe(true);
+
+    const evidenceSha = String(process.env.UX_EVIDENCE_SHA || "working-tree").slice(0, 12);
+    const monthScreenshotPath = testInfo.outputPath(`operations-month-${viewport.width}-${evidenceSha}.png`);
+    await page.screenshot({ path: monthScreenshotPath, fullPage: true });
+    await testInfo.attach(`Calendar-first Operations Month ${viewport.width}px at ${evidenceSha}`, {
+      path: monthScreenshotPath,
+      contentType: "image/png"
+    });
+    if ([390, 1440, 1487].includes(viewport.width)) {
+      const monthViewportPath = testInfo.outputPath(`operations-month-${viewport.width}-viewport-${evidenceSha}.png`);
+      await resetViewportScroll(page);
+      await page.screenshot({ path: monthViewportPath });
+      await testInfo.attach(`Calendar-first Operations Month ${viewport.width}px viewport at ${evidenceSha}`, {
+        path: monthViewportPath,
+        contentType: "image/png"
+      });
+    }
+
+    await operations.getByRole("button", { name: "Week", exact: true }).click();
+    await expect(operations.locator(".schedule-layout")).toHaveAttribute("data-view-mode", "week");
+    if (viewport.width === 390) {
+      await expect(operations.getByTestId("operations-mobile-agenda")).toBeVisible();
+      await expect(operations.getByTestId("operations-week-timeline")).toBeHidden();
+    } else {
+      const weekTimeline = operations.getByTestId("operations-week-timeline");
+      await expect(weekTimeline).toBeVisible();
+      await expect(operations.getByTestId("operations-week-time-axis")).toBeVisible();
+      await expect(weekTimeline.locator("[data-week-date]")).toHaveCount(7);
+      const weekDates = await weekTimeline.locator("[data-week-date]").evaluateAll((nodes) => (
+        nodes.map((node) => node.getAttribute("data-week-date"))
+      ));
+      expect(new Set(weekDates).size).toBe(7);
+      expect(weekDates).toEqual([...weekDates].sort());
+    }
+    if (viewport.width >= 1400) {
+      const weekTimeline = operations.getByTestId("operations-week-timeline");
+      await expect(eventContext).toHaveAttribute("data-context-placement", "detail-rail");
+      const [weekTimelineBox, detailRailBox] = await Promise.all([
+        weekTimeline.boundingBox(),
+        eventContext.boundingBox()
+      ]);
+      expect(weekTimelineBox).not.toBeNull();
+      expect(detailRailBox).not.toBeNull();
+      expect(detailRailBox.x).toBeGreaterThan(weekTimelineBox.x + weekTimelineBox.width);
+      expect(await eventContext.evaluate((node) => getComputedStyle(node).position)).toBe("sticky");
+
+      const eventA = weekTimeline.locator('[data-week-event-id="operations-event-a"]');
+      const eventB = weekTimeline.locator('[data-week-event-id="operations-event-b"]');
+      await expect(eventA).toHaveAttribute("data-start-minute", "1020");
+      await expect(eventB).toHaveAttribute("data-start-minute", "1080");
+      await expect(eventA).toHaveAttribute("data-duration-minutes", "240");
+      await expect(eventB).toHaveAttribute("data-duration-minutes", "240");
+      await expect(eventA).toHaveAttribute("data-collision-lane-count", "2");
+      await expect(eventB).toHaveAttribute("data-collision-lane-count", "2");
+      await expect(eventA).toHaveAttribute("aria-pressed", "true");
+
+      const [laneA, laneB] = await Promise.all([
+        eventA.getAttribute("data-collision-lane"),
+        eventB.getAttribute("data-collision-lane")
+      ]);
+      expect(new Set([laneA, laneB]).size).toBe(2);
+
+      const tick17 = operations.locator('[data-time-minute="1020"]');
+      const tick18 = operations.locator('[data-time-minute="1080"]');
+      const [eventABox, eventBBox, tick17Box, tick18Box] = await Promise.all([
+        eventA.boundingBox(),
+        eventB.boundingBox(),
+        tick17.boundingBox(),
+        tick18.boundingBox()
+      ]);
+      expect(eventABox).not.toBeNull();
+      expect(eventBBox).not.toBeNull();
+      expect(tick17Box).not.toBeNull();
+      expect(tick18Box).not.toBeNull();
+      const tick17Y = tick17Box.y + (tick17Box.height / 2);
+      const tick18Y = tick18Box.y + (tick18Box.height / 2);
+      const hourHeight = tick18Y - tick17Y;
+      expect(hourHeight).toBeGreaterThan(0);
+      expect(Math.abs(eventABox.y - tick17Y)).toBeLessThanOrEqual(3);
+      expect(Math.abs(eventBBox.y - tick18Y)).toBeLessThanOrEqual(3);
+      expect(Math.abs(eventABox.height - (hourHeight * 4))).toBeLessThanOrEqual(4);
+      expect(Math.abs(eventBBox.height - (hourHeight * 4))).toBeLessThanOrEqual(4);
+      expect(Math.abs(eventABox.x - eventBBox.x)).toBeGreaterThan(2);
+    }
+    await expect(operations.getByTestId("operations-focused-event"))
+      .toHaveAttribute("data-exact-event-id", "operations-event-a");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+      .toBe(true);
+
     const axe = await new AxeBuilder({ page })
       .include("[data-testid='operations-calendar']")
       .analyze();
     expect(axe.violations.filter((violation) => ["serious", "critical"].includes(violation.impact)))
       .toEqual([]);
 
-    const evidenceSha = String(process.env.UX_EVIDENCE_SHA || "working-tree").slice(0, 12);
-    const screenshotPath = testInfo.outputPath(`operations-${viewport.width}-${evidenceSha}.png`);
-    await page.screenshot({ path: screenshotPath, fullPage: true });
-    await testInfo.attach(`Calendar-first Operations ${viewport.width}px at ${evidenceSha}`, {
-      path: screenshotPath,
+    const weekScreenshotPath = testInfo.outputPath(`operations-week-${viewport.width}-${evidenceSha}.png`);
+    await page.screenshot({ path: weekScreenshotPath, fullPage: true });
+    await testInfo.attach(`Calendar-first Operations Week ${viewport.width}px at ${evidenceSha}`, {
+      path: weekScreenshotPath,
       contentType: "image/png"
     });
+    if ([390, 1440, 1487].includes(viewport.width)) {
+      const weekViewportPath = testInfo.outputPath(`operations-week-${viewport.width}-viewport-${evidenceSha}.png`);
+      await resetViewportScroll(page);
+      await page.screenshot({ path: weekViewportPath });
+      await testInfo.attach(`Calendar-first Operations Week ${viewport.width}px viewport at ${evidenceSha}`, {
+        path: weekViewportPath,
+        contentType: "image/png"
+      });
+    }
+    expect(consoleErrors).toEqual([]);
   });
 }
+
+test("preserves the exact selected event across Month and Week presentation switches", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/app/operations");
+
+  const operations = page.getByTestId("operations-calendar");
+  const context = operations.getByTestId("operations-event-context");
+  await operations.locator("button.schedule-day-cell.has-conflict").first().click();
+  await expect(context).toHaveAttribute("data-selected-event-id", "operations-event-a");
+
+  await operations.getByRole("button", { name: "Week", exact: true }).click();
+  const eventB = operations.locator('[data-week-event-id="operations-event-b"]');
+  await expect(operations.locator('[data-week-event-id="operations-event-a"]'))
+    .toHaveAttribute("aria-pressed", "true");
+  await eventB.click();
+  await expect(context).toHaveAttribute("data-selected-event-id", "operations-event-b");
+  await expect(eventB).toHaveAttribute("aria-pressed", "true");
+
+  await operations.getByRole("button", { name: "Month", exact: true }).click();
+  await expect(context).toHaveAttribute("data-context-placement", "below-calendar");
+  await expect(context).toHaveAttribute("data-selected-event-id", "operations-event-b");
+  await expect(operations.getByTestId("operations-focused-event"))
+    .toHaveAttribute("data-exact-event-id", "operations-event-b");
+
+  await operations.getByRole("button", { name: "Week", exact: true }).click();
+  await expect(context).toHaveAttribute("data-context-placement", "detail-rail");
+  await expect(context).toHaveAttribute("data-selected-event-id", "operations-event-b");
+  await expect(operations.locator('[data-week-event-id="operations-event-b"]'))
+    .toHaveAttribute("aria-pressed", "true");
+});
+
+test("honors Calendar and Reporting capability gates across navigation and direct routes", async ({ page }) => {
+  await page.addInitScript((catalog) => {
+    if (localStorage.getItem("operations-capability-gates-seeded") === "true") return;
+    localStorage.setItem("quoteWizard.catalog", JSON.stringify(catalog));
+    localStorage.setItem("quoteWizard.catalog.e2e-org", JSON.stringify(catalog));
+    localStorage.setItem("operations-capability-gates-seeded", "true");
+    sessionStorage.setItem("quotepilot:skipCatalogSetup:e2e-org", "1");
+  }, CAPABILITY_GATE_CATALOG);
+
+  await page.goto("/app");
+  const primaryNavigation = page.getByRole("navigation", { name: "Primary workspace" });
+  await expect(primaryNavigation).toBeVisible();
+  await expect(primaryNavigation.getByRole("button", { name: "Operations", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open in Calendar", exact: true })).toHaveCount(0);
+
+  await page.goto("/app/quotes/operations-event-a");
+  await expect(page.locator(".ambient-living-opportunity")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Calendar", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open in Calendar", exact: true })).toHaveCount(0);
+
+  await page.goto("/app/events");
+  const eventsWorkspace = page.locator(".live-ops-route");
+  await expect(eventsWorkspace.getByRole("heading", { name: "Accepted and booked events", exact: true })).toBeVisible();
+  await expect(eventsWorkspace.getByRole("button", { name: "Operations", exact: true })).toHaveCount(0);
+
+  await page.goto("/app/operations");
+  await expect(page.getByTestId("operations-calendar")).toHaveCount(0);
+  await page.goto("/app/schedule");
+  await expect(page.locator("#event-schedule-title")).toHaveCount(0);
+
+  await page.evaluate(() => {
+    const key = "quoteWizard.catalog.e2e-org";
+    const catalog = JSON.parse(localStorage.getItem(key) || "{}");
+    catalog.settings.featureFlags.eventSchedule = true;
+    catalog.settings.featureFlags.reportingDashboard = false;
+    localStorage.setItem(key, JSON.stringify(catalog));
+  });
+  await page.goto("/app/operations");
+  const operations = page.getByTestId("operations-calendar");
+  await expect(operations).toBeVisible();
+  await operations.getByTestId("operations-tools").getByText("Tools", { exact: true }).click();
+  await expect(operations.getByRole("button", { name: "Reporting", exact: true })).toHaveCount(0);
+});
 
 test("preserves exact Now to Calendar and Calendar to Opportunity handoffs", async ({ page }) => {
   await page.goto("/app");
@@ -110,7 +364,7 @@ test("preserves exact Now to Calendar and Calendar to Opportunity handoffs", asy
 
   await expect(page).toHaveURL(/\/app\/operations$/);
   const operations = page.getByTestId("operations-calendar");
-  const exactEvent = operations.locator("article.schedule-event-card").filter({ hasText: "Q-OPS-1" });
+  const exactEvent = operations.getByTestId("operations-focused-event").filter({ hasText: "Q-OPS-1" });
   await expect(exactEvent).toBeVisible();
   await expect(exactEvent).toBeFocused();
   await exactEvent.getByRole("button", { name: "Open opportunity", exact: true }).click();
@@ -170,16 +424,30 @@ test("shows conflict evidence and persists staffing and checklist work", async (
 
   const operations = page.getByTestId("operations-calendar");
   await operations.locator('[data-exact-event-id="operations-event-a"] button').first().click();
-  const event = operations.locator('article[data-schedule-event-id="operations-event-a"]');
+  const event = operations.locator('[data-schedule-event-id="operations-event-a"]');
   await expect(event).toBeVisible();
-  await expect(event.locator(".schedule-conflict-note")).toContainText("Time overlap");
-  await expect(event.locator(".schedule-conflict-note")).toContainText("Capacity risk");
+  await expect(operations.getByTestId("operations-conflict-workflow")).toContainText("Time overlap");
+  await expect(operations.getByTestId("operations-conflict-workflow")).toContainText("Capacity risk");
+  const comparisonDisclosure = operations.locator("details.schedule-conflict-comparison-disclosure");
+  await expect(comparisonDisclosure).not.toHaveAttribute("open", "");
+  await comparisonDisclosure.getByText("Compare event records", { exact: true }).click();
+  await expect(comparisonDisclosure).toHaveAttribute("open", "");
+  await expect(comparisonDisclosure).toContainText("Current event");
+  await expect(comparisonDisclosure).toContainText("Compare with");
 
-  await event.getByLabel("Staff lead").selectOption("Kitchen Lead");
+  const staffingSummary = operations.locator(".schedule-operational-disclosures > details > summary")
+    .filter({ hasText: /^Staffing/ });
+  await staffingSummary.click();
+  const staffing = staffingSummary.locator("..");
+  await staffing.getByLabel("Staff lead").selectOption("Kitchen Lead");
   await expect(operations.getByText("Assigned Kitchen Lead.", { exact: true })).toBeVisible();
-  await event.getByRole("checkbox", { name: /^Event brief reviewed/ }).check();
+  const productionSummary = operations.locator(".schedule-operational-disclosures > details > summary")
+    .filter({ hasText: /^Production/ });
+  await productionSummary.click();
+  const production = productionSummary.locator("..");
+  await production.getByRole("checkbox", { name: /^Event brief reviewed/ }).check();
   await expect(operations.getByText(/Production checklist updated for Q-OPS-1/)).toBeVisible();
-  await expect(event.getByRole("checkbox", { name: /^Event brief reviewed/ })).toBeChecked();
+  await expect(production.getByRole("checkbox", { name: /^Event brief reviewed/ })).toBeChecked();
 
   const stored = await page.evaluate(() => {
     const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
@@ -193,8 +461,16 @@ test("shows conflict evidence and persists staffing and checklist work", async (
 
   await page.reload();
   await operations.locator('[data-exact-event-id="operations-event-a"] button').first().click();
-  await expect(event.getByLabel("Staff lead")).toHaveValue("Kitchen Lead");
-  await expect(event.getByRole("checkbox", { name: /^Event brief reviewed/ })).toBeChecked();
+  const reloadedStaffingSummary = operations.locator(".schedule-operational-disclosures > details > summary")
+    .filter({ hasText: /^Staffing/ });
+  await reloadedStaffingSummary.click();
+  const reloadedStaffing = reloadedStaffingSummary.locator("..");
+  await expect(reloadedStaffing.getByLabel("Staff lead")).toHaveValue("Kitchen Lead");
+  const reloadedProductionSummary = operations.locator(".schedule-operational-disclosures > details > summary")
+    .filter({ hasText: /^Production/ });
+  await reloadedProductionSummary.click();
+  const reloadedProduction = reloadedProductionSummary.locator("..");
+  await expect(reloadedProduction.getByRole("checkbox", { name: /^Event brief reviewed/ })).toBeChecked();
 });
 
 test("preserves exact direct Event Focus and browser history continuity", async ({ page }) => {
@@ -211,7 +487,7 @@ test("preserves exact direct Event Focus and browser history continuity", async 
     .locator('[data-exact-event-id="operations-event-a"]')
     .getByRole("button");
   await targetDay.click();
-  const event = operations.locator('article[data-schedule-event-id="operations-event-a"]');
+  const event = operations.locator('[data-schedule-event-id="operations-event-a"]');
   await event.getByRole("button", { name: "Open opportunity", exact: true }).click();
   await expect(page).toHaveURL(/\/app\/quotes\/operations-event-a$/);
 

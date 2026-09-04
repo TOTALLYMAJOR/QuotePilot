@@ -110,6 +110,10 @@ export function buildWorkspaceShellModel({
     if (browserRouteId === WORKSPACE_ROUTE_IDS.OUTSIDE) notFoundReason = "outside-workspace";
     else if (browserRouteId === WORKSPACE_ROUTE_IDS.NOT_FOUND) notFoundReason = "unknown-route";
     else if (!workspace && LEGACY_GAPS.includes(resolvedRouteId)) notFoundReason = "legacy-unavailable";
+    else if (
+      resolvedRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS
+      && features.eventSchedule !== true
+    ) notFoundReason = "feature-disabled";
     else if (selectedTool && !routedToolAuthorized) {
       notFoundReason = selectedTool[2] && features[selectedTool[2]] !== true
         ? "feature-disabled"

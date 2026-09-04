@@ -42,6 +42,18 @@ function mountClearDeck(props = {}) {
 }
 
 describe("EventPlanningView recovery journeys", () => {
+  test("offers Operations only when the Calendar capability supplies a continuation", () => {
+    const withoutOperations = renderToStaticMarkup(
+      <EventPlanningView snapshot={snapshot()} />
+    );
+    const withOperations = renderToStaticMarkup(
+      <EventPlanningView snapshot={snapshot()} onOpenOperations={() => {}} />
+    );
+
+    expect(withoutOperations).not.toContain(">Operations</button>");
+    expect(withOperations).toContain(">Operations</button>");
+  });
+
   test("replaces raw provider errors with one safe productive recovery", () => {
     const markup = renderToStaticMarkup(
       <EventPlanningView snapshot={snapshot({ error: "Missing or insufficient permissions." })} />

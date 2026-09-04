@@ -118,6 +118,7 @@ export const AMBIENT_PRIMARY_WORKSPACE_NAVIGATION = Object.freeze([
     path: WORKSPACE_PATHS.operations,
     section: "operations",
     action: "onOperations",
+    capability: "eventSchedule",
     orientation: "operations",
     triggerRef: "operations"
   }),

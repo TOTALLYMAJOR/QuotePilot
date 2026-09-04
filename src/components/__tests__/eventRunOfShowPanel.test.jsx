@@ -61,6 +61,7 @@ describe("EventRunOfShowPanel", () => {
     expect(markup).toContain("Source: Firestore staff records. Authority: Canonical tenant staff records.");
     expect(markup).toContain("showing 1 of 1 accepted or booked records derived from 1 loaded quotes");
     expect(markup).toContain("<details");
+    expect(markup).not.toMatch(/<details[^>]*\sopen=/);
     expect(markup).toContain("Q-2026-0042: Spring Gala");
     expect(markup).toContain("Proposal acceptance: Accepted");
     expect(markup).toContain("Booking: Not booked");

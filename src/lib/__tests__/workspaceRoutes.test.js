@@ -215,7 +215,7 @@ describe("workspace route parsing and construction", () => {
     expect(Object.isFrozen(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION)).toBe(true);
     expect(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.every(Object.isFrozen)).toBe(true);
     expect(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.find((item) => item.routeId === WORKSPACE_ROUTE_IDS.OPERATIONS))
-      .toMatchObject({ triggerRef: "operations" });
+      .toMatchObject({ triggerRef: "operations", capability: "eventSchedule" });
 
     expect(PRIMARY_WORKSPACE_NAVIGATION.map((item) => item.label))
       .toEqual([
