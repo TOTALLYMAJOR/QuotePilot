@@ -1419,9 +1419,7 @@ test("accepted event production checklist persists completion", async ({ page })
 test("create then edit keeps one quote row and reflects updated fields", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 70 });
 
-  const quoteRows = page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy email text" })
-  });
+  const quoteRows = page.locator(".history-table-wrap tbody tr[data-quote-id]");
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("70");
   const originalQuoteId = await quoteRows.first().getAttribute("data-quote-id");

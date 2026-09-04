@@ -318,4 +318,21 @@ describe("configured quote action state", () => {
     expect(accepted.actions.change_status.visible).toBe(false);
   });
 
+  test("ranks customer-link renewal before send when the current portal issuance is expired", () => {
+    const result = controller(quote("draft", {
+      portalExpiresAtISO: "2020-01-01T00:00:00.000Z",
+      workflow: { approvalRequests: [] }
+    })).actionState;
+
+    expect(result.state.portalExpired).toBe(true);
+    expect(result.primaryAction).toMatchObject({
+      id: "rotate_portal",
+      label: "Renew customer link",
+      visible: true,
+      enabled: false
+    });
+    expect(result.primaryAction.disabledReason).toMatch(/approve customer-link renewal/i);
+    expect(result.actions.send_quote.enabled).toBe(false);
+  });
+
 });

@@ -786,6 +786,13 @@ describe("quoteStore versioning and delete behavior", () => {
       makeQuote({
         id: "q-duplicate-proof",
         status: "booked",
+        customerId: "customer-source",
+        customer: { name: "Client One", email: "client-one@example.com", phone: "205-555-0101" },
+        selection: { packageId: "classic", menuItems: ["salad"], menuItemNames: ["Salad"] },
+        pricing: { authority: "legacy_derived", grandTotal: 8400 },
+        pricingCatalogAuthority: { schemaVersion: 1, catalogRevision: 7 },
+        quoteMeta: { quoteValidityDays: 30, integrationRetryLimit: 4, integrationAuditRetention: 60 },
+        decidableOptionsProjection: [{ itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" }],
         acceptanceReceipt: { receiptId: "acceptance-source" },
         rebooking: { state: "draft_created_for_staff_review", sourceQuoteId: "older-source" },
         workflow: {
@@ -824,6 +831,14 @@ describe("quoteStore versioning and delete behavior", () => {
       .find((item) => item.id === created.id);
 
     expect(stored.status).toBe("draft");
+    expect(stored.customerId).toBe("customer-source");
+    expect(stored.customer).toMatchObject({ name: "Client One", email: "client-one@example.com" });
+    expect(stored.event).toMatchObject({ name: "Spring Banquet", venue: "Pine Hall", guests: 120 });
+    expect(stored.selection).toMatchObject({ packageId: "classic", menuItems: ["salad"] });
+    expect(stored.totals).toMatchObject({ total: 8400, deposit: 2520 });
+    expect(stored.pricing).toMatchObject({ authority: "legacy_derived", grandTotal: 8400 });
+    expect(stored.pricingCatalogAuthority).toEqual({ schemaVersion: 1, catalogRevision: 7 });
+    expect(stored.decidableOptionsProjection).toHaveLength(1);
     expect(stored.duplicatedFromQuoteId).toBe("q-duplicate-proof");
     expect(stored).not.toHaveProperty("acceptanceReceipt");
     expect(stored).not.toHaveProperty("rebooking");
@@ -840,6 +855,9 @@ describe("quoteStore versioning and delete behavior", () => {
     });
     expect(stored.payment).not.toHaveProperty("stripeSessionId");
     expect(stored.workflow).not.toHaveProperty("quoteDelivery");
+    expect(stored.integrations.providers).toEqual({});
+    expect(stored.integrations.logs).toEqual([]);
+    expect(stored).not.toHaveProperty("versionMeta");
     expect(stored.booking.contractNumber).toBe("");
     expect(stored.booking.bookedAtISO).toBe("");
   });

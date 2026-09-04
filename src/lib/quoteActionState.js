@@ -149,6 +149,7 @@ function choosePrimary({
   contractPresent,
   depositNeedsReconciliation,
   finalBalanceNeedsReconciliation,
+  portalIsExpired,
   acceptedProgressionPolicy
 }) {
   if (["outcome_ambiguous", "outcome_unknown"].includes(delivery)) {
@@ -159,6 +160,10 @@ function choosePrimary({
   if (finalBalanceNeedsReconciliation) return firstVisible(actions, ["reconcile_balance"]);
 
   if (status === "expired") return firstVisible(actions, ["reopen"]);
+  if (portalIsExpired) {
+    const portalRecovery = firstVisible(actions, ["rotate_portal"]);
+    if (portalRecovery) return portalRecovery;
+  }
   if (status === "declined") return firstVisible(actions, ["duplicate"]);
   if (status === "deleted") return null;
 
@@ -564,6 +569,7 @@ export function compileConfiguredQuoteActions({
     contractPresent,
     depositNeedsReconciliation,
     finalBalanceNeedsReconciliation,
+    portalIsExpired,
     acceptedProgressionPolicy
   });
 
