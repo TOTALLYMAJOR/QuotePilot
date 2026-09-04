@@ -1,0 +1,223 @@
+name: Temporary Finalize Configured Quote Action Safety
+
+on:
+  push:
+    branches:
+      - feat/configured-quote-action-state
+    paths:
+      - .github/workflows/tmp-finalize-configured-quote-actions.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/configured-quote-action-state
+          fetch-depth: 0
+      - name: Apply final bounded safety corrections
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const workflowPath = '.github/workflows/tmp-finalize-configured-quote-actions.yml';
+          const read = (path) => fs.readFileSync(path, 'utf8');
+          const write = (path, content) => fs.writeFileSync(path, content.endsWith('\n') ? content : `${content}\n`);
+
+          function replaceOnce(source, before, after, label) {
+            const index = source.indexOf(before);
+            if (index < 0) throw new Error(`Missing migration anchor: ${label}`);
+            if (source.indexOf(before, index + before.length) >= 0) {
+              throw new Error(`Ambiguous migration anchor: ${label}`);
+            }
+            return source.slice(0, index) + after + source.slice(index + before.length);
+          }
+
+          function timestamp(now = new Date()) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Chicago',
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit',
+              hourCycle: 'h23', timeZoneName: 'short'
+            }).formatToParts(now);
+            const value = (type) => parts.find((part) => part.type === type)?.value || '';
+            return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} ${value('timeZoneName')}`;
+          }
+
+          function updateTimestamp(content, value) {
+            return /^Last updated: .+$/m.test(content)
+              ? content.replace(/^Last updated: .+$/m, `Last updated: ${value}`)
+              : content;
+          }
+
+          // A. Portal expiry is a blocker/recovery state, not a hidden secondary action.
+          {
+            const path = 'src/lib/quoteActionState.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  finalBalanceNeedsReconciliation,\n  acceptedProgressionPolicy\n}) {',
+              '  finalBalanceNeedsReconciliation,\n  portalIsExpired,\n  acceptedProgressionPolicy\n}) {',
+              'portal expiry primary input'
+            );
+            source = replaceOnce(
+              source,
+              '  if (status === "expired") return firstVisible(actions, ["reopen"]);\n  if (status === "declined")',
+              '  if (status === "expired") return firstVisible(actions, ["reopen"]);\n  if (portalIsExpired) {\n    const portalRecovery = firstVisible(actions, ["rotate_portal"]);\n    if (portalRecovery) return portalRecovery;\n  }\n  if (status === "declined")',
+              'portal expiry recovery priority'
+            );
+            source = replaceOnce(
+              source,
+              '    finalBalanceNeedsReconciliation,\n    acceptedProgressionPolicy\n  });',
+              '    finalBalanceNeedsReconciliation,\n    portalIsExpired,\n    acceptedProgressionPolicy\n  });',
+              'pass portal expiry to primary chooser'
+            );
+            write(path, source);
+          }
+
+          // B. Browser-local alternate draft becomes an allowlist transformation.
+          {
+            const path = 'src/lib/quoteStore.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";\n  const { id: _sourceId, createdAt: _createdAt, ...sourceWithoutIdentity } = source;\n\n  const selection = {\n    ...(sourceWithoutIdentity.selection || {}),\n    addonQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.addonQuantities),\n    rentalQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.rentalQuantities),\n    menuItemQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.menuItemQuantities),\n    menuItemsSnapshot: Array.isArray(sourceWithoutIdentity.selection?.menuItemsSnapshot)\n      ? sourceWithoutIdentity.selection.menuItemsSnapshot.map((item) => ({',
+              '  const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";\n  const sourceSelection = source.selection && typeof source.selection === "object"\n    ? source.selection\n    : {};\n  const sourceIntegrations = source.integrations && typeof source.integrations === "object"\n    ? source.integrations\n    : {};\n\n  const selection = {\n    ...sourceSelection,\n    addonQuantities: normalizeQuantityMap(sourceSelection.addonQuantities),\n    rentalQuantities: normalizeQuantityMap(sourceSelection.rentalQuantities),\n    menuItemQuantities: normalizeQuantityMap(sourceSelection.menuItemQuantities),\n    menuItemsSnapshot: Array.isArray(sourceSelection.menuItemsSnapshot)\n      ? sourceSelection.menuItemsSnapshot.map((item) => ({',
+              'local duplicate allowlist source setup'
+            );
+            source = source.replaceAll('sourceWithoutIdentity.selection?.menuItemDetails', 'sourceSelection.menuItemDetails');
+            source = source.replaceAll('sourceWithoutIdentity.selection?.menuItemsSnapshot', 'sourceSelection.menuItemsSnapshot');
+            source = replaceOnce(
+              source,
+              '  const payload = {\n    ...sourceWithoutIdentity,\n    quoteNumber,',
+              '  const payload = {\n    quoteNumber,\n    ...(String(source.customerId || "").trim()\n      ? { customerId: String(source.customerId).trim() }\n      : {}),\n    customer: source.customer && typeof source.customer === "object"\n      ? { ...source.customer }\n      : {},\n    customerEmailKey: String(source.customerEmailKey || source.customer?.email || "").trim().toLowerCase(),\n    customerNameKey: normalizeCustomerNameKey(source.customerNameKey || source.customer?.name || ""),\n    eventTypeId: String(source.eventTypeId || sourceSelection.eventTypeId || source.event?.eventTypeId || "").trim(),\n    event: source.event && typeof source.event === "object"\n      ? { ...source.event }\n      : {},\n    selection,\n    decidableOptionsProjection: Array.isArray(source.decidableOptionsProjection)\n      ? source.decidableOptionsProjection.map((item) => ({ ...item }))\n      : [],\n    totals: source.totals && typeof source.totals === "object"\n      ? { ...source.totals }\n      : {},\n    pricing: source.pricing && typeof source.pricing === "object"\n      ? { ...source.pricing }\n      : undefined,\n    pricingCatalogAuthority: source.pricingCatalogAuthority && typeof source.pricingCatalogAuthority === "object"\n      ? { ...source.pricingCatalogAuthority }\n      : null,\n    quoteMeta: source.quoteMeta && typeof source.quoteMeta === "object"\n      ? { ...source.quoteMeta }\n      : {},\n    source: String(source.source || "local").trim() || "local",\n    quoteNumber,',
+              'local duplicate explicit payload allowlist'
+            );
+            // The replacement above intentionally introduces quoteNumber twice; remove the second generated identity line once.
+            source = replaceOnce(
+              source,
+              '    source: String(source.source || "local").trim() || "local",\n    quoteNumber,\n    portalKey,',
+              '    source: String(source.source || "local").trim() || "local",\n    portalKey,',
+              'dedupe local quote number'
+            );
+            source = replaceOnce(
+              source,
+              '      finalBalance: hydrateFinalBalance({}, sourceWithoutIdentity.totals || {})',
+              '      finalBalance: hydrateFinalBalance({}, source.totals || {})',
+              'local duplicate final balance basis'
+            );
+            source = replaceOnce(
+              source,
+              '    integrations: {\n      ...(sourceWithoutIdentity.integrations || {}),\n      lastSyncAtISO: "",\n      logs: []\n    },',
+              '    integrations: {\n      retryLimit: Math.max(1, Math.round(toNumber(sourceIntegrations.retryLimit, source.quoteMeta?.integrationRetryLimit || 3))),\n      retention: Math.max(10, Math.round(toNumber(sourceIntegrations.retention, source.quoteMeta?.integrationAuditRetention || 50))),\n      providers: {},\n      lastSyncAtISO: "",\n      logs: []\n    },',
+              'local duplicate integration proof reset'
+            );
+            write(path, source);
+          }
+
+          // C. Stronger local-copy test: preserve only the intended presentation/commercial basis.
+          {
+            const path = 'src/lib/__tests__/quoteStore.versioning.test.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '        status: "booked",\n        acceptanceReceipt:',
+              '        status: "booked",\n        customerId: "customer-source",\n        customer: { name: "Client One", email: "client-one@example.com", phone: "205-555-0101" },\n        selection: { packageId: "classic", menuItems: ["salad"], menuItemNames: ["Salad"] },\n        pricing: { authority: "legacy_derived", grandTotal: 8400 },\n        pricingCatalogAuthority: { schemaVersion: 1, catalogRevision: 7 },\n        quoteMeta: { quoteValidityDays: 30, integrationRetryLimit: 4, integrationAuditRetention: 60 },\n        decidableOptionsProjection: [{ itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" }],\n        acceptanceReceipt:',
+              'local duplicate preservation fixture'
+            );
+            source = replaceOnce(
+              source,
+              '    expect(stored.status).toBe("draft");\n    expect(stored.duplicatedFromQuoteId)',
+              '    expect(stored.status).toBe("draft");\n    expect(stored.customerId).toBe("customer-source");\n    expect(stored.customer).toMatchObject({ name: "Client One", email: "client-one@example.com" });\n    expect(stored.event).toMatchObject({ name: "Spring Banquet", venue: "Pine Hall", guests: 120 });\n    expect(stored.selection).toMatchObject({ packageId: "classic", menuItems: ["salad"] });\n    expect(stored.totals).toMatchObject({ total: 8400, deposit: 2520 });\n    expect(stored.pricing).toMatchObject({ authority: "legacy_derived", grandTotal: 8400 });\n    expect(stored.pricingCatalogAuthority).toEqual({ schemaVersion: 1, catalogRevision: 7 });\n    expect(stored.decidableOptionsProjection).toHaveLength(1);\n    expect(stored.duplicatedFromQuoteId)',
+              'local duplicate allowlist assertions'
+            );
+            source = replaceOnce(
+              source,
+              '    expect(stored.workflow).not.toHaveProperty("quoteDelivery");\n    expect(stored.booking.contractNumber)',
+              '    expect(stored.workflow).not.toHaveProperty("quoteDelivery");\n    expect(stored.integrations.providers).toEqual({});\n    expect(stored.integrations.logs).toEqual([]);\n    expect(stored).not.toHaveProperty("versionMeta");\n    expect(stored.booking.contractNumber)',
+              'local duplicate omitted proof assertions'
+            );
+            write(path, source);
+          }
+
+          // D. Hidden More controls must not be used as row-discovery selectors.
+          {
+            const path = 'e2e/quote-history-role-permissions.spec.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  const row = dialog.locator(".history-table-wrap tbody tr").filter({\n    has: page.getByRole("button", { name: "Copy email text" })\n  }).first();',
+              '  const row = dialog.locator(".history-table-wrap tbody tr[data-quote-id]").first();',
+              'sales role row discovery'
+            );
+            source = source.replace('name: "PDF"', 'name: "Download PDF"');
+            source = source.replace('name: "Delete"', 'name: "Delete quote"');
+            write(path, source);
+          }
+          {
+            const path = 'e2e/quote-wizard.smoke.spec.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  const quoteRows = page.locator(".history-table-wrap tbody tr").filter({\n    has: page.getByRole("button", { name: "Copy email text" })\n  });',
+              '  const quoteRows = page.locator(".history-table-wrap tbody tr[data-quote-id]");',
+              'edit test row discovery'
+            );
+            write(path, source);
+          }
+
+          // E. Portal-expiry acceptance keeps the blocker explicit.
+          {
+            const path = 'src/lib/__tests__/quoteActionState.test.js';
+            let source = read(path);
+            const insertion = `\n  test("ranks customer-link renewal before send when the current portal issuance is expired", () => {\n    const result = controller(quote("draft", {\n      portalExpiresAtISO: "2020-01-01T00:00:00.000Z",\n      workflow: { approvalRequests: [] }\n    })).actionState;\n\n    expect(result.state.portalExpired).toBe(true);\n    expect(result.primaryAction).toMatchObject({\n      id: "rotate_portal",\n      label: "Renew customer link",\n      visible: true,\n      enabled: false\n    });\n    expect(result.primaryAction.disabledReason).toMatch(/approve customer-link renewal/i);\n    expect(result.actions.send_quote.enabled).toBe(false);\n  });\n`;
+            const closing = '\n});\n';
+            const index = source.lastIndexOf(closing);
+            if (index < 0) throw new Error('quote action test close not found');
+            if (!source.includes('ranks customer-link renewal before send when the current portal issuance is expired')) {
+              source = source.slice(0, index) + insertion + source.slice(index);
+            }
+            write(path, source);
+          }
+
+          const now = timestamp();
+          for (const path of ['CHANGELOG.md', 'docs/FEATURE_MATRIX.md', 'docs/USER_MANUAL.md']) {
+            write(path, updateTimestamp(read(path), now));
+          }
+          {
+            const path = 'CHANGELOG.md';
+            let source = read(path);
+            source = source.replace(
+              'and the browser-local fallback clears acceptance, rebooking, delivery, payment-provider, and booking proof instead of cloning it.',
+              'and the browser-local fallback uses an explicit presentation/commercial allowlist while clearing acceptance, rebooking, delivery, payment-provider, integration-receipt, and booking proof instead of cloning the source object.'
+            );
+            write(path, source);
+          }
+          {
+            const path = 'docs/USER_MANUAL.md';
+            let source = read(path);
+            source = source.replace(
+              'Client, event, and quote configuration carry forward; the source quote remains unchanged, and delivery, acceptance, rebooking, payment-provider, and booking proof do not transfer.',
+              'Client, event, and quote configuration carry forward through an explicit allowlist; the source quote remains unchanged, and delivery, acceptance, rebooking, payment-provider, integration-receipt, and booking proof do not transfer.'
+            );
+            write(path, source);
+          }
+
+          fs.rmSync(workflowPath);
+          NODE
+
+          git config user.name "QuotePilot bounded migration"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/lib/quoteActionState.js src/lib/quoteStore.js \
+            src/lib/__tests__/quoteActionState.test.js \
+            src/lib/__tests__/quoteStore.versioning.test.js \
+            e2e/quote-history-role-permissions.spec.js \
+            e2e/quote-wizard.smoke.spec.js \
+            CHANGELOG.md docs/FEATURE_MATRIX.md docs/USER_MANUAL.md \
+            .github/workflows/tmp-finalize-configured-quote-actions.yml
+          git diff --cached --check
+          git commit -m "fix(quotes): harden configured quote action boundaries"
+          git push origin HEAD:feat/configured-quote-action-state
