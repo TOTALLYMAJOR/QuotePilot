@@ -108,7 +108,9 @@ async function createQuoteToHistory(page, { guests = 72, eventName, venue, date 
 }
 
 function quoteRows(page) {
-  return page.locator(".history-table-wrap tbody tr[data-quote-id]");
+  return page.locator(".history-table-wrap tbody tr").filter({
+    has: page.getByRole("button", { name: "Copy Email" })
+  });
 }
 
 async function setQuoteStatus(row, status) {
@@ -758,7 +760,9 @@ test("draft saves land on the exact canonical workspace and stay truthful across
   await expect(page.locator(".portal-link-row")).toHaveCount(0);
   expect(firstQuoteId).toBeTruthy();
   const history = await openQuoteHistoryFromWorkspace(page);
-  const firstQuoteRow = page.locator(".history-table-wrap tbody tr[data-quote-id]").first();
+  const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
+    has: page.getByRole("button", { name: "Copy Email" })
+  }).first();
   await expect(firstQuoteRow).toContainText("E2E Staff");
   await expect(firstQuoteRow).toContainText("110");
   await expect(history.locator(`tr[data-quote-id="${firstQuoteId}"]`)).toBeVisible();
@@ -842,29 +846,30 @@ test("unresolved quote delivery locks conflicting mutations but keeps read-only 
   for (const control of await row.locator("select").all()) {
     await expect(control).toBeDisabled();
   }
-  await row.locator("details.configured-quote-more-actions > summary").click();
-  for (const name of ["Edit draft", "Renew customer link", "Delete quote", "Create alternate draft"]) {
+  for (const name of ["Edit", "Rotate Portal", "Delete"]) {
     await expect(row.getByRole("button", { name })).toBeDisabled();
   }
-  await expect(row.getByRole("button", { name: "Request deposit" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Download PDF" })).toBeEnabled();
-  await expect(row.getByRole("button", { name: "Copy email text" })).toBeEnabled();
+  await expect(row.getByRole("button", { name: "Send Pay Request" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Duplicate" })).toBeEnabled();
+  await expect(row.getByRole("button", { name: "PDF" })).toBeEnabled();
+  await expect(row.getByRole("button", { name: "Copy Email" })).toBeEnabled();
 });
 
 test("quote history supports export and hides an unapproved payment link", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 84 });
 
-  const firstQuoteRow = page.locator(".history-table-wrap tbody tr[data-quote-id]").first();
+  const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
+    has: page.getByRole("button", { name: "Copy Email" })
+  }).first();
   await expect(firstQuoteRow).toBeVisible();
 
-  await firstQuoteRow.locator("details.configured-quote-more-actions > summary").click();
-  await firstQuoteRow.getByRole("button", { name: "Copy email text" }).click();
+  await firstQuoteRow.getByRole("button", { name: "Copy Email" }).click();
   await expect(page.getByRole("dialog").getByText(/Email template copied/i).first()).toContainText(/remains a draft/i);
-  await expect(firstQuoteRow.locator(".status-chip").filter({ hasText: /^Draft$/ }).first()).toBeVisible();
-  await expect(firstQuoteRow.getByRole("button", { name: "Copy customer link" })).toBeDisabled();
+  await expect(firstQuoteRow.getByRole("combobox").first()).toHaveValue("draft");
+  await expect(firstQuoteRow.getByRole("button", { name: "Copy Portal" })).toBeDisabled();
 
   const downloadPromise = page.waitForEvent("download");
-  await firstQuoteRow.getByRole("button", { name: "Download PDF" }).click();
+  await firstQuoteRow.getByRole("button", { name: "PDF" }).click();
   const pdfDownload = await downloadPromise;
   expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/i);
 
@@ -919,7 +924,7 @@ test("sales workflow persists a follow-up plan", async ({ page }) => {
   const history = page.getByRole("dialog", { name: "Quotes" });
   const executionRow = history.locator(`tr[data-quote-id]`).filter({ hasText: quoteLabel }).first();
   await expect(executionRow).toBeVisible();
-  const rotatePortalButton = executionRow.getByRole("button", { name: "Renew customer link" });
+  const rotatePortalButton = executionRow.getByRole("button", { name: "Rotate Portal" });
   await expect(rotatePortalButton).toBeFocused();
   await rotatePortalButton.click();
   await expect(history.getByText(/Portal link rotated/i)).toBeVisible();
@@ -1419,14 +1424,15 @@ test("accepted event production checklist persists completion", async ({ page })
 test("create then edit keeps one quote row and reflects updated fields", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 70 });
 
-  const quoteRows = page.locator(".history-table-wrap tbody tr[data-quote-id]");
+  const quoteRows = page.locator(".history-table-wrap tbody tr").filter({
+    has: page.getByRole("button", { name: "Copy Email" })
+  });
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("70");
   const originalQuoteId = await quoteRows.first().getAttribute("data-quote-id");
   expect(originalQuoteId).toBeTruthy();
 
-  await quoteRows.first().locator("details.configured-quote-more-actions > summary").click();
-  await quoteRows.first().getByRole("button", { name: "Edit draft" }).click();
+  await quoteRows.first().getByRole("button", { name: "Edit" }).click();
   await expect(page.getByText(/Editing quote/i)).toBeVisible();
 
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("95");
@@ -1448,8 +1454,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
   await createQuoteToHistory(page, { guests: 70, eventName: "Admin Isolation Quote" });
 
   const row = quoteRows(page).first();
-  await row.locator("details.configured-quote-more-actions > summary").click();
-  await row.getByRole("button", { name: "Edit draft" }).click();
+  await row.getByRole("button", { name: "Edit" }).click();
   const quoteEventType = page.getByLabel(/Event type/i);
   const originalEventType = await quoteEventType.inputValue();
   expect(originalEventType).toBeTruthy();

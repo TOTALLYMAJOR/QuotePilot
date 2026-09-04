@@ -95,31 +95,31 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog).toContainText("Sales can prepare proposal artifacts");
 
-  const row = dialog.locator(".history-table-wrap tbody tr[data-quote-id]").first();
+  const row = dialog.locator(".history-table-wrap tbody tr").filter({
+    has: page.getByRole("button", { name: "Copy Email" })
+  }).first();
   await expect(row).toBeVisible();
 
-  await expect(row.getByRole("button", { name: "Edit draft" })).toBeVisible();
-  const more = row.locator("details.configured-quote-more-actions");
-  await more.locator("summary").click();
-  await expect(row.getByRole("button", { name: "Create alternate draft" })).toBeVisible();
-  await expect(row.getByRole("button", { name: "Download PDF" })).toBeVisible();
-  await expect(row.getByRole("button", { name: "Send proposal" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Copy email text" })).toBeVisible();
-  await expect(row.getByRole("button", { name: "Copy customer link" })).toBeDisabled();
-  await expect(row.getByRole("button", { name: "Copy customer link" })).toHaveAttribute(
+  await expect(row.getByRole("button", { name: "Edit" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Duplicate" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "PDF" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Send Quote Email" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Copy Email" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Copy Portal" })).toBeDisabled();
+  await expect(row.getByRole("button", { name: "Copy Portal" })).toHaveAttribute(
     "title",
     "Customer portal sharing requires an active delivered status and valid future expiry."
   );
 
-  await row.getByRole("button", { name: "Copy email text" }).click();
+  await row.getByRole("button", { name: "Copy Email" }).click();
   await expect(dialog.getByText(/remains a draft/i).first()).toBeVisible();
 
   await expect(row.getByRole("button", { name: "Copy Pay Link" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Create Stripe Link" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Request deposit" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Create contract" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Renew customer link" })).toHaveCount(0);
-  await expect(row.getByRole("button", { name: "Delete quote" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Send Pay Request" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Convert" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Rotate Portal" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await expect(row.getByRole("combobox")).toHaveCount(0);
 
   const containment = await dialog.locator(".history-card").evaluate((card) => {
