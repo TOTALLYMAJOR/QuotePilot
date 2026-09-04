@@ -22,7 +22,7 @@
 }
 
 .pc-shell.container {
-  max-width: 1240px;
+  max-width: 1480px;
 }
 
 .proposal-composer {
@@ -248,9 +248,152 @@
 
 .pc-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 336px);
+  grid-template-columns: minmax(210px, 248px) minmax(0, 1fr) minmax(280px, 336px);
   gap: 1.4rem;
   align-items: start;
+}
+
+.pc-quote-plan {
+  position: sticky;
+  top: 1rem;
+  min-width: 0;
+  padding-top: 1.1rem;
+}
+
+.pc-quote-plan-head,
+.pc-quote-plan-head span {
+  display: flex;
+  align-items: center;
+}
+
+.pc-quote-plan-head {
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.2rem 0.65rem;
+}
+
+.pc-quote-plan-head span {
+  color: var(--pc-muted-deep);
+  font-size: 0.72rem;
+}
+
+.pc-quote-plan ol,
+.pc-truth-blockers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pc-quote-plan li {
+  border-top: 1px solid var(--pc-rule);
+}
+
+.pc-quote-plan li:last-child {
+  border-bottom: 1px solid var(--pc-rule);
+}
+
+.pc-quote-plan button {
+  width: 100%;
+  min-height: 4.6rem;
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--pc-ink);
+  padding: 0.78rem 0.55rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pc-quote-plan button:hover,
+.pc-quote-plan button[aria-current="step"] {
+  border-left-color: var(--pc-brass);
+  background: color-mix(in srgb, var(--pc-brass) 7%, transparent);
+}
+
+.pc-domain-index {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--pc-rule);
+  border-radius: 50%;
+  color: var(--pc-muted-deep);
+  font-family: var(--pc-money-font);
+  font-size: 0.68rem;
+}
+
+.pc-quote-plan li[data-state="complete"] .pc-domain-index {
+  border-color: var(--pc-teal);
+  color: var(--pc-teal);
+}
+
+.pc-quote-plan li[data-state="attention"] .pc-domain-index {
+  border-color: var(--pc-amber-deep);
+  color: var(--pc-amber-deep);
+}
+
+.pc-domain-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.22rem;
+}
+
+.pc-domain-copy strong {
+  font-size: 0.88rem;
+}
+
+.pc-domain-copy small {
+  color: var(--pc-muted-deep);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.pc-domain-state {
+  grid-column: 2;
+  color: var(--pc-brass-deep);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.pc-sheet [data-workbench-panel] {
+  display: none;
+}
+
+.pc-sheet[data-active-domain="event"] [data-workbench-panel="event"],
+.pc-sheet[data-active-domain="customer"] [data-workbench-panel="customer"],
+.pc-sheet[data-active-domain="experience"] [data-workbench-panel="experience"],
+.pc-sheet[data-active-domain="staffing"] [data-workbench-panel="staffing"],
+.pc-sheet[data-active-domain="commercials"] [data-workbench-panel="commercials"] {
+  display: block;
+}
+
+.pc-truth-blockers li + li {
+  border-top: 1px solid var(--pc-rule);
+}
+
+.pc-truth-blockers button {
+  width: 100%;
+  min-height: 2.75rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--pc-ink);
+  padding: 0.55rem 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pc-truth-blockers button small {
+  flex: none;
+  color: var(--pc-brass-deep);
+  font-weight: 700;
 }
 
 .pc-document {
@@ -1408,6 +1551,33 @@
 @media (max-width: 1080px) {
   .pc-columns { grid-template-columns: 1fr; }
 
+  .pc-quote-plan {
+    position: static;
+    padding-top: 0.4rem;
+  }
+
+  .pc-quote-plan ol {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .pc-quote-plan li,
+  .pc-quote-plan li:last-child {
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .pc-quote-plan button {
+    min-height: 4.25rem;
+    border-left: 0;
+    border-bottom: 3px solid transparent;
+  }
+
+  .pc-quote-plan button:hover,
+  .pc-quote-plan button[aria-current="step"] {
+    border-left-color: transparent;
+    border-bottom-color: var(--pc-brass);
+  }
+
   .pc-pulse {
     display: none;
   }
@@ -1489,6 +1659,20 @@
   .pc-investment-lede { flex-direction: column; align-items: flex-start; gap: 0.8rem; }
   .pc-proposal-polish ul { grid-template-columns: 1fr; }
   .pc-margin-cost dl { grid-template-columns: 1fr; }
+  .pc-quote-plan-head { padding-inline: 0; }
+  .pc-quote-plan ol {
+    grid-template-columns: repeat(5, minmax(7.5rem, 1fr));
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+  .pc-quote-plan li { scroll-snap-align: start; }
+  .pc-quote-plan button {
+    min-height: 3.4rem;
+    grid-template-columns: 1.45rem minmax(0, 1fr);
+    padding: 0.65rem 0.4rem;
+  }
+  .pc-domain-copy small,
+  .pc-domain-state { display: none; }
 
   /* A mobile keyboard can reduce the visual viewport enough for the sticky
      review bar to cover an inline editor's Apply and Cancel controls. Keep the

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { calculateQuote } from "../../lib/quoteCalculator";
 import {
   buildCompositionLine,
+  buildCommercialWorkbenchModel,
   buildExperienceModel,
   buildExperienceSectionStatus,
   buildGuestChangeConsequences,
@@ -217,6 +218,51 @@ describe("buildWatchingList", () => {
     const readiness = items.find((item) => item.id === "readiness");
     expect(readiness.state).toBe("watch");
     expect(readiness.detail).toBe("85/100 · Final review");
+  });
+});
+
+describe("Commercial Workbench presentation", () => {
+  it("derives five proposal domains without creating business state", () => {
+    const form = draftForm({ menuItems: ["salad"], style: "Buffet", servers: 4 });
+    const model = buildCommercialWorkbenchModel({
+      form,
+      totals: totalsFor(form),
+      catalog: quoteCalculationCatalog,
+      blockers: []
+    });
+
+    expect(model.modelId).toBe("commercial-workbench-v1");
+    expect(model.domains.map((domain) => domain.id)).toEqual([
+      "event",
+      "customer",
+      "experience",
+      "staffing",
+      "commercials"
+    ]);
+    expect(model.domains.find((domain) => domain.id === "experience")?.summary)
+      .toContain("1 menu item");
+  });
+
+  it("targets exact field blockers and sends authority blockers to Commercials", () => {
+    const form = draftForm({ menuItems: [] });
+    const model = buildCommercialWorkbenchModel({
+      form,
+      totals: totalsFor(form),
+      catalog: quoteCalculationCatalog,
+      blockers: [
+        { id: "event-date", message: "Add the event date." },
+        { id: "client-email", message: "Add the client email." },
+        { id: "menu-selection", message: "Select a menu item." },
+        { id: "change-impact-review", message: "Review the change impact." }
+      ]
+    });
+
+    expect(model.blockerTargets.map((blocker) => blocker.domainId)).toEqual([
+      "event",
+      "customer",
+      "experience",
+      "commercials"
+    ]);
   });
 });
 

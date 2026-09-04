@@ -9,6 +9,7 @@ import { buildMarginPresentation } from "./marginPresentation";
 import { playCue } from "./soundKit";
 import {
   buildCompositionLine,
+  buildCommercialWorkbenchModel,
   buildExperienceModel,
   buildExperienceSectionStatus,
   buildGuestChangeConsequences,
@@ -425,6 +426,7 @@ export default function ProposalComposer({
   const [rentalEditorOpen, setRentalEditorOpen] = useState(false);
   const [enhancementEditorOpen, setEnhancementEditorOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [activeDomain, setActiveDomain] = useState("event");
   const [pulseOpen, setPulseOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [guestAnchor, setGuestAnchor] = useState(null);
@@ -432,7 +434,7 @@ export default function ProposalComposer({
   const [liveNote, setLiveNote] = useState("");
   // Session-only running log of the changes made to this draft — a working
   // memory for the operator, not a record; saved history stays in versions.
-  const [activityOpen, setActivityOpen] = useState(true);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
   const activityIdRef = useRef(0);
   const saveReadinessRef = useRef(null);
@@ -503,6 +505,17 @@ export default function ProposalComposer({
     [completeness.experience, editingQuote?.id, touchedFields?.pkg, touchedFields?.style]
   );
   const staffing = useMemo(() => buildStaffingRecommendation(form), [form]);
+  const workbench = useMemo(
+    () => buildCommercialWorkbenchModel({
+      form,
+      totals,
+      catalog,
+      completeness,
+      blockers: currentSaveBlockers,
+      staffing
+    }),
+    [form, totals, catalog, completeness, currentSaveBlockers, staffing]
+  );
   const watching = useMemo(
     () => buildWatchingList({ form, totals, readiness, staffing }),
     [form, totals, readiness, staffing]
@@ -582,6 +595,19 @@ export default function ProposalComposer({
   }, []);
 
   const flashAttr = (key) => (flashKeys.has(key) ? "on" : undefined);
+
+  const openDomain = (domainId) => {
+    setActiveDomain(domainId);
+    if (domainId !== "experience") {
+      setExperienceEditorOpen(false);
+      setMenuEditorOpen(false);
+      setRentalEditorOpen(false);
+      setEnhancementEditorOpen(false);
+    }
+    window.requestAnimationFrame?.(() => {
+      document.querySelector(`[data-workbench-panel="${domainId}"]`)?.focus({ preventScroll: true });
+    });
+  };
 
   const commitField = (field) => (value) => {
     onFieldChange(field, value);
@@ -886,6 +912,33 @@ export default function ProposalComposer({
         ) : null}
       </div>
 
+      {workbench.blockerTargets.length ? (
+        <div className="pc-pulse-block pc-truth-blockers" data-testid="commercial-truth-blockers">
+          <p className="pc-eyebrow">Actionable blockers</p>
+          <ul>
+            {workbench.blockerTargets.map((blocker) => (
+              <li key={blocker.id || blocker.message}>
+                <button type="button" onClick={() => openDomain(blocker.domainId)}>
+                  <span>{blocker.message}</span>
+                  <small>Review {workbench.domains.find((domain) => domain.id === blocker.domainId)?.label}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {consequences ? (
+        <div className="pc-pulse-block" data-testid="commercial-truth-consequence">
+          <p className="pc-eyebrow">Current consequence</p>
+          <p>
+            Guests changed from {consequences.from || "—"} to {consequences.to}; the total moved by{" "}
+            <ImpactTag delta={consequences.totalDelta} />.
+          </p>
+          <button type="button" className="pc-watch-link" onClick={() => openDomain("event")}>Review guest change</button>
+        </div>
+      ) : null}
+
       {composition.length ? (
         <div className="pc-pulse-block">
           <p className="pc-eyebrow">Composition</p>
@@ -1058,6 +1111,9 @@ export default function ProposalComposer({
       </div>
 
       <div className="pc-pulse-actions">
+        <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
+          Preview client view
+        </button>
         <button
           type="button"
           className="pc-cta"
@@ -1139,6 +1195,40 @@ export default function ProposalComposer({
       </header>
 
       <div className="pc-columns">
+        <nav className="pc-quote-plan" aria-label="Quote plan" data-testid="commercial-workbench-plan">
+          <div className="pc-quote-plan-head">
+            <p className="pc-eyebrow">Quote plan</p>
+            <span>{workbench.domains.filter((domain) => domain.status === "complete").length}/5 ready</span>
+          </div>
+          <ol>
+            {workbench.domains.map((domain, index) => (
+              <li key={domain.id} data-state={domain.status}>
+                <button
+                  type="button"
+                  aria-current={activeDomain === domain.id ? "step" : undefined}
+                  onClick={() => openDomain(domain.id)}
+                  data-testid={`workbench-domain-${domain.id}`}
+                  data-workbench-domain-status={domain.status}
+                >
+                  <span className="pc-domain-index" aria-hidden="true">{index + 1}</span>
+                  <span className="pc-domain-copy">
+                    <strong>{domain.label}</strong>
+                    <small>{domain.summary}</small>
+                  </span>
+                  <span className="pc-domain-state">
+                    {domain.blockerCount > 0
+                      ? `${domain.blockerCount} blocker${domain.blockerCount === 1 ? "" : "s"}`
+                      : domain.status === "complete"
+                        ? "Ready"
+                        : domain.status === "attention"
+                          ? "Review"
+                          : "In progress"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
         <div className="pc-document" data-testid="pc-document">
           {reviewSurfaces}
 
@@ -1187,14 +1277,14 @@ export default function ProposalComposer({
             </aside>
           ) : null}
 
-          <article className="pc-sheet">
+          <article className="pc-sheet" data-active-domain={activeDomain} data-testid="commercial-workbench-object">
             {proposalIntroTitle || proposalIntroMessage ? (
               <section className="pc-proposal-note" aria-label="Proposal introduction">
                 {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
                 {proposalIntroMessage ? <p className="pc-proposal-note-copy">{proposalIntroMessage}</p> : null}
               </section>
             ) : null}
-            <section className="pc-section" aria-labelledby="pc-sec-event">
+            <section className="pc-section" aria-labelledby="pc-sec-event" data-workbench-panel="event" tabIndex={-1}>
               <SectionHeading id="pc-sec-event" eyebrow="Event" complete={completeness.event} />
               <div className="pc-inline-grid">
                 <InlineValue
@@ -1287,7 +1377,7 @@ export default function ProposalComposer({
               </label>
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-client">
+            <section className="pc-section" aria-labelledby="pc-sec-client" data-workbench-panel="customer" tabIndex={-1}>
               <SectionHeading id="pc-sec-client" eyebrow="Client" complete={completeness.client} />
               <div className="pc-inline-grid">
                 <InlineValue
@@ -1329,7 +1419,7 @@ export default function ProposalComposer({
               </div>
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-experience">
+            <section className="pc-section" aria-labelledby="pc-sec-experience" data-workbench-panel="experience" tabIndex={-1}>
               <SectionHeading id="pc-sec-experience" eyebrow="Experience" status={experienceSectionStatus} />
               <h4 className="pc-experience-title">{experience.title}</h4>
               <p className="pc-experience-blurb">{experience.blurb}</p>
@@ -1407,7 +1497,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-menu">
+            <section className="pc-section" aria-labelledby="pc-sec-menu" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-menu" eyebrow="Menu" complete={completeness.menu} />
               {menuLoading ? <p className="pc-muted">Loading the menu for this event type…</p> : null}
               {menuError ? <p className="pc-error" role="alert">{menuError}</p> : null}
@@ -1503,7 +1593,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-staffing">
+            <section className="pc-section" aria-labelledby="pc-sec-staffing" data-workbench-panel="staffing" tabIndex={-1}>
               <SectionHeading id="pc-sec-staffing" eyebrow="Staffing" complete={completeness.staffing} />
               <div className="pc-inline-grid pc-inline-grid-tight">
                 <InlineValue
@@ -1636,7 +1726,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-rentals">
+            <section className="pc-section" aria-labelledby="pc-sec-rentals" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-rentals" eyebrow="Rentals" complete={null} />
               {rentalRows.length ? (
                 <ul className="pc-rental-list">
@@ -1699,7 +1789,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-enhancements">
+            <section className="pc-section" aria-labelledby="pc-sec-enhancements" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-enhancements" eyebrow="Enhancements" complete={null} />
               {selectedAddonEntries.length ? (
                 <ul className="pc-enhancement-list">
@@ -1761,7 +1851,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section pc-section-investment" aria-labelledby="pc-sec-investment">
+            <section className="pc-section pc-section-investment" aria-labelledby="pc-sec-investment" data-workbench-panel="commercials" tabIndex={-1}>
               <SectionHeading id="pc-sec-investment" eyebrow="Investment" complete={completeness.investment} />
               <div className="pc-investment-lede">
                 <p className="pc-investment-total" data-pc-flash={flashAttr("total")} data-testid="pc-investment-total">
@@ -1869,9 +1959,10 @@ export default function ProposalComposer({
           className={`pc-pulse${pulseOpen ? " is-open" : ""}`}
           aria-label="Quote Pulse"
           data-testid="pc-pulse"
+          data-commercial-truth="true"
         >
           <div className="pc-pulse-head">
-            <p className="pc-eyebrow">Quote Pulse</p>
+            <p className="pc-eyebrow">Commercial truth</p>
             <button type="button" className="pc-ghost pc-pulse-close" onClick={() => setPulseOpen(false)}>
               Close
             </button>
