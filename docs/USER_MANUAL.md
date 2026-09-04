@@ -1,9 +1,35 @@
 # User Manual
 
-Last updated: 2026-09-04 12:43:00 CDT
+Last updated: 2026-09-04 13:30:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
+
+## Offers, templates, pricing, and rules
+
+Open **Library** to review how the business sells. The first group separates
+**Offers** from their menu, service, and rental components. **Event templates**
+provide reusable starting points. **Pricing** shows whether the current catalog
+revision has a valid administrator confirmation. **Rules** opens the bounded
+configuration-rule editor.
+
+Existing Packages are compatible Offers; no manual migration is required.
+Offer choice groups specify an exact minimum and maximum. Selected choices must
+also be present in the quote, and included components display as included
+rather than being charged twice. Event Templates fill only fields not already
+declared as explicit operator work. Template or rule edits are drafts until the
+existing catalog save/revision path succeeds; any catalog change reopens
+pricing review.
+
+Rules are JSON configuration, not executable code. Unknown operators, missing
+references, and conflicting mandatory outcomes block publication. A
+recommendation explains an option but never silently edits a quote.
+
+New authoritative quote calculations store `pricing-v2`: exact cent values,
+the applied service-fee/tax/season policies, and a line-by-line price
+waterfall. The browser total remains a preview. Saving or changing a quote uses
+server pricing and the current confirmed catalog. Existing saved `pricing-v1`
+revisions remain historical and are not recalculated.
 
 ## Start here: the everyday operating guide
 

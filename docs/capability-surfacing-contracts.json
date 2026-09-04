@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 68,
+  "catalogVersion": 69,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -2373,7 +2373,7 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -2383,10 +2383,26 @@
       "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, advisory REVIEW or STALE consequences, and one six-group source-labeled consequence review before any save.",
       "backendPaths": [
         "functions/commercialChangeImpactPreview.js",
+        "functions/commercialPlatformCore.cjs",
+        "functions/finalBalancePayment.js",
         "functions/index.js",
         "functions/pricingEngine.js",
+        "functions/pricingV2Core.cjs",
+        "functions/proposalAcceptance.js",
+        "functions/quoteCreation.js",
+        "functions/starterCatalogPacks.js",
+        "src/data/mockCatalog.js",
+        "src/hooks/useCatalogData.js",
+        "src/lib/ambientLibrary.js",
+        "src/lib/catalogWriteShapes.js",
         "src/lib/commerceOps.js",
+        "src/lib/commercialPlatform.js",
+        "src/lib/commercialPlatformCore.cjs",
         "src/lib/commercialChangeImpact.js",
+        "src/lib/pricingContracts.js",
+        "src/lib/pricingV2.js",
+        "src/lib/pricingV2Core.cjs",
+        "src/lib/quoteStore.js",
         "src/lib/unifiedCommercialConsequenceReview.js"
       ],
       "backendExports": [
@@ -2397,6 +2413,8 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/AmbientLibraryRoute.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/UnifiedCommercialConsequenceReview.jsx"
       ],
@@ -2420,6 +2438,17 @@
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/lib/__tests__/commercialChangeImpact.test.js",
         "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
+        "src/lib/__tests__/commercialPlatformCore.test.js",
+        "src/lib/__tests__/finalBalancePayment.server.test.js",
+        "src/lib/__tests__/pricingEngine.authoritative.test.js",
+        "src/lib/__tests__/pricingV1GoldenCorpus.test.js",
+        "src/lib/__tests__/pricingV2Core.test.js",
+        "src/lib/__tests__/pricingV2Differential.test.js",
+        "src/lib/__tests__/proposalAcceptance.server.test.js",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/starterCatalogPacks.server.test.js",
+        "src/lib/__tests__/ambientLibrary.test.js",
+        "src/components/__tests__/ambientLibraryRoute.test.jsx",
         "src/lib/__tests__/unifiedCommercialConsequenceReview.test.js",
         "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx"
       ],
@@ -2458,7 +2487,9 @@
         }
       ],
       "documentationPaths": [
+        "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
         "docs/FEATURE_MATRIX.md",
+        "docs/PRICING_CONSTITUTION.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [

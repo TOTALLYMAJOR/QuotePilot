@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 13:12:25 CDT
+Last updated: 2026-09-04 13:30:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,25 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Completed the local commercial-platform source candidate: new authoritative
+  calculations use integer-minor-unit pricing-v2 with deterministic half-up
+  line, service-fee, tax, deposit, and balance reconciliation; exact price
+  waterfalls and applied policy evidence are retained on the pricing receipt.
+  Explicit invalid tax/season references, malformed/overlapping fee tiers, and
+  ambiguous seasonal rules fail closed. A fixed-seed 5,000-case browser/server
+  differential suite requires exact cent and waterfall parity. Historical
+  pricing-v1 derivation remains explicitly versioned and unchanged.
+- Hardened proposal, stored quote, payment-ledger, and final-balance amount
+  provenance to prefer and cross-check authoritative `totalCents` and
+  `depositCents`. Stripe identity, idempotency, settlement, and provider
+  authority are unchanged. Library now distinguishes Offers, Components,
+  Templates, Pricing, and Rules, and existing versioned catering starter packs
+  derive template/rule seeds while preserving manifest identity, customization
+  fences, and the required post-install pricing review.
+- Split commercial publication validation from the startup route graph. The
+  compatibility profile remains below its prior largest-chunk ceiling; its
+  temporary total-JavaScript exception is widened by exactly 19,106 bytes to
+  the measured 3,330,226-byte candidate for the shared commercial kernel.
 - Added one shared commercial-platform core used by the browser and deployable
   Functions graph. Existing Packages now adapt to Configurable Offers with
   optional bounded choice groups; server pricing validates every choice and

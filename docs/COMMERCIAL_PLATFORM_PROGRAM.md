@@ -1,6 +1,6 @@
 # QuotePilot Commercial Platform Program
 
-Last updated: 2026-09-04 13:12:25 CDT
+Last updated: 2026-09-04 13:30:00 CDT
 
 ## Program status
 
@@ -46,7 +46,8 @@ authority benefits from it.
 Each slice is additive and reversible until the final branch candidate is
 qualified. Historical pricing-v1 receipts are never recalculated.
 
-Implementation checkpoint: Slices 2-4 are source-complete. Existing Packages
+Implementation checkpoint: Slices 2-7 are source-complete and entering final
+local qualification. Existing Packages
 adapt to Configurable Offers without migration; bounded choice groups validate
 minimums, maximums, active references, and authoritative quote selections.
 Existing Event Templates adapt to Commercial Templates, explicit operator work
@@ -54,6 +55,15 @@ is preserved on application, and shallow module collisions are returned for
 resolution. Configuration Rules use enumerated condition/effect operators,
 detect conflicting mandatory outcomes, perform no mutation, and are staged in
 Library under the existing catalog publication boundary.
+
+Pricing-v2 now applies integer-minor-unit arithmetic with a declared half-up
+rounding sequence, policy validation, exact line/fee/tax/deposit reconciliation,
+and a stored price waterfall. A fixed-seed differential test runs 5,000 valid
+cases across browser and server adapters. Quote, proposal, deposit, ledger, and
+final-balance projections carry exact cents with consistency checks. Library
+distinguishes Offers, Components, Templates, Pricing, and Rules; starter packs
+derive compatible catering templates and a disabled review-gated rule without
+changing their frozen manifest identity.
 
 ## Capability boundaries
 

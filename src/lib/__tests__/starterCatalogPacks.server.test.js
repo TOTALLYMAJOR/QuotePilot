@@ -197,6 +197,29 @@ describe("starter catalog pack manifests", () => {
     });
   });
 
+  test("seeds catering offers, templates, and review-gated bounded rules without changing manifest identity", () => {
+    const plan = buildStarterCatalogPackDocuments("wedding-events", { packVersion: 2 });
+    expect(plan.settings.verticalPack).toMatchObject({
+      id: "catering",
+      version: "vertical-pack-v1",
+      offerRefs: plan.collections.catalogPackages.map((entry) => entry.id)
+    });
+    expect(plan.settings.eventTemplates).toHaveLength(plan.collections.catalogPackages.length);
+    expect(plan.settings.eventTemplates[0]).toMatchObject({
+      templateVersion: "commercial-template-v1",
+      pkg: plan.collections.catalogPackages[0].id
+    });
+    expect(plan.settings.configurationRules).toEqual([
+      expect.objectContaining({
+        ruleVersion: "configuration-rule-v1",
+        type: "recommendation",
+        enabled: false
+      })
+    ]);
+    expect(plan.settings.starterCatalogPack.manifestHash).toBe(plan.pack.manifestHash);
+    expect(plan.settings.pricingSetupConfirmed).toBe(false);
+  });
+
   test("distinguishes generated, modified, and custom records by immutable baseline hash", () => {
     const plan = buildStarterCatalogPackDocuments("wedding-events", { packVersion: 2 });
     const generated = plan.collections.catalogPackages[0].data;

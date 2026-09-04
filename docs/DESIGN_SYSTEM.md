@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-04 12:43:00 CDT
+Last updated: 2026-09-04 13:30:00 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -29,6 +29,10 @@ human visual acceptance.
   color or decoration. One restrained brand accent.
 - Progressive disclosure: governance and evidence detail stays available but
   collapsed; screens lead with state and next action.
+- Library is the business-facing definition surface: group Offers with their
+  components, then show Templates, Pricing, and Rules as distinct concepts.
+  Keep catering-native nouns in ordinary UI and reserve kernel/version terms
+  for evidence or administration detail.
 - Re-express trustworthy data before collecting more: one recorded detail may
   orient, explain, rank, preview, or animate another decision only when its
   provenance, freshness, scope, and authority remain explicit. A novel use must

@@ -1,12 +1,25 @@
 # Feature Matrix
 
-Last updated: 2026-09-04 12:36:05 CDT
+Last updated: 2026-09-04 13:30:00 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
 current operational status. Use [`CHANGELOG.md`](../CHANGELOG.md) for the full
 change record and [`PROJECT_STATUS.md`](../PROJECT_STATUS.md) for current
 release, deployment, provider, risk, and acceptance state.
+
+## Commercial platform and pricing-v2 candidate (September 4, 2026)
+
+| Capability | Source status | Evidence boundary |
+|---|---|---|
+| Configurable Offers | Implemented through a compatibility adapter over existing Packages, with bounded choice groups, exact component references, active-reference validation, and authoritative anti-spoof checks. | Source/unit evidence only; no hosted tenant migration or human acceptance. |
+| Commercial Templates | Implemented through existing Event Templates with shared metadata, explicit-edit preservation, provenance, and collision detection. | Templates remain inputs to one quote draft and never pricing authority. |
+| Configuration Rules | Implemented as bounded data-only conditions/effects with deterministic evaluation, conflict detection, provenance, and the existing catalog revision/publication boundary. | No arbitrary formulas, scripts, workflow engine, or automatic quote mutation. |
+| Price Waterfall and pricing-v2 | Implemented with integer USD minor units, half-up line/fee/tax/deposit rounding, fail-closed policy validation, exact reconciliation, immutable waterfall evidence, and explicit pricing-v1 compatibility. | Browser remains preview; server remains authoritative. Local 5,000-case parity is not hosted proof. |
+| Exact payment amount provenance | Implemented through stored `totalCents`/`depositCents`, proposal snapshot validation, payment-ledger consistency checks, and exact final-balance subtraction. | Provider identity, idempotency, settlement, and reconciliation authority are unchanged. |
+| Expanded Library and starter packs | Admins can distinguish Offers, Components, Templates, Pricing, and Rules; versioned starter packs derive reviewed catering templates and a disabled rule example while retaining manifest/baseline identity and pricing review. | No second vertical experience, marketplace, or silent overwrite of tenant customization. |
+
+See the complete [commercial platform acceptance matrix](acceptance/commercial-platform-acceptance-matrix.md).
 
 ## Scope and Evidence (August 19, 2026)
 

@@ -1,8 +1,15 @@
 # QuotePilot Canonical Project State
 
-Last updated: 2026-09-03 20:20:30 CDT
+Last updated: 2026-09-04 13:30:00 CDT
 
 ## Current State
+
+The active draft PR #129 branch contains a local, not-yet-pushed commercial
+platform refinement over its existing Workbench and Operations candidate. It
+preserves the deployed production boundary below: pricing-v2, Offers,
+Templates, Rules, Library changes, and exact payment amount provenance remain
+source-candidate capabilities until the single final push and exact-head CI
+complete. They are not deployed, used, or commercially proven.
 
 QuotePilot is a deployed commercial SaaS product with a broad, tested source
 surface. Exact `v0.16.5` (`ad3517b39109b91dd735ee3700e8c79a4e2ca956`)

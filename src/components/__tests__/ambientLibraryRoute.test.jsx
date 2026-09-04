@@ -124,7 +124,9 @@ describe("AmbientLibraryRoute", () => {
     expect(library.dataset.surfaceContractId).toBe("ambient-library");
     expect(library.dataset.libraryContext).toBe("standalone");
     expect(container.querySelector("#ambient-library-title").textContent).toBe("The choices behind every quote.");
-    expect(container.textContent).toContain("Packages, menus, services, rentals, templates, and pricing");
+    expect(container.textContent).toContain("Offers, menus, services, rentals, templates, pricing, and rules");
+    expect(container.textContent).toContain("Offers & components");
+    expect(container.querySelector('[data-library-record-id="rules"]')).not.toBeNull();
     expect(container.querySelector('[data-library-section="catalog"]')).not.toBeNull();
     expect(container.querySelector('[data-library-section="templates"]')).not.toBeNull();
     expect(container.querySelector('[data-library-record-kind="event-template"][data-library-record-id="wedding"]')).not.toBeNull();

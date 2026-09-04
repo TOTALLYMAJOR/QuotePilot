@@ -138,23 +138,31 @@ function summaryForSection(section) {
     const attention = Number(summary.attentionCount || 0);
     return `${count} ${count === 1 ? "starting point" : "starting points"}${attention ? ` · ${attention} to review` : ""}`;
   }
+  if (section.id === "rules") {
+    const count = Number(summary.activeCount || 0);
+    return `${count} active ${count === 1 ? "rule" : "rules"}`;
+  }
   const active = Number(summary.activeCount || 0);
   if (section.id === "rentals") return `${active} ${active === 1 ? "collection" : "collections"}`;
   return `${active} active`;
 }
 
 function displayLabelForSection(section) {
+  if (section.id === "packages") return "Offers";
   if (section.id === "menu") return "Menus";
   if (section.id === "addons") return "Services";
   if (section.id === "templates") return "Event templates";
+  if (section.id === "rules") return "Rules";
   return section.label;
 }
 
 function displayActionForSection(section) {
+  if (section.id === "packages") return "Review offers";
   if (section.id === "menu") return "Review menus";
   if (section.id === "addons") return "Review services";
   if (section.id === "templates") return "Review templates";
   if (section.id === "pricing") return "Review pricing";
+  if (section.id === "rules") return "Review rules";
   return section.primaryAction.outcomeLabel;
 }
 
@@ -806,7 +814,7 @@ export default function AmbientLibraryRoute({
         </nav>
         <p className="ambient-library__label">Organization Library</p>
         <h1 id="ambient-library-title" ref={headingRef} tabIndex={-1}>The choices behind every quote.</h1>
-        <p>Packages, menus, services, rentals, templates, and pricing—kept ready for the next opportunity.</p>
+        <p>Offers, menus, services, rentals, templates, pricing, and rules—kept ready for the next opportunity.</p>
       </header>
 
       <LibraryAcknowledgement
@@ -830,7 +838,7 @@ export default function AmbientLibraryRoute({
         <>
           <section className="ambient-library__group" data-library-section="catalog" aria-labelledby="ambient-library-catalog-title">
             <div className="ambient-library__group-title">
-              <p>Catalog choices</p><span aria-hidden="true" />
+              <p>Offers &amp; components</p><span aria-hidden="true" />
               <h2 id="ambient-library-catalog-title" className="sr-only">Choices for new quotes</h2>
             </div>
             <ol className="ambient-library__row-list">
@@ -849,11 +857,11 @@ export default function AmbientLibraryRoute({
 
           <section className="ambient-library__group" data-library-section="templates" aria-labelledby="ambient-library-templates-title">
             <div className="ambient-library__group-title">
-              <p>Starting points &amp; pricing</p><span aria-hidden="true" />
-              <h2 id="ambient-library-templates-title" className="sr-only">Event starting points and pricing</h2>
+              <p>Starting points &amp; policy</p><span aria-hidden="true" />
+              <h2 id="ambient-library-templates-title" className="sr-only">Event starting points, pricing, and rules</h2>
             </div>
             <ol className="ambient-library__row-list">
-              {["templates", "pricing"].map((sectionId) => model.sections.find((section) => section.id === sectionId))
+              {["templates", "pricing", "rules"].map((sectionId) => model.sections.find((section) => section.id === sectionId))
                 .filter(Boolean)
                 .map((section) => (
                   <LibrarySectionRow
