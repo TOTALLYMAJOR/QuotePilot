@@ -1,25 +1,37 @@
 # Project Status
 
-Last updated: 2026-09-03 20:20:30 CDT
+Last updated: 2026-09-04 10:46:13 CDT
 
 ## Current Production Release
 
-- Production now runs annotated tag `v0.16.5`, exact commit
-  `ad3517b39109b91dd735ee3700e8c79a4e2ca956`. Exact-main CI Quality run
-  `33818617920` passed every required job. Governed Firebase production run
-  `33820173249` completed under `release_profile=email-active`; independent
-  readback proved 102 active `us-central1` Functions, including the Resend
-  acceptance callable, with rollback SHA
+- The public Vercel edge now runs annotated tag `v0.16.6`, exact commit
+  `a350b72a1c6968be80c7c07ef9079084ceba0b07`. Exact-main CI Quality run
+  `33889897821` passed every required job. Governed Vercel production run
+  `33890996339` deployed that exact release to immutable deployment
+  `https://quoteflow-9wdl5n6bb-mbmapps.vercel.app`, rebound
+  `https://quotepilot.mbmapps.com`, and verified public `/`, `/app`, and
+  `/system` responses. Vercel rollback authority is
+  `ad3517b39109b91dd735ee3700e8c79a4e2ca956`.
+- The production Firebase backend remains on exact v0.16.5 commit
+  `ad3517b39109b91dd735ee3700e8c79a4e2ca956`; PR #127 changed no Functions,
+  rules, indexes, or provider configuration, so no backend redeployment was
+  required. Governed Firebase production run `33820173249` remains the active
+  `release_profile=email-active` receipt; independent readback proved 102
+  active `us-central1` Functions, including the Resend acceptance callable,
+  with Firebase rollback SHA
   `4f329180f0864ebadb0383930f969a3767f8d9db`. SMS, buyer access, Commercial
   Change, staffing authority, and both Revenue Autopilot gates remain off.
-- Governed Vercel production run `33822596844` deployed the same exact v0.16.5
-  release to immutable deployment
-  `https://quoteflow-b8kcxv0k2-mbmapps.vercel.app` and rebound
-  `https://quotepilot.mbmapps.com`; the public asset contains the deployed
-  Email Provider Acceptance surface. Vercel rollback authority is
-  `c8800838c03ce9db49fe1034c529c8363c8bf27c`. The Firebase Hosting
-  origin/fallback remains on the prior v0.16.3 static release; it is not the
-  current public Vercel edge.
+- The v0.16.6 frontend exposes the state-aware **Send proposal** command to an
+  authorized administrator only when the saved proposal and delivery state
+  permit the existing server-owned email path. **Manual email** and **Copy
+  email text** remain separate local fallback actions; payment and final-balance
+  messages remain gated by their existing approval and payment prerequisites.
+  The exact source, CI, deployment, and public-edge checks are complete. An
+  ordinary customer proposal send has not yet been used as the controlled
+  acceptance event, so provider acceptance, delivery or bounce, inbox receipt,
+  message review, and human acceptance for that workflow remain open.
+- The Firebase Hosting origin/fallback remains on the prior v0.16.3 static
+  release; it is not the current public Vercel edge.
 
 ## Superseded v0.16.0 and v0.16.1 Production Receipts
 
