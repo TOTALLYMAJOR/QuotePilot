@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-03 22:45:00 CDT
+Last updated: 2026-09-04 12:36:05 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -27,6 +27,30 @@ release, deployment, provider, risk, and acceptance state.
 - **Human acceptance:** a named person completed and accepted the intended
   workflow. This is never inferred from source, tests, CI, deployment, or
 provider receipts.
+
+## UX Convergence source candidate (September 4, 2026)
+
+- **Commercial Workbench:** the existing `ProposalComposer` now presents the
+  same draft, Guided form, calculation path, explicit save/version authority,
+  and client-safe preview through Event, Customer, Experience, Staffing, and
+  Commercials domains. The model is presentation-only; switching domains does
+  not persist, reprice, version, fetch, or mutate catalog state.
+- **Calendar-first Operations:** `/app/operations` now composes the existing
+  `EventScheduleView` and its accepted/booked projection, month/week models,
+  conflict and capacity logic, staff-lead mutation, checklist, and run-of-show
+  context. `/app/schedule` remains a compatibility route to that same Calendar
+  capability. Phone width derives an agenda from the same event/conflict model.
+- **Exact handoffs and authority boundary:** Now and the canonical Living
+  Opportunity can hand the exact quote identity to Calendar through the
+  existing arrival contract; Calendar can return to the exact Opportunity.
+  No Event record, persistence authority, lifecycle value, pricing rule,
+  staffing authority, provider integration, or live-telemetry claim was added.
+- **Staged navigation:** this source checkpoint deliberately retains the Calm
+  Four primary navigation and every secondary entry. Operations promotion is
+  gated on exact-head CI and exact-SHA responsive evidence; navigation
+  retirement remains gated separately on authenticated role-aware reachability
+  parity. Source and CI evidence do not establish deployment, hosted behavior,
+  production readiness, or human acceptance.
 
 ## Production email sender identity (September 3, 2026)
 

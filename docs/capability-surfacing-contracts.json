@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 67,
+  "catalogVersion": 68,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -4515,7 +4515,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 19,
+      "reviewRevision": 20,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4690,6 +4690,10 @@
           "locator": "data-schedule-event-id={item.id}"
         },
         {
+          "path": "src/components/EventScheduleModal.jsx",
+          "locator": "data-operations-mode={operationsMode ? \"calendar-first\" : undefined}"
+        },
+        {
           "path": "src/components/ReportingDashboardModal.jsx",
           "locator": "data-report-signal"
         }
@@ -4705,6 +4709,7 @@
         "e2e/workspace-no-unintended-overlap.spec.js",
         "e2e/staff-app-cross-route-task-loop.spec.js",
         "e2e/staff-app-return-context.spec.js",
+        "e2e/ux-convergence-operations.spec.js",
         "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
         "src/components/__tests__/ambientNowView.test.jsx",
         "src/components/__tests__/ambientOpportunitiesStream.test.jsx",
@@ -5209,6 +5214,10 @@
         {
           "path": "src/components/__tests__/eventScheduleArrival.test.jsx",
           "locator": "keeps arrival pending until the exact same-tenant event is selected and focused"
+        },
+        {
+          "path": "e2e/ux-convergence-operations.spec.js",
+          "locator": "preserves exact Now to Calendar and Calendar to Opportunity handoffs"
         },
         {
           "path": "src/components/__tests__/reportingDashboardArrival.test.jsx",
