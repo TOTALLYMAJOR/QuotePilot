@@ -3757,6 +3757,21 @@ export async function rotateQuotePortalKey({
   };
 }
 
+const ALTERNATE_DRAFT_CUSTOMER_FIELDS = "name email phone organization";
+const ALTERNATE_DRAFT_EVENT_FIELDS = "name date time venue venueAddress guests hours servers chefs bartenders dietaryRestrictions style eventTypeId";
+const ALTERNATE_DRAFT_SELECTION_FIELDS = "packageId packageName packageInclusions addons rentals addonQuantities rentalQuantities menuItemQuantities addonSnapshots rentalSnapshots menuItems menuItemsSnapshot menuItemNames menuItemDetails milesRT payMethod eventTemplateId eventTypeId taxRegion seasonProfileId laborRateSnapshot bartenderRateTypeId staffingRateTypeId bartenderRateOverride serverRateOverride serverRateMixCsv chefRateMixCsv chefRateOverride";
+const ALTERNATE_DRAFT_TOTAL_FIELDS = "base addons rentals menu labor serverLabor chefLabor bartenderLabor bartenderRateApplied serverRateApplied serverRatesApplied chefRateApplied chefRatesApplied bartenderRateTypeId bartenderRateTypeName staffingRateTypeId staffingRateTypeName travel serviceFee tax total deposit serviceFeePctApplied taxRateApplied taxRegionId taxRegionName seasonProfileId seasonProfileName packageMultiplier addonMultiplier rentalMultiplier";
+const ALTERNATE_DRAFT_QUOTE_META_FIELDS = "organizationName quotePreparedBy proposalIntroTitle proposalIntroMessage proposalClosingMessage brandName brandTagline brandLogoUrl documentFontScale brandPrimaryColor brandAccentColor brandDarkAccentColor brandBackgroundStart brandBackgroundMid brandBackgroundEnd brandCrew businessPhone businessEmail businessAddress acceptanceEmail includeDisposables disposablesNote depositNotice quoteValidityDays pricingSettingsVersion pricingSettingsUpdatedAtISO";
+const ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS = "schemaVersion organizationId catalogSource catalogRevision confirmedCatalogRevision settingsFingerprintSha256";
+
+function cloneAllowedRecord(source, allowedFields) {
+  const record = source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  return Object.fromEntries(allowedFields.split(" ").flatMap((field) => {
+    if (!Object.hasOwn(record, field) || record[field] === undefined) return [];
+    return [[field, JSON.parse(JSON.stringify(record[field]))]];
+  }));
+}
+
 export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" } = {}) {
   const source = await readQuoteById(quoteId);
   const nowISO = isoNow();
@@ -3776,17 +3791,21 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     portalIssuedAtISO,
     nowISO
   );
-  const payment = hydratePayment(source.payment);
   const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";
-  const { id: _sourceId, createdAt: _createdAt, ...sourceWithoutIdentity } = source;
+  const sourceSelection = source.selection && typeof source.selection === "object"
+    ? source.selection
+    : {};
+  const sourceIntegrations = source.integrations && typeof source.integrations === "object"
+    ? source.integrations
+    : {};
 
   const selection = {
-    ...(sourceWithoutIdentity.selection || {}),
-    addonQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.addonQuantities),
-    rentalQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.rentalQuantities),
-    menuItemQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.menuItemQuantities),
-    menuItemsSnapshot: Array.isArray(sourceWithoutIdentity.selection?.menuItemsSnapshot)
-      ? sourceWithoutIdentity.selection.menuItemsSnapshot.map((item) => ({
+    ...cloneAllowedRecord(sourceSelection, ALTERNATE_DRAFT_SELECTION_FIELDS),
+    addonQuantities: normalizeQuantityMap(sourceSelection.addonQuantities),
+    rentalQuantities: normalizeQuantityMap(sourceSelection.rentalQuantities),
+    menuItemQuantities: normalizeQuantityMap(sourceSelection.menuItemQuantities),
+    menuItemsSnapshot: Array.isArray(sourceSelection.menuItemsSnapshot)
+      ? sourceSelection.menuItemsSnapshot.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3794,8 +3813,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
         quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1)))
       }))
       : [],
-    menuItemDetails: Array.isArray(sourceWithoutIdentity.selection?.menuItemDetails)
-      ? sourceWithoutIdentity.selection.menuItemDetails.map((item) => ({
+    menuItemDetails: Array.isArray(sourceSelection.menuItemDetails)
+      ? sourceSelection.menuItemDetails.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3807,57 +3826,63 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   };
 
   const payload = {
-    ...sourceWithoutIdentity,
     quoteNumber,
+    ...(String(source.customerId || "").trim()
+      ? { customerId: String(source.customerId).trim() }
+      : {}),
+    customer: source.customer && typeof source.customer === "object"
+      ? cloneAllowedRecord(source.customer, ALTERNATE_DRAFT_CUSTOMER_FIELDS)
+      : {},
+    customerEmailKey: String(source.customerEmailKey || source.customer?.email || "").trim().toLowerCase(),
+    customerNameKey: normalizeCustomerNameKey(source.customerNameKey || source.customer?.name || ""),
+    eventTypeId: String(source.eventTypeId || sourceSelection.eventTypeId || source.event?.eventTypeId || "").trim(),
+    event: source.event && typeof source.event === "object"
+      ? cloneAllowedRecord(source.event, ALTERNATE_DRAFT_EVENT_FIELDS)
+      : {},
+    selection,
+    decidableOptionsProjection: Array.isArray(source.decidableOptionsProjection)
+      ? normalizeDecisionRoomOptions(source.decidableOptionsProjection)
+      : [],
+    totals: source.totals && typeof source.totals === "object"
+      ? cloneAllowedRecord(source.totals, ALTERNATE_DRAFT_TOTAL_FIELDS)
+      : {},
+    pricing: source.pricing && typeof source.pricing === "object"
+      ? normalizePricingOutput(source.pricing)
+      : undefined,
+    pricingCatalogAuthority: source.pricingCatalogAuthority && typeof source.pricingCatalogAuthority === "object"
+      ? cloneAllowedRecord(source.pricingCatalogAuthority, ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS)
+      : null,
+    quoteMeta: source.quoteMeta && typeof source.quoteMeta === "object"
+      ? cloneAllowedRecord(source.quoteMeta, ALTERNATE_DRAFT_QUOTE_META_FIELDS)
+      : {},
+    source: String(source.source || "local").trim() || "local",
     portalKey,
     portalIssuedAtISO,
     portalExpiresAtISO,
     ownerUid: ownerUid || source.ownerUid || "",
     ownerEmail: normalizedOwnerEmail,
     organizationId,
+    duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),
     status: "draft",
     deletedAtISO: "",
-    selection,
-    payment: {
-      ...payment,
-      depositStatus: payment.depositLink ? "sent" : "unpaid",
-      depositConfirmedAtISO: ""
-    },
-    booking: {
-      bookedAtISO: "",
-      bookedByEmail: "",
-      staffLead: "",
-      staffAssignedAtISO: "",
-      kitchenCheckpoints: [],
-      productionChecklist: [],
-      contractNumber: "",
-      contractConvertedAtISO: "",
-      contractConvertedByEmail: "",
-      confirmationStatus: "pending",
-      confirmationSentAtISO: "",
-      confirmedAtISO: "",
-      confirmationUpdatedByEmail: "",
-      availabilityCheckedAtISO: "",
-      availabilitySummary: {}
-    },
+    payment: hydratePayment({}, source.totals || {}),
+    booking: hydrateBooking({}),
     workflow: {
       followUp: normalizeFollowUp({ stage: "new" }),
       approvalRequests: []
     },
     portalDecision: {},
     integrations: {
-      ...(sourceWithoutIdentity.integrations || {}),
+      retryLimit: Math.max(1, Math.round(toNumber(sourceIntegrations.retryLimit, source.quoteMeta?.integrationRetryLimit || 3))),
+      retention: Math.max(10, Math.round(toNumber(sourceIntegrations.retention, source.quoteMeta?.integrationAuditRetention || 50))),
+      providers: {},
       lastSyncAtISO: "",
       logs: []
     },
     createdAtISO: nowISO,
     updatedAtISO: nowISO,
     expiresAtISO,
-    lifecycle: {
-      draftAtISO: nowISO
-    },
-    activeVersionId: "",
-    latestVersionNumber: 0
+    lifecycle: { draftAtISO: nowISO }
   };
 
   if (firebaseReady) {

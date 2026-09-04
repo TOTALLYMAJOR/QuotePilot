@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-03 20:20:30 CDT
+Last updated: 2026-09-03 22:45:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added and hardened a state-aware configured-quote action compiler and migrated the quote administration row onto one ranked primary/recovery action while grouping subordinate capabilities under **More**. The v2 compiler now incorporates the surface's real provider setup, approval, rebook, conversation, in-flight mutation, and recovery readiness; the rail renders only compiled visible actions and enforces their compiled disabled state, so presentation cannot silently widen or contradict action authority. Draft edits read **Edit draft**, sent/viewed changes read **Revise quote**, tracked provider dispatch reads **Send proposal**, provider acceptance is evidence rather than a disabled command, and payment/contract/recovery actions use outcome language. **Create alternate draft** declares its separate-record consequence before creation, opens the created draft, and the browser-local fallback projects only named customer, event, selection, pricing, and proposal-presentation fields while excluding nested provider, credential, acceptance, rebooking, delivery, payment, integration, and booking proof. Its successful save creates and tests the new draft's own immutable `v0001` identity. The quote number opens its workspace, Firebase lifecycle management exposes explicit **Expire quote** instead of a generic selector, and exact workflow deep links open **More** before focusing a secondary approved action. Final-balance ranking mirrors the existing booked-contract + verified paid-deposit + stored-balance prerequisites, sent/viewed records without current delivery evidence recover through tracked resend instead of conversation, and an executable accepted-quote progression outranks a concurrently blocked preferred action. Existing Firebase, Stripe, portal, approval, and contract authority is unchanged; local/CI evidence does not claim hosted, provider, production, or human acceptance.
 - Released annotated tag `v0.16.5` at exact commit
   `ad3517b39109b91dd735ee3700e8c79a4e2ca956` after exact-main CI run
   `33818617920` passed. Governed Firebase production run `33820173249`
