@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 12:43:00 CDT
+Last updated: 2026-09-04 12:50:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -24,7 +24,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   Operations remains secondary and every existing navigation entry remains
   reachable until the separate exact-head promotion and role-parity retirement
   gates pass. Local and CI evidence do not claim deployment, hosted behavior,
-  production readiness, or human acceptance.
+  production readiness, or human acceptance. The compatibility bundle's
+  existing temporary exception is pinned to the exact CI measurement of
+  3,311,120 total JavaScript bytes (largest chunk 393,416 bytes), a 1,120-byte
+  increase for the new presentation and handoff surfaces with no percentage
+  headroom; the existing removal plan and expiry remain unchanged.
 - Released annotated tag `v0.16.6` at exact commit
   `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
   `33889897821` passed every required job. Governed Vercel production run
