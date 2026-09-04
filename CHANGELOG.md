@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:59:31 CDT
+Last updated: 2026-09-04 15:14:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -20,7 +20,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   and admin/sales visibility. This is a local source candidate only: it has not
   been pushed, deployed, accepted in a hosted tenant, or reviewed by a human.
 - Added a positive Workbench persistence golden path: a complete supported
-  draft saves, reopens through Quotes, edits through the existing authority,
+  draft saves into its Living Opportunity, reopens through Opportunities, edits
+  through the existing authority,
   and saves again as the same quote, quote number, and portal identity while
   advancing `v0001` to `v0002` with exactly two history records. Customer,
   venue, guest, and Menu state survive the round trip. Together with the

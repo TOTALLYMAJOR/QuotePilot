@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear();
     sessionStorage.clear();
   });
-  await page.goto("/app");
+  await page.goto("/app/quotes/new");
   await expect(page.getByTestId("proposal-composer")).toBeVisible();
 });
 
@@ -271,10 +271,13 @@ test("saves, reopens, and versions one supported Workbench draft", async ({ page
   await completeSavableDraft(page);
   await page.getByTestId("pc-save").click();
 
-  const savedWorkspace = page.getByTestId("quote-workspace");
+  const savedWorkspace = page.getByRole("region", { name: "Quote event workspace" });
   await expect(savedWorkspace).toBeVisible();
   await expect(page).toHaveURL(/\/app\/quotes\/[^/?#]+$/);
-  await expect(savedWorkspace.getByText("Saved workspace", { exact: true })).toBeVisible();
+  await expect(savedWorkspace.getByRole("heading", {
+    name: "Persistence Boundary Dinner",
+    exact: true
+  })).toBeVisible();
 
   const initialPersistence = await page.evaluate(() => ({
     quotes: JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]"),
@@ -301,16 +304,19 @@ test("saves, reopens, and versions one supported Workbench draft", async ({ page
   expect(initialPersistence.history.find((entry) => entry.quoteId === initialQuote.id))
     .toMatchObject({ versionId: "v0001", versionNumber: 1 });
 
-  await savedWorkspace.getByRole("button", { name: "Back to opportunities" }).click();
-  const quotes = page.getByRole("dialog", { name: "Quotes" });
-  await expect(quotes).toBeVisible();
-  const quoteRow = quotes.locator(`tr[data-quote-id="${initialQuote.id}"]`);
-  await expect(quoteRow).toHaveCount(1);
-  await quoteRow.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary workspace" })
+    .getByRole("button", { name: "Opportunities", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/quotes$/);
+  const opportunity = page.getByRole("article", { name: "Persistence Boundary Dinner", exact: true });
+  await expect(opportunity).toBeVisible();
+  await opportunity.getByRole("button", { name: "Review proposal details", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/quotes/${initialQuote.id}$`));
+  await savedWorkspace.getByRole("button", { name: "Review draft", exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`/app/quotes/${initialQuote.id}/edit$`));
   await expect(page.getByTestId("proposal-composer")).toBeVisible();
   await expect(page.getByText(`Editing quote ${initialQuote.quoteNumber}`, { exact: true })).toBeVisible();
+  await openDomain(page, "event");
   await commitInline(page, "Event name", "Persistence Boundary Dinner Revised");
   await expect(page.locator(".pc-save-state")).toHaveAttribute("data-state", "dirty");
   await expect(page.getByTestId("pc-save")).toHaveText("Save Changes");
@@ -318,7 +324,8 @@ test("saves, reopens, and versions one supported Workbench draft", async ({ page
 
   await expect(savedWorkspace).toBeVisible();
   await expect(savedWorkspace.getByRole("heading", {
-    name: new RegExp(`^${initialQuote.quoteNumber}.*Persistence Boundary Dinner Revised$`)
+    name: "Persistence Boundary Dinner Revised",
+    exact: true
   })).toBeVisible();
   const revisedPersistence = await page.evaluate(() => ({
     quotes: JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]"),
