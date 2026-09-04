@@ -113,6 +113,15 @@ export const AMBIENT_PRIMARY_WORKSPACE_NAVIGATION = Object.freeze([
     triggerRef: "quotes"
   }),
   Object.freeze({
+    routeId: WORKSPACE_ROUTE_IDS.OPERATIONS,
+    label: "Operations",
+    path: WORKSPACE_PATHS.operations,
+    section: "operations",
+    action: "onOperations",
+    orientation: "operations",
+    triggerRef: "operations"
+  }),
+  Object.freeze({
     routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
     label: "Clients",
     path: WORKSPACE_PATHS.customers,

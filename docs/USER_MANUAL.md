@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-04 14:33:24 CDT
+Last updated: 2026-09-04 14:55:17 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -49,7 +49,7 @@ reference for each feature.
 | **Search** | A known client, quote, or event | Open the exact matching record |
 | **Operations** | Accepted/booked Calendar, daily planning, and staff execution | Open the Calendar or a daily execution tool |
 
-On a phone, the four primary destinations stay in the bottom navigation. Use
+On a phone, the five primary destinations stay in the bottom navigation. Use
 the workspace/avatar control for Search, Frequent tools, Operations,
 progressively disclosed Administration, account settings, and sign-out.
 
@@ -100,7 +100,7 @@ mode edits the same draft and uses the same save authority.
 
 ### Calendar-first Operations (source candidate)
 
-Open secondary **Operations** or `/app/operations` to use the existing
+Open primary **Operations** or `/app/operations` to use the existing
 accepted/booked Event Schedule as the canonical operational lens. Month and
 Week retain the same event, conflict, capacity, staff-lead, checklist, and
 run-of-show models. On a phone, the Calendar becomes an agenda derived from
@@ -212,7 +212,9 @@ draft.
 
 ## Primary workspace
 
-The v0.16 candidate keeps four persistent primary destinations:
+The converged local candidate keeps five persistent primary destinations. The
+earlier v0.16 release contract used Calm Four; the later convergence contract
+adds Calendar-first Operations without changing its underlying authority:
 
 - **Now** shows the established hospitality-led home, up to three current
   priorities, recorded upcoming work, and quiet internal progress.
@@ -220,6 +222,9 @@ The v0.16 candidate keeps four persistent primary destinations:
   enter its exact opportunity workspace; use browser Back to return to the
   index. Ordering follows current recorded state and dates, not a fixed display
   list.
+- **Operations** opens the accepted/booked Calendar as the daily execution
+  index. Month, Week, conflict/capacity evidence, staff-lead work, checklist,
+  and run of show remain one reused schedule capability.
 - **Clients** opens the same-tenant relationship view. A tenant with no clients
   sees one **Start an opportunity** path into the established quote flow and no
   zero-value metrics or unnecessary search. A populated tenant sees current or
@@ -233,13 +238,13 @@ The v0.16 candidate keeps four persistent primary destinations:
   Browsing either mode does not change an opportunity.
 
 **New quote** is a global action into the existing opportunity/quote flow, not
-a navigation destination. On desktop, Search and Operations remain secondary
-controls and workspace/account controls stay quiet. Operations exposes only
-the Calendar-first **Operations**, **Clear the Deck**, and **Staff** daily
-execution paths. On mobile, select the workspace/avatar control in the standard
+a navigation destination. On desktop, Search remains secondary and
+workspace/account controls stay quiet; primary **Operations** opens Calendar
+directly. On mobile, select the workspace/avatar control in the standard
 header to open **Workspace & tools**. That focus-contained sheet provides
 Search; Frequent **Workflow**, **Messages**, and **Pilot** tools; the same three
-Operations paths; progressively disclosed **Administration**; workspace
+Operations-group paths (**Operations**, **Clear the Deck**, and role-gated
+**Staff**); progressively disclosed **Administration**; workspace
 identity; account settings; sound preference; and sign-out without adding
 fifth or sixth bottom-navigation items. Staff-only and administrator-only
 entries retain their existing role and feature gates.
@@ -251,7 +256,7 @@ different authorized account when necessary. **Account settings** shows the
 current identity and workspace; sending a password-reset email is a separate,
 explicit action and merely opening settings changes nothing.
 
-Now, Opportunities, Clients, and Library remain the only Calm Four primary
+Now, Opportunities, Operations, Clients, and Library are the five primary
 entries. Menu, pricing, proposal, activity, Event, and Event Schedule actions
 remain contextual or directly routed; Workflow, Messages, and Pilot remain
 Frequent tools; and reporting, integrations, imports, and diagnostics remain
@@ -325,7 +330,7 @@ browsed in the panel, but review returns an explicit **Continue in quote
 editor** handoff. Following that handoff requires discarding only the panel
 draft; it does not change the saved opportunity.
 
-X, Cancel, Escape, backdrop, Calm Four navigation, contextual Library/staffing/
+X, Cancel, Escape, backdrop, primary navigation, contextual Library/staffing/
 pricing handoffs, browser Back/Forward, and the applicable mobile back action
 all use the same unsaved-draft guard. **Keep editing** returns to the intact
 draft. **Discard draft** removes only the local draft, keeps the original saved
@@ -2714,11 +2719,11 @@ lifecycle label, event image, recorded event facts, and completeness review
 together. Menu items, quote totals, margin evidence when available, recent
 activity, and Activity & Save Health remain on the same exact saved quote.
 
-The workspace rail keeps only **Now**, **Opportunities**, **Clients**, and
-administrator-only **Library** as persistent orientation. Use **New quote** for
-a new draft and **Operations** for deeper operational work. Event, staffing,
-proposal, payment, and conversation work remains contextual to the selected
-record instead of becoming additional permanent navigation.
+The workspace rail keeps **Now**, **Opportunities**, **Operations**, **Clients**,
+and administrator-only **Library** as persistent orientation. Use **New quote**
+for a new draft. Operations opens the accepted/booked Calendar directly; Event,
+staffing, proposal, payment, and conversation work remains contextual to the
+selected record instead of becoming additional permanent navigation.
 
 The workspace does not itself save, approve, send, price, charge, or change a
 quote's lifecycle. Use **Edit quote**, the Menu/Services/Pricing tabs, or the

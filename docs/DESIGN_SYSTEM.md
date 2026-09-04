@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-04 13:41:00 CDT
+Last updated: 2026-09-04 14:55:17 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -61,10 +61,15 @@ human visual acceptance.
   and conflict models; never shrink the month grid into an unusable miniature.
   Selected state and conflicts need text, exact event identity stays stable,
   and planning language must not imply live actuals.
-- **Staged navigation:** Operations remains a secondary utility until its
-  critical exact-head gate passes. Navigation retirement follows only after a
-  separate authenticated role/reachability matrix; unproven paths remain
-  visibly Transitional.
+- **Converged navigation:** the local candidate uses five persistent primary
+  destinations in this order: Now, Opportunities, Operations, Clients, and
+  role-gated Library. Operations opens the reused Calendar capability directly;
+  it is not duplicated as a header menu. Workspace & tools retains Operations,
+  Clear the Deck, and Staff as the compact daily-execution group. At 390 the
+  five destinations wrap through the established automatic grid without
+  horizontal overflow; at 768 and 1440 they remain a stable orientation rail.
+  Exact-head CI, hosted role/reachability proof, and human acceptance remain
+  separate qualification boundaries.
 
 ## Ambient Intelligence extension (source proof, release-profile enabled)
 
@@ -85,7 +90,7 @@ both horizontal edges to a 16px viewport inset when the anchor sits too close
 to either edge. Anchoring may not clip the title, arrival context, evidence, or
 persistent outcome controls.
 
-### v0.16 Calm Four application contract (source candidate)
+### v0.16 Calm Four application contract (historical release contract)
 
 Calm Four applies one information architecture across the authenticated staff
 workspace. It distinguishes three layers and does not trade one for another:
@@ -110,6 +115,26 @@ stays exposed under Operations. Reporting, integrations, import, and diagnostics
 are conditionally rendered only after the user expands Administration, so a
 collapsed section cannot leak gated controls into keyboard order. Closing the
 sheet resets that secondary disclosure without changing any route or authority.
+
+### UX convergence primary-navigation overlay (local source candidate)
+
+The later frozen UX convergence contract promotes the proven Calendar-first
+**Operations** surface into a five-destination primary set: **Now**,
+**Opportunities**, **Operations**, **Clients**, and **Library**. This supersedes
+only the v0.16 four-item presentation rule; it does not replace any route,
+business authority, or role gate. Operations opens `/app/operations` directly
+and uses the same Calendar/schedule authority.
+
+The former secondary Ambient Operations header menu is removed to avoid two
+same-name destinations. **Workspace & tools** remains the one secondary
+switchboard: Search plus Workflow, Messages, and Pilot under Frequent tools;
+Operations, Clear the Deck, and role-gated Staff under Operations; Reporting,
+Integrations, Import, and Diagnostics under progressive Administration; then
+account controls. New quote remains a global action. At phone width the five
+primary destinations share the safe-area-aware bottom rail; at wider widths
+they remain the existing vertical orientation rail. Exact-head CI, hosted role
+exercise, assistive-technology acceptance, and human acceptance remain separate
+evidence gates.
 
 v0.16 authorizes one organization per signed-in principal. It therefore does
 not present a same-account **Switch workspace** control that the identity and
@@ -868,9 +893,10 @@ retention never crosses organization, quote, source, role, or gate identity.
   matrix contains one fail-closed route-contract drift guard; 45 route cases;
   three Library template-editor cases; 27 header, search, context, and Pilot
   cases; two mobile Live Breakdown cases; and three editor review/feedback
-  cases. The four Calm Four primary destinations are derived from the same
-  frozen navigation contract used by the shell, and every declared route must
-  resolve at least one current visible audit peer. The lane covers Workspace &
+  cases. At that v0.16 checkpoint, the four Calm Four primary destinations were
+  derived from the same frozen navigation contract used by the shell; the later
+  UX convergence overlay adds Operations as the fifth destination. Every
+  declared route must resolve at least one current visible audit peer. The lane covers Workspace &
   tools, declared header popovers, Workspace search, Package, Money, Proposal,
   and Conversation contexts, deterministic Pilot answers, the normal-flow Pilot
   scenario review, and draft-review/feedback states. Every geometry assertion

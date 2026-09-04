@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-04 14:45:25 CDT
+Last updated: 2026-09-04 14:55:17 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -58,15 +58,17 @@ provider receipts.
   existing arrival contract; Calendar can return to the exact Opportunity.
   No Event record, persistence authority, lifecycle value, pricing rule,
   staffing authority, provider integration, or live-telemetry claim was added.
-- **Staged navigation:** this source checkpoint retains the Calm Four primary
-  navigation and makes Calendar-first Operations the concise daily-execution
-  group: **Operations**, **Clear the Deck**, and **Staff**. **Workflow**,
-  **Messages**, and **Pilot** remain Frequent tools; **Reporting Dashboard**,
-  **Integrations Ops**, **Import Studio**, and **Session Diagnostics** remain
-  progressively disclosed Administration tools. Event and Event Schedule
-  remain contextual/direct routes rather than duplicated menu inventory.
-  `/app/schedule` retains compatibility with Calendar. Exact-head promotion is
-  still pending, as are hosted role-aware reachability and human acceptance;
+- **Converged navigation:** the local candidate promotes Calendar-first
+  **Operations** after **Opportunities**, producing five persistent primary
+  destinations: **Now**, **Opportunities**, **Operations**, **Clients**, and
+  role-gated **Library**. The duplicate Operations header menu is removed.
+  Workspace & tools retains the concise daily-execution group **Operations**,
+  **Clear the Deck**, and **Staff**; **Workflow**, **Messages**, and **Pilot**
+  remain Frequent tools; **Reporting Dashboard**, **Integrations Ops**,
+  **Import Studio**, and **Session Diagnostics** remain progressively disclosed
+  Administration tools. Event and Event Schedule remain contextual/direct
+  routes, and `/app/schedule` retains compatibility with Calendar. Exact-head
+  CI, hosted role-aware reachability, and human acceptance remain separate;
   source and local evidence do not establish deployment or production
   readiness.
 
@@ -77,7 +79,7 @@ provider receipts.
 | Commercial Workbench | Canonical quote composition | `ProposalComposer` retains the one App-owned form, calculation, Menu, staffing, Preview, and explicit save/version path. |
 | Guided | Alternate composition mode | Guided reads and edits the same draft and returns to Workbench without a second save or pricing authority. |
 | Flag-off quote wizard and connected Quote Workspace | Compatibility / rollback | Existing role, quote identity, pricing, and save behavior remain available when Ambient or Workbench presentation gates are off. |
-| Calendar-first Operations | Canonical operational index candidate | `/app/operations` reuses `EventScheduleView`; `/app/schedule` is a compatibility path to the same capability. |
+| Calendar-first Operations | Canonical operational index candidate and fifth primary destination | `/app/operations` reuses `EventScheduleView`; `/app/schedule` is a compatibility path to the same capability. |
 | Event Focus | Contextual / direct deep link | Exact `/app/events/:quoteId` routes remain available without duplicating Events or Event Schedule in Operations navigation. |
 | Workflow | Frequent global attention and exact contextual continuation | `/app/workflow` and exact Workflow focus remain authoritative outside Operations ownership. |
 | Messages | Frequent aggregate review and exact opportunity/client continuation | `/app/messaging` and exact conversation handoffs retain the existing message authority outside Operations ownership. |

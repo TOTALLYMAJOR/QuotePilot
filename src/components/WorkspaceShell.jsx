@@ -26,6 +26,7 @@ const NAV_ICONS = {
   home: CalendarBlank,
   opportunities: NotePencil,
   quotes: NotePencil,
+  operations: CalendarBlank,
   events: CalendarBlank,
   clients: UserCircle,
   customers: UserCircle,
@@ -649,9 +650,7 @@ export default function WorkspaceShell({
               <span className="shell-nav-label">Workflow</span><AttentionBadge count={attentionCount} />
             </button>}
 
-            {HEADER_MENUS.filter(([id]) => (
-              ambientOrientation ? id === "operations" : true
-            )).map(([id, label]) => {
+            {HEADER_MENUS.filter(() => !ambientOrientation).map(([id, label]) => {
               const mobile = id === "more";
               const open = openMenu === id;
               const MenuIcon = MENU_ICONS[id] || Plus;
@@ -676,11 +675,7 @@ export default function WorkspaceShell({
                       role="menu"
                       aria-label={label}
                     >
-                      {menuContent(id, {
-                        onlyLabels: ambientOrientation && id === "operations"
-                          ? WORKSPACE_TOOL_GROUPS.operations
-                          : null
-                      })}
+                      {menuContent(id)}
                     </div>
                   )}
                 </div>

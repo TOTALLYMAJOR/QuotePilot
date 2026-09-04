@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-04 14:33:24 CDT
+Last updated: 2026-09-04 14:55:17 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -115,9 +115,10 @@ evidence paths, freshness, blocker references, and the single next proof event.
 - `/app/operations`: source-candidate canonical Calendar for accepted/booked
   operations. It composes the existing month/week schedule, conflicts,
   capacity, staff-lead assignment, production checklist, and run-of-show
-  context without adding backend or live-telemetry authority. Desktop
-  **Operations** and the mobile Operations group contain only **Operations**,
-  **Clear the Deck**, and **Staff**.
+  context without adding backend or live-telemetry authority. The converged
+  Ambient primary navigation opens this Calendar directly; the secondary
+  Workspace & tools Operations group contains **Operations**, **Clear the
+  Deck**, and role-gated **Staff** without a duplicate header menu.
 - `/app/schedule`: compatibility path to the same Calendar capability. Event
   and schedule deep routes remain reachable from their exact context or URL;
   they are not duplicated in the Operations menu.
@@ -125,8 +126,8 @@ evidence paths, freshness, blocker references, and the single next proof event.
   workspace. **Reporting Dashboard**, **Integrations Ops**, **Import Studio**,
   and **Session Diagnostics** remain progressively disclosed Administration
   tools, while **Workflow**, **Messages**, and **Pilot** remain Frequent tools.
-  These navigation changes are a local source candidate; exact-head promotion,
-  hosted behavior, and human acceptance remain pending.
+  These navigation changes are a local source candidate; exact-head CI, hosted
+  behavior, and human acceptance remain pending.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
   workspaces; the existing admin gate remains authoritative. A default-off
   Ambient build presents `/app/catalog` as **Library**, separating catalog

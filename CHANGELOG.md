@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:48:01 CDT
+Last updated: 2026-09-04 14:59:31 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Promoted Calendar-first **Operations** into the Ambient primary orientation,
+  producing the intentionally bounded order **Now**, **Opportunities**,
+  **Operations**, **Clients**, and role-gated **Library**. Removed the duplicate
+  Ambient Operations header dropdown while retaining Operations, Clear the
+  Deck, and Staff in Workspace & tools; Frequent and progressive
+  Administration groups remain unchanged. Focused unit and local browser
+  coverage verifies the direct current route, desktop/mobile grouping,
+  responsive overflow and accessibility boundaries, compatibility navigation,
+  and admin/sales visibility. This is a local source candidate only: it has not
+  been pushed, deployed, accepted in a hosted tenant, or reviewed by a human.
 - Added a positive Workbench persistence golden path: a complete supported
   draft saves, reopens through Quotes, edits through the existing authority,
   and saves again as the same quote, quote number, and portal identity while
@@ -119,10 +129,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   same-model mobile agenda, retained `/app/schedule`, and added exact
   Now/Living Opportunity/Calendar handoffs. No Firebase, pricing, persistence,
   lifecycle, staffing, catalog, provider, or live-telemetry authority changed.
-  Operations remains secondary and every existing navigation entry remains
-  reachable until the separate exact-head promotion and role-parity retirement
-  gates pass. Local and CI evidence do not claim deployment, hosted behavior,
-  production readiness, or human acceptance. The compatibility bundle's
+  Every existing contextual and secondary navigation entry remains reachable;
+  the later local convergence slice promotes Operations into the five-item
+  primary orientation after its focused local gate. Local and CI evidence do
+  not claim deployment, hosted behavior, production readiness, or human
+  acceptance. The compatibility bundle's
   existing temporary exception is pinned to the exact CI measurement of
   3,311,120 total JavaScript bytes (largest chunk 393,416 bytes), a 1,120-byte
   increase for the new presentation and handoff surfaces with no percentage
@@ -130,9 +141,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   The correction is local-only by owner instruction. The draft PR remains at
   pre-correction SHA `30b6fcd48aa881d83150149eeb942e2d07dd89f8`, whose
   exact-head run `33902068474` failed that prior ceiling; consequently
-  Operations remains secondary and no navigation retirement is authorized.
-  The complete local `lane:release:cwv` passes against the corrected ceiling,
-  but local success does not substitute for the contract's exact-head CI gate.
+  that earlier Operations promotion was not authorized at that checkpoint.
+  The complete local `lane:release:cwv` passed against the corrected ceiling,
+  but local success did not substitute for that checkpoint's exact-head CI
+  gate.
 - Released annotated tag `v0.16.6` at exact commit
   `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
   `33889897821` passed every required job. Governed Vercel production run
