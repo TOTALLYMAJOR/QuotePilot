@@ -22,6 +22,39 @@ function immutable(value, seen = new WeakSet()) {
   return Object.freeze(value);
 }
 
+function resolveActionRevisionId(quote) {
+  const explicit = text(quote?.activeVersionId || quote?.versionMeta?.versionId, 80);
+  const versionNumber = Number(quote?.latestVersionNumber || quote?.versionMeta?.versionNumber);
+  const contentRevisionId = explicit || (
+    Number.isSafeInteger(versionNumber) && versionNumber > 0
+      ? `v${String(versionNumber).padStart(4, "0")}`
+      : ""
+  );
+  if (!contentRevisionId) return "";
+  const issuedAt = text(quote?.portalIssuedAtISO);
+  const parsed = issuedAt ? new Date(issuedAt) : null;
+  const portalIdentity = parsed && !Number.isNaN(parsed.getTime())
+    ? parsed.toISOString()
+    : text(quote?.portalKey, 64);
+  return portalIdentity ? `${contentRevisionId}@${portalIdentity}` : contentRevisionId;
+}
+
+function quoteWithCurrentDeliveryOnly(quote) {
+  if (!quote || typeof quote !== "object") return quote;
+  const delivery = quote?.workflow?.quoteDelivery;
+  if (!delivery || typeof delivery !== "object") return quote;
+  const expectedRevisionId = resolveActionRevisionId(quote);
+  const recordedRevisionId = text(delivery.revisionId);
+  if (!expectedRevisionId || recordedRevisionId === expectedRevisionId) return quote;
+  return {
+    ...quote,
+    workflow: {
+      ...(quote.workflow || {}),
+      quoteDelivery: {}
+    }
+  };
+}
+
 export function getQuoteActionPermissions(value) {
   const normalizedRole = role(value);
   const isAdmin = normalizedRole === "admin";
@@ -123,7 +156,7 @@ export function buildRoleSafeQuoteActionController({ quote = null, currentUserRo
     })];
   }));
   const actionState = compileConfiguredQuoteActions({
-    quote,
+    quote: quoteWithCurrentDeliveryOnly(quote),
     baseActions: actions,
     source: sourceMode
   });
