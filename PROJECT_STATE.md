@@ -1,6 +1,6 @@
 # QuotePilot Canonical Project State
 
-Last updated: 2026-09-04 15:25:00 CDT
+Last updated: 2026-09-04 18:11:13 CDT
 
 ## Current State
 
@@ -11,11 +11,17 @@ preserves the deployed production boundary below: pricing-v2, Offers,
 Templates, Rules, Library changes, and exact payment amount provenance remain
 source-candidate capabilities until a separately authorized future push and
 exact-head CI complete. They are not deployed, used, or commercially proven.
-The local candidate has completed its source qualification, including 4,499
-unit tests, build, exact bundle, capability/document governance, Truth Loop,
-CWV, and dedicated Workbench/Operations browser matrices. AC-236 remains
-UNVERIFIABLE because the owner explicitly prohibited a push; local success is
-not remote CI or hosted acceptance.
+Local implementation commit `5dd97a20133b592f210d56e2454e699c17d45200`
+corrects Calendar-first Operations to the selected compositions. Month uses a
+full-width calendar with the selected context below; Week uses a true
+seven-day time grid with duration geometry, collision lanes, and a secondary
+context rail. Collapsed operational detail, the derived-conflict workflow, and
+Calendar capability gates reuse the existing schedule, event, staffing,
+checklist, and arrival authority. The exact-source 12-case browser matrix and
+390/768/1440/1487 captures pass; the full local release/CWV lane also passes
+with the synchronized documentation content. AC-236 remains UNVERIFIABLE
+because the owner explicitly prohibited a push; local success is not remote CI
+or hosted acceptance.
 
 QuotePilot is a deployed commercial SaaS product with a broad, tested source
 surface. Exact `v0.16.5` (`ad3517b39109b91dd735ee3700e8c79a4e2ca956`)

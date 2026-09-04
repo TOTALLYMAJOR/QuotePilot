@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-04 14:55:17 CDT
+Last updated: 2026-09-04 18:01:21 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -51,26 +51,39 @@ provider receipts.
 - **Calendar-first Operations:** `/app/operations` now composes the existing
   `EventScheduleView` and its accepted/booked projection, month/week models,
   conflict and capacity logic, staff-lead mutation, checklist, and run-of-show
-  context. `/app/schedule` remains a compatibility route to that same Calendar
-  capability. Phone width derives an agenda from the same event/conflict model.
+  context. Month uses the broad primary canvas for the calendar and places its
+  selected-day/event workspace below. Week uses a vertical time axis, seven
+  dated columns, start/duration geometry, visible collision lanes, and a
+  secondary contextual rail. Operational sections begin collapsed, and
+  conflict comparison is contextual to derived conflict review. There is no
+  manual conflict-resolution state: authoritative date, time, duration, venue,
+  guest-count, or lifecycle changes cause the existing model to recompute.
+  `/app/schedule` remains a compatibility
+  route to that same Calendar capability. Phone width derives an agenda from
+  the same event/conflict model rather than creating separate Calendar logic.
 - **Exact handoffs and authority boundary:** Now and the canonical Living
   Opportunity can hand the exact quote identity to Calendar through the
   existing arrival contract; Calendar can return to the exact Opportunity.
+  These entries and both Calendar routes fail closed when `eventSchedule` is
+  disabled. Reporting remains independently controlled by
+  `reportingDashboard`, while People retains the existing administrator and
+  staffing-feature gates.
   No Event record, persistence authority, lifecycle value, pricing rule,
   staffing authority, provider integration, or live-telemetry claim was added.
 - **Converged navigation:** the local candidate promotes Calendar-first
-  **Operations** after **Opportunities**, producing five persistent primary
-  destinations: **Now**, **Opportunities**, **Operations**, **Clients**, and
-  role-gated **Library**. The duplicate Operations header menu is removed.
-  Workspace & tools retains the concise daily-execution group **Operations**,
-  **Clear the Deck**, and **Staff**; **Workflow**, **Messages**, and **Pilot**
-  remain Frequent tools; **Reporting Dashboard**, **Integrations Ops**,
-  **Import Studio**, and **Session Diagnostics** remain progressively disclosed
-  Administration tools. Event and Event Schedule remain contextual/direct
-  routes, and `/app/schedule` retains compatibility with Calendar. Exact-head
-  CI, hosted role-aware reachability, and human acceptance remain separate;
-  source and local evidence do not establish deployment or production
-  readiness.
+  **Operations** after **Opportunities** when Calendar is enabled, producing
+  five persistent primary destinations: **Now**, **Opportunities**,
+  **Operations**, **Clients**, and role-gated **Library**. The duplicate
+  Operations header menu is removed. Workspace & tools retains the concise
+  daily-execution group **Operations**, **Clear the Deck**, and **Staff** only
+  while Calendar is available; **Workflow**, **Messages**, and **Pilot** remain
+  Frequent tools; independently gated **Reporting Dashboard** plus
+  **Integrations Ops**, **Import Studio**, and **Session Diagnostics** remain
+  progressively disclosed Administration tools. Event and Event Schedule
+  remain contextual/direct routes, and `/app/schedule` retains compatibility
+  with Calendar when enabled. Exact-head CI, hosted role-aware reachability,
+  and human acceptance remain separate; source and local evidence do not
+  establish deployment or production readiness.
 
 ### UX convergence surface classification (local source candidate)
 
@@ -79,11 +92,11 @@ provider receipts.
 | Commercial Workbench | Canonical quote composition | `ProposalComposer` retains the one App-owned form, calculation, Menu, staffing, Preview, and explicit save/version path. |
 | Guided | Alternate composition mode | Guided reads and edits the same draft and returns to Workbench without a second save or pricing authority. |
 | Flag-off quote wizard and connected Quote Workspace | Compatibility / rollback | Existing role, quote identity, pricing, and save behavior remain available when Ambient or Workbench presentation gates are off. |
-| Calendar-first Operations | Canonical operational index candidate and fifth primary destination | `/app/operations` reuses `EventScheduleView`; `/app/schedule` is a compatibility path to the same capability. |
+| Calendar-first Operations | Capability-gated canonical operational index candidate and fifth primary destination | When `eventSchedule` is enabled, `/app/operations` reuses `EventScheduleView` as a full-width Month calendar with context below, a seven-day Week time grid with a secondary detail rail, and a same-model phone agenda; `/app/schedule` is a compatibility path. When disabled, both routes and all Calendar handoffs fail closed without mounting the surface. |
 | Event Focus | Contextual / direct deep link | Exact `/app/events/:quoteId` routes remain available without duplicating Events or Event Schedule in Operations navigation. |
 | Workflow | Frequent global attention and exact contextual continuation | `/app/workflow` and exact Workflow focus remain authoritative outside Operations ownership. |
 | Messages | Frequent aggregate review and exact opportunity/client continuation | `/app/messaging` and exact conversation handoffs retain the existing message authority outside Operations ownership. |
-| Reporting and system administration | Progressive Administration | Reporting, Integrations, Import, and Diagnostics retain their existing routes and role/feature gates without becoming daily navigation. |
+| Reporting and system administration | Progressive Administration | Reporting, Integrations, Import, and Diagnostics retain their existing routes and role/feature gates without becoming daily navigation; the Operations Reporting continuation follows `reportingDashboard` independently of Calendar. |
 | Legacy Operations switchboard | Superseded and removed from the Ambient graph | `ambientLegacyRetirement` records the Calendar-first replacement, zero-consumer retirement condition, and preserved live-route disposition. No capability or route was deleted. |
 
 ## Production email sender identity (September 3, 2026)

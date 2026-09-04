@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 15:25:00 CDT
+Last updated: 2026-09-04 18:11:13 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,32 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Corrected Calendar-first Operations to the selected compositions on the
+  existing schedule authority. Month now gives the full horizontal canvas to
+  the month calendar and reveals the selected day, focused event, conflict
+  consequence, and collapsed operational domains beneath it. Week now renders
+  a seven-day time grid with a vertical time axis, event position and height
+  derived from start time and duration, visible collision lanes, and a
+  secondary contextual detail rail. Both presentations retain one selection,
+  event projection, and conflict model; phone widths retain the same-model
+  agenda rather than a third Calendar implementation. Operational detail begins
+  collapsed, comparison appears only inside the conflict workflow, and Tools
+  remains secondary. Derived conflicts have no manual resolved state; operators
+  correct authoritative date, time, duration, venue, guest-count, or lifecycle
+  inputs on the affected Opportunity and the existing conflict model recomputes
+  the result. The same slice fails Calendar closed when `eventSchedule` is disabled:
+  Operations leaves primary and secondary navigation, `/app/operations` and
+  `/app/schedule` do not render Calendar, and Now, Opportunity, Client, and Event
+  handoffs are withheld. Reporting remains independently gated by
+  `reportingDashboard`; People retains the existing administrator/staffing gate.
+  Local implementation commit `5dd97a20133b592f210d56e2454e699c17d45200`
+  passes the 12-case Operations browser matrix, including 390/768/1440 and
+  same-size 1487×1058 reference captures, serious/critical axe checks, exact
+  handoffs, capability gates, and authoritative staffing/checklist persistence.
+  Final local release qualification also passes 4,509 unit tests, both build
+  and bundle gates, documentation/capability governance, 127 Truth Loop tests,
+  and Lighthouse CWV. No deployment, hosted role result, provider outcome, or
+  human acceptance is claimed.
 - Promoted Calendar-first **Operations** into the Ambient primary orientation,
   producing the intentionally bounded order **Now**, **Opportunities**,
   **Operations**, **Clients**, and role-gated **Library**. Removed the duplicate

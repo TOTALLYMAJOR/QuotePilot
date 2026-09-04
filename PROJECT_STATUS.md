@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-04 15:25:00 CDT
+Last updated: 2026-09-04 18:11:13 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -10,41 +10,44 @@ Last updated: 2026-09-04 15:25:00 CDT
   active candidate adds Configurable Offers, Commercial Templates, bounded
   Configuration Rules, pricing-v2 exact money and waterfalls, exact payment
   amount provenance, expanded Library presentation, and starter-pack adapters
-  without creating a second quote/catalog/pricing authority. Local source
-  local qualification is complete; exact-head CI remains unavailable until a
-  future, separately authorized push. This source state makes no hosted or
-  production claim.
+  without creating a second quote/catalog/pricing authority. The current
+  Operations presentation refinement has completed local qualification;
+  exact-head CI remains unavailable until a future, separately authorized
+  push. This source state makes no hosted or production claim.
 
 - Draft PR #129 remains frozen at exact remote head
   `dbf35164e77c1d441c254b110f0a5372f60ac162`. The local convergence branch is
-  ahead and intentionally unpushed; it contains the completed Workbench and
-  Calendar-first Operations refinement. The work remains isolated from the
-  integration checkout and its unrelated changes.
-- The local source candidate keeps exactly five primary destinations: Now,
-  Opportunities, Operations, Clients, and role-gated Library. Operations opens
-  the reused Calendar directly, while Workspace & tools preserves Operations,
-  Clear the Deck, Staff, Frequent tools, and progressive Administration without
-  a duplicate Operations header menu. Contextual/direct routes remain intact.
-- Focused local evidence passes for the Workbench model and Proposal Composer
-  browser regression, the existing schedule/arrival models, exact handoffs,
-  the `/app/schedule` compatibility route, responsive Calendar presentations
-  at 390/768/1440, serious/critical axe checks, and the production build.
-  Earlier exact-head run `33902068474` passed the full unit suite, production build,
-  capability gate, and documentation governance, then failed the compatibility
-  bundle ceiling by 1,120 bytes. Local-only commit
-  `2b2b54b44324fcdc5e07a3cec502b6a6f78ec8a3` pins that exact measurement and
-  passes the complete local `lane:release:cwv` gate, including 4,472 unit tests,
-  production build, governance, bundle, Truth Loop, and Lighthouse CWV, but is
-  intentionally unpushed and therefore has no exact-head CI evidence. The
-  subsequent local promotion is supported by focused unit, admin/sales route,
-  and 390/768/1440 browser evidence; it is not a deployment qualification.
-- Final local qualification passes project-state, environment, secret,
-  Ambient-release, Stripe-isolation, workflow, capability-surfacing,
-  documentation, exact bundle, production-build, 4,499-unit, 127 Truth Loop,
-  and Lighthouse CWV gates. Dedicated browser evidence passes 22/22 Workbench,
-  13/13 compatibility Proposal Composer, and 9/9 Calendar-first Operations
-  cases. The 238-row ledger closes locally as 236 PASS, one NOT APPLICABLE, and
-  AC-236 UNVERIFIABLE solely because no authorized push exists to create
+  ahead and intentionally unpushed; it contains the Workbench and Calendar-first
+  Operations source candidate. The work remains isolated from the integration
+  checkout and its unrelated changes.
+- When the existing `eventSchedule` capability is enabled, the local source
+  candidate presents Operations between Opportunities and Clients and opens the
+  reused Calendar directly. Month gives the broad primary canvas to the calendar
+  and places selected-day, focused-event, conflict, and collapsed operational
+  context below. Week presents a true seven-day time grid with vertical time,
+  start/duration geometry, collision lanes, and a secondary detail rail. Phone
+  widths retain the same-model agenda. Operational sections begin collapsed,
+  comparison stays inside the conflict workflow, and derived conflicts clear
+  only after authoritative date, time, duration, venue, guest-count, or
+  lifecycle inputs change on an affected Opportunity.
+- When `eventSchedule` is disabled, Operations is absent from primary and
+  secondary navigation, `/app/operations` and `/app/schedule` do not render the
+  Calendar, and contextual Calendar handoffs are withheld. Reporting remains
+  independently controlled by `reportingDashboard`; People retains the current
+  administrator and staffing-feature gates. This repairs presentation
+  reachability without adding or changing Event, conflict, staffing, checklist,
+  lifecycle, pricing, persistence, or provider authority.
+- Earlier local qualification and screenshots belong to the prior rendered
+  source and remain historical evidence only. Implementation commit
+  `5dd97a20133b592f210d56e2454e699c17d45200` passes 131 focused unit tests, a
+  production build, and the 12-case exact-source Operations browser matrix at
+  390, 768, 1440, and the selected-reference size of 1487×1058. Those browser
+  cases also pass their serious/critical axe scan and console boundary. The
+  complete local release/CWV lane passes 4,509 tests, the 528-module build,
+  exact 3,331,403/394,701-byte bundle limits, documentation/capability
+  governance, 127 Truth Loop tests, and Lighthouse CWV.
+- The 238-row ledger now resolves to 236 PASS, one NOT APPLICABLE, and AC-236
+  UNVERIFIABLE because local-commit-only authority cannot create remote
   exact-head CI.
 - The local-only publication restriction remains in force. Exact-head CI,
   hosted role parity, merge, and deployment require separate future authority.

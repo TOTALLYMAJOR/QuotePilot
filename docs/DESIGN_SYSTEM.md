@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-04 14:55:17 CDT
+Last updated: 2026-09-04 18:01:21 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -56,20 +56,50 @@ human visual acceptance.
   phone progressively collapse the same regions. Domain summaries stay visible
   in Quote Plan while only one domain body is expanded. Guided mode, client
   Preview, and saved-proposal continuations remain part of the same object.
-- **Calendar-first Operations:** the established calendar grid remains at 768
-  and 1440. At 390, use an agenda derived from the identical scheduled-event
-  and conflict models; never shrink the month grid into an unusable miniature.
-  Selected state and conflicts need text, exact event identity stays stable,
-  and planning language must not imply live actuals.
-- **Converged navigation:** the local candidate uses five persistent primary
-  destinations in this order: Now, Opportunities, Operations, Clients, and
-  role-gated Library. Operations opens the reused Calendar capability directly;
-  it is not duplicated as a header menu. Workspace & tools retains Operations,
-  Clear the Deck, and Staff as the compact daily-execution group. At 390 the
-  five destinations wrap through the established automatic grid without
-  horizontal overflow; at 768 and 1440 they remain a stable orientation rail.
-  Exact-head CI, hosted role/reachability proof, and human acceptance remain
-  separate qualification boundaries.
+- **Calendar-first Operations:** retain the established scheduled-event,
+  conflict, capacity, staffing, checklist, kitchen-checkpoint, and run-of-show
+  models. Month gives the full horizontal canvas to the calendar, then reveals
+  the selected day, focused event, conflict consequence, and collapsed
+  operational domains in a contextual workspace beneath it. Week is a true
+  seven-day time grid: vertical position encodes start time, height encodes
+  duration, and collision lanes make overlapping events visible before their
+  warning copy is read. Its focused context remains a secondary rail. These are
+  two presentations of one workspace, not separate modes or engines.
+  At 390, use an agenda derived from the identical day, event, and conflict
+  models; never shrink the calendar into an unusable miniature. Selected state
+  and conflict meaning need text, exact event identity stays stable, and
+  planning language must not imply live actuals.
+- **Operational disclosure:** event identity, timing, recorded lifecycle, and
+  the next consequential action lead. Staffing, production checklist, kitchen
+  checkpoints, and run-of-show detail begin collapsed and remain available in
+  the focused event. Tools is a secondary disclosure, not a competing page
+  destination.
+- **Derived conflicts:** overlap, unknown-time, and capacity findings are
+  observations recomputed from existing authoritative inputs. Never offer a
+  manual **Mark as resolved** action or persist a second resolution state.
+  Conflict comparison belongs inside the conflict workflow and identifies the
+  exact affected events; resolution routes the operator to the affected
+  Opportunity's authoritative date, time, duration, venue, guest-count, or
+  lifecycle control. Calendar then recomputes the finding.
+- **Visible Operations language:** use event, conflict, schedule, staffing,
+  production, kitchen, and run-of-show language. Provider/source identifiers,
+  design-system terminology, component names, model names, and evidence
+  plumbing stay out of the ordinary task surface unless they are necessary for
+  honest recovery.
+- **Converged navigation:** when the existing Calendar capability is enabled,
+  the local candidate uses five persistent primary destinations in this order:
+  Now, Opportunities, Operations, Clients, and role-gated Library. Operations
+  opens the reused Calendar capability directly; it is not duplicated as a
+  header menu. Workspace & tools retains Operations, Clear the Deck, and Staff
+  as the compact daily-execution group. When Calendar is disabled, Operations
+  is absent from both layers, its direct and compatibility routes do not render
+  Calendar, and contextual Calendar handoffs are withheld. Reporting remains
+  independently capability-gated and People retains the existing
+  administrator/staffing gate. At 390 the enabled five destinations wrap
+  through the established automatic grid without horizontal overflow; at 768
+  and 1440 they remain a stable orientation rail. Exact-head CI, hosted
+  role/reachability proof, and human acceptance remain separate qualification
+  boundaries.
 
 ## Ambient Intelligence extension (source proof, release-profile enabled)
 
@@ -118,19 +148,24 @@ sheet resets that secondary disclosure without changing any route or authority.
 
 ### UX convergence primary-navigation overlay (local source candidate)
 
-The later frozen UX convergence contract promotes the proven Calendar-first
+The later frozen UX convergence contract promotes the qualified Calendar-first
 **Operations** surface into a five-destination primary set: **Now**,
 **Opportunities**, **Operations**, **Clients**, and **Library**. This supersedes
 only the v0.16 four-item presentation rule; it does not replace any route,
-business authority, or role gate. Operations opens `/app/operations` directly
-and uses the same Calendar/schedule authority.
+business authority, role gate, or tenant capability. When `eventSchedule` is
+enabled, Operations opens `/app/operations` directly and uses the same
+Calendar/schedule authority. When it is disabled, Operations and its Calendar
+handoffs are not offered and `/app/operations` plus `/app/schedule` fail closed
+without mounting Calendar.
 
 The former secondary Ambient Operations header menu is removed to avoid two
 same-name destinations. **Workspace & tools** remains the one secondary
 switchboard: Search plus Workflow, Messages, and Pilot under Frequent tools;
-Operations, Clear the Deck, and role-gated Staff under Operations; Reporting,
+Operations, Clear the Deck, and role-gated Staff under Operations when Calendar
+is enabled; Reporting,
 Integrations, Import, and Diagnostics under progressive Administration; then
-account controls. New quote remains a global action. At phone width the five
+account controls. Reporting is independently hidden when its own capability is
+disabled. New quote remains a global action. At phone width the enabled five
 primary destinations share the safe-area-aware bottom rail; at wider widths
 they remain the existing vertical orientation rail. Exact-head CI, hosted role
 exercise, assistive-technology acceptance, and human acceptance remain separate

@@ -51,6 +51,115 @@ final result: passed
 
 ---
 
+# Calendar-first Operations selected-composition QA
+
+Final comparison: 2026-09-04 18:01:21 CDT
+
+## Comparison target
+
+- Selected Month composition: `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-de40cdfa-0b4e-41fa-989a-d9ae0abd04a6.png`
+- Selected Week composition: `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-9d59baa3-fa05-4b3f-b7c0-19675d5abd5d.png`
+- Exact rendered source: `5dd97a20133b592f210d56e2454e699c17d45200`
+- Month implementation: `output/playwright/ux-convergence-operations-fidelity/implementation-month-1487x1058-5dd97a20133b.png`
+- Week implementation: `output/playwright/ux-convergence-operations-fidelity/implementation-week-1487x1058-5dd97a20133b.png`
+- Month side-by-side input: `output/playwright/ux-convergence-operations-fidelity/comparison-month-selected-vs-5dd97a20133b.png`
+- Week side-by-side input: `output/playwright/ux-convergence-operations-fidelity/comparison-week-selected-vs-5dd97a20133b.png`
+
+Both selected references and both implementation captures are 1487×1058 at
+device scale factor 1. The comparison uses the same browser-local administrator
+fixture: Sunday, September 6, 2026 selected; Q-OPS-1 focused; Q-OPS-2
+overlapping; capacity threshold exceeded. Each source and implementation pair
+was placed in one side-by-side comparison input and inspected together.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: Month's five-week grid is about 60–70 pixels taller than the selected
+  reference, so less of the lower conflict workflow appears in the first
+  viewport. The required full-width-calendar-over-context relationship remains
+  intact.
+- P2: Month's lower workspace uses the existing inset panel token instead of
+  the reference's near-full-bleed sheet edge. Its selected-day, focused-event,
+  conflict, and collapsed-domain zones retain the selected composition.
+- P2: Week's secondary rail is slightly narrower and denser than the selected
+  reference, but remains subordinate to the temporal grid and keeps the focused
+  event plus consequence visible.
+- P2: Week omits the illustrative footer legend. Selection and conflict meaning
+  remain explicit through labels, borders, `aria-pressed`, and the contextual
+  conflict workflow.
+
+None of these differences changes the selected spatial relationships, hides a
+required action, creates another authority, or weakens responsive or accessible
+use.
+
+## Fidelity score
+
+Local design score: **9.5/10**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Defining Month/Week spatial composition | 4.0 | 4.0 |
+| Temporal and conflict legibility | 2.0 | 2.0 |
+| Information hierarchy and progressive disclosure | 1.5 | 1.5 |
+| Interaction and authority continuity | 1.0 | 1.0 |
+| Pixel-level density and finish | 1.5 | 1.0 |
+
+This score is a local implementation/design-QA judgment, not hosted or human
+acceptance.
+
+## Contract verification
+
+- Month gives the full horizontal content canvas to the reused month calendar;
+  no permanent detail rail sits beside it.
+- Selecting the conflict day reveals selected day, exact focused event,
+  consequence, and collapsed Run of show, Production, Kitchen timing, and
+  Staffing domains beneath the calendar.
+- Week renders one vertical time axis, seven dated columns, and event geometry
+  derived from real start time and duration. Q-OPS-1 and Q-OPS-2 occupy visible
+  collision lanes in the same day column.
+- The selected event is visually and semantically distinguished; the secondary
+  rail retains exact event identity, consequence, conflict comparison, and
+  Opportunity continuation.
+- Month → Week → Month preserves the selected date and exact event.
+- The 390px agenda consumes the same scheduled-event and conflict projection;
+  it is not another Calendar implementation.
+- The selected reference's manual **Mark as resolved** action was intentionally
+  excluded. Derived conflicts clear only when authoritative Opportunity inputs
+  change and the existing conflict model recomputes.
+- The illustrative **Week Conflict Lens** title was not copied. Both
+  presentations remain one canonical **Operations** workspace.
+
+## Behavioral and accessibility evidence
+
+- `e2e/ux-convergence-operations.spec.js`: 12/12 at exact rendered source,
+  covering 390, 768, 1440, and 1487×1058; Month/Week geometry; selection
+  continuity; capability gates; exact Now/Opportunity/Calendar handoffs;
+  staffing/checklist persistence; route compatibility; browser history; and
+  duplicate-navigation prevention.
+- Serious/critical axe violations: zero at all four captured widths.
+- Browser console errors: zero in all four responsive presentation cases.
+- Focused Operations unit/route/shell cohort: 131/131.
+- Independent authority review: one scheduled-event projection, one conflict
+  derivation, and only the pre-existing staffing, kitchen, and checklist write
+  paths.
+
+## Comparison history
+
+1. The preceding implementation inverted the selected compositions: Month used
+   a permanent right rail and Week stacked detail below a non-temporal card
+   layout. The owner rejected that mapping.
+2. Month was corrected to calendar-first full width with contextual content
+   below. Week was rebuilt only at the presentation layer as a true time grid
+   with collision lanes and a secondary rail.
+3. Exact 1487×1058 captures exposed density and viewport-position differences.
+   Calendar cell density, collision stacking, canvas alignment, and capture
+   scroll were tightened, then both side-by-side inputs were inspected again.
+
+final result: passed
+
+---
+
 # Opportunities Option 1 Design QA
 
 Final comparison: 2026-09-02 18:07:27 CDT

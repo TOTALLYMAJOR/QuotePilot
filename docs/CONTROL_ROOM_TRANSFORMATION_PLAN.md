@@ -1,20 +1,43 @@
 # Live Briefing + Control Room — Transformation Plan
 
-Last updated: 2026-09-04 12:43:00 CDT
+Last updated: 2026-09-04 18:01:21 CDT
 
 ## Calendar-first Operations execution refinement
 
-Draft PR #129 replaces only the `/app/operations` switchboard presentation with
-the existing `EventScheduleView`. Its accepted/booked projection, Month/Week
-models, conflict/capacity logic, staff-lead mutation, production checklist,
-kitchen checkpoints, and run-of-show remain the authority. The 390px agenda is
-derived from those same models; `/app/schedule` remains compatible, and exact
-Now/Opportunity/Calendar handoffs use the existing arrival contract.
+The unpushed local candidate replaces only the `/app/operations` switchboard
+presentation with the existing `EventScheduleView`. Its accepted/booked
+projection, Month/Week models, conflict/capacity logic, staff-lead mutation,
+production checklist, kitchen checkpoints, and run-of-show remain the
+authority. Month gives the full primary width to the month calendar and places
+the selected day, focused event, conflict consequence, and operational domains
+in a contextual workspace below. Week uses a true seven-day time grid with a
+vertical time axis, start-time position, duration height, collision lanes, and
+a secondary contextual rail. Both presentations retain the same selected date
+and event where sensible. The 390px agenda is derived from the same
+day/event/conflict projection rather than becoming a third implementation.
+
+Operational sections begin collapsed. Conflict comparison appears only when a
+derived conflict is being reviewed, and there is no manual or persisted
+"resolved" state: the existing model recomputes after authoritative schedule,
+date, time, duration, venue, guest-count, or lifecycle inputs change on the
+affected Opportunity. Staffing and checklist work remain authoritative for
+their own domains but do not masquerade as conflict clearance. Tools is
+secondary and ordinary copy uses operator-facing event language rather than
+component, source, model, or design terminology.
+
+`/app/schedule` remains compatible and exact Now/Opportunity/Calendar handoffs
+use the existing arrival contract only while `eventSchedule` is enabled. When
+that capability is disabled, Operations is removed from primary and secondary
+navigation, neither Calendar route mounts the surface, and contextual Calendar
+handoffs are withheld. Reporting remains independently controlled by its
+existing capability; People retains its administrator/staffing gate.
 
 This source slice does not implement Control Room live telemetry, a second
-Event entity, staff check-ins, issue records, or actual-stage claims. Operations
-promotion and navigation retirement remain separate later gates; every existing
-entry remains reachable until role-aware parity is proven.
+Event entity, staff check-ins, issue records, or actual-stage claims. The
+previous local promotion evidence belongs to the earlier rendered source; the
+new exact head must repeat its critical Operations and role-aware reachability
+matrices before it can be described as qualified. Disabled-capability omission
+is not navigation retirement: the routes remain recognized and fail closed.
 
 Status: evaluated and phased (Aug 13, 2026); first source/local planning and
 Staff People presentation slice added Aug 14, 2026. Source brief: "QuotePilot
@@ -108,8 +131,11 @@ panel), store beside the version link, resurface on the next comparable quote.
 ### Phase 6 — Library + Operations presentation
 Library as "reusable building blocks" with composition counts ("used by N
 events" is countable from `eventTemplateId` references) and existing
-provenance rows. Operations Switchboard = grouped presentation of the existing
-routed tools with attention counts from their own models.
+provenance rows. Operations is the established Calendar authority presented as
+Month with a full-width calendar and lower contextual workspace, Week with a
+true time grid and secondary detail rail, and a same-model mobile agenda. The
+former switchboard is superseded; secondary Tools retain gated continuations
+without becoming another operational index.
 
 Current source/local slice (Aug 14, 2026): `/app/clear-the-deck`,
 `/app/events`, `/app/events/:quoteId`, `/app/events/:quoteId/live`,

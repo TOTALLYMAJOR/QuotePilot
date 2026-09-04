@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-04 14:55:17 CDT
+Last updated: 2026-09-04 18:01:21 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -101,11 +101,28 @@ mode edits the same draft and uses the same save authority.
 ### Calendar-first Operations (source candidate)
 
 Open primary **Operations** or `/app/operations` to use the existing
-accepted/booked Event Schedule as the canonical operational lens. Month and
-Week retain the same event, conflict, capacity, staff-lead, checklist, and
-run-of-show models. On a phone, the Calendar becomes an agenda derived from
-those models. **Open in Calendar** keeps the exact Opportunity identity;
-**Open opportunity** returns to that exact record. `/app/schedule` remains a
+accepted/booked Event Schedule as the canonical operational lens.
+
+- In **Month**, use the broad calendar to choose a day or event. The selected
+  day, focused event, current conflict consequence, and operational sections
+  appear beneath the calendar; there is no permanent detail rail reducing the
+  month canvas.
+- In **Week**, read time vertically across seven dated columns. An event's
+  vertical position is its start time, its height is its duration, and
+  overlapping events occupy visible collision lanes. Select an event to review
+  it in the secondary detail rail.
+- Switching Month and Week retains the selected date and event where that
+  context remains in range. On a phone, both controls use an agenda derived
+  from the same event and conflict projection rather than a separate Calendar.
+- **Run of show**, **Production**, **Kitchen timing**, and **Staffing** begin
+  collapsed. Open only the domain needed for the current decision.
+- A conflict is derived, not manually resolved. Use the conflict comparison to
+  identify the affected Opportunities, then correct authoritative date, time,
+  duration, venue, guest count, or lifecycle state on the exact Opportunity.
+  Calendar recomputes the conflict from those records.
+
+**Open in Calendar** keeps the exact Opportunity identity; **Open
+opportunity** returns to that exact record. `/app/schedule` remains a
 compatibility path to the same Calendar.
 
 Desktop **Operations** and the mobile Operations group contain only
@@ -223,8 +240,10 @@ adds Calendar-first Operations without changing its underlying authority:
   index. Ordering follows current recorded state and dates, not a fixed display
   list.
 - **Operations** opens the accepted/booked Calendar as the daily execution
-  index. Month, Week, conflict/capacity evidence, staff-lead work, checklist,
-  and run of show remain one reused schedule capability.
+  index. Month's full-width calendar and lower contextual workspace, Week's
+  time-and-collision grid and secondary detail rail, the phone agenda,
+  conflict/capacity evidence, staff-lead work, checklist, and run of show remain
+  one reused schedule capability.
 - **Clients** opens the same-tenant relationship view. A tenant with no clients
   sees one **Start an opportunity** path into the established quote flow and no
   zero-value metrics or unnecessary search. A populated tenant sees current or
@@ -1546,10 +1565,18 @@ assistive-technology, or human acceptance.
 
 ## Event Schedule and Production Checklist
 - Open **Operations** or `/app/operations` to review accepted and booked events
-  by month or week, inspect conflicts, and assign a staff lead.
+  by month or week, inspect derived conflicts, and assign a staff lead. Month
+  keeps the full calendar above its selected-event workspace. Week uses real
+  start and duration geometry across seven day columns, with collision lanes
+  and a secondary detail rail. Operational sections remain collapsed until you
+  open the one needed.
   `/app/schedule` is a compatibility path to the same Calendar. Quote/proposal
   lifecycle and booking confirmation are separately labeled; an accepted quote
   with confirmation pending is not displayed as a confirmed booking.
+- Do not look for a **Mark as resolved** control. Overlap and capacity findings
+  clear only after the affected Opportunity's authoritative date, time,
+  duration, venue, guest count, or lifecycle changes and Calendar recomputes.
+  Use the conflict comparison to open the exact related record.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
 - Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
 - `Run of show` is a bounded, read-only sequence for the selected date. It
