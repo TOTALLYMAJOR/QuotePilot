@@ -105,6 +105,23 @@ describe("configured quote action state", () => {
     expect(result.primaryAction?.id).toBe("open_conversation");
   });
 
+  test("does not treat provider acceptance for an older revision as current delivery evidence", () => {
+    const result = controller(quote("draft", {
+      activeVersionId: "v0002",
+      latestVersionNumber: 2,
+      workflow: { quoteDelivery: providerAcceptedDelivery() }
+    })).actionState;
+
+    expect(result.state.providerAccepted).toBe(false);
+    expect(result.evidence.delivery.state).toBe("not_recorded");
+    expect(result.actions.send_quote).toMatchObject({
+      visible: true,
+      enabled: true,
+      label: "Send proposal"
+    });
+    expect(result.primaryAction?.id).toBe("send_quote");
+  });
+
   test("recovery overrides routine quote-changing actions when delivery is uncertain", () => {
     const result = controller(quote("sent", {
       workflow: {
@@ -239,7 +256,12 @@ describe("configured quote action state", () => {
     expect(getQuoteActionPermissions("sales").canReviewDelivery).toBe(false);
 
     const sales = controller(quote("sent", {
-      workflow: { quoteDelivery: { state: "outcome_unknown" } }
+      workflow: {
+        quoteDelivery: {
+          revisionId: "v0001@2099-08-03T12:00:00.000Z",
+          state: "outcome_unknown"
+        }
+      }
     }), "sales").actionState;
     expect(sales.actions.review_delivery.visible).toBe(false);
     expect(sales.primaryAction).toBeNull();
