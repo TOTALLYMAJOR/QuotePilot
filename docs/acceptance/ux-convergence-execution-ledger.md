@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 14:45:25 CDT
+Last updated: 2026-09-04 14:48:01 CDT
 
 ## Authority
 
@@ -260,15 +260,15 @@ separate.
 | AC-191 | AC-191 — System/Admin routes classified correctly | PASS | Canonical matrix classifies Reporting and system tools as progressive Administration with existing gates. |
 | AC-192 | AC-192 — Superseded presentation explicitly identified | PASS | Canonical matrix and `ambientLegacyRetirement` name the legacy Operations switchboard and its Calendar-first replacement. |
 | AC-193 | AC-193 — Dead duplicate components removed or documented with retirement condition | PASS | Zero-consumer `OperationsSwitchboardView` and its CSS are removed; the retirement registry records the mechanical condition and preserved-route disposition. |
-| AC-194 | AC-194 — New quote golden path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-195 | AC-195 — Existing quote edit golden path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-196 | AC-196 — Guided golden path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-197 | AC-197 — AI-assisted quote path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-198 | AC-198 — Scenario path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-199 | AC-199 — Blocked-save path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-200 | AC-200 — Long-menu path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-201 | AC-201 — Margin-disabled path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-202 | AC-202 — Save-failure recovery path | PENDING | No evidence recorded at contract checkpoint. |
+| AC-194 | AC-194 — New quote golden path | PASS | Dedicated browser coverage completes a valid Event, Customer, Experience/Menu, Staffing, and Commercial draft and saves it through the shared Workbench action. |
+| AC-195 | AC-195 — Existing quote edit golden path | PASS | The saved quote reopens from Quotes, edits through existing authority, and persists as the same quote/portal identity with `v0001` → `v0002` and exactly two history entries. |
+| AC-196 | AC-196 — Guided golden path | PASS | Workbench browser coverage enters Guided, edits the shared draft, returns to Workbench, and retains the same supported state and save authority. |
+| AC-197 | AC-197 — AI-assisted quote path | PASS | Flag-on Pilot coverage previews the exact dirty-draft mutation before explicit Apply and leaves ordinary save blockers authoritative. |
+| AC-198 | AC-198 — Scenario path | PASS | Browser coverage opens Compare Scenarios, changes isolated scenario inputs, proves the draft remains unchanged, then applies only the explicit chosen scenario. |
+| AC-199 | AC-199 — Blocked-save path | PASS | Both Workbench save controls expose the same exact blocker set and create no saved-success identity while blocked. |
+| AC-200 | AC-200 — Long-menu path | PASS | Birthday fixture browser coverage keeps ten course groups readable through intentional disclosure, selection, and search. |
+| AC-201 | AC-201 — Margin-disabled path | PASS | Browser coverage proves margin is absent flag-off and fail-closed with named unavailable evidence flag-on. |
+| AC-202 | AC-202 — Save-failure recovery path | PASS | Forced browser-local persistence failure creates no quote/success claim and preserves Event, Customer, and Menu work for retry. |
 | AC-203 | AC-203 — Calendar golden path | PASS | Operations real-route suite proves Operations → Month/Week → exact focused event → exact Opportunity. |
 | AC-204 | AC-204 — Conflict path | PASS | Browser coverage selects the exact overlapping event and observes both Time overlap and Capacity risk without offering a fabricated resolution. |
 | AC-205 | AC-205 — Staff lead path | PASS | Browser coverage assigns Kitchen Lead through the existing quote-store authority, reloads Operations, and reads the persisted exact assignment. |
@@ -296,7 +296,7 @@ separate.
 | AC-227 | AC-227 — No route silently aliases to semantically wrong destination | PASS | Schedule arrivals intentionally target Calendar-first Operations while `/app/schedule` remains the same named compatibility capability. |
 | AC-228 | AC-228 — Focused unit/component tests pass | PASS | 35 focused Workbench tests and 76 focused Operations/arrival tests pass. |
 | AC-229 | AC-229 — Relevant pre-existing tests remain green or have evidence-backed expectation updates | PASS | Proposal Composer regression was updated for explicit domain selection and supported saved-quote reopening; combined 19/19 browser cases and full 4,472-unit suite pass. |
-| AC-230 | AC-230 — Quote workbench real-route Playwright passes | PASS | `e2e/ux-convergence-workbench.spec.js` plus Proposal Composer regression pass 19/19. |
+| AC-230 | AC-230 — Quote workbench real-route Playwright passes | PASS | All 22 resolved Workbench cases have passing local evidence; the Pilot case is exercised in its required Ambient flag-on lane and the new save/version path passes. Final exact-head aggregate refresh remains part of local qualification. |
 | AC-231 | AC-231 — Operations/Calendar real-route Playwright passes | PASS | `e2e/ux-convergence-operations.spec.js` passes 9/9 with the required Ambient, Now, and staffing presentation gates enabled. |
 | AC-232 | AC-232 — Responsive matrix passes | PASS | Workbench and Operations dedicated tests pass at 390, 768, and 1440. |
 | AC-233 | AC-233 — Accessibility matrix passes | PASS | Dedicated serious/critical axe scans pass at all required widths; targeted color-contrast regressions pass. |

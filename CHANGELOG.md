@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:45:25 CDT
+Last updated: 2026-09-04 14:48:01 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added a positive Workbench persistence golden path: a complete supported
+  draft saves, reopens through Quotes, edits through the existing authority,
+  and saves again as the same quote, quote number, and portal identity while
+  advancing `v0001` to `v0002` with exactly two history records. Customer,
+  venue, guest, and Menu state survive the round trip. Together with the
+  already focused Guided, Pilot, scenario, blocker, long-Menu, margin, and
+  failure-recovery cases, this closes the local quote golden-path set without
+  adding another form, save, pricing, or persistence authority.
 - Certified contextual capability continuity across Workflow, Messages, Pilot,
   Clear the Deck, Staff, Reporting, Administration, Library, Now, and exact
   Opportunity/Calendar handoffs using 274 focused regressions plus bounded

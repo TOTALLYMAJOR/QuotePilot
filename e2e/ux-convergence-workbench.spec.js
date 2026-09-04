@@ -267,6 +267,88 @@ test("keeps exact blockers on both save controls without creating a saved-succes
   await expect(page.locator(".pc-save-state")).toHaveAttribute("data-state", "dirty");
 });
 
+test("saves, reopens, and versions one supported Workbench draft", async ({ page }) => {
+  await completeSavableDraft(page);
+  await page.getByTestId("pc-save").click();
+
+  const savedWorkspace = page.getByTestId("quote-workspace");
+  await expect(savedWorkspace).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/quotes\/[^/?#]+$/);
+  await expect(savedWorkspace.getByText("Saved workspace", { exact: true })).toBeVisible();
+
+  const initialPersistence = await page.evaluate(() => ({
+    quotes: JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]"),
+    history: JSON.parse(localStorage.getItem("quoteWizard.quoteHistory") || "[]")
+  }));
+  expect(initialPersistence.quotes).toHaveLength(1);
+  const initialQuote = initialPersistence.quotes[0];
+  expect(initialQuote).toMatchObject({
+    activeVersionId: "v0001",
+    latestVersionNumber: 1,
+    customer: {
+      name: "Boundary Client",
+      email: "boundary@example.test"
+    },
+    event: {
+      name: "Persistence Boundary Dinner",
+      venue: "Evidence Hall",
+      guests: 60
+    }
+  });
+  expect(initialQuote.selection.menuItems).toHaveLength(1);
+  expect(initialPersistence.history.filter((entry) => entry.quoteId === initialQuote.id))
+    .toHaveLength(1);
+  expect(initialPersistence.history.find((entry) => entry.quoteId === initialQuote.id))
+    .toMatchObject({ versionId: "v0001", versionNumber: 1 });
+
+  await savedWorkspace.getByRole("button", { name: "Back to opportunities" }).click();
+  const quotes = page.getByRole("dialog", { name: "Quotes" });
+  await expect(quotes).toBeVisible();
+  const quoteRow = quotes.locator(`tr[data-quote-id="${initialQuote.id}"]`);
+  await expect(quoteRow).toHaveCount(1);
+  await quoteRow.getByRole("button", { name: "Edit", exact: true }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/app/quotes/${initialQuote.id}/edit$`));
+  await expect(page.getByTestId("proposal-composer")).toBeVisible();
+  await expect(page.getByText(`Editing quote ${initialQuote.quoteNumber}`, { exact: true })).toBeVisible();
+  await commitInline(page, "Event name", "Persistence Boundary Dinner Revised");
+  await expect(page.locator(".pc-save-state")).toHaveAttribute("data-state", "dirty");
+  await expect(page.getByTestId("pc-save")).toHaveText("Save Changes");
+  await page.getByTestId("pc-save").click();
+
+  await expect(savedWorkspace).toBeVisible();
+  await expect(savedWorkspace.getByRole("heading", {
+    name: new RegExp(`^${initialQuote.quoteNumber}.*Persistence Boundary Dinner Revised$`)
+  })).toBeVisible();
+  const revisedPersistence = await page.evaluate(() => ({
+    quotes: JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]"),
+    history: JSON.parse(localStorage.getItem("quoteWizard.quoteHistory") || "[]")
+  }));
+  expect(revisedPersistence.quotes).toHaveLength(1);
+  const revisedQuote = revisedPersistence.quotes[0];
+  expect(revisedQuote.id).toBe(initialQuote.id);
+  expect(revisedQuote.quoteNumber).toBe(initialQuote.quoteNumber);
+  expect(revisedQuote.portalKey).toBe(initialQuote.portalKey);
+  expect(revisedQuote.activeVersionId).toBe("v0002");
+  expect(revisedQuote.latestVersionNumber).toBe(2);
+  expect(revisedQuote.event).toMatchObject({
+    name: "Persistence Boundary Dinner Revised",
+    venue: "Evidence Hall",
+    guests: 60
+  });
+  expect(revisedQuote.customer).toMatchObject({
+    name: "Boundary Client",
+    email: "boundary@example.test"
+  });
+  expect(revisedQuote.selection.menuItems).toEqual(initialQuote.selection.menuItems);
+  const revisedHistory = revisedPersistence.history.filter((entry) => entry.quoteId === initialQuote.id);
+  expect(revisedHistory).toHaveLength(2);
+  expect(revisedHistory).toEqual(expect.arrayContaining([
+      expect.objectContaining({ versionId: "v0001", versionNumber: 1 }),
+      expect.objectContaining({ versionId: "v0002", versionNumber: 2 })
+    ]));
+});
+
 test("keeps identity, active work, money, and attention in the first desktop viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const firstView = [
