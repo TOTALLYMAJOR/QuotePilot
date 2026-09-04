@@ -298,6 +298,21 @@ describe("investment + pulse", () => {
     expect(Object.keys(map)).toContain("labor");
   });
 
+  it("withholds a per-guest claim when the guest count is unavailable", () => {
+    const form = draftForm({ guests: 0 });
+    const totals = { ...totalsFor(form), guests: 0, total: 1200 };
+    const model = buildInvestmentModel({
+      form,
+      totals,
+      catalog: quoteCalculationCatalog,
+      settings: quoteCalculationSettings
+    });
+
+    expect(model.total).toBe(1200);
+    expect(model.guests).toBe(0);
+    expect(model.perGuest).toBeNull();
+  });
+
   it("composes the composition line from the record", () => {
     const form = draftForm({ guests: 80, servers: 6, bartenders: 1, chefs: 0 });
     const parts = buildCompositionLine({

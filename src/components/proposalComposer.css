@@ -193,7 +193,7 @@
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  min-height: 2.55rem;
+  min-height: 44px;
   transition: background 160ms ease-out, transform 160ms ease-out;
 }
 
@@ -210,7 +210,7 @@
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  min-height: 2.55rem;
+  min-height: 44px;
   transition: border-color 160ms ease-out, background 160ms ease-out;
 }
 
@@ -220,7 +220,7 @@
 }
 .pc-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.pc-compact { min-height: 2.3rem; padding: 0.45rem 0.85rem; }
+.pc-compact { min-height: 44px; padding: 0.45rem 0.85rem; }
 
 .proposal-composer button:focus-visible,
 .proposal-composer input:focus-visible,
@@ -464,6 +464,14 @@
 .pc-section-status[data-state="complete"] { color: var(--pc-teal); }
 .pc-section-status[data-state="preset"] { color: var(--pc-brass-deep); }
 
+.pc-domain-summary {
+  max-width: 62ch;
+  margin: -0.35rem 0 1rem;
+  color: var(--pc-muted-deep);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
 .pc-muted { color: var(--pc-muted-deep); font-size: 0.92rem; margin: 0.3rem 0; }
 .pc-error { color: var(--pc-red-deep); font-size: 0.92rem; margin: 0.3rem 0; }
 
@@ -535,7 +543,7 @@
   color: var(--pc-ink);
   font: inherit;
   padding: 0.5rem 0.6rem;
-  min-height: 40px;
+  min-height: 44px;
   max-width: 15rem;
 }
 
@@ -547,7 +555,7 @@
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .proposal-composer .ambient-inline-value__commit {
@@ -585,7 +593,7 @@
   color: var(--pc-ink);
   font: inherit;
   padding: 0.5rem 0.6rem;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .pc-quiet-field textarea { min-height: 64px; resize: vertical; }
@@ -623,6 +631,41 @@
 }
 
 .pc-editor-group + .pc-editor-group { margin-top: 0.9rem; }
+
+.pc-menu-editor-group {
+  border-top: 1px solid var(--pc-rule);
+  padding-top: 0.2rem;
+}
+
+.pc-menu-editor-group summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  color: var(--pc-ink);
+  cursor: pointer;
+  font-family: var(--font-editorial);
+  font-size: 1.02rem;
+  font-weight: 600;
+  list-style-position: inside;
+}
+
+.pc-menu-editor-group summary small {
+  color: var(--pc-muted-deep);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+.pc-menu-editor-group[open] summary {
+  color: var(--pc-brass-deep);
+}
+
+.pc-menu-editor-group .pc-choice-list {
+  padding: 0.2rem 0 0.55rem 1rem;
+}
 
 .pc-editor-note {
   margin: 0.8rem 0 0;
@@ -1229,6 +1272,25 @@
 
 .pc-margin-cost[data-state="unavailable"] {
   background: color-mix(in srgb, var(--pc-amber) 8%, var(--pc-sheet));
+}
+
+.pc-margin-cost[data-state="attention"] {
+  border-color: color-mix(in srgb, var(--pc-amber) 48%, var(--pc-rule));
+  background: color-mix(in srgb, var(--pc-amber) 8%, var(--pc-sheet));
+}
+
+.pc-margin-cost > summary {
+  min-height: 2.25rem;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.pc-margin-cost > summary::marker {
+  color: var(--pc-brass-deep);
+}
+
+.pc-margin-detail {
+  padding-top: 0.7rem;
 }
 
 .pc-margin-cost dl {

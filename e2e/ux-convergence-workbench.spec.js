@@ -4,6 +4,9 @@ import { expect, test } from "@playwright/test";
 const ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_PROPOSAL_COMPOSER_ENABLED || "").trim().toLowerCase()
 );
+const MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(process.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
+);
 
 test.skip(!ENABLED, "Commercial Workbench requires the Proposal Composer graph.");
 
@@ -103,7 +106,9 @@ test("keeps validation and canonical pricing attached to Event and Customer edit
   await page.getByRole("button", { name: "Change Email", exact: true }).click();
   await page.getByLabel("Email", { exact: true }).fill("invalid-email");
   await page.getByRole("button", { name: "Apply change", exact: true }).click();
-  await expect(page.getByText("Enter a valid email address.", { exact: true })).toBeVisible();
+  const emailError = page.getByText("Enter a valid email address.", { exact: true });
+  await expect(emailError).toBeVisible();
+  await expect(page.getByLabel("Email", { exact: true })).toHaveAttribute("aria-describedby", await emailError.getAttribute("id"));
   await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
 });
 
@@ -210,6 +215,116 @@ test("keeps exact blockers on both save controls without creating a saved-succes
   await expect(page.getByRole("heading", { name: "Blocked Draft Continuity", exact: true })).toBeVisible();
   await expect(page.getByText(/Editing quote/i)).toHaveCount(0);
   await expect(page.locator(".pc-save-state")).toHaveAttribute("data-state", "dirty");
+});
+
+test("keeps identity, active work, money, and attention in the first desktop viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const firstView = [
+    page.getByRole("heading", { level: 1 }),
+    page.getByTestId("workbench-domain-event"),
+    page.getByTestId("pc-pulse-total"),
+    page.locator(".pc-pulse-facts").getByText(/Deposit/),
+    page.getByTestId("commercial-truth-blockers")
+  ];
+
+  for (const locator of firstView) {
+    await expect(locator).toBeVisible();
+    const box = await locator.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Number(box?.y) + Number(box?.height)).toBeLessThanOrEqual(1000);
+  }
+  await expect(page.getByTestId("workbench-domain-event")).toHaveAttribute("aria-current", "step");
+});
+
+test("gives a blank quote honest identity, readable Event context, and named regions", async ({ page }) => {
+  await expect(page.getByRole("heading", { level: 1, name: "Untitled event", exact: true })).toBeVisible();
+  await expect(page.getByTestId("pc-event-summary")).toContainText("need review");
+  await expect(page.getByTestId("pc-event-summary")).not.toContainText(/undefined|null/i);
+  await expect(page.getByRole("navigation", { name: "Quote plan" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Living proposal document" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Quote Pulse" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Event", exact: true })).toBeVisible();
+});
+
+test("keeps a realistic Menu usable in normal flow at phone width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByLabel("Event type", { exact: true }).selectOption({ index: 1 });
+  await openDomain(page, "experience");
+  await page.getByTestId("pc-edit-menu").click();
+
+  const editor = page.getByTestId("pc-menu-editor");
+  const groups = editor.locator("details.pc-menu-editor-group");
+  await expect(groups.first()).toBeVisible();
+  expect(await groups.count()).toBeGreaterThan(2);
+  const openBeforeSearch = await groups.evaluateAll((nodes) => nodes.filter((node) => node.open).length);
+  expect(openBeforeSearch).toBeGreaterThan(0);
+  expect(openBeforeSearch).toBeLessThan(await groups.count());
+
+  const closedIndex = await groups.evaluateAll((nodes) => nodes.findIndex((node) => !node.open));
+  expect(closedIndex).toBeGreaterThanOrEqual(0);
+  const closedGroup = groups.nth(closedIndex);
+  const closedSummary = closedGroup.locator("summary");
+  const closedSummaryBox = await closedSummary.boundingBox();
+  expect(Number(closedSummaryBox?.height)).toBeGreaterThanOrEqual(44);
+  await closedSummary.click();
+  await expect(closedGroup).toHaveAttribute("open", "");
+
+  const firstDish = String(await editor.locator(".pc-choice-copy strong").first().textContent()).trim();
+  await editor.getByLabel("Search menu", { exact: true }).fill(firstDish);
+  await expect(groups.first()).toHaveAttribute("open", "");
+  expect(await groups.evaluateAll((nodes) => nodes.every((node) => node.open))).toBe(true);
+
+  const overflow = await editor.evaluate((node) => getComputedStyle(node).overflowY);
+  expect(["visible", "clip"]).toContain(overflow);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+    .toBe(true);
+});
+
+test("keeps long identity text in bounds and exposes visible keyboard focus", async ({ page }) => {
+  await commitInline(page, "Event name", "A Very Long Multi-Family Celebration Name That Must Wrap Without Colliding With Quote Actions Or Commercial Truth");
+  const title = page.getByRole("heading", { level: 1 });
+  expect(await title.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+    .toBe(true);
+
+  await page.keyboard.press("Tab");
+  const focusStyle = await page.locator(":focus").evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      visible: node.matches(":focus-visible"),
+      width: style.outlineWidth,
+      style: style.outlineStyle
+    };
+  });
+  expect(focusStyle.visible).toBe(true);
+  expect(Number.parseFloat(focusStyle.width)).toBeGreaterThanOrEqual(2);
+  expect(focusStyle.style).not.toBe("none");
+});
+
+test("removes Workbench animation and transitions for reduced-motion users", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByTestId("proposal-composer")).toBeVisible();
+  const motion = await page.getByTestId("workbench-domain-event").evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { animation: style.animationName, transition: style.transitionDuration };
+  });
+  expect(motion.animation).toBe("none");
+  expect(motion.transition.split(",").every((duration) => duration.trim() === "0s")).toBe(true);
+});
+
+test("keeps margin evidence behind its flag and expands unavailable evidence when enabled", async ({ page }) => {
+  const margin = page.getByTestId("pc-margin-cost");
+  if (!MARGINS_ENABLED) {
+    await expect(margin).toHaveCount(0);
+    return;
+  }
+
+  await commitInline(page, "Guests", "50");
+  await expect(margin).toHaveAttribute("data-state", "unavailable");
+  await expect(margin).toHaveAttribute("open", "");
+  await expect(margin).toContainText("Margins unavailable");
+  await expect(margin.locator("summary")).toContainText("Review · Staff-only");
 });
 
 for (const viewport of [

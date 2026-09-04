@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 14:05:11 CDT
+Last updated: 2026-09-04 14:22:07 CDT
 
 ## Authority
 
@@ -84,19 +84,19 @@ separate.
 | AC-017 | AC-017 — Desktop clearly communicates Quote Plan / Living Object / Commercial Truth | PASS | 1440px real-route test asserts all three stable regions; exact labels and markers are in `ProposalComposer`. |
 | AC-018 | AC-018 — One major domain active at a time | PASS | `data-active-domain` and scoped CSS expose one detailed domain body at a time. |
 | AC-019 | AC-019 — Normal screen does not expose every detailed domain simultaneously | PASS | Real-route test confirms inactive Customer detail is hidden while Event is active. |
-| AC-020 | AC-020 — First desktop viewport reveals: | PENDING | No evidence recorded at contract checkpoint. |
-| AC-021 | AC-021 — Density reduction is not accomplished by simply wrapping everything in more cards | PENDING | No evidence recorded at contract checkpoint. |
+| AC-020 | AC-020 — First desktop viewport reveals: | PASS | Focused 1440×1000 browser coverage bounds the H1 identity, active Event domain, canonical total, deposit, and actionable blockers inside the first viewport. |
+| AC-021 | AC-021 — Density reduction is not accomplished by simply wrapping everything in more cards | PASS | Workbench retains the ruled proposal sheet and flat Quote Plan/Truth hierarchy; dense Menu choices use native course disclosure rather than more nested cards. |
 | AC-022 | AC-022 — Exactly five primary composition domains unless repository evidence justifies a change | PASS | Workbench test asserts Event, Customer, Experience, Staffing, and Commercials. |
 | AC-023 | AC-023 — Current domain is visible without relying only on color | PASS | Active domain exposes `aria-current="step"` and textual Ready/Review/blocker state. |
 | AC-024 | AC-024 — Domain status markers are evidence-backed | PASS | Pure model tests cover status/summary derivation from completeness, blockers, form, totals, and staffing. |
 | AC-025 | AC-025 — Exact blockers focus the correct domain where possible | PASS | Pure blocker-target tests cover field domains and Commercials fallback for non-field authority blockers. |
 | AC-026 | AC-026 — Every domain keyboard reachable | PASS | Domains are native buttons in a named navigation landmark. |
-| AC-027 | AC-027 — Event first presents readable summary | PENDING | No evidence recorded at contract checkpoint. |
+| AC-027 | AC-027 — Event first presents readable summary | PASS | Event opens with the derived date/venue/guest summary before its existing inline fields; blank-state browser coverage asserts the honest review message. |
 | AC-028 | AC-028 — Existing validation retained | PASS | Focused browser coverage proves the existing inline email validator rejects an invalid address without committing it. |
 | AC-029 | AC-029 — Price-affecting Event changes update through existing pricing path | PASS | Focused browser coverage changes Guests, observes the canonical Pulse total move, and verifies Undo restores the exact prior total. |
 | AC-030 | AC-030 — Customer fields round-trip unchanged | PASS | Workbench-to-Guided browser coverage carries the same unsaved Client name through both presentation modes and back. |
 | AC-031 | AC-031 — Missing/invalid email remains exact blocker | PASS | Save-readiness units preserve `client-email` and `client-email-format`; browser coverage verifies email remains an exact visible blocker. |
-| AC-032 | AC-032 — Missing identity is not fabricated | PENDING | No evidence recorded at contract checkpoint. |
+| AC-032 | AC-032 — Missing identity is not fabricated | PASS | Blank browser coverage renders `Untitled event`, `Not set`, and the derived review summary without undefined/null or invented customer/event values. |
 | AC-033 | AC-033 — Package, Service style, Menu, Rentals and Enhancements are organized under Experience | PASS | Real-route Experience test asserts all five existing capability triggers in the active domain. |
 | AC-034 | AC-034 — Package semantics unchanged | PASS | Existing Package IDs, selection callback, catalog price ownership, and what-if preview remain in the shared form; focused model/browser tests cover selection and repricing. |
 | AC-035 | AC-035 — Service-style semantics unchanged | PENDING | No evidence recorded at contract checkpoint. |
@@ -104,7 +104,7 @@ separate.
 | AC-037 | AC-037 — Detailed Menu only opens intentionally | PASS | The editor is closed by default and focused browser coverage opens it only through the explicit Edit Menu control. |
 | AC-038 | AC-038 — Existing Menu functionality retained | PASS | Focused browser coverage loads the event-type Menu, selects an existing item, and preserves the governed shared selection. |
 | AC-039 | AC-039 — Menu close restores Experience context and focus | PASS | Focused browser coverage closes Menu, verifies focus on its toggle, and verifies Experience remains the current domain. |
-| AC-040 | AC-040 — Realistically long Menu remains usable | PENDING | No evidence recorded at contract checkpoint. |
+| AC-040 | AC-040 — Realistically long Menu remains usable | PASS | Real-route Birthday coverage loads ten course groups and verifies only relevant/first groups open, closed groups remain operable, and search opens matching disclosure without changing Menu authority. |
 | AC-041 | AC-041 — Current and recommended staffing visibly distinct | PASS | Focused browser coverage simultaneously shows current `0 servers` and the separately labelled Recommended card. |
 | AC-042 | AC-042 — No silent recommendation application | PASS | Current staffing remains unchanged while the recommendation is displayed; mutation still requires Use recommendation. |
 | AC-043 | AC-043 — Existing staffing financial consequence retained | PENDING | No evidence recorded at contract checkpoint. |
@@ -114,18 +114,18 @@ separate.
 | AC-047 | AC-047 — Total remains discoverable while editing any desktop domain | PASS | 1440px Workbench keeps Commercial Truth visible and asserts the existing `pc-pulse-total`. |
 | AC-048 | AC-048 — Deposit remains discoverable | PASS | Existing pulse deposit remains directly below the canonical total; full component/unit regressions pass. |
 | AC-049 | AC-049 — Rail total originates from canonical totals | PASS | Commercial Truth reuses the prior pulse model and `totals`; no alternate calculation was introduced. |
-| AC-050 | AC-050 — Per-guest value fails safely when inputs invalid | PENDING | No evidence recorded at contract checkpoint. |
-| AC-051 | AC-051 — Margin remains properly gated | PENDING | No evidence recorded at contract checkpoint. |
-| AC-052 | AC-052 — Healthy margin evidence compresses | PENDING | No evidence recorded at contract checkpoint. |
-| AC-053 | AC-053 — Margin uncertainty expands | PENDING | No evidence recorded at contract checkpoint. |
+| AC-050 | AC-050 — Per-guest value fails safely when inputs invalid | PASS | Focused investment-model unit coverage proves a positive total with zero guests returns `perGuest: null`; Workbench omits the derived claim. |
+| AC-051 | AC-051 — Margin remains properly gated | PASS | Browser coverage proves the margin surface is absent flag-off and fail-closed flag-on; `num` now correctly treats null/blank recorded costs as missing rather than zero. |
+| AC-052 | AC-052 — Healthy margin evidence compresses | PASS | Deterministic disclosure units prove available margin meeting a target (or without a target) starts compact, while the summary retains the headline evidence and staff-only boundary. |
+| AC-053 | AC-053 — Margin uncertainty expands | PASS | Deterministic units cover missing evidence and recorded-target misses; flag-on browser coverage verifies unavailable evidence opens with named missing-cost guidance. |
 | AC-054 | AC-054 — Blocker count exact | PASS | Browser coverage derives the count from Review N blockers and verifies exactly N rendered blocker records. |
 | AC-055 | AC-055 — Exact blocker reasons retained | PASS | Readiness renders the unchanged blocker messages; focused units assert the complete blocker ID order and governed authorization reason. |
 | AC-056 | AC-056 — Review blockers never saves/mutates by itself | PASS | Clicking blocker review only opens/focuses readiness; the same unsaved draft and dirty state remain. |
 | AC-057 | AC-057 — Blocked save cannot be bypassed by alternative workbench control | PASS | Header and Truth-rail save controls expose the identical blocker action and neither produces an editing/saved identity. |
 | AC-058 | AC-058 — Special existing blockers remain enforceable | PASS | Focused units prove quote-read, Pilot-review, intent-review, impact-review, and impact-authorization blockers remain in the common save gate. |
-| AC-059 | AC-059 — Guest changes preserve before/after consequence view | PENDING | No evidence recorded at contract checkpoint. |
-| AC-060 | AC-060 — Automatic pricing versus recommendations versus unchanged state clearly distinguished | PENDING | No evidence recorded at contract checkpoint. |
-| AC-061 | AC-061 — Existing explicit Apply / Keep / Undo outcomes retained where currently supported | PENDING | No evidence recorded at contract checkpoint. |
+| AC-059 | AC-059 — Guest changes preserve before/after consequence view | PASS | Focused browser coverage changes Guests and asserts the consequence surface retains before/after guest and total values. |
+| AC-060 | AC-060 — Automatic pricing versus recommendations versus unchanged state clearly distinguished | PASS | Browser coverage observes automatic canonical total movement, a separately labelled staffing recommendation, and unchanged current staffing until explicit action. |
+| AC-061 | AC-061 — Existing explicit Apply / Keep / Undo outcomes retained where currently supported | PASS | Focused browser coverage exercises Keep as quoted and Undo guest change; existing consequence-model units retain explicit staffing/rental apply patches. |
 | AC-062 | AC-062 — Pilot remains reachable | PENDING | No evidence recorded at contract checkpoint. |
 | AC-063 | AC-063 — AI changes inspectable before governed commit | PENDING | No evidence recorded at contract checkpoint. |
 | AC-064 | AC-064 — AI cannot bypass ordinary blockers/authority | PENDING | No evidence recorded at contract checkpoint. |
@@ -155,27 +155,27 @@ separate.
 | AC-088 | AC-088 — 768px adaptation has no horizontal document overflow | PASS | Dedicated 768px Workbench Playwright case asserts no page overflow. |
 | AC-089 | AC-089 — 390px uses intentional mobile composition, not squeezed desktop columns | PASS | Dedicated 390px Workbench case exercises horizontal Quote Plan plus modal Commercial Truth. |
 | AC-090 | AC-090 — Mobile total/attention remains readily discoverable | PASS | Existing mobile regression opens `Review quote` and verifies Commercial Truth visibility. |
-| AC-091 | AC-091 — Mobile controls preserve current minimum touch-target contract | PENDING | No evidence recorded at contract checkpoint. |
-| AC-092 | AC-092 — Long Menu fully usable at 390px | PENDING | No evidence recorded at contract checkpoint. |
-| AC-093 | AC-093 — No accidental nested-scroll trap | PENDING | No evidence recorded at contract checkpoint. |
-| AC-094 | AC-094 — Major regions have semantic/accessible names | PENDING | No evidence recorded at contract checkpoint. |
-| AC-095 | AC-095 — Heading hierarchy valid | PENDING | No evidence recorded at contract checkpoint. |
-| AC-096 | AC-096 — Selected/current/attention state not color-only | PENDING | No evidence recorded at contract checkpoint. |
-| AC-097 | AC-097 — Visible keyboard focus | PENDING | No evidence recorded at contract checkpoint. |
+| AC-091 | AC-091 — Mobile controls preserve current minimum touch-target contract | PASS | Workbench inputs, action buttons, inline edit controls, domain controls, and Menu summaries retain or now meet the repository 44px minimum; the 390px browser case measures disclosure height. |
+| AC-092 | AC-092 — Long Menu fully usable at 390px | PASS | Focused 390×844 browser coverage opens the ten-course Birthday Menu, expands a closed course, searches a real dish, and preserves document width. |
+| AC-093 | AC-093 — No accidental nested-scroll trap | PASS | The 390px long-Menu case verifies its editor remains normal-flow `visible`/`clip` overflow and the document stays within one pixel of viewport width. |
+| AC-094 | AC-094 — Major regions have semantic/accessible names | PASS | Browser roles resolve the named Quote plan navigation, Living proposal document article, and Quote Pulse complementary region. |
+| AC-095 | AC-095 — Heading hierarchy valid | PASS | Proposal structure is one H1, section H2s, and nested Experience/client-preview H3s; rendered browser snapshots and focused assertions confirm the corrected hierarchy. |
+| AC-096 | AC-096 — Selected/current/attention state not color-only | PASS | Current domain uses `aria-current=step`; every domain also emits textual Ready, Review, In progress, or exact blocker count alongside non-color styling. |
+| AC-097 | AC-097 — Visible keyboard focus | PASS | Focused browser coverage tabs to the next Workbench control, asserts `:focus-visible`, and measures the scoped 2px outline. |
 | AC-098 | AC-098 — Focus returns after closing Menu/Preview/Scenario/context | PASS | Focused browser coverage verifies return to the invoking Menu, Preview, and Scenario controls; domain context moves focus to its named panel. |
-| AC-099 | AC-099 — Field errors remain associated with controls | PENDING | No evidence recorded at contract checkpoint. |
-| AC-100 | AC-100 — Reduced-motion respected | PENDING | No evidence recorded at contract checkpoint. |
+| AC-099 | AC-099 — Field errors remain associated with controls | PASS | Invalid-email browser coverage verifies the editor input's `aria-describedby` points to the visible exact validation error. |
+| AC-100 | AC-100 — Reduced-motion respected | PASS | Reduced-motion browser emulation verifies Workbench animation is `none` and all transition durations resolve to zero. |
 | AC-101 | AC-101 — Zero new serious/critical axe violations | PASS | Workbench Playwright axe checks pass at 390, 768, and 1440. |
-| AC-102 | AC-102 — Blank quote looks intentionally structured | PENDING | No evidence recorded at contract checkpoint. |
-| AC-103 | AC-103 — Dense quote no longer renders as one giant continuous document | PENDING | No evidence recorded at contract checkpoint. |
-| AC-104 | AC-104 — Long names do not collide/clip | PENDING | No evidence recorded at contract checkpoint. |
-| AC-105 | AC-105 — Dense Menu remains readable when deliberately opened | PENDING | No evidence recorded at contract checkpoint. |
-| AC-106 | AC-106 — Important warning outranks routine metadata | PENDING | No evidence recorded at contract checkpoint. |
-| AC-107 | AC-107 — Total remains visually prominent | PENDING | No evidence recorded at contract checkpoint. |
-| AC-108 | AC-108 — Workbench looks like evolved QuotePilot, not a separate design system | PENDING | No evidence recorded at contract checkpoint. |
+| AC-102 | AC-102 — Blank quote looks intentionally structured | PASS | Rendered 390/768/1440 blank states retain named identity, five-domain plan, readable Event summary, proposal sheet, total, and exact attention instead of empty scaffolding. |
+| AC-103 | AC-103 — Dense quote no longer renders as one giant continuous document | PASS | Only the active domain is detailed; the dense ten-course Menu now reveals relevant/first course content and leaves the remaining course groups collapsed. |
+| AC-104 | AC-104 — Long names do not collide/clip | PASS | Focused browser coverage commits a long event identity and asserts both title and document remain within their available widths. |
+| AC-105 | AC-105 — Dense Menu remains readable when deliberately opened | PASS | Phone and desktop rendered review shows labelled course disclosure, option counts, one readable open choice list, and collapsed remaining courses. |
+| AC-106 | AC-106 — Important warning outranks routine metadata | PASS | Actionable blockers remain directly below the total/deposit and before composition, watching, polish, margin, and activity metadata in Commercial Truth. |
+| AC-107 | AC-107 — Total remains visually prominent | PASS | First-viewport and responsive browser coverage keep the canonical large money total visible in desktop Truth and the mobile review bar. |
+| AC-108 | AC-108 — Workbench looks like evolved QuotePilot, not a separate design system | PASS | Rendered review confirms the existing bone/sheet/brass tokens, editorial/mono typography, native controls, and shared shell remain continuous with QuotePilot. |
 | AC-109 | AC-109 — Bundle budget passes or any exception is explicitly justified | PASS | Local `check:perf:bundle` passes against an exact 3,311,120-byte temporary ceiling; the 1,120-byte CI delta is documented with no percentage headroom. |
-| AC-110 | AC-110 — Existing useful lazy boundaries retained | PENDING | No evidence recorded at contract checkpoint. |
-| AC-111 | AC-111 — Domain switching causes no unnecessary persistence/network work | PENDING | No evidence recorded at contract checkpoint. |
+| AC-110 | AC-110 — Existing useful lazy boundaries retained | PASS | This slice changes only mounted Proposal Composer presentation/CSS/models/tests; route-level and existing editor lazy boundaries are untouched. |
+| AC-111 | AC-111 — Domain switching causes no unnecessary persistence/network work | PASS | `openDomain` changes local active-domain/editor presentation state and focus only; continuity coverage crosses domains without save or identity creation. |
 | AC-112 | AC-112 — Material LOC overrun triggers architecture review | PENDING | No evidence recorded at contract checkpoint. |
 | AC-113 | AC-113 — Major unexpected implementation-scale increase requires explicit explanation before continuation | PENDING | No evidence recorded at contract checkpoint. |
 | AC-114 | AC-114 — Operations menu is no longer an undifferentiated 10+ item feature inventory | PASS | `/app/operations` renders `EventScheduleView` directly with only role-gated People and Reporting continuations. |

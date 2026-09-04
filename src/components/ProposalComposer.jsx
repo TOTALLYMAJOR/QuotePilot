@@ -5,7 +5,7 @@ import { currency } from "../lib/quoteCalculator";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
 import { detectBreakdownValueChanges, MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
-import { buildMarginPresentation } from "./marginPresentation";
+import { buildMarginPresentation, marginRequiresExpandedEvidence } from "./marginPresentation";
 import { playCue } from "./soundKit";
 import {
   buildCompositionLine,
@@ -112,7 +112,7 @@ function SectionHeading({ id, eyebrow, title, complete, status = null }) {
   } : null);
   return (
     <header className="pc-section-head">
-      <p className="pc-eyebrow" id={id}>{eyebrow}</p>
+      <h2 className="pc-eyebrow" id={id}>{eyebrow}</h2>
       <div className="pc-section-title-row">
         {title ? <h3 className="pc-section-title">{title}</h3> : null}
         {resolvedStatus ? (
@@ -422,6 +422,8 @@ export default function ProposalComposer({
   const [menuEditorOpen, setMenuEditorOpen] = useState(false);
   const [ratesEditorOpen, setRatesEditorOpen] = useState(false);
   const [menuQuery, setMenuQuery] = useState("");
+  const [openMenuGroups, setOpenMenuGroups] = useState(() => new Set());
+  const [marginDetailOpen, setMarginDetailOpen] = useState(false);
   const [experienceEditorOpen, setExperienceEditorOpen] = useState(false);
   const [rentalEditorOpen, setRentalEditorOpen] = useState(false);
   const [enhancementEditorOpen, setEnhancementEditorOpen] = useState(false);
@@ -882,6 +884,10 @@ export default function ProposalComposer({
     }
   ];
   const proposalPolishReadyCount = proposalPolishItems.filter((item) => item.state === "ready").length;
+  const marginNeedsAttention = marginRequiresExpandedEvidence(margin);
+  useEffect(() => {
+    setMarginDetailOpen(marginNeedsAttention);
+  }, [marginNeedsAttention]);
 
   const pulseBody = (
     <>
@@ -1007,48 +1013,52 @@ export default function ProposalComposer({
       </div>
 
       {margin ? (
-        <div
+        <details
           className="pc-pulse-block pc-margin-cost"
           data-testid="pc-margin-cost"
-          data-state={margin.available ? "ready" : "unavailable"}
+          data-state={!margin.available ? "unavailable" : marginNeedsAttention ? "attention" : "ready"}
+          open={marginDetailOpen}
+          onToggle={(event) => setMarginDetailOpen(event.currentTarget.open)}
         >
-          <div className="pc-pulse-block-head">
+          <summary className="pc-pulse-block-head">
             <p className="pc-eyebrow">Cost &amp; margin</p>
-            <small>Staff-only</small>
+            <small>{marginNeedsAttention ? "Review · Staff-only" : "Healthy · Staff-only"}</small>
+          </summary>
+          <div className="pc-margin-detail">
+            {margin.available ? (
+              <>
+                <dl>
+                  <div>
+                    <dt>Revenue scope</dt>
+                    <dd>{currency(margin.revenue)}</dd>
+                  </div>
+                  <div>
+                    <dt>Recorded cost</dt>
+                    <dd>{currency(margin.cost)}</dd>
+                  </div>
+                  <div>
+                    <dt>Margin</dt>
+                    <dd>{(margin.marginPct * 100).toFixed(1)}%</dd>
+                  </div>
+                  <div>
+                    <dt>Target</dt>
+                    <dd>{margin.target === null || margin.target === undefined ? "Not set" : `${Math.round(margin.target * 100)}%`}</dd>
+                  </div>
+                </dl>
+                <p>{margin.targetNote || margin.note}</p>
+              </>
+            ) : (
+              <>
+                <p>{margin.note}</p>
+                {margin.missing?.length ? (
+                  <ul className="pc-margin-missing">
+                    {margin.missing.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                ) : null}
+              </>
+            )}
           </div>
-          {margin.available ? (
-            <>
-              <dl>
-                <div>
-                  <dt>Revenue scope</dt>
-                  <dd>{currency(margin.revenue)}</dd>
-                </div>
-                <div>
-                  <dt>Recorded cost</dt>
-                  <dd>{currency(margin.cost)}</dd>
-                </div>
-                <div>
-                  <dt>Margin</dt>
-                  <dd>{(margin.marginPct * 100).toFixed(1)}%</dd>
-                </div>
-                <div>
-                  <dt>Target</dt>
-                  <dd>{margin.target === null || margin.target === undefined ? "Not set" : `${Math.round(margin.target * 100)}%`}</dd>
-                </div>
-              </dl>
-              <p>{margin.targetNote || margin.note}</p>
-            </>
-          ) : (
-            <>
-              <p>{margin.note}</p>
-              {margin.missing?.length ? (
-                <ul className="pc-margin-missing">
-                  {margin.missing.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              ) : null}
-            </>
-          )}
-        </div>
+        </details>
       ) : null}
 
       <div className="pc-pulse-block pc-draft-activity">
@@ -1277,7 +1287,12 @@ export default function ProposalComposer({
             </aside>
           ) : null}
 
-          <article className="pc-sheet" data-active-domain={activeDomain} data-testid="commercial-workbench-object">
+          <article
+            className="pc-sheet"
+            aria-label="Living proposal document"
+            data-active-domain={activeDomain}
+            data-testid="commercial-workbench-object"
+          >
             {proposalIntroTitle || proposalIntroMessage ? (
               <section className="pc-proposal-note" aria-label="Proposal introduction">
                 {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
@@ -1286,6 +1301,9 @@ export default function ProposalComposer({
             ) : null}
             <section className="pc-section" aria-labelledby="pc-sec-event" data-workbench-panel="event" tabIndex={-1}>
               <SectionHeading id="pc-sec-event" eyebrow="Event" complete={completeness.event} />
+              <p className="pc-domain-summary" data-testid="pc-event-summary">
+                {workbench.domains.find((domain) => domain.id === "event")?.summary}
+              </p>
               <div className="pc-inline-grid">
                 <InlineValue
                   className="pc-inline"
@@ -1421,7 +1439,7 @@ export default function ProposalComposer({
 
             <section className="pc-section" aria-labelledby="pc-sec-experience" data-workbench-panel="experience" tabIndex={-1}>
               <SectionHeading id="pc-sec-experience" eyebrow="Experience" status={experienceSectionStatus} />
-              <h4 className="pc-experience-title">{experience.title}</h4>
+              <h3 className="pc-experience-title">{experience.title}</h3>
               <p className="pc-experience-blurb">{experience.blurb}</p>
               {experience.facts.length ? (
                 <ul className="pc-fact-row">
@@ -1527,7 +1545,17 @@ export default function ProposalComposer({
                 type="button"
                 className="pc-section-action"
                 aria-expanded={menuEditorOpen}
-                onClick={() => setMenuEditorOpen((open) => !open)}
+                onClick={() => {
+                  if (!menuEditorOpen) {
+                    const selectedIds = new Set((form.menuItems || []).map(String));
+                    const initialGroups = (menuSections || [])
+                      .filter((section, index) => index === 0 || (section?.items || [])
+                        .some((item) => selectedIds.has(String(item?.id))))
+                      .map((section) => String(section?.id ?? section?.name));
+                    setOpenMenuGroups(new Set(initialGroups));
+                  }
+                  setMenuEditorOpen((open) => !open);
+                }}
                 data-testid="pc-edit-menu"
               >
                 {menuEditorOpen ? "Close menu editor" : "Edit menu →"}
@@ -1554,41 +1582,66 @@ export default function ProposalComposer({
                       </button>.
                     </p>
                   ) : null}
-                  {menuEditorSections.map((section) => (
-                    <div key={section.id} className="pc-editor-group">
-                      <p className="pc-menu-course">{section.name}</p>
-                      <ul className="pc-choice-list">
-                        {section.items.map((item) => (
-                          <li key={item.id}>
-                            <label className="pc-choice">
-                              <input
-                                type="checkbox"
-                                checked={item.selected}
-                                onChange={() => toggleCatalogSelection("menuItems", "menuItemQuantities", item.id, item.name)}
-                              />
-                              <span className="pc-choice-copy">
-                                <strong>{item.name}</strong>
-                                <ImpactTag delta={item.delta} />
-                              </span>
-                            </label>
-                            {item.selected ? (
-                              <input
-                                className="pc-qty"
-                                type="number"
-                                min={1}
-                                aria-label={`${item.name} quantity`}
-                                value={Number((form.menuItemQuantities || {})[item.id]) > 0
-                                  ? Math.round(Number(form.menuItemQuantities[item.id]))
-                                  : ""}
-                                placeholder="auto"
-                                onChange={(event) => setSelectionQuantity("menuItems", "menuItemQuantities", item.id, event.target.value, item.name)}
-                              />
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                  {menuEditorSections.map((section) => {
+                    const forcedOpen = Boolean(menuQuery.trim());
+                    const sectionOpen = forcedOpen || openMenuGroups.has(section.id);
+                    const selectedCount = section.items.filter((item) => item.selected).length;
+                    return (
+                      <details
+                        key={section.id}
+                        className="pc-editor-group pc-menu-editor-group"
+                        open={sectionOpen}
+                        onToggle={(event) => {
+                          const isOpen = event.currentTarget.open;
+                          if (forcedOpen) return;
+                          setOpenMenuGroups((current) => {
+                            if (isOpen === current.has(section.id)) return current;
+                            const next = new Set(current);
+                            if (isOpen) next.add(section.id);
+                            else next.delete(section.id);
+                            return next;
+                          });
+                        }}
+                      >
+                        <summary>
+                          <span>{section.name}</span>
+                          <small>
+                            {selectedCount > 0 ? `${selectedCount} selected · ` : ""}{section.items.length} option{section.items.length === 1 ? "" : "s"}
+                          </small>
+                        </summary>
+                        <ul className="pc-choice-list">
+                          {section.items.map((item) => (
+                            <li key={item.id}>
+                              <label className="pc-choice">
+                                <input
+                                  type="checkbox"
+                                  checked={item.selected}
+                                  onChange={() => toggleCatalogSelection("menuItems", "menuItemQuantities", item.id, item.name)}
+                                />
+                                <span className="pc-choice-copy">
+                                  <strong>{item.name}</strong>
+                                  <ImpactTag delta={item.delta} />
+                                </span>
+                              </label>
+                              {item.selected ? (
+                                <input
+                                  className="pc-qty"
+                                  type="number"
+                                  min={1}
+                                  aria-label={`${item.name} quantity`}
+                                  value={Number((form.menuItemQuantities || {})[item.id]) > 0
+                                    ? Math.round(Number(form.menuItemQuantities[item.id]))
+                                    : ""}
+                                  placeholder="auto"
+                                  onChange={(event) => setSelectionQuantity("menuItems", "menuItemQuantities", item.id, event.target.value, item.name)}
+                                />
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>

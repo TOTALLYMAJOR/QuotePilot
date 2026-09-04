@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:05:11 CDT
+Last updated: 2026-09-04 14:22:07 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Refined the local-only Commercial Workbench presentation after rendered
+  desktop/mobile review: long Menus now use course-level disclosure with the
+  first and selected groups open, search reveals matching groups, Event starts
+  with a readable evidence-derived summary, semantic region/headings and 44px
+  controls are explicit, and healthy margin detail compresses while missing or
+  below-target evidence expands. Corrected the margin evidence boundary so
+  null/blank recorded costs remain missing rather than coercing to zero.
+  Focused model and real-browser coverage certifies first-viewport hierarchy,
+  blank/long states, keyboard focus, error association, reduced motion, and
+  phone-width Menu flow. No pricing, persistence, catalog, provider, or save
+  authority changed; this slice remains local and unpublished.
 - Certified the existing Compare Scenarios and common save-readiness paths
   without widening runtime authority: scenario inspection remains isolated
   until explicit application, focus returns to its invoker, both Workbench save
