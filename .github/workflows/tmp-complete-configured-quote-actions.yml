@@ -1,0 +1,469 @@
+name: Temporary Complete Configured Quote Actions
+
+on:
+  push:
+    branches:
+      - feat/configured-quote-action-state
+    paths:
+      - .github/workflows/tmp-complete-configured-quote-actions.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/configured-quote-action-state
+          fetch-depth: 0
+      - name: Complete bounded migration
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+
+          const workflowPath = '.github/workflows/tmp-complete-configured-quote-actions.yml';
+
+          const read = (path) => fs.readFileSync(path, 'utf8');
+          const write = (path, content) => fs.writeFileSync(path, content.endsWith('\n') ? content : `${content}\n`);
+
+          function replaceOnce(source, before, after, label) {
+            const index = source.indexOf(before);
+            if (index < 0) throw new Error(`Missing migration anchor: ${label}`);
+            if (source.indexOf(before, index + before.length) >= 0) {
+              throw new Error(`Ambiguous migration anchor: ${label}`);
+            }
+            return source.slice(0, index) + after + source.slice(index + before.length);
+          }
+
+          function replaceInContract(source, contractId, transform) {
+            const startMarker = `    {\n      "id": "${contractId}",`;
+            const start = source.indexOf(startMarker);
+            if (start < 0) throw new Error(`Capability contract not found: ${contractId}`);
+            const end = source.indexOf('\n    },\n    {', start + startMarker.length);
+            if (end < 0) throw new Error(`Capability contract end not found: ${contractId}`);
+            const slice = source.slice(start, end + '\n    }'.length);
+            const next = transform(slice);
+            return source.slice(0, start) + next + source.slice(end + '\n    }'.length);
+          }
+
+          function updateTimestamp(content, timestamp) {
+            if (!/^Last updated: .+$/m.test(content)) throw new Error('Governed markdown is missing Last updated header.');
+            return content.replace(/^Last updated: .+$/m, `Last updated: ${timestamp}`);
+          }
+
+          function chicagoTimestamp(now = new Date()) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Chicago',
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit',
+              hourCycle: 'h23', timeZoneName: 'short'
+            }).formatToParts(now);
+            const value = (type) => parts.find((part) => part.type === type)?.value || '';
+            return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')} ${value('timeZoneName')}`;
+          }
+
+          // Pure compiler: authorization controls visibility; add explicit recovery and utility semantics.
+          {
+            const path = 'src/lib/quoteActionState.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  const visible = overrides.visible !== false && (roleAllowed || overrides.showWhenDisabled === true);',
+              '  const visible = overrides.visible !== false && roleAllowed;',
+              'role-safe compiler visibility'
+            );
+            source = replaceOnce(
+              source,
+              'function firstVisible(actions, ids) {\n  for (const id of ids) {\n    const action = actions[id];\n    if (action?.visible) return action;\n  }\n  return null;\n}\n',
+              'function firstVisible(actions, ids) {\n  for (const id of ids) {\n    const action = actions[id];\n    if (action?.visible) return action;\n  }\n  return null;\n}\n\nfunction firstEnabled(actions, ids) {\n  for (const id of ids) {\n    const action = actions[id];\n    if (action?.visible && action?.enabled) return action;\n  }\n  return null;\n}\n',
+              'first enabled action helper'
+            );
+            source = replaceOnce(
+              source,
+              '  finalBalanceDue,\n  contractPresent,\n  acceptedProgressionPolicy\n}) {',
+              '  finalBalanceDue,\n  contractPresent,\n  depositNeedsReconciliation,\n  finalBalanceNeedsReconciliation,\n  acceptedProgressionPolicy\n}) {',
+              'primary recovery inputs'
+            );
+            source = replaceOnce(
+              source,
+              '  if (delivery === "sending") return null;\n\n  if (status === "expired")',
+              '  if (delivery === "sending") return null;\n  if (depositNeedsReconciliation) return firstVisible(actions, ["reconcile_deposit"]);\n  if (finalBalanceNeedsReconciliation) return firstVisible(actions, ["reconcile_balance"]);\n\n  if (status === "expired")',
+              'payment recovery ranking'
+            );
+            source = replaceOnce(
+              source,
+              '  if (["sent", "viewed"].includes(status)) {\n    return firstVisible(actions, ["open_conversation", "edit"]);\n  }',
+              '  if (["sent", "viewed"].includes(status)) {\n    return firstEnabled(actions, ["open_conversation"]);\n  }',
+              'sent viewed primary decision'
+            );
+            source = replaceOnce(
+              source,
+              '    if (contractPresent) return firstVisible(actions, ["open_conversation"]);',
+              '    if (contractPresent) return firstEnabled(actions, ["open_conversation"]);',
+              'booked primary conversation'
+            );
+            source = replaceOnce(
+              source,
+              '  const finalBalanceDue = status === "booked"\n    && contractPresent\n    && depositSettled\n    && finalBalanceCents > 0\n    && finalBalanceStatus !== "paid";\n',
+              '  const finalBalanceDue = status === "booked"\n    && contractPresent\n    && depositSettled\n    && finalBalanceCents > 0\n    && finalBalanceStatus !== "paid";\n  const depositCheckoutState = normalized(quote?.payment?.stripeCheckoutState);\n  const depositSessionId = text(quote?.payment?.stripeSessionId);\n  const depositNeedsReconciliation = Boolean(depositSessionId)\n    && !depositSettled\n    && ["processing", "failed", "expired", "unknown"].includes(depositCheckoutState);\n  const finalBalanceSessionId = text(finalBalance.stripeSessionId);\n  const finalBalanceCheckoutState = normalized(finalBalance.stripeCheckoutState);\n  const finalBalanceNeedsReconciliation = finalBalanceDue\n    && Boolean(finalBalanceSessionId)\n    && ["processing", "failed", "expired", "unknown"].includes(finalBalanceCheckoutState);\n',
+              'payment reconciliation state'
+            );
+            source = replaceOnce(
+              source,
+              '  actions.export_proposal = decorate(baseActions, "export_proposal", {',
+              '  actions.review_beo = decorate(baseActions, "review_beo", {\n    label: "Review Kitchen BEO",\n    visible: status !== "deleted",\n    stateAllowed: status !== "deleted",\n    category: "operations",\n    consequence: "Open the Kitchen BEO authority without changing quote or payment state.",\n    priority: 85\n  });\n\n  actions.reconcile_deposit = decorate(baseActions, "reconcile_deposit", {\n    label: "Check payment outcome",\n    visible: Boolean(depositSessionId) && !depositSettled,\n    stateAllowed: Boolean(depositSessionId) && !depositSettled && !deliveryLocked,\n    disabledReason: deliveryLocked\n      ? "Resolve the current quote-delivery attempt before reconciling payment."\n      : "",\n    category: "recovery",\n    consequence: "Ask Stripe for the authoritative outcome of the existing deposit checkout without creating another checkout.",\n    evidenceProduced: "The existing payment record is reconciled only from provider evidence.",\n    presentation: depositNeedsReconciliation ? "recovery" : "secondary",\n    priority: depositNeedsReconciliation ? 1 : 75\n  });\n\n  actions.reconcile_balance = decorate(baseActions, "reconcile_balance", {\n    label: "Check final-balance outcome",\n    visible: Boolean(finalBalanceSessionId) && finalBalanceStatus !== "paid",\n    stateAllowed: Boolean(finalBalanceSessionId) && finalBalanceStatus !== "paid" && !deliveryLocked,\n    disabledReason: deliveryLocked\n      ? "Resolve the current quote-delivery attempt before reconciling the final balance."\n      : "",\n    category: "recovery",\n    consequence: "Ask Stripe for the authoritative outcome of the existing final-balance checkout without creating another checkout.",\n    evidenceProduced: "The existing final-balance record is reconciled only from provider evidence.",\n    presentation: finalBalanceNeedsReconciliation ? "recovery" : "secondary",\n    priority: finalBalanceNeedsReconciliation ? 1 : 75\n  });\n\n  actions.change_status = decorate(baseActions, "change_status", {\n    label: "Expire quote",\n    visible: ["draft", "sent", "viewed"].includes(status),\n    stateAllowed: ["draft", "sent", "viewed"].includes(status) && !deliveryLocked,\n    disabledReason: deliveryLocked\n      ? "Resolve the current delivery attempt before expiring this quote."\n      : "",\n    category: "administration",\n    consequence: "Mark this quote expired. This does not create customer acceptance, payment, or booking evidence.",\n    requiresConfirmation: true,\n    priority: 95\n  });\n\n  actions.copy_payment_link = decorate(baseActions, "copy_payment_link", {\n    label: "Copy deposit link",\n    visible: Boolean(text(quote?.payment?.depositLink)) && depositStatus === "sent",\n    stateAllowed: Boolean(text(quote?.payment?.depositLink)) && depositStatus === "sent",\n    category: "manual_handoff",\n    consequence: "Copy the already-created deposit checkout link. No payment or delivery evidence changes.",\n    priority: 90\n  });\n\n  actions.copy_balance_link = decorate(baseActions, "copy_balance_link", {\n    label: "Copy final-balance link",\n    visible: Boolean(text(finalBalance.paymentLink)) && finalBalanceStatus === "sent",\n    stateAllowed: Boolean(text(finalBalance.paymentLink)) && finalBalanceStatus === "sent",\n    category: "manual_handoff",\n    consequence: "Copy the already-created final-balance checkout link. No settlement evidence changes.",\n    priority: 90\n  });\n\n  actions.export_proposal = decorate(baseActions, "export_proposal", {',
+              'additional configured actions'
+            );
+            source = replaceOnce(
+              source,
+              '  const primaryAction = choosePrimary({\n    actions,\n    status,\n    delivery,\n    depositSettled,\n    finalBalanceDue,\n    contractPresent,\n    acceptedProgressionPolicy\n  });',
+              '  Object.keys(baseActions || {}).forEach((actionId) => {\n    if (actions[actionId]) return;\n    actions[actionId] = decorate(baseActions, actionId, {\n      visible: false,\n      stateAllowed: false,\n      disabledReason: "This capability is not a direct configured-quote action in the current state."\n    });\n  });\n\n  const primaryAction = choosePrimary({\n    actions,\n    status,\n    delivery,\n    depositSettled,\n    finalBalanceDue,\n    contractPresent,\n    depositNeedsReconciliation,\n    finalBalanceNeedsReconciliation,\n    acceptedProgressionPolicy\n  });',
+              'complete configured action vocabulary'
+            );
+            source = replaceOnce(
+              source,
+              '      finalBalanceDue\n    },',
+              '      finalBalanceDue,\n      depositNeedsReconciliation,\n      finalBalanceNeedsReconciliation\n    },',
+              'expose recovery state'
+            );
+            write(path, source);
+          }
+
+          // Quote row: one primary action, evidence outside commands, all secondary capabilities behind More.
+          {
+            const path = 'src/components/QuoteHistoryModal.jsx';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              'import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";\nimport EventWorkspaceView from "./EventWorkspaceView";',
+              'import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";\nimport ConfiguredQuoteActionRail from "./ConfiguredQuoteActionRail";\nimport EventWorkspaceView from "./EventWorkspaceView";',
+              'configured action rail import'
+            );
+            source = replaceOnce(
+              source,
+              '      const actionTarget = normalizedAction\n        ? Array.from(targetRow?.querySelectorAll("button[data-approval-action]") || [])\n          .find((button) => button.dataset.approvalAction === normalizedAction && !button.disabled)\n        : null;\n      const focusTarget = actionTarget || handoff;',
+              '      const actionTarget = normalizedAction\n        ? Array.from(targetRow?.querySelectorAll("button[data-approval-action]") || [])\n          .find((button) => button.dataset.approvalAction === normalizedAction && !button.disabled)\n        : null;\n      const actionDisclosure = actionTarget?.closest("details.configured-quote-more-actions");\n      if (actionDisclosure && !actionDisclosure.open) actionDisclosure.open = true;\n      const focusTarget = actionTarget || handoff;',
+              'open More before deep-link focus'
+            );
+            source = replaceOnce(
+              source,
+              '                        {permissions.canManageQuoteStatus && (\n                          <select',
+              '                        {permissions.canManageQuoteStatus && state.source !== "firebase" && (\n                          <select',
+              'local-only generic lifecycle selector'
+            );
+            source = replaceOnce(
+              source,
+              '                    <td>{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}</td>',
+              '                    <td>\n                      <button\n                        type="button"\n                        className="button-link history-quote-workspace-link"\n                        onClick={() => openQuoteWorkspace(quote.id)}\n                        aria-label={`Open ${formatWorkspaceText(quote.quoteNumber, { emptyLabel: "quote" })} workspace`}\n                      >\n                        {formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}\n                      </button>\n                    </td>',
+              'quote number workspace navigation'
+            );
+            source = replaceOnce(
+              source,
+              '                const configuredPrimaryActionId = configuredActionState.primaryAction?.id || "";\n                const rowActionClassName = (actionId) => (\n                  configuredPrimaryActionId === actionId ? "cta compact" : "ghost compact"\n                );',
+              '                const configuredPrimaryActionId = contractConversionState.phase === "error"\n                  ? "convert_contract_refresh"\n                  : configuredActionState.primaryAction?.id || "";\n                const configuredPrimaryAction = contractConversionState.phase === "error"\n                  ? {\n                    id: "convert_contract_refresh",\n                    label: "Refresh contract status",\n                    visible: true,\n                    enabled: true,\n                    disabledReason: ""\n                  }\n                  : configuredActionState.primaryAction;\n                const rowActionClassName = (actionId) => (\n                  configuredPrimaryActionId === actionId ? "cta compact" : "ghost compact"\n                );',
+              'runtime recovery primary action'
+            );
+            source = replaceOnce(
+              source,
+              '                    <td>\n                      <div className="row-actions">\n                        {permissions.canConvertToContract',
+              '                    <td>\n                      <ConfiguredQuoteActionRail\n                        primaryActionId={configuredPrimaryActionId}\n                        primaryAction={configuredPrimaryAction}\n                      >\n                        {permissions.canConvertToContract',
+              'wrap configured action rail'
+            );
+            source = replaceOnce(
+              source,
+              '                        {canReconcileFinalBalance ? (\n                          <button\n                            type="button"\n                            className="ghost compact"\n                            onClick={() => handleReconcileFinalBalance(quote)}\n                            disabled={reconcilingFinalBalanceId === quote.id || deliveryUnresolved}\n                          >\n                            {reconcilingFinalBalanceId === quote.id\n                              ? "Reconciling..."\n                              : "Reconcile Final Balance"}\n                          </button>\n                        ) : null}\n                      </div>\n                    </td>',
+              '                        {canReconcileFinalBalance ? (\n                          <button\n                            type="button"\n                            className={rowActionClassName("reconcile_balance")}\n                            data-quote-action-id="reconcile_balance"\n                            data-quote-action-group="recovery"\n                            onClick={() => handleReconcileFinalBalance(quote)}\n                            disabled={reconcilingFinalBalanceId === quote.id || deliveryUnresolved}\n                          >\n                            {reconcilingFinalBalanceId === quote.id\n                              ? "Checking..."\n                              : configuredActionState.actions.reconcile_balance.label}\n                          </button>\n                        ) : null}\n                      </ConfiguredQuoteActionRail>\n                    </td>',
+              'close configured action rail'
+            );
+
+            // Keep commercial receipts/evidence outside the More command disclosure.
+            source = replaceOnce(
+              source,
+              '                          <ContractConversionMutationStatus\n                            presentation={contractConversionPresentation}',
+              '                          <ContractConversionMutationStatus\n                            data-quote-action-kind="evidence"\n                            presentation={contractConversionPresentation}',
+              'contract conversion evidence marker'
+            );
+            source = replaceOnce(
+              source,
+              '                            data-quote-delivery-evidence="provider_accepted"',
+              '                            data-quote-action-kind="evidence"\n                            data-quote-delivery-evidence="provider_accepted"',
+              'delivery evidence marker'
+            );
+
+            const attributeReplacements = [
+              ['data-approval-action="convert_to_contract"\n                              className={rowActionClassName("convert_contract")}', 'data-approval-action="convert_to_contract"\n                              data-quote-action-id="convert_contract"\n                              data-quote-action-group="booking"\n                              className={rowActionClassName("convert_contract")}'],
+              ['className="ghost compact"\n                              onClick={() => handleRecoverContractConversion(quote)}', 'className={rowActionClassName("convert_contract_refresh")}\n                              data-quote-action-id="convert_contract_refresh"\n                              data-quote-action-group="recovery"\n                              onClick={() => handleRecoverContractConversion(quote)}'],
+              ['className="ghost compact"\n                            onClick={() => handleConfirmationUpdate(quote.id, "confirmed")}', 'className={rowActionClassName("manage_confirmation")}\n                            data-quote-action-id="manage_confirmation"\n                            data-quote-action-group="booking"\n                            onClick={() => handleConfirmationUpdate(quote.id, "confirmed")}'],
+              ['className={rowActionClassName("edit")}\n                            onClick={() => handleEditQuote(quote)}', 'className={rowActionClassName("edit")}\n                            data-quote-action-id="edit"\n                            data-quote-action-group="quote"\n                            onClick={() => handleEditQuote(quote)}'],
+              ['className={rowActionClassName("reopen")}\n                            onClick={() => handleReopenQuote(quote)}', 'className={rowActionClassName("reopen")}\n                            data-quote-action-id="reopen"\n                            data-quote-action-group="quote"\n                            onClick={() => handleReopenQuote(quote)}'],
+              ['className={rowActionClassName("duplicate")}\n                            onClick={() => handleDuplicateQuote(quote)}', 'className={rowActionClassName("duplicate")}\n                            data-quote-action-id="duplicate"\n                            data-quote-action-group="quote"\n                            onClick={() => handleDuplicateQuote(quote)}'],
+              ['className="ghost compact"\n                            onClick={() => handleExportPdf(quote)}', 'className="ghost compact"\n                            data-quote-action-id="export_proposal"\n                            data-quote-action-group="proposal"\n                            onClick={() => handleExportPdf(quote)}'],
+              ['className="ghost compact"\n                            onClick={() => handlePrintProposal(quote)}', 'className="ghost compact"\n                            data-quote-action-id="print_proposal"\n                            data-quote-action-group="proposal"\n                            onClick={() => handlePrintProposal(quote)}'],
+              ['className="ghost compact"\n                            onClick={() => handleOpenDefaultEmailApp(quote)}', 'className="ghost compact"\n                            data-quote-action-id="manual_email"\n                            data-quote-action-group="communication"\n                            onClick={() => handleOpenDefaultEmailApp(quote)}'],
+              ['className={rowActionClassName("review_delivery")}\n                            onClick={() => openDeliveryReview(quote, quoteRevisionId)}', 'className={rowActionClassName("review_delivery")}\n                            data-quote-action-id="review_delivery"\n                            data-quote-action-group="recovery"\n                            onClick={() => openDeliveryReview(quote, quoteRevisionId)}'],
+              ['className={rowActionClassName("send_quote")}\n                            onClick={() => handleSendQuoteEmail(quote)}', 'className={rowActionClassName("send_quote")}\n                            data-quote-action-id="send_quote"\n                            data-quote-action-group="communication"\n                            onClick={() => handleSendQuoteEmail(quote)}'],
+              ['className="ghost compact"\n                            onClick={() => openDeliveryReview(quote, quoteRevisionId)}\n                          >\n                            Review Outcome', 'className="ghost compact"\n                            data-quote-action-id="review_delivery_evidence"\n                            data-quote-action-group="recovery"\n                            onClick={() => openDeliveryReview(quote, quoteRevisionId)}\n                          >\n                            Review delivery evidence'],
+              ['data-approval-action="send_payment_request"\n                            className={rowActionClassName("request_deposit")}', 'data-approval-action="send_payment_request"\n                            data-quote-action-id="request_deposit"\n                            data-quote-action-group="payment"\n                            className={rowActionClassName("request_deposit")}'],
+              ['data-approval-action="send_final_balance_request"\n                            className={rowActionClassName("request_balance")}', 'data-approval-action="send_final_balance_request"\n                            data-quote-action-id="request_balance"\n                            data-quote-action-group="payment"\n                            className={rowActionClassName("request_balance")}'],
+              ['data-approval-action="rotate_portal_link"\n                            className="ghost compact"', 'data-approval-action="rotate_portal_link"\n                            data-quote-action-id="rotate_portal"\n                            data-quote-action-group="access"\n                            className="ghost compact"'],
+              ['className={rowActionClassName("open_conversation")}\n                                data-capability-action="open-quote-conversation"', 'className={rowActionClassName("open_conversation")}\n                                data-quote-action-id="open_conversation"\n                                data-quote-action-group="communication"\n                                data-capability-action="open-quote-conversation"'],
+              ['className="ghost compact"\n                              onClick={() => handleCopyEmail(quote)}', 'className="ghost compact"\n                              data-quote-action-id="copy_email"\n                              data-quote-action-group="communication"\n                              onClick={() => handleCopyEmail(quote)}'],
+              ['className="ghost compact"\n                              onClick={() => handleCopyPortalLink(quote)}', 'className="ghost compact"\n                              data-quote-action-id="copy_portal"\n                              data-quote-action-group="communication"\n                              onClick={() => handleCopyPortalLink(quote)}'],
+              ['data-approval-action="delete_quote"\n                            className="ghost compact"', 'data-approval-action="delete_quote"\n                            data-quote-action-id="delete"\n                            data-quote-action-group="administration"\n                            className="ghost compact"'],
+              ['className="ghost compact"\n                            onClick={() => handleReconcilePayment(quote)}', 'className={rowActionClassName("reconcile_deposit")}\n                            data-quote-action-id="reconcile_deposit"\n                            data-quote-action-group="recovery"\n                            onClick={() => handleReconcilePayment(quote)}']
+            ];
+            for (const [before, after] of attributeReplacements) {
+              source = replaceOnce(source, before, after, before.slice(0, 70));
+            }
+
+            source = replaceOnce(
+              source,
+              '                            disabled={duplicatingId === quote.id}\n                          >',
+              '                            disabled={duplicatingId === quote.id || !configuredActionState.actions.duplicate.enabled}\n                            title={!configuredActionState.actions.duplicate.enabled\n                              ? configuredActionState.actions.duplicate.disabledReason\n                              : configuredActionState.actions.duplicate.consequence}\n                          >',
+              'duplicate delivery lock'
+            );
+            source = replaceOnce(
+              source,
+              '{exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}',
+              '{exportingPdfId === quote.id ? "Generating PDF..." : configuredActionState.actions.export_proposal.label}',
+              'download pdf label'
+            );
+            source = replaceOnce(
+              source,
+              '>\n                                Conversation\n                              </button>',
+              '>\n                                {configuredActionState.actions.open_conversation.label}\n                              </button>',
+              'conversation label'
+            );
+            source = replaceOnce(
+              source,
+              '<button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>',
+              '<button\n                                type="button"\n                                className="ghost compact"\n                                data-quote-action-id="copy_payment_link"\n                                data-quote-action-group="payment"\n                                onClick={() => handleCopyPaymentLink(quote)}\n                              >\n                                {configuredActionState.actions.copy_payment_link.label}\n                              </button>',
+              'copy deposit link action'
+            );
+            source = replaceOnce(
+              source,
+              '                                className="ghost compact"\n                                onClick={() => handleCopyFinalBalanceLink(quote)}\n                              >\n                                Copy Balance Link',
+              '                                className="ghost compact"\n                                data-quote-action-id="copy_balance_link"\n                                data-quote-action-group="payment"\n                                onClick={() => handleCopyFinalBalanceLink(quote)}\n                              >\n                                {configuredActionState.actions.copy_balance_link.label}',
+              'copy balance link action'
+            );
+            source = replaceOnce(
+              source,
+              '{updatingId === quote.id ? "Deleting..." : "Delete"}',
+              '{updatingId === quote.id ? "Deleting..." : configuredActionState.actions.delete.label}',
+              'delete quote label'
+            );
+            source = replaceOnce(
+              source,
+              '{reconcilingPaymentId === quote.id ? "Reconciling..." : "Reconcile Payment"}',
+              '{reconcilingPaymentId === quote.id ? "Checking..." : configuredActionState.actions.reconcile_deposit.label}',
+              'deposit reconciliation label'
+            );
+            source = replaceOnce(
+              source,
+              '                              : deliveryUi.freshAttemptAvailable\n                                  ? "Start New Quote Email"\n                                : deliveryUi.retryAvailable\n                                  ? "Retry Quote Email"\n                                  : configuredActionState.actions.send_quote.label}',
+              '                              : deliveryUi.freshAttemptAvailable\n                                  ? "Send proposal again"\n                                : deliveryUi.retryAvailable\n                                  ? "Retry proposal send"\n                                  : configuredActionState.actions.send_quote.label}',
+              'proposal retry labels'
+            );
+            source = replaceOnce(
+              source,
+              '                        {permissions.canExportBeo && (\n                          <QuoteHistoryKitchenBeoAction\n                            source={state.source}',
+              '                        {permissions.canExportBeo && (\n                          <QuoteHistoryKitchenBeoAction\n                            data-quote-action-id="review_beo"\n                            data-quote-action-group="operations"\n                            source={state.source}',
+              'BEO action grouping'
+            );
+
+            // Replace generic Workspace button with an explicit expire action where Firebase permits it.
+            const workspaceBlock = '                        {quote?.id && (\n                          <button\n                            type="button"\n                            className="ghost compact"\n                            onClick={() => openQuoteWorkspace(quote.id)}\n                            title="Open this quote in the workspace, with activity and save health"\n                          >\n                            Workspace\n                          </button>\n                        )}\n';
+            source = replaceOnce(source, workspaceBlock, '', 'remove redundant Workspace action');
+            const editMarker = '                        {permissions.canEditQuote && canEditQuoteStatus(normalizedQuoteStatus) && (';
+            const expireBlock = '                        {permissions.canManageQuoteStatus\n                          && state.source === "firebase"\n                          && normalizedQuoteStatus !== "expired"\n                          && statusOptions.includes("expired") && (\n                          <button\n                            type="button"\n                            className="ghost compact"\n                            data-quote-action-id="change_status"\n                            data-quote-action-group="administration"\n                            onClick={() => handleStatusUpdate(quote.id, "expired")}\n                            disabled={updatingId === quote.id || deliveryUnresolved}\n                            title={configuredActionState.actions.change_status.consequence}\n                          >\n                            {configuredActionState.actions.change_status.label}\n                          </button>\n                        )}\n';
+            source = replaceOnce(source, editMarker, expireBlock + editMarker, 'explicit expire action');
+
+            write(path, source);
+          }
+
+          // Responsive action-rail styling extends existing staff-workspace tokens.
+          {
+            const path = 'src/styles.css';
+            let source = read(path);
+            const marker = '/* Configured quote action rail */';
+            if (!source.includes(marker)) {
+              source += `\n\n${marker}\n.configured-quote-action-rail {\n  display: grid;\n  min-width: 11rem;\n  gap: 0.45rem;\n  align-content: start;\n}\n\n.configured-quote-action-evidence,\n.configured-quote-primary-action,\n.configured-quote-primary-blocker {\n  display: grid;\n  gap: 0.3rem;\n}\n\n.configured-quote-primary-action > button,\n.configured-quote-primary-action > .cta {\n  width: 100%;\n  min-height: 44px;\n}\n\n.configured-quote-primary-blocker {\n  padding: 0.55rem 0.65rem;\n  border: 1px solid var(--border-subtle, currentColor);\n  border-radius: 10px;\n}\n\n.configured-quote-primary-blocker small {\n  max-width: 32ch;\n}\n\n.configured-quote-more-actions > summary {\n  min-height: 44px;\n  display: inline-flex;\n  align-items: center;\n  cursor: pointer;\n  font-weight: 700;\n}\n\n.configured-quote-more-actions[open] > summary {\n  margin-bottom: 0.45rem;\n}\n\n.configured-quote-more-groups {\n  display: grid;\n  gap: 0.65rem;\n  min-width: min(18rem, 70vw);\n}\n\n.configured-quote-action-group {\n  display: grid;\n  gap: 0.35rem;\n  padding-top: 0.5rem;\n  border-top: 1px solid var(--border-subtle, currentColor);\n}\n\n.configured-quote-action-group:first-child {\n  padding-top: 0;\n  border-top: 0;\n}\n\n.configured-quote-action-group > strong {\n  font-size: 0.75rem;\n}\n\n.history-quote-workspace-link {\n  min-height: 44px;\n  text-align: left;\n}\n\n@media (max-width: 620px) {\n  .configured-quote-action-rail,\n  .configured-quote-more-groups {\n    min-width: 0;\n    width: 100%;\n  }\n\n  .configured-quote-more-actions > summary,\n  .configured-quote-primary-action > button,\n  .configured-quote-action-group .compact {\n    width: 100%;\n    justify-content: center;\n  }\n}\n`;
+            }
+            write(path, source);
+          }
+
+          // Focused unit acceptance: permission-safe visibility and recovery ranking.
+          {
+            const path = 'src/lib/__tests__/quoteActionState.test.js';
+            let source = read(path);
+            const insertion = `\n  test("does not surface admin-only actions as disabled alternatives to sales", () => {\n    const result = controller(quote("accepted", {\n      workflow: { quoteDelivery: providerAcceptedDelivery() }\n    }), "sales").actionState;\n\n    expect(result.actions.convert_contract.visible).toBe(false);\n    expect(result.actions.request_deposit.visible).toBe(false);\n    expect(result.actions.delete.visible).toBe(false);\n  });\n\n  test("ranks provider reconciliation above normal payment progression only when provider evidence is unresolved", () => {\n    const result = controller(quote("booked", {\n      payment: {\n        depositStatus: "sent",\n        depositConfirmedAtISO: "",\n        stripeSessionId: "cs_test_pending",\n        stripeCheckoutState: "unknown",\n        finalBalance: { amountCents: 75000, status: "unpaid" }\n      },\n      booking: {\n        contractNumber: "C-1",\n        contractConvertedAtISO: "2099-08-03T12:05:00.000Z",\n        confirmationStatus: "pending"\n      },\n      workflow: {\n        quoteDelivery: providerAcceptedDelivery(),\n        approvalRequests: [approval("send_payment_request")]\n      }\n    })).actionState;\n\n    expect(result.state.depositNeedsReconciliation).toBe(true);\n    expect(result.primaryAction).toMatchObject({\n      id: "reconcile_deposit",\n      label: "Check payment outcome",\n      enabled: true\n    });\n  });\n\n  test("offers expiry as an explicit administrative outcome only for expirable lifecycle states", () => {\n    const draft = controller(quote("draft")).actionState;\n    const accepted = controller(quote("accepted", {\n      workflow: { quoteDelivery: providerAcceptedDelivery() }\n    })).actionState;\n\n    expect(draft.actions.change_status).toMatchObject({\n      visible: true,\n      enabled: true,\n      label: "Expire quote"\n    });\n    expect(accepted.actions.change_status.visible).toBe(false);\n  });\n`;
+            const close = '\n});\n';
+            const index = source.lastIndexOf(close);
+            if (index < 0) throw new Error('quoteActionState test close not found.');
+            if (!source.includes('does not surface admin-only actions as disabled alternatives to sales')) {
+              source = source.slice(0, index) + insertion + source.slice(index);
+            }
+            write(path, source);
+          }
+
+          // Browser acceptance follows progressive disclosure instead of assuming every capability is always visible.
+          {
+            const path = 'e2e/quote-history-role-permissions.spec.js';
+            let source = read(path);
+            source = replaceOnce(
+              source,
+              '  await expect(row.getByRole("button", { name: "Edit draft" })).toBeVisible();\n  await expect(row.getByRole("button", { name: "Create alternate draft" })).toBeVisible();',
+              '  await expect(row.getByRole("button", { name: "Edit draft" })).toBeVisible();\n  const more = row.locator("details.configured-quote-more-actions");\n  await more.locator("summary").click();\n  await expect(row.getByRole("button", { name: "Create alternate draft" })).toBeVisible();',
+              'sales More disclosure'
+            );
+            source = source.replace('await expect(row.getByRole("button", { name: "Convert" })).toHaveCount(0);', 'await expect(row.getByRole("button", { name: "Create contract" })).toHaveCount(0);');
+            write(path, source);
+          }
+          {
+            const path = 'e2e/quote-wizard.smoke.spec.js';
+            let source = read(path);
+            source = source.replaceAll(
+              'return page.locator(".history-table-wrap tbody tr").filter({\n    has: page.getByRole("button", { name: "Copy email text" })\n  });',
+              'return page.locator(".history-table-wrap tbody tr[data-quote-id]");'
+            );
+            source = source.replaceAll(
+              'page.locator(".history-table-wrap tbody tr").filter({\n    has: page.getByRole("button", { name: "Copy email text" })\n  }).first()',
+              'page.locator(".history-table-wrap tbody tr[data-quote-id]").first()'
+            );
+            source = replaceOnce(
+              source,
+              '  for (const name of ["Edit", "Rotate Portal", "Delete"]) {\n    await expect(row.getByRole("button", { name })).toBeDisabled();\n  }\n  await expect(row.getByRole("button", { name: "Request deposit" })).toHaveCount(0);\n  await expect(row.getByRole("button", { name: "Create alternate draft" })).toBeEnabled();\n  await expect(row.getByRole("button", { name: "PDF" })).toBeEnabled();\n  await expect(row.getByRole("button", { name: "Copy email text" })).toBeEnabled();',
+              '  await row.locator("details.configured-quote-more-actions > summary").click();\n  for (const name of ["Edit draft", "Renew customer link", "Delete quote", "Create alternate draft"]) {\n    await expect(row.getByRole("button", { name })).toBeDisabled();\n  }\n  await expect(row.getByRole("button", { name: "Request deposit" })).toHaveCount(0);\n  await expect(row.getByRole("button", { name: "Download PDF" })).toBeEnabled();\n  await expect(row.getByRole("button", { name: "Copy email text" })).toBeEnabled();',
+              'unresolved delivery secondary controls'
+            );
+            source = replaceOnce(
+              source,
+              '  await firstQuoteRow.getByRole("button", { name: "Copy email text" }).click();',
+              '  await firstQuoteRow.locator("details.configured-quote-more-actions > summary").click();\n  await firstQuoteRow.getByRole("button", { name: "Copy email text" }).click();',
+              'open More for export test'
+            );
+            source = source.replace('firstQuoteRow.getByRole("button", { name: "PDF" })', 'firstQuoteRow.getByRole("button", { name: "Download PDF" })');
+            source = replaceOnce(
+              source,
+              '  await quoteRows.first().getByRole("button", { name: "Edit draft" }).click();',
+              '  await quoteRows.first().locator("details.configured-quote-more-actions > summary").click();\n  await quoteRows.first().getByRole("button", { name: "Edit draft" }).click();',
+              'open More for admin edit test'
+            );
+            source = replaceOnce(
+              source,
+              '  const row = quoteRows(page).first();\n  await row.getByRole("button", { name: "Edit draft" }).click();',
+              '  const row = quoteRows(page).first();\n  await row.locator("details.configured-quote-more-actions > summary").click();\n  await row.getByRole("button", { name: "Edit draft" }).click();',
+              'open More for catalog isolation edit'
+            );
+            write(path, source);
+          }
+
+          // Restore capability manifest from main and apply only exact traceability deltas.
+          {
+            const path = 'docs/capability-surfacing-contracts.json';
+            let source = execFileSync('git', ['show', 'origin/main:docs/capability-surfacing-contracts.json'], { encoding: 'utf8' });
+            source = replaceOnce(source, '  "catalogVersion": 65,', '  "catalogVersion": 66,', 'capability catalog version');
+            source = replaceInContract(source, 'ambient-object-and-pilot-policy-foundations', (contract) => {
+              let next = replaceOnce(contract, '      "reviewRevision": 17,', '      "reviewRevision": 18,', 'ambient capability review revision');
+              next = replaceOnce(
+                next,
+                '        "src/lib/workspaceScope.js",\n        "src/lib/quoteHistoryController.js",',
+                '        "src/lib/workspaceScope.js",\n        "src/lib/quoteActionState.js",\n        "src/lib/quoteHistoryController.js",',
+                'action compiler backend path'
+              );
+              next = replaceOnce(
+                next,
+                '        "src/components/WorkspaceShell.jsx",\n        "src/components/QuoteHistoryModal.jsx",',
+                '        "src/components/WorkspaceShell.jsx",\n        "src/components/QuoteHistoryModal.jsx",\n        "src/components/ConfiguredQuoteActionRail.jsx",',
+                'action rail frontend path'
+              );
+              next = replaceOnce(
+                next,
+                '        "src/lib/__tests__/workspaceArrivalContract.test.js",\n        "src/lib/__tests__/quoteHistoryController.test.js",',
+                '        "src/lib/__tests__/workspaceArrivalContract.test.js",\n        "src/lib/__tests__/quoteHistoryController.test.js",\n        "src/lib/__tests__/quoteActionState.test.js",\n        "src/lib/__tests__/quoteStore.versioning.test.js",\n        "src/components/__tests__/configuredQuoteActionRail.test.jsx",\n        "e2e/quote-history-role-permissions.spec.js",\n        "e2e/quote-wizard.smoke.spec.js",',
+                'configured action test paths'
+              );
+              next = replaceOnce(
+                next,
+                '        {\n          "path": "src/lib/__tests__/quoteHistoryController.test.js",\n          "locator": "splits bounded opportunities, exact Event Room selection, and role-safe actions"\n        },',
+                '        {\n          "path": "src/lib/__tests__/quoteHistoryController.test.js",\n          "locator": "splits bounded opportunities, exact Event Room selection, and role-safe actions"\n        },\n        {\n          "path": "src/lib/__tests__/quoteActionState.test.js",\n          "locator": "recovery overrides routine quote-changing actions when delivery is uncertain"\n        },\n        {\n          "path": "src/lib/__tests__/quoteActionState.test.js",\n          "locator": "does not treat provider acceptance for an older revision as current delivery evidence"\n        },\n        {\n          "path": "src/lib/__tests__/quoteStore.versioning.test.js",\n          "locator": "local alternate draft keeps presentation while clearing source proof"\n        },\n        {\n          "path": "src/components/__tests__/configuredQuoteActionRail.test.jsx",\n          "locator": "keeps one ranked action outside More while grouping subordinate capabilities"\n        },',
+                'configured action test locators'
+              );
+              return next;
+            });
+            write(path, source);
+          }
+
+          // Candidate-aware documentation and exact design-source mapping.
+          const timestamp = chicagoTimestamp();
+          {
+            const path = 'docs/FEATURE_MATRIX.md';
+            let source = updateTimestamp(read(path), timestamp);
+            source = source.replace(
+              '| 8 | Quote management UI (list, sort, filters, state-aware configured-quote action compilation with one ranked primary/recovery action, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing and conversation with bounded same-session unresolved-request restoration, isolated Stripe deposit and final-balance request/reconciliation rails, provider-owned payment status) | Implemented (deployed; authenticated, production-data, and provider acceptance remain separate) |',
+              '| 8 | Quote management UI (list, sort, filters, state-aware configured-quote action compilation with one ranked primary/recovery action and progressively disclosed secondary capabilities, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing and conversation with bounded same-session unresolved-request restoration, isolated Stripe deposit and final-balance request/reconciliation rails, provider-owned payment status) | Implemented in source candidate (prior quote-management baseline deployed; this action-state migration still requires hosted and human acceptance) |'
+            );
+            if (!source.includes('`src/components/ConfiguredQuoteActionRail.jsx`')) {
+              source = source.replace(
+                '`src/components/QuoteHistoryModal.jsx`, `src/lib/quoteActionState.js`',
+                '`src/components/QuoteHistoryModal.jsx`, `src/components/ConfiguredQuoteActionRail.jsx`, `src/lib/quoteActionState.js`'
+              );
+            }
+            write(path, source);
+          }
+          {
+            const path = 'docs/USER_MANUAL.md';
+            let source = updateTimestamp(read(path), timestamp);
+            source = source.replace(
+              "The configured quote view now ranks one next action from the quote's recorded lifecycle, exact current delivery revision, approval state, payment evidence, contract state, portal validity, and recovery state. Other permitted utilities remain secondary; an unresolved delivery or transaction recovery replaces normal progression until it is reconciled.",
+              "The configured quote view ranks one next action from the quote's recorded lifecycle, exact current delivery revision, approval state, payment evidence, contract state, portal validity, and recovery state. Other permitted utilities are grouped under **More**; an unresolved delivery or transaction recovery replaces normal progression until it is reconciled. The quote number itself opens the workspace, so navigation does not compete with the commercial next action."
+            );
+            source = source.replace(
+              '- **Create alternate draft** creates a separate quote after an explicit consequence confirmation.',
+              '- **Create alternate draft** lives under **More** unless it is the ranked outcome for a closed opportunity. It creates a separate quote after an explicit consequence confirmation.'
+            );
+            if (!source.includes('Firebase-backed lifecycle management uses an explicit **Expire quote** action')) {
+              source = source.replace(
+                '- **Request deposit**, **Create contract**, **Request final balance**, **Record customer confirmation**, **Restore as draft**, and **Renew customer link** retain their existing approval, provider, portal, payment, and role boundaries.',
+                '- Firebase-backed lifecycle management uses an explicit **Expire quote** action rather than a generic lifecycle selector; the browser-local fallback retains its existing status selector for compatibility.\n- **Request deposit**, **Create contract**, **Request final balance**, **Record customer confirmation**, **Restore as draft**, and **Renew customer link** retain their existing approval, provider, portal, payment, and role boundaries.'
+              );
+            }
+            write(path, source);
+          }
+          {
+            const path = 'CHANGELOG.md';
+            let source = updateTimestamp(read(path), timestamp);
+            source = source.replace(
+              'migrated the quote administration row onto one ranked primary/recovery action while preserving subordinate capabilities.',
+              'migrated the quote administration row onto one ranked primary/recovery action while grouping subordinate capabilities under **More**.'
+            );
+            if (!source.includes('The quote number now opens its workspace')) {
+              source = source.replace(
+                'Existing Firebase, Stripe, portal, approval, and contract authority is unchanged; local/CI evidence does not claim hosted, provider, production, or human acceptance.',
+                'The quote number now opens its workspace, Firebase lifecycle management exposes explicit **Expire quote** instead of a generic selector, and exact workflow deep links open **More** before focusing a secondary approved action. Existing Firebase, Stripe, portal, approval, and contract authority is unchanged; local/CI evidence does not claim hosted, provider, production, or human acceptance.'
+              );
+            }
+            write(path, source);
+          }
+
+          fs.rmSync(workflowPath);
+          NODE
+
+          git config user.name "QuotePilot bounded migration"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/lib/quoteActionState.js \
+            src/components/QuoteHistoryModal.jsx \
+            src/styles.css \
+            src/lib/__tests__/quoteActionState.test.js \
+            e2e/quote-history-role-permissions.spec.js \
+            e2e/quote-wizard.smoke.spec.js \
+            docs/capability-surfacing-contracts.json \
+            docs/FEATURE_MATRIX.md docs/USER_MANUAL.md CHANGELOG.md \
+            .github/workflows/tmp-complete-configured-quote-actions.yml
+          git diff --cached --check
+          git commit -m "feat(quotes): complete configured quote action system"
+          git push origin HEAD:feat/configured-quote-action-state
