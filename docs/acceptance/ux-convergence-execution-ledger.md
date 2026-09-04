@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 14:22:07 CDT
+Last updated: 2026-09-04 14:27:47 CDT
 
 ## Authority
 
@@ -99,7 +99,7 @@ separate.
 | AC-032 | AC-032 — Missing identity is not fabricated | PASS | Blank browser coverage renders `Untitled event`, `Not set`, and the derived review summary without undefined/null or invented customer/event values. |
 | AC-033 | AC-033 — Package, Service style, Menu, Rentals and Enhancements are organized under Experience | PASS | Real-route Experience test asserts all five existing capability triggers in the active domain. |
 | AC-034 | AC-034 — Package semantics unchanged | PASS | Existing Package IDs, selection callback, catalog price ownership, and what-if preview remain in the shared form; focused model/browser tests cover selection and repricing. |
-| AC-035 | AC-035 — Service-style semantics unchanged | PENDING | No evidence recorded at contract checkpoint. |
+| AC-035 | AC-035 — Service-style semantics unchanged | PASS | Focused browser coverage changes an existing style through the shared callback, observes the same style after Guided round-trip, and retains the existing staffing-rule consequence. |
 | AC-036 | AC-036 — Closed Menu presents meaningful summary | PASS | Selected items remain visible in the grouped Menu summary while the editor is closed. |
 | AC-037 | AC-037 — Detailed Menu only opens intentionally | PASS | The editor is closed by default and focused browser coverage opens it only through the explicit Edit Menu control. |
 | AC-038 | AC-038 — Existing Menu functionality retained | PASS | Focused browser coverage loads the event-type Menu, selects an existing item, and preserves the governed shared selection. |
@@ -107,7 +107,7 @@ separate.
 | AC-040 | AC-040 — Realistically long Menu remains usable | PASS | Real-route Birthday coverage loads ten course groups and verifies only relevant/first groups open, closed groups remain operable, and search opens matching disclosure without changing Menu authority. |
 | AC-041 | AC-041 — Current and recommended staffing visibly distinct | PASS | Focused browser coverage simultaneously shows current `0 servers` and the separately labelled Recommended card. |
 | AC-042 | AC-042 — No silent recommendation application | PASS | Current staffing remains unchanged while the recommendation is displayed; mutation still requires Use recommendation. |
-| AC-043 | AC-043 — Existing staffing financial consequence retained | PENDING | No evidence recorded at contract checkpoint. |
+| AC-043 | AC-043 — Existing staffing financial consequence retained | PASS | Browser coverage explicitly applies the existing staffing recommendation, observes the canonical Pulse total change, and verifies a non-zero Staffing investment row. |
 | AC-044 | AC-044 — Existing Rentals capability retained | PASS | Focused browser coverage selects an existing rental inside Experience and observes it in the proposal summary. |
 | AC-045 | AC-045 — Rental suggestions remain explicit proposals | PASS | Pure model tests prove only explicit lagging quantities produce suggestions and no quantity changes without the existing Apply action. |
 | AC-046 | AC-046 — Existing Enhancements capability retained | PASS | Focused browser coverage selects an existing enhancement and observes it in the proposal list. |
@@ -126,10 +126,10 @@ separate.
 | AC-059 | AC-059 — Guest changes preserve before/after consequence view | PASS | Focused browser coverage changes Guests and asserts the consequence surface retains before/after guest and total values. |
 | AC-060 | AC-060 — Automatic pricing versus recommendations versus unchanged state clearly distinguished | PASS | Browser coverage observes automatic canonical total movement, a separately labelled staffing recommendation, and unchanged current staffing until explicit action. |
 | AC-061 | AC-061 — Existing explicit Apply / Keep / Undo outcomes retained where currently supported | PASS | Focused browser coverage exercises Keep as quoted and Undo guest change; existing consequence-model units retain explicit staffing/rental apply patches. |
-| AC-062 | AC-062 — Pilot remains reachable | PENDING | No evidence recorded at contract checkpoint. |
-| AC-063 | AC-063 — AI changes inspectable before governed commit | PENDING | No evidence recorded at contract checkpoint. |
-| AC-064 | AC-064 — AI cannot bypass ordinary blockers/authority | PENDING | No evidence recorded at contract checkpoint. |
-| AC-065 | AC-065 — Idle Pilot footprint is restrained | PENDING | No evidence recorded at contract checkpoint. |
+| AC-062 | AC-062 — Pilot remains reachable | PASS | Flag-on real-route coverage reveals the contextual Pilot after the first draft edit; focused shell tests retain the global desktop/mobile Pilot entry. |
+| AC-063 | AC-063 — AI changes inspectable before governed commit | PASS | Browser coverage previews an exact bartender draft change with `Nothing is saved yet` before explicit Apply; scenario review units retain before/after, compromises, provenance, and confirmation. |
+| AC-064 | AC-064 — AI cannot bypass ordinary blockers/authority | PASS | Applying Pilot changes only the dirty draft and the common save control still exposes ordinary blockers; 78 focused policy/review tests reject unsafe authority, scope, confirmation, and evidence drift. |
+| AC-065 | AC-065 — Idle Pilot footprint is restrained | PASS | Browser coverage proves the draft Pilot is absent on untouched arrival and appears only after relevant draft activity under its existing flag. |
 | AC-066 | AC-066 — Existing Compare Scenarios remains available | PASS | Focused browser coverage opens the existing Scenario Compare surface from Workbench. |
 | AC-067 | AC-067 — Scenario detail is contextual rather than permanently expanded | PASS | Scenario configuration exists only in the invoked modal and closes back to the same draft. |
 | AC-068 | AC-068 — Internal-only evidence excluded | PASS | Workbench browser test opens client Preview and asserts no margin, blocker, or staff-only copy. |
@@ -143,14 +143,14 @@ separate.
 | AC-076 | AC-076 — No accidental continuous autosave introduced | PASS | Field and scenario edits remain dirty and do not create a saved/editing identity without the explicit shared save action. Local recovery remains labelled recovery, not server save. |
 | AC-077 | AC-077 — Firebase authoritative pricing remains intact | PASS | No pricing authority moved into Workbench; the unchanged Firebase authoritative-pricing and trusted-write suites passed in the last exact runtime qualification. |
 | AC-078 | AC-078 — Version behavior remains intact | PASS | Existing quote edit/version suites passed unchanged; Workbench continues to invoke the single App save/version callback. |
-| AC-079 | AC-079 — UI presents saved success only from real successful save state | PENDING | No evidence recorded at contract checkpoint. |
-| AC-080 | AC-080 — Failed save preserves unsaved work where current architecture permits | PENDING | No evidence recorded at contract checkpoint. |
+| AC-079 | AC-079 — UI presents saved success only from real successful save state | PASS | A forced local persistence exception leaves `data-state=dirty`, shows the exact failure, creates no quote record, and never renders a saved identity/success state. |
+| AC-080 | AC-080 — Failed save preserves unsaved work where current architecture permits | PASS | Focused browser coverage completes a valid draft, injects failure at the local persistence boundary, then reads back the same event identity, customer, and selected Menu item. |
 | AC-081 | AC-081 — Advanced pricing collapsed by default | PASS | Focused browser coverage verifies the native details region is closed on arrival. |
 | AC-082 | AC-082 — Existing advanced pricing capabilities retained | PASS | Opening Advanced pricing exposes the retained Event template, Tax region, Season profile, travel, payment, and disposables controls. |
 | AC-083 | AC-083 — Unsupported arbitrary per-quote price override remains absent | PASS | Workbench retains only supported staffing-rate overrides and governed pricing context; no arbitrary line, subtotal, or total override control or authority exists. |
 | AC-084 | AC-084 — Activity remains inspectable | PASS | Updated browser regression opens the activity toggle and verifies session changes. |
 | AC-085 | AC-085 — Activity secondary while healthy | PASS | Activity now starts collapsed and remains available through its existing toggle. |
-| AC-086 | AC-086 — Actionable recovery evidence may promote through Attention | PENDING | No evidence recorded at contract checkpoint. |
+| AC-086 | AC-086 — Actionable recovery evidence may promote through Attention | PASS | Save failure is promoted into the always-visible save-readiness block as `Latest draft notice` with its exact recovery error while recent routine activity remains collapsed. |
 | AC-087 | AC-087 — 1440px workbench intentionally uses desktop hierarchy | PASS | Dedicated 1440px Workbench Playwright case passes. |
 | AC-088 | AC-088 — 768px adaptation has no horizontal document overflow | PASS | Dedicated 768px Workbench Playwright case asserts no page overflow. |
 | AC-089 | AC-089 — 390px uses intentional mobile composition, not squeezed desktop columns | PASS | Dedicated 390px Workbench case exercises horizontal Quote Plan plus modal Commercial Truth. |

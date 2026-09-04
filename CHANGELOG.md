@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:22:07 CDT
+Last updated: 2026-09-04 14:27:47 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Certified the remaining Workbench behavioral boundaries without adding a
+  second authority: service style survives a Guided round-trip, explicit
+  staffing adoption reprices the canonical total, Pilot stays dormant until
+  relevant and previews before applying only to the dirty draft, and ordinary
+  save blockers still govern AI-assisted changes. A forced browser-local
+  persistence exception now has end-to-end evidence that no saved-success
+  claim or quote record is created while event, customer, and Menu work remain
+  intact and the exact failure promotes into save-readiness Attention. This is
+  focused local evidence only; no provider, hosted, or production claim is
+  made.
 - Refined the local-only Commercial Workbench presentation after rendered
   desktop/mobile review: long Menus now use course-level disclosure with the
   first and selected groups open, search reveals matching groups, Event starts

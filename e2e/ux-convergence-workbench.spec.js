@@ -7,6 +7,9 @@ const ENABLED = ["1", "true", "yes", "on"].includes(
 const MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
 );
+const PILOT_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(process.env.VITE_PILOT_COMMAND_ENABLED || "").trim().toLowerCase()
+);
 
 test.skip(!ENABLED, "Commercial Workbench requires the Proposal Composer graph.");
 
@@ -29,6 +32,22 @@ async function commitInline(page, label, value) {
   await page.getByRole("button", { name: `Change ${label}`, exact: true }).click();
   await page.getByLabel(label, { exact: true }).fill(value);
   await page.getByRole("button", { name: "Apply change", exact: true }).click();
+}
+
+async function completeSavableDraft(page) {
+  await page.getByLabel("Event type", { exact: true }).selectOption({ index: 1 });
+  await commitInline(page, "Event name", "Persistence Boundary Dinner");
+  await commitInline(page, "Date", "2027-10-18");
+  await commitInline(page, "Guests", "60");
+  await page.getByTestId("pc-consequences").getByRole("button", { name: "Keep as quoted" }).click();
+  await commitInline(page, "Venue", "Evidence Hall");
+  await openDomain(page, "customer");
+  await commitInline(page, "Client name", "Boundary Client");
+  await commitInline(page, "Email", "boundary@example.test");
+  await openDomain(page, "experience");
+  await page.getByTestId("pc-edit-menu").click();
+  await page.getByTestId("pc-menu-editor")
+    .locator(".pc-choice input[type='checkbox']").first().check();
 }
 
 test("keeps one proposal object while switching among five presentation domains", async ({ page }) => {
@@ -137,6 +156,37 @@ test("keeps recommendations explicit and preserves Rentals and Enhancements", as
     .locator(".pc-choice input[type='checkbox']").first();
   await enhancementChoice.click();
   await expect(page.locator(".pc-enhancement-list")).toBeVisible();
+});
+
+test("keeps service-style state shared and staffing changes on the canonical price", async ({ page }) => {
+  await commitInline(page, "Guests", "80");
+  await page.getByTestId("pc-consequences").getByRole("button", { name: "Keep as quoted" }).click();
+  await openDomain(page, "experience");
+  await page.getByRole("button", { name: /Change package or service style/ }).click();
+  const styleOptions = page.getByTestId("pc-experience-editor").locator(".pc-option-grid").nth(1);
+  const nextStyle = styleOptions.locator(".pc-option:not([aria-pressed='true'])").first();
+  const nextStyleName = String(await nextStyle.locator("strong").textContent()).trim();
+  await nextStyle.click();
+  await expect(styleOptions.locator(".pc-option").filter({ hasText: nextStyleName }).first())
+    .toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".pc-fact-row")).toContainText(nextStyleName);
+
+  await page.getByTestId("pc-guided-mode").click();
+  await expect(page.locator(".wizard-panel")).toBeVisible();
+  await page.getByRole("button", { name: "Composer view" }).click();
+  await openDomain(page, "experience");
+  await expect(page.locator(".pc-fact-row")).toContainText(nextStyleName);
+
+  await openDomain(page, "staffing");
+  const totalBefore = await page.getByTestId("pc-pulse-total").textContent();
+  const recommendation = page.getByTestId("pc-staffing-recommendation");
+  await expect(recommendation).toBeVisible();
+  await recommendation.getByRole("button", { name: /Use recommendation/ }).click();
+  await expect(page.getByTestId("pc-pulse-total")).not.toHaveText(String(totalBefore || ""));
+  await openDomain(page, "commercials");
+  const staffingRow = page.locator(".pc-investment-rows > div").filter({ hasText: "Staffing" });
+  await expect(staffingRow).toBeVisible();
+  await expect(staffingRow).not.toContainText("$0.00");
 });
 
 test("keeps Commercial truth and client preview attached to the proposal", async ({ page }) => {
@@ -325,6 +375,49 @@ test("keeps margin evidence behind its flag and expands unavailable evidence whe
   await expect(margin).toHaveAttribute("open", "");
   await expect(margin).toContainText("Margins unavailable");
   await expect(margin.locator("summary")).toContainText("Review · Staff-only");
+});
+
+test("keeps Pilot dormant until needed and subjects its draft change to ordinary blockers", async ({ page }) => {
+  const pilot = page.locator(".pilot-command");
+  await expect(pilot).toHaveCount(0);
+  if (!PILOT_ENABLED) return;
+
+  await commitInline(page, "Event name", "Pilot Review Dinner");
+  await expect(pilot).toBeVisible();
+  await pilot.getByLabel("Command for this draft", { exact: true }).fill("add another bartender");
+  await pilot.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(pilot.locator(".pilot-command-preview")).toContainText("Nothing is saved yet");
+  await openDomain(page, "staffing");
+  await expect(page.getByRole("button", { name: "Change Bartenders", exact: true })).toContainText("0 bartenders");
+
+  await pilot.getByRole("button", { name: "Apply to draft", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Change Bartenders", exact: true })).toContainText("1 bartender");
+  await expect(page.getByTestId("pc-save")).toHaveText(/Review \d+ blockers?/i);
+  await expect(page.locator(".pc-save-state")).toHaveAttribute("data-state", "dirty");
+});
+
+test("preserves the complete unsaved draft when local persistence fails", async ({ page }) => {
+  await completeSavableDraft(page);
+  await expect(page.getByTestId("pc-save")).toHaveText("Save draft");
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function failQuotePersistence(key, value) {
+      if (key === "quoteWizard.quotes") throw new Error("Injected quote persistence failure.");
+      return setItem.call(this, key, value);
+    };
+  });
+
+  await page.getByTestId("pc-save").click();
+  const notice = page.getByTestId("pc-draft-notice");
+  await expect(notice).toContainText("Injected quote persistence failure.");
+  await expect(page.getByRole("heading", { level: 1, name: "Persistence Boundary Dinner" })).toBeVisible();
+  await expect(page.locator(".pc-save-state")).toHaveAttribute("data-state", "dirty");
+  expect(await page.evaluate(() => localStorage.getItem("quoteWizard.quotes"))).toBeNull();
+
+  await openDomain(page, "customer");
+  await expect(page.getByRole("button", { name: "Change Client name", exact: true })).toContainText("Boundary Client");
+  await openDomain(page, "experience");
+  await expect(page.locator(".pc-menu-list")).toContainText("Assorted Meat Croissants");
 });
 
 for (const viewport of [
