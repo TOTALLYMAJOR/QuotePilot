@@ -7,6 +7,7 @@ vi.mock("../firebase", () => ({
 
 import {
   deleteQuote,
+  duplicateQuote,
   ensureLegacyQuoteCompatibility,
   getActiveQuoteVersion,
   getQuoteHistory,
@@ -778,6 +779,152 @@ describe("quoteStore versioning and delete behavior", () => {
     const updated = quotes.quotes.find((quote) => quote.id === "legacy-upgrade-1");
     expect(updated.activeVersionId).toBe("v0001");
     expect(updated.latestVersionNumber).toBe(1);
+  });
+
+  test("local alternate draft keeps presentation while clearing source proof", async () => {
+    seedQuotes([
+      makeQuote({
+        id: "q-duplicate-proof",
+        status: "booked",
+        customerId: "customer-source",
+        customer: {
+          name: "Client One",
+          email: "client-one@example.com",
+          phone: "205-555-0101",
+          providerReceiptId: "must-not-copy"
+        },
+        event: {
+          name: "Spring Banquet",
+          venue: "Pine Hall",
+          guests: 120,
+          settlementEvidence: { id: "must-not-copy" }
+        },
+        selection: {
+          packageId: "classic",
+          menuItems: ["salad"],
+          menuItemNames: ["Salad"],
+          deliveryEvidence: { id: "must-not-copy" }
+        },
+        totals: {
+          total: 8400,
+          deposit: 2520,
+          serverRatesApplied: [42, 44],
+          providerReceiptId: "must-not-copy"
+        },
+        pricing: { authority: "legacy_derived", grandTotal: 8400, providerReceiptId: "must-not-copy" },
+        pricingCatalogAuthority: { schemaVersion: 1, catalogRevision: 7, secret: "must-not-copy" },
+        quoteMeta: {
+          quoteValidityDays: 30,
+          integrationRetryLimit: 4,
+          integrationAuditRetention: 60,
+          pricingSettingsVersion: "source-calculation-internal",
+          crmBridgeAuthToken: "must-not-copy",
+          providerReceiptId: "must-not-copy"
+        },
+        decidableOptionsProjection: [{
+          itemType: "addon",
+          name: "Premium Bar",
+          price: 15,
+          pricingType: "per_person",
+          providerReceiptId: "must-not-copy"
+        }],
+        acceptanceReceipt: { receiptId: "acceptance-source" },
+        rebooking: { state: "draft_created_for_staff_review", sourceQuoteId: "older-source" },
+        workflow: {
+          quoteDelivery: {
+            revisionId: "v0003@2026-03-10T12:00:00.000Z",
+            state: "provider_accepted",
+            providerMessageId: "provider-source"
+          }
+        },
+        payment: {
+          depositLink: "https://checkout.stripe.com/c/pay/cs_test_source",
+          depositStatus: "paid",
+          depositConfirmedAtISO: "2026-03-12T12:00:00.000Z",
+          stripeSessionId: "cs_test_source",
+          finalBalance: {
+            amountCents: 588000,
+            status: "paid",
+            paymentLink: "https://checkout.stripe.com/c/pay/cs_test_balance",
+            stripeSessionId: "cs_test_balance",
+            confirmedAtISO: "2026-03-15T12:00:00.000Z"
+          }
+        },
+        booking: {
+          contractNumber: "C-SOURCE",
+          contractConvertedAtISO: "2026-03-11T12:00:00.000Z",
+          bookedAtISO: "2026-03-11T12:00:00.000Z"
+        }
+      })
+    ]);
+
+    const created = await duplicateQuote("q-duplicate-proof", {
+      ownerUid: "staff-new",
+      ownerEmail: "staff-new@example.com"
+    });
+    const stored = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]")
+      .find((item) => item.id === created.id);
+
+    expect(stored.status).toBe("draft");
+    expect(stored.customerId).toBe("customer-source");
+    expect(stored.customer).toMatchObject({ name: "Client One", email: "client-one@example.com" });
+    expect(stored.event).toMatchObject({ name: "Spring Banquet", venue: "Pine Hall", guests: 120 });
+    expect(stored.selection).toMatchObject({ packageId: "classic", menuItems: ["salad"] });
+    expect(stored.totals).toMatchObject({ total: 8400, deposit: 2520 });
+    expect(stored.pricing).toMatchObject({ authority: "legacy_derived", grandTotal: 8400 });
+    expect(stored.pricingCatalogAuthority).toEqual({ schemaVersion: 1, catalogRevision: 7 });
+    expect(stored.decidableOptionsProjection).toHaveLength(1);
+    expect(stored.duplicatedFromQuoteId).toBe("q-duplicate-proof");
+    expect(stored).not.toHaveProperty("acceptanceReceipt");
+    expect(stored).not.toHaveProperty("rebooking");
+    expect(stored.payment).toMatchObject({
+      depositLink: "",
+      depositStatus: "unpaid",
+      depositConfirmedAtISO: "",
+      finalBalance: {
+        status: "unpaid",
+        paymentLink: "",
+        confirmedAtISO: "",
+        stripeSessionId: ""
+      }
+    });
+    expect(stored.payment).not.toHaveProperty("stripeSessionId");
+    expect(stored.workflow).not.toHaveProperty("quoteDelivery");
+    expect(stored.integrations.providers).toEqual({});
+    expect(stored.integrations.logs).toEqual([]);
+    expect(stored.activeVersionId).toBe("v0001");
+    expect(stored.latestVersionNumber).toBe(1);
+    expect(stored.versionMeta).toMatchObject({
+      versionId: "v0001",
+      versionNumber: 1,
+      reason: "duplicate_quote_create",
+      createdBy: {
+        uid: "staff-new",
+        email: "staff-new@example.com"
+      }
+    });
+    expect(stored.customer).not.toHaveProperty("providerReceiptId");
+    expect(stored.event).not.toHaveProperty("settlementEvidence");
+    expect(stored.selection).not.toHaveProperty("deliveryEvidence");
+    expect(stored.totals).not.toHaveProperty("providerReceiptId");
+    expect(stored.totals).not.toHaveProperty("serverRatesApplied");
+    expect(stored.pricing).not.toHaveProperty("providerReceiptId");
+    expect(stored.pricingCatalogAuthority).not.toHaveProperty("secret");
+    expect(stored.quoteMeta).not.toHaveProperty("crmBridgeAuthToken");
+    expect(stored.quoteMeta).not.toHaveProperty("providerReceiptId");
+    expect(stored.quoteMeta).not.toHaveProperty("pricingSettingsVersion");
+    expect(stored.decidableOptionsProjection[0]).not.toHaveProperty("providerReceiptId");
+    expect(stored.booking.contractNumber).toBe("");
+    expect(stored.booking.bookedAtISO).toBe("");
+
+    const duplicateHistory = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]")
+      .filter((item) => item.quoteId === created.id);
+    expect(duplicateHistory).toHaveLength(1);
+    expect(duplicateHistory[0]).toMatchObject({
+      versionId: "v0001",
+      versionNumber: 1,
+      reason: "duplicate_quote_create"
+    });
   });
 
   test("getActiveQuoteVersion resolves legacy quote without persisted version docs", async () => {

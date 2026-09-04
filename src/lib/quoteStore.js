@@ -72,6 +72,8 @@ const SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_final_balance_request"
 ]);
 const ACCEPT_QUOTE_PROPOSAL_CALLABLE = "acceptQuoteProposal";
+const QUOTE_ID_REQUIRED = "Quote id is required.";
+const QUOTE_NOT_FOUND = "Quote not found.";
 export const PROPOSAL_ACCEPTANCE_CONSENT_VERSION = "proposal-acceptance-v1";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
@@ -276,7 +278,7 @@ function quoteWriteCollectionRef(organizationId = undefined, action = "quote wri
 function quoteWriteDocRef(quoteId, organizationId = undefined, action = "quote write") {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   return getOrganizationSubDocRef(QUOTES_COLLECTION, id, requireWriteOrganizationId(organizationId, action));
 }
@@ -295,7 +297,7 @@ function isMissingCallableError(error) {
 function quoteVersionsWriteCollectionRef(quoteId, organizationId = undefined, action = "quote version write") {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const resolvedOrganizationId = requireWriteOrganizationId(organizationId, action);
   return collection(db, "organizations", resolvedOrganizationId, QUOTES_COLLECTION, id, QUOTE_VERSIONS_COLLECTION);
@@ -1008,7 +1010,7 @@ async function ensureQuoteWriteTarget(
 ) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const resolvedOrganizationId = requireWriteOrganizationId(organizationId, action);
@@ -1027,7 +1029,7 @@ async function ensureQuoteWriteTarget(
       migratedFromLegacy: false
     };
   }
-  throw new Error("Quote not found.");
+  throw new Error(QUOTE_NOT_FOUND);
 }
 
 function resolvePersistedPricingSnapshot({
@@ -1541,7 +1543,7 @@ function withLegacyReadDefaults(quote) {
 async function readQuoteById(quoteId, { serverOnly = false } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const nowISO = isoNow();
@@ -1575,7 +1577,7 @@ async function readQuoteById(quoteId, { serverOnly = false } = {}) {
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const match = existing.find((quote) => quote.id === id);
   if (!match) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   return withLegacyReadDefaults(hydrateQuote(match, nowISO));
 }
@@ -1862,7 +1864,7 @@ export async function saveQuoteVersion(
 export async function getQuoteVersionHistory(quoteId, { organizationId = undefined } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   if (firebaseReady) {
@@ -1942,7 +1944,7 @@ export async function convertQuoteToContract({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   if (firebaseReady) {
@@ -2076,7 +2078,7 @@ export async function updateQuoteBookingConfirmation({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const quote = await readQuoteById(id);
@@ -2154,7 +2156,7 @@ export async function recordQuoteIntegrationSync({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
 
@@ -2256,7 +2258,7 @@ export async function syncQuoteToCrm({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   throw new Error(
     "Direct browser CRM sends are disabled. A server-authorized admin integration is required."
@@ -2289,7 +2291,7 @@ async function persistQuotePatch({
     found = true;
     return { ...item, updatedAtISO: nowISO, ...localPatch(item) };
   });
-  if (!found) throw new Error("Quote not found.");
+  if (!found) throw new Error(QUOTE_NOT_FOUND);
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
   return "local";
 }
@@ -2297,7 +2299,7 @@ async function persistQuotePatch({
 export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
   const nowISO = isoNow();
@@ -2327,7 +2329,7 @@ export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } =
 export async function updateQuoteKitchenCheckpoints({ quoteId, checkpoints = [] } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
   const nowISO = isoNow();
@@ -2357,7 +2359,7 @@ export async function updateQuoteProductionChecklist({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
   const nowISO = isoNow();
@@ -2394,7 +2396,7 @@ export async function updateQuoteFollowUp({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   if (!FOLLOW_UP_STAGE_IDS.includes(stage)) {
     throw new Error("Invalid follow-up stage.");
@@ -2447,7 +2449,7 @@ export async function updateQuoteChangeRequestHandling({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const normalizedRole = String(actorRole || "").trim().toLowerCase();
   if (!["admin", "sales"].includes(normalizedRole)) {
@@ -2524,7 +2526,7 @@ export async function updateQuoteChangeRequestHandling({
     let result = null;
     await runTransaction(db, async (transaction) => {
       const quoteSnap = await transaction.get(quoteRef);
-      if (!quoteSnap.exists()) throw new Error("Quote not found.");
+      if (!quoteSnap.exists()) throw new Error(QUOTE_NOT_FOUND);
       const quote = quoteSnap.data();
       if (
         quote.status === "deleted"
@@ -2565,7 +2567,7 @@ export async function updateQuoteChangeRequestHandling({
     item.id === id
     && normalizeOrganizationId(item.organizationId) === writeOrganizationId
   ));
-  if (quoteIndex < 0) throw new Error("Quote not found.");
+  if (quoteIndex < 0) throw new Error(QUOTE_NOT_FOUND);
   const quote = existing[quoteIndex];
   if (
     quote.status === "deleted"
@@ -2612,7 +2614,7 @@ export async function requestQuoteApproval({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const normalizedRole = String(actorRole || "").trim().toLowerCase();
   if (!new Set(["sales", "admin"]).has(normalizedRole)) {
@@ -3249,7 +3251,7 @@ export async function updateQuote({
 }) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const expectedRevisionId = String(expectedActiveVersionId || "").trim();
   const selectedMenuItems = requireMenuSelection(form);
@@ -3646,7 +3648,7 @@ export async function rotateQuotePortalKey({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const quote = await readQuoteById(id);
@@ -3757,6 +3759,24 @@ export async function rotateQuotePortalKey({
   };
 }
 
+const ALTERNATE_DRAFT_CUSTOMER_FIELDS = "name email phone organization";
+const ALTERNATE_DRAFT_EVENT_FIELDS = "name date time venue venueAddress guests hours servers chefs bartenders dietaryRestrictions style eventTypeId";
+const ALTERNATE_DRAFT_SELECTION_FIELDS = "packageId packageName packageInclusions addons rentals addonQuantities rentalQuantities menuItemQuantities addonSnapshots rentalSnapshots menuItems menuItemsSnapshot menuItemNames menuItemDetails milesRT payMethod eventTemplateId eventTypeId taxRegion seasonProfileId laborRateSnapshot bartenderRateTypeId staffingRateTypeId bartenderRateOverride serverRateOverride serverRateMixCsv chefRateMixCsv chefRateOverride";
+const ALTERNATE_DRAFT_TOTAL_FIELDS = "base addons rentals menu labor travel serviceFee tax total deposit serviceFeePctApplied taxRateApplied taxRegionId seasonProfileId";
+const ALTERNATE_DRAFT_QUOTE_META_FIELDS = "organizationName quotePreparedBy proposalIntroTitle proposalIntroMessage proposalClosingMessage brandName brandTagline brandLogoUrl documentFontScale brandPrimaryColor brandAccentColor brandDarkAccentColor brandBackgroundStart brandBackgroundMid brandBackgroundEnd brandCrew businessPhone businessEmail businessAddress acceptanceEmail includeDisposables disposablesNote depositNotice quoteValidityDays";
+const ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS = "schemaVersion organizationId catalogSource catalogRevision confirmedCatalogRevision settingsFingerprintSha256";
+
+function cloneAllowedRecord(source, allowedFields) {
+  const record = source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  const cloned = {};
+  allowedFields.split(" ").forEach((field) => {
+    if (Object.hasOwn(record, field) && record[field] !== undefined) {
+      cloned[field] = JSON.parse(JSON.stringify(record[field]));
+    }
+  });
+  return cloned;
+}
+
 export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" } = {}) {
   const source = await readQuoteById(quoteId);
   const nowISO = isoNow();
@@ -3776,17 +3796,17 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     portalIssuedAtISO,
     nowISO
   );
-  const payment = hydratePayment(source.payment);
   const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";
-  const { id: _sourceId, createdAt: _createdAt, ...sourceWithoutIdentity } = source;
+  const sourceSelection = source.selection || {};
+  const sourceIntegrations = source.integrations || {};
 
   const selection = {
-    ...(sourceWithoutIdentity.selection || {}),
-    addonQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.addonQuantities),
-    rentalQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.rentalQuantities),
-    menuItemQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.menuItemQuantities),
-    menuItemsSnapshot: Array.isArray(sourceWithoutIdentity.selection?.menuItemsSnapshot)
-      ? sourceWithoutIdentity.selection.menuItemsSnapshot.map((item) => ({
+    ...cloneAllowedRecord(sourceSelection, ALTERNATE_DRAFT_SELECTION_FIELDS),
+    addonQuantities: normalizeQuantityMap(sourceSelection.addonQuantities),
+    rentalQuantities: normalizeQuantityMap(sourceSelection.rentalQuantities),
+    menuItemQuantities: normalizeQuantityMap(sourceSelection.menuItemQuantities),
+    menuItemsSnapshot: Array.isArray(sourceSelection.menuItemsSnapshot)
+      ? sourceSelection.menuItemsSnapshot.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3794,8 +3814,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
         quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1)))
       }))
       : [],
-    menuItemDetails: Array.isArray(sourceWithoutIdentity.selection?.menuItemDetails)
-      ? sourceWithoutIdentity.selection.menuItemDetails.map((item) => ({
+    menuItemDetails: Array.isArray(sourceSelection.menuItemDetails)
+      ? sourceSelection.menuItemDetails.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3807,57 +3827,55 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   };
 
   const payload = {
-    ...sourceWithoutIdentity,
     quoteNumber,
+    ...(String(source.customerId || "").trim()
+      ? { customerId: String(source.customerId).trim() }
+      : {}),
+    customer: cloneAllowedRecord(source.customer, ALTERNATE_DRAFT_CUSTOMER_FIELDS),
+    customerEmailKey: String(source.customerEmailKey || source.customer?.email || "").trim().toLowerCase(),
+    customerNameKey: normalizeCustomerNameKey(source.customerNameKey || source.customer?.name || ""),
+    eventTypeId: String(source.eventTypeId || sourceSelection.eventTypeId || source.event?.eventTypeId || "").trim(),
+    event: cloneAllowedRecord(source.event, ALTERNATE_DRAFT_EVENT_FIELDS),
+    selection,
+    decidableOptionsProjection: Array.isArray(source.decidableOptionsProjection)
+      ? normalizeDecisionRoomOptions(source.decidableOptionsProjection)
+      : [],
+    totals: cloneAllowedRecord(source.totals, ALTERNATE_DRAFT_TOTAL_FIELDS),
+    pricing: source.pricing && typeof source.pricing === "object"
+      ? normalizePricingOutput(source.pricing)
+      : undefined,
+    pricingCatalogAuthority: source.pricingCatalogAuthority
+      ? cloneAllowedRecord(source.pricingCatalogAuthority, ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS)
+      : null,
+    quoteMeta: cloneAllowedRecord(source.quoteMeta, ALTERNATE_DRAFT_QUOTE_META_FIELDS),
+    source: String(source.source || "local").trim() || "local",
     portalKey,
     portalIssuedAtISO,
     portalExpiresAtISO,
     ownerUid: ownerUid || source.ownerUid || "",
     ownerEmail: normalizedOwnerEmail,
     organizationId,
+    duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),
     status: "draft",
     deletedAtISO: "",
-    selection,
-    payment: {
-      ...payment,
-      depositStatus: payment.depositLink ? "sent" : "unpaid",
-      depositConfirmedAtISO: ""
-    },
-    booking: {
-      bookedAtISO: "",
-      bookedByEmail: "",
-      staffLead: "",
-      staffAssignedAtISO: "",
-      kitchenCheckpoints: [],
-      productionChecklist: [],
-      contractNumber: "",
-      contractConvertedAtISO: "",
-      contractConvertedByEmail: "",
-      confirmationStatus: "pending",
-      confirmationSentAtISO: "",
-      confirmedAtISO: "",
-      confirmationUpdatedByEmail: "",
-      availabilityCheckedAtISO: "",
-      availabilitySummary: {}
-    },
+    payment: hydratePayment({}, source.totals || {}),
+    booking: hydrateBooking({}),
     workflow: {
       followUp: normalizeFollowUp({ stage: "new" }),
       approvalRequests: []
     },
     portalDecision: {},
     integrations: {
-      ...(sourceWithoutIdentity.integrations || {}),
+      retryLimit: Math.max(1, Math.round(toNumber(sourceIntegrations.retryLimit, source.quoteMeta?.integrationRetryLimit || 3))),
+      retention: Math.max(10, Math.round(toNumber(sourceIntegrations.retention, source.quoteMeta?.integrationAuditRetention || 50))),
+      providers: {},
       lastSyncAtISO: "",
       logs: []
     },
     createdAtISO: nowISO,
     updatedAtISO: nowISO,
     expiresAtISO,
-    lifecycle: {
-      draftAtISO: nowISO
-    },
-    activeVersionId: "",
-    latestVersionNumber: 0
+    lifecycle: { draftAtISO: nowISO }
   };
 
   if (firebaseReady) {
@@ -4108,12 +4126,12 @@ export async function getQuoteHistory(filters = {}) {
 
 export async function updateQuoteStatus(quoteId, status) {
   if (!quoteId) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const nowISO = isoNow();
   const nextStatus = normalizeStatus(status);
@@ -4194,7 +4212,7 @@ export async function updateQuoteStatus(quoteId, status) {
 export async function reopenQuote(id) {
   const quoteId = String(id || "").trim();
   if (!quoteId) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const quote = await readQuoteById(quoteId);
@@ -4361,7 +4379,7 @@ export async function deleteQuote(id, {
 } = {}) {
   const quoteId = String(id || "").trim();
   if (!quoteId) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   if (firebaseReady) {
@@ -4390,7 +4408,7 @@ export async function deleteQuote(id, {
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const exists = existing.some((item) => item.id === quoteId);
   if (!exists) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   const next = existing.filter((item) => item.id !== quoteId);
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
@@ -4438,7 +4456,7 @@ export async function getPortalQuote(portalKey) {
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const quote = existing.find((item) => item.portalKey === key);
   if (!quote) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   const snapshot = buildPortalSnapshot(quote.id, quote);
   const portalValidity = assertPortalTokenActive(snapshot, nowISO);
@@ -4565,7 +4583,7 @@ export async function updatePortalDecision({
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const localTarget = existing.find((quote) => quote.portalKey === key);
   if (!localTarget) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   assertPortalTokenActive(localTarget, nowISO);
   const currentStatus = normalizeStatus(localTarget.status);

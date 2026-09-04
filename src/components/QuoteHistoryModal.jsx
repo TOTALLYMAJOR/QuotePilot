@@ -44,6 +44,7 @@ import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import { buildQuotePath } from "../lib/workspaceRoutes";
 import {
   buildQuoteHistoryController,
+  buildRoleSafeQuoteActionController,
   getQuoteActionPermissions
 } from "../lib/quoteHistoryController";
 import {
@@ -55,6 +56,7 @@ import {
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
 import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
+import ConfiguredQuoteActionRail from "./ConfiguredQuoteActionRail";
 import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
@@ -167,6 +169,7 @@ const DEFINITIVE_CONTRACT_CONVERSION_ERROR_CODES = new Set([
   "permission-denied",
   "unauthenticated"
 ]);
+const DELIVERY_LOCK_REASON = "Resolve the current delivery attempt first.";
 
 function contractConversionErrorMessage(error, fallback = "Contract conversion could not be completed.") {
   const message = String(error?.message || fallback)
@@ -1431,6 +1434,8 @@ export function QuoteHistoryView({
         ? Array.from(targetRow?.querySelectorAll("button[data-approval-action]") || [])
           .find((button) => button.dataset.approvalAction === normalizedAction && !button.disabled)
         : null;
+      const actionDisclosure = actionTarget?.closest("details.configured-quote-more-actions");
+      if (actionDisclosure && !actionDisclosure.open) actionDisclosure.open = true;
       const focusTarget = actionTarget || handoff;
       focusTarget.focus({ preventScroll: true });
       focusTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1857,6 +1862,10 @@ export function QuoteHistoryView({
 
   const handleDuplicateQuote = async (quote) => {
     if (!quote?.id) return;
+    const confirmed = window.confirm(
+      "Create a separate alternate draft from this quote? The client, event, and quote configuration carry forward. The current quote stays unchanged, and delivery, acceptance, payment, booking, and rebooking proof do not transfer."
+    );
+    if (!confirmed) return;
     setDuplicatingId(quote.id);
     setState((prev) => ({ ...prev, error: "" }));
     try {
@@ -1866,10 +1875,11 @@ export function QuoteHistoryView({
       });
       setState((prev) => ({
         ...prev,
-        feedback: `Quote duplicated as ${result.quoteNumber}.`
+        feedback: `Alternate draft created as ${result.quoteNumber}.`
       }));
-      pushToast(`Quote duplicated as ${result.quoteNumber}.`, "success");
+      pushToast(`Alternate draft created as ${result.quoteNumber}.`, "success");
       await load();
+      openQuoteWorkspace(result.id);
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -3403,13 +3413,257 @@ export function QuoteHistoryView({
                 const canReconcileFinalBalance = permissions.canReconcileFinalBalance
                   && finalBalanceRequestEligible
                   && Boolean(String(finalBalance.stripeSessionId || "").trim());
+                const sendQuoteDisabledReason = state.source !== "firebase"
+                  ? "Provider email requires Firebase-backed quote storage."
+                  : !rebookDeliveryGate.deliveryReady
+                    ? rebookDeliveryGate.deliveryMessage
+                    : deliveryRecorded
+                      ? "This saved revision already has provider acceptance evidence."
+                      : deliveryUi.activeLease
+                        ? "Delivery is still in progress. The safe retry action unlocks after this lease expires."
+                        : !emailSetup.checked || !emailSetup.configured
+                          ? "Configure a supported email provider in Integration Ops first."
+                          : !quoteRevisionId
+                            ? "Save this quote as a versioned draft before sending."
+                            : !canDeliverQuoteEmailStatus(normalizedQuoteStatus)
+                              ? "Only draft, sent, viewed, accepted, or booked quotes can be delivered by quote email."
+                              : "";
+                const configuredActionRuntime = {
+                  convert_contract: {
+                    visible: canConvert && !["error", "recovery", "receipt"].includes(contractConversionState.phase),
+                    enabled: !deliveryUnresolved
+                      && !contractConversionBusy
+                      && convertingId !== quote.id
+                      && (
+                        contractConversionState.phase === "uncertain"
+                        || !approvalRequired
+                        || Boolean(contractApproval)
+                      ),
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : contractConversionBusy || convertingId === quote.id
+                        ? "Contract conversion is already in progress."
+                        : approvalRequired && !contractApproval
+                          ? "Approve contract conversion in Workflow first."
+                          : "",
+                    label: contractConversionState.phase === "reconciliation"
+                      ? "Reconciling..."
+                      : contractConversionState.phase === "submitting" || convertingId === quote.id
+                        ? "Converting..."
+                        : contractConversionState.phase === "uncertain"
+                          ? "Reconcile conversion"
+                          : ""
+                  },
+                  convert_contract_refresh: {
+                    visible: canConvert && contractConversionActive && contractConversionState.phase === "error",
+                    enabled: true
+                  },
+                  manage_confirmation: {
+                    visible: canTrackConfirmation && confirmationStatus !== "confirmed",
+                    enabled: updatingConfirmationId !== quote.id && !deliveryUnresolved,
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : "Booking confirmation is already being updated."
+                  },
+                  change_status: {
+                    visible: state.source === "firebase"
+                      && normalizedQuoteStatus !== "expired"
+                      && statusOptions.includes("expired"),
+                    enabled: updatingId !== quote.id && !deliveryUnresolved,
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : "Quote status is already being updated."
+                  },
+                  edit: {
+                    visible: canEditQuoteStatus(normalizedQuoteStatus),
+                    enabled: !deliveryUnresolved,
+                    disabledReason: DELIVERY_LOCK_REASON
+                  },
+                  reopen: {
+                    visible: normalizedQuoteStatus === "expired",
+                    enabled: !deliveryUnresolved && reopeningQuoteId !== quote.id,
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : "This quote is already being restored.",
+                    label: reopeningQuoteId === quote.id ? "Restoring..." : ""
+                  },
+                  duplicate: {
+                    enabled: duplicatingId !== quote.id && !deliveryUnresolved,
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : "An alternate draft is already being created.",
+                    label: duplicatingId === quote.id ? "Creating draft..." : ""
+                  },
+                  export_proposal: {
+                    enabled: exportingPdfId !== quote.id && rebookDeliveryGate.ready,
+                    disabledReason: !rebookDeliveryGate.ready
+                      ? rebookDeliveryGate.message
+                      : "The proposal artifact is already being generated.",
+                    label: exportingPdfId === quote.id ? "Generating PDF..." : ""
+                  },
+                  print_proposal: {
+                    visible: true,
+                    enabled: exportingPdfId !== quote.id && rebookDeliveryGate.ready,
+                    disabledReason: !rebookDeliveryGate.ready
+                      ? rebookDeliveryGate.message
+                      : "The proposal artifact is already being generated.",
+                    label: "Print"
+                  },
+                  manual_email: {
+                    visible: Boolean(quote?.customer?.email),
+                    enabled: rebookDeliveryGate.ready,
+                    disabledReason: rebookDeliveryGate.message,
+                    label: "Manual email"
+                  },
+                  review_beo: {
+                    enabled: exportingLocalBeoId !== quote.id && rebookDeliveryGate.ready,
+                    disabledReason: !rebookDeliveryGate.ready
+                      ? rebookDeliveryGate.message
+                      : "The Kitchen BEO is already being prepared."
+                  },
+                  review_delivery: {
+                    visible: state.source === "firebase" && deliveryUi.reviewRequired,
+                    enabled: true
+                  },
+                  send_quote: {
+                    visible: !deliveryRecorded && !deliveryUi.reviewRequired,
+                    enabled: sendingQuoteEmailId !== quote.id && canDeliverCurrentQuote,
+                    disabledReason: sendingQuoteEmailId === quote.id
+                      ? "Proposal delivery is already in progress."
+                      : sendQuoteDisabledReason,
+                    label: sendingQuoteEmailId === quote.id
+                      ? "Sending..."
+                      : deliveryUi.freshAttemptAvailable
+                        ? "Send proposal again"
+                        : deliveryUi.retryAvailable
+                          ? "Retry proposal send"
+                          : ""
+                  },
+                  review_delivery_evidence: {
+                    visible: state.source === "firebase"
+                      && deliveryUi.reviewAvailable
+                      && !deliveryUi.reviewRequired,
+                    enabled: true
+                  },
+                  request_deposit: {
+                    enabled: sendingPaymentEmailId !== quote.id
+                      && !deliveryUnresolved
+                      && (portalShareable || paymentRequestInProgress),
+                    disabledReason: sendingPaymentEmailId === quote.id
+                      ? "The deposit request is already being submitted."
+                      : !portalShareable && !paymentRequestInProgress
+                        ? "Payment email requires an active customer portal for the current provider-accepted issuance."
+                        : "",
+                    label: sendingPaymentEmailId === quote.id
+                      ? paymentRequestInProgress ? "Resuming..." : "Sending..."
+                      : ""
+                  },
+                  request_balance: {
+                    visible: finalBalanceRequestEligible || finalBalanceRequestInProgress,
+                    enabled: sendingFinalBalanceEmailId !== quote.id
+                      && !deliveryUnresolved
+                      && (portalShareable || finalBalanceRequestInProgress),
+                    disabledReason: sendingFinalBalanceEmailId === quote.id
+                      ? "The final-balance request is already being submitted."
+                      : !portalShareable && !finalBalanceRequestInProgress
+                        ? "Final-balance email requires an active customer portal for the current provider-accepted issuance."
+                        : "",
+                    label: sendingFinalBalanceEmailId === quote.id
+                      ? finalBalanceRequestInProgress ? "Resuming..." : "Sending..."
+                      : finalBalanceRequestInProgress
+                        ? "Resume final balance request"
+                        : ""
+                  },
+                  rotate_portal: {
+                    visible: canRotatePortalForStatus,
+                    enabled: !deliveryUnresolved
+                      && rotatingPortalId !== quote.id
+                      && (!approvalRequired || Boolean(portalRotationApproval)),
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : rotatingPortalId === quote.id
+                        ? "Customer access is already being renewed."
+                        : approvalRequired && !portalRotationApproval
+                          ? "Approve customer-link renewal in Workflow first."
+                          : "",
+                    label: rotatingPortalId === quote.id ? "Renewing..." : ""
+                  },
+                  open_conversation: {
+                    visible: state.source === "firebase" && portalConversationAvailable() && portalShareable,
+                    enabled: canOpenQuoteConversation(conversationQuote),
+                    disabledReason: "Close the current quote conversation before opening another."
+                  },
+                  copy_email: {
+                    enabled: rebookDeliveryGate.ready,
+                    disabledReason: rebookDeliveryGate.message
+                  },
+                  copy_portal: {
+                    enabled: portalShareable,
+                    disabledReason: state.source === "firebase"
+                      ? "Customer portal sharing requires provider acceptance for this revision and a valid future expiry."
+                      : "Customer portal sharing requires an active delivered status and valid future expiry."
+                  },
+                  copy_payment_link: { visible: Boolean(publishedPaymentLink), enabled: Boolean(publishedPaymentLink) },
+                  copy_balance_link: { visible: Boolean(publishedFinalBalanceLink), enabled: Boolean(publishedFinalBalanceLink) },
+                  delete: {
+                    visible: canDeleteQuotes,
+                    enabled: !deliveryUnresolved
+                      && updatingId !== quote.id
+                      && (!approvalRequired || Boolean(deleteApproval)),
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : updatingId === quote.id
+                        ? "This quote is already being deleted."
+                        : approvalRequired && !deleteApproval
+                          ? "Approve quote deletion in Workflow first."
+                          : "",
+                    label: updatingId === quote.id ? "Deleting..." : ""
+                  },
+                  reconcile_deposit: {
+                    visible: canReconcilePayment,
+                    enabled: reconcilingPaymentId !== quote.id && !deliveryUnresolved,
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : "The deposit outcome is already being checked.",
+                    label: reconcilingPaymentId === quote.id ? "Checking..." : ""
+                  },
+                  reconcile_balance: {
+                    visible: canReconcileFinalBalance,
+                    enabled: reconcilingFinalBalanceId !== quote.id && !deliveryUnresolved,
+                    disabledReason: deliveryUnresolved
+                      ? DELIVERY_LOCK_REASON
+                      : "The final-balance outcome is already being checked.",
+                    label: reconcilingFinalBalanceId === quote.id ? "Checking..." : ""
+                  }
+                };
+                const configuredActionState = buildRoleSafeQuoteActionController({
+                  quote,
+                  currentUserRole: permissions.role,
+                  source: state.source,
+                  runtimeActions: configuredActionRuntime
+                }).actionState;
+                const configuredPrimaryActionId = configuredActionState.primaryAction?.id || "";
+                const configuredPrimaryAction = configuredActionState.primaryAction;
+                const configuredActions = configuredActionState.actions;
+                const rowActionClassName = (actionId) => (
+                  configuredPrimaryActionId === actionId ? "cta compact" : "ghost compact"
+                );
                 return (
                   <tr
                     key={quote.id}
                     data-quote-id={quote.id}
                     className={quote.id === focusQuoteId ? "history-row-target" : ""}
                   >
-                    <td>{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button-link history-quote-workspace-link"
+                        onClick={() => openQuoteWorkspace(quote.id)}
+                        aria-label={`Open ${formatWorkspaceText(quote.quoteNumber, { emptyLabel: "quote" })} workspace`}
+                      >
+                        {formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}
+                      </button>
+                    </td>
                     <td>{formatWorkspaceText(quote.customer?.name || quote.customer?.email, { emptyLabel: "Customer not recorded" })}</td>
                     <td>{quoteEventTypeLabel}</td>
                     <td>{fmtDate(quote.event?.date)}</td>
@@ -3420,7 +3674,7 @@ export function QuoteHistoryView({
                       <div className="history-meta-stack">
                         <small>Quote / proposal lifecycle</small>
                         <StatusChip {...statusSemantics.lifecycle} />
-                        {permissions.canManageQuoteStatus && (
+                        {permissions.canManageQuoteStatus && state.source !== "firebase" && (
                           <select
                             value={quote.status || "draft"}
                             onChange={(e) => handleStatusUpdate(quote.id, e.target.value)}
@@ -3498,365 +3752,317 @@ export function QuoteHistoryView({
                     <td>{fmtDate(quote.expiresAtISO)}</td>
                     <td>{fmtDate(quote.updatedAtISO || quote.createdAtISO)}</td>
                     <td>
-                      <div className="row-actions">
+                      <ConfiguredQuoteActionRail
+                        primaryActionId={configuredPrimaryActionId}
+                        primaryAction={configuredPrimaryAction}
+                        actions={configuredActions}
+                      >
                         {permissions.canConvertToContract && (canConvert || contractConversionActive) && (
                           <ContractConversionMutationStatus
+                            data-quote-action-kind="evidence"
                             presentation={contractConversionPresentation}
                             showReady
                           />
                         )}
-                        {permissions.canConvertToContract
-                          && canConvert
-                          && !["error", "recovery", "receipt"].includes(contractConversionState.phase)
-                          && (
+                        {configuredActions.convert_contract.visible && (
                             <button
                               type="button"
                               data-approval-action="convert_to_contract"
-                              className="cta compact"
+                              data-quote-action-id="convert_contract"
+                              data-quote-action-group="booking"
+                              className={rowActionClassName("convert_contract")}
                               onClick={() => handleConvertToContract(quote, {
                                 reconcile: contractConversionState.phase === "uncertain"
                               })}
-                              disabled={
-                                deliveryUnresolved
-                                || contractConversionBusy
-                                || convertingId === quote.id
-                                || (
-                                  contractConversionState.phase !== "uncertain"
-                                  && approvalRequired
-                                  && !contractApproval
-                                )
-                              }
-                              title={
-                                contractConversionState.phase === "uncertain"
-                                  ? "Reconcile the original approved conversion request."
-                                  : approvalRequired && !contractApproval
-                                    ? "Approve contract conversion in Workflow first."
-                                    : ""
-                              }
                             >
-                              {contractConversionState.phase === "reconciliation"
-                                ? "Reconciling..."
-                                : contractConversionState.phase === "submitting" || convertingId === quote.id
-                                  ? "Converting..."
-                                  : contractConversionState.phase === "uncertain"
-                                    ? "Reconcile conversion"
-                                    : "Convert"}
+                              {configuredActions.convert_contract.label}
                             </button>
                           )}
-                        {permissions.canConvertToContract
-                          && canConvert
-                          && contractConversionActive
-                          && contractConversionState.phase === "error"
-                          && (
+                        {configuredActions.convert_contract_refresh.visible && (
                             <button
                               type="button"
-                              className="ghost compact"
+                              className={rowActionClassName("convert_contract_refresh")}
+                              data-quote-action-id="convert_contract_refresh"
+                              data-quote-action-group="recovery"
                               onClick={() => handleRecoverContractConversion(quote)}
                             >
-                              Refresh history
+                              {configuredActions.convert_contract_refresh.label}
                             </button>
                           )}
-                        {permissions.canManageConfirmation && canTrackConfirmation && confirmationStatus !== "confirmed" && (
+                        {configuredActions.manage_confirmation.visible && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("manage_confirmation")}
+                            data-quote-action-id="manage_confirmation"
+                            data-quote-action-group="booking"
                             onClick={() => handleConfirmationUpdate(quote.id, "confirmed")}
-                            disabled={updatingConfirmationId === quote.id || deliveryUnresolved}
                           >
-                            Confirm
+                            {configuredActions.manage_confirmation.label}
                           </button>
                         )}
-                        {quote?.id && (
+                        {configuredActions.change_status.visible && (
                           <button
                             type="button"
                             className="ghost compact"
-                            onClick={() => openQuoteWorkspace(quote.id)}
-                            title="Open this quote in the workspace, with activity and save health"
+                            data-quote-action-id="change_status"
+                            data-quote-action-group="administration"
+                            onClick={() => handleStatusUpdate(quote.id, "expired")}
                           >
-                            Workspace
+                            {configuredActions.change_status.label}
                           </button>
                         )}
-                        {permissions.canEditQuote && canEditQuoteStatus(normalizedQuoteStatus) && (
+                        {configuredActions.edit.visible && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("edit")}
+                            data-quote-action-id="edit"
+                            data-quote-action-group="quote"
                             onClick={() => handleEditQuote(quote)}
-                            disabled={deliveryUnresolved}
                           >
-                            Edit
+                            {configuredActions.edit.label}
                           </button>
                         )}
-                        {permissions.canReopenQuote && normalizedQuoteStatus === "expired" && (
+                        {configuredActions.reopen.visible && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("reopen")}
+                            data-quote-action-id="reopen"
+                            data-quote-action-group="quote"
                             onClick={() => handleReopenQuote(quote)}
-                            disabled={deliveryUnresolved || reopeningQuoteId === quote.id}
-                            title="Restore the last nonterminal version as a draft with a new portal issuance."
                           >
-                            {reopeningQuoteId === quote.id ? "Reopening..." : "Reopen"}
+                            {configuredActions.reopen.label}
                           </button>
                         )}
-                        {permissions.canDuplicateQuote && (
+                        {configuredActions.duplicate.visible && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("duplicate")}
+                            data-quote-action-id="duplicate"
+                            data-quote-action-group="quote"
                             onClick={() => handleDuplicateQuote(quote)}
-                            disabled={duplicatingId === quote.id}
                           >
-                            {duplicatingId === quote.id ? "Duplicating..." : "Duplicate"}
+                            {configuredActions.duplicate.label}
                           </button>
                         )}
-                        {permissions.canExportProposal && (
+                        {configuredActions.export_proposal.visible && (
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="export_proposal"
+                            data-quote-action-group="proposal"
                             onClick={() => handleExportPdf(quote)}
-                            disabled={exportingPdfId === quote.id || !rebookDeliveryGate.ready}
-                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
                           >
-                            {exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}
+                            {configuredActions.export_proposal.label}
                           </button>
                         )}
-                        {permissions.canExportProposal && (
+                        {configuredActions.print_proposal.visible && (
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="print_proposal"
+                            data-quote-action-group="proposal"
                             onClick={() => handlePrintProposal(quote)}
-                            disabled={exportingPdfId === quote.id || !rebookDeliveryGate.ready}
-                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : "Open print-ready proposal"}
                           >
-                            Print
+                            {configuredActions.print_proposal.label}
                           </button>
                         )}
-                        {permissions.canCopyArtifacts && quote?.customer?.email && (
+                        {configuredActions.manual_email.visible && (
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="manual_email"
+                            data-quote-action-group="communication"
                             onClick={() => handleOpenDefaultEmailApp(quote)}
-                            disabled={!rebookDeliveryGate.ready}
-                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : "Open default email app"}
                           >
-                            Email app
+                            {configuredActions.manual_email.label}
                           </button>
                         )}
-                        {permissions.canExportBeo && (
+                        {configuredActions.review_beo.visible && (
                           <QuoteHistoryKitchenBeoAction
+                            data-quote-action-id="review_beo"
+                            data-quote-action-group="operations"
                             source={state.source}
                             quote={quote}
-                            disabled={!rebookDeliveryGate.ready}
-                            disabledReason={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
+                            disabled={!configuredActions.review_beo.enabled}
+                            disabledReason={configuredActions.review_beo.disabledReason}
                             exportingLocal={exportingLocalBeoId === quote.id}
                             onOpenAuthoritative={handleOpenKitchenBeo}
                             onExportLocal={handleExportLocalBeo}
                           />
                         )}
-                        {permissions.canSendQuoteEmail
-                          && state.source === "firebase"
-                          && deliveryUi.reviewRequired ? (
+                        {configuredActions.review_delivery.visible ? (
                           <button
                             type="button"
-                            className="cta compact"
+                            className={rowActionClassName("review_delivery")}
+                            data-quote-action-id="review_delivery"
+                            data-quote-action-group="recovery"
                             onClick={() => openDeliveryReview(quote, quoteRevisionId)}
                           >
-                            Review Delivery
+                            {configuredActions.review_delivery.label}
                           </button>
-                        ) : permissions.canSendQuoteEmail ? (
+                        ) : deliveryRecorded ? (
+                          <small
+                            className="source-note"
+                            data-quote-action-kind="evidence"
+                            data-quote-delivery-evidence="provider_accepted"
+                          >
+                            Delivery: Provider accepted
+                          </small>
+                        ) : configuredActions.send_quote.visible ? (
                           <button
                             type="button"
-                            className="cta compact"
+                            className={rowActionClassName("send_quote")}
+                            data-quote-action-id="send_quote"
+                            data-quote-action-group="communication"
                             onClick={() => handleSendQuoteEmail(quote)}
-                            disabled={sendingQuoteEmailId === quote.id || !canDeliverCurrentQuote}
-                            title={state.source !== "firebase"
-                              ? "Provider email requires Firebase-backed quote storage."
-                              : !rebookDeliveryGate.deliveryReady
-                                ? rebookDeliveryGate.deliveryMessage
-                              : deliveryRecorded
-                                ? "This saved revision already has provider acceptance evidence."
-                                : deliveryUi.activeLease
-                                  ? "Delivery is still in progress. The safe retry action unlocks after this lease expires."
-                                  : !emailSetup.checked || !emailSetup.configured
-                                    ? "Configure a supported email provider in Integration Ops first."
-                                : !quoteRevisionId
-                                  ? "Save this quote as a versioned draft before sending."
-                                : !canDeliverQuoteEmailStatus(normalizedQuoteStatus)
-                                    ? "Only draft, sent, viewed, accepted, or booked quotes can be delivered by quote email."
-                                    : ""}
                           >
-                            {sendingQuoteEmailId === quote.id
-                              ? "Sending..."
-                              : deliveryRecorded
-                                ? "Provider accepted"
-                                : deliveryUi.freshAttemptAvailable
-                                  ? "Start New Quote Email"
-                                : deliveryUi.retryAvailable
-                                  ? "Retry Quote Email"
-                                  : "Send Quote Email"}
+                            {configuredActions.send_quote.label}
                           </button>
                         ) : null}
-                        {permissions.canSendQuoteEmail
-                          && state.source === "firebase"
-                          && deliveryUi.reviewAvailable
-                          && !deliveryUi.reviewRequired && (
+                        {configuredActions.review_delivery_evidence.visible && (
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="review_delivery_evidence"
+                            data-quote-action-group="recovery"
                             onClick={() => openDeliveryReview(quote, quoteRevisionId)}
                           >
-                            Review Outcome
+                            {configuredActions.review_delivery_evidence.label}
                           </button>
                         )}
-                        {permissions.canSendPaymentRequest && paymentRequestApproval && (
+                        {configuredActions.request_deposit.visible && (
                           <button
                             type="button"
                             data-approval-action="send_payment_request"
-                            className="cta compact"
+                            data-quote-action-id="request_deposit"
+                            data-quote-action-group="payment"
+                            className={rowActionClassName("request_deposit")}
                             onClick={() => handleSendPaymentRequestEmail(quote)}
-                            disabled={
-                              deliveryUnresolved
-                              || sendingPaymentEmailId === quote.id
-                              || (!portalShareable && !paymentRequestInProgress)
-                            }
-                            title={!portalShareable && !paymentRequestInProgress
-                                ? "Payment email requires an active customer portal for the current provider-accepted issuance."
-                              : paymentRequestInProgress
-                                ? "Resume the interrupted payment request using its existing approval."
-                                : ""}
                           >
-                            {sendingPaymentEmailId === quote.id
-                              ? paymentRequestInProgress ? "Resuming..." : "Sending..."
-                              : paymentRequestInProgress ? "Resume Pay Request" : "Send Pay Request"}
+                            {configuredActions.request_deposit.label}
                           </button>
                         )}
-                        {permissions.canSendFinalBalanceRequest
-                          && finalBalanceApproval
-                          && (finalBalanceRequestEligible || finalBalanceRequestInProgress) && (
+                        {configuredActions.request_balance.visible && (
                           <button
                             type="button"
                             data-approval-action="send_final_balance_request"
-                            className="cta compact"
+                            data-quote-action-id="request_balance"
+                            data-quote-action-group="payment"
+                            className={rowActionClassName("request_balance")}
                             onClick={() => handleSendFinalBalanceRequestEmail(quote)}
-                            disabled={
-                              deliveryUnresolved
-                              || sendingFinalBalanceEmailId === quote.id
-                              || (!portalShareable && !finalBalanceRequestInProgress)
-                            }
-                            title={!portalShareable && !finalBalanceRequestInProgress
-                                ? "Final-balance email requires an active customer portal for the current provider-accepted issuance."
-                              : finalBalanceRequestInProgress
-                                ? "Resume the interrupted final-balance request using its existing approval."
-                                : ""}
                           >
-                            {sendingFinalBalanceEmailId === quote.id
-                              ? finalBalanceRequestInProgress ? "Resuming..." : "Sending..."
-                              : finalBalanceRequestInProgress
-                                ? "Resume Balance Request"
-                                : "Send Balance Request"}
+                            {configuredActions.request_balance.label}
                           </button>
                         )}
-                        {permissions.canRotatePortalLink && canRotatePortalForStatus && (
+                        {configuredActions.rotate_portal.visible && (
                           <button
                             type="button"
                             data-approval-action="rotate_portal_link"
+                            data-quote-action-id="rotate_portal"
+                            data-quote-action-group="access"
                             className="ghost compact"
                             onClick={() => handleRotatePortalLink(quote)}
-                            disabled={deliveryUnresolved || rotatingPortalId === quote.id || (approvalRequired && !portalRotationApproval)}
-                            title={approvalRequired && !portalRotationApproval ? "Approve portal rotation in Workflow first." : ""}
                           >
-                            {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
+                            {configuredActions.rotate_portal.label}
                           </button>
                         )}
                         {permissions.canCopyArtifacts && (
                           <>
-                            {state.source === "firebase"
-                              && portalConversationAvailable()
-                              && portalShareable && (
+                            {configuredActions.open_conversation.visible && (
                               <button
                                 type="button"
-                                className="ghost compact"
+                                className={rowActionClassName("open_conversation")}
+                                data-quote-action-id="open_conversation"
+                                data-quote-action-group="communication"
                                 data-capability-action="open-quote-conversation"
                                 onClick={() => onOpenConversation
                                   ? onOpenConversation(quote.id)
                                   : setConversationQuote(quote)}
-                                disabled={!canOpenQuoteConversation(conversationQuote)}
-                                title={conversationQuote
-                                  ? "Close the current quote conversation before opening another."
-                                  : ""}
                               >
-                                Conversation
+                                {configuredActions.open_conversation.label}
                               </button>
                             )}
-                            <button
-                              type="button"
-                              className="ghost compact"
-                              onClick={() => handleCopyEmail(quote)}
-                              disabled={!rebookDeliveryGate.ready}
-                              title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
-                            >
-                              Copy Email
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost compact"
-                              onClick={() => handleCopyPortalLink(quote)}
-                              disabled={!portalShareable}
-                              title={!portalShareable
-                                ? state.source === "firebase"
-                                  ? "Customer portal sharing requires provider acceptance for this revision and a valid future expiry."
-                                  : "Customer portal sharing requires an active delivered status and valid future expiry."
-                                : ""}
-                            >
-                              Copy Portal
-                            </button>
-                            {permissions.canCopyPaymentLink && publishedPaymentLink && (
-                              <button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>
-                            )}
-                            {permissions.canCopyFinalBalanceLink && publishedFinalBalanceLink && (
+                            {configuredActions.copy_email.visible && (
                               <button
                                 type="button"
                                 className="ghost compact"
+                                data-quote-action-id="copy_email"
+                                data-quote-action-group="communication"
+                                onClick={() => handleCopyEmail(quote)}
+                              >
+                                {configuredActions.copy_email.label}
+                              </button>
+                            )}
+                            {configuredActions.copy_portal.visible && (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                data-quote-action-id="copy_portal"
+                                data-quote-action-group="communication"
+                                onClick={() => handleCopyPortalLink(quote)}
+                              >
+                                {configuredActions.copy_portal.label}
+                              </button>
+                            )}
+                            {configuredActions.copy_payment_link.visible && (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                data-quote-action-id="copy_payment_link"
+                                data-quote-action-group="payment"
+                                onClick={() => handleCopyPaymentLink(quote)}
+                              >
+                                {configuredActions.copy_payment_link.label}
+                              </button>
+                            )}
+                            {configuredActions.copy_balance_link.visible && (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                data-quote-action-id="copy_balance_link"
+                                data-quote-action-group="payment"
                                 onClick={() => handleCopyFinalBalanceLink(quote)}
                               >
-                                Copy Balance Link
+                                {configuredActions.copy_balance_link.label}
                               </button>
                             )}
                           </>
                         )}
-                        {permissions.canDeleteQuote && canDeleteQuotes ? (
+                        {configuredActions.delete.visible ? (
                           <button
                             type="button"
                             data-approval-action="delete_quote"
+                            data-quote-action-id="delete"
+                            data-quote-action-group="administration"
                             className="ghost compact"
                             onClick={() => requestDeleteQuote(quote)}
-                            disabled={deliveryUnresolved || updatingId === quote.id || (approvalRequired && !deleteApproval)}
-                            title={approvalRequired && !deleteApproval ? "Approve quote deletion in Workflow first." : ""}
                           >
-                            {updatingId === quote.id ? "Deleting..." : "Delete"}
+                            {configuredActions.delete.label}
                           </button>
                         ) : null}
-                        {canReconcilePayment ? (
+                        {configuredActions.reconcile_deposit.visible ? (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("reconcile_deposit")}
+                            data-quote-action-id="reconcile_deposit"
+                            data-quote-action-group="recovery"
                             onClick={() => handleReconcilePayment(quote)}
-                            disabled={reconcilingPaymentId === quote.id || deliveryUnresolved}
                           >
-                            {reconcilingPaymentId === quote.id ? "Reconciling..." : "Reconcile Payment"}
+                            {configuredActions.reconcile_deposit.label}
                           </button>
                         ) : null}
-                        {canReconcileFinalBalance ? (
+                        {configuredActions.reconcile_balance.visible ? (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("reconcile_balance")}
+                            data-quote-action-id="reconcile_balance"
+                            data-quote-action-group="recovery"
                             onClick={() => handleReconcileFinalBalance(quote)}
-                            disabled={reconcilingFinalBalanceId === quote.id || deliveryUnresolved}
                           >
-                            {reconcilingFinalBalanceId === quote.id
-                              ? "Reconciling..."
-                              : "Reconcile Final Balance"}
+                            {configuredActions.reconcile_balance.label}
                           </button>
                         ) : null}
-                      </div>
+                      </ConfiguredQuoteActionRail>
                     </td>
                   </tr>
                 );
