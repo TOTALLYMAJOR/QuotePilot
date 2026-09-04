@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-04 13:41:00 CDT
+Last updated: 2026-09-04 14:33:24 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -47,11 +47,11 @@ reference for each feature.
 | **Library** | Business setup, catalog, menus, pricing, and readiness | Follow the first setup row that needs review |
 | **New quote** | A new event or pasted inquiry | Complete the draft blockers, then save |
 | **Search** | A known client, quote, or event | Open the exact matching record |
-| **Operations** | Reporting, schedules, integrations, and admin tools | Choose the role-authorized operational surface |
+| **Operations** | Accepted/booked Calendar, daily planning, and staff execution | Open the Calendar or a daily execution tool |
 
 On a phone, the four primary destinations stay in the bottom navigation. Use
-the workspace/avatar control for Search, Operations, account settings, and
-sign-out.
+the workspace/avatar control for Search, Frequent tools, Operations,
+progressively disclosed Administration, account settings, and sign-out.
 
 ### Five-minute first setup
 
@@ -100,14 +100,24 @@ mode edits the same draft and uses the same save authority.
 
 ### Calendar-first Operations (source candidate)
 
-Open secondary **Operations** to use the existing accepted/booked Event
-Schedule as the default operational lens. Month and Week retain the same event,
-conflict, capacity, staff-lead, checklist, and run-of-show models. On a phone,
-the Calendar becomes an agenda derived from those models. **Open in Calendar**
-keeps the exact Opportunity identity; **Open opportunity** returns to that exact
-record. `/app/schedule` remains a compatibility path to the same Calendar.
-Planning and checklist details are not live attendance, issue, payment,
-inventory, or readiness telemetry.
+Open secondary **Operations** or `/app/operations` to use the existing
+accepted/booked Event Schedule as the canonical operational lens. Month and
+Week retain the same event, conflict, capacity, staff-lead, checklist, and
+run-of-show models. On a phone, the Calendar becomes an agenda derived from
+those models. **Open in Calendar** keeps the exact Opportunity identity;
+**Open opportunity** returns to that exact record. `/app/schedule` remains a
+compatibility path to the same Calendar.
+
+Desktop **Operations** and the mobile Operations group contain only
+**Operations**, **Clear the Deck**, and **Staff**. Use Frequent tools for
+**Workflow**, **Messages**, and **Pilot**. Expand **Administration** for
+role-authorized **Reporting Dashboard**, **Integrations Ops**, **Import
+Studio**, and **Session Diagnostics**. Event and Event Schedule routes remain
+available from their exact context or direct route rather than appearing again
+as menu inventory. These changes describe the local source candidate; they do
+not establish exact-head promotion, deployment, hosted behavior, or human
+acceptance. Planning and checklist details are not live attendance, issue,
+payment, inventory, or readiness telemetry.
 
 ### Read state labels literally
 
@@ -224,12 +234,15 @@ The v0.16 candidate keeps four persistent primary destinations:
 
 **New quote** is a global action into the existing opportunity/quote flow, not
 a navigation destination. On desktop, Search and Operations remain secondary
-controls and workspace/account controls stay quiet. On mobile, select the
-workspace/avatar control in the standard header to open **Workspace & tools**.
-That focus-contained sheet provides Search, Operations, workspace identity,
-account settings, sound preference, and sign-out without adding fifth or sixth
-bottom-navigation items. Staff-only and administrator-only entries retain their
-existing role and feature gates.
+controls and workspace/account controls stay quiet. Operations exposes only
+the Calendar-first **Operations**, **Clear the Deck**, and **Staff** daily
+execution paths. On mobile, select the workspace/avatar control in the standard
+header to open **Workspace & tools**. That focus-contained sheet provides
+Search; Frequent **Workflow**, **Messages**, and **Pilot** tools; the same three
+Operations paths; progressively disclosed **Administration**; workspace
+identity; account settings; sound preference; and sign-out without adding
+fifth or sixth bottom-navigation items. Staff-only and administrator-only
+entries retain their existing role and feature gates.
 
 The v0.16 identity model authorizes one organization per signed-in principal,
 so **Workspace & tools** shows the current workspace but does not pretend that
@@ -239,11 +252,13 @@ current identity and workspace; sending a password-reset email is a separate,
 explicit action and merely opening settings changes nothing.
 
 Now, Opportunities, Clients, and Library remain the only Calm Four primary
-entries. Menu, staffing, pricing, proposal, activity, event, messaging,
-schedule, reporting, and administrative actions remain contextual or inside
-Operations. Browser Back and Forward preserve the route and history entry. If
-Quick Updates has an unsaved draft, navigation first asks whether to keep or
-discard it; discarding then continues to the exact requested history entry.
+entries. Menu, pricing, proposal, activity, Event, and Event Schedule actions
+remain contextual or directly routed; Workflow, Messages, and Pilot remain
+Frequent tools; and reporting, integrations, imports, and diagnostics remain
+progressively disclosed Administration tools. Browser Back and Forward
+preserve the route and history entry. If Quick Updates has an unsaved draft,
+navigation first asks whether to keep or discard it; discarding then continues
+to the exact requested history entry.
 
 ### Returning without losing your place
 
@@ -1525,8 +1540,9 @@ assistive-technology, or human acceptance.
   disabled.
 
 ## Event Schedule and Production Checklist
-- Open `Schedule` or `/app/schedule` to review accepted and booked events by
-  month or week, inspect conflicts, and assign a staff lead. Quote/proposal
+- Open **Operations** or `/app/operations` to review accepted and booked events
+  by month or week, inspect conflicts, and assign a staff lead.
+  `/app/schedule` is a compatibility path to the same Calendar. Quote/proposal
   lifecycle and booking confirmation are separately labeled; an accepted quote
   with confirmation pending is not displayed as a confirmed booking.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.

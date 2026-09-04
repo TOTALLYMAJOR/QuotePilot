@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:27:47 CDT
+Last updated: 2026-09-04 14:39:33 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Consolidated the Ambient Operations menu into the Calendar-first daily
+  execution paths: **Operations**, **Clear the Deck**, and role-gated **Staff**.
+  Workflow, Messages, and Pilot remain Frequent tools; Reporting,
+  Integrations, Import, and Diagnostics remain progressive Administration;
+  exact Event Focus and Schedule compatibility remain directly reachable.
+  Focused shell tests and 9/9 real-route Operations cases now cover the
+  responsive Calendar, exact handoffs, conflict evidence, persisted staff and
+  checklist work, direct Event arrival, and Back/Forward continuity. This is a
+  local source candidate only; it has not been pushed, deployed, or accepted in
+  a hosted environment.
 - Certified the remaining Workbench behavioral boundaries without adding a
   second authority: service style survives a Guided round-trip, explicit
   staffing adoption reprices the canonical total, Pilot stays dormant until

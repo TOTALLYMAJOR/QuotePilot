@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-04 13:41:00 CDT
+Last updated: 2026-09-04 14:33:24 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -58,12 +58,17 @@ provider receipts.
   existing arrival contract; Calendar can return to the exact Opportunity.
   No Event record, persistence authority, lifecycle value, pricing rule,
   staffing authority, provider integration, or live-telemetry claim was added.
-- **Staged navigation:** this source checkpoint deliberately retains the Calm
-  Four primary navigation and every secondary entry. Operations promotion is
-  gated on exact-head CI and exact-SHA responsive evidence; navigation
-  retirement remains gated separately on authenticated role-aware reachability
-  parity. Source and CI evidence do not establish deployment, hosted behavior,
-  production readiness, or human acceptance.
+- **Staged navigation:** this source checkpoint retains the Calm Four primary
+  navigation and makes Calendar-first Operations the concise daily-execution
+  group: **Operations**, **Clear the Deck**, and **Staff**. **Workflow**,
+  **Messages**, and **Pilot** remain Frequent tools; **Reporting Dashboard**,
+  **Integrations Ops**, **Import Studio**, and **Session Diagnostics** remain
+  progressively disclosed Administration tools. Event and Event Schedule
+  remain contextual/direct routes rather than duplicated menu inventory.
+  `/app/schedule` retains compatibility with Calendar. Exact-head promotion is
+  still pending, as are hosted role-aware reachability and human acceptance;
+  source and local evidence do not establish deployment or production
+  readiness.
 
 ## Production email sender identity (September 3, 2026)
 

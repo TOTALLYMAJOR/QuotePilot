@@ -287,7 +287,7 @@ describe("WorkspaceShell", () => {
     expect(buttonsByText(container, "Catalog Admin")).toHaveLength(0);
   });
 
-  test("retains contextual tools in desktop Operations while mobile uses the switchboard", () => {
+  test("keeps daily execution concise while Workspace tools preserve other reachability", () => {
     const onOpenChange = vi.fn();
     const props = render({
       ambientNavigation: true,
@@ -297,42 +297,24 @@ describe("WorkspaceShell", () => {
     const operations = container.querySelector('[role="menu"][aria-label="Operations"]');
     const clearDeck = buttonsByText(operations, "Clear the Deck")[0];
     const switchboard = buttonsByText(operations, "Operations")[0];
-    const events = buttonsByText(operations, "Events")[0];
-    const messages = buttonsByText(operations, "Messages")[0];
     const staff = buttonsByText(operations, "Staff")[0];
-    const pilot = buttonsByText(operations, "Pilot")[0];
-    const workflow = operations.querySelector('button[aria-label="Workflow, 2 quotes need attention"]');
-    expect(clearDeck.dataset.capabilityEntry).toBe("live-operations-planning");
+    expect(Array.from(operations.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent.trim()))
+      .toEqual(["Operations", "Clear the Deck", "Staff"]);
     expect(switchboard.dataset.capabilityEntry).toBe("live-operations-planning");
-    expect(events.dataset.capabilityEntry).toBe("live-operations-planning");
-    expect(messages.dataset.capabilityEntry).toBe("event-messaging-station");
-    expect(pilot.dataset.capabilityEntry).toBe("ambient-pilot-context");
+    expect(clearDeck.dataset.capabilityEntry).toBe("live-operations-planning");
     expect(staff).not.toBeNull();
-    expect(workflow.querySelector(".workflow-attention-badge").textContent).toBe("2");
     expect(buttonsByText(operations, "Catalog Admin")).toHaveLength(0);
 
-    act(() => clearDeck.click());
     act(() => switchboard.click());
-    act(() => events.click());
-    act(() => messages.click());
-    act(() => workflow.click());
-    act(() => pilot.click());
+    act(() => clearDeck.click());
     act(() => staff.click());
-    expect(onOpenChange).toHaveBeenCalledTimes(7);
+    expect(onOpenChange).toHaveBeenCalledTimes(3);
     expect(onOpenChange).toHaveBeenNthCalledWith(1, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(2, "");
     expect(onOpenChange).toHaveBeenNthCalledWith(3, "");
-    expect(onOpenChange).toHaveBeenNthCalledWith(4, "");
-    expect(onOpenChange).toHaveBeenNthCalledWith(5, "");
-    expect(onOpenChange).toHaveBeenNthCalledWith(6, "");
-    expect(onOpenChange).toHaveBeenNthCalledWith(7, "");
     expect(props.actions.onClearDeck).toHaveBeenCalledTimes(1);
     expect(props.actions.onOperations).toHaveBeenCalledTimes(1);
-    expect(props.actions.onEvents).toHaveBeenCalledTimes(1);
-    expect(props.actions.onMessages).toHaveBeenCalledTimes(1);
-    expect(props.actions.onWorkflow).toHaveBeenCalledTimes(1);
     expect(props.actions.onStaff).toHaveBeenCalledTimes(1);
-    expect(props.actions.onPilot).toHaveBeenCalledTimes(1);
 
     render({
       ambientNavigation: true,
@@ -356,7 +338,8 @@ describe("WorkspaceShell", () => {
     expect(administration.querySelector("h3").textContent).toBe("Administration");
     expect(mobileOperations.dataset.capabilityEntry).toBe("live-operations-planning");
     expect(buttonsByText(operationalTools, "Clear the Deck")).toHaveLength(1);
-    expect(buttonsByText(operationalTools, "Events")).toHaveLength(1);
+    expect(buttonsByText(operationalTools, "Events")).toHaveLength(0);
+    expect(buttonsByText(operationalTools, "Event Schedule")).toHaveLength(0);
     expect(buttonsByText(frequentTools, "Messages")).toHaveLength(1);
     expect(buttonsByText(frequentTools, "Pilot")).toHaveLength(1);
     expect(buttonsByText(operationalTools, "Staff")).toHaveLength(1);

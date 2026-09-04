@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-04 13:06:37 CDT
+Last updated: 2026-09-04 14:33:24 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -112,10 +112,21 @@ evidence paths, freshness, blocker references, and the single next proof event.
 - `/staffing/respond?staffing=<signed-token>`: public bearer response for one
   exact staff assignment invitation. The link records accept or decline only;
   it does not establish attendance, hours, payroll, completion, or readiness.
-- `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
-  schedule and proof-safe commercial reporting workspaces.
-- `/app/operations`: Ambient Operations switchboard over existing daily,
-  business, and system routes. It adds no new backend authority.
+- `/app/operations`: source-candidate canonical Calendar for accepted/booked
+  operations. It composes the existing month/week schedule, conflicts,
+  capacity, staff-lead assignment, production checklist, and run-of-show
+  context without adding backend or live-telemetry authority. Desktop
+  **Operations** and the mobile Operations group contain only **Operations**,
+  **Clear the Deck**, and **Staff**.
+- `/app/schedule`: compatibility path to the same Calendar capability. Event
+  and schedule deep routes remain reachable from their exact context or URL;
+  they are not duplicated in the Operations menu.
+- `/app/reporting`: temporary-flagged proof-safe commercial reporting
+  workspace. **Reporting Dashboard**, **Integrations Ops**, **Import Studio**,
+  and **Session Diagnostics** remain progressively disclosed Administration
+  tools, while **Workflow**, **Messages**, and **Pilot** remain Frequent tools.
+  These navigation changes are a local source candidate; exact-head promotion,
+  hosted behavior, and human acceptance remain pending.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
   workspaces; the existing admin gate remains authoritative. A default-off
   Ambient build presents `/app/catalog` as **Library**, separating catalog

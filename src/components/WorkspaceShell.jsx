@@ -44,7 +44,7 @@ const MENU_ICONS = {
 
 const WORKSPACE_TOOL_GROUPS = Object.freeze({
   frequent: ["Workflow", "Messages", "Pilot"],
-  operations: ["Clear the Deck", "Operations", "Events", "Event Schedule", "Staff"],
+  operations: ["Operations", "Clear the Deck", "Staff"],
   administration: [
     "Reporting Dashboard",
     "Integrations Ops",
@@ -676,7 +676,11 @@ export default function WorkspaceShell({
                       role="menu"
                       aria-label={label}
                     >
-                      {menuContent(id)}
+                      {menuContent(id, {
+                        onlyLabels: ambientOrientation && id === "operations"
+                          ? WORKSPACE_TOOL_GROUPS.operations
+                          : null
+                      })}
                     </div>
                   )}
                 </div>

@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 14:27:47 CDT
+Last updated: 2026-09-04 14:39:33 CDT
 
 ## Authority
 
@@ -27,7 +27,7 @@ separate.
 | EXTEND | Proposal Composer presentation model and domain focus; Quote Pulse presentation hierarchy; optional Event Schedule framing and continuation callbacks; existing exact-arrival Schedule destination. |
 | MOVE | The existing Calendar presentation becomes the content of `/app/operations`; Schedule arrival targets move to Operations while `/app/schedule` remains a compatibility route. |
 | COMPOSE | Event, Customer, Experience, Staffing, and Commercials compose one proposal document; People and Reporting remain role-safe Operations continuations. |
-| RETIRE | No user capability or navigation entry at contract checkpoint. The old Operations switchboard presentation may leave the route only because every capability entry remains independently reachable. Navigation retirement requires the separate role-aware parity gate. |
+| RETIRE | The flat Ambient Operations menu inventory is removed while every capability and route remains reachable through its intended daily, Frequent, Administration, contextual, or direct path. The old Operations switchboard presentation may leave the route only because every capability entry remains independently reachable. Broader navigation retirement still requires the separate role-aware parity gate. |
 | NEW | Pure workbench outputs, mobile agenda presentation derived from existing models, stable evidence markers, focused Workbench/Operations browser suites, and this ledger. No business-state, pricing, persistence, lifecycle, staffing, catalog, provider, or Firebase authority is new. |
 
 ## Repository corrections
@@ -178,11 +178,11 @@ separate.
 | AC-111 | AC-111 — Domain switching causes no unnecessary persistence/network work | PASS | `openDomain` changes local active-domain/editor presentation state and focus only; continuity coverage crosses domains without save or identity creation. |
 | AC-112 | AC-112 — Material LOC overrun triggers architecture review | PENDING | No evidence recorded at contract checkpoint. |
 | AC-113 | AC-113 — Major unexpected implementation-scale increase requires explicit explanation before continuation | PENDING | No evidence recorded at contract checkpoint. |
-| AC-114 | AC-114 — Operations menu is no longer an undifferentiated 10+ item feature inventory | PASS | `/app/operations` renders `EventScheduleView` directly with only role-gated People and Reporting continuations. |
-| AC-115 | AC-115 — Daily execution has one obvious operational entry | PENDING | No evidence recorded at contract checkpoint. |
+| AC-114 | AC-114 — Operations menu is no longer an undifferentiated 10+ item feature inventory | PASS | Focused shell units and real-route browser coverage prove the Ambient Operations menu contains only Operations, Clear the Deck, and role-gated Staff. |
+| AC-115 | AC-115 — Daily execution has one obvious operational entry | PASS | Operations is the single Calendar-first daily index; Clear the Deck and Staff are bounded continuations rather than duplicate event indexes. |
 | AC-116 | AC-116 — Calendar/Schedule is reused rather than replaced | PASS | Both `/app/operations` and compatibility `/app/schedule` render the existing `EventScheduleView`. |
-| AC-117 | AC-117 — Operations is organized around time/execution rather than repository modules | PENDING | No evidence recorded at contract checkpoint. |
-| AC-118 | AC-118 — Routes may remain available without all remaining permanent navigation entries | PENDING | No evidence recorded at contract checkpoint. |
+| AC-117 | AC-117 — Operations is organized around time/execution rather than repository modules | PASS | Calendar-first Operations owns daily execution; Workflow, Messages, Pilot, and Administration are explicitly separated by use rather than folded into one module list. |
+| AC-118 | AC-118 — Routes may remain available without all remaining permanent navigation entries | PASS | Events and Event Schedule leave Ambient Operations menu inventory while exact `/app/events/:id` and compatibility `/app/schedule` remain browser-tested direct routes. |
 | AC-119 | AC-119 — Calendar is the default operational lens when current capability supports it | PASS | Operations route composition opens directly on Calendar. |
 | AC-120 | AC-120 — Existing Month view retained | PASS | Operations browser suite asserts the existing Month control at all target widths. |
 | AC-121 | AC-121 — Existing Week view retained | PASS | Operations browser suite asserts the existing Week control at all target widths. |
@@ -195,11 +195,11 @@ separate.
 | AC-128 | AC-128 — Production checklist remains available | PASS | Existing checklist component remains mounted in reused event cards; full unit regression passes. |
 | AC-129 | AC-129 — Existing kitchen/run-of-show planning context remains available where currently supported | PASS | Exact screenshots and browser surface retain Run of show; existing kitchen/checklist code remains unchanged. |
 | AC-130 | AC-130 — Calendar does not claim live telemetry that does not exist | PASS | Visible source note explicitly labels read-only planning and rejects attendance/inventory/readiness inference. |
-| AC-131 | AC-131 — Events and Schedule are not presented as two confusing equal event indexes without a documented reason | PENDING | No evidence recorded at contract checkpoint. |
+| AC-131 | AC-131 — Events and Schedule are not presented as two confusing equal event indexes without a documented reason | PASS | Canonical docs name Operations as the Calendar index, Schedule as compatibility, and Event Focus as contextual/direct; neither Events nor Event Schedule remains duplicated in the Operations menu. |
 | AC-132 | AC-132 — Calendar event opens exact existing event/opportunity identity | PASS | Operations Playwright opens exact `operations-event-a` and verifies its Opportunity heading. |
 | AC-133 | AC-133 — No duplicate Event record introduced | PASS | Calendar still derives from quote history; no Firestore schema, entity, or write path was added. |
-| AC-134 | AC-134 — Exact Event routes remain functional for direct/deep arrival | PENDING | No evidence recorded at contract checkpoint. |
-| AC-135 | AC-135 — Event Focus remains available where supported | PENDING | No evidence recorded at contract checkpoint. |
+| AC-134 | AC-134 — Exact Event routes remain functional for direct/deep arrival | PASS | Operations browser coverage opens `/app/events/operations-event-a` directly and retains the exact quote/event identity. |
+| AC-135 | AC-135 — Event Focus remains available where supported | PASS | The same direct-route case asserts Event Focus, the exact event heading, and semantic Event basics region. |
 | AC-136 | AC-136 — Existing Workflow authority remains unchanged | PENDING | No evidence recorded at contract checkpoint. |
 | AC-137 | AC-137 — Now can continue to deep-link exact Workflow attention | PENDING | No evidence recorded at contract checkpoint. |
 | AC-138 | AC-138 — Opportunity can continue to deep-link exact Workflow attention | PENDING | No evidence recorded at contract checkpoint. |
@@ -268,9 +268,9 @@ separate.
 | AC-201 | AC-201 — Margin-disabled path | PENDING | No evidence recorded at contract checkpoint. |
 | AC-202 | AC-202 — Save-failure recovery path | PENDING | No evidence recorded at contract checkpoint. |
 | AC-203 | AC-203 — Calendar golden path | PASS | Operations real-route suite proves Operations → Month/Week → exact focused event → exact Opportunity. |
-| AC-204 | AC-204 — Conflict path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-205 | AC-205 — Staff lead path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-206 | AC-206 — Production checklist path | PENDING | No evidence recorded at contract checkpoint. |
+| AC-204 | AC-204 — Conflict path | PASS | Browser coverage selects the exact overlapping event and observes both Time overlap and Capacity risk without offering a fabricated resolution. |
+| AC-205 | AC-205 — Staff lead path | PASS | Browser coverage assigns Kitchen Lead through the existing quote-store authority, reloads Operations, and reads the persisted exact assignment. |
+| AC-206 | AC-206 — Production checklist path | PASS | Browser coverage completes Event brief reviewed through the existing checklist authority, reloads Operations, and reads the persisted completion. |
 | AC-207 | AC-207 — Opportunity-to-Calendar path | PASS | Living Opportunity component test proves booked quote ID and exact Calendar action; App routes it through the arrival contract. |
 | AC-208 | AC-208 — Now-to-Calendar path | PASS | Real-route browser test clicks Now's exact Calendar action and verifies exact focused event. |
 | AC-209 | AC-209 — Calendar-to-Opportunity path | PASS | Same browser test opens exact Opportunity ID from Calendar. |
@@ -286,16 +286,16 @@ separate.
 | AC-219 | AC-219 — Event details have semantic structure | PASS | Exact event details remain focusable articles with headings, labeled status group, facts, staff field, and checklist. |
 | AC-220 | AC-220 — Focus is restored after event/detail overlays where applicable | PASS | No new event overlay was added; the reused modal focus/return contract remains covered by the full unit suite. |
 | AC-221 | AC-221 — No new serious/critical axe violations | PASS | Operations axe scan passes at all three required widths. |
-| AC-222 | AC-222 — Every route intentionally removed from primary/Operations navigation remains reachable through its new intended path | PASS | No route or navigation entry was removed; retirement gate remains closed. |
-| AC-223 | AC-223 — Browser Back/Forward remains correct | PENDING | Existing history units are green, but no new authenticated post-promotion browser matrix exists. |
-| AC-224 | AC-224 — Direct deep links remain correct | PASS | `/app/operations`, `/app/schedule`, and exact Calendar→Opportunity direct route are exercised locally. |
+| AC-222 | AC-222 — Every route intentionally removed from primary/Operations navigation remains reachable through its new intended path | PASS | Real-route coverage proves Workflow/Messages/Pilot in Frequent tools, Reporting/Integrations/Import/Diagnostics in progressive Administration, direct exact Event Focus, and Schedule compatibility after menu consolidation. |
+| AC-223 | AC-223 — Browser Back/Forward remains correct | PASS | Local real-route coverage navigates Operations → exact Opportunity → Back to Operations → Forward to the same exact Opportunity identity. Hosted authenticated history acceptance remains separately unclaimed. |
+| AC-224 | AC-224 — Direct deep links remain correct | PASS | `/app/operations`, `/app/schedule`, `/app/events/operations-event-a`, and exact Calendar→Opportunity routes are exercised locally. |
 | AC-225 | AC-225 — Auth/role restrictions unchanged | TRANSITIONAL | Source gates are unchanged and unit tests pass; authenticated admin/sales hosted matrix remains unverified. |
 | AC-226 | AC-226 — Mobile Workspace/tools navigation remains accessible | PASS | Pre-promotion Calm Four/mobile utility structure is unchanged and 390px axe/overflow checks pass. |
 | AC-227 | AC-227 — No route silently aliases to semantically wrong destination | PASS | Schedule arrivals intentionally target Calendar-first Operations while `/app/schedule` remains the same named compatibility capability. |
 | AC-228 | AC-228 — Focused unit/component tests pass | PASS | 35 focused Workbench tests and 76 focused Operations/arrival tests pass. |
 | AC-229 | AC-229 — Relevant pre-existing tests remain green or have evidence-backed expectation updates | PASS | Proposal Composer regression was updated for explicit domain selection and supported saved-quote reopening; combined 19/19 browser cases and full 4,472-unit suite pass. |
 | AC-230 | AC-230 — Quote workbench real-route Playwright passes | PASS | `e2e/ux-convergence-workbench.spec.js` plus Proposal Composer regression pass 19/19. |
-| AC-231 | AC-231 — Operations/Calendar real-route Playwright passes | PASS | `e2e/ux-convergence-operations.spec.js` passes 6/6. |
+| AC-231 | AC-231 — Operations/Calendar real-route Playwright passes | PASS | `e2e/ux-convergence-operations.spec.js` passes 9/9 with the required Ambient, Now, and staffing presentation gates enabled. |
 | AC-232 | AC-232 — Responsive matrix passes | PASS | Workbench and Operations dedicated tests pass at 390, 768, and 1440. |
 | AC-233 | AC-233 — Accessibility matrix passes | PASS | Dedicated serious/critical axe scans pass at all required widths; targeted color-contrast regressions pass. |
 | AC-234 | AC-234 — Build passes | PASS | Local production build and exact-head CI build at `30b6fcd` pass. |
