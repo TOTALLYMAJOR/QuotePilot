@@ -860,7 +860,7 @@ test("quote history supports export and hides an unapproved payment link", async
   await firstQuoteRow.locator("details.configured-quote-more-actions > summary").click();
   await firstQuoteRow.getByRole("button", { name: "Copy email text" }).click();
   await expect(page.getByRole("dialog").getByText(/Email template copied/i).first()).toContainText(/remains a draft/i);
-  await expect(firstQuoteRow.getByRole("combobox").first()).toHaveValue("draft");
+  await expect(firstQuoteRow.locator(".status-chip").filter({ hasText: /^Draft$/ }).first()).toBeVisible();
   await expect(firstQuoteRow.getByRole("button", { name: "Copy customer link" })).toBeDisabled();
 
   const downloadPromise = page.waitForEvent("download");
