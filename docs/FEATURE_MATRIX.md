@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-04 14:33:24 CDT
+Last updated: 2026-09-04 14:45:25 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -69,6 +69,20 @@ provider receipts.
   still pending, as are hosted role-aware reachability and human acceptance;
   source and local evidence do not establish deployment or production
   readiness.
+
+### UX convergence surface classification (local source candidate)
+
+| Surface | Classification | Preserved authority and route |
+|---|---|---|
+| Commercial Workbench | Canonical quote composition | `ProposalComposer` retains the one App-owned form, calculation, Menu, staffing, Preview, and explicit save/version path. |
+| Guided | Alternate composition mode | Guided reads and edits the same draft and returns to Workbench without a second save or pricing authority. |
+| Flag-off quote wizard and connected Quote Workspace | Compatibility / rollback | Existing role, quote identity, pricing, and save behavior remain available when Ambient or Workbench presentation gates are off. |
+| Calendar-first Operations | Canonical operational index candidate | `/app/operations` reuses `EventScheduleView`; `/app/schedule` is a compatibility path to the same capability. |
+| Event Focus | Contextual / direct deep link | Exact `/app/events/:quoteId` routes remain available without duplicating Events or Event Schedule in Operations navigation. |
+| Workflow | Frequent global attention and exact contextual continuation | `/app/workflow` and exact Workflow focus remain authoritative outside Operations ownership. |
+| Messages | Frequent aggregate review and exact opportunity/client continuation | `/app/messaging` and exact conversation handoffs retain the existing message authority outside Operations ownership. |
+| Reporting and system administration | Progressive Administration | Reporting, Integrations, Import, and Diagnostics retain their existing routes and role/feature gates without becoming daily navigation. |
+| Legacy Operations switchboard | Superseded and removed from the Ambient graph | `ambientLegacyRetirement` records the Calendar-first replacement, zero-consumer retirement condition, and preserved live-route disposition. No capability or route was deleted. |
 
 ## Production email sender identity (September 3, 2026)
 

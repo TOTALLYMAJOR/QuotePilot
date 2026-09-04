@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 14:39:33 CDT
+Last updated: 2026-09-04 14:45:25 CDT
 
 ## Authority
 
@@ -32,9 +32,11 @@ separate.
 
 ## Repository corrections
 
-- The frozen contract describes intended convergence; current source begins
-  with Calm Four plus a secondary Operations switchboard and a separate
-  `/app/schedule` calendar route.
+- The frozen contract describes intended convergence; the program began with
+  Calm Four plus a secondary Operations switchboard and a separate
+  `/app/schedule` calendar route. The local candidate now retires that
+  switchboard presentation, preserves every route, and keeps fifth-primary
+  promotion behind its explicit gate.
 - Schedule exact-arrival already has a bounded focus contract. Convergence
   changes its destination path to `/app/operations` and retains the same
   `schedule` surface/focus object.
@@ -200,64 +202,64 @@ separate.
 | AC-133 | AC-133 — No duplicate Event record introduced | PASS | Calendar still derives from quote history; no Firestore schema, entity, or write path was added. |
 | AC-134 | AC-134 — Exact Event routes remain functional for direct/deep arrival | PASS | Operations browser coverage opens `/app/events/operations-event-a` directly and retains the exact quote/event identity. |
 | AC-135 | AC-135 — Event Focus remains available where supported | PASS | The same direct-route case asserts Event Focus, the exact event heading, and semantic Event basics region. |
-| AC-136 | AC-136 — Existing Workflow authority remains unchanged | PENDING | No evidence recorded at contract checkpoint. |
-| AC-137 | AC-137 — Now can continue to deep-link exact Workflow attention | PENDING | No evidence recorded at contract checkpoint. |
-| AC-138 | AC-138 — Opportunity can continue to deep-link exact Workflow attention | PENDING | No evidence recorded at contract checkpoint. |
-| AC-139 | AC-139 — Removing/demoting a menu entry does not make Workflow unreachable | PENDING | No evidence recorded at contract checkpoint. |
-| AC-140 | AC-140 — Bulk/global Workflow route remains available if supported use cases require it | PENDING | No evidence recorded at contract checkpoint. |
-| AC-141 | AC-141 — Existing conversation/message capability preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-142 | AC-142 — Opportunity-context conversation remains reachable | PENDING | No evidence recorded at contract checkpoint. |
-| AC-143 | AC-143 — Client-context conversation remains reachable where supported | PENDING | No evidence recorded at contract checkpoint. |
-| AC-144 | AC-144 — Global Messages remains available where aggregate review is required | PENDING | No evidence recorded at contract checkpoint. |
-| AC-145 | AC-145 — Messaging is not duplicated inside Operations merely for navigation convenience | PENDING | No evidence recorded at contract checkpoint. |
-| AC-146 | AC-146 — Pilot remains globally reachable according to current capability design | PENDING | No evidence recorded at contract checkpoint. |
-| AC-147 | AC-147 — Pilot is not architecturally owned by Operations | PENDING | No evidence recorded at contract checkpoint. |
-| AC-148 | AC-148 — No second Operations-specific Pilot implementation | PENDING | No evidence recorded at contract checkpoint. |
-| AC-149 | AC-149 — Clear the Deck behavior preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-150 | AC-150 — Clear the Deck remains reachable from appropriate attention context | PENDING | No evidence recorded at contract checkpoint. |
-| AC-151 | AC-151 — It is not treated as an independent operational data authority | PENDING | No evidence recorded at contract checkpoint. |
-| AC-152 | AC-152 — Existing Staff capability preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-153 | AC-153 — Calendar may link to Staff without rebuilding Staff | PENDING | No evidence recorded at contract checkpoint. |
+| AC-136 | AC-136 — Existing Workflow authority remains unchanged | PASS | Workflow source is untouched; exact-focus and write/readback suites remain green in the 274-test contextual regression. |
+| AC-137 | AC-137 — Now can continue to deep-link exact Workflow attention | PASS | `ambientNowView.test.jsx` proves priority and request-backed items carry the exact shared Workflow focus identity. |
+| AC-138 | AC-138 — Opportunity can continue to deep-link exact Workflow attention | PASS | Living Opportunity tests prove exact final-count, customer-request, and follow-up continuations target existing Workflow items without substitution. |
+| AC-139 | AC-139 — Removing/demoting a menu entry does not make Workflow unreachable | PASS | Workflow remains in Frequent tools and `/app/workflow`; focused shell and route tests pass after Operations consolidation. |
+| AC-140 | AC-140 — Bulk/global Workflow route remains available if supported use cases require it | PASS | The global `/app/workflow` route and aggregate Workflow action remain registered and tested. |
+| AC-141 | AC-141 — Existing conversation/message capability preserved | PASS | Messaging station state and exact-arrival suites pass without message-source or write-path changes. |
+| AC-142 | AC-142 — Opportunity-context conversation remains reachable | PASS | Living Opportunity opens exact Conversation evidence and routes the same quote/thread identity without mutation. |
+| AC-143 | AC-143 — Client-context conversation remains reachable where supported | PASS | Ambient Clients tests retain exact customer-reply identity in the conversation handoff. |
+| AC-144 | AC-144 — Global Messages remains available where aggregate review is required | PASS | Messages remains in Frequent tools and the tested `/app/messaging` route. |
+| AC-145 | AC-145 — Messaging is not duplicated inside Operations merely for navigation convenience | PASS | Shell unit/browser evidence proves Messages is absent from Operations and present once in Frequent tools. |
+| AC-146 | AC-146 — Pilot remains globally reachable according to current capability design | PASS | Pilot remains in Frequent tools and the global Pilot surface/context suites pass. |
+| AC-147 | AC-147 — Pilot is not architecturally owned by Operations | PASS | Workspace grouping and source keep Pilot in the global secondary surface; Operations has no Pilot implementation. |
+| AC-148 | AC-148 — No second Operations-specific Pilot implementation | PASS | Repository search and focused Pilot regressions identify only the shared global/contextual Pilot path. |
+| AC-149 | AC-149 — Clear the Deck behavior preserved | PASS | Focused component tests prove the bounded approval/decision-debt queue, three-item cap, refresh, and exact Workflow review handoff. |
+| AC-150 | AC-150 — Clear the Deck remains reachable from appropriate attention context | PASS | Clear the Deck remains a named daily execution action in desktop and mobile Operations groups. |
+| AC-151 | AC-151 — It is not treated as an independent operational data authority | PASS | Clear Deck tests assert planning/review-only copy, existing snapshot inputs, no resolution action, and honest unavailable/empty boundaries. |
+| AC-152 | AC-152 — Existing Staff capability preserved | PASS | Staff remains a role-gated daily continuation and the existing private staff workspace suite passes. |
+| AC-153 | AC-153 — Calendar may link to Staff without rebuilding Staff | PASS | Calendar's existing People continuation routes to `/app/staff`; no staff component, store, or authority was duplicated. |
 | AC-154 | AC-154 — Staff private/role authority unchanged | PASS | People continuation is shown only under the existing admin and staffing-feature gates; staffing authority code is unchanged. |
-| AC-155 | AC-155 — Existing Reporting preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-156 | AC-156 — Reporting no longer competes visually with primary operational execution unless evidence justifies it | PENDING | No evidence recorded at contract checkpoint. |
-| AC-157 | AC-157 — Reporting remains reachable through secondary/admin/Insights path | PENDING | No evidence recorded at contract checkpoint. |
-| AC-158 | AC-158 — Integrations Ops preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-159 | AC-159 — Import Studio preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-160 | AC-160 — Diagnostics preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-161 | AC-161 — Moving these out of Operations does not remove authority or reachability | PENDING | No evidence recorded at contract checkpoint. |
-| AC-162 | AC-162 — Administrative tools are distinguishable from daily operator work | PENDING | No evidence recorded at contract checkpoint. |
-| AC-163 | AC-163 — Catalog administration remains preserved | PENDING | No evidence recorded at contract checkpoint. |
-| AC-164 | AC-164 — Ambient Library remains or becomes the conceptual home for business-building-block configuration where current IA supports it | PENDING | No evidence recorded at contract checkpoint. |
-| AC-165 | AC-165 — Catalog is not redundantly surfaced under Operations without documented need | PENDING | No evidence recorded at contract checkpoint. |
-| AC-166 | AC-166 — Now may show compact upcoming operational horizon | PENDING | No evidence recorded at contract checkpoint. |
-| AC-167 | AC-167 — Now does not duplicate full Calendar | PENDING | No evidence recorded at contract checkpoint. |
-| AC-168 | AC-168 — Upcoming event can navigate to exact Calendar/Event context | PENDING | No evidence recorded at contract checkpoint. |
-| AC-169 | AC-169 — Conflict/attention language shown in Now is evidence-backed | PENDING | No evidence recorded at contract checkpoint. |
-| AC-170 | AC-170 — Accepted/booked Opportunity can open operational Calendar/Event context | PENDING | No evidence recorded at contract checkpoint. |
-| AC-171 | AC-171 — Commercial and operational contexts retain same exact opportunity/event identity | PENDING | No evidence recorded at contract checkpoint. |
+| AC-155 | AC-155 — Existing Reporting preserved | PASS | Reporting route, exact-arrival, and evidence suites pass with no reporting-source change. |
+| AC-156 | AC-156 — Reporting no longer competes visually with primary operational execution unless evidence justifies it | PASS | Reporting is a secondary Calendar continuation and progressive Administration tool, not a primary or daily index. |
+| AC-157 | AC-157 — Reporting remains reachable through secondary/admin/Insights path | PASS | Calendar retains its secondary Reporting action and Workspace tools retains Reporting Dashboard under Administration. |
+| AC-158 | AC-158 — Integrations Ops preserved | PASS | Integrations Ops remains role/feature-gated under progressive Administration with its route unchanged. |
+| AC-159 | AC-159 — Import Studio preserved | PASS | Import Studio remains administrator-gated under progressive Administration with its route unchanged. |
+| AC-160 | AC-160 — Diagnostics preserved | PASS | Session Diagnostics remains capability-gated under progressive Administration with its route unchanged. |
+| AC-161 | AC-161 — Moving these out of Operations does not remove authority or reachability | PASS | Browser and shell coverage expand Administration and verify all four actions after their removal from the flat Operations menu. |
+| AC-162 | AC-162 — Administrative tools are distinguishable from daily operator work | PASS | Workspace tools renders a separately titled, initially collapsed Administration group after the concise daily Operations group. |
+| AC-163 | AC-163 — Catalog administration remains preserved | PASS | Administrator Library retains the existing guarded catalog editor and `/app/catalog` compatibility route. |
+| AC-164 | AC-164 — Ambient Library remains or becomes the conceptual home for business-building-block configuration where current IA supports it | PASS | Ambient Library tests prove Catalog and Templates remain its purpose-bearing business-building-block sections. |
+| AC-165 | AC-165 — Catalog is not redundantly surfaced under Operations without documented need | PASS | Catalog Admin is absent from Ambient Operations; role-safe Library remains the intended home. |
+| AC-166 | AC-166 — Now may show compact upcoming operational horizon | PASS | Now tests cap the ordered priority horizon at three and render only recorded upcoming work. |
+| AC-167 | AC-167 — Now does not duplicate full Calendar | PASS | Now renders compact priority rows and exact continuations, not Month/Week controls or a Calendar grid. |
+| AC-168 | AC-168 — Upcoming event can navigate to exact Calendar/Event context | PASS | Operations Playwright clicks Now's exact Open in Calendar action and focuses `operations-event-a`. |
+| AC-169 | AC-169 — Conflict/attention language shown in Now is evidence-backed | PASS | Now presentation tests preserve supplied bounded attention order and receipt-backed quiet progress without invented state. |
+| AC-170 | AC-170 — Accepted/booked Opportunity can open operational Calendar/Event context | PASS | Living Opportunity tests hand an accepted exact quote ID to Calendar without mutation. |
+| AC-171 | AC-171 — Commercial and operational contexts retain same exact opportunity/event identity | PASS | Browser and component tests carry `operations-event-a` from Now/Opportunity into Calendar and back to the same Opportunity. |
 | AC-172 | AC-172 — Transition introduces no duplicate persisted Event entity unless one already exists authoritatively | PASS | Implementation adds presentation callbacks/markers only and retains quote-history projection. |
 | AC-173 | AC-173 — Planning state explicitly distinguished from live actuals | PASS | Run-of-show copy identifies a read-only projection and states which live actuals it cannot establish. |
-| AC-174 | AC-174 — No current-stage claim without authoritative state | PENDING | No evidence recorded at contract checkpoint. |
-| AC-175 | AC-175 — No live issue claim without issue records | PENDING | No evidence recorded at contract checkpoint. |
-| AC-176 | AC-176 — No staff check-in claim without authoritative check-in data | PENDING | No evidence recorded at contract checkpoint. |
-| AC-177 | AC-177 — No Replay claim without immutable operational evidence | PENDING | No evidence recorded at contract checkpoint. |
+| AC-174 | AC-174 — No current-stage claim without authoritative state | PASS | Event Focus labels only recorded opportunity and booking state and states that schedule date does not establish readiness. |
+| AC-175 | AC-175 — No live issue claim without issue records | PASS | Event/Calendar surfaces expose planning conflicts only; no live issue state or issue-record substitute exists. |
+| AC-176 | AC-176 — No staff check-in claim without authoritative check-in data | PASS | Staff assignment remains a planning record and no attendance/check-in claim is rendered. |
+| AC-177 | AC-177 — No Replay claim without immutable operational evidence | PASS | Event tests prove Replay is not offered as an active control and the exact replay route states it is unavailable until immutable ledger evidence exists. |
 | AC-178 | AC-178 — Primary navigation remains intentionally small | PENDING | No evidence recorded at contract checkpoint. |
-| AC-179 | AC-179 — New Quote remains a global action rather than a permanent content destination if current design supports this | PENDING | No evidence recorded at contract checkpoint. |
-| AC-180 | AC-180 — Search remains global/secondary | PENDING | No evidence recorded at contract checkpoint. |
-| AC-181 | AC-181 — Pilot remains global/secondary | PENDING | No evidence recorded at contract checkpoint. |
-| AC-182 | AC-182 — System/Admin capabilities do not inflate primary navigation | PENDING | No evidence recorded at contract checkpoint. |
+| AC-179 | AC-179 — New Quote remains a global action rather than a permanent content destination if current design supports this | PASS | Shell browser/unit evidence keeps New quote as the standalone global CTA, outside primary content navigation. |
+| AC-180 | AC-180 — Search remains global/secondary | PASS | Search remains a global desktop utility and the first action in mobile Workspace tools. |
+| AC-181 | AC-181 — Pilot remains global/secondary | PASS | Pilot remains in Frequent tools and its shared global surface; it is absent from Operations. |
+| AC-182 | AC-182 — System/Admin capabilities do not inflate primary navigation | PASS | Reporting, Integrations, Import, and Diagnostics remain inside collapsed Administration rather than primary navigation. |
 | AC-183 | AC-183 — Mobile navigation remains focused and accessible | PENDING | No evidence recorded at contract checkpoint. |
-| AC-184 | AC-184 — Canonical quote composition surface documented | PENDING | No evidence recorded at contract checkpoint. |
-| AC-185 | AC-185 — Guided classified as alternate mode | PENDING | No evidence recorded at contract checkpoint. |
-| AC-186 | AC-186 — Legacy/flag-off quote path classified compatibility/rollback | PENDING | No evidence recorded at contract checkpoint. |
-| AC-187 | AC-187 — Calendar-first Operations documented as canonical operational index if promoted | PENDING | No evidence recorded at contract checkpoint. |
-| AC-188 | AC-188 — Exact Events route classified contextual/deep-link if removed from permanent nav | PENDING | No evidence recorded at contract checkpoint. |
-| AC-189 | AC-189 — Workflow route classified correctly | PENDING | No evidence recorded at contract checkpoint. |
-| AC-190 | AC-190 — Messages route classified correctly | PENDING | No evidence recorded at contract checkpoint. |
-| AC-191 | AC-191 — System/Admin routes classified correctly | PENDING | No evidence recorded at contract checkpoint. |
-| AC-192 | AC-192 — Superseded presentation explicitly identified | PENDING | No evidence recorded at contract checkpoint. |
-| AC-193 | AC-193 — Dead duplicate components removed or documented with retirement condition | PENDING | No evidence recorded at contract checkpoint. |
+| AC-184 | AC-184 — Canonical quote composition surface documented | PASS | Feature Matrix classifies Commercial Workbench/`ProposalComposer` as canonical and names its preserved one-form/save authority. |
+| AC-185 | AC-185 — Guided classified as alternate mode | PASS | Feature Matrix and User Manual classify Guided as an alternate mode over the same draft and save authority. |
+| AC-186 | AC-186 — Legacy/flag-off quote path classified compatibility/rollback | PASS | Feature Matrix classifies the flag-off wizard and connected Quote Workspace as compatibility/rollback. |
+| AC-187 | AC-187 — Calendar-first Operations documented as canonical operational index if promoted | PASS | README, User Manual, and Feature Matrix identify `/app/operations` as the local canonical operational index candidate and withhold promotion claims. |
+| AC-188 | AC-188 — Exact Events route classified contextual/deep-link if removed from permanent nav | PASS | Canonical docs classify Event Focus as contextual/direct and browser-test exact `/app/events/:quoteId`. |
+| AC-189 | AC-189 — Workflow route classified correctly | PASS | Canonical matrix classifies Workflow as Frequent global attention plus exact contextual continuation. |
+| AC-190 | AC-190 — Messages route classified correctly | PASS | Canonical matrix classifies Messages as Frequent aggregate review plus exact opportunity/client continuation. |
+| AC-191 | AC-191 — System/Admin routes classified correctly | PASS | Canonical matrix classifies Reporting and system tools as progressive Administration with existing gates. |
+| AC-192 | AC-192 — Superseded presentation explicitly identified | PASS | Canonical matrix and `ambientLegacyRetirement` name the legacy Operations switchboard and its Calendar-first replacement. |
+| AC-193 | AC-193 — Dead duplicate components removed or documented with retirement condition | PASS | Zero-consumer `OperationsSwitchboardView` and its CSS are removed; the retirement registry records the mechanical condition and preserved-route disposition. |
 | AC-194 | AC-194 — New quote golden path | PENDING | No evidence recorded at contract checkpoint. |
 | AC-195 | AC-195 — Existing quote edit golden path | PENDING | No evidence recorded at contract checkpoint. |
 | AC-196 | AC-196 — Guided golden path | PENDING | No evidence recorded at contract checkpoint. |

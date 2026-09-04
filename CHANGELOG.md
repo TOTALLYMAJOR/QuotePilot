@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 14:39:33 CDT
+Last updated: 2026-09-04 14:45:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Certified contextual capability continuity across Workflow, Messages, Pilot,
+  Clear the Deck, Staff, Reporting, Administration, Library, Now, and exact
+  Opportunity/Calendar handoffs using 274 focused regressions plus bounded
+  Clear Deck interaction coverage. Removed the zero-consumer legacy Operations
+  switchboard and its dead CSS, and registered its Calendar-first replacement,
+  retirement condition, and route-preservation disposition. The canonical
+  feature inventory now classifies Workbench, Guided, compatibility quote
+  paths, Operations, Event Focus, Workflow, Messages, and Administration
+  explicitly. No business authority, live-event claim, route, or capability was
+  added or removed; this remains local and unpushed.
 - Consolidated the Ambient Operations menu into the Calendar-first daily
   execution paths: **Operations**, **Clear the Deck**, and role-gated **Staff**.
   Workflow, Messages, and Pilot remain Frequent tools; Reporting,

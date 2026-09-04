@@ -14745,44 +14745,8 @@ hr {
   gap: 0.5rem;
 }
 
-.live-ops-switchboard {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.live-ops-switchboard button {
-  display: grid;
-  gap: 0.35rem;
-  min-height: 96px;
-  border: 1px solid #e3ded4;
-  border-radius: 8px;
-  background: #fbfaf6;
-  color: #171d1a;
-  padding: 0.9rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.live-ops-switchboard button:hover,
-.live-ops-switchboard button:focus-visible {
-  border-color: #a7771c;
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(167, 119, 28, 0.16);
-}
-
-.live-ops-switchboard button:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
-}
-
-.live-ops-switchboard span {
-  color: #6b6b65;
-}
-
 @media (max-width: 760px) {
-  .live-ops-focus-grid,
-  .live-ops-switchboard {
+  .live-ops-focus-grid {
     grid-template-columns: 1fr;
   }
 
