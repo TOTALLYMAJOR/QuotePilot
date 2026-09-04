@@ -14860,3 +14860,89 @@ hr {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Configured quote action rail */
+.configured-quote-action-rail {
+  display: grid;
+  min-width: 11rem;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.configured-quote-action-evidence,
+.configured-quote-primary-action,
+.configured-quote-primary-blocker {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.configured-quote-primary-action > button,
+.configured-quote-primary-action > .cta {
+  width: 100%;
+  min-height: 44px;
+}
+
+.configured-quote-primary-blocker {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border-subtle, currentColor);
+  border-radius: 10px;
+}
+
+.configured-quote-primary-blocker small {
+  max-width: 32ch;
+}
+
+.configured-quote-more-actions > summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.configured-quote-more-actions[open] > summary {
+  margin-bottom: 0.45rem;
+}
+
+.configured-quote-more-groups {
+  display: grid;
+  gap: 0.65rem;
+  min-width: min(18rem, 70vw);
+}
+
+.configured-quote-action-group {
+  display: grid;
+  gap: 0.35rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-subtle, currentColor);
+}
+
+.configured-quote-action-group:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.configured-quote-action-group > strong {
+  font-size: 0.75rem;
+}
+
+.history-quote-workspace-link {
+  min-height: 44px;
+  text-align: left;
+}
+
+@media (max-width: 620px) {
+  .configured-quote-action-rail,
+  .configured-quote-more-groups {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .configured-quote-more-actions > summary,
+  .configured-quote-primary-action > button,
+  .configured-quote-action-group .compact {
+    width: 100%;
+    justify-content: center;
+  }
+}

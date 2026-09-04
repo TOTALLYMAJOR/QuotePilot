@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 65,
+  "catalogVersion": 66,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -4515,7 +4515,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 17,
+      "reviewRevision": 18,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4548,6 +4548,7 @@
         "src/lib/workspaceReturnContext.js",
         "src/lib/workspaceArrivalContract.js",
         "src/lib/workspaceScope.js",
+        "src/lib/quoteActionState.js",
         "src/lib/quoteHistoryController.js",
         "src/lib/ambientSurfaceGrammar.js",
         "src/lib/ambientOperationalReceipts.js",
@@ -4563,6 +4564,7 @@
         "src/components/WorkspaceRoute.jsx",
         "src/components/WorkspaceShell.jsx",
         "src/components/QuoteHistoryModal.jsx",
+        "src/components/ConfiguredQuoteActionRail.jsx",
         "src/components/CustomerPortalView.jsx",
         "src/components/AmbientGlobalPilotSurface.jsx",
         "src/components/AmbientNowView.jsx",
@@ -4765,6 +4767,11 @@
         "src/lib/__tests__/appInteractionRecovery.test.js",
         "src/lib/__tests__/workspaceArrivalContract.test.js",
         "src/lib/__tests__/quoteHistoryController.test.js",
+        "src/lib/__tests__/quoteActionState.test.js",
+        "src/lib/__tests__/quoteStore.versioning.test.js",
+        "src/components/__tests__/configuredQuoteActionRail.test.jsx",
+        "e2e/quote-history-role-permissions.spec.js",
+        "e2e/quote-wizard.smoke.spec.js",
         "src/lib/__tests__/ambientSurfaceGrammar.test.js",
         "src/lib/__tests__/ambientOperationalReceipts.test.js",
         "src/lib/__tests__/ambientGestureController.test.js",
@@ -5210,6 +5217,22 @@
         {
           "path": "src/lib/__tests__/quoteHistoryController.test.js",
           "locator": "splits bounded opportunities, exact Event Room selection, and role-safe actions"
+        },
+        {
+          "path": "src/lib/__tests__/quoteActionState.test.js",
+          "locator": "recovery overrides routine quote-changing actions when delivery is uncertain"
+        },
+        {
+          "path": "src/lib/__tests__/quoteActionState.test.js",
+          "locator": "does not treat provider acceptance for an older revision as current delivery evidence"
+        },
+        {
+          "path": "src/lib/__tests__/quoteStore.versioning.test.js",
+          "locator": "local alternate draft keeps presentation while clearing source proof"
+        },
+        {
+          "path": "src/components/__tests__/configuredQuoteActionRail.test.jsx",
+          "locator": "keeps one ranked action outside More while grouping subordinate capabilities"
         },
         {
           "path": "src/lib/__tests__/ambientSurfaceGrammar.test.js",

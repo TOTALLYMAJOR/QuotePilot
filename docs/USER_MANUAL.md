@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-03 17:48:40 CDT
+Last updated: 2026-09-03 19:27:39 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2702,3 +2702,13 @@ no-approval, no-discount, no-charge, and no-configuration boundary.
 - Feature inventory and implementation chronology: `docs/FEATURE_MATRIX.md`
 - Launch operations: `docs/LAUNCH_RUNBOOK.md`
 - Release and governance policy: `docs/VERSION_CONTROL.md` and `docs/DOC_SYSTEM.md`
+
+## Configured quote actions
+
+The configured quote view ranks one next action from the quote's recorded lifecycle, exact current delivery revision, approval state, payment evidence, contract state, portal validity, and recovery state. Other permitted utilities are grouped under **More**; an unresolved delivery or transaction recovery replaces normal progression until it is reconciled. The quote number itself opens the workspace, so navigation does not compete with the commercial next action.
+
+- **Edit draft** changes a current draft. **Revise quote** means a sent or viewed quote will return to a new draft version while the prior version remains historical evidence.
+- **Send proposal** is the tracked QuotePilot provider path. **Manual email** and **Copy email text** are manual handoffs and do not establish QuotePilot send or delivery evidence. Provider acceptance is shown as delivery evidence rather than as a disabled button.
+- **Create alternate draft** lives under **More** unless it is the ranked outcome for a closed opportunity. It creates a separate quote after an explicit consequence confirmation. Client, event, and quote configuration carry forward through an explicit allowlist; the source quote remains unchanged, and delivery, acceptance, rebooking, payment-provider, integration-receipt, and booking proof do not transfer. On success, QuotePilot opens the created draft.
+- Firebase-backed lifecycle management uses an explicit **Expire quote** action rather than a generic lifecycle selector; the browser-local fallback retains its existing status selector for compatibility.
+- **Request deposit**, **Create contract**, **Request final balance**, **Record customer confirmation**, **Restore as draft**, and **Renew customer link** retain their existing approval, provider, portal, payment, and role boundaries. The action ranking does not change whether the organization's workflow treats contract creation before or after deposit settlement.

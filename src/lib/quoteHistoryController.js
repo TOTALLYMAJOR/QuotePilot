@@ -1,3 +1,5 @@
+import { compileConfiguredQuoteActions } from "./quoteActionState";
+
 export const QUOTE_HISTORY_CONTROLLER_MODEL = "quote-history-controller-v1";
 
 const STAFF_ROLES = new Set(["admin", "sales"]);
@@ -20,6 +22,39 @@ function immutable(value, seen = new WeakSet()) {
   return Object.freeze(value);
 }
 
+function resolveActionRevisionId(quote) {
+  const explicit = text(quote?.activeVersionId || quote?.versionMeta?.versionId, 80);
+  const versionNumber = Number(quote?.latestVersionNumber || quote?.versionMeta?.versionNumber);
+  const contentRevisionId = explicit || (
+    Number.isSafeInteger(versionNumber) && versionNumber > 0
+      ? `v${String(versionNumber).padStart(4, "0")}`
+      : ""
+  );
+  if (!contentRevisionId) return "";
+  const issuedAt = text(quote?.portalIssuedAtISO);
+  const parsed = issuedAt ? new Date(issuedAt) : null;
+  const portalIdentity = parsed && !Number.isNaN(parsed.getTime())
+    ? parsed.toISOString()
+    : text(quote?.portalKey, 64);
+  return portalIdentity ? `${contentRevisionId}@${portalIdentity}` : contentRevisionId;
+}
+
+function quoteWithCurrentDeliveryOnly(quote) {
+  if (!quote || typeof quote !== "object") return quote;
+  const delivery = quote?.workflow?.quoteDelivery;
+  if (!delivery || typeof delivery !== "object") return quote;
+  const expectedRevisionId = resolveActionRevisionId(quote);
+  const recordedRevisionId = text(delivery.revisionId);
+  if (!expectedRevisionId || recordedRevisionId === expectedRevisionId) return quote;
+  return {
+    ...quote,
+    workflow: {
+      ...(quote.workflow || {}),
+      quoteDelivery: {}
+    }
+  };
+}
+
 export function getQuoteActionPermissions(value) {
   const normalizedRole = role(value);
   const isAdmin = normalizedRole === "admin";
@@ -32,7 +67,7 @@ export function getQuoteActionPermissions(value) {
     canDuplicateQuote: isStaff,
     canExportProposal: isStaff,
     canExportBeo: isStaff,
-    canReviewDelivery: isStaff,
+    canReviewDelivery: isAdmin,
     canOpenConversation: isStaff,
     canSendQuoteEmail: isAdmin,
     canOpenIntegrationRecovery: isAdmin,
@@ -57,7 +92,7 @@ const ACTION_DEFINITIONS = Object.freeze([
   ["duplicate", "Duplicate quote", "canDuplicateQuote", "quote_version_service", "trusted_mutation"],
   ["export_proposal", "Download proposal", "canExportProposal", "proposal_export", "read_artifact"],
   ["review_beo", "Review Kitchen BEO", "canExportBeo", "kitchen_beo_authority", "read_artifact"],
-  ["review_delivery", "Review delivery evidence", "canReviewDelivery", "delivery_evidence_review", "read_artifact"],
+  ["review_delivery", "Resolve delivery outcome", "canReviewDelivery", "delivery_evidence_review", "trusted_mutation"],
   ["open_conversation", "Open event conversation", "canOpenConversation", "quote_conversation", "navigation"],
   ["send_quote", "Send quote", "canSendQuoteEmail", "quote_delivery_callable", "communication"],
   ["copy_artifacts", "Copy customer details", "canCopyArtifacts", "browser_clipboard", "read_artifact"],
@@ -120,13 +155,19 @@ export function buildRoleSafeQuoteActionController({ quote = null, currentUserRo
             : ""
     })];
   }));
+  const actionState = compileConfiguredQuoteActions({
+    quote: quoteWithCurrentDeliveryOnly(quote),
+    baseActions: actions,
+    source: sourceMode
+  });
   return immutable({
     modelId: "role-safe-quote-action-controller-v1",
     quoteId: quoteId || null,
     quoteStatus,
     source: sourceMode,
     permissions,
-    actions
+    actions,
+    actionState
   });
 }
 

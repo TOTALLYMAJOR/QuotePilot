@@ -3776,17 +3776,21 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     portalIssuedAtISO,
     nowISO
   );
-  const payment = hydratePayment(source.payment);
   const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";
-  const { id: _sourceId, createdAt: _createdAt, ...sourceWithoutIdentity } = source;
+  const sourceSelection = source.selection && typeof source.selection === "object"
+    ? source.selection
+    : {};
+  const sourceIntegrations = source.integrations && typeof source.integrations === "object"
+    ? source.integrations
+    : {};
 
   const selection = {
-    ...(sourceWithoutIdentity.selection || {}),
-    addonQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.addonQuantities),
-    rentalQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.rentalQuantities),
-    menuItemQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.menuItemQuantities),
-    menuItemsSnapshot: Array.isArray(sourceWithoutIdentity.selection?.menuItemsSnapshot)
-      ? sourceWithoutIdentity.selection.menuItemsSnapshot.map((item) => ({
+    ...sourceSelection,
+    addonQuantities: normalizeQuantityMap(sourceSelection.addonQuantities),
+    rentalQuantities: normalizeQuantityMap(sourceSelection.rentalQuantities),
+    menuItemQuantities: normalizeQuantityMap(sourceSelection.menuItemQuantities),
+    menuItemsSnapshot: Array.isArray(sourceSelection.menuItemsSnapshot)
+      ? sourceSelection.menuItemsSnapshot.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3794,8 +3798,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
         quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1)))
       }))
       : [],
-    menuItemDetails: Array.isArray(sourceWithoutIdentity.selection?.menuItemDetails)
-      ? sourceWithoutIdentity.selection.menuItemDetails.map((item) => ({
+    menuItemDetails: Array.isArray(sourceSelection.menuItemDetails)
+      ? sourceSelection.menuItemDetails.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3807,21 +3811,52 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   };
 
   const payload = {
-    ...sourceWithoutIdentity,
     quoteNumber,
+    ...(String(source.customerId || "").trim()
+      ? { customerId: String(source.customerId).trim() }
+      : {}),
+    customer: source.customer && typeof source.customer === "object"
+      ? { ...source.customer }
+      : {},
+    customerEmailKey: String(source.customerEmailKey || source.customer?.email || "").trim().toLowerCase(),
+    customerNameKey: normalizeCustomerNameKey(source.customerNameKey || source.customer?.name || ""),
+    eventTypeId: String(source.eventTypeId || sourceSelection.eventTypeId || source.event?.eventTypeId || "").trim(),
+    event: source.event && typeof source.event === "object"
+      ? { ...source.event }
+      : {},
+    selection,
+    decidableOptionsProjection: Array.isArray(source.decidableOptionsProjection)
+      ? source.decidableOptionsProjection.map((item) => ({ ...item }))
+      : [],
+    totals: source.totals && typeof source.totals === "object"
+      ? { ...source.totals }
+      : {},
+    pricing: source.pricing && typeof source.pricing === "object"
+      ? { ...source.pricing }
+      : undefined,
+    pricingCatalogAuthority: source.pricingCatalogAuthority && typeof source.pricingCatalogAuthority === "object"
+      ? { ...source.pricingCatalogAuthority }
+      : null,
+    quoteMeta: source.quoteMeta && typeof source.quoteMeta === "object"
+      ? { ...source.quoteMeta }
+      : {},
+    source: String(source.source || "local").trim() || "local",
     portalKey,
     portalIssuedAtISO,
     portalExpiresAtISO,
     ownerUid: ownerUid || source.ownerUid || "",
     ownerEmail: normalizedOwnerEmail,
     organizationId,
+    duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),
+    rebooking: undefined,
+    acceptanceReceipt: undefined,
     status: "draft",
     deletedAtISO: "",
-    selection,
     payment: {
-      ...payment,
-      depositStatus: payment.depositLink ? "sent" : "unpaid",
-      depositConfirmedAtISO: ""
+      depositLink: "",
+      depositStatus: "unpaid",
+      depositConfirmedAtISO: "",
+      finalBalance: hydrateFinalBalance({}, source.totals || {})
     },
     booking: {
       bookedAtISO: "",
@@ -3846,7 +3881,9 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     },
     portalDecision: {},
     integrations: {
-      ...(sourceWithoutIdentity.integrations || {}),
+      retryLimit: Math.max(1, Math.round(toNumber(sourceIntegrations.retryLimit, source.quoteMeta?.integrationRetryLimit || 3))),
+      retention: Math.max(10, Math.round(toNumber(sourceIntegrations.retention, source.quoteMeta?.integrationAuditRetention || 50))),
+      providers: {},
       lastSyncAtISO: "",
       logs: []
     },

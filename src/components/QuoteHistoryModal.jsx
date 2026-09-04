@@ -44,6 +44,7 @@ import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import { buildQuotePath } from "../lib/workspaceRoutes";
 import {
   buildQuoteHistoryController,
+  buildRoleSafeQuoteActionController,
   getQuoteActionPermissions
 } from "../lib/quoteHistoryController";
 import {
@@ -55,6 +56,7 @@ import {
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
 import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
+import ConfiguredQuoteActionRail from "./ConfiguredQuoteActionRail";
 import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
@@ -1431,6 +1433,8 @@ export function QuoteHistoryView({
         ? Array.from(targetRow?.querySelectorAll("button[data-approval-action]") || [])
           .find((button) => button.dataset.approvalAction === normalizedAction && !button.disabled)
         : null;
+      const actionDisclosure = actionTarget?.closest("details.configured-quote-more-actions");
+      if (actionDisclosure && !actionDisclosure.open) actionDisclosure.open = true;
       const focusTarget = actionTarget || handoff;
       focusTarget.focus({ preventScroll: true });
       focusTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1857,6 +1861,10 @@ export function QuoteHistoryView({
 
   const handleDuplicateQuote = async (quote) => {
     if (!quote?.id) return;
+    const confirmed = window.confirm(
+      "Create a separate alternate draft from this quote? The client, event, and quote configuration carry forward. The current quote stays unchanged, and delivery, acceptance, payment, booking, and rebooking proof do not transfer."
+    );
+    if (!confirmed) return;
     setDuplicatingId(quote.id);
     setState((prev) => ({ ...prev, error: "" }));
     try {
@@ -1866,10 +1874,11 @@ export function QuoteHistoryView({
       });
       setState((prev) => ({
         ...prev,
-        feedback: `Quote duplicated as ${result.quoteNumber}.`
+        feedback: `Alternate draft created as ${result.quoteNumber}.`
       }));
-      pushToast(`Quote duplicated as ${result.quoteNumber}.`, "success");
+      pushToast(`Alternate draft created as ${result.quoteNumber}.`, "success");
       await load();
+      openQuoteWorkspace(result.id);
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -3403,13 +3412,42 @@ export function QuoteHistoryView({
                 const canReconcileFinalBalance = permissions.canReconcileFinalBalance
                   && finalBalanceRequestEligible
                   && Boolean(String(finalBalance.stripeSessionId || "").trim());
+                const configuredActionState = buildRoleSafeQuoteActionController({
+                  quote,
+                  currentUserRole: permissions.role,
+                  source: state.source
+                }).actionState;
+                const configuredPrimaryActionId = contractConversionState.phase === "error"
+                  ? "convert_contract_refresh"
+                  : configuredActionState.primaryAction?.id || "";
+                const configuredPrimaryAction = contractConversionState.phase === "error"
+                  ? {
+                    id: "convert_contract_refresh",
+                    label: "Refresh contract status",
+                    visible: true,
+                    enabled: true,
+                    disabledReason: ""
+                  }
+                  : configuredActionState.primaryAction;
+                const rowActionClassName = (actionId) => (
+                  configuredPrimaryActionId === actionId ? "cta compact" : "ghost compact"
+                );
                 return (
                   <tr
                     key={quote.id}
                     data-quote-id={quote.id}
                     className={quote.id === focusQuoteId ? "history-row-target" : ""}
                   >
-                    <td>{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button-link history-quote-workspace-link"
+                        onClick={() => openQuoteWorkspace(quote.id)}
+                        aria-label={`Open ${formatWorkspaceText(quote.quoteNumber, { emptyLabel: "quote" })} workspace`}
+                      >
+                        {formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}
+                      </button>
+                    </td>
                     <td>{formatWorkspaceText(quote.customer?.name || quote.customer?.email, { emptyLabel: "Customer not recorded" })}</td>
                     <td>{quoteEventTypeLabel}</td>
                     <td>{fmtDate(quote.event?.date)}</td>
@@ -3420,7 +3458,7 @@ export function QuoteHistoryView({
                       <div className="history-meta-stack">
                         <small>Quote / proposal lifecycle</small>
                         <StatusChip {...statusSemantics.lifecycle} />
-                        {permissions.canManageQuoteStatus && (
+                        {permissions.canManageQuoteStatus && state.source !== "firebase" && (
                           <select
                             value={quote.status || "draft"}
                             onChange={(e) => handleStatusUpdate(quote.id, e.target.value)}
@@ -3498,9 +3536,13 @@ export function QuoteHistoryView({
                     <td>{fmtDate(quote.expiresAtISO)}</td>
                     <td>{fmtDate(quote.updatedAtISO || quote.createdAtISO)}</td>
                     <td>
-                      <div className="row-actions">
+                      <ConfiguredQuoteActionRail
+                        primaryActionId={configuredPrimaryActionId}
+                        primaryAction={configuredPrimaryAction}
+                      >
                         {permissions.canConvertToContract && (canConvert || contractConversionActive) && (
                           <ContractConversionMutationStatus
+                            data-quote-action-kind="evidence"
                             presentation={contractConversionPresentation}
                             showReady
                           />
@@ -3512,7 +3554,9 @@ export function QuoteHistoryView({
                             <button
                               type="button"
                               data-approval-action="convert_to_contract"
-                              className="cta compact"
+                              data-quote-action-id="convert_contract"
+                              data-quote-action-group="booking"
+                              className={rowActionClassName("convert_contract")}
                               onClick={() => handleConvertToContract(quote, {
                                 reconcile: contractConversionState.phase === "uncertain"
                               })}
@@ -3540,7 +3584,7 @@ export function QuoteHistoryView({
                                   ? "Converting..."
                                   : contractConversionState.phase === "uncertain"
                                     ? "Reconcile conversion"
-                                    : "Convert"}
+                                    : configuredActionState.actions.convert_contract.label}
                             </button>
                           )}
                         {permissions.canConvertToContract
@@ -3550,7 +3594,9 @@ export function QuoteHistoryView({
                           && (
                             <button
                               type="button"
-                              className="ghost compact"
+                              className={rowActionClassName("convert_contract_refresh")}
+                              data-quote-action-id="convert_contract_refresh"
+                              data-quote-action-group="recovery"
                               onClick={() => handleRecoverContractConversion(quote)}
                             >
                               Refresh history
@@ -3559,69 +3605,91 @@ export function QuoteHistoryView({
                         {permissions.canManageConfirmation && canTrackConfirmation && confirmationStatus !== "confirmed" && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("manage_confirmation")}
+                            data-quote-action-id="manage_confirmation"
+                            data-quote-action-group="booking"
                             onClick={() => handleConfirmationUpdate(quote.id, "confirmed")}
                             disabled={updatingConfirmationId === quote.id || deliveryUnresolved}
                           >
-                            Confirm
+                            Record customer confirmation
                           </button>
                         )}
-                        {quote?.id && (
+                        {permissions.canManageQuoteStatus
+                          && state.source === "firebase"
+                          && normalizedQuoteStatus !== "expired"
+                          && statusOptions.includes("expired") && (
                           <button
                             type="button"
                             className="ghost compact"
-                            onClick={() => openQuoteWorkspace(quote.id)}
-                            title="Open this quote in the workspace, with activity and save health"
+                            data-quote-action-id="change_status"
+                            data-quote-action-group="administration"
+                            onClick={() => handleStatusUpdate(quote.id, "expired")}
+                            disabled={updatingId === quote.id || deliveryUnresolved}
+                            title={configuredActionState.actions.change_status.consequence}
                           >
-                            Workspace
+                            {configuredActionState.actions.change_status.label}
                           </button>
                         )}
                         {permissions.canEditQuote && canEditQuoteStatus(normalizedQuoteStatus) && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("edit")}
+                            data-quote-action-id="edit"
+                            data-quote-action-group="quote"
                             onClick={() => handleEditQuote(quote)}
                             disabled={deliveryUnresolved}
+                            title={configuredActionState.actions.edit.consequence}
                           >
-                            Edit
+                            {configuredActionState.actions.edit.label}
                           </button>
                         )}
                         {permissions.canReopenQuote && normalizedQuoteStatus === "expired" && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("reopen")}
+                            data-quote-action-id="reopen"
+                            data-quote-action-group="quote"
                             onClick={() => handleReopenQuote(quote)}
                             disabled={deliveryUnresolved || reopeningQuoteId === quote.id}
                             title="Restore the last nonterminal version as a draft with a new portal issuance."
                           >
-                            {reopeningQuoteId === quote.id ? "Reopening..." : "Reopen"}
+                            {reopeningQuoteId === quote.id ? "Restoring..." : configuredActionState.actions.reopen.label}
                           </button>
                         )}
                         {permissions.canDuplicateQuote && (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("duplicate")}
+                            data-quote-action-id="duplicate"
+                            data-quote-action-group="quote"
                             onClick={() => handleDuplicateQuote(quote)}
-                            disabled={duplicatingId === quote.id}
+                            disabled={duplicatingId === quote.id || !configuredActionState.actions.duplicate.enabled}
+                            title={!configuredActionState.actions.duplicate.enabled
+                              ? configuredActionState.actions.duplicate.disabledReason
+                              : configuredActionState.actions.duplicate.consequence}
                           >
-                            {duplicatingId === quote.id ? "Duplicating..." : "Duplicate"}
+                            {duplicatingId === quote.id ? "Creating draft..." : configuredActionState.actions.duplicate.label}
                           </button>
                         )}
                         {permissions.canExportProposal && (
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="export_proposal"
+                            data-quote-action-group="proposal"
                             onClick={() => handleExportPdf(quote)}
                             disabled={exportingPdfId === quote.id || !rebookDeliveryGate.ready}
                             title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
                           >
-                            {exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}
+                            {exportingPdfId === quote.id ? "Generating PDF..." : configuredActionState.actions.export_proposal.label}
                           </button>
                         )}
                         {permissions.canExportProposal && (
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="print_proposal"
+                            data-quote-action-group="proposal"
                             onClick={() => handlePrintProposal(quote)}
                             disabled={exportingPdfId === quote.id || !rebookDeliveryGate.ready}
                             title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : "Open print-ready proposal"}
@@ -3633,15 +3701,19 @@ export function QuoteHistoryView({
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="manual_email"
+                            data-quote-action-group="communication"
                             onClick={() => handleOpenDefaultEmailApp(quote)}
                             disabled={!rebookDeliveryGate.ready}
                             title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : "Open default email app"}
                           >
-                            Email app
+                            Manual email
                           </button>
                         )}
                         {permissions.canExportBeo && (
                           <QuoteHistoryKitchenBeoAction
+                            data-quote-action-id="review_beo"
+                            data-quote-action-group="operations"
                             source={state.source}
                             quote={quote}
                             disabled={!rebookDeliveryGate.ready}
@@ -3656,15 +3728,27 @@ export function QuoteHistoryView({
                           && deliveryUi.reviewRequired ? (
                           <button
                             type="button"
-                            className="cta compact"
+                            className={rowActionClassName("review_delivery")}
+                            data-quote-action-id="review_delivery"
+                            data-quote-action-group="recovery"
                             onClick={() => openDeliveryReview(quote, quoteRevisionId)}
                           >
-                            Review Delivery
+                            {configuredActionState.actions.review_delivery.label}
                           </button>
+                        ) : deliveryRecorded ? (
+                          <small
+                            className="source-note"
+                            data-quote-action-kind="evidence"
+                            data-quote-delivery-evidence="provider_accepted"
+                          >
+                            Delivery: Provider accepted
+                          </small>
                         ) : permissions.canSendQuoteEmail ? (
                           <button
                             type="button"
-                            className="cta compact"
+                            className={rowActionClassName("send_quote")}
+                            data-quote-action-id="send_quote"
+                            data-quote-action-group="communication"
                             onClick={() => handleSendQuoteEmail(quote)}
                             disabled={sendingQuoteEmailId === quote.id || !canDeliverCurrentQuote}
                             title={state.source !== "firebase"
@@ -3685,13 +3769,11 @@ export function QuoteHistoryView({
                           >
                             {sendingQuoteEmailId === quote.id
                               ? "Sending..."
-                              : deliveryRecorded
-                                ? "Provider accepted"
-                                : deliveryUi.freshAttemptAvailable
-                                  ? "Start New Quote Email"
+                              : deliveryUi.freshAttemptAvailable
+                                  ? "Send proposal again"
                                 : deliveryUi.retryAvailable
-                                  ? "Retry Quote Email"
-                                  : "Send Quote Email"}
+                                  ? "Retry proposal send"
+                                  : configuredActionState.actions.send_quote.label}
                           </button>
                         ) : null}
                         {permissions.canSendQuoteEmail
@@ -3701,16 +3783,20 @@ export function QuoteHistoryView({
                           <button
                             type="button"
                             className="ghost compact"
+                            data-quote-action-id="review_delivery_evidence"
+                            data-quote-action-group="recovery"
                             onClick={() => openDeliveryReview(quote, quoteRevisionId)}
                           >
-                            Review Outcome
+                            Review delivery evidence
                           </button>
                         )}
                         {permissions.canSendPaymentRequest && paymentRequestApproval && (
                           <button
                             type="button"
                             data-approval-action="send_payment_request"
-                            className="cta compact"
+                            data-quote-action-id="request_deposit"
+                            data-quote-action-group="payment"
+                            className={rowActionClassName("request_deposit")}
                             onClick={() => handleSendPaymentRequestEmail(quote)}
                             disabled={
                               deliveryUnresolved
@@ -3725,7 +3811,7 @@ export function QuoteHistoryView({
                           >
                             {sendingPaymentEmailId === quote.id
                               ? paymentRequestInProgress ? "Resuming..." : "Sending..."
-                              : paymentRequestInProgress ? "Resume Pay Request" : "Send Pay Request"}
+                              : configuredActionState.actions.request_deposit.label}
                           </button>
                         )}
                         {permissions.canSendFinalBalanceRequest
@@ -3734,7 +3820,9 @@ export function QuoteHistoryView({
                           <button
                             type="button"
                             data-approval-action="send_final_balance_request"
-                            className="cta compact"
+                            data-quote-action-id="request_balance"
+                            data-quote-action-group="payment"
+                            className={rowActionClassName("request_balance")}
                             onClick={() => handleSendFinalBalanceRequestEmail(quote)}
                             disabled={
                               deliveryUnresolved
@@ -3750,20 +3838,22 @@ export function QuoteHistoryView({
                             {sendingFinalBalanceEmailId === quote.id
                               ? finalBalanceRequestInProgress ? "Resuming..." : "Sending..."
                               : finalBalanceRequestInProgress
-                                ? "Resume Balance Request"
-                                : "Send Balance Request"}
+                                ? "Resume final balance request"
+                                : configuredActionState.actions.request_balance.label}
                           </button>
                         )}
                         {permissions.canRotatePortalLink && canRotatePortalForStatus && (
                           <button
                             type="button"
                             data-approval-action="rotate_portal_link"
+                            data-quote-action-id="rotate_portal"
+                            data-quote-action-group="access"
                             className="ghost compact"
                             onClick={() => handleRotatePortalLink(quote)}
                             disabled={deliveryUnresolved || rotatingPortalId === quote.id || (approvalRequired && !portalRotationApproval)}
                             title={approvalRequired && !portalRotationApproval ? "Approve portal rotation in Workflow first." : ""}
                           >
-                            {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
+                            {rotatingPortalId === quote.id ? "Renewing..." : configuredActionState.actions.rotate_portal.label}
                           </button>
                         )}
                         {permissions.canCopyArtifacts && (
@@ -3773,7 +3863,9 @@ export function QuoteHistoryView({
                               && portalShareable && (
                               <button
                                 type="button"
-                                className="ghost compact"
+                                className={rowActionClassName("open_conversation")}
+                                data-quote-action-id="open_conversation"
+                                data-quote-action-group="communication"
                                 data-capability-action="open-quote-conversation"
                                 onClick={() => onOpenConversation
                                   ? onOpenConversation(quote.id)
@@ -3783,21 +3875,25 @@ export function QuoteHistoryView({
                                   ? "Close the current quote conversation before opening another."
                                   : ""}
                               >
-                                Conversation
+                                {configuredActionState.actions.open_conversation.label}
                               </button>
                             )}
                             <button
                               type="button"
                               className="ghost compact"
+                              data-quote-action-id="copy_email"
+                              data-quote-action-group="communication"
                               onClick={() => handleCopyEmail(quote)}
                               disabled={!rebookDeliveryGate.ready}
                               title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
                             >
-                              Copy Email
+                              Copy email text
                             </button>
                             <button
                               type="button"
                               className="ghost compact"
+                              data-quote-action-id="copy_portal"
+                              data-quote-action-group="communication"
                               onClick={() => handleCopyPortalLink(quote)}
                               disabled={!portalShareable}
                               title={!portalShareable
@@ -3806,18 +3902,28 @@ export function QuoteHistoryView({
                                   : "Customer portal sharing requires an active delivered status and valid future expiry."
                                 : ""}
                             >
-                              Copy Portal
+                              Copy customer link
                             </button>
                             {permissions.canCopyPaymentLink && publishedPaymentLink && (
-                              <button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                data-quote-action-id="copy_payment_link"
+                                data-quote-action-group="payment"
+                                onClick={() => handleCopyPaymentLink(quote)}
+                              >
+                                {configuredActionState.actions.copy_payment_link.label}
+                              </button>
                             )}
                             {permissions.canCopyFinalBalanceLink && publishedFinalBalanceLink && (
                               <button
                                 type="button"
                                 className="ghost compact"
+                                data-quote-action-id="copy_balance_link"
+                                data-quote-action-group="payment"
                                 onClick={() => handleCopyFinalBalanceLink(quote)}
                               >
-                                Copy Balance Link
+                                {configuredActionState.actions.copy_balance_link.label}
                               </button>
                             )}
                           </>
@@ -3826,37 +3932,43 @@ export function QuoteHistoryView({
                           <button
                             type="button"
                             data-approval-action="delete_quote"
+                            data-quote-action-id="delete"
+                            data-quote-action-group="administration"
                             className="ghost compact"
                             onClick={() => requestDeleteQuote(quote)}
                             disabled={deliveryUnresolved || updatingId === quote.id || (approvalRequired && !deleteApproval)}
                             title={approvalRequired && !deleteApproval ? "Approve quote deletion in Workflow first." : ""}
                           >
-                            {updatingId === quote.id ? "Deleting..." : "Delete"}
+                            {updatingId === quote.id ? "Deleting..." : configuredActionState.actions.delete.label}
                           </button>
                         ) : null}
                         {canReconcilePayment ? (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("reconcile_deposit")}
+                            data-quote-action-id="reconcile_deposit"
+                            data-quote-action-group="recovery"
                             onClick={() => handleReconcilePayment(quote)}
                             disabled={reconcilingPaymentId === quote.id || deliveryUnresolved}
                           >
-                            {reconcilingPaymentId === quote.id ? "Reconciling..." : "Reconcile Payment"}
+                            {reconcilingPaymentId === quote.id ? "Checking..." : configuredActionState.actions.reconcile_deposit.label}
                           </button>
                         ) : null}
                         {canReconcileFinalBalance ? (
                           <button
                             type="button"
-                            className="ghost compact"
+                            className={rowActionClassName("reconcile_balance")}
+                            data-quote-action-id="reconcile_balance"
+                            data-quote-action-group="recovery"
                             onClick={() => handleReconcileFinalBalance(quote)}
                             disabled={reconcilingFinalBalanceId === quote.id || deliveryUnresolved}
                           >
                             {reconcilingFinalBalanceId === quote.id
-                              ? "Reconciling..."
-                              : "Reconcile Final Balance"}
+                              ? "Checking..."
+                              : configuredActionState.actions.reconcile_balance.label}
                           </button>
                         ) : null}
-                      </div>
+                      </ConfiguredQuoteActionRail>
                     </td>
                   </tr>
                 );
