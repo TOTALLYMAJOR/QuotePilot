@@ -47,6 +47,7 @@ describe("ConfiguredQuoteActionRail", () => {
     expect(markup).toContain(">Quote<");
     expect(markup).toContain(">Proposal<");
     expect(markup.match(/Send proposal/g)).toHaveLength(1);
+    expect(markup.indexOf("Delivery not recorded")).toBeLessThan(markup.indexOf("<summary>More</summary>"));
   });
 
   test("shows the compiler blocker rather than inventing a substitute primary action", () => {
