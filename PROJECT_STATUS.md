@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 01:06:23 CDT
+Last updated: 2026-09-05 01:58:12 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -13,9 +13,13 @@ Last updated: 2026-09-05 01:06:23 CDT
   Configuration Rules, pricing-v2 exact money and waterfalls, exact payment
   amount provenance, expanded Library presentation, and starter-pack adapters
   without creating a second quote/catalog/pricing authority. The current
-  Operations presentation refinement has completed local qualification;
-  exact-head CI remains pending publication of the complete candidate. This
-  source state makes no hosted or production claim.
+  Operations presentation refinement has completed local qualification. Exact-
+  head CI run `33949152892` passed classification, quick, core, Firebase/auth,
+  authoritative-pricing, CWV, Docker, and advisory product-truth jobs, but the
+  Playwright lane found five stale compatibility assertions against the
+  selected Library presentation. The test-only correction now passes those
+  five cases locally and awaits a replacement exact-head run. This source state
+  makes no hosted or production claim.
 
 - Whole-candidate local qualification now passes across the synchronized
   Workbench, Calendar-first Operations, Now, Library, internal Client 360, and
@@ -29,7 +33,7 @@ Last updated: 2026-09-05 01:06:23 CDT
   results establish source/local evidence, not connected-hosted, provider,
   production, recipient, assistive-technology, or human-acceptance evidence.
 
-- A same-day branch/worktree reconciliation found all 17 UX Convergence commits
+- A same-day branch/worktree reconciliation found all 30 UX Convergence commits
   on this candidate and confirmed that current `origin/main` is tree-identical
   to the morning v0.16.6 release receipt. No other same-day commit exists outside
   this branch. The integration checkout's uncommitted Golden Lattice planning
@@ -51,12 +55,13 @@ Last updated: 2026-09-05 01:06:23 CDT
   combined comparison received a local **9.5/10 — GO** visual verdict. Commit,
   exact-head CI, hosted, production, and human evidence remain distinct.
 
-- Draft PR #129 remains frozen at exact remote head
-  `dbf35164e77c1d441c254b110f0a5372f60ac162`. The local convergence branch is
-  ahead and pending whole-branch qualification before publication. It contains
-  the Workbench, Calendar-first Operations, Now, Library, internal Client 360,
-  and customer proposal decision-center candidate. The work remains isolated
-  from the integration checkout and its unrelated changes.
+- Draft PR #129 is published at exact remote head
+  `8b64e4e199751018c6ade5592ffa9545611c933b`. The local convergence branch adds
+  only the bounded Library acceptance correction above that head before
+  replacement publication. It contains the Workbench, Calendar-first
+  Operations, Now, Library, internal Client 360, and customer proposal
+  decision-center candidate. The work remains isolated from the integration
+  checkout and its unrelated changes.
 - The Library portion of this candidate now follows the selected
   Option 2 composition with Option 3 restraint. Desktop uses one broad
   commercial ledger and one secondary readiness rail; mobile preserves that

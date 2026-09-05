@@ -385,8 +385,8 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
   });
   await expect(page.getByText(`No menu items are configured for ${selectedEventType} yet.`)).toBeVisible();
   await page.getByRole("button", { name: "Add menu items" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Catalog Admin" }) });
-  await expect(catalogAdmin.getByRole("heading", { name: "Catalog Admin" })).toBeVisible();
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
+  await expect(catalogAdmin.getByRole("heading", { name: "Library settings" })).toBeVisible();
   await expect(page.locator(".admin-tab.active")).toHaveText("Menu");
   await expect(catalogAdmin.getByRole("combobox", { name: "Event type", exact: true }))
     .toHaveValue(selectedEventTypeId);
@@ -440,9 +440,7 @@ test("a menu item stages immediately without activating the current quote", asyn
 
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({
-    has: page.getByRole("heading", { name: "Catalog Admin" })
-  });
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
   await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
   await catalogAdmin.getByRole("combobox", { name: "Event type", exact: true })
     .selectOption(selectedEventTypeId);
@@ -458,8 +456,10 @@ test("a menu item stages immediately without activating the current quote", asyn
   await catalogAdmin.getByRole("button", { name: "Add Item" }).click();
   await expect(catalogAdmin.getByLabel("Edit Immediate Recovery Entree").getByLabel("Name", { exact: true }))
     .toHaveValue("Immediate Recovery Entree");
-  await expect(catalogAdmin.getByText("Ready to review", { exact: true })).toBeVisible();
-  await expect(catalogAdmin.getByText("1 changed record; active pricing is unchanged.")).toBeVisible();
+  await expect(catalogAdmin.getByText("Library changes are in this workspace only", { exact: true })).toBeVisible();
+  await expect(catalogAdmin.getByText(
+    "1 change is available here. Publishing is unavailable from this source. No shared catalog or pricing changed."
+  )).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__catalogDraftSaveCalls.length)).toBe(1);
 
   await catalogAdmin.getByRole("button", { name: "Close" }).click();
@@ -1467,9 +1467,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
 
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({
-    has: page.getByRole("heading", { name: "Catalog Admin" })
-  });
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
   await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
   const adminEventType = catalogAdmin.getByRole("combobox", { name: "Event type", exact: true });
   await expect.poll(() => adminEventType.locator("option").count()).toBeGreaterThan(2);

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-05 01:06:23 CDT
+Last updated: 2026-09-05 01:58:12 CDT
 
 All notable project changes are documented in this file.
 
@@ -13,8 +13,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   Clients compositions without changing runtime behavior or authority. The
   exact Now-to-Calendar test now addresses the focused event by its accessible
   name, and the legacy Calm Four Clients assertion now verifies the selected
-  relationship-led heading instead of superseded presentation copy. A
-  same-day branch/worktree reconciliation confirms all 17 UX Convergence
+  relationship-led heading instead of superseded presentation copy. Five
+  compatibility browser cases now retain the **Catalog Admin** entry-point
+  contract while addressing the selected **Library settings** dialog, opening
+  the intentionally disclosed Advanced policy and customer-facing brand groups
+  before editing, and asserting the real **Changes waiting to save** state
+  rather than misclassifying an unsaved local edit as a synchronization
+  failure. The corrected five-case CI-shaped matrix passes locally without any
+  runtime, catalog, pricing, persistence, or role-authority change. A same-day
+  branch/worktree reconciliation confirms all 30 UX Convergence
   commits are present on this candidate and no other same-day commit exists
   outside it; unrelated integration-checkout planning work and older
   experimental worktrees remain excluded. Whole-candidate local qualification
