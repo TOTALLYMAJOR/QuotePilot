@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-05 09:12:00 CDT
+Last updated: 2026-09-05 09:32:23 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Repaired the branded customer-portal browser fixture after its fixed issue
+  timestamp crossed the product's authoritative 30-day portal-validity limit
+  during exact-head CI run `33971452740`. The active fixture now uses the test
+  execution time while its explicit expired sibling continues to prove the
+  terminal recovery path. The focused real-browser case passes locally; no
+  portal validity, persistence, customer output, or payment behavior changed.
 - Hardened governed Firebase candidate deployment so a complete Functions
   production dependency tree is verified before receipt reservation or any
   provider mutation. The first `v0.17.0` provider-profile attempt at

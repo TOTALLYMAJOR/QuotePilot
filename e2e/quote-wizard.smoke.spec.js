@@ -1242,7 +1242,10 @@ test("portal refreshes webhook-backed payment state after a Stripe success retur
 test("valid and expired portal links use tenant branding without exposing token entry", async ({ page }) => {
   const activeKey = "portal-branded-active-12345678901234567890";
   const expiredKey = "portal-branded-expired-1234567890123456";
-  const createdAtISO = "2026-08-06T12:00:00.000Z";
+  // Keep the active fixture inside the authoritative 30-day portal window.
+  // A fixed issue date turns this into a wall-clock failure while the
+  // explicitly expired sibling below already covers the terminal path.
+  const createdAtISO = new Date().toISOString();
   await page.addInitScript(({ activePortalKey, expiredPortalKey, createdAt }) => {
     const nativeClear = Storage.prototype.clear;
     Storage.prototype.clear = function preservePortalFixture() {

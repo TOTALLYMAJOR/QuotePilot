@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 09:12:00 CDT
+Last updated: 2026-09-05 09:32:23 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -21,7 +21,13 @@ Last updated: 2026-09-05 09:12:00 CDT
   partial receipt is retained; the provider-acceptance window did not establish
   a deployment or payment result, and a fresh published/qualified SHA is
   required. Candidate preflight now verifies that dependency tree before
-  receipt reservation or provider mutation. Production remains unchanged.
+  receipt reservation or provider mutation. Follow-up exact-head CI run
+  `33971452740` passed seven jobs and correctly blocked staging on one
+  customer-portal browser fixture whose fixed issue timestamp had crossed the
+  product's 30-day validity boundary. The active fixture is now wall-clock safe,
+  its explicit expired sibling remains authoritative, and the focused browser
+  case passes locally. A new exact-head CI run is required. Production remains
+  unchanged.
 
 - Whole-candidate local qualification now passes across the synchronized
   Workbench, Calendar-first Operations, Now, Library, internal Client 360, and
