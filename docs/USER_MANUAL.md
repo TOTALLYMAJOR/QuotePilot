@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-05 18:49:28 CDT
+Last updated: 2026-09-05 18:50:11 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1835,63 +1835,176 @@ assistive-technology, or human acceptance.
 - To change what is included/locked, update entitlements through customer provisioning, then reopen `Admin Catalog`.
 
 ## Import Studio
-- Open `Imports` or `/app/imports`. Admin access is required.
-- The destination organization is locked to the authenticated admin's organization and cannot be supplied or changed by uploaded data.
-- The first release accepts CSV files up to 2 MB and supports:
-  - Customers
-  - Packages
-  - Add-ons
-  - Rentals
-  - Menu items
-- Upload a CSV, confirm the suggested record type, and review the proposed column mappings.
-- Rows labeled `Need attention` are not imported. Correct the source file or change the mapping, then review again.
-- Import creates ready records only, skips existing duplicate emails/names, sends no outbound messages, and saves an organization-scoped receipt.
-- Customer and catalog imports run through the signed-in organization's
-  admin-only server operations. For customers, the server owns the opaque
-  customer ID, normalized name/email directory keys, private normalized-email
-  ownership claim, duplicate/collision decision, actor receipt, and rollback
-  check; browser code cannot read or write the email claim or create/mutate
-  customer/import-receipt documents directly. For package, add-on,
-  rental, and menu records, the server also stores prices in integer minor
-  units and, when a record is created, advances the catalog revision once and
-  clears prior pricing confirmation so an owner reviews the resulting catalog
-  again. An all-duplicate receipt does not disturb confirmed pricing.
-- An import retry keeps the same batch identity. Customer retries are accepted
-  only for the exact same normalized input; a mismatched retry fails closed.
-  If a request returns without a server receipt, Import Studio labels the
-  outcome uncertain and offers reconciliation of that same batch instead of
-  assuming success or failure. While submission or reconciliation is active,
-  Close, reset, source-type changes, and file replacement stay locked so the
-  batch identity cannot be discarded. A confirmed receipt is the only completed-state
-  evidence and never implies outbound messages. If another catalog save,
-  import, pack action, rollback, or confirmation advanced the revision first,
-  the server returns a definitive conflict and makes no writes; Import Studio
-  refreshes the catalog in place and labels the action as recovery while
-  keeping the batch identity, file, visible error, or receipt available. If the
-  refresh itself fails, use `Retry source refresh`. Review the
-  refreshed source before retrying the same batch identity; no completed write
-  is assumed.
-- `Undo this import` removes only unchanged documents whose `importBatchId` and
-  baseline hash match that receipt. Records edited after import, package
-  inclusions, and records still selected by persistent templates are protected
-  so rollback cannot leave an orphaned catalog reference. Pre-existing records
-  are never deleted by the batch. Catalog rollback also requires the current
-  revision; it advances once and reopens pricing review only when a record is
-  actually deleted.
-- Existing customer imports created by the previously deployed browser path
-  remain readable records, and their legacy receipts retain guarded rollback
-  compatibility. They do not acquire new directory keys merely because this
-  source exists; normalize/migrate legacy customer data under a separately
-  reviewed data operation before enabling the new directory for a tenant.
-- Catalog Admin blocks menu deactivation or deletion while other catalog,
-  branding, menu-item, or menu-form drafts are pending. Finish/save those edits,
-  or close and discard them, before retrying the revisioned menu action.
-- Saving or editing a quote also projects its customer into the matching
-  organization record inside the trusted server transaction. An existing
-  normalized email is reused; blank quote fields do not erase imported phone,
-  company, notes, or other richer data. Browser code cannot write projected
-  quote history.
-- Active quotes, payments, contracts, bookings, and staff accounts are outside the first Import Studio release and must not be represented as imported operational history.
+
+Open **Imports** or `/app/imports`. Admin access is required. The destination is
+locked to the signed-in admin's organization; a file cannot select or override
+another tenant.
+
+### Supported sources and records
+
+- CSV files may be up to 5 MB and may contain Customers, Packages, Add-ons,
+  Rentals, Event types, Menu sections, or Menu items. Comma, tab, semicolon, and
+  pipe separators are detected. Duplicate headings and short rows remain
+  visible for review. A row with values beyond its headings is blocked so those
+  values cannot disappear during mapping.
+- Searchable PDFs may be up to 12 MB and 80 pages and may contain only the six
+  catalog record types: Packages, Add-ons, Rentals, Event types, Menu sections,
+  or Menu items. QuotePilot reads the existing text layer and retains page and
+  source-excerpt provenance. PDF extraction is heuristic: every inferred row,
+  heading, price, and relationship must be reviewed.
+- A single reviewed operation may contain at most 1,500 ready rows. Split a
+  larger source into coherent sections so every inferred record remains
+  inspectable.
+- Package inclusion columns may name menu items, add-ons, or rentals. An
+  inclusion is staged only when its ID or normalized name resolves uniquely in
+  the current catalog; ambiguous and missing relationships are blockers. Each
+  inclusion list is limited to 100 exact, non-duplicated record IDs.
+
+The supported fields are deliberately narrower than an arbitrary source file:
+
+- **Customers:** name, email, phone, company, and notes. At least name or email
+  is required.
+- **Packages:** name, positive price per person, optional cost per person,
+  included menu items/add-ons/rentals, and active state.
+- **Add-ons:** name, pricing basis, price, optional cost, and active state.
+- **Rentals:** name, price, optional cost, a whole-number guests-per-unit ratio
+  from 1 through 100,000, and active state.
+- **Event types:** name and active state.
+- **Menu sections:** name, exact event type, and active state.
+- **Menu items:** name, exact event type and menu section, price, optional cost,
+  pricing basis, and active state.
+
+Money inputs accept no more than two decimal places and no amount above
+`1000000.00`; package price per person must be greater than zero. Source columns
+outside these fields—including catalog descriptions not supported by the
+current catalog authority—are named under **Not imported as record fields**.
+PDF page and excerpt columns remain visible provenance even when they are not
+record fields.
+
+Customer PDFs, image-only or scanned PDFs, password-protected PDFs, spreadsheets
+other than CSV, and damaged or unsupported documents are not imported. Quotes,
+opportunities/bookings, contracts, payments, messages, staff accounts, event
+templates, and advanced pricing rules are also excluded. They must never be
+represented as imported operational history. Export a searchable catalog PDF
+or a CSV for the supported record type instead.
+
+### The eight-stage workbench
+
+1. **Choose source** accepts a CSV or searchable PDF, states the format and size
+   boundary, and keeps the organization destination visible.
+2. **Inspect source** reports the detected delimiter or PDF text method, row or
+   page count, provenance, and any structural blocker before mapping begins.
+3. **Confirm records** suggests one supported record type. Change it when the
+   source means something else; PDFs never offer Customers.
+4. **Map fields** suggests header matches without silently claiming certainty.
+   One source column cannot drive multiple destination fields. For required
+   relationships, zero choices show a blocker and recovery, one choice becomes
+   static confirmed context, and many choices remain selectable.
+5. **Resolve issues** shows every inferred source row with its row number or PDF
+   page/excerpt and a scan-ready column for every mapped value, resolved stable
+   ID, default, and field state. The review uses explicit 50-row pages with the
+   visible range and Previous/Next controls, so every inferred row remains
+   reachable; preflight still evaluates the exact included set across all
+   pages. Invalid money, boolean, pricing-basis, required-field, duplicate, and
+   relationship values stay blocked. Fix and reload the source, change its
+   mapping, or explicitly uncheck a row. Blocked rows are never silently
+   omitted, and every mapping, constant, or inclusion change makes an older
+   preflight stale.
+6. **Preflight plan** sends the exact included customer set to the tenant-bound
+   server or checks the current shared catalog-draft generation and catalog
+   revision. The resulting plan reports projected creates/skips or staged
+   changes and must still match the exact source before Import becomes eligible.
+7. **Authoritative import** asks for confirmation and states the destination,
+   record count, expected effect, and that no messages will be sent. Controls
+   that could change or discard the source are locked while the outcome is
+   pending or uncertain.
+8. **Review and publish** shows the authoritative receipt. Customer records are
+   saved immediately. Catalog records are **Saved** into the shared setup draft
+   and remain **Draft**—not **Published**—until an admin reviews and publishes
+   that draft in Library. Use **Review catalog draft** for the exact handoff. If
+   a replay proves that this exact request was already published, the workbench
+   instead shows **Published**, links to **Review active catalog**, and offers no
+   import undo; a later shared draft may contain unrelated work.
+
+### Customer authority, batching, and recovery
+
+The server owns customer IDs, normalized name/email directory keys, private
+email claims, duplicate/collision decisions, actor receipts, and rollback
+checks. Browser code cannot create those authoritative records directly. The
+preflight records a tenant- and actor-bound server receipt that is valid for 15
+minutes to begin and returns its SHA-256 plan hash; every transaction-sized
+child request is bound to that issued receipt, full source, exact hash, and
+child index. A correctly calculated but never-issued hash is rejected. The
+server recomputes the binding before it writes. A child contains no more than
+350 records and never exceeds Firestore's 500-write transaction budget; when
+every row introduces a unique email claim, the safe ceiling is 249 rows. Stable
+parent and child IDs make confirmed parts replay-safe when a later part needs
+recovery.
+
+The first accepted child receipt activates a 24-hour continuation window for
+that exact session. Remaining children and exact replays may continue during
+that window even after the original 15-minute issue window has elapsed. After
+24 hours, the session cannot be extended: undo the confirmed subset or begin a
+new import with a new server preflight.
+
+Only `{ok: true}` child receipts with the expected batch identity, completed
+state, plan hash, and child index count as success. If no acceptable receipt
+returns, the workbench shows **Failed**, **Pending**, or a confirmed partial
+result instead of manufacturing completion. A partial receipt names only the
+accepted child batches and exposes both **Resume remaining import** and **Undo
+this import**; the latter is limited to that confirmed subset. Retry or
+reconcile the same stable identity rather than starting a blind second import.
+Undo processes child receipts in reverse order and removes only unchanged
+records stamped by the batch. Edited records are protected, and pre-existing
+duplicates are never deleted.
+
+Existing customer imports and their legacy receipts retain guarded rollback
+compatibility. They do not acquire new normalized directory keys merely because
+this workbench exists; any legacy-data normalization remains a separately
+reviewed migration.
+
+### Catalog draft authority and recovery
+
+Catalog imports stage creates into the same shared setup draft used by Library.
+Preflight SHA-256-binds the exact tenant, batch, included rows, generated
+patches, draft generation, base catalog revision, current revision, change-count
+limit, and conservative byte limit. An open draft based on an older active
+revision is blocked before staging and must be reviewed, discarded, or
+reconciled in Library. The active catalog, active prices, catalog
+revision, and prior publication state do not change at import time. Review the
+staged records, resolve any concurrent-draft conflict, and publish through the
+existing catalog authority. The browser accepts a save receipt only when its
+organization, base revision, expected and resulting generation, projected
+change count, and complete patch identities and payloads match the reviewed
+plan; a success-shaped but substituted response fails closed.
+
+The server also keeps a tenant- and actor-bound mutation receipt for the exact
+request ID and SHA-256-normalized patch set. Publication records the exact patch
+hashes and resulting catalog revision under that draft's server-only session
+lineage. This lets an exact replay after a lost response report **Staged** only
+when the mutation remains in that open draft, or **Published** only when the
+publication lineage matches and every requested field is still active. A
+reused request ID, different actor or payload, missing lineage, or subsequently
+changed active value fails closed instead of being presented as confirmation.
+
+If another draft save or publication changes a generation or revision, the
+workbench retains the same batch identity and waits for the requested catalog
+read to finish before saying the source was refreshed. A read failure keeps
+**Retry source refresh** available. After a successful read, run a fresh
+preflight against the same source and identity; the workbench does not assume a
+write. When the server definitively reports that the transaction was aborted,
+the explicit **Release no-write attempt** action can unlock that rejected
+identity after confirmation. This release does not claim that anything was
+staged and does not discard the visible source.
+
+Catalog Admin separately blocks menu deactivation or deletion while other
+catalog, branding, menu-item, or menu-form drafts are pending. Finish, publish,
+or discard those edits before retrying the revisioned action.
+
+Saving or editing a quote continues to project its customer through the trusted
+quote transaction. A matching normalized email is reused, and blank quote
+fields do not erase richer imported phone, company, notes, or other details.
+Browser code cannot write projected quote history.
 
 ## Public $1 Invoice-First Buyer Access
 

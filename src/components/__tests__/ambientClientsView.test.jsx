@@ -483,6 +483,52 @@ describe("AmbientClientsView", () => {
     });
   });
 
+  test("turns a rejected async client handoff into terminal recovery", async () => {
+    const onOpenClient = vi.fn(() => Promise.reject(new Error("The selected client route is temporarily unavailable.")));
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel({ rows: [directoryRow(42, { customerId: CLIENT_ID })] })}
+        currentUserRole="sales"
+        onOpenClient={onOpenClient}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+
+    await act(async () => {
+      container.querySelector(`[data-client-id="${CLIENT_ID}"] .ambient-client__primary`).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const acknowledgement = container.querySelector(".ambient-clients__acknowledgement");
+    expect(acknowledgement.getAttribute("data-result-kind")).toBe("recovery");
+    expect(acknowledgement.getAttribute("role")).toBe("alert");
+    expect(acknowledgement.textContent).toContain("selected client route is temporarily unavailable");
+    expect(acknowledgement.textContent).toContain("current client list remains visible");
+  });
+
+  test("turns a rejected async directory refresh into retryable recovery", async () => {
+    const onRefresh = vi.fn(() => Promise.reject(new Error("The client service did not answer.")));
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel()}
+        onRefresh={onRefresh}
+        onStartOpportunity={() => {}}
+      />
+    );
+
+    await act(async () => {
+      container.querySelector(".ambient-clients__refresh").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const acknowledgement = container.querySelector(".ambient-clients__acknowledgement");
+    expect(acknowledgement.getAttribute("data-result-kind")).toBe("recovery");
+    expect(acknowledgement.textContent).toContain("client service did not answer");
+    expect(acknowledgement.textContent).toContain("try this refresh again");
+  });
+
   test("makes relationship identity, state, risk, and the next action understandable at the top layer", () => {
     const markup = renderToStaticMarkup(
       <AmbientClientRelationship model={relationshipModel()} currentUserRole="sales" />
@@ -626,6 +672,29 @@ describe("AmbientClientsView", () => {
     });
     expect(container.querySelector(".ambient-client-overview__primary")
       .getAttribute("data-workspace-task-id")).toBe(action.id);
+  });
+
+  test("turns a rejected async relationship action into terminal recovery", async () => {
+    const onOpenConversation = vi.fn(() => Promise.reject(new Error("The conversation is not reachable right now.")));
+    mount(
+      <AmbientClientRelationship
+        model={relationshipModel()}
+        currentUserRole="sales"
+        onOpenConversation={onOpenConversation}
+      />
+    );
+
+    await act(async () => {
+      container.querySelector(".ambient-client-overview__primary").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const acknowledgement = container.querySelector(".ambient-client-overview__acknowledgement");
+    expect(acknowledgement.getAttribute("data-result-kind")).toBe("recovery");
+    expect(acknowledgement.getAttribute("role")).toBe("alert");
+    expect(acknowledgement.textContent).toContain("conversation is not reachable right now");
+    expect(acknowledgement.textContent).toContain("client overview remains visible");
   });
 
   test("distinguishes the prominent opportunity action as the exact return-focus control", () => {

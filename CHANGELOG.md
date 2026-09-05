@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-05 18:49:28 CDT
+Last updated: 2026-09-05 18:50:11 CDT
 
 All notable project changes are documented in this file.
 
@@ -138,6 +138,55 @@ This changelog is backfilled from git history and will be maintained going forwa
   receipt, and requires a fresh published and CI-qualified SHA. The bounded
   recovery is `npm ci --prefix functions`; no payment result or provider
   acceptance is inferred from the failed attempt.
+- Established `quote-pilot-field-state-v1` as the governing five-axis field
+  contract for availability, origin, editability, persistence, and evidence.
+  Shared `FieldStateIndicator` and 0/1/many `AdaptiveChoiceField` primitives now
+  distinguish absence, provenance, draft/save/publication authority, and
+  failure/recovery without color-only meaning. The registered adoption
+  replaces false one-option selectors across quote setup, event templates,
+  Package Workspace, staffing, catalog recovery, Ambient menu selection, and
+  the Import Workbench. High-confidence interaction repairs also add
+  hover/pressed/focus-visible/reduced-motion treatment and visible recovery to
+  the audited Quote History, customer portal, Pilot, role authority, Ambient
+  client, catalog, and workspace-handoff actions. The machine contract,
+  explicit surface registry, checker, and `lane:core` wiring make future
+  relevant field changes fail closed when registered semantics drift or a
+  shared-primitive adopter is not registered.
+- Rebuilt the admin-only Import Studio surface as a readiness-gated Import
+  Workbench for customer/catalog CSV and searchable-PDF catalog sources. It now
+  exposes eight source-to-publication stages; seven supported record types;
+  row/page/excerpt provenance; a scan-ready view of every mapped value, resolved
+  ID, default, and field state; explicit 50-row review pages that keep every
+  inferred record reachable while preflight covers the full included set;
+  explicit unsupported-column, mapping,
+  relationship, invalid-coercion, and row-exclusion resolution; and an
+  exact-current-plan gate before mutation. Customer
+  preflight scans the tenant destination, projects duplicates, and partitions
+  up to 1,500 reviewed rows under both the 350-record and Firestore 500-write
+  ceilings. Every child mutation is bound to a short-lived tenant/actor server
+  preflight receipt, the full normalized SHA-256 plan, and its child index;
+  the receipt has a 15-minute issue window and its first accepted child activates
+  a 24-hour exact-session continuation. Stable identities preserve
+  partial/uncertain recovery, accepted child receipts can be resumed or undone
+  as an exact subset, and only an exact accepted child receipt can aggregate as
+  completed. Catalog records now
+  stage into the existing revision-fenced shared setup draft under an exact
+  tenant/batch/row/patch/generation fingerprint and remain
+  explicitly Saved/Draft—not Published—until normal Library review and
+  publication. Success-shaped catalog responses are rejected unless their
+  organization, revision/generation projection, complete patch identities, and
+  payloads match the reviewed plan. Durable server-only mutation receipts bind
+  the exact request, tenant, actor, fences, and normalized patch hash; publication
+  lineage can reconcile a lost response as still Staged or already Published
+  only while the exact accepted fields remain staged or active. The Published
+  presentation links to the active catalog and never offers draft undo.
+  Recovery now awaits the actual catalog read, retains a retry after read
+  failure, and offers an explicit release only for a definitive no-write
+  transaction abort. PDF parsing is lazy-loaded,
+  searchable-text-only, and heuristic;
+  its same-origin runtime has a separate exact file/byte/SHA-256 budget;
+  source/local tests and visual inspection do not claim hosted Firebase,
+  production, assistive-technology, or human acceptance.
 - Synchronized final acceptance expectations with the selected Operations and
   Clients compositions without changing runtime behavior or authority. The
   exact Now-to-Calendar test now addresses the focused event by its accessible

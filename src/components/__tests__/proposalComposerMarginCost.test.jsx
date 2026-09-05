@@ -89,7 +89,9 @@ function baseProps() {
     onSelectionTouched: vi.fn(),
     onPatchForm: vi.fn(),
     onTemplateChange: vi.fn(),
-    onEventTypeChange: vi.fn()
+    onEventTypeChange: vi.fn(),
+    onGuidedMode: vi.fn(),
+    onOpenCatalogPricing: vi.fn()
   };
 }
 
@@ -105,5 +107,35 @@ describe("ProposalComposer staff cost and margin", () => {
     expect(html).toContain("Meets your 40% target.");
     expect(html).toContain("Proposal polish");
     expect(html).toContain("Large proposal text");
+  });
+
+  test("renders one available choice as static context and many as selects", async () => {
+    const ProposalComposer = await loadComposerWithMarginGate();
+    const html = renderToStaticMarkup(<ProposalComposer {...baseProps()} />);
+
+    expect(html).toContain('id="proposal-event-type-label"');
+    expect(html).toContain('data-adaptive-choice-value="gala"');
+    expect(html).not.toContain('id="proposal-event-type"');
+    expect(html).toContain('id="proposal-event-template"');
+    expect(html).toContain('data-adaptive-choice-value="local"');
+    expect(html).toContain('data-adaptive-choice-value="auto"');
+  });
+
+  test("blocks empty authoritative sets while preserving stale draft values", async () => {
+    const ProposalComposer = await loadComposerWithMarginGate();
+    const props = baseProps();
+    const html = renderToStaticMarkup(
+      <ProposalComposer
+        {...props}
+        eventTypes={[]}
+        settings={{ ...props.settings, taxRegions: [] }}
+      />
+    );
+
+    expect(html).toContain("The saved event type");
+    expect(html).toContain("The saved tax region");
+    expect(html).toContain("Open Library setup");
+    expect(html).not.toContain('id="proposal-event-type"');
+    expect(html).not.toContain('id="proposal-tax-region"');
   });
 });

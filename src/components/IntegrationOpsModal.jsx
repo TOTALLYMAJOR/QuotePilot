@@ -37,6 +37,7 @@ import {
 import { useModalDialog } from "../hooks/useModalDialog";
 import CustomerProvisioningAuthorityState from "./CustomerProvisioningAuthorityState";
 import OrganizationRoleAuthorityPanel from "./OrganizationRoleAuthorityPanel";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
@@ -1112,6 +1113,17 @@ export function IntegrationOpsView({
           : provisionState.error
             ? "error"
             : "ready";
+  const selectedIntegrationQuotePresent = state.quotes.some((quote) => quote.id === form.quoteId);
+  const integrationQuoteOptions = state.quotes.map((quote) => ({
+    value: quote.id,
+    label: `${quote.quoteNumber || quote.id} • ${quote.customer?.name || quote.customer?.email || "-"} • ${quote.event?.date || "-"}`
+  }));
+  if (form.quoteId && !selectedIntegrationQuotePresent && integrationQuoteOptions.length > 0) {
+    integrationQuoteOptions.unshift({
+      value: form.quoteId,
+      label: `Previously selected quote ${form.quoteId} (not in the current read)`
+    });
+  }
 
   const handleRecord = async () => {
     if (!form.quoteId) {
@@ -1840,20 +1852,33 @@ export function IntegrationOpsView({
             for audit events until a server-authorized CRM connector is enabled.
           </p>
           <div className="admin-grid-settings integration-form-grid">
-            <label>
-              Quote
-              <select
+            <div data-choice-field="integration-audit-quote">
+              <AdaptiveChoiceField
+                label="Quote"
+                options={integrationQuoteOptions}
                 value={form.quoteId}
                 onChange={(event) => setForm((prev) => ({ ...prev, quoteId: event.target.value }))}
-              >
-                <option value="">Select quote</option>
-                {state.quotes.map((quote) => (
-                  <option key={quote.id} value={quote.id}>
-                    {quote.quoteNumber || quote.id} • {quote.customer?.name || quote.customer?.email || "-"} • {quote.event?.date || "-"}
-                  </option>
-                ))}
-              </select>
-            </label>
+                disabled={state.loading}
+                placeholder="Select quote"
+                emptyState="unavailable"
+                emptyReason={form.quoteId && !selectedIntegrationQuotePresent
+                  ? `The previously selected quote ${form.quoteId} is not in the current integration read.`
+                  : state.loading
+                    ? "The integration quote read is still loading."
+                    : "No quote is available to receive an integration audit event."}
+                recoveryAction={{ label: "Reload quotes", onClick: load }}
+                singleChoiceDetail="This is the only quote available for an integration audit event."
+                fieldState={form.quoteId && !selectedIntegrationQuotePresent
+                  ? { evidence: "stale" }
+                  : undefined}
+                fieldStateDetails={form.quoteId && !selectedIntegrationQuotePresent
+                  ? {
+                      reason: "The selected quote is not present in the current integration read.",
+                      recoveryAction: { label: "Reload quotes", onClick: load }
+                    }
+                  : undefined}
+              />
+            </div>
             <label>
               Provider
               <select

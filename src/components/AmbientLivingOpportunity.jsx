@@ -73,6 +73,7 @@ import AmbientProposalContext from "./AmbientProposalContext";
 import AmbientOperationalReceipts from "./AmbientOperationalReceipts";
 import { deriveAttendanceState } from "./attendanceState";
 import QuickUpdatesPanel from "./QuickUpdatesPanel";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import "./ambientLivingOpportunity.css";
 
 const AMBIENT_INTERACTION_EVENT_NAME = "quotepilot:ambient-interaction";
@@ -431,6 +432,9 @@ function ActionAcknowledgement({ value }) {
       aria-live="polite"
     >
       <strong>{value.label}</strong>
+      {value.reason && value.reason !== value.consequence && (
+        <span data-acknowledgement-reason>{value.reason}</span>
+      )}
       <span>{value.consequence}</span>
       <small>{value.nextResolutions[0]?.label}</small>
     </div>
@@ -546,6 +550,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const quickUpdatesMobileTriggerRef = useRef(null);
   const quickUpdatesReturnFocusRef = useRef(null);
   const quickUpdatesDialogId = useId();
+  const menuReplacementSourceFieldId = useId();
   const pilotContextAnchorRef = useRef(null);
   const eventLogisticsTriggerRefs = useRef(Object.fromEntries(
     EVENT_LOGISTICS_KINDS.map((kind) => [kind, { current: null }])
@@ -738,6 +743,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       ? `${model.menuObject.items.length} saved ${model.menuObject.items.length === 1 ? "item" : "items"}`
       : "Menu not recorded"
   ].filter(Boolean).join(" · ");
+  const menuReplacementSourceOptions = model.menuObject.items.flatMap((item) => {
+    const value = String(item?.id || "").trim();
+    if (!value) return [];
+    return [{ value, label: item.savedName || value }];
+  });
   const proposalActivity = model.disclosureLayers.supporting.find((item) => item.id === "activity");
   const quickUpdatesAvailable = Boolean(
     ordinaryEditAllowed
@@ -1962,7 +1972,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     }
   };
 
-  const openLegacyWorkspace = () => {
+  const openLegacyWorkspace = async () => {
     const action = model.actions.openLegacyControls;
     if (!action.enabled || typeof onOpenLegacyWorkspace !== "function") return;
     const runtimeToken = beginAction(action);
@@ -1975,7 +1985,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       deferRuntime: true
     });
     try {
-      const navigationResult = onOpenLegacyWorkspace({
+      const navigationResult = await onOpenLegacyWorkspace({
         object: action.arrivalContract.object,
         reason: action.arrivalContract.reason,
         consequence: action.arrivalContract.consequence,
@@ -2008,7 +2018,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         runtimeToken,
         kind: "recovery",
         label: "Full opportunity controls were not opened",
-        reason: error?.userMessage || "The existing role-safe controls could not be opened.",
+        reason: error?.userMessage || error?.message || "The existing role-safe controls could not be opened.",
         consequence: "The opportunity and unsaved preview remain unchanged.",
         nextActionId: "back-to-opportunities",
         nextResolution: "Return to Opportunities or continue reviewing here."
@@ -4404,40 +4414,87 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             )}
           </section>
 
-          {model.actions.replaceMenuItemInDraft && (
+          {(model.actions.replaceMenuItemInDraft || menuReplacementSourceOptions.length === 0) && (
             <section className="ambient-menu-replacement">
-              <h3>Available menu replacements</h3>
-              <label>
-                <span>Replace this saved item</span>
-                <select
+              <h3>{model.actions.replaceMenuItemInDraft
+                ? "Available menu replacements"
+                : "Menu replacement unavailable"}</h3>
+              {menuReplacementSourceOptions.length === 0 ? (
+                <div
+                  className="adaptive-choice-field ambient-menu-replacement-source"
+                  role="group"
+                  aria-labelledby={`${menuReplacementSourceFieldId}-label`}
+                  aria-describedby={`${menuReplacementSourceFieldId}-reason`}
+                  data-adaptive-choice-mode="empty"
+                  data-menu-replacement-source-state="unavailable"
+                >
+                  <span
+                    className="adaptive-choice-field__label"
+                    id={`${menuReplacementSourceFieldId}-label`}
+                  >
+                    Replace this saved item
+                  </span>
+                  <span
+                    className="adaptive-choice-field__description"
+                    id={`${menuReplacementSourceFieldId}-reason`}
+                    role="status"
+                  >
+                    <strong>Unavailable.</strong>{" "}
+                    {model.menuObject.savedSelection.reason
+                      || "No exact saved menu item is available to use as the replacement source."}
+                  </span>
+                  <button
+                    type="button"
+                    className="field-state-indicator__recovery"
+                    onClick={model.actions.openLegacyControls.enabled
+                      ? openLegacyWorkspace
+                      : dismissMenuContext}
+                    data-ambient-action-id={model.actions.openLegacyControls.enabled
+                      ? model.actions.openLegacyControls.id
+                      : model.actions.dismissMenuContext.id}
+                  >
+                    {model.actions.openLegacyControls.enabled
+                      ? "Open quote workspace"
+                      : "Close menu details"}
+                  </button>
+                </div>
+              ) : (
+                <AdaptiveChoiceField
+                  className="ambient-menu-replacement-source"
+                  id={menuReplacementSourceFieldId}
+                  label="Replace this saved item"
+                  description="Choose the exact saved item whose quantity and position the editor should preserve."
+                  options={menuReplacementSourceOptions}
                   value={menuReplacementSourceId}
                   onChange={(event) => setMenuReplacementSourceId(event.target.value)}
-                >
-                  {model.menuObject.items.map((item) => (
-                    <option key={item.id} value={item.id}>{item.savedName || item.id}</option>
-                  ))}
-                </select>
-              </label>
-              <p className="ambient-object-instruction">
-                QuotePilot keeps this item's saved quantity and position. Review price and connected effects in the editor.
-              </p>
-              <div className="ambient-candidate-list">
-                {model.menuObject.replacementCandidates.items
-                  .filter((candidate) => candidate.draftReplacementEligible)
-                  .map((candidate) => (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      className="ambient-candidate-action"
-                      onClick={() => stageMenuReplacement(candidate)}
-                      data-ambient-action-id={model.actions.replaceMenuItemInDraft.id}
-                    >
-                      <span>{candidate.name}</span>
-                      <small>{candidate.section.label} · review replacement</small>
-                      <ArrowRight size={17} aria-hidden="true" />
-                    </button>
-                  ))}
-              </div>
+                  placeholder="Choose a saved menu item"
+                  singleChoiceDetail="This is the only saved menu item, so there is nothing to choose. Its exact quantity and position will be preserved."
+                />
+              )}
+              {model.actions.replaceMenuItemInDraft && (
+                <>
+                  <p className="ambient-object-instruction">
+                    QuotePilot keeps this item's saved quantity and position. Review price and connected effects in the editor.
+                  </p>
+                  <div className="ambient-candidate-list">
+                    {model.menuObject.replacementCandidates.items
+                      .filter((candidate) => candidate.draftReplacementEligible)
+                      .map((candidate) => (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          className="ambient-candidate-action"
+                          onClick={() => stageMenuReplacement(candidate)}
+                          data-ambient-action-id={model.actions.replaceMenuItemInDraft.id}
+                        >
+                          <span>{candidate.name}</span>
+                          <small>{candidate.section.label} · review replacement</small>
+                          <ArrowRight size={17} aria-hidden="true" />
+                        </button>
+                      ))}
+                  </div>
+                </>
+              )}
             </section>
           )}
 

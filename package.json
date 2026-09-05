@@ -62,6 +62,7 @@
     "check:project-state": "node ./scripts/check-project-state.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
     "check:capability-surfaces": "node ./scripts/check-capability-surfacing.mjs",
+    "check:field-states": "node ./scripts/check-field-state-contract.mjs",
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
     "check:perf:cwv": "bash ./scripts/run-lighthouse-cwv.sh",
     "release:uat:digest": "node ./scripts/release-uat-attestation.mjs --print-digest",

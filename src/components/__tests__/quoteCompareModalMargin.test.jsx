@@ -77,4 +77,54 @@ describe("QuoteCompareModal margin (flag default off)", () => {
     expect(markup).toContain("Better");
     expect(markup).toContain("Best");
   });
+
+  test("uses selects only for multi-option comparison sets", () => {
+    const markup = renderToStaticMarkup(
+      <QuoteCompareModal
+        open
+        onClose={() => {}}
+        form={form}
+        setForm={() => {}}
+        catalog={catalog}
+        settings={settings}
+        styles={["Buffet", "Plated"]}
+        primaryTotals={{ total: 5000, servers: 0, chefs: 0 }}
+      />
+    );
+
+    expect(markup).toContain('id="compare-package"');
+    expect(markup).toContain('id="compare-service-style"');
+    expect(markup).toContain('data-adaptive-choice-value="local"');
+    expect(markup).not.toContain('id="compare-tax-region"');
+    expect(markup).toContain('id="compare-season-profile"');
+  });
+
+  test("blocks empty comparison sets and keeps stale values visible", () => {
+    const emptyCatalog = { ...catalog, packages: [] };
+    const staleForm = { ...form, pkg: "retired", style: "Family", taxRegion: "retired-tax" };
+    const emptySettings = { ...settings, taxRegions: [] };
+    const markup = renderToStaticMarkup(
+      <QuoteCompareModal
+        open
+        onClose={() => {}}
+        form={staleForm}
+        setForm={() => {}}
+        catalog={emptyCatalog}
+        settings={emptySettings}
+        styles={[]}
+        primaryTotals={{ total: 5000, servers: 0, chefs: 0 }}
+      />
+    );
+
+    expect(markup).toContain("no longer available in the catalog");
+    expect(markup).toContain("no longer available");
+    expect(markup).toContain("no longer configured");
+    expect(markup).toContain("retired");
+    expect(markup).toContain("Family");
+    expect(markup).toContain("retired-tax");
+    expect(markup).toContain("Return to quote");
+    expect(markup).not.toContain('id="compare-package"');
+    expect(markup).not.toContain('id="compare-service-style"');
+    expect(markup).not.toContain('id="compare-tax-region"');
+  });
 });

@@ -135,6 +135,60 @@ describe("EventTemplatesEditor", () => {
     expect(idInput.readOnly).toBe(true);
     expect(idInput.value).toBe("wedding");
     expect(idInput.closest('[data-template-group="advanced"]').open).toBe(false);
+    const startingOffer = container.querySelector('[data-template-field="pkg"]');
+    expect(startingOffer.dataset.adaptiveChoiceMode).toBeUndefined();
+    expect(startingOffer.querySelector('[data-adaptive-choice-mode="single"]')).toBeTruthy();
+    expect(startingOffer.querySelector("select")).toBeNull();
+    expect(container.querySelector('[data-template-field="eventTypeId"]')?.tagName).toBe("SELECT");
+  });
+
+  test("turns an unselected sole offer into an explicit suggestion with a draft recovery action", () => {
+    const onChange = vi.fn();
+    renderEditor({
+      onChange,
+      templates: [{ ...TEMPLATE, pkg: "" }]
+    });
+
+    const startingOffer = container.querySelector('[data-template-field="pkg"]');
+    expect(startingOffer.querySelector("select")).toBeNull();
+    expect(startingOffer.querySelector('[data-field-state-primary="suggested"]')).toBeTruthy();
+    expect(startingOffer.textContent).toContain("Confirm Deluxe");
+    click([...startingOffer.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Use Deluxe"));
+
+    expect(onChange).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "wedding", pkg: "deluxe" })],
+      { type: "edit", templateId: "wedding", field: "pkg" }
+    );
+  });
+
+  test("preserves a stale sole choice until the operator explicitly replaces it", () => {
+    const onChange = vi.fn();
+    renderEditor({
+      onChange,
+      templates: [{ ...TEMPLATE, pkg: "legacy" }]
+    });
+
+    const startingOffer = container.querySelector('[data-template-field="pkg"]');
+    expect(startingOffer.querySelector('[data-field-state-primary="stale"]')).toBeTruthy();
+    expect(startingOffer.textContent).toContain("Unavailable starting offer: legacy");
+    click([...startingOffer.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Use Deluxe"));
+
+    expect(onChange.mock.calls[0][0][0]).toEqual(expect.objectContaining({ pkg: "deluxe" }));
+  });
+
+  test("renders an instructive state instead of an empty offer selector", () => {
+    renderEditor({
+      packages: [],
+      templates: [{ ...TEMPLATE, pkg: "" }]
+    });
+
+    const startingOffer = container.querySelector('[data-template-field="pkg"]');
+    expect(startingOffer.querySelector("select")).toBeNull();
+    expect(startingOffer.querySelector("button")).toBeNull();
+    expect(startingOffer.querySelector('[data-field-state-primary="not_provided"]')).toBeTruthy();
+    expect(startingOffer.textContent).toContain("Activate one elsewhere in Library");
   });
 
   test("emits a parent-owned draft while preserving identity and unknown fields", () => {

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "contractId": "quote-pilot-field-state-v1",
+  "version": 1,
+  "purpose": "Keep absence, source, edit authority, persistence, and evidence distinct while presenting one clear primary state.",
+  "runtimeModule": "src/lib/fieldState.js",
+  "axes": {
+    "availability": {
+      "baseline": "known",
+      "states": [
+        { "id": "unknown", "label": "Unknown", "meaning": "We do not know.", "priority": 140, "tone": "neutral", "announce": "off" },
+        { "id": "not_provided", "label": "Not provided", "meaning": "The user or source supplied nothing.", "priority": 130, "tone": "neutral", "announce": "off" },
+        { "id": "not_applicable", "label": "Not applicable", "meaning": "This field does not apply.", "priority": 150, "tone": "quiet", "announce": "off" },
+        { "id": "unavailable", "label": "Unavailable", "meaning": "The capability or evidence cannot currently be obtained.", "priority": 30, "tone": "warning", "announce": "assertive", "requiresReason": true, "requiresRecovery": true }
+      ]
+    },
+    "origin": {
+      "baseline": "direct",
+      "states": [
+        { "id": "defaulted", "label": "Defaulted", "meaning": "This value came from a default.", "priority": 120, "tone": "neutral", "announce": "off", "requiresProvenance": true },
+        { "id": "suggested", "label": "Suggested", "meaning": "This value is a recommendation only.", "priority": 100, "tone": "suggestion", "announce": "off", "requiresProvenance": true },
+        { "id": "prepopulated", "label": "Prepopulated", "meaning": "This value was staged from another source but is not yet confirmed.", "priority": 110, "tone": "information", "announce": "off", "requiresProvenance": true },
+        { "id": "historical_imported", "label": "Historical/imported", "meaning": "Source truth is preserved but was not established by QuotePilot.", "priority": 190, "tone": "historical", "announce": "off", "requiresProvenance": true }
+      ]
+    },
+    "editability": {
+      "baseline": "editable",
+      "states": [
+        { "id": "draft", "label": "Draft", "meaning": "The user edited this value, but it has not been persisted.", "priority": 90, "tone": "information", "announce": "polite" },
+        { "id": "blocked", "label": "Blocked", "meaning": "This action cannot proceed until another condition is resolved.", "priority": 20, "tone": "warning", "announce": "assertive", "requiresReason": true, "requiresRecovery": true },
+        { "id": "read_only", "label": "Read-only", "meaning": "The user may inspect this value but not modify it.", "priority": 170, "tone": "quiet", "announce": "off" },
+        { "id": "protected", "label": "Protected", "meaning": "This state exists but must not be changed through this surface.", "priority": 160, "tone": "quiet", "announce": "off" }
+      ]
+    },
+    "persistence": {
+      "baseline": "unchanged",
+      "states": [
+        { "id": "saving", "label": "Saving", "meaning": "An authoritative write is in progress.", "priority": 40, "tone": "progress", "announce": "polite" },
+        { "id": "saved", "label": "Saved", "meaning": "The server confirmed persistence.", "priority": 180, "tone": "confirmed", "announce": "polite" },
+        { "id": "published", "label": "Published", "meaning": "This configuration is now active.", "priority": 70, "tone": "confirmed", "announce": "polite" }
+      ]
+    },
+    "evidence": {
+      "baseline": "unestablished",
+      "states": [
+        { "id": "pending", "label": "Pending", "meaning": "The external or server outcome is not established yet.", "priority": 50, "tone": "progress", "announce": "polite" },
+        { "id": "confirmed", "label": "Confirmed", "meaning": "Authoritative evidence exists.", "priority": 80, "tone": "confirmed", "announce": "polite" },
+        { "id": "failed", "label": "Failed", "meaning": "The attempted action failed.", "priority": 10, "tone": "failure", "announce": "assertive", "requiresReason": true, "requiresRecovery": true },
+        { "id": "stale", "label": "Stale", "meaning": "This value or evidence was valid against an older revision.", "priority": 60, "tone": "warning", "announce": "polite", "requiresReason": true, "requiresRecovery": true }
+      ]
+    }
+  },
+  "composition": {
+    "oneStatePerAxis": true,
+    "axesMayCoexist": true,
+    "primaryPresentation": "Render exactly one primary state. Use the lowest numeric priority unless an active contextual state is explicitly selected.",
+    "supportingPresentation": "Render other active states as supporting text, never as a competing badge row.",
+    "validExamples": [
+      { "origin": "historical_imported", "editability": "read_only", "evidence": "stale" },
+      { "origin": "prepopulated", "editability": "draft" },
+      { "editability": "protected", "persistence": "published", "evidence": "confirmed" }
+    ]
+  },
+  "semantics": {
+    "saved": "A server has confirmed persistence. Saved does not mean published.",
+    "published": "Configuration is active for its authoritative scope.",
+    "confirmed": "Authoritative evidence exists for the exact claim.",
+    "historical_imported": "Source truth is preserved but was not established by QuotePilot.",
+    "pending": "An outcome is not established. Pending never authorizes a blind retry."
+  },
+  "presentation": {
+    "reasonRequiredFor": ["failed", "unavailable", "stale", "blocked"],
+    "recoveryRequiredFor": ["failed", "unavailable", "stale", "blocked"],
+    "provenanceRequiredForAxis": "origin",
+    "colorMayNotCarryMeaningAlone": true,
+    "liveStates": {
+      "polite": ["draft", "saving", "saved", "published", "pending", "confirmed", "stale"],
+      "assertive": ["failed", "unavailable", "blocked"]
+    }
+  },
+  "adaptiveChoice": {
+    "zero": "Show Blocked or Unavailable, the reason, and one recovery action.",
+    "one": "Show the only value as static Confirmed and Read-only context without a dropdown chevron.",
+    "many": "Show a labeled select with a visible focus state and explicit validation feedback."
+  }
+}

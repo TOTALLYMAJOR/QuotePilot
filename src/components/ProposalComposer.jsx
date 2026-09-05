@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
 import { currency } from "../lib/quoteCalculator";
@@ -140,6 +141,32 @@ function PcSelect({ label, value, onChange, children, hint }) {
       {hint ? <small className="pc-field-hint">{hint}</small> : null}
     </div>
   );
+}
+
+function buildChoiceSet(items, {
+  currentValue = "",
+  getValue = (item) => item?.id,
+  getLabel = (item) => item?.name
+} = {}) {
+  const seenValues = new Set();
+  const options = (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      value: String(getValue(item) ?? "").trim(),
+      label: String(getLabel(item) ?? "").trim()
+    }))
+    .filter((option) => {
+      if (!option.value || !option.label || seenValues.has(option.value)) return false;
+      seenValues.add(option.value);
+      return true;
+    });
+  const selectedValue = String(currentValue || "").trim();
+  const stale = Boolean(selectedValue && !options.some((option) => option.value === selectedValue));
+  return {
+    stale,
+    options: stale && options.length > 0
+      ? [{ value: selectedValue, label: `${selectedValue} (no longer available)`, disabled: true }, ...options]
+      : options
+  };
 }
 
 function PcQuietInput({ label, value, onChange, hint, type = "text", inputMode, placeholder }) {
@@ -441,6 +468,55 @@ export default function ProposalComposer({
   const activityIdRef = useRef(0);
   const saveReadinessRef = useRef(null);
   const pendingSaveReviewFocusRef = useRef(false);
+
+  const eventTypeChoices = buildChoiceSet(eventTypes, {
+    currentValue: form.eventTypeId
+  });
+  const templateChoices = buildChoiceSet([
+    { id: "custom", name: "Custom" },
+    ...(eventTemplates || [])
+  ], {
+    currentValue: form.eventTemplateId || "custom"
+  });
+  const taxRegionChoices = buildChoiceSet(settings?.taxRegions, {
+    currentValue: form.taxRegion,
+    getLabel: (region) => `${region?.name || region?.id} (${Math.round(Number(region?.rate || 0) * 1000) / 10}%)`
+  });
+  const seasonChoices = buildChoiceSet([
+    { id: "auto", name: "Auto detect" },
+    ...(settings?.seasonalProfiles || [])
+  ], {
+    currentValue: form.seasonProfileId || "auto"
+  });
+  const setupRecoveryAction = typeof onOpenCatalogPricing === "function"
+    ? { label: "Open Library setup", onClick: onOpenCatalogPricing }
+    : { label: "Review guided setup", onClick: onGuidedMode };
+
+  useEffect(() => {
+    if (
+      eventTypeChoices.options.length === 1
+      && !eventTypeChoices.stale
+      && String(form.eventTypeId || "") !== eventTypeChoices.options[0].value
+    ) {
+      onEventTypeChange(eventTypeChoices.options[0].value);
+    }
+    if (
+      taxRegionChoices.options.length === 1
+      && !taxRegionChoices.stale
+      && String(form.taxRegion || "") !== taxRegionChoices.options[0].value
+    ) {
+      onFieldChange("taxRegion", taxRegionChoices.options[0].value);
+    }
+  }, [
+    eventTypeChoices.options,
+    eventTypeChoices.stale,
+    form.eventTypeId,
+    form.taxRegion,
+    onEventTypeChange,
+    onFieldChange,
+    taxRegionChoices.options,
+    taxRegionChoices.stale
+  ]);
 
   const currentSaveBlockers = Array.isArray(saveBlockers)
     ? saveBlockers.filter((blocker) => blocker && String(blocker.message || "").trim())
@@ -1314,16 +1390,28 @@ export default function ProposalComposer({
                   editActionId="pc-edit-event-name"
                 />
                 <div className="pc-inline pc-inline-static">
-                  <PcSelect
+                  <AdaptiveChoiceField
+                    id="proposal-event-type"
                     label="Event type"
+                    options={eventTypeChoices.options}
                     value={form.eventTypeId || ""}
-                    onChange={(value) => onEventTypeChange(value)}
-                  >
-                    <option value="">Choose event type</option>
-                    {(eventTypes || []).map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </PcSelect>
+                    onChange={(event) => onEventTypeChange(event.target.value)}
+                    placeholder="Choose event type"
+                    emptyReason={eventTypeChoices.stale
+                      ? `The saved event type “${form.eventTypeId}” is no longer available. The draft value is preserved until setup is repaired.`
+                      : "No event types are available for this workspace."}
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={eventTypeChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={eventTypeChoices.stale ? {
+                      reason: "This draft references an event type outside the current workspace set.",
+                      recoveryAction: {
+                        label: "Choose a current event type",
+                        onClick: () => document.getElementById("proposal-event-type")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="This is the only event type currently available to this workspace."
+                    className="pc-select"
+                  />
                 </div>
                 <InlineValue
                   className="pc-inline"
@@ -1935,37 +2023,65 @@ export default function ProposalComposer({
               >
                 <summary>Advanced pricing</summary>
                 <div className="pc-advanced-grid">
-                  <PcSelect
+                  <AdaptiveChoiceField
+                    id="proposal-event-template"
                     label="Event template"
+                    options={templateChoices.options}
                     value={form.eventTemplateId || "custom"}
-                    onChange={(value) => onTemplateChange(value)}
-                  >
-                    <option value="custom">Custom</option>
-                    {(eventTemplates || []).map((template) => (
-                      <option key={template.id} value={template.id}>{template.name}</option>
-                    ))}
-                  </PcSelect>
-                  <PcSelect
+                    onChange={(event) => onTemplateChange(event.target.value)}
+                    emptyReason="No proposal templates are available for this workspace."
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={templateChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={templateChoices.stale ? {
+                      reason: "The draft keeps its historical template identity until you choose a current template or Custom.",
+                      recoveryAction: {
+                        label: "Choose a current template",
+                        onClick: () => document.getElementById("proposal-event-template")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="Custom is the only proposal template currently available."
+                    className="pc-select"
+                  />
+                  <AdaptiveChoiceField
+                    id="proposal-tax-region"
                     label="Tax region"
+                    options={taxRegionChoices.options}
                     value={form.taxRegion || ""}
-                    onChange={(value) => onFieldChange("taxRegion", value)}
-                  >
-                    {(settings.taxRegions || []).map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.name} ({Math.round(Number(region.rate || 0) * 1000) / 10}%)
-                      </option>
-                    ))}
-                  </PcSelect>
-                  <PcSelect
+                    onChange={(event) => onFieldChange("taxRegion", event.target.value)}
+                    emptyReason={taxRegionChoices.stale
+                      ? `The saved tax region “${form.taxRegion}” is no longer available. The draft value is preserved and pricing remains blocked.`
+                      : "No tax regions are configured, so authoritative tax cannot be calculated."}
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={taxRegionChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={taxRegionChoices.stale ? {
+                      reason: "This tax region is outside the current workspace configuration.",
+                      recoveryAction: {
+                        label: "Choose a current tax region",
+                        onClick: () => document.getElementById("proposal-tax-region")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="This is the only tax region configured for this workspace."
+                    className="pc-select"
+                  />
+                  <AdaptiveChoiceField
+                    id="proposal-season-profile"
                     label="Season profile"
+                    options={seasonChoices.options}
                     value={form.seasonProfileId || "auto"}
-                    onChange={(value) => onFieldChange("seasonProfileId", value)}
-                  >
-                    <option value="auto">Auto detect</option>
-                    {(settings.seasonalProfiles || []).map((season) => (
-                      <option key={season.id} value={season.id}>{season.name}</option>
-                    ))}
-                  </PcSelect>
+                    onChange={(event) => onFieldChange("seasonProfileId", event.target.value)}
+                    emptyReason="No season profiles are available for this workspace."
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={seasonChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={seasonChoices.stale ? {
+                      reason: "The draft keeps its historical season profile until you choose a current profile or Auto detect.",
+                      recoveryAction: {
+                        label: "Choose a current season profile",
+                        onClick: () => document.getElementById("proposal-season-profile")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="Auto detect is the only season choice currently available."
+                    className="pc-select"
+                  />
                   <PcQuietInput
                     label="Travel (round-trip miles)"
                     type="number"

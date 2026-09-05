@@ -107,7 +107,9 @@
 .marketing-header nav button:focus-visible { color: white; background: rgba(255, 255, 255, 0.06); }
 
 .marketing-header-actions { justify-self: end; display: flex; align-items: center; gap: .65rem; }
-.marketing-header-feature { display: none; min-height: 2.7rem; padding: 0 .8rem; border: 1px solid var(--marketing-line); border-radius: .35rem; color: #c3c4c8; background: rgba(255,255,255,.025); font-family: "DM Mono", monospace; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.marketing-header-feature { display: none; min-height: 2.7rem; padding: 0 .8rem; border: 1px solid var(--marketing-line); border-radius: .35rem; color: #c3c4c8; background: rgba(255,255,255,.025); font-family: "DM Mono", monospace; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; transition: color 180ms ease, background 180ms ease, border-color 180ms ease, transform 180ms ease; }
+.marketing-header-feature:hover,
+.marketing-header-feature:focus-visible { color: #fff; border-color: rgba(255, 157, 22, 0.52); background: rgba(255, 157, 22, 0.1); transform: translateY(-1px); }
 .marketing-header-cta { justify-self: end; display: inline-flex; align-items: center; gap: 0.65rem; padding: 0.72rem 1rem; border: 1px solid rgba(255, 157, 22, 0.42); border-radius: 0.35rem; color: #f4d39f !important; font-family: "DM Mono", monospace; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; transition: background 180ms ease, transform 180ms ease; }
 .marketing-header-cta:hover { transform: translateY(-2px); background: rgba(255, 157, 22, 0.1); }
 

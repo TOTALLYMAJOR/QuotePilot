@@ -2,7 +2,7 @@
 
 **Status:** Living document. Every design, copy, and feature decision gets checked against these five commitments.
 **Owner:** Michael Major
-**Last updated:** 2026-08-16
+Last updated: 2026-09-05 12:05:00 CDT
 
 ## Purpose
 
@@ -65,6 +65,27 @@ Every screen should make the user's next decision easier — obvious next step, 
 **Rules out:** Competing CTAs of equal weight. Copy the user must re-read. Buttons whose consequence is a surprise. Settings where a default would do.
 
 **Review questions:** At this point on the screen, what should the user do next — and is that visually undeniable? Before clicking, do they know what happens after? Did we make a choice easier, or just present it?
+
+## Governing Interaction Truth
+
+The five commitments operate inside one non-negotiable state rule: the product
+must not make the operator infer whether a value is absent, inherited, merely
+suggested, locally edited, being saved, server-confirmed, active, stale, or
+failed. Availability, origin, editability, persistence, and evidence remain
+separate even when one primary status leads the presentation.
+
+This rules out false choices and silent outcomes. Zero choices explain the
+blocker and recovery; one choice becomes static context; many choices remain an
+explicit decision. A user-triggered async action shows eligibility, progress,
+outcome, and recovery beside the action. Imported and prepopulated values retain
+their source. Saved is not Published, and Pending is not success. The canonical
+state vocabulary and adopted-surface registry live in
+`field-state-contract.json` and `field-state-surface-contracts.json`.
+
+**Review questions:** What does the system actually know? Who or what supplied
+the value? May this user change it here? What exact receipt establishes the
+outcome? If it fails or goes stale, can the operator understand and recover
+without leaving this surface?
 
 ## Using This Document
 

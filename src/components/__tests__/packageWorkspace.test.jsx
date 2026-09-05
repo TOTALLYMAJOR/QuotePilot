@@ -160,6 +160,46 @@ describe("Offer package workspace", () => {
     expect(packageList.querySelector('button[role="listitem"]')).toBeNull();
     expect(container.querySelector('.package-workspace-nav[aria-label="Offer list"]')).toBeTruthy();
     expect(container.textContent).toContain("Customer-ready catering packages");
+    expect(container.querySelector('.package-workspace-mobile-switcher select[aria-label="Choose offer"]')).toBeTruthy();
+  });
+
+  test("shows a sole offer as confirmed read-only instead of a false mobile selector", () => {
+    const fixture = catalog();
+    fixture.packages = [fixture.packages[0]];
+    renderView({ catalog: fixture });
+
+    const switcher = container.querySelector(".package-workspace-mobile-switcher");
+    expect(switcher.dataset.adaptiveChoiceMode).toBe("single");
+    expect(switcher.querySelector("select")).toBeNull();
+    expect(switcher.querySelector('[data-field-state-primary="confirmed"]')).toBeTruthy();
+  });
+
+  test("shows a sole menu event type as read-only after applying the presentation filter", async () => {
+    renderView();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const filter = container.querySelector('[data-package-field="eventTypeFilter"]');
+    expect(filter.querySelector('[data-adaptive-choice-mode="single"]')).toBeTruthy();
+    expect(filter.querySelector("select")).toBeNull();
+    expect(filter.textContent).toContain("Dinner");
+  });
+
+  test("explains how to recover when no menu event types are active", async () => {
+    const menuService = await import("../../lib/menuService");
+    menuService.getEventTypes.mockResolvedValueOnce([]);
+    renderView();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const filter = container.querySelector('[data-package-field="eventTypeFilter"]');
+    expect(filter.querySelector("select")).toBeNull();
+    expect(filter.querySelector('[data-field-state-primary="not_provided"]')).toBeTruthy();
+    expect(filter.textContent).toContain("Add or activate one in the Menu area");
   });
 
   test("keeps a package draft when switching between navigator rows", () => {
@@ -230,6 +270,20 @@ describe("Offer package workspace", () => {
       .toContain("Nothing selected yet.");
     expect(packageGroup("Rentals").querySelector('[data-package-group-toggle="rentals"]')?.getAttribute("aria-expanded"))
       .toBe("false");
+  });
+
+  test("shows a sole picker category as context instead of a no-op filter", async () => {
+    renderView();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    clickButtonByText("Add rentals");
+    const category = packageGroup("Rentals").querySelector(".package-workspace-search[data-adaptive-choice-mode]");
+    expect(category?.dataset.adaptiveChoiceMode).toBe("single");
+    expect(category?.textContent).toContain("Rentals");
+    expect(category?.querySelector("select")).toBeNull();
   });
 
   test("blocks activation until a package is ready and clears stale notice on revert", () => {

@@ -44,6 +44,12 @@ function scheduleFrame(callback) {
   return () => clearTimeout(timer);
 }
 
+function settleAsyncCallback(response, onResolved, onRejected) {
+  if (!response || typeof response.then !== "function") return false;
+  Promise.resolve(response).then(onResolved).catch(onRejected);
+  return true;
+}
+
 function actionResult(action, kind, overrides = {}) {
   return createAmbientActionResult({
     kind,
@@ -300,6 +306,21 @@ export function AmbientClientsDirectory({
     const action = row.primaryAction || fallbackReviewClientAction(row, currentUserRole);
     if (!action.enabled) return;
     announce(actionResult(action, "pending"), "Opening this client with the relationship context already in view.");
+    const recover = (reason = "The exact client overview could not be opened.") => {
+      const visibleReason = text(reason) || "The exact client overview could not be opened.";
+      announce(actionResult(action, "recovery", {
+        reason: visibleReason,
+        consequence: "The current client list remains visible and no record changed.",
+        nextResolution: "Review the current row, then try again."
+      }), `${visibleReason} The current client list remains visible and no record changed. Try again from this row.`);
+    };
+    const settle = (response, resolvedAsync = false) => {
+      if (response?.status === "recovery") {
+        recover(response.reason);
+      } else if (response?.status === "resolved" || (resolvedAsync && response?.status !== "pending")) {
+        announce(actionResult(action, "context"), "The exact client overview is ready to review.");
+      }
+    };
     try {
       const response = onOpenClient?.({
         customerId: text(row.customerId || row.clientId || row.id),
@@ -309,19 +330,15 @@ export function AmbientClientsDirectory({
         consequence: action.arrivalContract.consequence,
         nextResolutionId: action.arrivalContract.nextResolutionIds[0]
       });
-      if (response?.status === "recovery") {
-        announce(actionResult(action, "recovery", {
-          reason: response.reason || "The exact client overview could not be opened.",
-          consequence: "The current client list remains visible and no record changed.",
-          nextResolution: response.nextResolution || "Review the current row, then try again."
-        }), response.reason || "The exact client overview could not be opened.");
+      if (!settleAsyncCallback(
+        response,
+        (result) => settle(result, true),
+        (error) => recover(error instanceof Error ? error.message : "The exact client overview could not be opened.")
+      )) {
+        settle(response);
       }
     } catch (error) {
-      announce(actionResult(action, "recovery", {
-        reason: error instanceof Error ? error.message : "The exact client overview could not be opened.",
-        consequence: "The current client list remains visible and no record changed.",
-        nextResolution: "Review the current row, then try again."
-      }), "The exact client overview could not be opened. No record changed.");
+      recover(error instanceof Error ? error.message : "The exact client overview could not be opened.");
     }
   };
 
@@ -330,7 +347,30 @@ export function AmbientClientsDirectory({
     announce(actionResult(refreshAction, "pending", {
       nextResolution: "Review the client list when the refresh finishes."
     }), "Refreshing clients. The current page stays visible while newer information loads.");
-    onRefresh?.();
+    const recover = (error) => {
+      const reason = error instanceof Error && text(error.message)
+        ? text(error.message)
+        : "The client list could not be refreshed.";
+      announce(actionResult(refreshAction, "recovery", {
+        reason,
+        consequence: "The current client page remains visible and no record changed.",
+        nextResolution: "Check the current connection, then try this refresh again."
+      }), `${reason} The current page is unchanged; try this refresh again.`);
+    };
+    try {
+      const response = onRefresh?.();
+      settleAsyncCallback(response, (result) => {
+        if (result?.status === "recovery") {
+          recover(new Error(result.reason || "The client list could not be refreshed."));
+          return;
+        }
+        if (result?.status !== "pending") {
+          announce(actionResult(refreshAction, "context"), "The client refresh finished. Review this page for the latest available information.");
+        }
+      }, recover);
+    } catch (error) {
+      recover(error);
+    }
   };
 
   const start = () => {
@@ -338,13 +378,34 @@ export function AmbientClientsDirectory({
     announce(actionResult(startAction, "pending", {
       nextResolution: "Add the client and event details needed for a priced draft."
     }), "Opening a new editable opportunity. Nothing has been sent.");
-    onStartOpportunity?.({
-      actionId: startAction.id,
-      object: startAction.arrivalContract.object,
-      reason: startAction.arrivalContract.reason,
-      consequence: startAction.arrivalContract.consequence,
-      nextResolutionId: startAction.arrivalContract.nextResolutionIds[0]
-    });
+    const recover = (error) => {
+      const reason = error instanceof Error && text(error.message)
+        ? text(error.message)
+        : "A new opportunity could not be opened.";
+      announce(actionResult(startAction, "recovery", {
+        reason,
+        consequence: "The Clients view remains visible and no draft was created here.",
+        nextResolution: "Review the current client context, then try again."
+      }), `${reason} The Clients view is unchanged; try again when you are ready.`);
+    };
+    try {
+      const response = onStartOpportunity?.({
+        actionId: startAction.id,
+        object: startAction.arrivalContract.object,
+        reason: startAction.arrivalContract.reason,
+        consequence: startAction.arrivalContract.consequence,
+        nextResolutionId: startAction.arrivalContract.nextResolutionIds[0]
+      });
+      settleAsyncCallback(response, (result) => {
+        if (result?.status === "recovery") {
+          recover(new Error(result.reason || "A new opportunity could not be opened."));
+        } else if (result?.status !== "pending") {
+          announce(actionResult(startAction, "context"), "The new opportunity is ready for client and event details.");
+        }
+      }, recover);
+    } catch (error) {
+      recover(error);
+    }
   };
 
   return (
@@ -909,12 +970,48 @@ export function AmbientClientRelationship({
     announce(actionResult(refreshAction, "pending", {
       nextResolution: "Review the client overview when the refresh finishes."
     }), "Refreshing this client. The current view stays visible while newer information loads.");
-    onRefresh?.();
+    const recover = (error) => {
+      const reason = error instanceof Error && text(error.message)
+        ? text(error.message)
+        : "This client could not be refreshed.";
+      announce(actionResult(refreshAction, "recovery", {
+        reason,
+        consequence: "The current client overview remains visible and no record changed.",
+        nextResolution: "Check the current connection, then try this refresh again."
+      }), `${reason} The current client overview is unchanged; try this refresh again.`);
+    };
+    try {
+      const response = onRefresh?.();
+      settleAsyncCallback(response, (result) => {
+        if (result?.status === "recovery") {
+          recover(new Error(result.reason || "This client could not be refreshed."));
+        } else if (result?.status !== "pending") {
+          announce(actionResult(refreshAction, "context"), "The client refresh finished. Review this overview for the latest available information.");
+        }
+      }, recover);
+    } catch (error) {
+      recover(error);
+    }
   };
 
   const resolveAction = (action, target = {}) => {
     if (!action?.enabled) return;
     announce(actionResult(action, "pending"), `Opening ${action.outcomeLabel.toLowerCase()} with this client’s context attached.`);
+    const recover = (reason = "The exact destination could not be opened.") => {
+      const visibleReason = text(reason) || "The exact destination could not be opened.";
+      announce(actionResult(action, "recovery", {
+        reason: visibleReason,
+        consequence: "The client overview remains visible and no record changed.",
+        nextResolution: "Review the current context, then try again."
+      }), `${visibleReason} The client overview remains visible and no record changed. Try again from this context.`);
+    };
+    const settle = (response, resolvedAsync = false) => {
+      if (response?.status === "recovery") {
+        recover(response.reason);
+      } else if (response?.status === "resolved" || (resolvedAsync && response?.status !== "pending")) {
+        announce(actionResult(action, "context"), "The requested client context is ready to review.");
+      }
+    };
     try {
       let response = null;
       const destination = text(target.destination || target.kind || action.executionTarget?.surfaceId);
@@ -958,21 +1055,15 @@ export function AmbientClientRelationship({
       } else {
         throw new Error("This next step has no exact destination in the client overview.");
       }
-      if (response?.status === "recovery") {
-        announce(actionResult(action, "recovery", {
-          reason: response.reason || "The exact destination could not be opened.",
-          consequence: "The client overview remains visible and no record changed.",
-          nextResolution: response.nextResolution || "Review the current context, then try again."
-        }), response.reason || "The exact destination could not be opened.");
-      } else if (response?.status === "resolved") {
-        announce(actionResult(action, "context"), "The requested client context is ready to review.");
+      if (!settleAsyncCallback(
+        response,
+        (result) => settle(result, true),
+        (error) => recover(error instanceof Error ? error.message : "The exact destination could not be opened.")
+      )) {
+        settle(response);
       }
     } catch (error) {
-      announce(actionResult(action, "recovery", {
-        reason: error instanceof Error ? error.message : "The exact destination could not be opened.",
-        consequence: "The client overview remains visible and no record changed.",
-        nextResolution: "Review the current context, then try again."
-      }), "The exact destination could not be opened. No record changed.");
+      recover(error instanceof Error ? error.message : "The exact destination could not be opened.");
     }
   };
 

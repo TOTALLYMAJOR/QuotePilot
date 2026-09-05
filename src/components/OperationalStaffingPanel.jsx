@@ -9,6 +9,8 @@ import {
   readPendingOperationalStaffingAttempt,
   resetDefinitiveOperationalStaffingAttempt
 } from "../lib/operationalStaffingClient";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import "./operationalStaffingPanel.css";
 
 export const OPERATIONAL_STAFFING_CAPABILITY_ID = "authoritative-operational-staffing";
@@ -223,6 +225,117 @@ function profileWindowsValid(windows) {
   }
   normalized.sort((left, right) => left.start - right.start || left.end - right.end);
   return normalized.every((window, index) => index === 0 || window.start >= normalized[index - 1].end);
+}
+
+function StaffingAssignmentChoice({
+  slot,
+  profiles,
+  selectedStaffIds,
+  eventWindow,
+  disabled,
+  onSelect,
+  onRecover
+}) {
+  const label = `${slot.required ? "Required" : "Optional"} ${roleLabel(slot.role)} assignment`;
+  const currentProfile = profiles.find((profile) => profile.staffId === slot.staffId) || null;
+  const eligibleProfiles = profiles.filter((profile) => (
+    profile.active
+    && profile.capabilities.includes(slot.role)
+    && recordedWindowCoverage(profile, eventWindow) === "recorded_cover"
+    && (!selectedStaffIds.has(profile.staffId) || profile.staffId === slot.staffId)
+  ));
+  const currentIsEligible = Boolean(
+    currentProfile && eligibleProfiles.some((profile) => profile.staffId === currentProfile.staffId)
+  );
+  const options = [
+    ...(!currentIsEligible && slot.staffId ? [{
+      value: slot.staffId,
+      label: `${currentProfile?.displayName || slot.staffId} · saved assignment no longer eligible`,
+      disabled: true
+    }] : []),
+    ...eligibleProfiles.map((profile) => ({
+      value: profile.staffId,
+      label: `${profile.displayName} · available for this event`
+    }))
+  ];
+
+  if (!eligibleProfiles.length && !slot.staffId) {
+    return (
+      <AdaptiveChoiceField
+        className="operational-staffing-slot"
+        label={label}
+        options={[]}
+        emptyState="blocked"
+        emptyReason={`No active ${roleLabel(slot.role)} candidates have recorded availability for the full event.`}
+        recoveryAction={{ label: "Refresh staffing plan", onClick: onRecover }}
+      />
+    );
+  }
+
+  if (!eligibleProfiles.length && slot.staffId) {
+    return (
+      <div className="operational-staffing-slot" data-adaptive-choice-mode="stale">
+        <span className="adaptive-choice-field__label">{label}</span>
+        <strong className="adaptive-choice-field__single-value">{currentProfile?.displayName || slot.staffId}</strong>
+        <FieldStateIndicator
+          state={disabled ? { editability: "protected" } : { evidence: "stale" }}
+          label={`${label} state`}
+          reason={disabled ? "Staffing changes are temporarily locked." : "This saved assignment is not an eligible candidate for the current event window."}
+          supportingDetail="The saved staff value remains visible until an operator resolves it."
+          recoveryAction={disabled ? undefined : { label: "Clear unavailable assignment", onClick: () => onSelect("") }}
+        />
+      </div>
+    );
+  }
+
+  if (eligibleProfiles.length === 1 && !slot.staffId) {
+    const [onlyProfile] = eligibleProfiles;
+    return (
+      <div className="operational-staffing-slot" data-adaptive-choice-mode="suggested">
+        <span className="adaptive-choice-field__label">{label}</span>
+        <strong className="adaptive-choice-field__single-value">{onlyProfile.displayName}</strong>
+        <FieldStateIndicator
+          state={disabled ? { editability: "protected" } : { origin: "suggested" }}
+          label={`${label} state`}
+          provenance={disabled ? "" : "The only active, role-matched teammate with recorded availability for this event"}
+          supportingDetail={disabled
+            ? "Staffing changes are temporarily locked."
+            : "This is a candidate only. Confirm the assignment before it becomes part of the staffing draft."}
+          recoveryAction={disabled ? undefined : {
+            label: `Assign ${onlyProfile.displayName}`,
+            onClick: () => onSelect(onlyProfile.staffId)
+          }}
+        />
+      </div>
+    );
+  }
+
+  const stale = Boolean(slot.staffId && !currentIsEligible);
+  return (
+    <div>
+      <AdaptiveChoiceField
+        className="operational-staffing-slot"
+        label={label}
+        options={options}
+        value={slot.staffId}
+        onChange={(event) => onSelect(event.target.value)}
+        disabled={disabled}
+        placeholder="Choose a team member"
+        singleChoiceDetail="This is the only eligible teammate and the current saved assignment."
+        fieldState={stale ? (disabled ? { editability: "protected" } : { evidence: "stale" }) : undefined}
+        fieldStateDetails={stale ? {
+          reason: disabled
+            ? "Staffing changes are temporarily locked."
+            : "The saved assignment is no longer eligible for this event window.",
+          supportingDetail: "The saved staff value remains visible until an operator resolves it.",
+          recoveryAction: disabled ? undefined : { label: "Clear unavailable assignment", onClick: () => onSelect("") }
+        } : {}}
+      />
+      {slot.staffId && currentIsEligible && !disabled ? (
+        <button type="button" className="operational-staffing-secondary" onClick={() => onSelect("")}>Clear assignment</button>
+      ) : null}
+    </div>
+  );
 }
 
 function localRequirements(quote) {
@@ -705,31 +818,17 @@ export default function OperationalStaffingPanel({
             </div>
             {slots.length ? (
               <div className="operational-staffing-slots">
-                {slots.map((slot, index) => (
-                  <label key={slot.slotId} className="operational-staffing-slot">
-                    <span>{slot.required ? `${roleLabel(slot.role)} ${slot.roleSlotNumber}` : "Optional event lead"}</span>
-                    <select
-                      aria-label={`${slot.required ? "Required" : "Optional"} ${roleLabel(slot.role)} assignment`}
-                      value={slot.staffId}
-                      disabled={!readIsCurrentAndComplete || busy || frozenByUncertainty}
-                      onChange={(event) => updateSlot(slot.slotId, event.target.value)}
-                    >
-                      <option value="">{slot.required ? "Choose a team member" : "No lead assigned"}</option>
-                      {profiles.filter((profile) => profile.active && profile.capabilities.includes(slot.role)).map((profile) => {
-                        const coverage = recordedWindowCoverage(profile, envelope.canonicalEventWindow);
-                        const chosenElsewhere = selectedStaffIds.has(profile.staffId) && profile.staffId !== slot.staffId;
-                        return (
-                          <option
-                            key={profile.staffId}
-                            value={profile.staffId}
-                            disabled={chosenElsewhere || coverage !== "recorded_cover"}
-                          >
-                            {profile.displayName} · {coverage === "recorded_cover" ? "available for this event" : "not available for the full event"}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
+                {slots.map((slot) => (
+                  <StaffingAssignmentChoice
+                    key={slot.slotId}
+                    slot={slot}
+                    profiles={profiles}
+                    selectedStaffIds={selectedStaffIds}
+                    eventWindow={envelope.canonicalEventWindow}
+                    disabled={!readIsCurrentAndComplete || busy || frozenByUncertainty}
+                    onSelect={(staffId) => updateSlot(slot.slotId, staffId)}
+                    onRecover={() => void load({ recovery: true })}
+                  />
                 ))}
               </div>
             ) : (

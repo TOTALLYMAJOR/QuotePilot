@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-05 02:28:23 CDT
+Last updated: 2026-09-05 13:22:00 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -118,6 +118,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   4,319,173 / 432,561 bytes after compatibility passed. The Ambient ceiling is
   pinned to that larger literal CI artifact. Neither profile adds percentage
   or future-growth headroom.
+  The field-state, interaction-integrity, and Import Workbench candidate adds
+  the shared state primitive, exact-value review and recovery UI, client
+  preflight adapters, and lazy Import route behavior. Exact local CI-matrix
+  builds measure 3,476,619 / 399,646 bytes for compatibility and 4,427,364 /
+  435,494 bytes for Ambient. The new ceilings are 3,478,714 / 399,665 and
+  4,444,836 / 435,565 respectively: each preceding exact-CI ceiling plus only
+  the corresponding observed local source delta.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -132,7 +139,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   evidence. The Library increment is concentrated in existing lazy Catalog,
   Event Template, and Library route boundaries and adds approximately 10.6 KB
   transferred gzip to compatibility and 14.6 KB to Ambient, but it remains
-  explicit optimization debt rather than free growth capacity.
+  explicit optimization debt rather than free growth capacity. The Workbench
+  also carries a separately pinned 1,667,684-byte PDF parser runtime when a user
+  begins searchable-PDF inspection. It is not an initial-route transfer, but it
+  is real on-demand download and execution cost and remains optimization debt.
 - Performance impact: Local production-equivalent builds measured compatibility
   at 2,769,824 aggregate / 391,596 largest bytes and Ambient at 3,700,202 /
   391,596 before the owner-authority recovery surface. That source-only safety
@@ -186,7 +196,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   environments pass without discretionary growth headroom. The largest-chunk
   ceiling remains 391,901 bytes. This is a combined-candidate reconciliation,
   not a claim that any one capability caused the increase and not general
-  growth headroom.
+  growth headroom. The current field-state, interaction, and import candidate
+  measures 3,476,619 / 399,646 compatibility bytes and 4,427,364 / 435,494
+  Ambient bytes. Relative to the preceding local Library graphs, this is an
+  97,457 / 2,237-byte compatibility delta and a 125,663 / 3,004-byte Ambient delta.
+  The same-origin PDF.js runtime is deliberately outside `dist/assets` and is
+  constrained separately to exactly 1,667,684 runtime bytes, a 1,232,303-byte
+  largest asset, and three pinned files with exact SHA-256 digests.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
@@ -257,7 +273,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   measured the Ambient graph at 4,319,173 / 432,561 bytes before its stale
   prior literal ceiling rejected that build. The exception now pins both exact
   CI artifacts with no discretionary margin, and a new exact-head CI run
-  remains the release gate.
+  remains the release gate. The current local candidate builds and optional-tool
+  manifest check pass against the new literal ceilings; exact-head CI, hosted
+  transfer timing, production use, and human acceptance remain open.
 
 ## Superseded Exceptions
 

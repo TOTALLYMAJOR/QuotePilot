@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-05 00:28:05 CDT
+Last updated: 2026-09-05 12:05:00 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -48,6 +48,61 @@ human visual acceptance.
   terms wherever softer language would blur a consequential boundary.
 - Customer-facing surfaces (portal, proposal PDFs, marketing) keep their
   tenant-branded hospitality treatment and are NOT covered by this system.
+
+## Governing field-state and interaction contract
+
+Every field or field-like control must preserve separate truths for
+availability, origin, edit authority, persistence, and evidence. The canonical
+machine-readable definitions live in `docs/field-state-contract.json`; exact
+adopted surfaces live in `docs/field-state-surface-contracts.json`. UI work that
+adds or changes a field, choice control, save state, recommendation, imported
+value, or evidence state must update the registry and pass
+`npm run check:field-states`. The gate scans explicit component roots for direct
+imports of the shared state primitives and fails when an adopter lacks a
+registered marker and assertion-bearing test; it does not guess field semantics
+from unrelated repository text.
+
+| Axis | States | Question answered |
+|---|---|---|
+| Availability | Unknown, Not provided, Not applicable, Unavailable | Do we have a value, and can it be obtained? |
+| Origin | Defaulted, Suggested, Prepopulated, Historical/imported | Where did this value come from, and has QuotePilot established it? |
+| Editability | Draft, Blocked, Read-only, Protected | May this user change it here, and has a local edit been persisted? |
+| Persistence | Saving, Saved, Published | Has the authoritative write completed, and is the configuration active? |
+| Evidence | Pending, Confirmed, Failed, Stale | What outcome or revision does authoritative evidence establish? |
+
+Axes may coexist; their meanings may not be flattened into one status enum.
+Render exactly one outcome-led primary state and express other active axes as
+supporting detail rather than a competing row of badges. Every origin state
+shows provenance. **Failed**, **Unavailable**, **Stale**, and **Blocked** always
+show both the reason and one recovery action beside the affected field or
+initiating control. Dynamic state changes use the contract's polite/assertive
+live-region policy. Text or an icon carries meaning; color is supplemental.
+
+State words are evidence claims. **Saved** means the server confirmed
+persistence; it never means **Published**. **Published** means the configuration
+is active for the stated scope. **Confirmed** requires authoritative evidence
+for the exact claim. **Pending** preserves uncertainty and never authorizes a
+blind retry. **Historical/imported** preserves source truth without implying
+that QuotePilot established it.
+
+Choice controls follow a strict 0/1/many contract through
+`AdaptiveChoiceField`:
+
+- Zero options renders **Blocked** or **Unavailable**, the reason, and one
+  recovery action. It does not render an empty dropdown.
+- One option renders static **Confirmed** and **Read-only** context without a
+  dropdown chevron. It may be selected automatically only when the relationship
+  is exact and the source remains visible.
+- Two or more options render a labeled select with focus-visible, validation,
+  disabled, and error states. A stale selected value remains visible until the
+  operator resolves it; the UI never silently chooses a nearby value.
+
+Buttons and button-like links must visibly answer four questions: can I act,
+did activation begin, what outcome occurred, and how do I recover? Hover and
+pressed movement lasts about 140ms where motion is useful; `focus-visible`,
+readable disabled treatment, forced-colors behavior, and reduced-motion
+fallbacks are mandatory. A caught user-triggered failure may not disappear into
+console diagnostics or leave the initiating control looking idle.
 
 ## UX Convergence surfaces (source candidate)
 

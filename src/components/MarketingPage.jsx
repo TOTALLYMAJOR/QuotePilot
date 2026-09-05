@@ -101,6 +101,7 @@ export default function MarketingPage() {
   const [commercialStarted, setCommercialStarted] = useState(false);
   const [commercialPlaying, setCommercialPlaying] = useState(false);
   const [commercialMuted, setCommercialMuted] = useState(true);
+  const [commercialError, setCommercialError] = useState("");
 
   const emitMarketingVideoEvent = (type, detail = {}) => {
     if (typeof window === "undefined") return;
@@ -153,8 +154,10 @@ export default function MarketingPage() {
     video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
 
     if (video.paused) {
+      setCommercialError("");
       emitMarketingVideoEvent("cta_click", { element: "commercial_play_overlay", action: "play" });
       video.play().catch(() => {
+        setCommercialError("The background film could not start. You can retry it without losing your place on this page.");
         emitMarketingVideoEvent("play_error", { element: "commercial_play_overlay" });
       });
     } else {
@@ -190,13 +193,35 @@ export default function MarketingPage() {
     });
 
     if (!nextMuted && video.paused) {
+      setCommercialError("");
       video.play().catch(() => {
+        setCommercialError("The background film could not resume with sound. You can retry it or continue without the film.");
         emitMarketingVideoEvent("play_error", { element: "cinematic_sound_control" });
       });
     }
   };
 
+  const handleCommercialMediaError = () => {
+    setCommercialPlaying(false);
+    setCommercialError("The background film is currently unavailable. Retry the media or continue with the full page content below.");
+    emitMarketingVideoEvent("play_error", { element: "background_film_media" });
+  };
+
+  const retryCommercialMedia = () => {
+    const video = marketingCommercialRef.current;
+    if (!video) return;
+    setCommercialError("");
+    video.load();
+    video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.play().catch(() => {
+      setCommercialError("The background film is still unavailable. The rest of the QuotePilot story remains available below.");
+      emitMarketingVideoEvent("play_error", { element: "background_film_retry" });
+    });
+  };
+
   const handleCommercialPlayEvent = () => {
+    setCommercialError("");
     setCommercialStarted(true);
     setCommercialPlaying(true);
     emitMarketingVideoEvent("play", {
@@ -268,6 +293,7 @@ export default function MarketingPage() {
           onPlay={handleCommercialPlayEvent}
           onPause={handleCommercialPauseEvent}
           onEnded={handleCommercialEnded}
+          onError={handleCommercialMediaError}
         >
           <source src={COMMERCIAL_VIDEO.src} type="video/mp4" />
           <track
@@ -422,6 +448,12 @@ export default function MarketingPage() {
               </button>
             </div>
           </div>
+          {commercialError ? (
+            <div className="qp-landing-film-recovery" role="alert">
+              <span>{commercialError}</span>
+              <button type="button" onClick={retryCommercialMedia}>Retry film</button>
+            </div>
+          ) : null}
         </section>
 
         <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes" data-landing-chapter>

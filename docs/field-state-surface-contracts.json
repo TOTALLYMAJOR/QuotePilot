@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "registryId": "quote-pilot-field-state-surfaces-v1",
+  "contractId": "quote-pilot-field-state-v1",
+  "coverage": {
+    "mode": "shared-primitive-import-registration",
+    "scope": "field-state-foundation-and-shared-primitive-adoption",
+    "adoptionRoots": ["src/components"],
+    "wholeRepositoryScan": false,
+    "note": "Every production component importing FieldStateIndicator or AdaptiveChoiceField must be explicitly registered with exact markers and assertion-bearing tests; unrelated source text is outside this deterministic scan."
+  },
+  "runtime": {
+    "path": "src/lib/fieldState.js",
+    "markers": [
+      "FIELD_STATE_AXES",
+      "FIELD_STATE_DEFINITIONS",
+      "buildFieldStatePresentation"
+    ],
+    "testPath": "src/lib/__tests__/fieldState.test.js"
+  },
+  "surfaces": [
+    {
+      "id": "field-state-indicator",
+      "path": "src/components/FieldStateIndicator.jsx",
+      "markers": [
+        "data-field-state-primary",
+        "data-field-state-axes",
+        "data-field-state-provenance"
+      ],
+      "testPath": "src/components/__tests__/AdaptiveChoiceField.test.jsx"
+    },
+    {
+      "id": "adaptive-choice-field",
+      "path": "src/components/AdaptiveChoiceField.jsx",
+      "markers": [
+        "data-adaptive-choice-mode",
+        "data-adaptive-choice-value"
+      ],
+      "modes": ["empty", "single", "select"],
+      "testPath": "src/components/__tests__/AdaptiveChoiceField.test.jsx"
+    },
+    {
+      "id": "import-workbench-field-states",
+      "path": "src/components/ImportStudioModal.jsx",
+      "markers": [
+        "Import Workbench progress",
+        "FieldStateIndicator",
+        "AdaptiveChoiceField"
+      ],
+      "testPaths": [
+        "src/components/__tests__/importStudioPresentation.test.jsx",
+        "src/components/__tests__/importWorkbenchFlow.test.jsx"
+      ]
+    },
+    {
+      "id": "quote-wizard-choice-states",
+      "path": "src/components/WizardSteps.jsx",
+      "markers": [
+        "data-choice-field",
+        "FieldStateIndicator",
+        "AdaptiveChoiceField"
+      ],
+      "testPaths": [
+        "src/components/__tests__/stepServicesGuidedDecisions.test.jsx",
+        "src/components/__tests__/advancedPricingChoiceStates.test.jsx"
+      ]
+    },
+    {
+      "id": "event-template-choice-states",
+      "path": "src/components/EventTemplatesEditor.jsx",
+      "markers": [
+        "FieldStateIndicator",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/eventTemplatesEditor.test.jsx"
+    },
+    {
+      "id": "package-workspace-choice-states",
+      "path": "src/components/PackageWorkspace.jsx",
+      "markers": [
+        "FieldStateIndicator",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/packageWorkspace.test.jsx"
+    },
+    {
+      "id": "staff-workspace-choice-and-operation-states",
+      "path": "src/components/StaffWorkspace.jsx",
+      "markers": [
+        "AdaptiveChoiceField",
+        "data-staff-operation"
+      ],
+      "testPath": "src/components/__tests__/staffWorkspace.test.jsx"
+    },
+    {
+      "id": "catalog-choice-and-recovery-states",
+      "path": "src/components/AdminCatalogModal.jsx",
+      "markers": [
+        "FieldStateIndicator",
+        "data-choice-field=\"catalog-event-type\"",
+        "data-choice-field=\"catalog-menu-section\""
+      ],
+      "testPaths": [
+        "src/components/__tests__/adminCatalogRecoveryProbe.test.jsx",
+        "src/components/__tests__/residualChoiceFieldStates.test.jsx"
+      ]
+    },
+    {
+      "id": "ambient-menu-choice-states",
+      "path": "src/components/AmbientLivingOpportunity.jsx",
+      "markers": [
+        "data-adaptive-choice-mode=\"empty\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/ambientLivingOpportunity.test.jsx"
+    },
+    {
+      "id": "event-schedule-staff-lead-states",
+      "path": "src/components/EventScheduleModal.jsx",
+      "markers": [
+        "StaffLeadChoiceField",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/eventScheduleModal.test.jsx"
+    },
+    {
+      "id": "legacy-event-schedule-staff-lead-states",
+      "path": "src/components/LegacyEventScheduleModal.jsx",
+      "markers": [
+        "StaffLeadChoiceField",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/eventScheduleModal.test.jsx"
+    },
+    {
+      "id": "operational-staffing-assignment-states",
+      "path": "src/components/OperationalStaffingPanel.jsx",
+      "markers": [
+        "StaffingAssignmentChoice",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/operationalStaffingPanel.test.jsx"
+    },
+    {
+      "id": "quick-update-service-style-states",
+      "path": "src/components/QuickUpdatesPanel.jsx",
+      "markers": [
+        "qup-service-style-choice",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/QuickUpdatesPanel.test.jsx"
+    },
+    {
+      "id": "sales-workflow-authoritative-quote-states",
+      "path": "src/components/SalesWorkflowModal.jsx",
+      "markers": [
+        "data-choice-field=\"workflow-authoritative-quote\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/residualChoiceFieldStates.test.jsx"
+    },
+    {
+      "id": "legacy-sales-workflow-authoritative-quote-states",
+      "path": "src/components/LegacySalesWorkflowModal.jsx",
+      "markers": [
+        "data-choice-field=\"legacy-workflow-authoritative-quote\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/residualChoiceFieldStates.test.jsx"
+    },
+    {
+      "id": "integration-audit-quote-states",
+      "path": "src/components/IntegrationOpsModal.jsx",
+      "markers": [
+        "data-choice-field=\"integration-audit-quote\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/residualChoiceFieldStates.test.jsx"
+    },
+    {
+      "id": "quote-history-choice-states",
+      "path": "src/components/QuoteHistoryModal.jsx",
+      "markers": [
+        "id=\"quote-provider-outcome\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/quoteHistoryStatusSemantics.test.jsx"
+    },
+    {
+      "id": "legacy-quote-history-choice-states",
+      "path": "src/components/LegacyQuoteHistoryModal.jsx",
+      "markers": [
+        "id=\"legacy-quote-provider-outcome\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/quoteHistoryStatusSemantics.test.jsx"
+    },
+    {
+      "id": "proposal-composer-choice-states",
+      "path": "src/components/ProposalComposer.jsx",
+      "markers": [
+        "id=\"proposal-event-template\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/proposalComposerMarginCost.test.jsx"
+    },
+    {
+      "id": "quote-comparison-choice-states",
+      "path": "src/components/QuoteCompareModal.jsx",
+      "markers": [
+        "id=\"compare-package\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/quoteCompareModalMargin.test.jsx"
+    }
+  ]
+}

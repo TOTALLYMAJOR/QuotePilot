@@ -429,9 +429,15 @@ const CUSTOMER_EMAIL_CLAIMS_COLLECTION = "customerEmailClaims";
 const CUSTOMER_IMPORT_BATCH_KIND = "customer";
 const CUSTOMER_IMPORT_SOURCE = "import_studio";
 const CUSTOMER_IMPORT_TYPE = "customers";
+const CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION = "customerImportPreflights";
+const CUSTOMER_IMPORT_PREFLIGHT_KIND = "customer_import_preflight";
+const CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS = 15 * 60 * 1000;
+const CUSTOMER_IMPORT_SESSION_CONTINUATION_MS = 24 * 60 * 60 * 1000;
 const CUSTOMER_IMPORT_MAX_RECORDS = 350;
+const CUSTOMER_IMPORT_MAX_SESSION_RECORDS = 1500;
 const CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS = 2000;
 const CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES = 500;
+const CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES = 2;
 const PORTAL_CONVERSATION_MESSAGES_COLLECTION = "portalConversationMessages";
 const PORTAL_CONVERSATION_REQUESTS_COLLECTION = "portalConversationRequests";
 const PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION = "portalConversationRateLimits";
@@ -9503,13 +9509,47 @@ function customerImportText(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
 }
 
+function customerImportBoundedText(value, {
+  field,
+  maxLength,
+  rowNumber = null
+} = {}) {
+  const text = String(value ?? "").trim();
+  if (text.length > maxLength) {
+    const location = rowNumber !== null && Number.isSafeInteger(Number(rowNumber))
+      ? `row ${Number(rowNumber)} `
+      : "";
+    throw new CustomerImportError(
+      "invalid-argument",
+      `Customer import ${location}${field} exceeds ${maxLength} characters. Shorten it and run server preflight again.`
+    );
+  }
+  return text;
+}
+
+function normalizeCustomerImportFileName(value) {
+  return customerImportBoundedText(value, {
+    field: "file name",
+    maxLength: 240
+  });
+}
+
 function customerImportNameKey(value) {
   return customerImportText(value, 160).toLowerCase().replace(/\s+/g, " ");
 }
 
 function normalizeCustomerImportBatchId(value) {
-  const batchId = customerImportText(value, 128);
+  const batchId = String(value ?? "").trim();
   return /^[A-Za-z0-9_-]{20,128}$/.test(batchId) ? batchId : "";
+}
+
+function createCustomerImportPreflightId() {
+  return `customer_preflight_${randomUUID().replace(/-/g, "")}`;
+}
+
+function normalizeCustomerImportPreflightId(value) {
+  const preflightId = String(value ?? "").trim().toLowerCase();
+  return /^customer_preflight_[a-f0-9]{32}$/.test(preflightId) ? preflightId : "";
 }
 
 function stableCustomerImportValue(value) {
@@ -9568,8 +9608,16 @@ function customerImportDocumentId(data = {}) {
 
 function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   const source = input && typeof input === "object" ? input : {};
-  const name = customerImportText(source.name, 160);
-  const email = normalizeEmail(customerImportText(source.email, 254));
+  const name = customerImportBoundedText(source.name, {
+    field: "name",
+    maxLength: 160,
+    rowNumber
+  });
+  const email = normalizeEmail(customerImportBoundedText(source.email, {
+    field: "email",
+    maxLength: 254,
+    rowNumber
+  }));
   if (!name && !email) {
     throw new CustomerImportError(
       "invalid-argument",
@@ -9585,9 +9633,21 @@ function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   const data = {
     name,
     email,
-    phone: customerImportText(source.phone, 80),
-    company: customerImportText(source.company || source.organization, 160),
-    notes: customerImportText(source.notes, 2_000),
+    phone: customerImportBoundedText(source.phone, {
+      field: "phone",
+      maxLength: 80,
+      rowNumber
+    }),
+    company: customerImportBoundedText(source.company || source.organization, {
+      field: "company",
+      maxLength: 160,
+      rowNumber
+    }),
+    notes: customerImportBoundedText(source.notes, {
+      field: "notes",
+      maxLength: 2_000,
+      rowNumber
+    }),
     nameKey: customerImportNameKey(name),
     emailKey: email
   };
@@ -9598,14 +9658,14 @@ function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   };
 }
 
-function normalizeCustomerImportRows(records = []) {
+function normalizeCustomerImportRows(records = [], { maxRecords = CUSTOMER_IMPORT_MAX_RECORDS } = {}) {
   if (!Array.isArray(records) || records.length === 0) {
     throw new CustomerImportError("invalid-argument", "No valid customer records are ready to import.");
   }
-  if (records.length > CUSTOMER_IMPORT_MAX_RECORDS) {
+  if (records.length > maxRecords) {
     throw new CustomerImportError(
       "resource-exhausted",
-      `Customer import batches are limited to ${CUSTOMER_IMPORT_MAX_RECORDS} records.`
+      `Customer import batches are limited to ${maxRecords} records.`
     );
   }
   return records.map((entry, index) => {
@@ -9622,12 +9682,254 @@ function normalizeCustomerImportRows(records = []) {
   });
 }
 
-function customerImportRequestHash({ fileName = "", rows = [] } = {}) {
+function customerImportRequestHash({ organizationId = "", fileName = "", rows = [] } = {}) {
   return customerImportHash({
+    organizationId: normalizeOrganizationId(organizationId),
     importType: CUSTOMER_IMPORT_TYPE,
-    fileName: customerImportText(fileName, 240),
+    fileName: normalizeCustomerImportFileName(fileName),
     rows: rows.map((row) => ({ rowNumber: row.rowNumber, data: row.data }))
   });
+}
+
+function customerImportChunkPlanHash(chunks = []) {
+  return customerImportHash(chunks.map((chunk) => ({
+    index: chunk.index,
+    sourceIndexes: chunk.sourceIndexes,
+    rowNumbers: chunk.rowNumbers,
+    recordCount: chunk.recordCount,
+    distinctEmailCount: chunk.distinctEmailCount,
+    maximumWrites: chunk.maximumWrites
+  })));
+}
+
+function bindCustomerImportBatchToPreflight({
+  organizationId = "",
+  fileName = "",
+  rows = [],
+  preflightId = "",
+  preflightPlanHash = "",
+  preflightRecords,
+  preflightChunkIndex,
+  preflightSessionId = "",
+  importBatchId = ""
+} = {}) {
+  const normalizedPreflightId = normalizeCustomerImportPreflightId(preflightId);
+  const normalizedPlanHash = String(preflightPlanHash ?? "").trim().toLowerCase();
+  const normalizedSessionId = normalizeCustomerImportBatchId(preflightSessionId);
+  const normalizedBatchId = normalizeCustomerImportBatchId(importBatchId);
+  if (
+    !normalizedPreflightId
+    || !/^[a-f0-9]{64}$/.test(normalizedPlanHash)
+    || !Array.isArray(preflightRecords)
+    || !Number.isSafeInteger(preflightChunkIndex)
+    || preflightChunkIndex < 0
+    || !normalizedSessionId
+  ) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "This customer import is missing its complete server preflight binding. Run preflight again."
+    );
+  }
+  const preflightRows = normalizeCustomerImportRows(preflightRecords, {
+    maxRecords: CUSTOMER_IMPORT_MAX_SESSION_RECORDS
+  });
+  const expectedPlanHash = customerImportRequestHash({
+    organizationId,
+    fileName,
+    rows: preflightRows
+  });
+  if (expectedPlanHash !== normalizedPlanHash) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The customer rows or source file changed after server preflight. Run preflight again."
+    );
+  }
+  const chunks = buildCustomerImportChunkPlan(preflightRows);
+  const chunkIndex = preflightChunkIndex;
+  const expectedChunk = chunks[chunkIndex];
+  if (!expectedChunk) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "The requested customer import part is not present in the server preflight plan."
+    );
+  }
+  const expectedBatchId = chunks.length === 1
+    ? normalizedSessionId
+    : `${normalizedSessionId}_part_${String(chunkIndex + 1).padStart(3, "0")}`;
+  if (expectedBatchId.length > 128) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "The customer import session identity is too long for its server-issued chunk plan. Start a new import."
+    );
+  }
+  if (!normalizedBatchId || normalizedBatchId !== expectedBatchId) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "This customer import part is not bound to the expected session identity. Run server preflight again."
+    );
+  }
+  const expectedRows = expectedChunk.sourceIndexes.map((sourceIndex) => preflightRows[sourceIndex]);
+  const batchHash = customerImportHash(rows.map((row) => ({ rowNumber: row.rowNumber, data: row.data })));
+  const expectedBatchHash = customerImportHash(expectedRows.map((row) => ({
+    rowNumber: row.rowNumber,
+    data: row.data
+  })));
+  if (batchHash !== expectedBatchHash) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "This customer import part no longer matches the server preflight plan. Run preflight again."
+    );
+  }
+  return {
+    preflightId: normalizedPreflightId,
+    planHash: normalizedPlanHash,
+    chunkPlanHash: customerImportChunkPlanHash(chunks),
+    sourceCount: preflightRows.length,
+    chunkIndex,
+    chunkCount: chunks.length,
+    sessionId: normalizedSessionId,
+    expectedBatchId
+  };
+}
+
+function assertIssuedCustomerImportPreflight(snapshot, {
+  organizationId,
+  actorUid,
+  actorEmail,
+  fileName,
+  binding,
+  importBatchId,
+  requestHash,
+  nowISO,
+  allowExpired = false
+} = {}) {
+  if (!snapshot?.exists) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight receipt is unavailable. Run preflight again."
+    );
+  }
+  const receipt = snapshot.data() || {};
+  const receiptActor = receipt.actor && typeof receipt.actor === "object" ? receipt.actor : {};
+  const completedChunks = receipt.completedChunks && typeof receipt.completedChunks === "object"
+    ? receipt.completedChunks
+    : {};
+  const completedChunkEntries = Object.entries(completedChunks);
+  const hasBoundSession = Boolean(receipt.sessionImportBatchId);
+  if (
+    receipt.schemaVersion !== 1
+    || receipt.kind !== CUSTOMER_IMPORT_PREFLIGHT_KIND
+    || !["issued", "in_progress", "completed"].includes(receipt.status)
+    || receipt.preflightId !== binding.preflightId
+    || receipt.organizationId !== organizationId
+    || receipt.importType !== CUSTOMER_IMPORT_TYPE
+    || receipt.fileName !== fileName
+    || receipt.planHash !== binding.planHash
+    || receipt.chunkPlanHash !== binding.chunkPlanHash
+    || Number(receipt.sourceCount) !== binding.sourceCount
+    || Number(receipt.chunkCount) !== binding.chunkCount
+    || receiptActor.uid !== actorUid
+    || normalizeEmail(receiptActor.email) !== normalizeEmail(actorEmail)
+    || (receipt.sessionImportBatchId && receipt.sessionImportBatchId !== binding.sessionId)
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The customer import no longer matches its server-issued preflight receipt. Run preflight again."
+    );
+  }
+  const expiresAtMs = Date.parse(String(receipt.expiresAtISO || ""));
+  const issuedAtMs = Date.parse(String(receipt.issuedAtISO || ""));
+  const expiresAtTimestampMs = typeof receipt.expiresAt?.toMillis === "function"
+    ? receipt.expiresAt.toMillis()
+    : Number.NaN;
+  const sessionActivatedAtMs = Date.parse(String(receipt.sessionActivatedAtISO || ""));
+  const sessionExpiresAtMs = Date.parse(String(receipt.sessionExpiresAtISO || ""));
+  const sessionExpiresAtTimestampMs = typeof receipt.sessionExpiresAt?.toMillis === "function"
+    ? receipt.sessionExpiresAt.toMillis()
+    : Number.NaN;
+  const nowMs = Date.parse(String(nowISO || ""));
+  if (
+    !Number.isFinite(expiresAtMs)
+    || !Number.isFinite(issuedAtMs)
+    || !Number.isFinite(expiresAtTimestampMs)
+    || !Number.isFinite(nowMs)
+    || expiresAtTimestampMs !== expiresAtMs
+    || expiresAtMs - issuedAtMs !== CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight has expired. Run preflight again."
+    );
+  }
+  const sessionEvidenceValid = hasBoundSession
+    && Number.isFinite(sessionActivatedAtMs)
+    && Number.isFinite(sessionExpiresAtMs)
+    && Number.isFinite(sessionExpiresAtTimestampMs)
+    && sessionExpiresAtTimestampMs === sessionExpiresAtMs
+    && sessionExpiresAtMs - sessionActivatedAtMs === CUSTOMER_IMPORT_SESSION_CONTINUATION_MS
+    && sessionActivatedAtMs >= issuedAtMs
+    && sessionActivatedAtMs <= expiresAtMs;
+  const completedEvidenceValid = completedChunkEntries.every(([key, value]) => {
+    const index = Number(key);
+    const expectedBatchId = binding.chunkCount === 1
+      ? receipt.sessionImportBatchId
+      : `${receipt.sessionImportBatchId}_part_${String(index + 1).padStart(3, "0")}`;
+    return Number.isSafeInteger(index)
+      && index >= 0
+      && index < binding.chunkCount
+      && value
+      && typeof value === "object"
+      && value.importBatchId === expectedBatchId
+      && /^[a-f0-9]{64}$/.test(String(value.requestHash || ""))
+      && Number.isFinite(Date.parse(String(value.completedAtISO || "")));
+  });
+  const statusEvidenceValid = receipt.status === "issued"
+    ? !hasBoundSession && completedChunkEntries.length === 0
+    : sessionEvidenceValid
+      && completedEvidenceValid
+      && completedChunkEntries.length > 0
+      && (
+        (receipt.status === "in_progress" && completedChunkEntries.length < binding.chunkCount)
+        || (receipt.status === "completed" && completedChunkEntries.length === binding.chunkCount)
+      );
+  if (!statusEvidenceValid) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight has inconsistent session evidence. Run reconciliation before retrying."
+    );
+  }
+  if (
+    !allowExpired
+    && (
+      (!hasBoundSession && expiresAtMs <= nowMs)
+      || (hasBoundSession && sessionExpiresAtMs <= nowMs)
+    )
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      hasBoundSession
+        ? "The customer import session continuation window has expired. Undo the partial session or start a new import."
+        : "The server-issued customer import preflight has expired. Run preflight again."
+    );
+  }
+  const completedChunk = completedChunks[String(binding.chunkIndex)];
+  if (completedChunk && (
+    completedChunk.importBatchId !== importBatchId
+    || completedChunk.requestHash !== requestHash
+  )) {
+    throw new CustomerImportError(
+      "already-exists",
+      "This server preflight chunk is already bound to a different customer import batch."
+    );
+  }
+  return {
+    receipt,
+    completedChunks,
+    completedChunk,
+    expiresAtISO: String(receipt.expiresAtISO || ""),
+    sessionActivatedAtISO: hasBoundSession ? String(receipt.sessionActivatedAtISO || "") : "",
+    sessionExpiresAtISO: hasBoundSession ? String(receipt.sessionExpiresAtISO || "") : ""
+  };
 }
 
 function customerImportResultFromReceipt(receipt = {}, { idempotentReplay = true } = {}) {
@@ -9641,6 +9943,12 @@ function customerImportResultFromReceipt(receipt = {}, { idempotentReplay = true
     createdRecords: Array.isArray(receipt.createdRecords) ? receipt.createdRecords : [],
     skippedRows: Array.isArray(receipt.skippedRows) ? receipt.skippedRows : [],
     status: customerImportText(receipt.status, 40) || "completed",
+    preflightId: normalizeCustomerImportPreflightId(receipt.preflightId),
+    preflightPlanHash: customerImportText(receipt.preflightPlanHash, 64),
+    preflightChunkIndex: Number.isSafeInteger(Number(receipt.preflightChunkIndex))
+      ? Number(receipt.preflightChunkIndex)
+      : null,
+    preflightSessionId: normalizeCustomerImportBatchId(receipt.preflightSessionId),
     idempotentReplay
   };
 }
@@ -9665,7 +9973,11 @@ function customerImportRollbackResultFromReceipt(receipt = {}, { idempotentRepla
 function assertCustomerImportReceiptIdentity(receipt = {}, {
   organizationId,
   importBatchId,
-  requestHash
+  requestHash,
+  preflightId,
+  preflightPlanHash,
+  preflightChunkIndex,
+  preflightSessionId
 } = {}) {
   if (
     receipt.batchKind !== CUSTOMER_IMPORT_BATCH_KIND
@@ -9675,6 +9987,10 @@ function assertCustomerImportReceiptIdentity(receipt = {}, {
     || receipt.importType !== CUSTOMER_IMPORT_TYPE
     || receipt.targetCollection !== "customers"
     || receipt.requestHash !== requestHash
+    || receipt.preflightId !== preflightId
+    || receipt.preflightPlanHash !== preflightPlanHash
+    || Number(receipt.preflightChunkIndex) !== Number(preflightChunkIndex)
+    || receipt.preflightSessionId !== preflightSessionId
   ) {
     throw new CustomerImportError(
       "already-exists",
@@ -9705,12 +10021,208 @@ function assertExistingCustomerImportIdentity(snapshot, organizationId) {
   return customerImportDuplicateKey(data);
 }
 
+function buildCustomerImportChunkPlan(rows = []) {
+  const chunks = [];
+  let current = null;
+  const startChunk = () => ({
+    index: chunks.length,
+    sourceIndexes: [],
+    rowNumbers: [],
+    recordCount: 0,
+    distinctEmailCount: 0,
+    maximumWrites: CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES,
+    emailKeys: new Set()
+  });
+  rows.forEach((row, sourceIndex) => {
+    if (!current) current = startChunk();
+    const emailKey = normalizeEmail(row?.data?.emailKey || row?.data?.email);
+    const addsEmail = emailKey && !current.emailKeys.has(emailKey) ? 1 : 0;
+    const nextRecords = current.recordCount + 1;
+    const nextEmails = current.distinctEmailCount + addsEmail;
+    if (
+      current.recordCount > 0
+      && (
+        nextRecords > CUSTOMER_IMPORT_MAX_RECORDS
+        || nextRecords + nextEmails + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES
+          > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES
+      )
+    ) {
+      chunks.push(current);
+      current = startChunk();
+    }
+    if (emailKey) current.emailKeys.add(emailKey);
+    current.sourceIndexes.push(sourceIndex);
+    current.rowNumbers.push(row.rowNumber);
+    current.recordCount += 1;
+    current.distinctEmailCount = current.emailKeys.size;
+    current.maximumWrites = current.recordCount
+      + current.distinctEmailCount
+      + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES;
+  });
+  if (current?.recordCount) chunks.push(current);
+  return chunks.map(({ emailKeys, ...chunk }, index) => ({ ...chunk, index }));
+}
+
+async function preflightCustomerImportBatchInternal({
+  organizationId = "",
+  fileName = "",
+  records = [],
+  actorUid = "",
+  actorEmail = "",
+  nowISO = new Date().toISOString()
+} = {}) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  if (!normalizedOrganizationId) {
+    throw new CustomerImportError("invalid-argument", "organizationId is required.");
+  }
+  const normalizedFileName = normalizeCustomerImportFileName(fileName);
+  const normalizedActorUid = customerImportBoundedText(actorUid, {
+    field: "actor identity",
+    maxLength: 160
+  });
+  const normalizedActorEmail = normalizeEmail(customerImportBoundedText(actorEmail, {
+    field: "actor email",
+    maxLength: 254
+  }));
+  if (!normalizedActorUid) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "Customer import preflight requires an authenticated actor identity."
+    );
+  }
+  const issuedAtMs = Date.parse(nowISO);
+  if (!Number.isFinite(issuedAtMs)) {
+    throw new CustomerImportError("internal", "Customer import preflight time is invalid.");
+  }
+  const expiresAtISO = new Date(issuedAtMs + CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS).toISOString();
+  const rows = normalizeCustomerImportRows(records, {
+    maxRecords: CUSTOMER_IMPORT_MAX_SESSION_RECORDS
+  });
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
+  const customerCollectionRef = organizationRef.collection("customers");
+  const customerEmailClaimCollectionRef = organizationRef.collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
+  const existingSnapshot = await customerCollectionRef
+    .limit(CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS + 1)
+    .get();
+  if (existingSnapshot.docs.length > CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS) {
+    throw new CustomerImportError(
+      "resource-exhausted",
+      `This destination has more than ${CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS} customer records. Use a managed migration so duplicate checks remain complete.`
+    );
+  }
+
+  const existingKeys = new Map();
+  existingSnapshot.docs.forEach((snapshot) => {
+    const duplicateKey = assertExistingCustomerImportIdentity(snapshot, normalizedOrganizationId);
+    if (!duplicateKey) return;
+    const priorId = existingKeys.get(duplicateKey);
+    if (priorId && priorId !== snapshot.id) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "Multiple customer records already share the same normalized identity. Repair the collision before importing."
+      );
+    }
+    existingKeys.set(duplicateKey, snapshot.id);
+  });
+
+  const requestedEmailKeys = [...new Set(rows
+    .map((row) => normalizeEmail(row.data.emailKey || row.data.email))
+    .filter(Boolean))];
+  const claimRefs = requestedEmailKeys.map((emailKey) => (
+    customerEmailClaimCollectionRef.doc(customerEmailClaimDocumentId(emailKey))
+  ));
+  const claimSnapshots = [];
+  for (let offset = 0; offset < claimRefs.length; offset += 250) {
+    claimSnapshots.push(...await db.getAll(...claimRefs.slice(offset, offset + 250)));
+  }
+  claimSnapshots.forEach((snapshot, index) => {
+    if (!snapshot.exists) return;
+    const emailKey = requestedEmailKeys[index];
+    const binding = readCustomerEmailClaim(snapshot, normalizedOrganizationId, emailKey);
+    const existingCustomerId = existingKeys.get(`email:${emailKey}`);
+    if (!existingCustomerId || existingCustomerId !== binding.customerId) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "A customer email claim does not match the existing customer directory. Repair it before importing."
+      );
+    }
+  });
+
+  const seenKeys = new Set(existingKeys.keys());
+  const decisions = rows.map((row) => {
+    const duplicate = seenKeys.has(row.duplicateKey);
+    seenKeys.add(row.duplicateKey);
+    return {
+      rowNumber: row.rowNumber,
+      status: duplicate ? "skip" : "create",
+      ...(duplicate ? { reason: "duplicate" } : {})
+    };
+  });
+  const chunks = buildCustomerImportChunkPlan(rows);
+  const planHash = customerImportRequestHash({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows
+  });
+  const chunkPlanHash = customerImportChunkPlanHash(chunks);
+  const preflightId = createCustomerImportPreflightId();
+  const preflightReceipt = {
+    schemaVersion: 1,
+    kind: CUSTOMER_IMPORT_PREFLIGHT_KIND,
+    preflightId,
+    organizationId: normalizedOrganizationId,
+    importType: CUSTOMER_IMPORT_TYPE,
+    fileName: normalizedFileName,
+    planHash,
+    chunkPlanHash,
+    sourceCount: rows.length,
+    chunkCount: chunks.length,
+    status: "issued",
+    completedChunks: {},
+    actor: {
+      uid: normalizedActorUid,
+      email: normalizedActorEmail
+    },
+    issuedAtISO: nowISO,
+    expiresAtISO,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromDate(new Date(expiresAtISO))
+  };
+  await organizationRef
+    .collection(CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION)
+    .doc(preflightId)
+    .set(preflightReceipt);
+  return {
+    ok: true,
+    status: "ready",
+    authority: "server_preflight",
+    organizationId: normalizedOrganizationId,
+    importType: CUSTOMER_IMPORT_TYPE,
+    preflightId,
+    planHash,
+    expiresAtISO,
+    observedAtISO: nowISO,
+    sourceCount: rows.length,
+    projectedCreateCount: decisions.filter((entry) => entry.status === "create").length,
+    projectedSkipCount: decisions.filter((entry) => entry.status === "skip").length,
+    destinationRecordCount: existingSnapshot.docs.length,
+    decisions,
+    chunks
+  };
+}
+
 async function createCustomerImportBatchInternal({
   organizationId = "",
   organizationName = "",
   fileName = "",
   records = [],
   importBatchId = "",
+  preflightId = "",
+  preflightPlanHash = "",
+  preflightRecords,
+  preflightChunkIndex,
+  preflightSessionId = "",
   actorUid = "",
   actorEmail = "",
   nowISO = new Date().toISOString()
@@ -9723,13 +10235,36 @@ async function createCustomerImportBatchInternal({
   if (!normalizedBatchId) {
     throw new CustomerImportError("invalid-argument", "A stable importBatchId is required.");
   }
+  const normalizedFileName = normalizeCustomerImportFileName(fileName);
+  const normalizedOrganizationName = customerImportBoundedText(organizationName, {
+    field: "organization name",
+    maxLength: 300
+  });
   const rows = normalizeCustomerImportRows(records);
-  const operationHash = customerImportRequestHash({ fileName, rows });
+  const preflightBinding = bindCustomerImportBatchToPreflight({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows,
+    preflightId,
+    preflightPlanHash,
+    preflightRecords,
+    preflightChunkIndex,
+    preflightSessionId,
+    importBatchId: normalizedBatchId
+  });
+  const operationHash = customerImportRequestHash({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows
+  });
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
   const customerCollectionRef = organizationRef.collection("customers");
   const customerEmailClaimCollectionRef = organizationRef
     .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
   const receiptRef = organizationRef.collection("importBatches").doc(normalizedBatchId);
+  const preflightRef = organizationRef
+    .collection(CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION)
+    .doc(preflightBinding.preflightId);
   const emailClaimRefs = new Map();
   rows.forEach((row) => {
     const emailKey = normalizeEmail(row.data.emailKey || row.data.email);
@@ -9740,21 +10275,54 @@ async function createCustomerImportBatchInternal({
     );
   });
   return db.runTransaction(async (transaction) => {
-    const receiptSnapshot = await transaction.get(receiptRef);
+    const [receiptSnapshot, preflightSnapshot] = await Promise.all([
+      transaction.get(receiptRef),
+      transaction.get(preflightRef)
+    ]);
+    const preflightAuthority = assertIssuedCustomerImportPreflight(preflightSnapshot, {
+      organizationId: normalizedOrganizationId,
+      actorUid,
+      actorEmail,
+      fileName: normalizedFileName,
+      binding: preflightBinding,
+      importBatchId: normalizedBatchId,
+      requestHash: operationHash,
+      nowISO,
+      allowExpired: receiptSnapshot.exists
+    });
     if (receiptSnapshot.exists) {
       const receipt = receiptSnapshot.data() || {};
       assertCustomerImportReceiptIdentity(receipt, {
         organizationId: normalizedOrganizationId,
         importBatchId: normalizedBatchId,
-        requestHash: operationHash
+        requestHash: operationHash,
+        preflightId: preflightBinding.preflightId,
+        preflightPlanHash: preflightBinding.planHash,
+        preflightChunkIndex: preflightBinding.chunkIndex,
+        preflightSessionId: preflightBinding.sessionId
       });
-      if (receipt.status === "completed") return customerImportResultFromReceipt(receipt);
+      if (receipt.status === "completed" && preflightAuthority.completedChunk) {
+        return customerImportResultFromReceipt(receipt);
+      }
       throw new CustomerImportError(
         "failed-precondition",
-        "This customer import was already rolled back. Start a new import batch."
+        receipt.status === "rolled_back"
+          ? "This customer import was already rolled back. Start a new import batch."
+          : "The customer import receipt and preflight completion evidence disagree. Run reconciliation before retrying."
       );
     }
-    if (rows.length + emailClaimRefs.size + 1 > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES) {
+    if (preflightAuthority.completedChunk) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "The server preflight marks this chunk complete but its import receipt is missing. Run reconciliation before retrying."
+      );
+    }
+    if (
+      rows.length
+      + emailClaimRefs.size
+      + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES
+      > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES
+    ) {
       throw new CustomerImportError(
         "resource-exhausted",
         "This customer import has too many email identities for one atomic batch. Split it into smaller files."
@@ -9894,17 +10462,30 @@ async function createCustomerImportBatchInternal({
       });
     });
 
+    const sessionActivatedAtISO = preflightAuthority.sessionActivatedAtISO || nowISO;
+    const sessionExpiresAtISO = preflightAuthority.sessionExpiresAtISO || new Date(
+      Date.parse(sessionActivatedAtISO) + CUSTOMER_IMPORT_SESSION_CONTINUATION_MS
+    ).toISOString();
     transaction.set(receiptRef, {
       schemaVersion: 3,
       batchKind: CUSTOMER_IMPORT_BATCH_KIND,
       operation: "customer_import",
       importBatchId: normalizedBatchId,
       organizationId: normalizedOrganizationId,
-      organizationName: customerImportText(organizationName, 300),
+      organizationName: normalizedOrganizationName,
       importType: CUSTOMER_IMPORT_TYPE,
       targetCollection: "customers",
-      fileName: customerImportText(fileName, 240),
+      fileName: normalizedFileName,
       requestHash: operationHash,
+      preflightId: preflightBinding.preflightId,
+      preflightPlanHash: preflightBinding.planHash,
+      preflightSourceCount: preflightBinding.sourceCount,
+      preflightChunkIndex: preflightBinding.chunkIndex,
+      preflightChunkCount: preflightBinding.chunkCount,
+      preflightSessionId: preflightBinding.sessionId,
+      preflightExpiresAtISO: preflightAuthority.expiresAtISO,
+      preflightSessionActivatedAtISO: sessionActivatedAtISO,
+      preflightSessionExpiresAtISO: sessionExpiresAtISO,
       status: "completed",
       sourceRows: rows.length,
       createdCount: createdRecords.length,
@@ -9920,6 +10501,26 @@ async function createCustomerImportBatchInternal({
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     });
+    const completedChunks = {
+      ...preflightAuthority.completedChunks,
+      [String(preflightBinding.chunkIndex)]: {
+        importBatchId: normalizedBatchId,
+        requestHash: operationHash,
+        completedAtISO: nowISO
+      }
+    };
+    transaction.set(preflightRef, {
+      sessionImportBatchId: preflightBinding.sessionId,
+      sessionActivatedAtISO,
+      sessionExpiresAtISO,
+      sessionExpiresAt: Timestamp.fromDate(new Date(sessionExpiresAtISO)),
+      status: Object.keys(completedChunks).length === preflightBinding.chunkCount
+        ? "completed"
+        : "in_progress",
+      completedChunks,
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
     return {
       ...customerImportResultFromReceipt({
         importBatchId: normalizedBatchId,
@@ -9928,7 +10529,11 @@ async function createCustomerImportBatchInternal({
         skippedCount: skippedRows.length,
         createdRecords,
         skippedRows,
-        status: "completed"
+        status: "completed",
+        preflightId: preflightBinding.preflightId,
+        preflightPlanHash: preflightBinding.planHash,
+        preflightChunkIndex: preflightBinding.chunkIndex,
+        preflightSessionId: preflightBinding.sessionId
       }, { idempotentReplay: false })
     };
   });
@@ -10156,6 +10761,24 @@ function toCustomerImportHttpsError(error, fallbackMessage) {
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
 
+exports.preflightCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await preflightCustomerImportBatchInternal({
+      organizationId: staff.organizationId,
+      fileName: data?.fileName,
+      records: data?.records,
+      actorUid: staff.uid,
+      actorEmail: staff.email
+    });
+  } catch (error) {
+    throw toCustomerImportHttpsError(error, "Failed to preflight customer records.");
+  }
+});
+
 exports.createCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, {
@@ -10168,6 +10791,11 @@ exports.createCustomerImportBatch = functions.region(REGION).https.onCall(async 
       fileName: data?.fileName,
       records: data?.records,
       importBatchId: data?.importBatchId,
+      preflightId: data?.preflightId,
+      preflightPlanHash: data?.preflightPlanHash,
+      preflightRecords: data?.preflightRecords,
+      preflightChunkIndex: data?.preflightChunkIndex,
+      preflightSessionId: data?.preflightSessionId,
       actorUid: staff.uid,
       actorEmail: staff.email
     });

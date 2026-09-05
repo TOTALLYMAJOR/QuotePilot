@@ -4392,10 +4392,9 @@ export default function App({
           });
           pushToast(`Quote ${result.quoteNumber} updated.`, "success");
         }
-        // Structured change-request version linking: this save already
-        // fully succeeded above, so linking is strictly best-effort — never
-        // block navigation or surface its own failure. Cleared either way
-        // so a later, unrelated save cannot attempt a stale link.
+        // The quote save and change-request linkage are separate outcomes.
+        // A linkage failure must not erase the confirmed quote receipt, but it
+        // must remain visible so the operator does not assume resolution.
         if (
           result.storage === "firebase"
           && manageEditorState
@@ -4412,6 +4411,10 @@ export default function App({
               surface: "change-request-record",
               action: "link-version"
             });
+            pushToast(
+              `Quote ${result.quoteNumber} was saved, but its change-request resolution was not confirmed. Reopen Change Requests and retry against the saved version.`,
+              "warning"
+            );
           });
           setPendingResolutionLink(null);
         }
@@ -5864,10 +5867,38 @@ export default function App({
       currentUserUid,
       currentUserEmail,
       catalogRevision: Math.max(0, Number(catalog.settings?.catalogRevision || 0)),
+      catalogContext: {
+        eventTypeId: globalEventTypeId,
+        eventTypes: catalog.eventTypes || [],
+        packages: catalog.packages || [],
+        addons: catalog.addons || [],
+        rentals: catalog.rentals || [],
+        menuSections: effectiveMenuSections
+      },
       onReload: () => catalog.reload({ background: true }),
+      onReviewCatalog: (result) => {
+        const importType = String(result?.importType || "");
+        const reviewTab = ["eventTypes", "menuCategories", "menuItems"].includes(importType)
+          ? "menu"
+          : ["packages", "addons", "rentals"].includes(importType)
+            ? importType
+            : "starter";
+        setImportStudioOpen(false);
+        openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, {
+          beforeOpen: () => {
+            setLibraryContextualOrigin(null);
+            setAdminInitialTab(reviewTab);
+          }
+        });
+      },
       onImported: (result) => {
         catalog.reload({ background: true });
-        if (result?.status === "staged") {
+        if (result?.status === "published") {
+          pushToast(
+            `Import ${result.importBatchId} was already published in catalog revision ${result.catalogRevisionAfter ?? result.catalogRevision ?? "confirmed by the server"}.`,
+            "success"
+          );
+        } else if (result?.status === "staged") {
           pushToast(`Added ${result?.stagedCount || 0} record(s) to the catalog setup draft.`, "success");
         } else if (result?.status === "rolled_back") {
           pushToast(`Import ${result.importBatchId} was undone.`, "info");

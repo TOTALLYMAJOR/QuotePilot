@@ -2,6 +2,7 @@ import { httpsCallable } from "firebase/functions";
 import { buildCatalogRecordChanges, buildSettingsPatch } from "../hooks/useCatalogData";
 import { cloudFunctions, firebaseReady } from "./firebase";
 import { addonWriteShape, packageWriteShape, rentalWriteShape } from "./catalogWriteShapes";
+import { sha256CanonicalValue } from "./commercialDependencyGraph";
 
 const E2E_FUNCTION_ADAPTER_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_BYPASS_AUTH || "").trim().toLowerCase()
@@ -10,7 +11,9 @@ const E2E_FUNCTION_ADAPTER_ENABLED = ["1", "true", "yes", "on"].includes(
 const COLLECTION_BY_CATALOG_KEY = Object.freeze({
   packages: "catalogPackages",
   addons: "catalogAddons",
-  rentals: "catalogRentals"
+  rentals: "catalogRentals",
+  eventTypes: "eventTypes",
+  menuCategories: "menuCategories"
 });
 const WRITE_SHAPE_BY_CATALOG_KEY = Object.freeze({
   packages: packageWriteShape,
@@ -243,9 +246,68 @@ function importRecordId(batchId, row, index) {
   return `imp_${String(batchId || "catalog").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 180)}_${rowNumber}_${index}`;
 }
 
-function importMoney(value) {
-  if (value === "" || value === null || value === undefined) return null;
-  return Math.round(Number(value) * 100);
+const IMPORT_MONEY_MAX_MINOR = 100_000_000;
+const IMPORT_RELATIONSHIP_LIMIT = 100;
+
+function importText(value, {
+  label = "Value",
+  maxLength = 300,
+  required = false,
+  rowNumber = "unknown"
+} = {}) {
+  const normalized = String(value || "").trim();
+  if (required && !normalized) {
+    throw new Error(`Catalog import row ${rowNumber} needs ${label.toLowerCase()}.`);
+  }
+  if (normalized.length > maxLength) {
+    throw new Error(`Catalog import row ${rowNumber} ${label.toLowerCase()} exceeds ${maxLength} characters.`);
+  }
+  return normalized;
+}
+
+function importMoney(value, {
+  label = "Amount",
+  required = false,
+  positive = false,
+  rowNumber = "unknown"
+} = {}) {
+  if (value === "" || value === null || value === undefined) {
+    if (required) throw new Error(`Catalog import row ${rowNumber} needs ${label.toLowerCase()}.`);
+    return null;
+  }
+  const numeric = Number(value);
+  const scaled = numeric * 100;
+  const rounded = Math.round(scaled);
+  if (
+    !Number.isFinite(numeric)
+    || numeric < 0
+    || (positive && numeric <= 0)
+    || Math.abs(scaled - rounded) > 1e-8
+    || rounded > IMPORT_MONEY_MAX_MINOR
+  ) {
+    throw new Error(`Catalog import row ${rowNumber} has an invalid ${label.toLowerCase()}.`);
+  }
+  return rounded;
+}
+
+function importRelationshipIds(value, { label, rowNumber }) {
+  if (!Array.isArray(value)) return [];
+  const normalized = value.map((entry) => importText(entry, {
+    label,
+    maxLength: 256,
+    required: true,
+    rowNumber
+  }));
+  if (normalized.some((id) => id === "." || id === ".." || id.includes("/"))) {
+    throw new Error(`Catalog import row ${rowNumber} has an invalid ${label.toLowerCase()}.`);
+  }
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error(`Catalog import row ${rowNumber} repeats a ${label.toLowerCase()}.`);
+  }
+  if (normalized.length > IMPORT_RELATIONSHIP_LIMIT) {
+    throw new Error(`Catalog import row ${rowNumber} has more than ${IMPORT_RELATIONSHIP_LIMIT} ${label.toLowerCase()} values.`);
+  }
+  return normalized;
 }
 
 export function buildCatalogImportDraftChanges({ importType = "", rows = [], importBatchId = "" } = {}) {
@@ -253,30 +315,251 @@ export function buildCatalogImportDraftChanges({ importType = "", rows = [], imp
   if (!collection) throw new Error("Choose a supported catalog import type.");
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
     const record = row?.record || row?.data || row || {};
+    const rowNumber = Number.isSafeInteger(Number(row?.rowNumber)) ? Number(row.rowNumber) : index + 1;
+    const name = importText(record.name, { label: "Name", required: true, rowNumber });
     let payload;
     if (importType === "packages") {
       payload = {
-        name: String(record.name || "").trim(),
-        pppMinor: importMoney(record.ppp),
-        costPppMinor: importMoney(record.costPpp),
-        description: String(record.description || "").trim(),
+        name,
+        pppMinor: importMoney(record.ppp, { label: "Price per person", required: true, positive: true, rowNumber }),
+        costPppMinor: importMoney(record.costPpp, { label: "Cost per person", rowNumber }),
         active: record.active !== false,
-        includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: []
+        includedMenuItemIds: importRelationshipIds(record.includedMenuItemIds, { label: "Included menu item", rowNumber }),
+        includedAddonIds: importRelationshipIds(record.includedAddonIds, { label: "Included add-on", rowNumber }),
+        includedRentalIds: importRelationshipIds(record.includedRentalIds, { label: "Included rental", rowNumber })
       };
     } else if (importType === "addons") {
       const basis = record.pricingType || record.type || "per_event";
-      payload = { name: String(record.name || "").trim(), priceMinor: importMoney(record.price), costMinor: importMoney(record.cost), pricingType: basis, type: basis, description: String(record.description || "").trim(), active: record.active !== false };
+      if (!["per_person", "per_item", "per_event"].includes(basis)) {
+        throw new Error(`Catalog import row ${rowNumber} has an invalid pricing basis.`);
+      }
+      payload = {
+        name,
+        priceMinor: importMoney(record.price, { label: "Price", required: true, rowNumber }),
+        costMinor: importMoney(record.cost, { label: "Cost", rowNumber }),
+        pricingType: basis,
+        type: basis,
+        staffRole: "",
+        active: record.active !== false,
+        portalDecidable: false
+      };
     } else if (importType === "rentals") {
-      payload = { name: String(record.name || "").trim(), priceMinor: importMoney(record.price), costMinor: importMoney(record.cost), qtyPerGuests: Math.max(1, Number(record.qtyPerGuests || 1)), pricingType: "per_item", type: "per_item", description: String(record.description || "").trim(), active: record.active !== false };
+      const qtyPerGuests = Number(record.qtyPerGuests);
+      if (!Number.isSafeInteger(qtyPerGuests) || qtyPerGuests < 1 || qtyPerGuests > 100_000) {
+        throw new Error(`Catalog import row ${rowNumber} needs a whole-number guests-per-unit ratio from 1 to 100000.`);
+      }
+      payload = {
+        name,
+        priceMinor: importMoney(record.price, { label: "Price", required: true, rowNumber }),
+        costMinor: importMoney(record.cost, { label: "Cost", rowNumber }),
+        qtyPerGuests,
+        pricingType: "per_item",
+        type: "per_item",
+        active: record.active !== false,
+        portalDecidable: false
+      };
+    } else if (importType === "eventTypes") {
+      payload = {
+        name,
+        active: record.active !== false
+      };
+    } else if (importType === "menuCategories") {
+      if (!String(record.eventTypeId || "").trim()) {
+        throw new Error(`Catalog import row ${rowNumber} needs an event type.`);
+      }
+      payload = {
+        name,
+        eventTypeId: importText(record.eventTypeId, { label: "Event type ID", maxLength: 256, required: true, rowNumber }),
+        active: record.active !== false
+      };
     } else {
       const basis = record.pricingType || record.type || "per_item";
-      payload = { name: String(record.name || "").trim(), eventTypeId: String(record.eventTypeId || "").trim(), categoryId: String(record.categoryId || "").trim(), priceMinor: importMoney(record.price), costMinor: importMoney(record.cost), pricingType: basis, type: basis, active: record.active !== false };
+      const eventTypeId = importText(record.eventTypeId, { label: "Event type ID", maxLength: 256, rowNumber });
+      const categoryId = importText(record.categoryId, { label: "Menu section ID", maxLength: 256, rowNumber });
+      if (!eventTypeId || !categoryId) {
+        throw new Error(`Catalog import row ${rowNumber} needs both an event type and menu section.`);
+      }
+      if (!["per_person", "per_item", "per_event"].includes(basis)) {
+        throw new Error(`Catalog import row ${rowNumber} has an invalid pricing basis.`);
+      }
+      payload = { name, eventTypeId, categoryId, priceMinor: importMoney(record.price, { label: "Price", required: true, rowNumber }), costMinor: importMoney(record.cost, { label: "Cost", rowNumber }), pricingType: basis, type: basis, active: record.active !== false };
     }
     return { collection, recordId: importRecordId(importBatchId, row, index), intent: "create", payload };
   });
 }
 
-export async function stageCatalogImportDraft({
+const MAX_CATALOG_DRAFT_CHANGES = 400;
+const MAX_CATALOG_DRAFT_BYTES = 900_000;
+
+function approximateUtf8Bytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+function catalogImportFingerprintValue({ organizationId, importType, importBatchId, patches }) {
+  return stableValue({
+    schemaVersion: "catalog-import-input-v1",
+    organizationId: String(organizationId || "").trim(),
+    importType: String(importType || "").trim(),
+    importBatchId: String(importBatchId || "").trim(),
+    patches
+  });
+}
+
+async function buildCatalogImportFingerprint(input) {
+  return sha256CanonicalValue(catalogImportFingerprintValue(input));
+}
+
+async function buildCatalogImportPlanHash({ inputFingerprint, expectedGeneration, baseCatalogRevision, currentCatalogRevision, patches }) {
+  return sha256CanonicalValue(stableValue({
+    schemaVersion: "catalog-import-plan-v1",
+    inputFingerprint,
+    expectedGeneration: Number(expectedGeneration || 0),
+    baseCatalogRevision: Number(baseCatalogRevision || 0),
+    currentCatalogRevision: Number(currentCatalogRevision || 0),
+    patches
+  }));
+}
+
+function catalogImportError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function catalogImportReceiptMismatch(reason) {
+  return catalogImportError(
+    "failed-precondition",
+    `The catalog draft save receipt did not match the reviewed import plan (${reason}). Refresh the shared draft and run preflight again.`
+  );
+}
+
+const CATALOG_IMPORT_MUTATION_STATUSES = new Set(["staged", "published"]);
+
+function compatibleCatalogImportIntent(requestedIntent, authoritativeIntent) {
+  return requestedIntent === authoritativeIntent || authoritativeIntent === "create";
+}
+
+function isIsoInstant(value) {
+  return typeof value === "string"
+    && value.length > 0
+    && Number.isFinite(Date.parse(value));
+}
+
+function assertCatalogImportMutationReceipt({ result, plan, patches, organizationId, requestId }) {
+  const expectedOrganizationId = String(organizationId || "").trim();
+  const mutationStatus = String(result?.mutationStatus || "");
+  const receipt = result?.mutationReceipt;
+  if (!CATALOG_IMPORT_MUTATION_STATUSES.has(mutationStatus)) {
+    throw catalogImportReceiptMismatch("unsupported mutation status");
+  }
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+    throw catalogImportReceiptMismatch("missing durable mutation receipt");
+  }
+  if (receipt.schemaVersion !== 1) {
+    throw catalogImportReceiptMismatch("schema version mismatch");
+  }
+  if (!receipt.actor || !String(receipt.actor.uid || "").trim()) {
+    throw catalogImportReceiptMismatch("actor identity missing");
+  }
+  if (
+    result?.organizationId !== expectedOrganizationId
+    || receipt.organizationId !== expectedOrganizationId
+  ) {
+    throw catalogImportReceiptMismatch("organization mismatch");
+  }
+  if (receipt.requestId !== requestId) {
+    throw catalogImportReceiptMismatch("request identity mismatch");
+  }
+  if (receipt.status !== mutationStatus) {
+    throw catalogImportReceiptMismatch("mutation status mismatch");
+  }
+  if (!/^[a-f0-9]{64}$/.test(String(receipt.draftSessionId || ""))) {
+    throw catalogImportReceiptMismatch("draft session identity mismatch");
+  }
+
+  const expectedBaseCatalogRevision = Number(plan.baseCatalogRevision);
+  if (
+    !Number.isSafeInteger(expectedBaseCatalogRevision)
+    || !Number.isSafeInteger(receipt.baseCatalogRevision)
+    || receipt.baseCatalogRevision !== expectedBaseCatalogRevision
+  ) {
+    throw catalogImportReceiptMismatch("base catalog revision mismatch");
+  }
+
+  const expectedGeneration = Number(plan.expectedGeneration);
+  if (
+    !Number.isSafeInteger(expectedGeneration)
+    || !Number.isSafeInteger(receipt.expectedGeneration)
+    || receipt.expectedGeneration !== expectedGeneration
+  ) {
+    throw catalogImportReceiptMismatch("expected generation mismatch");
+  }
+  if (
+    !Number.isSafeInteger(receipt.draftGeneration)
+    || receipt.draftGeneration !== expectedGeneration + 1
+  ) {
+    throw catalogImportReceiptMismatch("resulting draft generation mismatch");
+  }
+
+  const expectedDraftChangeCount = Number(plan.projectedDraftChangeCount);
+  if (
+    !Number.isSafeInteger(expectedDraftChangeCount)
+    || !Number.isSafeInteger(receipt.resultingDraftChangedRecordCount)
+    || receipt.resultingDraftChangedRecordCount !== expectedDraftChangeCount
+  ) {
+    throw catalogImportReceiptMismatch("resulting draft change projection mismatch");
+  }
+  if (
+    !Number.isSafeInteger(receipt.requestedChangeCount)
+    || receipt.requestedChangeCount !== patches.length
+    || !Array.isArray(receipt.changes)
+    || receipt.changes.length !== patches.length
+  ) {
+    throw catalogImportReceiptMismatch("requested patch count mismatch");
+  }
+  if (!isIsoInstant(receipt.stagedAtISO)) {
+    throw catalogImportReceiptMismatch("staged receipt timestamp mismatch");
+  }
+
+  const authoritativeById = new Map();
+  receipt.changes.forEach((change) => {
+    const id = String(change?.id || "");
+    if (!id || authoritativeById.has(id)) {
+      throw catalogImportReceiptMismatch("duplicate or missing requested patch identity");
+    }
+    authoritativeById.set(id, change);
+  });
+
+  patches.forEach((patch) => {
+    const expectedId = `${patch.collection}:${patch.recordId}`;
+    const authoritative = authoritativeById.get(expectedId);
+    if (
+      !authoritative
+      || authoritative.collection !== patch.collection
+      || authoritative.recordId !== patch.recordId
+      || authoritative.requestedIntent !== patch.intent
+      || !compatibleCatalogImportIntent(patch.intent, authoritative.intent)
+      || !valuesMatch(authoritative.payload, patch.payload)
+    ) {
+      throw catalogImportReceiptMismatch(`requested patch ${expectedId} mismatch`);
+    }
+  });
+
+  if (mutationStatus === "published") {
+    if (
+      !/^[A-Za-z0-9_-]{16,128}$/.test(String(receipt.publicationReceiptId || ""))
+      || !Number.isSafeInteger(receipt.catalogRevisionAfter)
+      || receipt.catalogRevisionAfter !== expectedBaseCatalogRevision + 1
+      || !isIsoInstant(receipt.publishedAtISO)
+    ) {
+      throw catalogImportReceiptMismatch("published receipt projection mismatch");
+    }
+  }
+
+  return { mutationStatus, receipt };
+}
+
+export async function preflightCatalogImportDraft({
   organizationId = "",
   importType = "",
   rows = [],
@@ -285,23 +568,139 @@ export async function stageCatalogImportDraft({
   const current = await getCatalogSetupDraft({ organizationId });
   const draft = current?.draft || {};
   const patches = buildCatalogImportDraftChanges({ importType, rows, importBatchId });
-  const result = await saveCatalogSetupDraft({
-    organizationId,
-    requestId: createCatalogSetupRequestId("import_sync"),
-    expectedGeneration: Number(draft.generation || 0),
-    baseCatalogRevision: Number(draft.state === "open" ? draft.baseCatalogRevision : current.currentCatalogRevision || 0),
+  const expectedGeneration = Number(draft.state === "open" ? draft.generation || 0 : 0);
+  const currentCatalogRevision = Number(current.currentCatalogRevision || 0);
+  const baseCatalogRevision = Number(draft.state === "open" ? draft.baseCatalogRevision : currentCatalogRevision);
+  if (draft.state === "open" && baseCatalogRevision !== currentCatalogRevision) {
+    throw new Error(`The shared catalog draft is based on revision ${baseCatalogRevision}, but revision ${currentCatalogRevision} is active. Review, discard, or reconcile that draft in Library before importing.`);
+  }
+  const existingChanges = Array.isArray(draft.changes) ? draft.changes : [];
+  const merged = new Map(existingChanges.map((change) => [
+    String(change?.id || `${change?.collection}:${change?.recordId}`),
+    change
+  ]));
+  patches.forEach((change) => {
+    const id = `${change.collection}:${change.recordId}`;
+    const projected = { id, ...change, baselineHash: "0".repeat(64) };
+    if (approximateUtf8Bytes(projected) > 30_000) {
+      throw new Error(`This source would make a shared catalog draft change too large for authoritative review. Split the source before importing ${id}.`);
+    }
+    merged.set(id, projected);
+  });
+  const projectedChanges = [...merged.values()];
+  if (projectedChanges.length > MAX_CATALOG_DRAFT_CHANGES) {
+    throw new Error(`This import would grow the shared catalog draft to ${projectedChanges.length} changes; publish or discard work before the ${MAX_CATALOG_DRAFT_CHANGES}-change limit.`);
+  }
+  if (approximateUtf8Bytes(projectedChanges) > MAX_CATALOG_DRAFT_BYTES) {
+    throw new Error("This import would make the shared catalog draft too large. Split the source and publish smaller reviewed groups.");
+  }
+  const inputFingerprint = await buildCatalogImportFingerprint({ organizationId, importType, importBatchId, patches });
+  const planHash = await buildCatalogImportPlanHash({
+    inputFingerprint,
+    expectedGeneration,
+    baseCatalogRevision,
+    currentCatalogRevision,
     patches
   });
   return {
     ok: true,
-    status: "staged",
+    status: "ready",
+    authority: "catalog_draft_server_read",
+    organizationId: String(organizationId || "").trim(),
+    importType,
+    importBatchId,
+    stagedCount: patches.length,
+    projectedDraftChangeCount: projectedChanges.length,
+    expectedGeneration,
+    baseCatalogRevision,
+    currentCatalogRevision,
+    inputFingerprint,
+    planHash,
+    observedAtISO: new Date().toISOString(),
+    requestId: createCatalogSetupRequestId("import_sync"),
+    patches
+  };
+}
+
+export async function stageCatalogImportDraft({
+  organizationId = "",
+  importType = "",
+  rows = [],
+  importBatchId = createCatalogSetupRequestId("import"),
+  preflight = null
+} = {}) {
+  const plan = preflight;
+  const patches = buildCatalogImportDraftChanges({ importType, rows, importBatchId });
+  if (
+    plan?.ok !== true
+    || plan?.status !== "ready"
+    ||
+    String(plan.organizationId || "").trim() !== String(organizationId || "").trim()
+    || plan.importBatchId !== importBatchId
+    || plan.importType !== importType
+    || !Array.isArray(plan.patches)
+    || !/^[a-f0-9]{64}$/.test(String(plan.inputFingerprint || ""))
+    || !/^[a-f0-9]{64}$/.test(String(plan.planHash || ""))
+  ) {
+    throw catalogImportError("failed-precondition", "The catalog preflight no longer matches this import. Run preflight again.");
+  }
+  const currentInputFingerprint = await buildCatalogImportFingerprint({ organizationId, importType, importBatchId, patches });
+  const currentPlanHash = await buildCatalogImportPlanHash({
+    inputFingerprint: currentInputFingerprint,
+    expectedGeneration: plan.expectedGeneration,
+    baseCatalogRevision: plan.baseCatalogRevision,
+    currentCatalogRevision: plan.currentCatalogRevision,
+    patches
+  });
+  if (
+    currentInputFingerprint !== plan.inputFingerprint
+    || currentPlanHash !== plan.planHash
+    || !valuesMatch(plan.patches, patches)
+  ) {
+    throw catalogImportError("failed-precondition", "The included catalog records changed after preflight. Run preflight again for this exact plan.");
+  }
+  const requestId = plan.requestId
+    || `import_sync_${String(importBatchId).replace(/[^A-Za-z0-9_-]/g, "_")}`.slice(0, 128);
+  const result = await saveCatalogSetupDraft({
+    organizationId,
+    requestId,
+    expectedGeneration: Number(plan.expectedGeneration || 0),
+    baseCatalogRevision: Number(plan.baseCatalogRevision || 0),
+    patches
+  });
+  if (result?.ok !== true) {
+    throw catalogImportError(
+      String(result?.code || "failed-precondition"),
+      String(result?.error || result?.message || "The catalog draft did not return an accepted durable mutation receipt.")
+    );
+  }
+  const { mutationStatus, receipt } = assertCatalogImportMutationReceipt({
+    result,
+    plan,
+    patches,
+    organizationId,
+    requestId
+  });
+  return {
+    ok: true,
+    status: mutationStatus,
     importBatchId,
     importType,
     stagedCount: patches.length,
     createdCount: 0,
     skippedCount: 0,
-    catalogRevision: Number(current.currentCatalogRevision || 0),
-    draft: result?.draft || null
+    catalogRevision: mutationStatus === "published"
+      ? receipt.catalogRevisionAfter
+      : Number(plan.currentCatalogRevision || 0),
+    mutationReceipt: receipt,
+    idempotentReplay: result.idempotentReplay === true,
+    ...(mutationStatus === "published"
+      ? {
+          publicationReceiptId: receipt.publicationReceiptId,
+          catalogRevisionAfter: receipt.catalogRevisionAfter,
+          publishedAtISO: receipt.publishedAtISO
+        }
+      : { draft: result?.draft || null })
   };
 }
 

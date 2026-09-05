@@ -706,7 +706,7 @@ export default function CustomerPortalView({
         : "idle",
     attempt: 0
   });
-  const [recovery, setRecovery] = useState({ loading: false, contact: null });
+  const [recovery, setRecovery] = useState({ loading: false, contact: null, error: "" });
   const [manualEntry, setManualEntry] = useState(!initialPortalKey);
   const portalKeyInputRef = useRef(null);
   const portalLoadRequestRef = useRef(0);
@@ -865,15 +865,19 @@ export default function CustomerPortalView({
   const loadRecoveryContact = async (key) => {
     const requestId = recoveryRequestRef.current + 1;
     recoveryRequestRef.current = requestId;
-    setRecovery({ loading: true, contact: null });
+    setRecovery({ loading: true, contact: null, error: "" });
     try {
       const contact = await getPortalRecoveryContact(key);
       if (recoveryRequestRef.current === requestId) {
-        setRecovery({ loading: false, contact });
+        setRecovery({ loading: false, contact, error: "" });
       }
     } catch {
       if (recoveryRequestRef.current === requestId) {
-        setRecovery({ loading: false, contact: null });
+        setRecovery({
+          loading: false,
+          contact: null,
+          error: "Caterer contact details are temporarily unavailable."
+        });
       }
     }
   };
@@ -888,7 +892,7 @@ export default function CustomerPortalView({
     const requestId = portalLoadRequestRef.current + 1;
     portalLoadRequestRef.current = requestId;
     recoveryRequestRef.current += 1;
-    setRecovery({ loading: false, contact: null });
+    setRecovery({ loading: false, contact: null, error: "" });
     setState((prev) => ({ ...prev, loading: true, error: "", status: "" }));
     try {
       let quote = await getPortalQuote(key);
@@ -944,7 +948,7 @@ export default function CustomerPortalView({
     decisionRequestRef.current += 1;
     decisionAttemptRef.current = null;
     setDecisionMutation({ phase: "ready" });
-    setRecovery({ loading: false, contact: null });
+    setRecovery({ loading: false, contact: null, error: "" });
     setState((prev) => ({
       ...prev,
       loading: false,
@@ -1388,6 +1392,30 @@ export default function CustomerPortalView({
             <h2>Request a new link</h2>
             {recovery.loading ? (
               <p className="source-note" role="status">Finding the right catering contact...</p>
+            ) : recovery.error ? (
+              <>
+                <p
+                  id="portal-recovery-contact-error"
+                  className="warning-note"
+                  role="alert"
+                  data-capability-state="unavailable"
+                >
+                  {recovery.error} Your proposal remains unavailable; try the contact lookup again or use another current key.
+                </p>
+                <div className="portal-recovery-actions">
+                  <button
+                    type="button"
+                    className="cta"
+                    data-capability-state="recovery"
+                    onClick={() => void loadRecoveryContact(String(portalKey || initialPortalKey || "").trim())}
+                  >
+                    Try finding contact again
+                  </button>
+                  <button type="button" className="ghost" onClick={tryAnotherPortalKey}>
+                    Try another key
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 <p>

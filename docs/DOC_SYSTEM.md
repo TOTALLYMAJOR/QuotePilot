@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-05 18:49:28 CDT
+Last updated: 2026-09-05 18:50:11 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -19,6 +19,10 @@ Each major topic has one source of truth. Other docs should link to that source 
   tenant-configuration, contextual-UX, migration, and delivery-slice authority.
 - `docs/PRICING_CONSTITUTION.md`: pricing policy, version, exact-money,
   waterfall, historical-compatibility, and payment-provenance authority.
+- `docs/field-state-contract.json`: canonical multi-axis field-state vocabulary,
+  semantics, priority, accessibility, provenance, and 0/1/many choice contract.
+- `docs/field-state-surface-contracts.json`: explicit registry of product
+  surfaces and executable tests adopting the field-state contract.
 
 ## Update Triggers
 - Code or behavior changes: update `CHANGELOG.md`.
@@ -32,6 +36,10 @@ Each major topic has one source of truth. Other docs should link to that source 
   update `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and its accepted ADR.
 - Pricing policy, arithmetic, rounding, receipt, waterfall, or payment amount
   provenance changes: update `docs/PRICING_CONSTITUTION.md`.
+- Field, selector, imported/defaulted/suggested value, edit authority,
+  save/publish state, or field-level failure/recovery changes: update the field-
+  state surface registry and its exact tests; change the field-state contract
+  itself only when the governing vocabulary or semantics change.
 
 ## Update Timestamps
 Every changed canonical Markdown document, every Markdown file under `docs/`,
@@ -115,10 +123,11 @@ as separate claims.
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
 | Workspace visual system and interaction contracts | `docs/DESIGN_SYSTEM.md` | The canonical staff-workspace visual grammar, motion, hierarchy, and scoped Ambient/customer extensions. UI agents load `design-language` first, then preserve this repository-specific authority. |
 | Product design principles and review lens | `docs/DESIGN_PRINCIPLES.md` | The review rubric for copy, hierarchy, story, incentive, and CTA decisions; surface-specific design docs may extend it but should not contradict it. |
+| Field-state semantics and adopted UI surfaces | `docs/field-state-contract.json` and `docs/field-state-surface-contracts.json` | Separates availability, origin, editability, persistence, and evidence; the registry binds each adopted surface to exact runtime markers and tests. |
 | Attendance planning, confirmation, commercial-basis, and actual-count boundaries | `docs/ATTENDANCE_STATE_ADR.md` | Accepted phased architecture and source/local Slice A–E contracts around the unchanged exact `event.guests` commercial basis. Role journeys, external patterns, hypotheses, interview guide, and measurement plan live in `docs/ATTENDANCE_JOURNEY_RESEARCH.md`; operational actual attendance remains a separate unfinished slice. |
 | Package Workspace product and implementation program | `docs/PACKAGE_WORKSPACE.md` | Entry point for the QuotePilot Package Workspace audit, PRD, UI specification, ADR, technical design, and phased plan. Current implementation truth remains in the Feature Matrix; operational proof remains in `PROJECT_STATUS.md`. |
 | Bounded acceptance evidence matrices | `docs/acceptance/` | Criterion-to-proof ladders for named journeys or workspaces. They must label source, local automated, local connected, hosted, production, assistive-technology, and human evidence separately and may not replace capability or operational truth. |
-| Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | The clean-main baseline lives in `docs/performance/bundle-budget.json`; any active temporary absolute ceilings live separately in `docs/performance/bundle-exception.json` and must match that baseline exactly. |
+| Performance budgets, optional-tool assets, and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | The clean-main baseline lives in `docs/performance/bundle-budget.json`; any active temporary absolute ceilings live separately in `docs/performance/bundle-exception.json` and must match that baseline exactly. Lazy non-`dist/assets` runtimes must be pinned by exact file, byte count, and SHA-256 in `docs/performance/optional-tool-budget.json`. |
 | Backend-to-interface capability contracts | `docs/capability-surfacing-contracts.json` | Machine-checked structural traceability; current release evidence remains in `PROJECT_STATUS.md`. |
 | Commercial Truth Loop rule/evidence contract shared by both tiers | `docs/truthloop-evidence-contract.json` | Machine-checked single definition of rules, required evidence, availability states, and reason codes. The JavaScript exporter and the Python reconciler both read it; a cross-tier test fails if either drifts from it. |
 | Commercial Truth Loop reconciliation tier | `docs/COMMERCIAL_TRUTH_LOOP_ADR.md` | Authority boundary and binding decisions for the read-only Python tier. Rule catalog, evidence-bundle contract, and metrics live in `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md`; package usage lives in `truthloop/README.md`; operational truth remains in `PROJECT_STATUS.md`. |
@@ -174,6 +183,17 @@ anchor. Private claims, tokens, secrets, raw provider records, and ledgers stay
 hidden and require non-exposure/authority tests. This gate proves structural
 traceability only—not semantic completeness, visual polish, hosted availability,
 provider behavior, production promotion, or human acceptance.
+
+## Field-State Drift Gate
+
+`npm run check:field-states` validates the canonical 19-state vocabulary,
+five-axis composition rules, presentation requirements, runtime definitions,
+shared field/choice primitives, and every explicitly registered adoption
+surface. It runs in `lane:core`. Any new or modified field-like surface must be
+registered with an assertion-bearing test when the field-state contract is
+relevant. A pass proves source-level contract alignment only; it does not prove
+that every historical field has been migrated, that hosted data exercises each
+state, or that assistive-technology and human acceptance are complete.
 
 ## Merge Discipline
 Per merge, contributors must review this order:

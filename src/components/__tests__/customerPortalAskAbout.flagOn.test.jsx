@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 
 const stores = vi.hoisted(() => ({
   getPortalQuote: vi.fn(),
+  getPortalRecoveryContact: vi.fn(),
   panelProps: { current: null }
 }));
 
@@ -21,7 +22,7 @@ vi.mock("../../lib/portalConversationClient", () => ({
 }));
 
 vi.mock("../../lib/portalRecoveryClient", () => ({
-  getPortalRecoveryContact: vi.fn().mockResolvedValue({})
+  getPortalRecoveryContact: stores.getPortalRecoveryContact
 }));
 
 vi.mock("quotepilot-active-conversation-panel", () => ({
@@ -80,6 +81,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   stores.panelProps.current = null;
   stores.getPortalQuote.mockResolvedValue(portalQuote());
+  stores.getPortalRecoveryContact.mockReset().mockResolvedValue({});
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -100,6 +102,35 @@ async function renderPortal() {
 }
 
 describe("customer portal ask-about with the decision-room flag on", () => {
+  test("keeps a failed recovery-contact read visible and retryable", async () => {
+    stores.getPortalQuote.mockRejectedValueOnce(new Error("expired"));
+    stores.getPortalRecoveryContact
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({
+        organizationName: "Riverbend Catering",
+        email: "events@riverbend.example"
+      });
+
+    await renderPortal();
+    await settle();
+
+    const unavailable = container.querySelector("#portal-recovery-contact-error");
+    expect(unavailable).not.toBeNull();
+    expect(unavailable.getAttribute("data-capability-state")).toBe("unavailable");
+    expect(unavailable.textContent).toContain("contact details are temporarily unavailable");
+    const retry = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Try finding contact again"));
+    expect(retry).toBeTruthy();
+
+    act(() => retry.click());
+    await settle();
+
+    expect(stores.getPortalRecoveryContact).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("#portal-recovery-contact-error")).toBeNull();
+    expect(container.textContent).toContain("Contact Riverbend Catering");
+    expect(container.querySelector('a[href^="mailto:events@riverbend.example"]')).not.toBeNull();
+  });
+
   test("each existing block gets its own Ask about this button", async () => {
     await renderPortal();
 

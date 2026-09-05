@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-05 02:28:23 CDT
+Last updated: 2026-09-05 13:22:00 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,10 +25,10 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,381,257-byte aggregate
-  and 397,428-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,319,173-byte aggregate ceiling and
-  432,561-byte largest-chunk ceiling. The pre-authority local
+- The current compatibility graph has a temporary 3,478,714-byte aggregate
+  and 399,665-byte largest-chunk ceiling. The production-equivalent Ambient
+  graph has a separate temporary 4,444,836-byte aggregate ceiling and
+  435,565-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
@@ -135,6 +135,22 @@ Threshold policy:
   passed. Both ceilings are pinned to those larger literal CI graphs; neither
   profile receives percentage or future-growth headroom. This budget evidence
   is not hosted, production, or human acceptance.
+  The field-state, interaction-integrity, and Import Workbench candidate was
+  then rebuilt locally under both exact `ci-quality.yml` flag matrices.
+  Compatibility measures 3,476,619 / 399,646 bytes and Ambient measures
+  4,427,364 / 435,494 bytes. Against the preceding local Library graphs, the
+  reviewed source deltas are 97,457 / 2,237 bytes and 125,663 / 3,004 bytes. The
+  temporary ceilings add those literal source deltas to the preceding exact-CI
+  ceilings, retaining only the already observed profile-specific runner
+  differences: 3,478,714 / 399,665 for compatibility and 4,444,836 / 435,565
+  for Ambient. This is not percentage or future-growth headroom.
+  Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
+  `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
+  These assets are same-origin and load only after PDF inspection begins; they
+  are excluded from `dist/assets` aggregate JavaScript by design and therefore
+  have their own exact byte-and-SHA-256 manifest in
+  `docs/performance/optional-tool-budget.json`. The bundle guard rejects a
+  changed, missing, additional, or unbudgeted optional runtime asset.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

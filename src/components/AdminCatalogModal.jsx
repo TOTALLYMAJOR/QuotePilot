@@ -30,6 +30,8 @@ import {
 } from "../lib/catalogSetupDraftService";
 import PackageWorkspace from "./PackageWorkspace";
 import CatalogDraftStateBar, { catalogDraftCapabilityState } from "./CatalogDraftStateBar";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import {
   validateCommercialPublication,
   validateConfigurationRule
@@ -416,11 +418,13 @@ function coerceRuleScalarInput(value, currentValue) {
 }
 
 function configurationRuleComponentOptions(catalog = {}, componentType = "", selectedId = "") {
-  const options = configurationRuleComponentRecords(catalog, componentType).map((record) => ({
-    value: String(record?.id || "").trim(),
-    label: `${String(record?.name || record?.label || "").trim() || `Unnamed ${(RULE_COMPONENT_TYPE_LABELS[componentType] || "component").toLowerCase()}`}${record?.active === false ? " (not available)" : ""}`
-  })).filter((option) => option.value);
   const normalizedSelectedId = String(selectedId || "").trim();
+  const options = configurationRuleComponentRecords(catalog, componentType)
+    .filter((record) => record?.active !== false || String(record?.id || "").trim() === normalizedSelectedId)
+    .map((record) => ({
+      value: String(record?.id || "").trim(),
+      label: `${String(record?.name || record?.label || "").trim() || `Unnamed ${(RULE_COMPONENT_TYPE_LABELS[componentType] || "component").toLowerCase()}`}${record?.active === false ? " (not available)" : ""}`
+    })).filter((option) => option.value);
   if (normalizedSelectedId && !options.some((option) => option.value === normalizedSelectedId)) {
     const resolved = resolveConfigurationRuleComponentRef(
       { componentType, componentId: normalizedSelectedId },
@@ -1187,8 +1191,11 @@ export function AdminCatalogView({
   const [packActionId, setPackActionId] = useState("");
   const [catalogRefreshRequired, setCatalogRefreshRequired] = useState(false);
   const [manualSetupEnabled, setManualSetupEnabled] = useState(false);
-  const [confirmedMenuRecoveryAvailable, setConfirmedMenuRecoveryAvailable] = useState(false);
-  const [confirmedMenuRecoveryChecked, setConfirmedMenuRecoveryChecked] = useState(false);
+  const [confirmedMenuRecoveryProbe, setConfirmedMenuRecoveryProbe] = useState({
+    status: "idle",
+    reason: ""
+  });
+  const [confirmedMenuRecoveryRetryNonce, setConfirmedMenuRecoveryRetryNonce] = useState(0);
   const handledFocusRequestRef = useRef("");
   const pendingCatalogEvidenceRef = useRef(null);
   const acceptedCatalogRevisionRef = useRef(null);
@@ -1241,7 +1248,8 @@ export function AdminCatalogView({
     catalogRevision,
     authoritativeVersion,
     starterPackRevision,
-    catalog?.settings?.pricingSetupConfirmed === true
+    catalog?.settings?.pricingSetupConfirmed === true,
+    confirmedMenuRecoveryRetryNonce
   ]);
   const eventMenuLoadScopeKey = JSON.stringify([
     scopedOrganizationId,
@@ -1424,8 +1432,7 @@ export function AdminCatalogView({
     if (!acceptedRevision) {
       setManualSetupEnabled(false);
     }
-    setConfirmedMenuRecoveryAvailable(false);
-    setConfirmedMenuRecoveryChecked(false);
+    setConfirmedMenuRecoveryProbe({ status: "idle", reason: "" });
     setMenuLoading(false);
     setMenuActionLoading(false);
     setNewEventTypeName("");
@@ -1484,14 +1491,25 @@ export function AdminCatalogView({
       return undefined;
     }
     confirmedInventoryLoadScopeRef.current = confirmedInventoryLoadScopeKey;
-    if (!firebaseReady || catalog?.settings?.pricingSetupConfirmed !== true) {
-      setConfirmedMenuRecoveryAvailable(false);
-      setConfirmedMenuRecoveryChecked(true);
+    if (catalog?.settings?.pricingSetupConfirmed !== true) {
+      setConfirmedMenuRecoveryProbe({
+        status: "not_applicable",
+        reason: "Menu recovery is checked only after pricing is confirmed."
+      });
+      return undefined;
+    }
+    if (!scopedOrganizationId || !firebaseReady) {
+      setConfirmedMenuRecoveryProbe({
+        status: "unavailable",
+        reason: !scopedOrganizationId
+          ? "Choose an organization before QuotePilot checks its confirmed menu."
+          : "The live Library connection is unavailable, so QuotePilot cannot verify whether menu recovery is needed."
+      });
       return undefined;
     }
 
     let alive = true;
-    setConfirmedMenuRecoveryChecked(false);
+    setConfirmedMenuRecoveryProbe({ status: "checking", reason: "" });
     async function inspectConfirmedMenuInventory() {
       try {
         const eventTypes = await getEventTypes({ organizationId: scopedOrganizationId });
@@ -1508,12 +1526,21 @@ export function AdminCatalogView({
           return { categories, items };
         }));
         if (!alive) return;
-        setConfirmedMenuRecoveryAvailable(hasNoMenuInventory(inventory));
-      } catch {
+        setConfirmedMenuRecoveryProbe(hasNoMenuInventory(inventory)
+          ? {
+              status: "empty",
+              reason: "The complete confirmed-menu inventory contains no sections or items."
+            }
+          : {
+              status: "present",
+              reason: "Confirmed menu records are present; setup recovery is not needed."
+            });
+      } catch (error) {
         if (!alive) return;
-        setConfirmedMenuRecoveryAvailable(false);
-      } finally {
-        if (alive) setConfirmedMenuRecoveryChecked(true);
+        setConfirmedMenuRecoveryProbe({
+          status: "failed",
+          reason: error?.message || "QuotePilot could not inspect the confirmed menu inventory."
+        });
       }
     }
     inspectConfirmedMenuInventory();
@@ -1777,9 +1804,14 @@ export function AdminCatalogView({
 
   const stagedPack = draft?.settings?.starterCatalogPack || {};
   const recoveryReplacementBlocked = stagedPack.replacementBlocked === true;
-  const confirmedMissingMenuRecovery = confirmedMenuRecoveryChecked
-    && confirmedMenuRecoveryAvailable
+  const confirmedMissingMenuRecovery = confirmedMenuRecoveryProbe.status === "empty"
     && draft?.settings?.pricingSetupConfirmed === true;
+  const retryConfirmedMenuRecoveryProbe = () => {
+    setConfirmedMenuRecoveryProbe({ status: "checking", reason: "" });
+    setConfirmedMenuRecoveryRetryNonce((value) => value + 1);
+  };
+  const confirmedMenuRecoveryProbeVisible = draft?.settings?.pricingSetupConfirmed === true
+    && !["idle", "not_applicable", "empty"].includes(confirmedMenuRecoveryProbe.status);
   const pricingReviewRequired = Boolean(stagedPack.id)
     && draft?.settings?.pricingSetupConfirmed !== true;
   const hasCatalogContent = Boolean(
@@ -2153,19 +2185,24 @@ export function AdminCatalogView({
       value: item.id,
       label: `${label}${item.active === false ? " (inactive — choose another target)" : ""}`
     });
-    if (kind === "rental") {
-      return (draft.rentals || [])
+    const records = kind === "rental"
+      ? (draft.rentals || [])
+      : kind === "package"
+        ? (draft.packages || [])
+        : (draft.addons || []);
+    const options = records
         .filter((item) => item?.active !== false || item.id === selectedId)
-        .map((item) => optionFor(item, item.name));
+        .map((item) => optionFor(
+          item,
+          kind === "package" ? `${item.name} (${item.ppp}/person)` : item.name
+        ));
+    if (selectedId && !options.some((option) => option.value === selectedId)) {
+      options.unshift({
+        value: selectedId,
+        label: `Previously selected ${kind === "package" ? "offer" : kind} (not available)`
+      });
     }
-    if (kind === "package") {
-      return (draft.packages || [])
-        .filter((item) => item?.active !== false || item.id === selectedId)
-        .map((item) => optionFor(item, `${item.name} (${item.ppp}/person)`));
-    }
-    return (draft.addons || [])
-      .filter((item) => item?.active !== false || item.id === selectedId)
-      .map((item) => optionFor(item, item.name));
+    return options;
   };
 
   const patchJsonDraft = (field, value) => {
@@ -2649,6 +2686,60 @@ export function AdminCatalogView({
   const saveActiveMenuItem = () => activeMenuItem && handleManagedMenuItemBlur(activeMenuItem.id);
   const saveActiveMenuItemOnEnter = (event) => activeMenuItem && handleManagedMenuItemKeyDown(event, activeMenuItem.id);
   const selectedCategoryItemCount = menuItems.filter((item) => item.categoryId === selectedCategory).length;
+  const menuEventTypeOptions = menuEventTypes.map((eventType) => ({
+    value: eventType.id,
+    label: eventType.name
+  }));
+  if (
+    selectedEventType
+    && !menuEventTypeOptions.some((option) => option.value === selectedEventType)
+  ) {
+    menuEventTypeOptions.unshift({
+      value: selectedEventType,
+      label: "Previously selected event type (not in the current Library read)"
+    });
+  }
+  const menuEventTypeSelectionStale = Boolean(selectedEventType && !selectedEventTypeRecord);
+  const menuEventTypeChoiceOptions = menuEventTypeSelectionStale && menuEventTypes.length === 0
+    ? []
+    : menuEventTypeOptions;
+  const menuSectionOptions = menuCategories.map((category) => ({
+    value: category.id,
+    label: category.name
+  }));
+  if (
+    selectedCategory
+    && !menuSectionOptions.some((option) => option.value === selectedCategory)
+  ) {
+    menuSectionOptions.unshift({
+      value: selectedCategory,
+      label: "Previously selected menu section (not in the current Library read)"
+    });
+  }
+  const menuSectionSelectionStale = Boolean(selectedCategory && !selectedCategoryRecord);
+  const menuSectionChoiceOptions = menuSectionSelectionStale && menuCategories.length === 0
+    ? []
+    : menuSectionOptions;
+  const bulkDestinationOptions = menuCategories
+    .filter((section) => section.id !== selectedCategory)
+    .map((section) => ({ value: section.id, label: section.name }));
+  if (
+    bulkTargetSection
+    && bulkTargetSection !== selectedCategory
+    && !bulkDestinationOptions.some((option) => option.value === bulkTargetSection)
+  ) {
+    bulkDestinationOptions.unshift({
+      value: bulkTargetSection,
+      label: "Previously selected destination (not in the current Library read)"
+    });
+  }
+  const resolvedBulkTargetSection = bulkTargetSection
+    || (bulkDestinationOptions.length === 1 ? bulkDestinationOptions[0].value : "");
+  const focusMenuStructureInput = (ariaLabel) => {
+    window.requestAnimationFrame(() => {
+      dialogRef.current?.querySelector(`[aria-label="${ariaLabel}"]`)?.focus?.();
+    });
+  };
   const applyBulkMenuChange = ({ active, categoryId } = {}) => {
     const selected = menuItems.filter((item) => selectedMenuItemIds.includes(item.id));
     if (!selected.length) return;
@@ -2905,8 +2996,44 @@ export function AdminCatalogView({
           </div>
         )}
 
+        {confirmedMenuRecoveryProbeVisible && (
+          <div
+            className="starter-pack-review-banner"
+            data-menu-recovery-probe-state={confirmedMenuRecoveryProbe.status}
+          >
+            <FieldStateIndicator
+              state={confirmedMenuRecoveryProbe.status === "failed"
+                ? { evidence: "failed" }
+                : confirmedMenuRecoveryProbe.status === "unavailable"
+                  ? { availability: "unavailable" }
+                  : confirmedMenuRecoveryProbe.status === "present"
+                    ? { evidence: "confirmed" }
+                    : { evidence: "pending" }}
+              label="Menu recovery check"
+              reason={["failed", "unavailable"].includes(confirmedMenuRecoveryProbe.status)
+                ? confirmedMenuRecoveryProbe.reason
+                : ""}
+              supportingDetail={confirmedMenuRecoveryProbe.status === "present"
+                ? confirmedMenuRecoveryProbe.reason
+                : confirmedMenuRecoveryProbe.status === "checking"
+                  ? "Checking the complete confirmed-menu inventory before offering recovery."
+                  : ""}
+              recoveryAction={["failed", "unavailable"].includes(confirmedMenuRecoveryProbe.status)
+                ? {
+                    label: "Retry menu check",
+                    onClick: retryConfirmedMenuRecoveryProbe
+                  }
+                : undefined}
+            />
+          </div>
+        )}
+
         {confirmedMissingMenuRecovery && (
-          <div className="starter-pack-review-banner" role="alert">
+          <div
+            className="starter-pack-review-banner"
+            role="alert"
+            data-menu-recovery-probe-state="empty"
+          >
             <div>
               <strong>This confirmed catalog has no menu.</strong>
               <span> Choose a setup preset to add missing records to the shared draft. Active pricing stays unchanged until review and publication.</span>
@@ -3107,22 +3234,38 @@ export function AdminCatalogView({
 
             <div className="admin-section-body admin-menu-workbench">
               <aside className="admin-menu-context-panel" aria-label="Menu context">
-                <label className="admin-menu-field">
-                  <span>Event type</span>
-                  <select
+                <div className="admin-menu-field" data-choice-field="catalog-event-type">
+                  <AdaptiveChoiceField
+                    label="Event type"
+                    options={menuEventTypeChoiceOptions}
                     value={selectedEventType}
-                    onChange={(e) => {
-                      setManagedEventType(e.target.value);
+                    onChange={(event) => {
+                      setManagedEventType(event.target.value);
                       setActiveMenuItemId("");
                     }}
                     disabled={menuLoading}
-                  >
-                    <option value="">Choose event type</option>
-                    {menuEventTypes.map((eventType) => (
-                      <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-                    ))}
-                  </select>
-                </label>
+                    placeholder="Choose event type"
+                    emptyState="unavailable"
+                    emptyReason={menuEventTypeSelectionStale
+                      ? `The previously selected event type ${selectedEventType} is not in the current Library read.`
+                      : menuLoading
+                        ? "Event types are still loading. You can prepare a new event type below if this Library has none."
+                        : "No event types are available in this Library. Add one before building menu sections."}
+                    recoveryAction={{
+                      label: "Add event type",
+                      onClick: () => focusMenuStructureInput("New event type name")
+                    }}
+                    singleChoiceDetail="This is the only event type in the current Library read."
+                    fieldState={menuEventTypeSelectionStale ? { evidence: "stale" } : undefined}
+                    fieldStateDetails={menuEventTypeSelectionStale ? {
+                      reason: "The saved event type is not present in the current Library read.",
+                      recoveryAction: {
+                        label: "Add event type",
+                        onClick: () => focusMenuStructureInput("New event type name")
+                      }
+                    } : undefined}
+                  />
+                </div>
 
                 <MenuStructureEditor
                   kind="event type"
@@ -3142,22 +3285,39 @@ export function AdminCatalogView({
                   onNewSave={handleCreateEventType}
                 />
 
-                <label className="admin-menu-field">
-                  <span>Menu section</span>
-                  <select
+                <div className="admin-menu-field" data-choice-field="catalog-menu-section">
+                  <AdaptiveChoiceField
+                    label="Menu section"
+                    options={menuSectionChoiceOptions}
                     value={selectedCategory}
-                    onChange={(e) => {
-                      setSelectedCategory(e.target.value);
+                    onChange={(event) => {
+                      setSelectedCategory(event.target.value);
                       setActiveMenuItemId("");
                     }}
                     disabled={!selectedEventType || menuLoading}
-                  >
-                    <option value="">Choose menu section</option>
-                    {menuCategories.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-                </label>
+                    placeholder="Choose menu section"
+                    emptyReason={menuSectionSelectionStale
+                      ? `The previously selected menu section ${selectedCategory} is not in the current Library read.`
+                      : selectedEventType
+                        ? "This event type has no menu sections. Add one before adding menu items."
+                        : "Choose or add an event type before adding a menu section."}
+                    recoveryAction={{
+                      label: selectedEventType ? "Add menu section" : "Add event type",
+                      onClick: () => focusMenuStructureInput(
+                        selectedEventType ? "New menu section name" : "New event type name"
+                      )
+                    }}
+                    singleChoiceDetail="This is the only menu section for the selected event type."
+                    fieldState={menuSectionSelectionStale ? { evidence: "stale" } : undefined}
+                    fieldStateDetails={menuSectionSelectionStale ? {
+                      reason: "The saved menu section is not present in the current Library read.",
+                      recoveryAction: {
+                        label: "Add menu section",
+                        onClick: () => focusMenuStructureInput("New menu section name")
+                      }
+                    } : undefined}
+                  />
+                </div>
 
                 <MenuStructureEditor
                   kind="menu section"
@@ -3220,11 +3380,20 @@ export function AdminCatalogView({
                     <strong>{selectedMenuItemIds.length} selected</strong>
                     <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: true })}>Make available</button>
                     <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: false })}>Make unavailable</button>
-                    <select aria-label="Move selected items to menu section" value={bulkTargetSection} onChange={(event) => setBulkTargetSection(event.target.value)}>
-                      <option value="">Move to menu section…</option>
-                      {menuCategories.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
-                    </select>
-                    <button type="button" className="ghost compact" disabled={!bulkTargetSection} onClick={() => applyBulkMenuChange({ categoryId: bulkTargetSection })}>Move selected</button>
+                    <AdaptiveChoiceField
+                      label="Move selected items to menu section"
+                      options={bulkDestinationOptions}
+                      value={resolvedBulkTargetSection}
+                      onChange={(event) => setBulkTargetSection(event.target.value)}
+                      placeholder="Move to menu section…"
+                      emptyReason="There is no other menu section to move these items into."
+                      recoveryAction={{
+                        label: "Add menu section",
+                        onClick: () => focusMenuStructureInput("New menu section name")
+                      }}
+                      singleChoiceDetail="This is the only other menu section, so it is the confirmed destination."
+                    />
+                    <button type="button" className="ghost compact" disabled={!resolvedBulkTargetSection} onClick={() => applyBulkMenuChange({ categoryId: resolvedBulkTargetSection })}>Move selected</button>
                   </div>
                 )}
 
@@ -3353,6 +3522,20 @@ export function AdminCatalogView({
                     const componentOptions = componentRef
                       ? configurationRuleComponentOptions(configurationRuleCatalog, componentType, componentId)
                       : [];
+                    const componentResolution = componentRef
+                      ? resolveConfigurationRuleComponentRef(
+                          componentRef,
+                          configurationRuleCatalog,
+                          { menuInventoryComplete: false }
+                        )
+                      : null;
+                    const componentSelectionStale = Boolean(
+                      componentId && componentResolution?.available !== true
+                    );
+                    const componentChoiceOptions = componentSelectionStale
+                      && !componentOptions.some((option) => option.value !== componentId)
+                      ? []
+                      : componentOptions;
                     return (
                       <article
                         className="rule-config-card rule-editor-card"
@@ -3546,24 +3729,38 @@ export function AdminCatalogView({
                                             ))}
                                           </select>
                                         </label>
-                                        <label>
-                                          <span>Catalog component</span>
-                                          <select
-                                            aria-label={`${rule.title} result component`}
-                                            value={componentId}
-                                            onChange={(event) => patchConfigurationRule({
-                                              section: "componentRef",
-                                              ruleIndex: rule.sourceIndex,
-                                              field: "componentId",
-                                              value: event.target.value
-                                            })}
-                                          >
-                                            {!componentId && <option value="">Choose a component</option>}
-                                            {componentOptions.map((option) => (
-                                              <option key={option.value} value={option.value}>{option.label}</option>
-                                            ))}
-                                          </select>
-                                        </label>
+                                        <AdaptiveChoiceField
+                                          label="Catalog component"
+                                          options={componentChoiceOptions}
+                                          value={componentId}
+                                          onChange={(event) => patchConfigurationRule({
+                                            section: "componentRef",
+                                            ruleIndex: rule.sourceIndex,
+                                            field: "componentId",
+                                            value: event.target.value
+                                          })}
+                                          placeholder="Choose a component"
+                                          emptyReason={componentSelectionStale
+                                            ? `The saved ${(
+                                                RULE_COMPONENT_TYPE_LABELS[componentType] || "catalog component"
+                                              ).toLowerCase()} ${componentResolution?.label || componentId} is not available in this Library draft.`
+                                            : `No ${(
+                                                RULE_COMPONENT_TYPE_LABELS[componentType] || "catalog component"
+                                              ).toLowerCase()} records are available for this rule.`}
+                                          recoveryAction={{
+                                            label: "Change component type",
+                                            onClick: () => focusMenuStructureInput(`${rule.title} result component type`)
+                                          }}
+                                          singleChoiceDetail="This is the only catalog component available for the selected type."
+                                          fieldState={componentSelectionStale ? { evidence: "stale" } : undefined}
+                                          fieldStateDetails={componentSelectionStale ? {
+                                            reason: "The saved component remains visible but is not available in the current Library draft.",
+                                            recoveryAction: {
+                                              label: "Change component type",
+                                              onClick: () => focusMenuStructureInput(`${rule.title} result component type`)
+                                            }
+                                          } : undefined}
+                                        />
                                       </>
                                     ) : (
                                       <label>
@@ -3991,6 +4188,27 @@ export function AdminCatalogView({
             {(draft.settings?.upsellRules || []).map((rule, ruleIndex) => {
               const kind = String(rule.kind || "addon");
               const targets = getUpsellTargetOptions(kind, rule.targetId);
+              const autoPackageTargetAvailable = kind === "package"
+                && (draft.packages || []).filter((item) => item?.active !== false).length >= 2;
+              const targetOptions = autoPackageTargetAvailable
+                ? [{ value: "__auto_next_package__", label: "Auto next higher package" }, ...targets]
+                : targets;
+              const targetValue = kind === "package" && !rule.targetId
+                ? "__auto_next_package__"
+                : (rule.targetId || "");
+              const targetCollection = kind === "rental"
+                ? (draft.rentals || [])
+                : kind === "package"
+                  ? (draft.packages || [])
+                  : (draft.addons || []);
+              const selectedTargetRecord = targetCollection.find((item) => item.id === rule.targetId);
+              const targetSelectionStale = Boolean(
+                rule.targetId && (!selectedTargetRecord || selectedTargetRecord.active === false)
+              );
+              const targetChoiceOptions = targetSelectionStale
+                && !targetOptions.some((option) => option.value !== targetValue)
+                ? []
+                : targetOptions;
               return (
                 <article className="rule-config-card" key={rule.id || `rule-${ruleIndex}`}>
                   <div className="rule-config-head">
@@ -4024,19 +4242,33 @@ export function AdminCatalogView({
                         ))}
                       </select>
                     </label>
-                    <label>
-                      Target item
-                      <select
-                        value={rule.targetId || ""}
-                        onChange={(e) => patchUpsellRule(ruleIndex, "targetId", e.target.value)}
-                      >
-                        {kind === "package" && <option value="">Auto next higher package</option>}
-                        {kind !== "package" && <option value="">Choose target</option>}
-                        {targets.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </label>
+                    <AdaptiveChoiceField
+                      label="Target item"
+                      options={targetChoiceOptions}
+                      value={targetValue}
+                      onChange={(event) => patchUpsellRule(
+                        ruleIndex,
+                        "targetId",
+                        event.target.value === "__auto_next_package__" ? "" : event.target.value
+                      )}
+                      placeholder="Choose target"
+                      emptyReason={targetSelectionStale
+                        ? `The saved target ${rule.targetId} is not available in this Library draft.`
+                        : `No active ${kind === "package" ? "offers" : `${kind}s`} are available for this recommendation.`}
+                      recoveryAction={{
+                        label: `Review ${kind === "package" ? "offers" : `${kind}s`}`,
+                        onClick: () => setActiveTab(kind === "package" ? "packages" : `${kind}s`)
+                      }}
+                      singleChoiceDetail="This is the only available target for this recommendation."
+                      fieldState={targetSelectionStale ? { evidence: "stale" } : undefined}
+                      fieldStateDetails={targetSelectionStale ? {
+                        reason: "The saved recommendation target remains visible but is not available in the current Library draft.",
+                        recoveryAction: {
+                          label: `Review ${kind === "package" ? "offers" : `${kind}s`}`,
+                          onClick: () => setActiveTab(kind === "package" ? "packages" : `${kind}s`)
+                        }
+                      } : undefined}
+                    />
                     <label>
                       Min guests
                       <input

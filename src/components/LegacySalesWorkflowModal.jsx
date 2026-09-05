@@ -43,6 +43,7 @@ import {
   resetDefinitiveDecisionDebtPolicyAttempt
 } from "../lib/decisionDebtClient";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import DecisionDebtPanel from "./DecisionDebtPanel";
 import RevenueAutopilotOperations from "./RevenueAutopilotOperations";
 import RevenueAutopilotPreviewPanel from "./RevenueAutopilotPreviewPanel";
@@ -830,6 +831,19 @@ export function SalesWorkflowView({
   const quoteSnapshotBound = state.snapshotAtISO
     ? (state.truncated ? "truncated" : "complete")
     : "unknown";
+  const authoritativeQuoteOptions = quoteSummaries.map(({ quote }) => ({
+    value: quote.id,
+    label: `${formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })} · ${quote.customer?.name || quote.customer?.email || "Customer"}`
+  }));
+  const authoritativeQuoteSelectionStale = Boolean(
+    selectedQuoteId && !authoritativeQuoteOptions.some((option) => option.value === selectedQuoteId)
+  );
+  if (authoritativeQuoteSelectionStale && authoritativeQuoteOptions.length > 0) {
+    authoritativeQuoteOptions.unshift({
+      value: selectedQuoteId,
+      label: `Previously selected quote ${selectedQuoteId} (not in the current Workflow read)`
+    });
+  }
   const displayedAutopilotAttentionCount = Array.isArray(autopilotOperations.snapshot?.attention)
     ? autopilotOperations.snapshot.attention.length
     : 0;
@@ -965,6 +979,9 @@ export function SalesWorkflowView({
     )),
     [selectedQuote, state.source]
   );
+  const resolvedApprovalAction = requestableApprovalActions.some((item) => item.id === approvalAction)
+    ? approvalAction
+    : requestableApprovalActions[0]?.id || "";
   const isAdmin = String(currentUserRole || "").toLowerCase() === "admin";
   const isStaff = ["admin", "sales"].includes(String(currentUserRole || "").toLowerCase());
 
@@ -1037,15 +1054,15 @@ export function SalesWorkflowView({
   };
 
   const handleRequestApproval = async () => {
-    if (!selectedQuote?.id || !isStaff || !approvalAction) return;
-    if (state.source !== "firebase" && PROVIDER_APPROVAL_ACTIONS.has(approvalAction)) {
+    if (!selectedQuote?.id || !isStaff || !resolvedApprovalAction) return;
+    if (state.source !== "firebase" && PROVIDER_APPROVAL_ACTIONS.has(resolvedApprovalAction)) {
       setState((prev) => ({
         ...prev,
         error: "Payment approvals require Firebase-backed provider execution. Reload the hosted workspace and try again."
       }));
       return;
     }
-    const eligibility = getApprovalActionEligibility(selectedQuote, approvalAction, {
+    const eligibility = getApprovalActionEligibility(selectedQuote, resolvedApprovalAction, {
       requireActivePortal: state.source === "firebase"
     });
     if (!eligibility.eligible) {
@@ -1062,7 +1079,7 @@ export function SalesWorkflowView({
     try {
       const result = await requestQuoteApproval({
         quoteId: selectedQuote.id,
-        action: approvalAction,
+        action: resolvedApprovalAction,
         note: approvalNote,
         actorEmail: currentUserEmail,
         actorRole: currentUserRole
@@ -1077,7 +1094,7 @@ export function SalesWorkflowView({
         }
       }));
       setApprovalNote("");
-      reportSuccess(`${actionLabel(approvalAction)} approval requested.`);
+      reportSuccess(`${actionLabel(resolvedApprovalAction)} approval requested.`);
     } catch (err) {
       if (workflowScopeRef.current !== actionScope) return;
       setState((prev) => ({ ...prev, error: err?.message || "Failed to request approval." }));
@@ -2144,37 +2161,46 @@ export function SalesWorkflowView({
                     </div>
                   </section>
 
-                  {isStaff && requestableApprovalActions.length > 0 && (
+                  {isStaff && (
                     <section className="workflow-form-section">
                       <h4>Request sensitive action approval</h4>
                       <div className="workflow-approval-request">
-                        <select value={approvalAction} onChange={(event) => setApprovalAction(event.target.value)}>
-                          {requestableApprovalActions.map((item) => (
-                            <option key={item.id} value={item.id}>{item.label}</option>
-                          ))}
-                        </select>
-                        <input
-                          type="text"
-                          maxLength="800"
-                          placeholder="Reason or customer context"
-                          value={approvalNote}
-                          onChange={(event) => setApprovalNote(event.target.value)}
+                        <AdaptiveChoiceField
+                          label="Requestable approval action"
+                          options={requestableApprovalActions.map((item) => ({
+                            value: item.id,
+                            label: item.label
+                          }))}
+                          value={resolvedApprovalAction}
+                          onChange={(event) => setApprovalAction(event.target.value)}
+                          placeholder="Choose an approval action"
+                          emptyReason="This quote has no sensitive action that can be requested in its current state."
+                          recoveryAction={{
+                            label: "Review quote",
+                            onClick: () => handleEditQuote(selectedQuote)
+                          }}
+                          singleChoiceDetail="This is the only sensitive action this quote can request now."
                         />
-                        <button
-                          type="button"
-                          className="ghost compact"
-                          onClick={handleRequestApproval}
-                          disabled={!approvalAction || busyKey === `request:${selectedQuote.id}`}
-                        >
-                          {busyKey === `request:${selectedQuote.id}` ? "Requesting..." : "Request"}
-                        </button>
+                        {requestableApprovalActions.length > 0 && (
+                          <>
+                            <input
+                              type="text"
+                              maxLength="800"
+                              placeholder="Reason or customer context"
+                              value={approvalNote}
+                              onChange={(event) => setApprovalNote(event.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={handleRequestApproval}
+                              disabled={!resolvedApprovalAction || busyKey === `request:${selectedQuote.id}`}
+                            >
+                              {busyKey === `request:${selectedQuote.id}` ? "Requesting..." : "Request"}
+                            </button>
+                          </>
+                        )}
                       </div>
-                    </section>
-                  )}
-                  {isStaff && requestableApprovalActions.length === 0 && (
-                    <section className="workflow-form-section">
-                      <h4>Sensitive action approval</h4>
-                      <p className="muted">No approval-backed action is currently available for this quote.</p>
                     </section>
                   )}
 
@@ -2212,21 +2238,29 @@ export function SalesWorkflowView({
           </p>
           <section className="workflow-form-section" aria-labelledby="workflow-autopilot-quote-title">
             <h4 id="workflow-autopilot-quote-title">Quote snapshot</h4>
-            <label className="field">
-              <span>Authoritative quote</span>
-              <select
+            <div className="field" data-choice-field="legacy-workflow-authoritative-quote">
+              <AdaptiveChoiceField
+                label="Authoritative quote"
+                options={authoritativeQuoteOptions}
                 value={selectedQuoteId}
                 onChange={(event) => setSelectedQuoteId(event.target.value)}
-                disabled={state.loading || quoteSummaries.length === 0}
-              >
-                <option value="">Select a quote</option>
-                {quoteSummaries.map(({ quote }) => (
-                  <option key={quote.id} value={quote.id}>
-                    {formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })} · {quote.customer?.name || quote.customer?.email || "Customer"}
-                  </option>
-                ))}
-              </select>
-            </label>
+                disabled={state.loading}
+                placeholder="Select a quote"
+                emptyState="unavailable"
+                emptyReason={authoritativeQuoteSelectionStale
+                  ? `The previously selected quote ${selectedQuoteId} is not in the current Workflow read.`
+                  : state.loading
+                    ? "The bounded Workflow quote read is still loading."
+                    : "No authoritative quote is available in the bounded Workflow read."}
+                recoveryAction={{ label: "Reload quotes", onClick: () => load() }}
+                singleChoiceDetail="This is the only authoritative quote in the bounded Workflow read."
+                fieldState={authoritativeQuoteSelectionStale ? { evidence: "stale" } : undefined}
+                fieldStateDetails={authoritativeQuoteSelectionStale ? {
+                  reason: "The selected quote remains visible but is not present in the current Workflow read.",
+                  recoveryAction: { label: "Reload quotes", onClick: () => load() }
+                } : undefined}
+              />
+            </div>
             <p
               className={state.truncated ? "warning-note" : "source-note"}
               data-quote-snapshot-bound={quoteSnapshotBound}

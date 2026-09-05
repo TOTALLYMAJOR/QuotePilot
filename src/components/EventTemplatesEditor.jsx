@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import { Plus, TrashSimple, WarningCircle } from "./ProductIcons";
 import "./eventTemplatesEditor.css";
 
@@ -201,6 +203,116 @@ function includeUnavailableChoice(records, selectedId, label) {
   const id = text(selectedId);
   if (!id || records.some((record) => record.id === id)) return records;
   return [{ id, name: `Unavailable ${label}: ${id}`, active: false, unavailable: true }, ...records];
+}
+
+function TemplateChoiceField({
+  templateId,
+  field,
+  label,
+  records,
+  currentId,
+  placeholder,
+  disabled,
+  onSelect,
+  registerTarget
+}) {
+  const choices = includeUnavailableChoice(records, currentId, label.toLowerCase());
+  const activeChoices = records.filter((record) => record.active !== false);
+  const currentChoice = choices.find((record) => record.id === currentId);
+  const registerField = (node) => registerTarget(templateId, field, node);
+
+  if (activeChoices.length > 1) {
+    return (
+      <label>
+        {label}
+        <select
+          value={currentId}
+          onChange={(event) => onSelect(event.target.value)}
+          disabled={disabled}
+          data-template-field={field}
+          ref={registerField}
+        >
+          <option value="">{placeholder}</option>
+          {choices.map((record) => (
+            <option
+              key={record.id}
+              value={record.id}
+              disabled={record.active === false && record.id !== currentId}
+            >
+              {record.name}{record.active === false && !record.unavailable ? " (inactive)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  const onlyChoice = activeChoices[0];
+  if (onlyChoice && currentId === onlyChoice.id) {
+    return (
+      <div
+        data-template-field={field}
+        tabIndex={-1}
+        ref={registerField}
+      >
+        <AdaptiveChoiceField
+          label={label}
+          options={[{ value: onlyChoice.id, label: onlyChoice.name }]}
+          value={currentId}
+          disabled={disabled}
+          singleChoiceDetail="This is the only active Library choice."
+        />
+      </div>
+    );
+  }
+
+  const suggestedChoice = onlyChoice && !currentId;
+  const staleChoice = Boolean(currentId);
+  const visibleValue = currentChoice?.name || onlyChoice?.name || "No current choice";
+  const canRecover = !disabled && typeof onSelect === "function";
+  const recoveryAction = canRecover && (onlyChoice || staleChoice)
+    ? {
+        label: onlyChoice ? `Use ${onlyChoice.name}` : `Remove unavailable ${label.toLowerCase()}`,
+        onClick: () => onSelect(onlyChoice?.id || "")
+      }
+    : undefined;
+  const state = disabled
+    ? { editability: "protected" }
+    : staleChoice
+      ? { evidence: "stale" }
+      : suggestedChoice
+        ? { origin: "suggested" }
+        : { availability: "not_provided" };
+  const reason = staleChoice && canRecover
+    ? `The saved ${label.toLowerCase()} is no longer an active Library choice.`
+    : "";
+  const provenance = suggestedChoice && !disabled ? "The only active Library choice" : "";
+  const supportingDetail = disabled
+    ? `This ${label.toLowerCase()} cannot be changed while Library edits are protected.`
+    : staleChoice
+      ? `The saved value is preserved until you ${onlyChoice ? "replace" : "remove"} it.`
+      : suggestedChoice
+        ? `Confirm ${onlyChoice.name} to add it to this template draft.`
+        : `No active ${label.toLowerCase()} choices are available. Activate one elsewhere in Library, then return to this template.`;
+
+  return (
+    <div
+      data-template-field={field}
+      tabIndex={-1}
+      ref={registerField}
+    >
+      <span className="adaptive-choice-field__label">{label}</span>
+      <strong className="adaptive-choice-field__single-value">{visibleValue}</strong>
+      <FieldStateIndicator
+        state={state}
+        label={`${label} state`}
+        reason={reason}
+        provenance={provenance}
+        supportingDetail={supportingDetail}
+        recoveryAction={recoveryAction}
+      />
+    </div>
+  );
 }
 
 function DependencyPicker({
@@ -636,8 +748,6 @@ export function EventTemplatesEditor({
               duplicateIds
             });
             const resolvedEventTypeId = text(template?.eventTypeId) || templateId;
-            const eventTypeChoices = includeUnavailableChoice(eventTypeRecords, resolvedEventTypeId, "event type");
-            const packageChoices = includeUnavailableChoice(packageRecords, template?.pkg, "offer");
             const presentation = buildEventTemplateObjectPresentation(template, {
               eventTypes: eventTypeRecords,
               packages: packageRecords,
@@ -746,27 +856,17 @@ export function EventTemplatesEditor({
                         <span><strong>Starting Offer</strong><small>{presentation.groups.startingOffer}</small></span>
                       </summary>
                       <div className="event-templates-editor__object-group-body event-templates-editor__identity-grid">
-                        <label>
-                          Starting offer
-                          <select
-                            value={text(template?.pkg)}
-                            onChange={(event) => patchTemplate(index, { pkg: event.target.value }, "pkg")}
-                            disabled={disabled}
-                            data-template-field="pkg"
-                            ref={(node) => registerTarget(templateId, "pkg", node)}
-                          >
-                            <option value="">Choose an offer</option>
-                            {packageChoices.map((record) => (
-                              <option
-                                key={record.id}
-                                value={record.id}
-                                disabled={record.active === false && record.id !== text(template?.pkg)}
-                              >
-                                {record.name}{record.active === false && !record.unavailable ? " (inactive)" : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <TemplateChoiceField
+                          templateId={templateId}
+                          field="pkg"
+                          label="Starting offer"
+                          records={packageRecords}
+                          currentId={text(template?.pkg)}
+                          placeholder="Choose an offer"
+                          disabled={disabled}
+                          onSelect={(value) => patchTemplate(index, { pkg: value }, "pkg")}
+                          registerTarget={registerTarget}
+                        />
                       </div>
                     </details>
 
@@ -775,27 +875,17 @@ export function EventTemplatesEditor({
                         <span><strong>Event context</strong><small>{presentation.groups.eventContext}</small></span>
                       </summary>
                       <div className="event-templates-editor__object-group-body event-templates-editor__identity-grid">
-                        <label>
-                          Event type
-                          <select
-                            value={resolvedEventTypeId}
-                            onChange={(event) => patchTemplate(index, { eventTypeId: event.target.value }, "eventTypeId")}
-                            disabled={disabled}
-                            data-template-field="eventTypeId"
-                            ref={(node) => registerTarget(templateId, "eventTypeId", node)}
-                          >
-                            <option value="">Choose an event type</option>
-                            {eventTypeChoices.map((record) => (
-                              <option
-                                key={record.id}
-                                value={record.id}
-                                disabled={record.active === false && record.id !== resolvedEventTypeId}
-                              >
-                                {record.name}{record.active === false && !record.unavailable ? " (inactive)" : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <TemplateChoiceField
+                          templateId={templateId}
+                          field="eventTypeId"
+                          label="Event type"
+                          records={eventTypeRecords}
+                          currentId={resolvedEventTypeId}
+                          placeholder="Choose an event type"
+                          disabled={disabled}
+                          onSelect={(value) => patchTemplate(index, { eventTypeId: value }, "eventTypeId")}
+                          registerTarget={registerTarget}
+                        />
                         <label>
                           Service style
                           <input

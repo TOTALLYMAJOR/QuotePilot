@@ -2873,6 +2873,71 @@ hr {
   color: #c9d1cc;
 }
 
+.import-workbench-steps {
+  padding: 0.85rem 1.4rem 0;
+  overflow-x: auto;
+}
+
+.import-workbench-steps ol {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(92px, 1fr));
+  min-width: 820px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-workbench-steps li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.45rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 0;
+  padding: 0 0.42rem 0.7rem 0;
+  color: #777168;
+  font-size: 0.7rem;
+}
+
+.import-workbench-steps li::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  content: "";
+  background: #c9c5bd;
+}
+
+.import-workbench-steps li > span {
+  display: inline-grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.import-workbench-steps li strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-workbench-steps li[data-step-state="complete"] {
+  color: #356656;
+}
+
+.import-workbench-steps li[data-step-state="current"] {
+  color: #7b5414;
+}
+
+.import-workbench-steps li[data-step-state="complete"]::after,
+.import-workbench-steps li[data-step-state="current"]::after {
+  background: #b7832c;
+}
+
 .import-studio-card > .error-note {
   margin: 0.9rem 1.4rem 0;
 }
@@ -2965,10 +3030,55 @@ hr {
   font-weight: 700;
 }
 
+.import-source-inspection,
 .import-mapping-section,
 .import-review-section,
+.import-preflight-section,
 .import-receipt {
   margin: 1.15rem 1.4rem 0;
+}
+
+.import-source-inspection,
+.import-preflight-section {
+  padding: 1rem;
+  border: 1px solid #c5c0b6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.import-source-inspection .field-state-indicator,
+.import-mapping-section > .field-state-indicator,
+.import-preflight-section > .field-state-indicator,
+.import-receipt > .field-state-indicator {
+  margin-top: 0.75rem;
+}
+
+.import-diagnostic-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-diagnostic-list li {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.6rem 0.7rem;
+  border-left: 3px solid #8d8270;
+  color: #4f4941;
+  background: rgba(246, 244, 239, 0.92);
+  font-size: 0.82rem;
+}
+
+.import-diagnostic-list li[data-severity="warning"] {
+  border-left-color: #b17a20;
+}
+
+.import-diagnostic-list li[data-severity="error"] {
+  border-left-color: #aa4734;
+  background: #fff3ef;
 }
 
 .import-section-heading {
@@ -2995,7 +3105,7 @@ hr {
   margin-top: 0.75rem;
 }
 
-.import-mapping-grid label {
+.import-mapping-grid .import-mapping-field {
   display: grid;
   gap: 0.35rem;
   min-width: 0;
@@ -3005,7 +3115,12 @@ hr {
   background: rgba(255, 255, 255, 0.7);
 }
 
-.import-mapping-grid label > span {
+.import-mapping-field > label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.import-mapping-field > label > span {
   color: #454039;
   font-size: 0.77rem;
   font-weight: 800;
@@ -3013,7 +3128,7 @@ hr {
 
 .import-review-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid #aeaa9f;
   border-radius: 12px;
   overflow: hidden;
@@ -3062,9 +3177,43 @@ hr {
   background: rgba(255, 255, 255, 0.74);
 }
 
+.import-review-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.import-review-filters button[aria-pressed="true"] {
+  border-color: #8b631f;
+  color: #2f2a23;
+  background: #f2e4c6;
+  box-shadow: inset 0 0 0 1px #8b631f;
+}
+
+.import-review-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.import-review-pagination p {
+  margin: 0;
+  color: #655f56;
+  font-size: 0.8rem;
+}
+
+.import-review-pagination > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .import-preview-table-wrap table {
-  width: 100%;
-  min-width: 690px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
 }
 
@@ -3074,21 +3223,149 @@ hr {
   border-bottom: 1px solid #d0cfce;
   text-align: left;
   font-size: 0.82rem;
+  vertical-align: top;
+}
+
+.import-preview-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: #4f4941;
+  background: #f5f1e8;
 }
 
 .import-preview-table-wrap tr:last-child td {
   border-bottom: 0;
 }
 
-.import-preview-table-wrap .is-ready td:nth-child(3) {
-  color: #236447;
+.import-preview-table-wrap .import-row-status {
+  min-width: 6.5rem;
   font-weight: 800;
 }
 
-.import-preview-table-wrap .has-issues td:nth-child(3),
-.import-preview-table-wrap .has-issues td:nth-child(4) {
+.import-preview-table-wrap .is-ready .import-row-status {
+  color: #236447;
+}
+
+.import-preview-table-wrap .has-issues .import-row-status,
+.import-preview-table-wrap .has-issues .import-row-details {
   color: #9c3f2f;
   font-weight: 700;
+}
+
+.import-source-cell {
+  min-width: 13.5rem;
+  max-width: 18rem;
+}
+
+.import-source-cell > strong,
+.import-source-cell > span {
+  display: block;
+}
+
+.import-source-excerpt {
+  margin-top: 0.35rem;
+  color: #655f57;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.import-preview-field {
+  min-width: 11rem;
+  max-width: 17rem;
+}
+
+.import-preview-field > strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #2f3d37;
+  font-weight: 750;
+}
+
+.import-preview-field .field-state-indicator {
+  gap: 0.2rem;
+  margin-top: 0.35rem;
+}
+
+.import-preview-field .field-state-indicator__primary,
+.import-preview-field .field-state-indicator__details {
+  font-size: 0.68rem;
+}
+
+.import-preview-field .field-state-indicator__details {
+  max-width: 16rem;
+  line-height: 1.35;
+}
+
+.import-preview-field .field-state-indicator__recovery {
+  width: fit-content;
+  font-size: 0.7rem;
+}
+
+.import-row-details {
+  min-width: 14rem;
+  max-width: 22rem;
+  white-space: normal;
+}
+
+.import-preview-table-wrap .is-excluded {
+  color: #716b63;
+  background: #efede9;
+}
+
+.import-preview-table-wrap .is-excluded td:not(:first-child) {
+  text-decoration: line-through;
+  text-decoration-color: #aaa39a;
+}
+
+.import-issue-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #d7a494;
+  border-radius: 10px;
+  color: #74382c;
+  background: #fff4f0;
+}
+
+.import-issue-action p {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.import-preflight-plan {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  border: 1px solid #aebfb6;
+  border-radius: 10px;
+  background: #aebfb6;
+}
+
+.import-preflight-plan > div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  background: #f4f8f5;
+}
+
+.import-preflight-plan span {
+  color: #59655f;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.import-preflight-plan strong {
+  color: #24493d;
+  font-size: 1.05rem;
 }
 
 .import-studio-foot {
@@ -3119,6 +3396,12 @@ hr {
 
 .import-receipt > p:not(.import-studio-kicker) {
   color: #52645c;
+}
+
+@media (min-width: 1025px) {
+  .app-shell-ambient-navigation .embedded-workspace-route .import-studio-head {
+    padding-right: 12.5rem;
+  }
 }
 
 .modal-head,
@@ -10764,8 +11047,23 @@ hr {
 
   .import-section-heading,
   .import-mapping-grid,
-  .import-review-metrics {
+  .import-review-metrics,
+  .import-preflight-plan {
     grid-template-columns: 1fr;
+  }
+
+  .import-issue-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .import-review-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .import-review-pagination > div > button {
+    flex: 1 1 10rem;
   }
 
   .import-review-metrics > div {
@@ -10780,8 +11078,10 @@ hr {
   .import-drop-zone,
   .import-file-bar,
   .import-type-strip,
+  .import-source-inspection,
   .import-mapping-section,
   .import-review-section,
+  .import-preflight-section,
   .import-receipt {
     margin-left: 0.75rem;
     margin-right: 0.75rem;

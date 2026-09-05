@@ -3,6 +3,7 @@ import { calculateQuote, currency } from "../lib/quoteCalculator";
 import { buildQuoteScenarios } from "../lib/quoteWorkflow";
 import { buildMarginPresentation } from "./marginPresentation";
 import { useModalDialog } from "../hooks/useModalDialog";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 
 // Same default-off gate as every other margin surface; costs are tenant
 // catalog data and margin never renders in any customer-facing projection.
@@ -20,6 +21,32 @@ function cloneForm(form) {
     addons: Array.isArray(form?.addons) ? [...form.addons] : [],
     rentals: Array.isArray(form?.rentals) ? [...form.rentals] : [],
     menuItems: Array.isArray(form?.menuItems) ? [...form.menuItems] : []
+  };
+}
+
+function buildChoiceSet(items, {
+  currentValue = "",
+  getValue = (item) => item?.id,
+  getLabel = (item) => item?.name
+} = {}) {
+  const seenValues = new Set();
+  const options = (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      value: String(getValue(item) ?? "").trim(),
+      label: String(getLabel(item) ?? "").trim()
+    }))
+    .filter((option) => {
+      if (!option.value || !option.label || seenValues.has(option.value)) return false;
+      seenValues.add(option.value);
+      return true;
+    });
+  const selectedValue = String(currentValue || "").trim();
+  const stale = Boolean(selectedValue && !options.some((option) => option.value === selectedValue));
+  return {
+    stale,
+    options: stale && options.length > 0
+      ? [{ value: selectedValue, label: `${selectedValue} (no longer available)`, disabled: true }, ...options]
+      : options
   };
 }
 
@@ -71,6 +98,8 @@ export default function QuoteCompareModal({
 }) {
   const [compareForm, setCompareForm] = useState(() => cloneForm(form));
   const [scenarioId, setScenarioId] = useState("better");
+  const seasonOptions = Array.isArray(settings?.seasonalProfiles) ? settings.seasonalProfiles : [];
+  const taxRegionOptions = Array.isArray(settings?.taxRegions) ? settings.taxRegions : [];
   const scenarios = useMemo(
     () => buildQuoteScenarios(form, catalog),
     [form, catalog]
@@ -96,6 +125,51 @@ export default function QuoteCompareModal({
       setCompareForm(cloneForm(initial?.form || form));
     }
   }, [open, form, scenarios]);
+
+  const packageChoices = buildChoiceSet(catalog?.packages, {
+    currentValue: compareForm.pkg,
+    getLabel: (item) => `${item?.name || item?.id} - ${currency(item?.ppp)}/person`
+  });
+  const styleChoices = buildChoiceSet(styles, {
+    currentValue: compareForm.style,
+    getValue: (style) => style,
+    getLabel: (style) => style
+  });
+  const taxRegionChoices = buildChoiceSet(taxRegionOptions, {
+    currentValue: compareForm.taxRegion,
+    getLabel: (region) => `${region?.name || region?.id} (${Math.round(Number(region?.rate || 0) * 1000) / 10}%)`
+  });
+  const seasonChoices = buildChoiceSet([
+    { id: "auto", name: "Auto detect" },
+    ...seasonOptions
+  ], {
+    currentValue: compareForm.seasonProfileId || "auto"
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setCompareForm((current) => {
+      const patch = {};
+      if (packageChoices.options.length === 1 && !packageChoices.stale && !String(current.pkg || "").trim()) {
+        patch.pkg = packageChoices.options[0].value;
+      }
+      if (styleChoices.options.length === 1 && !styleChoices.stale && !String(current.style || "").trim()) {
+        patch.style = styleChoices.options[0].value;
+      }
+      if (taxRegionChoices.options.length === 1 && !taxRegionChoices.stale && !String(current.taxRegion || "").trim()) {
+        patch.taxRegion = taxRegionChoices.options[0].value;
+      }
+      return Object.keys(patch).length > 0 ? { ...current, ...patch } : current;
+    });
+  }, [
+    open,
+    packageChoices.options,
+    packageChoices.stale,
+    styleChoices.options,
+    styleChoices.stale,
+    taxRegionChoices.options,
+    taxRegionChoices.stale
+  ]);
 
   const compareTotals = useMemo(
     () => calculateQuote(compareForm, catalog, settings),
@@ -152,9 +226,6 @@ export default function QuoteCompareModal({
     }));
     onClose();
   };
-
-  const seasonOptions = Array.isArray(settings?.seasonalProfiles) ? settings.seasonalProfiles : [];
-  const taxRegionOptions = Array.isArray(settings?.taxRegions) ? settings.taxRegions : [];
 
   return (
     <div
@@ -234,20 +305,48 @@ export default function QuoteCompareModal({
                   onChange={(e) => updateField("bartenders", Number(e.target.value))}
                 />
               </label>
-              <label className="field">
-                <span>Package</span>
-                <select value={compareForm.pkg} onChange={(e) => updateField("pkg", e.target.value)}>
-                  {catalog.packages.map((item) => (
-                    <option key={item.id} value={item.id}>{item.name} - {currency(item.ppp)}/person</option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Service style</span>
-                <select value={compareForm.style} onChange={(e) => updateField("style", e.target.value)}>
-                  {styles.map((style) => <option key={style} value={style}>{style}</option>)}
-                </select>
-              </label>
+              <AdaptiveChoiceField
+                id="compare-package"
+                label="Package"
+                options={packageChoices.options}
+                value={compareForm.pkg}
+                onChange={(event) => updateField("pkg", event.target.value)}
+                emptyReason={packageChoices.stale
+                  ? `The scenario keeps package “${compareForm.pkg}”, but it is no longer available in the catalog.`
+                  : "No active packages are available, so this scenario cannot be priced."}
+                recoveryAction={{ label: "Return to quote", onClick: onClose }}
+                fieldState={packageChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                fieldStateDetails={packageChoices.stale ? {
+                  reason: "Choose a current package before applying this scenario.",
+                  recoveryAction: {
+                    label: "Choose a current package",
+                    onClick: () => document.getElementById("compare-package")?.focus()
+                  }
+                } : {}}
+                singleChoiceDetail="This is the only package currently available for comparison."
+                className="field"
+              />
+              <AdaptiveChoiceField
+                id="compare-service-style"
+                label="Service style"
+                options={styleChoices.options}
+                value={compareForm.style}
+                onChange={(event) => updateField("style", event.target.value)}
+                emptyReason={styleChoices.stale
+                  ? `The scenario keeps service style “${compareForm.style}”, but it is no longer available.`
+                  : "No service styles are available for this scenario."}
+                recoveryAction={{ label: "Return to quote", onClick: onClose }}
+                fieldState={styleChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                fieldStateDetails={styleChoices.stale ? {
+                  reason: "Choose a current service style before applying this scenario.",
+                  recoveryAction: {
+                    label: "Choose a current service style",
+                    onClick: () => document.getElementById("compare-service-style")?.focus()
+                  }
+                } : {}}
+                singleChoiceDetail="This is the only service style currently available for comparison."
+                className="field"
+              />
               <label className="field">
                 <span>Miles (RT)</span>
                 <input
@@ -264,28 +363,46 @@ export default function QuoteCompareModal({
                   <option value="ach">Pay by ACH/Check</option>
                 </select>
               </label>
-              <label className="field">
-                <span>Tax region</span>
-                <select value={compareForm.taxRegion || ""} onChange={(e) => updateField("taxRegion", e.target.value)}>
-                  {taxRegionOptions.map((region) => (
-                    <option key={region.id} value={region.id}>
-                      {region.name} ({Math.round(Number(region.rate || 0) * 1000) / 10}%)
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Season profile</span>
-                <select
-                  value={compareForm.seasonProfileId || "auto"}
-                  onChange={(e) => updateField("seasonProfileId", e.target.value)}
-                >
-                  <option value="auto">Auto detect</option>
-                  {seasonOptions.map((season) => (
-                    <option key={season.id} value={season.id}>{season.name}</option>
-                  ))}
-                </select>
-              </label>
+              <AdaptiveChoiceField
+                id="compare-tax-region"
+                label="Tax region"
+                options={taxRegionChoices.options}
+                value={compareForm.taxRegion || ""}
+                onChange={(event) => updateField("taxRegion", event.target.value)}
+                emptyReason={taxRegionChoices.stale
+                  ? `The scenario keeps tax region “${compareForm.taxRegion}”, but it is no longer configured.`
+                  : "No tax regions are configured, so authoritative tax cannot be compared."}
+                recoveryAction={{ label: "Return to quote", onClick: onClose }}
+                fieldState={taxRegionChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                fieldStateDetails={taxRegionChoices.stale ? {
+                  reason: "Choose a current tax region before applying this scenario.",
+                  recoveryAction: {
+                    label: "Choose a current tax region",
+                    onClick: () => document.getElementById("compare-tax-region")?.focus()
+                  }
+                } : {}}
+                singleChoiceDetail="This is the only tax region configured for comparison."
+                className="field"
+              />
+              <AdaptiveChoiceField
+                id="compare-season-profile"
+                label="Season profile"
+                options={seasonChoices.options}
+                value={compareForm.seasonProfileId || "auto"}
+                onChange={(event) => updateField("seasonProfileId", event.target.value)}
+                emptyReason="No season profiles are available for this scenario."
+                recoveryAction={{ label: "Return to quote", onClick: onClose }}
+                fieldState={seasonChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                fieldStateDetails={seasonChoices.stale ? {
+                  reason: "Choose a current season profile or Auto detect before applying this scenario.",
+                  recoveryAction: {
+                    label: "Choose a current season profile",
+                    onClick: () => document.getElementById("compare-season-profile")?.focus()
+                  }
+                } : {}}
+                singleChoiceDetail="Auto detect is the only season choice currently available."
+                className="field"
+              />
             </div>
 
             <div className="compare-options">

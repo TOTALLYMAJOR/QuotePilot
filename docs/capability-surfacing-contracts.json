@@ -866,26 +866,44 @@
     },
     {
       "id": "trusted-customer-import",
-      "reviewRevision": 1,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "admin"
       ],
-      "summary": "Customer CSV import and rollback use tenant-bound server callables, stable batch identity, reversible receipts, and explicit uncertain-outcome reconciliation.",
+      "summary": "The tenant Import Workbench combines exact-value CSV/searchable-PDF review with SHA-256-bound customer sessions, receipt-bounded partial recovery, and catalog-draft staging whose durable request receipt can reconcile the exact mutation as staged or already published.",
       "backendPaths": [
         "firestore.rules",
+        "functions/catalogSetupDrafts.js",
         "functions/index.js",
-        "src/lib/importBatchService.js"
+        "src/lib/fieldState.js",
+        "src/lib/importBatchService.js",
+        "src/lib/importWorkbenchModel.js",
+        "src/lib/pdfImport.js",
+        "src/lib/catalogSetupDraftService.js"
       ],
       "backendExports": [
+        "functions/index.js#preflightCustomerImportBatch",
         "functions/index.js#createCustomerImportBatch",
         "functions/index.js#rollbackCustomerImportBatch"
       ],
+      "affectedBackendExports": [
+        "functions/index.js#preflightCustomerImportBatch",
+        "functions/index.js#createCustomerImportBatch",
+        "functions/index.js#rollbackCustomerImportBatch",
+        "functions/index.js#saveCatalogSetupDraft",
+        "functions/index.js#publishCatalogSetupDraft"
+      ],
       "frontendPaths": [
         "src/App.jsx",
-        "src/components/ImportStudioModal.jsx"
+        "src/components/ImportStudioModal.jsx",
+        "src/hooks/useCatalogData.js",
+        "src/lib/catalogSetupDraftService.js",
+        "src/lib/importBatchService.js",
+        "src/lib/importWorkbenchModel.js",
+        "src/lib/pdfImport.js"
       ],
       "entryPointLocators": [
         {
@@ -894,19 +912,74 @@
         }
       ],
       "testPaths": [
+        "e2e/import-workbench-pdf.spec.js",
+        "src/components/__tests__/importWorkbenchFlow.test.jsx",
         "src/components/__tests__/importStudioPresentation.test.jsx",
+        "src/hooks/__tests__/useCatalogData.observation.test.jsx",
+        "src/lib/__tests__/catalogSetupDraftImport.test.js",
+        "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+        "src/lib/__tests__/importWorkbenchModel.test.js",
+        "src/lib/__tests__/pdfImport.test.js",
         "src/lib/__tests__/customerImport.emulator.test.js",
         "src/lib/__tests__/importBatchService.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
         {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "makes every inferred source row reachable through explicit review pages"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "renders every mapped PDF value, resolved relationship, and source excerpt before preflight"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "uploads CSV, explicitly excludes a blocked row, preflights, and hands a multi-batch customer session to the service"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "renders a reconciled published catalog receipt without offering draft undo"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "keeps an unresolved customer batch locked to its issued preflight while resuming"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "keeps catalog source-refresh retry reachable after reload fails, then re-preflights the same batch"
+        },
+        {
           "path": "src/components/__tests__/importStudioPresentation.test.jsx",
           "locator": "renders uncertain customer imports and same-batch reconciliation without assuming success"
         },
         {
+          "path": "src/hooks/__tests__/useCatalogData.observation.test.jsx",
+          "locator": "reload stays pending until the successful read is committed to hook state"
+        },
+        {
+          "path": "src/lib/__tests__/catalogSetupDraftImport.test.js",
+          "locator": "stages only a matching preflight and forwards both revision fences"
+        },
+        {
+          "path": "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+          "locator": "reconciles one exact save receipt as staged, then published after response loss and a later draft"
+        },
+        {
           "path": "src/lib/__tests__/customerImport.emulator.test.js",
           "locator": "server owns customer ids, normalized search fields, duplicate decisions, and receipts"
+        },
+        {
+          "path": "src/lib/__tests__/customerImport.emulator.test.js",
+          "locator": "preflight divides unique-email rows before Firestore's transaction write ceiling"
+        },
+        {
+          "path": "src/lib/__tests__/customerImport.emulator.test.js",
+          "locator": "an activated multi-chunk session resumes after preflight expiry and replays idempotently"
+        },
+        {
+          "path": "e2e/import-workbench-pdf.spec.js",
+          "locator": "searchable PDF is extracted by the pinned browser runtime into an exact, mobile-safe review"
         },
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
@@ -920,7 +993,7 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback)"
+          "locator": "Tenant Import Workbench: customer and catalog CSV plus searchable-PDF catalog extraction"
         },
         {
           "path": "docs/USER_MANUAL.md",
@@ -928,7 +1001,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Import Studio now presents initial submission, stable-batch uncertainty, reconciliation, server receipt, definitive error, and retry states without assuming writes or outbound delivery.",
+      "surfaceReviewNote": "Import Workbench makes every inferred record reachable, keeps exact values and provenance visible, activates a 24-hour customer continuation only after the first accepted child, preserves confirmed partial receipts for resume or undo, awaits catalog source reads before reporting refresh, and distinguishes a shared-draft receipt from a server-reconciled publication receipt without offering draft undo for published records.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -974,7 +1047,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Admins can reconcile the same import batch, see a server-owned receipt, and undo eligible records without treating browser state as proof of a completed mutation."
+      "safeOutcome": "Admins can review every inferred source record, preflight the exact customer or catalog plan, resume or undo only server-confirmed customer children, retry a failed catalog refresh under the same identity, and treat catalog data as staged or published only when the exact server receipt supports that state; source and local tests do not establish hosted, production, or human acceptance."
     },
     {
       "id": "quote-conversation-receipts",

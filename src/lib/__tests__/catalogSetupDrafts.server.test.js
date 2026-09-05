@@ -140,6 +140,211 @@ function actor() {
 }
 
 describe("catalog setup draft authority", () => {
+  test("reconciles one exact save receipt as staged, then published after response loss and a later draft", async () => {
+    const { db, plan } = starterDb();
+    const packageRecord = plan.collections.catalogPackages[0];
+    const eventTypeRecord = plan.collections.eventTypes[0];
+    const saveInput = {
+      db,
+      organizationId: "acme",
+      requestId: "draft_response_loss_0001",
+      expectedGeneration: 0,
+      baseCatalogRevision: 1,
+      patches: [{
+        collection: "catalogPackages",
+        recordId: packageRecord.id,
+        intent: "update",
+        payload: { ...packageRecord.data, pppMinor: packageRecord.data.pppMinor + 500 }
+      }],
+      ...actor(),
+      nowISO: "2026-08-31T18:00:30.000Z"
+    };
+
+    const accepted = await saveCatalogSetupDraft(saveInput);
+    expect(accepted).toMatchObject({
+      idempotentReplay: false,
+      mutationStatus: "staged",
+      currentCatalogRevision: 1,
+      mutationReceipt: {
+        requestId: "draft_response_loss_0001",
+        status: "staged",
+        organizationId: "acme",
+        actor: { uid: "owner-1", email: "owner@example.com" },
+        baseCatalogRevision: 1,
+        expectedGeneration: 0,
+        draftGeneration: 1,
+        resultingDraftChangedRecordCount: 1,
+        requestedChangeCount: 1,
+        changes: [expect.objectContaining({
+          id: `catalogPackages:${packageRecord.id}`,
+          requestedIntent: "update",
+          intent: "update",
+          payload: expect.objectContaining({ pppMinor: packageRecord.data.pppMinor + 500 })
+        })]
+      }
+    });
+    expect(accepted.mutationReceipt.draftSessionId).toMatch(/^[a-f0-9]{64}$/);
+    expect(db.store.get("organizations/acme/catalogDraftMutationReceipts/draft_response_loss_0001"))
+      .toMatchObject({
+        kind: "catalog_setup_draft_mutation",
+        requestId: "draft_response_loss_0001",
+        organizationId: "acme",
+        draftSessionId: accepted.mutationReceipt.draftSessionId
+      });
+
+    const immediateReplay = await saveCatalogSetupDraft(saveInput);
+    expect(immediateReplay).toMatchObject({
+      idempotentReplay: true,
+      mutationStatus: "staged",
+      mutationReceipt: { status: "staged" }
+    });
+
+    await publishCatalogSetupDraft({
+      db,
+      organizationId: "acme",
+      requestId: "publish_response_loss_0001",
+      expectedGeneration: 1,
+      baseCatalogRevision: 1,
+      ...actor(),
+      nowISO: "2026-08-31T18:01:00.000Z"
+    });
+    expect(db.store.get(
+      `organizations/acme/catalogDraftPublicationLineages/${accepted.mutationReceipt.draftSessionId}`
+    )).toMatchObject({
+      kind: "catalog_setup_draft_publication_lineage",
+      publicationReceiptId: "publish_response_loss_0001",
+      catalogRevisionBefore: 1,
+      catalogRevisionAfter: 2
+    });
+
+    await saveCatalogSetupDraft({
+      db,
+      organizationId: "acme",
+      requestId: "draft_later_session_0001",
+      expectedGeneration: 0,
+      baseCatalogRevision: 2,
+      patches: [{
+        collection: "eventTypes",
+        recordId: eventTypeRecord.id,
+        intent: "update",
+        payload: { ...eventTypeRecord.data, name: `${eventTypeRecord.data.name} revised` }
+      }],
+      ...actor(),
+      nowISO: "2026-08-31T18:02:00.000Z"
+    });
+    const laterDraft = clone(db.store.get("organizations/acme/catalogSetupDrafts/current"));
+
+    const publishedReplay = await saveCatalogSetupDraft(saveInput);
+    expect(publishedReplay).toMatchObject({
+      idempotentReplay: true,
+      mutationStatus: "published",
+      currentCatalogRevision: 2,
+      draft: { state: "open", baseCatalogRevision: 2, generation: 1 },
+      mutationReceipt: {
+        requestId: "draft_response_loss_0001",
+        status: "published",
+        publicationReceiptId: "publish_response_loss_0001",
+        catalogRevisionAfter: 2,
+        publishedAtISO: "2026-08-31T18:01:00.000Z"
+      }
+    });
+    expect(db.store.get("organizations/acme/catalogSetupDrafts/current")).toEqual(laterDraft);
+
+    const publishedRecordPath = `organizations/acme/catalogPackages/${packageRecord.id}`;
+    db.store.set(publishedRecordPath, {
+      ...db.store.get(publishedRecordPath),
+      pppMinor: packageRecord.data.pppMinor + 999
+    });
+    await expect(saveCatalogSetupDraft(saveInput)).rejects.toMatchObject({
+      code: "failed-precondition",
+      message: expect.stringMatching(/exact values are no longer active/i)
+    });
+  });
+
+  test("rejects a reused save request id when the exact payload differs", async () => {
+    const { db, plan } = starterDb();
+    const packageRecord = plan.collections.catalogPackages[0];
+    const baseInput = {
+      db,
+      organizationId: "acme",
+      requestId: "draft_payload_binding_0001",
+      expectedGeneration: 0,
+      baseCatalogRevision: 1,
+      patches: [{
+        collection: "catalogPackages",
+        recordId: packageRecord.id,
+        intent: "update",
+        payload: { ...packageRecord.data, pppMinor: packageRecord.data.pppMinor + 100 }
+      }],
+      ...actor()
+    };
+    await saveCatalogSetupDraft(baseInput);
+    const acceptedDraft = clone(db.store.get("organizations/acme/catalogSetupDrafts/current"));
+
+    await expect(saveCatalogSetupDraft({
+      ...baseInput,
+      patches: [{
+        ...baseInput.patches[0],
+        payload: { ...packageRecord.data, pppMinor: packageRecord.data.pppMinor + 200 }
+      }]
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(db.store.get("organizations/acme/catalogSetupDrafts/current")).toEqual(acceptedDraft);
+    expect(db.store.get("organizations/acme/catalogDraftMutationReceipts/draft_payload_binding_0001"))
+      .toMatchObject({ requestedChangeCount: 1 });
+  });
+
+  test("binds save receipts to the authoritative actor while isolating the same request id by tenant", async () => {
+    const { db, plan } = starterDb();
+    [...db.store.entries()].forEach(([path, value]) => {
+      if (path.startsWith("organizations/acme/")) {
+        db.store.set(path.replace("organizations/acme/", "organizations/beta/"), clone(value));
+      }
+    });
+    const packageRecord = plan.collections.catalogPackages[0];
+    const input = {
+      db,
+      organizationId: "acme",
+      requestId: "draft_actor_tenant_0001",
+      expectedGeneration: 0,
+      baseCatalogRevision: 1,
+      patches: [{
+        collection: "catalogPackages",
+        recordId: packageRecord.id,
+        intent: "update",
+        payload: { ...packageRecord.data, pppMinor: packageRecord.data.pppMinor + 300 }
+      }],
+      ...actor()
+    };
+    await saveCatalogSetupDraft(input);
+
+    await expect(saveCatalogSetupDraft({
+      ...input,
+      actorUid: "owner-2",
+      actorEmail: "other-owner@example.com"
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+
+    const otherTenant = await saveCatalogSetupDraft({
+      ...input,
+      organizationId: "beta",
+      actorUid: "owner-beta",
+      actorEmail: "owner@beta.example"
+    });
+    expect(otherTenant).toMatchObject({
+      idempotentReplay: false,
+      mutationStatus: "staged",
+      organizationId: "beta",
+      mutationReceipt: {
+        requestId: "draft_actor_tenant_0001",
+        organizationId: "beta",
+        actor: { uid: "owner-beta" }
+      }
+    });
+    expect(db.store.get("organizations/acme/catalogDraftMutationReceipts/draft_actor_tenant_0001").actor.uid)
+      .toBe("owner-1");
+    expect(db.store.get("organizations/beta/catalogDraftMutationReceipts/draft_actor_tenant_0001").actor.uid)
+      .toBe("owner-beta");
+  });
+
   test("coalesces durable intent without activating it, then publishes one confirmed revision and receipt", async () => {
     const { db, plan } = starterDb();
     const packageRecord = plan.collections.catalogPackages[0];

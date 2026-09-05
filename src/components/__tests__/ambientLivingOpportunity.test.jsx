@@ -1278,6 +1278,86 @@ describe("AmbientLivingOpportunity", () => {
     expect(QUOTE).toEqual(beforeQuote);
   });
 
+  test("uses a real selector only when several saved menu items can be replacement sources", () => {
+    mount();
+
+    act(() => button("Review menu").click());
+
+    const field = container.querySelector('[data-adaptive-choice-mode="select"]');
+    const selector = field?.querySelector("select");
+    expect(field).not.toBeNull();
+    expect(selector?.value).toBe("salad");
+    expect([...selector.querySelectorAll("option")].map((option) => option.value)).toEqual([
+      "",
+      "salad",
+      "chicken"
+    ]);
+  });
+
+  test("presents one saved menu replacement source as confirmed read-only context", () => {
+    const singleMenuQuote = {
+      ...QUOTE,
+      selection: {
+        ...QUOTE.selection,
+        menuItems: ["salad"],
+        menuItemsSnapshot: [QUOTE.selection.menuItemsSnapshot[0]],
+        menuItemNames: ["Garden salad"],
+        menuItemQuantities: { salad: 2 }
+      }
+    };
+    mount({ quote: singleMenuQuote });
+
+    act(() => button("Review menu").click());
+
+    const field = container.querySelector('[data-adaptive-choice-mode="single"]');
+    expect(field).not.toBeNull();
+    expect(field.querySelector("select")).toBeNull();
+    expect(field.querySelector('[data-adaptive-choice-value="salad"]')?.textContent)
+      .toContain("Garden salad");
+    expect(field.textContent).toContain("only saved menu item");
+    expect(field.textContent).toContain("Read-only");
+  });
+
+  test("explains and recovers when no exact saved menu item can be a replacement source", async () => {
+    const onOpenLegacyWorkspace = vi.fn(async () => {
+      throw new Error("Quote workspace route failed.");
+    });
+    const emptyMenuQuote = {
+      ...QUOTE,
+      selection: {
+        ...QUOTE.selection,
+        menuItems: [],
+        menuItemsSnapshot: [],
+        menuItemNames: [],
+        menuItemQuantities: {}
+      }
+    };
+    mount({ quote: emptyMenuQuote, onOpenLegacyWorkspace });
+
+    act(() => container.querySelector('[data-intelligent-object="menu"] button').click());
+
+    const field = container.querySelector('[data-menu-replacement-source-state="unavailable"]');
+    expect(field).not.toBeNull();
+    expect(field.dataset.adaptiveChoiceMode).toBe("empty");
+    expect(field.querySelector("select")).toBeNull();
+    expect(field.textContent).toContain("Unavailable");
+    expect(field.textContent).toContain("does not record a menu selection");
+    const recovery = field.querySelector("button");
+    expect(recovery?.dataset.ambientActionId)
+      .toBe("open-full-opportunity-controls");
+
+    await act(async () => {
+      recovery.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-result-kind="recovery"]')?.textContent)
+      .toContain("Quote workspace route failed.");
+    expect(container.textContent).toContain("Full opportunity controls were not opened");
+  });
+
   test("offers visible keyboard-equivalent menu moves and hands the exact reorder intent to the editor", () => {
     const onEditQuote = vi.fn(() => ({ status: "opened" }));
     const beforeQuote = structuredClone(QUOTE);

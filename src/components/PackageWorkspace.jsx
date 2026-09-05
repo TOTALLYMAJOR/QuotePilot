@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import StatusChip from "./StatusChip";
 import { STATUS_FAMILY } from "../lib/statusSemantics";
 
@@ -336,6 +338,15 @@ export default function PackageWorkspace({
     : []).filter((rule) => (
     rule?.kind === "package" && text(rule?.targetId) === selectedPackageId
   ));
+  const availableMenuEventTypes = (Array.isArray(menuEventTypes) ? menuEventTypes : [])
+    .filter((eventType) => text(eventType?.id) && eventType?.active !== false);
+  const selectedMenuEventTypeId = text(selectedEventType);
+  const selectedMenuEventTypeIsAvailable = availableMenuEventTypes.some(
+    (eventType) => text(eventType.id) === selectedMenuEventTypeId
+  );
+  const onlyMenuEventType = availableMenuEventTypes.length === 1
+    ? availableMenuEventTypes[0]
+    : null;
 
   const choiceOptionsForType = (componentType) => {
     if (componentType === "menu_item") return allMenuChoices(menuItems, draftCatalog);
@@ -392,6 +403,17 @@ export default function PackageWorkspace({
       setActivationNotice("");
     }
   }, [activationNotice, selectedPackageModel?.readiness, selectedPackageRecord?.active]);
+
+  useEffect(() => {
+    if (
+      menuLoading
+      || !workspace
+      || !onlyMenuEventType
+      || selectedMenuEventTypeId
+      || typeof onSelectEventType !== "function"
+    ) return;
+    onSelectEventType(text(onlyMenuEventType.id));
+  }, [menuLoading, onSelectEventType, onlyMenuEventType, selectedMenuEventTypeId, workspace]);
 
   const revealSection = (sectionId) => {
     const section = rootRef.current?.querySelector(`[data-package-section="${sectionId}"]`);
@@ -550,6 +572,144 @@ export default function PackageWorkspace({
       ? "This offer will become available for quoting when the catalog draft is saved."
       : "This offer will remain draft-only when the catalog draft is saved.");
     onPatchPackageField(selectedPackageId, "active", nextActive);
+  };
+
+  const renderMenuEventTypeFilter = () => {
+    const label = "Menu item filter for add actions";
+    const description = "This only narrows the available menu choices below. It does not change where the offer can be used.";
+    const canSelectEventType = typeof onSelectEventType === "function";
+
+    if (menuLoading) {
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <FieldStateIndicator
+            state={{ evidence: "pending" }}
+            label="Menu event types"
+            supportingDetail="Loading the current Library event types."
+          />
+        </div>
+      );
+    }
+
+    if (availableMenuEventTypes.length === 0) {
+      const canClearStale = Boolean(selectedMenuEventTypeId && canSelectEventType);
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <FieldStateIndicator
+            state={canClearStale ? { evidence: "stale" } : { availability: "not_provided" }}
+            label="Menu event types"
+            reason={canClearStale ? "The selected event type is no longer active in the current Library." : ""}
+            supportingDetail={canClearStale
+              ? "Remove the stale filter, then activate an event type before adding menu inclusions."
+              : "No active event types are available. Add or activate one in the Menu area, then return to this offer."}
+            recoveryAction={canClearStale
+              ? { label: "Remove unavailable filter", onClick: () => onSelectEventType("") }
+              : undefined}
+          />
+        </div>
+      );
+    }
+
+    if (onlyMenuEventType && selectedMenuEventTypeIsAvailable) {
+      return (
+        <div data-package-field="eventTypeFilter">
+          <AdaptiveChoiceField
+            className="admin-package-menu-filter package-workspace-menu-filter"
+            label={label}
+            description={description}
+            options={[{
+              value: text(onlyMenuEventType.id),
+              label: text(onlyMenuEventType.name) || text(onlyMenuEventType.id)
+            }]}
+            value={selectedMenuEventTypeId}
+            singleChoiceDetail="This is the only active menu event type."
+          />
+        </div>
+      );
+    }
+
+    if (onlyMenuEventType && !selectedMenuEventTypeId) {
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <strong className="adaptive-choice-field__single-value">
+            {text(onlyMenuEventType.name) || text(onlyMenuEventType.id)}
+          </strong>
+          <FieldStateIndicator
+            state={{ origin: "defaulted" }}
+            label="Menu event type"
+            provenance="The only active menu event type"
+            supportingDetail="Applying this presentation-only filter."
+          />
+        </div>
+      );
+    }
+
+    if (onlyMenuEventType) {
+      const canRecover = canSelectEventType;
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <strong className="adaptive-choice-field__single-value">{selectedMenuEventTypeId}</strong>
+          <FieldStateIndicator
+            state={canRecover ? { evidence: "stale" } : { availability: "unknown" }}
+            label="Menu event type"
+            reason={canRecover ? "The selected filter is no longer an active event type." : ""}
+            supportingDetail={`The only current choice is ${text(onlyMenuEventType.name) || text(onlyMenuEventType.id)}.`}
+            recoveryAction={canRecover
+              ? {
+                  label: `Use ${text(onlyMenuEventType.name) || text(onlyMenuEventType.id)}`,
+                  onClick: () => onSelectEventType(text(onlyMenuEventType.id))
+                }
+              : undefined}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <label className="admin-package-menu-filter package-workspace-menu-filter">
+        <span>{label}</span>
+        <small>{description}</small>
+        <select
+          aria-label="Menu item filter for package inclusions"
+          data-package-field="eventTypeFilter"
+          value={selectedMenuEventTypeIsAvailable ? selectedMenuEventTypeId : ""}
+          onChange={(event) => onSelectEventType(event.target.value)}
+        >
+          <option value="">Choose event type</option>
+          {availableMenuEventTypes.map((eventType) => (
+            <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
+          ))}
+        </select>
+      </label>
+    );
   };
 
   if (!workspace || workspace.packageIds.length === 0) {
@@ -748,28 +908,50 @@ export default function PackageWorkspace({
               && nestedAttentionForPackage(findPackageById(draftCatalog?.packages, entry.package.id)) === 0
             )).length} ready</span>
           </div>
-          <label className="package-workspace-mobile-switcher">
-            <span>Choose offer</span>
-            <select
-              aria-label="Choose offer"
-              value={selectedPackageId}
-              onChange={(event) => selectPackage(event.target.value)}
-            >
-              {workspace.packages.map((entry, entryIndex) => {
-                const entryNestedAttention = nestedAttentionForPackage(
-                  findPackageById(draftCatalog?.packages, entry.package.id)
-                );
-                const entryReadiness = entry.readiness === "ready" && entryNestedAttention > 0
-                  ? "Needs review"
-                  : packageReadinessPresentation(entry.readiness).label;
-                return (
-                  <option key={entry.package.id} value={entry.package.id}>
-                    {text(entry.package.name) || `Unnamed offer ${entryIndex + 1}`} · {entryReadiness}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
+          {workspace.packages.length === 1 ? (() => {
+            const [entry] = workspace.packages;
+            const entryNestedAttention = nestedAttentionForPackage(
+              findPackageById(draftCatalog?.packages, entry.package.id)
+            );
+            const entryReadiness = entry.readiness === "ready" && entryNestedAttention > 0
+              ? "Needs review"
+              : packageReadinessPresentation(entry.readiness).label;
+            return (
+              <AdaptiveChoiceField
+                className="package-workspace-mobile-switcher"
+                label="Choose offer"
+                options={[{
+                  value: entry.package.id,
+                  label: `${text(entry.package.name) || "Unnamed offer"} · ${entryReadiness}`
+                }]}
+                value={selectedPackageId}
+                singleChoiceDetail="This is the only offer in the current Library draft."
+              />
+            );
+          })() : (
+            <label className="package-workspace-mobile-switcher">
+              <span>Choose offer</span>
+              <select
+                aria-label="Choose offer"
+                value={selectedPackageId}
+                onChange={(event) => selectPackage(event.target.value)}
+              >
+                {workspace.packages.map((entry, entryIndex) => {
+                  const entryNestedAttention = nestedAttentionForPackage(
+                    findPackageById(draftCatalog?.packages, entry.package.id)
+                  );
+                  const entryReadiness = entry.readiness === "ready" && entryNestedAttention > 0
+                    ? "Needs review"
+                    : packageReadinessPresentation(entry.readiness).label;
+                  return (
+                    <option key={entry.package.id} value={entry.package.id}>
+                      {text(entry.package.name) || `Unnamed offer ${entryIndex + 1}`} · {entryReadiness}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          )}
           <ul className="package-workspace-nav-list">
             {workspace.packages.map((entry, entryIndex) => {
               const entryReadiness = packageReadinessPresentation(entry.readiness);
@@ -916,22 +1098,7 @@ export default function PackageWorkspace({
                 </p>
               </div>
 
-            <label className="admin-package-menu-filter package-workspace-menu-filter">
-              <span>Menu item filter for add actions</span>
-              <small>This only narrows the available menu choices below. It does not change where the offer can be used.</small>
-              <select
-                aria-label="Menu item filter for package inclusions"
-                data-package-field="eventTypeFilter"
-                value={selectedEventType}
-                onChange={(event) => onSelectEventType(event.target.value)}
-                disabled={menuLoading}
-              >
-                <option value="">Choose event type</option>
-                {menuEventTypes.map((eventType) => (
-                  <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-                ))}
-              </select>
-            </label>
+            {renderMenuEventTypeFilter()}
 
             <div className="package-workspace-group-grid">
               {INCLUSION_GROUPS.map((group) => {
@@ -1052,22 +1219,20 @@ export default function PackageWorkspace({
                                 placeholder={`Search ${group.label.toLowerCase()}`}
                               />
                             </label>
-                            <label className="package-workspace-search">
-                              <span>Category</span>
-                              <select
-                                aria-label={`Filter ${group.label.toLowerCase()} by category`}
+                            {categories.length > 0 ? (
+                              <AdaptiveChoiceField
+                                className="package-workspace-search"
+                                label="Category"
+                                options={categories.map((category) => ({ value: category, label: category }))}
                                 value={categoryByGroup[group.id] || ""}
+                                placeholder="All categories"
                                 onChange={(event) => setCategoryByGroup((current) => ({
                                   ...current,
                                   [group.id]: event.target.value
                                 }))}
-                              >
-                                <option value="">All categories</option>
-                                {categories.map((category) => (
-                                  <option key={category} value={category}>{category}</option>
-                                ))}
-                              </select>
-                            </label>
+                                singleChoiceDetail="Every available record is in this category, so filtering would not change the list."
+                              />
+                            ) : null}
                           </div>
                           <p className="package-workspace-picker-count" role="status">
                             {countLabel(pendingIds.size, "selection")} in this offer

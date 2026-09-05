@@ -49,6 +49,14 @@ import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
 import QuoteConversationPanel from "quotepilot-active-conversation-panel";
 import StatusChip from "./StatusChip";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+
+const QUOTE_STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "draft", label: "Draft" },
+  { value: "submitted", label: "Submitted" },
+  { value: "archived", label: "Archived" }
+];
 
 const RESUMABLE_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
@@ -772,6 +780,9 @@ export function QuoteHistoryView({
   const [query, setQuery] = useState("");
   const [eventTypeFilter, setEventTypeFilter] = useState("all");
   const [eventTypes, setEventTypes] = useState([]);
+  const [eventTypesReady, setEventTypesReady] = useState(false);
+  const [eventTypesError, setEventTypesError] = useState("");
+  const [eventTypesRetryNonce, setEventTypesRetryNonce] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState("");
   const [convertingId, setConvertingId] = useState("");
@@ -1022,19 +1033,26 @@ export function QuoteHistoryView({
   useEffect(() => {
     if (!open) return;
     let alive = true;
+    setEventTypesReady(false);
+    setEventTypesError("");
     getEventTypes({ organizationId })
       .then((items) => {
         if (!alive) return;
         setEventTypes(items);
+        setEventTypesReady(true);
+        setEventTypesError("");
       })
       .catch(() => {
         if (!alive) return;
-        setEventTypes([]);
+        setEventTypesReady(false);
+        setEventTypesError(
+          "Event type filters could not be refreshed. Your current selection is preserved; try again before changing this filter."
+        );
       });
     return () => {
       alive = false;
     };
-  }, [open, organizationId]);
+  }, [eventTypesRetryNonce, open, organizationId]);
 
   useEffect(() => {
     if (!open) return;
@@ -1147,6 +1165,28 @@ export function QuoteHistoryView({
   const eventTypeNameById = new Map(
     (eventTypes || []).map((item) => [String(item.id), item.name])
   );
+  const eventTypeFilterUnavailable = eventTypeFilter !== "all"
+    && !eventTypes.some((item) => String(item.id) === eventTypeFilter);
+  const eventTypeFilterOptions = (!eventTypesReady && eventTypes.length === 0)
+    ? []
+    : [
+        ...(eventTypeFilterUnavailable && eventTypeFilter !== "all"
+          ? [{
+              value: eventTypeFilter,
+              label: `${humanizeWorkspaceValue(eventTypeFilter)} (not in current event types)`,
+              disabled: true
+            }]
+          : []),
+        { value: "all", label: "All event types" },
+        ...eventTypes.map((eventType) => ({
+          value: String(eventType.id),
+          label: String(eventType.name || eventType.id)
+        }))
+      ];
+  const retryEventTypes = {
+    label: "Retry event types",
+    onClick: () => setEventTypesRetryNonce((current) => current + 1)
+  };
 
   const filteredQuotes = filterQuoteHistoryQuotes(state.quotes, {
     query,
@@ -2425,18 +2465,43 @@ export function QuoteHistoryView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <select value={eventTypeFilter} onChange={(e) => setEventTypeFilter(e.target.value)}>
-            <option value="all">All event types</option>
-            {eventTypes.map((eventType) => (
-              <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-            ))}
-          </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="all">All statuses</option>
-            <option value="draft">Draft</option>
-            <option value="submitted">Submitted</option>
-            <option value="archived">Archived</option>
-          </select>
+          <AdaptiveChoiceField
+            id="legacy-quote-event-type-filter"
+            label="Event type"
+            options={eventTypeFilterOptions}
+            value={eventTypeFilter}
+            onChange={(event) => setEventTypeFilter(event.target.value)}
+            emptyState={eventTypesError ? "unavailable" : "blocked"}
+            emptyReason={eventTypesError
+              ? `${eventTypesError}${eventTypeFilter !== "all" ? ` Current filter “${eventTypeFilter}” remains preserved.` : ""}`
+              : "Event type filters are still loading."}
+            recoveryAction={retryEventTypes}
+            fieldState={eventTypesError
+              ? { evidence: "failed" }
+              : eventTypeFilterUnavailable
+                ? { evidence: "stale", editability: "draft" }
+                : undefined}
+            fieldStateDetails={eventTypesError ? {
+              reason: eventTypesError,
+              recoveryAction: retryEventTypes
+            } : eventTypeFilterUnavailable ? {
+              reason: "This saved filter is outside the current event type set; it remains selected until you clear or replace it.",
+              recoveryAction: {
+                label: "Clear event type filter",
+                onClick: () => setEventTypeFilter("all")
+              }
+            } : {}}
+            singleChoiceDetail="No event-type-specific filter is available, so all event types are shown."
+          />
+          <AdaptiveChoiceField
+            id="legacy-quote-status-filter"
+            label="Quote status"
+            options={QUOTE_STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            emptyReason="Quote status filters are unavailable."
+            recoveryAction={{ label: "Clear filters", onClick: clearFilters }}
+          />
           <p className="history-result-count" role="status">
             Showing {filteredQuotes.length} of {state.quotes.length} quotes
           </p>
@@ -2631,15 +2696,34 @@ export function QuoteHistoryView({
                         <small>Quote / proposal lifecycle</small>
                         <StatusChip {...statusSemantics.lifecycle} />
                         {permissions.canManageQuoteStatus && (
-                          <select
+                          <AdaptiveChoiceField
+                            id={`legacy-quote-lifecycle-${quote.id}`}
+                            label="Change quote / proposal lifecycle"
+                            options={statusOptions.map((status) => ({
+                              value: status,
+                              label: classifyQuoteStatus(status).label
+                            }))}
                             value={quote.status || "draft"}
-                            onChange={(e) => handleStatusUpdate(quote.id, e.target.value)}
-                            disabled={updatingId === quote.id || statusOptions.length <= 1 || deliveryUnresolved}
-                          >
-                            {statusOptions.map((status) => (
-                              <option key={status} value={status}>{classifyQuoteStatus(status).label}</option>
-                            ))}
-                          </select>
+                            onChange={(event) => handleStatusUpdate(quote.id, event.target.value)}
+                            disabled={updatingId === quote.id || deliveryUnresolved}
+                            emptyReason="No lifecycle transitions are available for this quote."
+                            recoveryAction={{ label: "Reload quote history", onClick: load }}
+                            fieldState={updatingId === quote.id
+                              ? { persistence: "saving" }
+                              : deliveryUnresolved
+                                ? { editability: "blocked" }
+                                : undefined}
+                            fieldStateDetails={deliveryUnresolved ? {
+                              reason: "Resolve the current delivery attempt first.",
+                              recoveryAction: deliveryUi.reviewRequired
+                                ? {
+                                    label: "Review provider outcome",
+                                    onClick: () => openDeliveryReview(quote, quoteRevisionId)
+                                  }
+                                : { label: "Refresh delivery status", onClick: load }
+                            } : {}}
+                            singleChoiceDetail="This is the only lifecycle state currently authorized for this quote."
+                          />
                         )}
                         {deliveryUi.reviewRequired ? (
                           <small>Delivery readiness: Review required</small>
@@ -3138,25 +3222,31 @@ export function QuoteHistoryView({
                 That acceptance must be recorded; a no-send resolution is unavailable.
               </p>
             )}
-            <label>
-              Provider outcome
-              <select
-                value={deliveryReview.resolution}
-                onChange={(event) => setDeliveryReview((current) => ({
-                  ...current,
-                  resolution: event.target.value,
-                  providerMessageId: event.target.value === "provider_accepted"
-                    ? current.providerMessageId
-                    : ""
-                }))}
-                disabled={resolvingDeliveryId === deliveryReview.quoteId}
-              >
-                {!deliveryReview.knownProviderAcceptance && (
-                  <option value="confirmed_not_sent">Provider confirms no email was sent</option>
-                )}
-                <option value="provider_accepted">Provider accepted the email</option>
-              </select>
-            </label>
+            <AdaptiveChoiceField
+              id="legacy-quote-provider-outcome"
+              label="Provider outcome"
+              options={[
+                ...(!deliveryReview.knownProviderAcceptance
+                  ? [{ value: "confirmed_not_sent", label: "Provider confirms no email was sent" }]
+                  : []),
+                { value: "provider_accepted", label: "Provider accepted the email" }
+              ]}
+              value={deliveryReview.resolution}
+              onChange={(event) => setDeliveryReview((current) => ({
+                ...current,
+                resolution: event.target.value,
+                providerMessageId: event.target.value === "provider_accepted"
+                  ? current.providerMessageId
+                  : ""
+              }))}
+              disabled={resolvingDeliveryId === deliveryReview.quoteId}
+              emptyReason="The provider outcome cannot be reviewed from this delivery record."
+              recoveryAction={{ label: "Cancel review", onClick: closeDeliveryReview }}
+              fieldState={resolvingDeliveryId === deliveryReview.quoteId
+                ? { persistence: "saving", evidence: "pending" }
+                : undefined}
+              singleChoiceDetail="Provider acceptance is already observed for this exact delivery attempt, so the outcome is read-only."
+            />
             {deliveryReview.resolution === "provider_accepted" && (
               <label>
                 Provider message ID

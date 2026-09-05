@@ -2,6 +2,7 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const clientMocks = vi.hoisted(() => ({
@@ -105,6 +106,10 @@ describe("StaffWorkspace", () => {
     expect(container.querySelector('[aria-label="Server"]')).not.toBeNull();
     expect(container.querySelector('svg[data-icon-weight="fill"]')?.getAttribute("stroke-width")).toBe("2.2");
     expect(container.textContent).toContain("Smith Wedding");
+    const assignmentChoice = container.querySelector('.staff-briefing-actions [data-adaptive-choice-mode="single"]');
+    expect(assignmentChoice).not.toBeNull();
+    expect(assignmentChoice.querySelector("select")).toBeNull();
+    expect(assignmentChoice.querySelector('[data-field-state-primary="confirmed"]')).not.toBeNull();
     expect(Array.from(container.querySelectorAll("button")).map((button) => button.textContent.trim()))
       .toEqual(expect.arrayContaining(["Review assignment", "View assignment", "Print sheet", "Download PDF", "Open email app", "Preview invitation"]));
     expect(container.querySelectorAll(".staff-roster li > button")).toHaveLength(1);
@@ -113,6 +118,41 @@ describe("StaffWorkspace", () => {
     expect(container.textContent).toContain("Not dispatched");
     expect(container.textContent).toContain("Awaiting staff response");
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  test("keeps assignment selection interactive when a teammate has multiple events", async () => {
+    const result = fixture();
+    result.assignments[0] = {
+      ...result.assignments[0],
+      event: { ...result.assignments[0].event, date: "2026-09-20" },
+      eventWindow: {
+        startAtISO: "2026-09-20T20:00:00.000Z",
+        endAtISO: "2026-09-21T03:00:00.000Z"
+      }
+    };
+    result.assignments.push({
+      ...result.assignments[0],
+      assignmentId: "assignment-2",
+      quoteId: "quote-2",
+      quoteRevisionId: "version-1",
+      event: { ...result.assignments[0].event, name: "Jones Gala", date: "2026-09-22" },
+      eventWindow: {
+        startAtISO: "2026-09-22T20:00:00.000Z",
+        endAtISO: "2026-09-23T03:00:00.000Z"
+      }
+    });
+    clientMocks.getStaffDirectory.mockResolvedValue(result);
+
+    await act(async () => {
+      root.render(<StaffWorkspace organizationId="org-alpha" organizationName="Smith Catering" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const assignmentSelect = container.querySelector(".staff-briefing-actions .staff-field select");
+    expect(assignmentSelect).not.toBeNull();
+    expect(assignmentSelect.querySelectorAll("option")).toHaveLength(2);
+    expect(container.querySelector('.staff-briefing-actions [data-adaptive-choice-mode="single"]')).toBeNull();
   });
 
   test("requires preview before manual dispatch and separates provider acceptance from acknowledgement", async () => {
@@ -182,6 +222,108 @@ describe("StaffWorkspace", () => {
     expect(container.textContent).toContain("Provider accepted");
     expect(container.textContent).toContain("Awaiting staff response");
     expect(container.textContent).not.toContain("Delivered by provider");
+  });
+
+  test("keeps a definitive staff save failure operation-specific and retries the retained draft", async () => {
+    const savedEntry = fixture().records[0];
+    clientMocks.saveStaffRecord
+      .mockRejectedValueOnce(Object.assign(new Error("Your current role cannot save this staff record."), { code: "functions/permission-denied" }))
+      .mockResolvedValueOnce({ entry: savedEntry });
+    await act(async () => {
+      root.render(<StaffWorkspace organizationId="org-alpha" organizationName="Smith Catering" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const name = container.querySelector('.staff-field input[value="Avery Lane"]');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Avery Lane Updated");
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save changes").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const failure = container.querySelector('[data-staff-operation="save_record"][data-capability-state="error"]');
+    expect(failure).not.toBeNull();
+    expect(failure.textContent).toContain("Your current role cannot save this staff record");
+    expect(failure.textContent).toContain("The unsaved staff draft remains available");
+    const retry = Array.from(failure.querySelectorAll("button")).find((button) => button.textContent === "Retry staff save");
+    expect(retry).not.toBeUndefined();
+    await act(async () => {
+      retry.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(clientMocks.saveStaffRecord).toHaveBeenCalledTimes(2);
+  });
+
+  test("allows a failed read-only invitation preview to retry but never blind-retries an uncertain dispatch", async () => {
+    const previewResult = {
+      payload: {
+        organizationId: "org-alpha",
+        quoteId: "quote-1",
+        staffId: "staff-avery",
+        assignmentId: "assignment-1",
+        expectedQuoteRevisionId: "version-2",
+        expectedPlanRevision: 3,
+        expectedRecordRevision: 1
+      },
+      dispatchRequestId: "staff-invitation:test-request-uncertain",
+      preview: {
+        invitationId: "sti_uncertain",
+        previewDigest: "b".repeat(64),
+        recipient: { name: "Avery", email: "avery@example.com" },
+        subject: "Smith Wedding staff invitation",
+        textWithoutResponseLink: "Hi Avery, review this assignment.",
+        doNothing: "Nothing is sent."
+      }
+    };
+    clientMocks.previewStaffInvitation
+      .mockRejectedValueOnce(new Error("Preview service unavailable."))
+      .mockResolvedValueOnce(previewResult);
+    clientMocks.dispatchStaffInvitation.mockRejectedValueOnce(new Error("Provider response timed out."));
+    await act(async () => {
+      root.render(<StaffWorkspace organizationId="org-alpha" organizationName="Smith Catering" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent.includes("Preview invitation")).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const retryPreview = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent === "Retry invitation preview");
+    expect(retryPreview).not.toBeUndefined();
+    await act(async () => {
+      retryPreview.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent.includes("Send invitation")).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(clientMocks.dispatchStaffInvitation).toHaveBeenCalledTimes(1);
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent.includes("Send invitation"))).toBe(false);
+    expect(container.textContent).toContain("Do not send again");
+    expect(container.textContent).toContain("contact support with the exact assignment");
+    const refresh = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh invitation status");
+    expect(refresh).not.toBeUndefined();
+    await act(async () => {
+      refresh.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(clientMocks.getStaffDirectory).toHaveBeenCalledTimes(2);
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent.includes("Send invitation"))).toBe(false);
+    expect(container.textContent).toContain("still does not establish the invitation provider outcome");
   });
 
   test("returns a contextual unavailable state when no authoritative backend is connected", async () => {
@@ -365,5 +507,17 @@ describe("StaffWorkspace", () => {
     });
     expect(container.textContent).toContain("Choose a teammate or welcome someone new");
     expect(container.querySelector(".staff-record__identity")).toBeNull();
+  });
+
+  test("keeps role buttons, section links, and Manage rates perceivable across pointer and contrast modes", () => {
+    const css = readFileSync(`${process.cwd()}/src/components/staffWorkspace.css`, "utf8");
+    expect(css).toContain(".staff-role-icons > button:hover");
+    expect(css).toContain(".staff-profile-tabs a:hover");
+    expect(css).toContain(".staff-text-action:hover");
+    expect(css).toContain(".staff-role-icons > button:focus-visible");
+    expect(css).toContain(".staff-profile-tabs a:focus-visible");
+    expect(css).toContain(".staff-text-action:focus-visible");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(css).toContain("@media (forced-colors: active)");
   });
 });

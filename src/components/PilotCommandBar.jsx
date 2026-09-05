@@ -82,6 +82,26 @@ function provenanceLabel(entry) {
   ].filter(Boolean).join(" | ");
 }
 
+function legacyVoiceRecoveryMessage(errorName) {
+  const normalized = String(errorName || "").trim().toLowerCase();
+  if (normalized === "not-allowed") {
+    return "Microphone access is blocked. Allow it in your browser, choose Speak to try again, or type your request.";
+  }
+  if (["service-not-allowed", "language-not-supported"].includes(normalized)) {
+    return "Speech input is unavailable here. Type your request or choose Speak to try again.";
+  }
+  if (normalized === "audio-capture") {
+    return "No usable microphone was found. Check your device, choose Speak to try again, or type your request.";
+  }
+  if (normalized === "network") {
+    return "The speech service could not be reached. Your draft is unchanged; choose Speak to try again or type your request.";
+  }
+  if (["no-speech", "nomatch"].includes(normalized)) {
+    return "No words were captured. Choose Speak to try again or type your request.";
+  }
+  return "Voice capture could not finish. Your draft is unchanged; choose Speak to try again or type your request.";
+}
+
 function withoutScenarioClauses(clauses, scenarioIntent) {
   if (!scenarioIntent) return clauses;
   return clauses.filter((clause) => {
@@ -124,6 +144,7 @@ export default function PilotCommandBar({
   const [handedOffScenarioIds, setHandedOffScenarioIds] = useState([]);
   const [scenarioHandoffStatus, setScenarioHandoffStatus] = useState(null);
   const [legacyVoiceListening, setLegacyVoiceListening] = useState(false);
+  const [legacyVoiceError, setLegacyVoiceError] = useState("");
   const commandRef = useRef(null);
   const inputRef = useRef(null);
   const textValueRef = useRef("");
@@ -275,6 +296,7 @@ export default function PilotCommandBar({
       setLegacyVoiceListening(false);
       return;
     }
+    setLegacyVoiceError("");
     const recognition = new Recognition();
     recognition.lang = "en-US";
     recognition.interimResults = false;
@@ -292,10 +314,18 @@ export default function PilotCommandBar({
       }
     };
     recognition.onend = () => setLegacyVoiceListening(false);
-    recognition.onerror = () => setLegacyVoiceListening(false);
+    recognition.onerror = (event) => {
+      setLegacyVoiceListening(false);
+      setLegacyVoiceError(legacyVoiceRecoveryMessage(event?.error));
+    };
     legacyRecognitionRef.current = recognition;
     setLegacyVoiceListening(true);
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      setLegacyVoiceListening(false);
+      setLegacyVoiceError(legacyVoiceRecoveryMessage("error"));
+    }
   };
 
   const voiceSupported = holdVoiceEnabled
@@ -488,7 +518,9 @@ export default function PilotCommandBar({
               voice.toggle();
             }}
             aria-pressed={voicePhase === PILOT_VOICE_PHASES.LISTENING}
-            aria-describedby={holdVoiceEnabled ? "pilot-command-voice-status" : undefined}
+            aria-describedby={holdVoiceEnabled
+              ? "pilot-command-voice-status"
+              : legacyVoiceError ? "pilot-command-legacy-voice-error" : undefined}
           >
             {holdVoiceEnabled && (
               <Microphone className="pilot-command-voice-mark" size={18} weight="duotone" aria-hidden="true" />
@@ -524,6 +556,18 @@ export default function PilotCommandBar({
           aria-atomic="true"
         >
           {voice.presentation.status}
+        </p>
+      )}
+      {!holdVoiceEnabled && legacyVoiceError && (
+        <p
+          id="pilot-command-legacy-voice-error"
+          className="pilot-command-voice-status error-note"
+          data-capability-state="recovery"
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+        >
+          {legacyVoiceError}
         </p>
       )}
 
