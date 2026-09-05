@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 02:28:23 CDT
+Last updated: 2026-09-05 09:12:00 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -14,12 +14,14 @@ Last updated: 2026-09-05 02:28:23 CDT
   amount provenance, expanded Library presentation, and starter-pack adapters
   without creating a second quote/catalog/pricing authority. The current
   Operations presentation refinement has completed local qualification. Exact-
-  head CI run `33949152892` passed classification, quick, core, Firebase/auth,
-  authoritative-pricing, CWV, Docker, and advisory product-truth jobs, but the
-  Playwright lane found five stale compatibility assertions against the
-  selected Library presentation. The test-only correction now passes those
-  five cases locally and awaits a replacement exact-head run. This source state
-  makes no hosted or production claim.
+  head `bba03f05cbb582ba3084b95f3a7b79e91be963f5` passed all eight required CI
+  jobs in run `33953026985`. Its first provider-profile candidate attempt then
+  stopped at the local Firebase CLI module-loading boundary because the clean
+  worktree lacked its separate Functions dependency install. The immutable
+  partial receipt is retained; the provider-acceptance window did not establish
+  a deployment or payment result, and a fresh published/qualified SHA is
+  required. Candidate preflight now verifies that dependency tree before
+  receipt reservation or provider mutation. Production remains unchanged.
 
 - Whole-candidate local qualification now passes across the synchronized
   Workbench, Calendar-first Operations, Now, Library, internal Client 360, and

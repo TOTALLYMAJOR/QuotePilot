@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-03 15:59:15 CDT
+Last updated: 2026-09-05 09:12:00 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -171,8 +171,11 @@ explicit owner promotion after real-run review.
    `not-applicable` for `none` or Twilio. Portal projection backfill is separate
    source/data-operation acceptance, not deployment-target evidence.
    Use `npm run release:candidate:deploy` only from the clean, published
-   `release/vX.Y.Z` head with its exact successful CI run. The command is fixed
-   to the isolated Firebase staging identity or the `quoteflow` Vercel preview
+   `release/vX.Y.Z` head with its exact successful CI run. The command requires
+   a complete root and Functions dependency install; Firebase-all preflight
+   verifies the Functions production dependency tree before receipt reservation
+   or provider mutation, with `npm ci --prefix functions` as the bounded repair.
+   It is fixed to the isolated Firebase staging identity or the `quoteflow` Vercel preview
    project, requires a SHA-bound confirmation, and records a hosted source/gate
    manifest plus provider deployment id. The receipt path is reserved before
    mutation and retains failed or partial outcomes. Hosted manifest equality is

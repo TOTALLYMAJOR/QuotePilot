@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-05 02:28:23 CDT
+Last updated: 2026-09-05 09:12:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Hardened governed Firebase candidate deployment so a complete Functions
+  production dependency tree is verified before receipt reservation or any
+  provider mutation. The first `v0.17.0` provider-profile attempt at
+  `bba03f05cbb582ba3084b95f3a7b79e91be963f5` reached the guarded local Firebase
+  CLI boundary without `functions/node_modules`, retained its immutable partial
+  receipt, and requires a fresh published and CI-qualified SHA. The bounded
+  recovery is `npm ci --prefix functions`; no payment result or provider
+  acceptance is inferred from the failed attempt.
 - Synchronized final acceptance expectations with the selected Operations and
   Clients compositions without changing runtime behavior or authority. The
   exact Now-to-Calendar test now addresses the focused event by its accessible

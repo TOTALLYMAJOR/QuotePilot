@@ -30,6 +30,7 @@ import {
   isEnabledFirebaseSecretVersion,
   providerRequestHeaders,
   resolveGitHubToken,
+  validateFunctionsDependencyInstall,
   validateHostedManifest,
   vercelAutomationBypassToken,
   vercelDeploymentPayload
@@ -116,6 +117,31 @@ describe("governed release candidate deployment", () => {
         throw new Error("provider-specific authentication output");
       }
     })).toThrow(/GITHUB_TOKEN, GH_TOKEN, or an authenticated GitHub CLI session/i);
+  });
+
+  test("rejects an incomplete Functions dependency install before provider work", () => {
+    expect(validateFunctionsDependencyInstall({
+      root: "/tmp/quotepilot-release-fixture",
+      inspect: (_command, args) => ({
+        status: 0,
+        stdout: JSON.stringify({
+          dependencies: {
+            "firebase-functions": { version: "7.3.2" }
+          }
+        }),
+        args
+      })
+    })).toMatchObject({
+      source: "npm dependency tree",
+      packageName: "firebase-functions",
+      version: "7.3.2"
+    });
+    expect(() => validateFunctionsDependencyInstall({
+      inspect: () => ({ status: 1, stdout: "{}" })
+    })).toThrow(/npm ci --prefix functions/i);
+    expect(() => validateFunctionsDependencyInstall({
+      inspect: () => ({ status: 0, stdout: "{}" })
+    })).toThrow(/firebase-functions is unavailable/i);
   });
 
   test("binds Firebase Rules user-ADC requests to the fixed staging quota project", () => {
@@ -236,6 +262,7 @@ describe("governed release candidate deployment", () => {
     );
     const rulesPreflightOffset = source.lastIndexOf("await readFirebaseRulesReleases(firebaseRulesAccessToken)");
     const vercelPreflightOffset = source.lastIndexOf("await validateVercelProjectAccess(vercelToken)");
+    const functionsDependencyOffset = source.lastIndexOf("validateFunctionsDependencyInstall()");
     const reserveOffset = source.lastIndexOf("reservation = reserveCandidateReceipt");
     const mutationOffset = source.indexOf("attempt.providerMutationAttempted = true");
     const firebaseMutation = source.slice(mutationOffset, source.indexOf("response = parseJsonOutput", mutationOffset));
@@ -246,6 +273,8 @@ describe("governed release candidate deployment", () => {
     expect(reserveOffset).toBeGreaterThan(providerSafeOffOffset);
     expect(reserveOffset).toBeGreaterThan(rulesPreflightOffset);
     expect(reserveOffset).toBeGreaterThan(vercelPreflightOffset);
+    expect(functionsDependencyOffset).toBeGreaterThan(0);
+    expect(reserveOffset).toBeGreaterThan(functionsDependencyOffset);
     expect(firebaseMutation).toContain("capture(firebaseCliPath");
     expect(firebaseMutation).not.toContain('capture("npx"');
     expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
