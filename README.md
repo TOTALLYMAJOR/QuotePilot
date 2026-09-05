@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-05 18:13:08 CDT
+Last updated: 2026-09-05 18:41:41 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -1525,10 +1525,10 @@ This launches fresh Auth, Firestore and Functions emulators, verifies all four
 workflow packs, seeds synthetic staff sign-in and starts the real app at
 `http://127.0.0.1:4174/app`. Java and the repository Firebase tooling are required;
 the configured emulator ports and port 4174 must be free. Use
-`event-admin@local.test` or `event-sales@local.test` with the intentionally public,
-emulator-only password `LocalRehearsal-Only-2026!`. Ordinary authentication and
-role checks remain active. Ctrl+C stops the rehearsal; restarting creates a fresh
-disposable fixture. Do not use these synthetic credentials in hosted systems.
+`event-admin@local.test` or `event-sales@local.test` with the emulator-only
+password printed by the launcher. A fresh password is generated for each
+disposable session. Ordinary authentication and role checks remain active. Ctrl+C
+stops the rehearsal; restarting creates a fresh disposable fixture. Do not use these synthetic credentials in hosted systems.
 
 If catalog onboarding appears, choose **Explore the workspace** as administrator.
 The verified rehearsal prepares a named event type and menu category before

@@ -1,10 +1,15 @@
 # Changelog
 
-Last updated: 2026-09-05 18:13:08 CDT
+Last updated: 2026-09-05 18:41:41 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — QP-TOM review preparation
+
+- Generate a fresh local-emulator login password for each disposable rehearsal
+  session, retaining the fixed demo-project and localhost checks.
 
 ## Unreleased — QP-TOM local whole-app rehearsal
 

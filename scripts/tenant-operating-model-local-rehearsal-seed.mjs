@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Adds synthetic sign-in/display fixtures and native-planned local acceptance/booking after the real matrix.
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -38,8 +39,8 @@ export async function seedRehearsal() {
   const settings = (await org.collection('settings').doc('config').get()).data();
   assert.equal(settings?.eventOperatingSpineEnabled, true);
   assert.equal(settings?.commercialChangeAuthorityEnabled, true);
-  // This password is intentionally public and accepted only against demo emulators.
-  const password = 'LocalRehearsal-Only-2026!';
+  // Generate a fresh credential for this disposable emulator session only.
+  const password = randomBytes(24).toString('base64url');
   for (const [email, role] of [['event-admin@local.test', 'admin'], ['event-sales@local.test', 'sales']]) {
     const user = await auth.getUserByEmail(email);
     assert.equal(user.customClaims?.organizationId, organizationId);
