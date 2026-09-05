@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-09-02 20:08:21 CDT
+Last updated: 2026-09-05 17:00:23 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -65,6 +65,7 @@ separate from release publication, and dormant gates remain off.
 | 15 | `QP-ATTEND-015` — attendance persistence and confirmation bridge | Row 60 attendance source note; attendance ADR Slice B onward | Direct terminology/channel research; accepted migration and authority plan; unchanged exact `event.guests`; existing Commercial Change receipts | Versioned planning/confirmation evidence persists with source/actor/time; legacy reads remain valid; differing confirmed counts remain proposed until exact-revision apply; BEO/closeout freshness stays separate; portal, rules, role, tenant, and browser acceptance pass | `blocked on product/human decisions`; read-only Slice A/C is complete locally |
 | 16 | `QP-PWA-016` — qualify the installable safe recovery shell | Row 62 | Repository manifest, cache namespace, asset allowlist, navigation fallback, responsive recovery, and production-preview proof complete; exact deployment and supported test devices remain | On the exact hosted candidate, supported desktop/mobile browsers install and relaunch; offline navigation reaches the truthful recovery page; reconnect succeeds; no authenticated data or trusted mutation is represented as offline-capable | Repository slice complete; exact deployment, hosted install/relaunch, and physical-device acceptance are `human/external` |
 | 17 | `QP-AUDIT-017` — complete optional cross-surface security/audit depth | Row 21 plus row 63 Operations Audit | Bounded taxonomy, retention/privacy boundary, server receipt authority, tenant/role visibility, and legacy-event compatibility are implemented locally | Final quote approvals and organization role changes have server-owned, tenant-scoped, role-stamped immutable receipt projections; Operations Audit exposes only bounded safe fields; replay, failed execution, foreign-tenant rejection, retention, truncation, and export/clear policy tests pass | Repository slice complete; deployment, authenticated hosted role/tenant denial, production-data review, and human acceptance are `human/external`; provider-derived outcomes remain separately evidenced |
+| 18 | `QP-TOM-020` — Tenant Operating Model packs and pilot | Event Operating Spine, Configuration Studio and four bounded domain packs are implemented locally; real pilot and release evidence remain open | Accepted Phase 0 ADR and fixed workflow vocabulary; owner-approved policy allowlist, role matrix, migration rule, founder-pilot boundary, and offline decision; fresh sibling worktree | Every instance pins an immutable tenant workflow version and exact subject revisions; existing domain authorities remain authoritative; at least three bounded workflow packs reuse the execution contract; one tenant pilot proves role/tenant denial, replay, rollback, operator comprehension, and separately labeled evidence | Source through Phase 4 is implemented in the isolated worktree; see [current status](PROJECT_STATUS.md#tenant-operating-model-local-development) and [program plan](docs/plans/20260905-tenant-operating-model.md). Remaining: real tenant migration decisions, bounded pilot, commit/release qualification and separately evidenced hosted/human outcomes. |
 
 `QP-OBS-018` is the implemented source/local cross-cutting control before
 additional provider promotion work. Its deterministic commands and advisory CI
@@ -312,6 +313,19 @@ replace their safety conditions.
 - Deploy the environment-only Functions configuration candidate through an
   exact coordinated backend release and verify runtime readback before March
   2027. Source no longer reads `functions.config()`; deployment remains open.
+
+## P1 - Tenant Operating Model Program
+
+- Select the real tenant, explicit event cohort and operator for the
+  [pilot acceptance matrix](docs/acceptance/tenant-operating-model.md). Record
+  connectivity needs and baseline effort where observable.
+- Review tenant-scoped migration inventory and initialize only approved exact
+  current sources. Retain unknown historical evidence without synthesis.
+- Complete moderated role/tenant, recovery, rollback and comprehension evidence,
+  then record an explicit continue/revise/pause decision.
+- Qualify an exact committed candidate and separately authorize publication,
+  deployment and tenant activation. Hosted behavior, provider outcomes, human
+  acceptance, adoption and customer impact remain distinct proof gates.
 
 ## P1 - Ambient Intelligence Interface Program
 

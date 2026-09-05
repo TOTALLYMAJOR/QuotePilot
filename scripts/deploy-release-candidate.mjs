@@ -11,6 +11,8 @@ import {
   RELEASE_CANDIDATE_POLICY,
   RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
   RELEASE_CANDIDATE_UAT_PROFILE,
+  RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE,
+  candidateEventSpineRequirements,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   candidateFunctionsRuntimeExpected,
   candidateReceiptRelativePath,
@@ -294,7 +296,7 @@ function validateFunctionsEnvironmentFile(candidateProfile) {
   );
 }
 
-function writeCandidateManifest(
+export function writeCandidateManifest(
   outputDirectory,
   releaseSha,
   ciRunId,
@@ -317,7 +319,12 @@ function writeCandidateManifest(
       candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
     buyerAccessServerEnabled: functionsGates.BUYER_ACCESS_ENABLED === "true",
     emailProvider: functionsGates.NOTIFICATIONS_EMAIL_PROVIDER,
-    quotePaymentMode: functionsGates.STRIPE_MODE
+    quotePaymentMode: functionsGates.STRIPE_MODE,
+    ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? {
+      eventOperatingSpineBrowserEnabled: true,
+      eventOperatingSpineAuthorityEnabled: functionsGates.EVENT_OPERATING_SPINE_ENABLED === "true",
+      rolloutRequirements: candidateEventSpineRequirements(candidateProfile)
+    } : {})
   };
   fs.writeFileSync(
     path.join(outputDirectory, "release-candidate.json"),
@@ -606,7 +613,8 @@ async function deployFirebase({
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:
         candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
       VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY_CONFIGURED:
-        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { VITE_EVENT_OPERATING_SPINE_ENABLED: true } : {})
     },
     serverGates: functionsGates
   };
@@ -936,8 +944,10 @@ async function deployVercel({
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:
         candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
       VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY_CONFIGURED:
-        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { VITE_EVENT_OPERATING_SPINE_ENABLED: true } : {})
     },
+    ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { serverGates: functionsGates } : {}),
     dependencies: {
       firebaseFunctions: stagingBackendEvidence
     }

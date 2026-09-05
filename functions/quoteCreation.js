@@ -444,6 +444,46 @@ function sanitizeTime(value) {
   return candidate;
 }
 
+// Reviewed planning is evidence beside the exact pricing input. The callable
+// supplies provenance; a form cannot claim customer confirmation or application.
+function sanitizeAttendancePlanning(value, commercialCount) {
+  if (value === undefined) return undefined;
+  const keys = ["kind", "value", "min", "max", "sourceType"];
+  const count = (number) => Number.isInteger(number) && number >= 1 && number <= 400;
+  if (!isRecord(value) || Object.keys(value).length !== keys.length
+    || keys.some((key) => !Object.hasOwn(value, key))
+    || value.sourceType !== "staff_intake"
+    || !["exact", "approximate", "range"].includes(value.kind)
+    || !count(value.value) || value.value !== commercialCount) {
+    throw new QuoteCreationError("invalid-argument", "Reviewed attendance planning must match the exact priced count and contain only supported planning fields.");
+  }
+  const bounded = count(value.min) && count(value.max)
+    && value.min < value.max && value.min <= value.value && value.value <= value.max;
+  const unbounded = value.min === null && value.max === null;
+  if ((value.kind === "exact" && !unbounded)
+    || (value.kind === "range" && !bounded)
+    || (value.kind === "approximate" && !unbounded && !bounded)) {
+    throw new QuoteCreationError("invalid-argument", "Attendance planning bounds must reflect the reviewed evidence.");
+  }
+  return Object.fromEntries(keys.map((key) => [key, value[key]]));
+}
+
+function buildReviewedAttendancePlanning({ planning, commercialCount, quoteId, versionId, actorUid, nowISO }) {
+  const reviewed = sanitizeAttendancePlanning(planning, commercialCount);
+  if (!reviewed) return undefined;
+  const sourceReferenceId = `${quoteId}:${versionId}:planning`;
+  return {
+    schemaVersion: 1,
+    planning: { ...reviewed, sourceReferenceId, observedAtISO: nowISO, recordedByUid: actorUid },
+    confirmation: {
+      state: "not_requested", requestedAtISO: "", dueDate: "", submittedCount: null,
+      sourceType: "", sourceReferenceId: "", submittedAtISO: "", submittedByRole: "",
+      appliedRevisionId: "", commercialChangeReceiptId: ""
+    },
+    commercialBasis: { source: "planning", sourceReferenceId, appliedRevisionId: versionId }
+  };
+}
+
 function sanitizeQuoteCreationRequest(data = {}) {
   const root = isRecord(data) ? data : {};
   const rawForm = isRecord(root.form)
@@ -490,6 +530,7 @@ function sanitizeQuoteCreationRequest(data = {}) {
       venue: text(rawForm.venue, 240),
       venueAddress: text(rawForm.venueAddress, 500),
       guests: integerInRange(rawForm.guests, 0, 0, 100_000),
+      ...(rawForm.attendancePlanning !== undefined ? { attendancePlanning: sanitizeAttendancePlanning(rawForm.attendancePlanning, integerInRange(rawForm.guests, 0, 0, 100_000)) } : {}),
       hours: numberInRange(rawForm.hours, 0, 0, 72),
       servers: integerInRange(rawForm.servers, 0, 0, 1_000),
       chefs: integerInRange(rawForm.chefs, 0, 0, 1_000),
@@ -1732,6 +1773,7 @@ function buildTrustedQuoteCreationDocuments({
     provider: crmProvider
   };
 
+  const attendance = buildReviewedAttendancePlanning({ planning: form.attendancePlanning, commercialCount: integerInRange(pricingEvent.guests, 0, 0, 100_000), quoteId: id, versionId: QUOTE_VERSION_ID, actorUid, nowISO: createdAtISO });
   const quote = {
     quoteNumber: number,
     customer: {
@@ -1759,6 +1801,7 @@ function buildTrustedQuoteCreationDocuments({
       venue: text(pricingEvent.venue, 240),
       venueAddress: text(pricingEvent.venueAddress, 500),
       guests: integerInRange(pricingEvent.guests, 0, 0, 100_000),
+      ...(attendance ? { attendance } : {}),
       hours: numberInRange(pricingEvent.hours, 0, 0, 72),
       servers: integerInRange(pricingEvent.servers, 0, 0, 1_000),
       chefs: integerInRange(pricingEvent.chefs, 0, 0, 1_000),
@@ -1920,6 +1963,45 @@ function buildTrustedQuoteCreationDocuments({
   };
 }
 
+// This parameter is supplied only by the transaction that verifies the private
+// attendance journal and Commercial Change receipt chain. It is never a form field.
+function validateAttendanceAmendmentBinding(binding, { quoteId, source, form, pricing, applyReceiptId }) {
+  if (binding === undefined) {
+    if (applyReceiptId !== undefined) throw new QuoteCreationError("invalid-argument", "An amendment receipt requires its verified source binding.");
+    return null;
+  }
+  const keys = ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", "submissionReceiptId", "submissionReceiptDigest", "count"];
+  const opaque = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,179}$/;
+  if (!isRecord(binding) || Object.keys(binding).length !== keys.length
+    || keys.some((key) => !Object.hasOwn(binding, key))
+    || keys.filter((key) => !["count", "submissionReceiptDigest"].includes(key)).some((key) => typeof binding[key] !== "string" || !opaque.test(binding[key]))
+    || typeof binding.submissionReceiptDigest !== "string" || !/^[a-f0-9]{64}$/.test(binding.submissionReceiptDigest)
+    || !Number.isInteger(binding.count) || binding.count < 1 || binding.count > 400
+    || !["accepted", "booked"].includes(source.status)
+    || binding.organizationId !== source.organizationId || binding.quoteId !== quoteId
+    || binding.sourceVersionId !== source.activeVersionId
+    || binding.acceptanceReceiptId !== source.acceptanceReceipt?.receiptId
+    || binding.count !== Number(form.guests) || binding.count !== pricing?.inputs?.event?.guests
+    || (applyReceiptId !== undefined && (typeof applyReceiptId !== "string" || !/^ccp_[a-f0-9]{48}$/.test(applyReceiptId)))) {
+    throw new QuoteCreationError("failed-precondition", "Attendance amendment requires the exact accepted source, submitted count and verified commercial receipt binding.");
+  }
+  const originalForm = buildDuplicateQuoteForm(source);
+  const proposedForm = sanitizeQuoteCreationRequest({ form: { ...form, attendancePlanning: undefined } }).form;
+  delete originalForm.guests;
+  delete proposedForm.guests;
+  if (JSON.stringify(originalForm) !== JSON.stringify(proposedForm)) {
+    throw new QuoteCreationError("failed-precondition", "Attendance amendments may change only the reviewed guest count. Review other changes separately.");
+  }
+  return {
+    schemaVersion: 1,
+    sourceVersionId: binding.sourceVersionId,
+    acceptanceReceiptId: binding.acceptanceReceiptId,
+    submissionReceiptId: binding.submissionReceiptId,
+    applyReceiptId: applyReceiptId || "",
+    requiresAcceptance: true
+  };
+}
+
 function buildTrustedQuoteEditDocuments({
   quoteId,
   quote,
@@ -1930,7 +2012,9 @@ function buildTrustedQuoteEditDocuments({
   catalogSource,
   catalog = null,
   settings,
-  nowISO
+  nowISO,
+  attendanceAmendmentBinding = undefined,
+  attendanceAmendmentApplyReceiptId = undefined
 } = {}) {
   const id = sanitizeIdentifier(quoteId);
   const source = isRecord(quote) ? quote : {};
@@ -1963,13 +2047,14 @@ function buildTrustedQuoteEditDocuments({
       "Staff role required to edit quotes."
     );
   }
-  if (!["draft", "sent", "viewed"].includes(sourceStatus)) {
+  const attendanceAmendment = validateAttendanceAmendmentBinding(attendanceAmendmentBinding, { quoteId: id, source, form, pricing, applyReceiptId: attendanceAmendmentApplyReceiptId });
+  if (!attendanceAmendment && !["draft", "sent", "viewed"].includes(sourceStatus)) {
     throw new QuoteCreationError(
       "failed-precondition",
       "Only draft, sent, or viewed quotes can be edited. Reopen or duplicate another quote first."
     );
   }
-  if (hasTerminalDecisionEvidence(source)) {
+  if (!attendanceAmendment && hasTerminalDecisionEvidence(source)) {
     throw new QuoteCreationError(
       "failed-precondition",
       "Accepted, declined, booked, paid, or refunded quote evidence cannot be overwritten."
@@ -1997,6 +2082,12 @@ function buildTrustedQuoteEditDocuments({
     999_999
   ) + 1;
   const versionId = `v${String(nextVersionNumber).padStart(4, "0")}`;
+  if (form.attendancePlanning !== undefined) {
+    canonical.quote.event.attendance = buildReviewedAttendancePlanning({ planning: form.attendancePlanning,
+      commercialCount: canonical.quote.event.guests, quoteId: id, versionId, actorUid, nowISO: editedAtISO });
+  } else if (source.event?.attendance && source.event.guests === canonical.quote.event.guests) {
+    canonical.quote.event.attendance = JSON.parse(JSON.stringify(source.event.attendance));
+  }
   const versionMeta = {
     versionId,
     versionNumber: nextVersionNumber,
@@ -2006,7 +2097,7 @@ function buildTrustedQuoteEditDocuments({
       email: actorEmail,
       role: actorRole
     },
-    reason: "quote_edit"
+    reason: attendanceAmendment ? "attendance_amendment" : "quote_edit"
   };
   const sourceLifecycle = isRecord(source.lifecycle) ? source.lifecycle : {};
   const lifecycle = {
@@ -2037,7 +2128,7 @@ function buildTrustedQuoteEditDocuments({
   const integrations = isRecord(source.integrations)
     ? source.integrations
     : canonical.quote.integrations;
-  const portalDecision = isRecord(source.portalDecision)
+  const portalDecision = attendanceAmendment ? {} : isRecord(source.portalDecision)
     ? source.portalDecision
     : {};
   const ownerUid = sanitizeIdentifier(source.ownerUid);
@@ -2080,6 +2171,7 @@ function buildTrustedQuoteEditDocuments({
     latestVersionNumber: nextVersionNumber,
     versionMeta,
     ...(rebooking ? { rebooking } : {}),
+    ...(attendanceAmendment ? { attendanceAmendment, acceptanceReceipt: null } : {}),
     updatedAtISO: editedAtISO
   };
   // Fresh recompute when the caller holds the org catalog (the normal
@@ -2122,7 +2214,8 @@ function buildTrustedQuoteEditDocuments({
     activeVersionId: versionId,
     latestVersionNumber: nextVersionNumber,
     versionMeta,
-    ...(rebooking ? { rebooking } : {})
+    ...(rebooking ? { rebooking } : {}),
+    ...(attendanceAmendment ? { attendanceAmendment, acceptanceReceipt: null } : {})
   };
   const version = {
     versionId,
@@ -2150,6 +2243,7 @@ function buildTrustedQuoteEditDocuments({
       quoteId: id,
       quoteNumber,
       status: "draft",
+      ...(attendanceAmendment ? { attendanceAmendment } : {}),
       portalKey,
       portalIssuedAtISO: editedQuote.portalIssuedAtISO,
       portalExpiresAtISO: editedQuote.portalExpiresAtISO,

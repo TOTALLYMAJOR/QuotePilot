@@ -489,10 +489,16 @@ function DisclosureFacts({ items }) {
   );
 }
 
+const QuoteAttendancePanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./QuoteAttendancePanel")) : null;
+
 const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   quote,
   source,
   ordinaryEditAllowed = false,
+  attendanceEnabled = false,
+  attendanceReviewAllowed = false,
+  principalId = "",
   conversationAvailable = false,
   pricingPreviewAvailable = false,
   pricingMargin = null,
@@ -4077,6 +4083,16 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           className="ambient-context-content ambient-attendance-context"
           data-attendance-state={attendanceView.stateId.toLowerCase()}
         >
+          {guestOpen && QuoteAttendancePanel && attendanceEnabled && ["accepted", "booked"].includes(quote?.status) && (
+            <Suspense fallback={<p role="status">Loading final guest count...</p>}>
+              <QuoteAttendancePanel organizationId={ambientContext?.organizationId} quoteId={quote?.id} principalId={principalId}
+                role={ambientRole} enabled={attendanceEnabled} source={source}
+                sourceVersionId={quote?.activeVersionId || quote?.versionMeta?.versionId || ""}
+                acceptanceReceiptId={quote?.acceptanceReceipt?.receiptId || ""}
+                onStageCommercialChange={attendanceReviewAllowed && typeof onEditQuote === "function"
+                  ? submission => onEditQuote(quote, { attendanceSubmission: submission }) : undefined} />
+            </Suspense>
+          )}
           <dl className="ambient-attendance-strip" data-tone={attendanceView.tone}>
             <div data-attendance-dimension="commercial-basis">
               <dt>Saved priced count</dt>

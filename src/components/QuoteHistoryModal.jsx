@@ -871,6 +871,7 @@ export function QuoteHistoryView({
   currentUserUid = "",
   currentUserEmail = "",
   currentUserRole = "customer",
+  attendanceEnabled = false,
   tenantTimeZone = "",
   focusQuoteId = "",
   focusAction = "",
@@ -2735,6 +2736,9 @@ export function QuoteHistoryView({
                 ref={savedQuoteHandoffRef}
                 quote={focusedQuote}
                 source={state.source}
+                attendanceEnabled={attendanceEnabled}
+                attendanceReviewAllowed={attendanceEnabled && permissions.canEditQuote && ["accepted", "booked"].includes(focusedQuoteStatus) && !focusedDelivery.mutationLocked}
+                principalId={currentUserUid}
                 ordinaryEditAllowed={ordinaryEditAllowed}
                 conversationAvailable={conversationAvailable}
                 ambientPricingCatalog={ambientPricingCatalog}

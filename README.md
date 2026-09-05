@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-05 17:45:01 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -1442,3 +1442,73 @@ the primary targets.
 - Current operational state: [PROJECT_STATUS.md](PROJECT_STATUS.md)
 - Prioritized backlog: [DEV_TASKS.md](DEV_TASKS.md)
 - Change history: [CHANGELOG.md](CHANGELOG.md)
+
+### Event Operating Spine local acceptance
+
+The default-off `QP-TOM-020-A/B/C/D` phase, operator-work, declared-actuals and Replay slices share a disposable
+acceptance harness:
+
+```bash
+env -u DEBUG EVENT_OPERATING_SPINE_ENABLED=true npx firebase-tools --config firebase.e2e.json --project demo-event-operating-spine emulators:exec --only auth,firestore,functions "node scripts/event-operating-spine-emulator-acceptance.mjs"
+```
+
+This command must use the explicit `demo-event-operating-spine` emulator
+project. It creates synthetic local data only. The
+[Tenant Operating Model ADR](docs/TENANT_OPERATING_MODEL_ADR.md) owns the role,
+source, policy, online-only and rollout boundaries. Runtime and tenant gates
+remain off outside this disposable check; a passing harness does not activate
+a tenant or authorize deployment.
+
+For a local build of the actual Ambient Control Room and its default-off event
+panels, use all three build switches:
+
+```bash
+VITE_AMBIENT_UI_ENABLED=true VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true VITE_EVENT_OPERATING_SPINE_ENABLED=true npm run build -- --outDir output/tom-enabled-build
+```
+
+The default compatibility build selects the legacy application. Enabling only
+the event switch does not validate the Ambient event panels. The build switches
+do not enable server or tenant mutation authority.
+
+
+### Workflow configuration local acceptance
+
+The default-off tenant workflow Studio and event coordinator use the same
+Event Operating Spine environment and tenant gates. The disposable local
+acceptance script is `scripts/workflow-configuration-emulator-acceptance.mjs`.
+It accepts only demo projects and loopback emulator hosts and exercises real
+configuration/instance transactions. Runtime publication never enables a gate.
+See [Configuration Studio](docs/USER_MANUAL.md#tenant-workflow-configuration-studio)
+and the [accepted execution contract](docs/TENANT_OPERATING_MODEL_ADR.md#slices-e-and-f--versioned-coordination-and-configuration-studio).
+
+
+## Tenant Workflow Migration Inventory
+
+`scripts/event-workflow-migration-inventory.mjs` reads an explicitly named local
+private input bundle and emits a bounded advisory inventory:
+
+```bash
+node scripts/event-workflow-migration-inventory.mjs --input /secure/path/offline-proof.json > /tmp/tenant-workflow-inventory.json
+```
+
+Schema 2 inputs name one organization and an explicit four-pack subject cohort,
+with current source/native proof, retained publication/instance receipts and
+separate server/tenant gate observations. Inputs must be regular JSON files no
+larger than 16 MiB. The tool fails closed if proof cannot be verified. It has no network,
+credentials, application writes or apply mode. Keep private source bundles out
+of version control; exported inventory contains safe scope IDs, digests, pins
+and classifications. See the script's argument validation and the
+[Tenant Operating Model ADR](docs/TENANT_OPERATING_MODEL_ADR.md#phase-5--local-inventory-and-release-preparation)
+for source and proof boundaries. A report does not authorize migration; runtime
+commands recheck the current source and policy.
+
+The release tooling accepts the isolated `staging-event-operating-spine`
+profile for a deliberately selected candidate. It binds server and browser
+EventSpine flags and server Commercial Change Authority enforcement. EventSpine
+and Commercial Change each retain a separate tenant activation prerequisite;
+neither is enabled by publication or a candidate manifest. Existing
+release profiles retain their default-off contracts. Preparing or validating a
+candidate manifest does not deploy it, select a real tenant, activate a provider
+or establish operator acceptance. The real pilot tenant, bounded cohort,
+walkthrough and baseline remain explicit completion requirements. Use the
+[bounded pilot acceptance matrix](docs/acceptance/tenant-operating-model.md).

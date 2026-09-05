@@ -1,8 +1,8 @@
 # Attendance State and Confirmation Architecture Decision
 
-Last updated: 2026-08-28 18:12:02 CDT
+Last updated: 2026-09-05 16:46:47 CDT
 
-Status: Accepted direction; phased implementation required
+Status: Accepted; Slices A–E implemented in the isolated Tenant Operating Model source; actual-attendance Slice F remains open
 
 ## Context
 
@@ -270,11 +270,16 @@ foundation commit adds no user-facing consumer or persistence path, so new
 planning/confirmation envelopes and their presentation still require later
 slices.
 
-### Slice B — Persist reviewed planning evidence
+### Slice B — Persist reviewed planning evidence (implemented source/local)
 
-Carry CREATE's exact/approximate/range metadata into the versioned quote through
-the existing trusted draft write. Add schema validation, Firestore/rules tests,
-capability traceability, Feature Matrix, User Manual, and UI states.
+CREATE's reviewed exact/approximate/range metadata now enters the existing
+trusted draft write through five bounded planning fields. The server stamps
+actor, observation time and immutable version identity; clients cannot claim
+customer confirmation. Approximate counts may have both bounds null. Explicit
+ranges must contain the exact reviewed pricing count. An unchanged draft edit
+can preserve source evidence; duplicate creation does not carry old confirmation.
+Local fallback is separately labeled by local provenance. Quote versioning,
+forged field, source/count, legacy and fallback regressions are covered locally.
 
 ### Slice C — Living Opportunity attendance strip (implemented source/local)
 
@@ -288,19 +293,29 @@ read, adds no callable or duplicate I/O, rejects stale, error, loading, and
 mismatched timing evidence, and routes only an exact task to its existing
 Workflow destination. Navigation does not resolve the task or alter the quote.
 Malformed future envelopes retain the priced count and render a bounded review
-state. New planning/confirmation persistence remains Slice B/D work.
+state. The implemented planning and confirmation paths are described below.
 
-### Slice D — Customer confirmation request and response
+### Slice D — Customer confirmation request and response (implemented source/local)
 
-Add idempotent callable-owned request/submission receipts and a bounded portal
-questionnaire. No direct quote mutation.
+The callable-owned private journal stores exact accepted-source requests and
+customer/staff response receipts. The current activated portal exposes the
+bounded questionnaire; staff record responses through the Guest count inspector.
+Request creation does not send a message. Receipt replay preserves the original
+identity; source replacement, wrong tenant and stale portal issuance fail closed.
+The response does not mutate the quote or establish actual attendance.
 
-### Slice E — Commercial true-up
+### Slice E — Commercial true-up (implemented source/local)
 
-Route a differing submitted count through existing simulation, approval, apply,
-version, receipt, and dependency invalidation.
+The reviewed response binds an immutable submission receipt to existing
+Commercial Change simulation, approval, apply, version and invalidation. Tenant
+policy adds approval constraints without weakening the existing approval floor.
+An explicit matching-count apply also creates a new version. An accepted/booked
+attendance amendment becomes a draft requiring renewed customer acceptance and
+administrator booking review; original acceptance, booking and payment evidence
+remain historical and unchanged. The versioned attendance envelope records the
+actual apply receipt. No automatic charge, send or new acceptance occurs.
 
-### Slice F — Operational and actual attendance
+### Slice F — Operational and actual attendance (not implemented by this program)
 
 Expose count/revision freshness on staffing/BEO/run-of-show surfaces and record
 actual attendance through post-event closeout.
@@ -352,3 +367,13 @@ actual attendance through post-event closeout.
 - Legacy quotes degrade honestly without invented confirmation.
 - Mobile/desktop, keyboard, screen-reader, hosted, provider, production, and
   human-acceptance evidence remain separately reported.
+
+
+## Tenant Operating Model integration
+
+The [Tenant Operating Model ADR](TENANT_OPERATING_MODEL_ADR.md#attendance-planning-and-customer-response)
+owns the bounded request/response pack now being integrated. Pending responses
+live in a separate immutable journal; the versioned envelope continues to
+represent reviewed planning and applied commercial evidence. A policy reference
+is not an unresolved Decision Debt item. Actual attendance and provider delivery
+remain separate evidence domains, with missing evidence explicitly retained.

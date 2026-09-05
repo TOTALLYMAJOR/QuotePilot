@@ -7,6 +7,7 @@ import CommercialChangeImpactPanel, {
   buildCommercialChangeImpactPanelState
 } from "../CommercialChangeImpactPanel";
 import { COMMERCIAL_CHANGE_IMPACT_BOUNDARY } from "../../lib/commercialChangeImpact";
+import { buildUnifiedCommercialConsequenceReview } from "../../lib/unifiedCommercialConsequenceReview";
 
 const APP_SOURCE = readFileSync(
   fileURLToPath(new URL("../../App.jsx", import.meta.url)),
@@ -467,5 +468,38 @@ describe("CommercialChangeImpactPanel", () => {
     expect(FUNCTIONS_SOURCE).toContain("exports.reconcileCommercialQuoteChangeApplyOutcome =");
     expect(FUNCTIONS_SOURCE).toContain("commercialChangeAuthority.buildApply(");
     expect(FUNCTIONS_SOURCE).toContain("persistCommercialChangeApply({");
+  });
+});
+
+
+describe("published commercial approval review", () => {
+  test("preserves unified consequence choices alongside bound attendance review", () => {
+    const model = simulation({ attendanceBinding: { count: 175 }, workflowPolicy: null, approvalEvaluation: { absoluteTotalDeltaCents: 0, impactApprovalRequired: false, thresholdApprovalRequired: false } });
+    const unifiedReview = buildUnifiedCommercialConsequenceReview({ model, recommendations: [], catalogRevision: 4 });
+    const html = renderToStaticMarkup(<CommercialChangeImpactPanel model={model} unifiedReview={unifiedReview} authorityState="enforced" authorizationRequired={false} scopeCurrent onApply={() => {}} onApplyAllConsequences={() => {}} onApplySelectedConsequences={() => {}} onKeepQuotedPlan={() => {}} />);
+    expect(html).toContain('data-capability-id="unified-commercial-consequence-review"');
+    expect(html).toContain("Keep quoted plan");
+    expect(html).toContain("Apply all");
+    expect(html).toContain("Apply reviewed guest count");
+    expect(html).toContain("This exact response remains proposed");
+    expect(APP_SOURCE).toMatch(/form: candidateForm,\s*\.\.\.\(attendanceChange \? \{ attendanceSubmissionReceiptId: attendanceChange\.submissionReceiptId \} : \{\}\)/);
+  });
+  test("shows inclusive zero threshold and participant role without exposing raw policy JSON", () => {
+    const model = simulation({ workflowPolicy: { definitionPin: { version: 2 }, approvalPolicy: { thresholdCents: 0, allowedRoles: ["admin", "sales"] } }, approvalEvaluation: { absoluteTotalDeltaCents: 0, impactApprovalRequired: false, thresholdApprovalRequired: true } });
+    const html = renderToStaticMarkup(<CommercialChangeImpactPanel model={model} />);
+    expect(html).toContain("Published version 2");
+    expect(html).toContain("$0.00 or more");
+    expect(html).toContain("meets or exceeds the published threshold");
+    expect(html).toContain("Administrator, Sales");
+    expect(html).not.toContain("absolute_total_delta_cents");
+  });
+  test("offers explicit reviewed attendance apply without an approval requirement and freezes uncertainty", () => {
+    const model = simulation({ attendanceBinding: { count: 175 }, workflowPolicy: null, approvalEvaluation: { absoluteTotalDeltaCents: 0, impactApprovalRequired: false, thresholdApprovalRequired: false } });
+    const render = props => renderToStaticMarkup(<CommercialChangeImpactPanel model={model} authorityState="enforced" authorizationRequired={false} scopeCurrent onApply={() => {}} {...props} />);
+    expect(render({})).toContain("Apply reviewed guest count");
+    expect(render({})).toContain("This exact response remains proposed");
+    expect(render({})).not.toContain("use the normal Save Changes");
+    expect(render({ mutationState: "uncertain", mutationKind: "apply", onReconcileApplyOutcome: () => {} })).toContain("Reconcile exact outcome");
+    expect(render({ mutationState: "uncertain", mutationKind: "apply" })).toContain("Apply outcome unresolved");
   });
 });

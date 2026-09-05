@@ -454,3 +454,9 @@ describe("post-event closeout mutation lifecycle", () => {
     expect(recordPostEventCloseoutReview).not.toHaveBeenCalled();
   });
 });
+
+test("closeout actuals source uses projected closeout references without current quote fallback", async () => {
+  const { closeoutActualsSource } = await import("../PostEventCloseoutReviewAction");
+  expect(closeoutActualsSource({ organizationId: "org-a", quoteId: "quote-a", activeVersionId: "current-version", acceptanceReceipt: { receiptId: "current-receipt" }, reviewedAction: { sourceVersionId: "closeout-version", acceptanceReceiptId: "closeout-receipt" } })).toEqual({ organizationId: "org-a", quoteId: "quote-a", sourceVersionId: "closeout-version", acceptanceReceiptId: "closeout-receipt" });
+  expect(closeoutActualsSource({ organizationId: "org-a", quoteId: "quote-a", activeVersionId: "current-version" }).sourceVersionId).toBe("");
+});

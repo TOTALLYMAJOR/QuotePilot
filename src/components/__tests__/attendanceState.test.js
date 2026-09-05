@@ -590,3 +590,10 @@ describe("attendance-state-v1", () => {
     );
   });
 });
+
+
+test("approximate evidence permits no invented bounds but rejects partial bounds", () => {
+  const result = deriveAttendanceState({ quote: quote({ event: { guests: 120, attendance: attendance({ planning: planning({ kind: "approximate", min: null, max: null }) }) } }) });
+  expect(result.planning).toMatchObject({ kind: "approximate", value: 120, min: null, max: null });
+  expect(() => deriveAttendanceState({ quote: quote({ event: { guests: 120, attendance: attendance({ planning: planning({ kind: "approximate", min: 110, max: null }) }) } }) })).toThrow(AttendanceStateError);
+});

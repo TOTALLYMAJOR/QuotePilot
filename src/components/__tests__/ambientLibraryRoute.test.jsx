@@ -111,9 +111,12 @@ function mount(props = {}) {
 }
 
 async function settleEditorOpen() {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 40));
-  });
+  await vi.waitFor(async () => {
+    // Arrival schedules a frame and a subsequent task; flush React and wait
+    // for the observable editor instead of assuming a frame fits in 40ms.
+    await act(async () => {});
+    expect(container.querySelector('[data-testid="catalog-editor"]')).not.toBeNull();
+  }, { timeout: 3000 });
 }
 
 describe("AmbientLibraryRoute", () => {
@@ -302,4 +305,17 @@ describe("AmbientLibraryRoute", () => {
     expect(container.querySelector('[data-library-action-id="review-library-menu"]').disabled).toBe(true);
     expect(container.querySelector('[data-testid="catalog-editor"]')).toBeNull();
   });
+});
+
+test("workflow Studio Library entry requires enabled connected administrator scope", () => {
+  mount({ principalId: "admin-one", workflowStudioEnabled: true, workflowSource: "firebase" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).not.toBeNull();
+  expect(container.querySelector('[data-library-record-id="workflow"] h3').textContent).toBe("Business workflows");
+  expect(container.querySelector('[data-library-record-id="workflow"]').textContent).toContain("quote approval, final guest count, event execution, and closeout follow-up");
+  mount({ principalId: "admin-one", workflowStudioEnabled: true, workflowSource: "firebase", currentUserRole: "sales" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).toBeNull();
+  mount({ principalId: "admin-one", workflowStudioEnabled: false, workflowSource: "firebase" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).toBeNull();
+  mount({ principalId: "admin-one", workflowStudioEnabled: true, workflowSource: "local" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).toBeNull();
 });

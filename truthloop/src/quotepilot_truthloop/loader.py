@@ -418,23 +418,18 @@ def _cost_basis(value: object) -> CostBasis:
 
 
 def _actual_consumption(value: object) -> ActualConsumption:
-    data = _mapping(value, "actualConsumption")
-    if not data:
+    if value is None:
         return ActualConsumption()
+    data = _mapping(value, "actualConsumption")
+    required = ("laborCostCents", "purchasingCostCents", "otherCostCents", "recordedAtISO")
+    if any(key not in data or data[key] is None for key in required):
+        raise BundleError("actualConsumption requires all three explicit cost totals and a recording timestamp.")
     return ActualConsumption(
         present=True,
-        labor_cost_cents=_cents(
-            data.get("laborCostCents"), "actualConsumption.laborCostCents"
-        ),
-        purchasing_cost_cents=_cents(
-            data.get("purchasingCostCents"), "actualConsumption.purchasingCostCents"
-        ),
-        other_cost_cents=_cents(
-            data.get("otherCostCents"), "actualConsumption.otherCostCents"
-        ),
-        recorded_at_iso=_iso(
-            data.get("recordedAtISO"), "actualConsumption.recordedAtISO"
-        ),
+        labor_cost_cents=_cents(data["laborCostCents"], "actualConsumption.laborCostCents"),
+        purchasing_cost_cents=_cents(data["purchasingCostCents"], "actualConsumption.purchasingCostCents"),
+        other_cost_cents=_cents(data["otherCostCents"], "actualConsumption.otherCostCents"),
+        recorded_at_iso=_iso(data["recordedAtISO"], "actualConsumption.recordedAtISO", required=True),
     )
 
 
@@ -442,26 +437,21 @@ def _overrun_thresholds(value: object) -> OverrunThresholds:
     data = _mapping(value, "overrunThresholds")
     if not data:
         return OverrunThresholds()
-    defaults = OverrunThresholds()
+    required = ("laborBasisPoints", "purchasingBasisPoints", "minimumCents", "declaredBy", "declaredAtISO")
+    if any(key not in data or data[key] is None for key in required):
+        raise BundleError("overrunThresholds requires explicit tolerances, a declaring actor, and a declaration timestamp.")
+    labor = _integer(data["laborBasisPoints"], "overrunThresholds.laborBasisPoints")
+    purchasing = _integer(data["purchasingBasisPoints"], "overrunThresholds.purchasingBasisPoints")
+    minimum = _cents(data["minimumCents"], "overrunThresholds.minimumCents")
+    actor = _text(data["declaredBy"], "overrunThresholds.declaredBy", required=True)
+    if labor > 10_000 or purchasing > 10_000 or minimum > 1_000_000_000 or len(actor) > 256:
+        raise BundleError("overrunThresholds exceeds the bounded comparison-policy limits.")
     return OverrunThresholds(
-        labor_basis_points=_sentinel_integer(
-            data,
-            "laborBasisPoints",
-            "overrunThresholds.laborBasisPoints",
-            defaults.labor_basis_points,
-        ),
-        purchasing_basis_points=_sentinel_integer(
-            data,
-            "purchasingBasisPoints",
-            "overrunThresholds.purchasingBasisPoints",
-            defaults.purchasing_basis_points,
-        ),
-        minimum_cents=_sentinel_integer(
-            data,
-            "minimumCents",
-            "overrunThresholds.minimumCents",
-            defaults.minimum_cents,
-        ),
+        labor_basis_points=labor,
+        purchasing_basis_points=purchasing,
+        minimum_cents=minimum,
+        declared_by=actor,
+        declared_at_iso=_iso(data["declaredAtISO"], "overrunThresholds.declaredAtISO", required=True),
     )
 
 
@@ -544,6 +534,15 @@ def load_record(value: object) -> CommercialRecord:
     """Build one ``CommercialRecord``, or raise ``BundleError``."""
     data = _mapping(value, "record")
     envelopes, values = _evidence(data.get("evidence"))
+    thresholds = _overrun_thresholds(data.get("overrunThresholds"))
+    policy_evidence = None
+    if "overrunPolicyEvidence" in data:
+        policy_evidence, policy_value = _envelope("overrunThresholds", data["overrunPolicyEvidence"])
+        if policy_evidence.availability is Availability.AVAILABLE:
+            if not thresholds.declared or _overrun_thresholds(policy_value) != thresholds:
+                raise BundleError("overrunPolicyEvidence must match the explicit top-level declared tolerance.")
+        elif data.get("overrunThresholds") is not None:
+            raise BundleError("Unavailable overrunPolicyEvidence cannot carry top-level tolerances.")
     return CommercialRecord(
         organization_id=_text(data.get("organizationId"), "organizationId", required=True),
         quote_id=_text(data.get("quoteId"), "quoteId", required=True),
@@ -558,7 +557,8 @@ def load_record(value: object) -> CommercialRecord:
         operational_plan=_operational_plan(values["operationalPlan"]),
         cost_basis=_cost_basis(values["costBasis"]),
         actual_consumption=_actual_consumption(values["actualConsumption"]),
-        overrun_thresholds=_overrun_thresholds(data.get("overrunThresholds")),
+        overrun_thresholds=thresholds,
+        overrun_policy_evidence=policy_evidence,
         current_catalog_revision=_sentinel_integer(
             data, "currentCatalogRevision", "currentCatalogRevision", -1
         ),

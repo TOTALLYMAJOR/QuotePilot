@@ -28,11 +28,11 @@
         "section": "processorFeeSchedule"
       },
       {
-        "producerId": "actual-consumption-producer-v1",
+        "producerId": "actual-consumption-producer-v2",
         "section": "actualConsumption"
       }
     ],
-    "recordsDigestSha256": "8aa7b995d8c3e30358feb838589ff7381a1c432044837193011b8aaf61958bf6"
+    "recordsDigestSha256": "5e880ab0fb09ac0f1b44d170a3f53a8f1e0dc9cee9b02da2c96279b9f37290b4"
   },
   "records": [
     {
@@ -107,14 +107,14 @@
           }
         },
         "actualConsumption": {
-          "availability": "not_applicable",
-          "constraintClass": "none",
-          "detail": "The event has not been delivered, so there is nothing to consume yet.",
+          "availability": "not_yet_available",
+          "constraintClass": "business_policy",
+          "detail": "No verified operator-declared actuals journal is available. Event dates and phase completion do not establish costs.",
           "provenance": {
             "exporterVersion": "commercial-evidence-exporter-v1",
             "observedAtISO": "",
             "revision": "",
-            "sourceField": "",
+            "sourceField": "actualsState/current",
             "sourceObject": "",
             "sourceSchemaVersion": ""
           }
@@ -292,6 +292,19 @@
         }
       },
       "organizationId": "org_demo",
+      "overrunPolicyEvidence": {
+        "availability": "not_yet_available",
+        "constraintClass": "business_policy",
+        "detail": "No verified instance-pinned comparison policy is available; no tolerance is inferred.",
+        "provenance": {
+          "exporterVersion": "commercial-evidence-exporter-v1",
+          "observedAtISO": "",
+          "revision": "",
+          "sourceField": "definition.config.comparisonPolicy",
+          "sourceObject": "",
+          "sourceSchemaVersion": ""
+        }
+      },
       "quoteId": "quote_demo_1",
       "quoteNumber": "QP-1042"
     }

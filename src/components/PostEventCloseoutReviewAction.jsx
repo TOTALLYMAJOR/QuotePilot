@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import {
   isDefinitivePostEventCloseoutError,
   readPendingPostEventCloseoutConfigurationAttempt,
@@ -15,6 +15,14 @@ import {
   formatWorkspaceText
 } from "../lib/workspacePresentation";
 
+const WorkflowPackPolicyPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./WorkflowPackPolicyPanel")) : null;
+const EventActualsCloseoutSummary = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./EventActualsCloseoutSummary")) : null;
+export function closeoutActualsSource(opportunity = {}) {
+  const source = opportunity.reviewedAction || {};
+  return { organizationId: opportunity.organizationId || "", quoteId: opportunity.quoteId || "", sourceVersionId: source.sourceVersionId || "", acceptanceReceiptId: source.acceptanceReceiptId || "" };
+}
 const CLOSEOUT_STATE_PRESENTATION = Object.freeze({
   scheduled: { family: "info", label: "Scheduled" },
   due: { family: "action", label: "Due today" },
@@ -83,6 +91,7 @@ export function buildPostEventCloseoutPresentation(opportunity = {}, available =
 export default function PostEventCloseoutReviewAction({
   opportunity,
   available = true,
+  workflowScope = null,
   onReceipt
 }) {
   const view = useMemo(
@@ -197,6 +206,9 @@ export default function PostEventCloseoutReviewAction({
         </div>
         <StatusChip {...view.presentation} />
       </div>
+
+      {WorkflowPackPolicyPanel && available && view.authoritative && workflowScope?.enabled && <Suspense fallback={<p role="status">Loading closeout coordination...</p>}><WorkflowPackPolicyPanel {...workflowScope} organizationId={opportunity.organizationId} quoteId={opportunity.quoteId} workflowKind="closeout_follow_up" sourceVersionId={opportunity.reviewedAction?.sourceVersionId || ""} sourceReceiptId={opportunity.reviewedAction?.acceptanceReceiptId || ""} domainRevision={mutation.receipt?.receiptId || opportunity.reviewedAction?.completedAtISO || ""} otherMutationBlocked={["submitting", "uncertain", "reconciliation", "error", "recovery"].includes(mutation.state)} /></Suspense>}
+      {EventActualsCloseoutSummary && available && view.authoritative && ["due", "overdue", "completed"].includes(view.state) && <Suspense fallback={<p role="status">Loading closeout actuals...</p>}><EventActualsCloseoutSummary {...closeoutActualsSource(opportunity)} available={available} /></Suspense>}
 
       {view.state === "blocked_configuration" && view.authoritative && available && (
         <div className="post-event-closeout-configuration" data-closeout-item="configuration">

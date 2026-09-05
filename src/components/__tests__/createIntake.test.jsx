@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
-import CreateIntake from "../CreateIntake";
+import CreateIntake, { buildApplyPayload } from "../CreateIntake";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -98,4 +98,13 @@ describe("CreateIntake", () => {
     act(() => root.unmount());
     container.remove();
   });
+});
+
+
+test("reviewed intake persists declared attendance uncertainty without inventing bounds or customer provenance", () => {
+  const apply = fact => buildApplyPayload({ draft: { guests: fact.value }, facts: [{ id: "guests", field: "guests", ...fact }] });
+  expect(apply({ kind: "range", value: 115, min: 100, max: 130 }).draft.attendancePlanning).toEqual({ kind: "range", value: 115, min: 100, max: 130, sourceType: "staff_intake" });
+  expect(apply({ kind: "approximate", value: 80 }).draft.attendancePlanning).toEqual({ kind: "approximate", value: 80, min: null, max: null, sourceType: "staff_intake" });
+  expect(apply({ kind: "exact", value: 80 }).draft.attendancePlanning).toEqual({ kind: "exact", value: 80, min: null, max: null, sourceType: "staff_intake" });
+  expect(apply({ kind: "exact", value: 401 }).draft.attendancePlanning).toBeUndefined();
 });

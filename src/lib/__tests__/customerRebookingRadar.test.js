@@ -195,6 +195,29 @@ describe("Customer 360 rebooking radar", () => {
     expect(radar.excludedReasonCounts.outside_opportunity_window).toBe(2);
   });
 
+  test("closeout actuals references come only from the exact closeout projection", () => {
+    const quote = makeQuote({ id: "closeout-source", date: "2026-08-08" });
+    const projected = {
+      closeoutId: "closeout-exact-source", organizationId: ORGANIZATION_ID,
+      customerId: CUSTOMER_ID, quoteId: quote.id, eventDate: quote.event.date,
+      sourceVersionId: "v0001", acceptanceReceiptId: "older-acceptance-receipt",
+      dueDate: "2026-08-15", state: "open", reviewItems: {},
+      policy: { state: "configured", timeZone: "America/Chicago" }
+    };
+    const action = (closeout) => build(makeWorkspace({ quotes: [{
+      ...quote, workflow: { postEventCloseout: closeout }
+    }] }), { date: "2026-08-15" }).opportunities[0].reviewedAction;
+    expect(action(projected)).toMatchObject({
+      sourceVersionId: "v0001", acceptanceReceiptId: "older-acceptance-receipt"
+    });
+    // Never substitute the quote's newer accepted version or receipt.
+    expect(action({ ...projected, sourceVersionId: undefined, acceptanceReceiptId: undefined }))
+      .toMatchObject({ sourceVersionId: "", acceptanceReceiptId: "" });
+    expect(action({ ...projected, sourceVersionId: "foreign/path", acceptanceReceiptId: "bad/path" }))
+      .toMatchObject({ sourceVersionId: "", acceptanceReceiptId: "" });
+    expect(action({ ...projected, organizationId: "other-org" })).toBeNull();
+  });
+
   test("creates a same-week-last-year anniversary cue from calendar dates", () => {
     const sameWeek = makeQuote({ id: "same-week", date: "2025-08-14" });
     const nextWeek = makeQuote({ id: "next-week", date: "2025-08-18" });

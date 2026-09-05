@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-03 22:45:00 CDT
+Last updated: 2026-09-05 17:45:01 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -308,7 +308,7 @@ progress** to timestamp-backed internal workflow receipts. The ordinary NOW
 surface remains the flag-off rollback. This is `v0.8.0` candidate source only;
 it adds no Firebase, provider, payment, pricing, role, or mutation authority and
 has no hosted or human-acceptance evidence.
-| 71 | Commercial Truth Loop evidence exporter: read-only tenant-scoped Firestore reader plus projection of already-read authoritative quote, acceptance-receipt, ledger, and cost-snapshot documents into the canonical `truthloop-evidence-bundle-v2` reconciliation bundle, with per-section provenance, explicit availability classification (`available`, `missing`, `not_applicable`, `not_yet_available`, `blocked_by_integration`, `contradictory`, `schema_drift`), schema-drift refusal, producer interfaces for processor payout settlement, declared fee schedules, and post-event consumption, and an evidence-coverage report separating engineering, integration, and business-policy blockers | Implemented (source/local + emulator evidence only. The reader assembles quote, acceptance-receipt, active-version, change-request-resolution, and organization-settings documents for one explicitly named organization; there is no all-tenant read and no collectionGroup query, a cross-tenant document aborts the read rather than being skipped, and an explicit field allowlist withholds portal keys, buyer tokens, and provider secrets. The Admin SDK bypasses Firestore rules, so containment is explicit-scope and allowlist enforced rather than rule-enforced. The payout producer stays inert behind the Stripe Connect stopping point and cannot be made to emit provider evidence; no organization has declared a fee schedule and no post-event consumption capture surface exists, so no production record can currently reach `fullyReconciled`. Findings remain `observation_only` staff observations and are never customer output, accounting truth, repricing, or permission to charge, accept, book, or settle. Firestore reads, any operator surface, hosted verification, provider evidence, deployment, and human acceptance remain pending.) | `scripts/reconciliation-evidence-export.mjs`, `evidence/src/exporterCore.mjs`, `evidence/src/availability.mjs`, `evidence/src/provenance.mjs`, `evidence/src/canonical.mjs`, `evidence/src/schemaDrift.mjs`, `evidence/src/coverage.mjs`, `evidence/src/producers/*.mjs`, `docs/truthloop-evidence-contract.json`, `src/lib/__tests__/commercialEvidenceExporter.test.js`, `src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js`, `evidence/src/firestoreReader.mjs`, `scripts/truthloop-export-emulator-acceptance.mjs`, `src/lib/__tests__/commercialEvidenceReader.test.js`, `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`, `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md` |
+| 71 | Commercial Truth Loop evidence exporter: read-only tenant-scoped Firestore reader plus projection of already-read authoritative quote, acceptance-receipt, ledger, and cost-snapshot documents into the canonical `truthloop-evidence-bundle-v2` reconciliation bundle, with per-section provenance, explicit availability classification (`available`, `missing`, `not_applicable`, `not_yet_available`, `blocked_by_integration`, `contradictory`, `schema_drift`), schema-drift refusal, producer interfaces for processor payout settlement, declared fee schedules, and post-event consumption, and an evidence-coverage report separating engineering, integration, and business-policy blockers | Implemented (source/local + emulator evidence only. The reader assembles quote, acceptance-receipt, active-version, change-request-resolution, and organization-settings documents for one explicitly named organization; there is no all-tenant read and no collectionGroup query, a cross-tenant document aborts the read rather than being skipped, and an explicit field allowlist withholds portal keys, buyer tokens, and provider secrets. The Admin SDK bypasses Firestore rules, so containment is explicit-scope and allowlist enforced rather than rule-enforced. The payout producer stays inert behind the Stripe Connect stopping point and cannot be made to emit provider evidence; declared-cost capture and receipt-verified export now exist, while undeclared fee schedules, undeclared overrun policy and provider settlement remain explicit blockers, so this does not establish a production `fullyReconciled` record. Findings remain `observation_only` staff observations and are never customer output, accounting truth, repricing, or permission to charge, accept, book, or settle. Firestore reads, any operator surface, hosted verification, provider evidence, deployment, and human acceptance remain pending.) | `scripts/reconciliation-evidence-export.mjs`, `evidence/src/exporterCore.mjs`, `evidence/src/availability.mjs`, `evidence/src/provenance.mjs`, `evidence/src/canonical.mjs`, `evidence/src/schemaDrift.mjs`, `evidence/src/coverage.mjs`, `evidence/src/producers/*.mjs`, `docs/truthloop-evidence-contract.json`, `src/lib/__tests__/commercialEvidenceExporter.test.js`, `src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js`, `evidence/src/firestoreReader.mjs`, `scripts/truthloop-export-emulator-acceptance.mjs`, `src/lib/__tests__/commercialEvidenceReader.test.js`, `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`, `docs/COMMERCIAL_TRUTH_LOOP_DESIGN.md` |
 
 ## Implementation Chronology
 
@@ -463,3 +463,179 @@ earlier feature. Detailed history remains canonical in `CHANGELOG.md`.
   org-scoped quote instead of auto-migrating legacy global data.
 - Feature flags for optional surfaces (portal/schedule/integrations/diagnostics/reporting/compare/guided selling) are normalized in `src/App.jsx` and managed in `src/components/AdminCatalogModal.jsx`.
 - Firebase browser smoke coverage now includes both auth+rules and authoritative-pricing lanes under `e2e/`.
+
+## Event Operating Spine — bounded first slice
+
+| Capability | Source implementation | Boundary |
+|---|---|---|
+| Event Operating Spine phase ledger | `functions/eventOperations.js`, `functions/index.js`, `src/lib/eventOperationsClient.js`, `src/components/EventOperationsPanel.jsx`, `src/components/LiveOperationsPlanningViews.jsx` | Default-off source slice: same-tenant administrators initialize an exact accepted/booked event ledger and record only `prepared -> in_progress -> completed`; sales can read the bounded snapshot. Exact command receipts support uncertain-attempt reconciliation. |
+
+The server requires both `EVENT_OPERATING_SPINE_ENABLED` and the exact tenant's
+protected `organizations/{orgId}/settings/config.eventOperatingSpineEnabled` field. The frontend additionally requires
+`VITE_EVENT_OPERATING_SPINE_ENABLED`. Browser administrators cannot activate the
+tenant setting. Records and receipts are server-private; customer portals receive
+none of this operational evidence. The existing immutable accepted source remains
+commercial authority. The read view exposes only the latest receipt, not complete
+Replay history. Phase completion is an operator record, not readiness, actual
+attendance, labor, purchasing, closeout review, provider, payment, or settlement
+proof. These remain separate or unavailable. This entry records source scope;
+local validation and hosted, production, and human acceptance are separate evidence
+in `PROJECT_STATUS.md`. No tenant activation or deployment is implied.
+
+## Event Operating Work Journal — bounded checkpoints and issues
+
+| Capability | Source implementation | Boundary |
+|---|---|---|
+| Event Operating Work Journal | `functions/eventOperatingWork.js`, `functions/index.js`, `src/lib/eventOperatingWorkClient.js`, `src/lib/eventOperatingMutationGuard.js`, `src/components/EventOperatingWorkPanel.jsx` | Same-tenant administrators record or reopen four fixed checkpoints and open, resolve, or reopen a bounded issue log against one initialized exact-source event ledger. Sales can read. Independent work policy, work revision, and immutable work receipts preserve the original phase ledger and policy. |
+
+Fixed checkpoint identifiers are `venue_access`, `team_briefing`,
+`service_handoff`, and `pack_down`.
+
+Journal changes are allowed in every initialized event phase, including
+`completed`, and never reopen or otherwise change the phase. Missing journal
+state remains unavailable until the first successful work command; a checkpoint
+without an operator record is not treated as complete. Issue IDs are assigned by
+the server. The log retains at most 25 issues, including resolved issues; normal
+and urgent severity are fixed when an issue is opened. Notes are limited to 240
+characters and required for opening, resolving or reopening an issue and reopening
+a checkpoint. A checkpoint record may omit its note.
+
+The existing environment and exact tenant gates apply. Work state and receipts
+remain server-private, with bounded staff projections and no customer-portal
+exposure. A pending or uncertain phase command excludes a new journal command,
+and a pending or uncertain journal command excludes a new phase command. Each
+command reconciles its own exact receipt before another mutation is permitted.
+Checkpoint and issue records are operator statements, not staffing confirmation,
+attendance, actual labor/purchasing, readiness, delivery, closeout review, payment,
+or settlement evidence. Full Replay remains unavailable; declared actuals have a separate surface below. This is a
+source/local implementation boundary; hosted, production, provider, and human
+acceptance remain separate.
+
+
+## Event Operating Actuals — declared costs and completeness
+
+| Capability | Source implementation | Boundary |
+|---|---|---|
+| Event Operating Actuals | `functions/eventOperatingActuals.js`, `functions/index.js`, `src/lib/eventOperatingActualsClient.js`, `src/lib/eventOperatingMutationGuard.js`, `src/components/EventOperatingActualsPanel.jsx` | Same-tenant administrators record, correct, void, and declare labor, purchasing, and other costs against an initialized exact-source event ledger. Sales read bounded projections. Actuals policy, revision, state, and immutable receipts are independent of phase and work authority. |
+
+Costs are explicitly declared nonnegative integer USD cents, bounded at
+1,000,000,000 cents per entry. Labor also records 1–10,080 whole duration minutes
+and an operator-declared role category; no wage, rate, staffing assignment, or
+attendance is inferred. Purchasing records spend, not physical consumption.
+The journal retains at most 50 entries over its lifetime, including terminal voids.
+Corrections replace the typed entry fields while preserving its ID and category;
+corrections and voids require a reason. Text is limited to 240 characters.
+
+Each category starts `not_declared`. Record, correction, or void resets that
+category to `partial` and clears its current completeness declaration. An
+administrator separately declares `complete`, `not_applicable`, or `partial`.
+Complete may explicitly confirm zero; not applicable requires no active entries.
+Captured totals are provisional until all three categories are complete or not
+applicable. Unknown or partial categories must never become zero by default.
+
+Existing global and exact tenant gates apply, with private state and receipts,
+sales reads, and administrator commands. Pending or uncertain phase, work, and
+actuals commands exclude each other. No actuals command changes accepted quotes,
+phase or work policy, delivery, closeout, payment, or settlement authority. A
+trusted read-only evidence export and operator-declared tolerance policy remain
+separate integration work. This documents source scope and local validation,
+without tenant activation, hosted verification, or human acceptance.
+
+
+## Event Operating Replay — anchored operational receipts
+
+Slice D adds an exact-event, read-only operational history for admin and sales
+staff under the existing event gates. Replay merges verified phase, checkpoint
+and issue, and declared-cost receipts into bounded pages pinned to the first
+read's channel heads. Newer writes require refresh; stale accepted sources,
+gaps, corrupt receipts, and missing parent evidence fail closed. It shows
+bounded actor, time, target and before/after records without private receipt
+bodies. Current staffing, BEO, dependency and run-of-show references retain
+their domain authority and are not historical execution evidence.
+
+The declared-cost exporter verifies exact private acceptance, phase, actuals,
+and category declaration receipts before emitting aggregate USD costs. Missing
+or partial capture remains unavailable; explicit zero remains zero. Recorded
+costs can support contribution comparison but cannot establish physical
+consumption, attendance, payroll, delivery, payment or settlement. Overrun
+comparisons additionally require explicit declared tolerance with actor/time
+provenance; coverage includes this policy prerequisite.
+
+Source implementation has local unit, emulator, responsive browser and build
+evidence. Hosted and human acceptance remain separate. The canonical
+contract is [Slice D](TENANT_OPERATING_MODEL_ADR.md#slice-d--operational-replay-and-declared-cost-evidence).
+
+
+## Tenant Workflow Configuration Studio
+
+The administrator-only Library editor supports bounded workflow draft editing,
+validation, exact publication preview, typed confirmation, immutable tenant
+versions and reason-bound retirement. Allowed fields are task roles, names and
+instructions, due/escalation timing, fixed manual handoff references, and
+optional explicit cost-review thresholds and comparison tolerances. Existing
+Library navigation and dirty-dismissal guards apply. Unknown program fields,
+code, recipients, URLs and role escalation are rejected.
+
+A source-controlled seed is explicit version evidence for new instances while
+the tenant has never published. Publication changes future instance bindings;
+it does not rebase existing events. Retirement preserves immutable version
+records and existing bindings while blocking new bindings until another
+publication. Current tenant, role, email and runtime gates apply to every
+transaction. Exact request identity and immutable lifecycle receipts support
+uncertain-outcome recovery without duplicate publication.
+
+Source, local automated tests, real emulator scenarios and responsive browser
+fixtures are validated. Final populated rollback qualification passes; current rollout boundaries remain in Project Status;
+no hosted, tenant activation or human acceptance claim is made.
+
+## Event Workflow Coordination
+
+The exact-event Control Room shows the pinned definition, task ownership,
+workflow/task due and escalation projections, fixed manual handoff guidance,
+and receipt-bound acknowledgements. Admin or the enabled assigned task role
+may acknowledge a coordination obligation; the existing domain write roles
+remain unchanged. Cost review is administrator-only and requires complete
+explicit actuals at or above the configured threshold, including known zero
+at a zero threshold. A later actuals revision makes an old acknowledgement
+historical.
+
+A separate migration preview and typed confirmation bind the current instance,
+source and target publication. Compatibility initially preserves workflow and
+domain policy, all existing task keys, acknowledged task meaning, and review
+and comparison policy. Four event mutation owners share an unresolved-request
+exclusion. Phase coordination stores only trusted outcome references alongside
+its own immutable receipts; A/B/C policies and receipt bytes remain unchanged.
+A second thin post-event-review fixture exercises the generic contract without
+shipping an additional commercial workflow pack.
+
+The read-only exporter can supply exact pinned tenant comparison policy with
+publisher and time evidence. Missing, seed, invalid or undeclared policy stays
+unavailable independently of actual-cost capture. Coverage distinguishes
+structural producer support from record-specific evidence availability.
+
+
+## Bounded Catering Workflow Packs
+
+| Pack | Discoverable surface | Governed outcome |
+|---|---|---|
+| Quote review | Commercial change review and its workflow policy panel | Exact tenant approval policy is sealed into the existing simulation, authorization and apply chain; tasks cannot approve changes |
+| Final guest count | Living Opportunity Guest count inspector and current customer portal | Staff request and customer/staff response remain separate from the applied pricing count; applying a booked-event amendment requires renewed acceptance |
+| Event execution | Control Room and existing event policy panel | Tenant checkpoint prerequisites and urgent-issue blocks narrow original phase/work commands while preserving their receipts |
+| Closeout follow-up | Post-event closeout review and its workflow policy panel | Tenant responsibility and follow-up timing compose the original closeout record; rebooking remains a reviewed draft handoff |
+
+The shared policy panel exposes pinned publication, tasks and explicit compatible
+migration. Studio permits only each pack's bounded fields. Schema 1 event
+compatibility remains available; new schema 2 packs require explicit publication.
+Neither publication nor acknowledgement activates a tenant or performs a domain
+action. Private attendance journals and adapter proof deny all browser access.
+Source, browser integration and populated restart rollback qualification pass;
+real tenant pilot and rollout boundaries remain in Project Status.
+
+## Tenant Workflow Migration Inventory
+
+An explicitly invoked offline tool classifies bounded exact-source inputs and
+reports safe identifiers, policy pins and blocked reasons. It cannot mutate
+records or create historical evidence. The isolated staging EventSpine release
+profile prepares explicit server/browser configuration; tenant activation and
+hosted/operator evidence remain separate. These are developer/operator tools,
+not customer actions or automatic migration approval.

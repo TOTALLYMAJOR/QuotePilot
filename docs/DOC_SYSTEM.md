@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-08-28 20:18:30 CDT
+Last updated: 2026-09-05 16:46:47 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -105,7 +105,7 @@ as separate claims.
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
 | Workspace visual system and interaction contracts | `docs/DESIGN_SYSTEM.md` | The canonical staff-workspace visual grammar, motion, hierarchy, and scoped Ambient/customer extensions. UI agents load `design-language` first, then preserve this repository-specific authority. |
 | Product design principles and review lens | `docs/DESIGN_PRINCIPLES.md` | The review rubric for copy, hierarchy, story, incentive, and CTA decisions; surface-specific design docs may extend it but should not contradict it. |
-| Attendance planning, confirmation, commercial-basis, and actual-count boundaries | `docs/ATTENDANCE_STATE_ADR.md` | Accepted phased architecture and source/local Slice A/C status around the unchanged exact `event.guests` commercial basis. Role journeys, external patterns, hypotheses, interview guide, and measurement plan live in `docs/ATTENDANCE_JOURNEY_RESEARCH.md`; persistence and later authority slices remain explicitly unimplemented. |
+| Attendance planning, confirmation, commercial-basis, and actual-count boundaries | `docs/ATTENDANCE_STATE_ADR.md` | Accepted phased architecture and source/local Slice A–E contracts around the unchanged exact `event.guests` commercial basis. Role journeys, external patterns, hypotheses, interview guide, and measurement plan live in `docs/ATTENDANCE_JOURNEY_RESEARCH.md`; operational actual attendance remains a separate unfinished slice. |
 | Package Workspace product and implementation program | `docs/PACKAGE_WORKSPACE.md` | Entry point for the QuotePilot Package Workspace audit, PRD, UI specification, ADR, technical design, and phased plan. Current implementation truth remains in the Feature Matrix; operational proof remains in `PROJECT_STATUS.md`. |
 | Bounded acceptance evidence matrices | `docs/acceptance/` | Criterion-to-proof ladders for named journeys or workspaces. They must label source, local automated, local connected, hosted, production, assistive-technology, and human evidence separately and may not replace capability or operational truth. |
 | Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | The clean-main baseline lives in `docs/performance/bundle-budget.json`; any active temporary absolute ceilings live separately in `docs/performance/bundle-exception.json` and must match that baseline exactly. |

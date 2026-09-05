@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+const WorkflowPackPolicyPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true" ? lazy(() => import("./WorkflowPackPolicyPanel")) : null;
 import { useEffect, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
 import ShimmerReveal from "./ShimmerReveal";
@@ -396,6 +398,7 @@ function SimulationEvidence({ model }) {
 }
 
 function CommercialChangeAuthorityControls({
+  model,
   authorityState = "",
   authorizationRequired = false,
   staffRole = "sales",
@@ -428,7 +431,9 @@ function CommercialChangeAuthorityControls({
     && mutationKind === "apply"
     && applyOutcome?.state === "not_committed";
   const authorized = Boolean(authorizationReceiptId) || approvalState === "authorized";
-  const canMutate = normalizedAuthority === "enforced" && scopeCurrent && !busy;
+  const policyRoleAllowed = !model?.workflowPolicy || model.workflowPolicy.approvalPolicy.allowedRoles.includes(staffRole);
+  const attendanceApply = Boolean(model?.attendanceBinding);
+  const canMutate = normalizedAuthority === "enforced" && scopeCurrent && !busy && policyRoleAllowed;
 
   useEffect(() => {
     const receiptId = text(applyOutcome?.outcomeReceiptId);
@@ -463,7 +468,7 @@ function CommercialChangeAuthorityControls({
         <p className="source-note" role="status">
           Commercial-change enforcement is dormant for this workspace. This trusted receipt is review evidence only; ordinary quote saving remains on the existing edit path until both server and tenant gates are promoted.
         </p>
-      ) : !authorizationRequired ? (
+      ) : !authorizationRequired && !attendanceApply ? (
         <p className="source-note" role="status">
           The server found no governed dependency impact. No administrator authorization receipt is required; use the normal Save Changes action.
         </p>
@@ -475,14 +480,16 @@ function CommercialChangeAuthorityControls({
               : "The unsaved form or saved revision changed after simulation. Authorization and apply are disabled until you re-simulate."}
           </p>
 
+          {!policyRoleAllowed && <p className="warning-note" role="alert">The published quote review policy excludes your role from this change.</p>}
+          {attendanceApply && !authorizationRequired && <p className="source-note">No administrator approval is required for this preview. Apply explicitly to record the submitted count against a new quote version.</p>}
           <dl className="staff-evidence-details">
             <div>
               <dt>Approval state</dt>
-              <dd>{humanizeWorkspaceValue(approvalState, { emptyLabel: "Not requested" })}<small>{approval?.approvalRequestId ? <code>{approval.approvalRequestId}</code> : "No approval request receipt"}</small></dd>
+              <dd>{!authorizationRequired ? "Not required" : humanizeWorkspaceValue(approvalState, { emptyLabel: "Not requested" })}<small>{approval?.approvalRequestId ? <code>{approval.approvalRequestId}</code> : "No approval request receipt"}</small></dd>
             </div>
             <div>
               <dt>Authorization receipt</dt>
-              <dd>{authorizationReceiptId ? "Exact receipt ready" : "Not authorized"}<small>{authorizationReceiptId ? <code>{authorizationReceiptId}</code> : "No authorization may be inferred"}</small></dd>
+              <dd>{authorizationReceiptId ? "Exact receipt ready" : !authorizationRequired ? "Not required" : "Not authorized"}<small>{authorizationReceiptId ? <code>{authorizationReceiptId}</code> : "No authorization may be inferred"}</small></dd>
             </div>
           </dl>
 
@@ -496,7 +503,7 @@ function CommercialChangeAuthorityControls({
           )}
 
           <div className="right-actions">
-            {!authorized && isAdmin && typeof onAuthorize === "function" && (
+            {authorizationRequired && !authorized && isAdmin && typeof onAuthorize === "function" && (
               <button
                 type="button"
                 className="cta compact"
@@ -509,7 +516,7 @@ function CommercialChangeAuthorityControls({
                   : "Authorize exact change"}
               </button>
             )}
-            {!authorized && !isAdmin && !approvalState && typeof onRequestAuthorization === "function" && (
+            {authorizationRequired && !authorized && !isAdmin && !approvalState && typeof onRequestAuthorization === "function" && (
               <button
                 type="button"
                 className="cta compact"
@@ -519,7 +526,7 @@ function CommercialChangeAuthorityControls({
                 Request admin authorization
               </button>
             )}
-            {!authorized && approvalState === "pending" && typeof onRefreshAuthorization === "function" && (
+            {authorizationRequired && !authorized && approvalState === "pending" && typeof onRefreshAuthorization === "function" && (
               <button
                 type="button"
                 className="ghost compact"
@@ -529,7 +536,7 @@ function CommercialChangeAuthorityControls({
                 Refresh approval state
               </button>
             )}
-            {authorized && typeof onApply === "function" && (
+            {(authorized || !authorizationRequired) && typeof onApply === "function" && (
               <button
                 type="button"
                 className="cta compact"
@@ -547,7 +554,7 @@ function CommercialChangeAuthorityControls({
                     ? "Apply outcome unresolved"
                     : applyResult
                       ? "Authorized change applied"
-                      : "Apply authorized change"}
+                      : attendanceApply && !authorizationRequired ? "Apply reviewed guest count" : "Apply authorized change"}
               </button>
             )}
             {applyOutcomeUncertain && typeof onReconcileApplyOutcome === "function" && (
@@ -618,7 +625,29 @@ function CommercialChangeAuthorityControls({
   );
 }
 
+function BoundCommercialReview({ model }) {
+  if (!model?.approvalEvaluation) return null;
+  const policy = model.workflowPolicy;
+  const evaluation = model.approvalEvaluation;
+  const usd = cents => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+  const threshold = policy?.approvalPolicy.thresholdCents ?? null;
+  return <section className="workflow-form-section" aria-label="Published approval and guest count evidence">
+    <h4>Approval basis for this preview</h4>
+    <dl className="staff-evidence-details">
+      <div><dt>Quote review policy</dt><dd>{policy ? `Published version ${policy.definitionPin.version}` : "Existing commercial approval rules"}</dd></div>
+      <div><dt>Absolute total change</dt><dd>{usd(evaluation.absoluteTotalDeltaCents)}</dd></div>
+      <div><dt>Declared approval threshold</dt><dd>{threshold === null ? "No additional threshold declared" : `${usd(threshold)} or more`}</dd></div>
+      {policy && <div><dt>Permitted participants</dt><dd>{policy.approvalPolicy.allowedRoles.map(role => role === "admin" ? "Administrator" : "Sales").join(", ")}</dd></div>}
+    </dl>
+    <p>{evaluation.impactApprovalRequired ? "Administrator approval is required because governed dependencies are affected." : "No governed dependency requires administrator approval."}</p>
+    <p>{evaluation.thresholdApprovalRequired ? "Administrator approval is required because the total change meets or exceeds the published threshold." : "The published threshold adds no approval requirement to this preview."}</p>
+    {model.attendanceBinding && <p><strong>Submitted guest count: {model.attendanceBinding.count}.</strong> This exact response remains proposed until you apply the reviewed change, including when the count matches the current price basis. Applying creates a new draft quote revision and clears current acceptance. Prior acceptance, payment and booking history remain preserved. Separate customer acceptance and administrator booking revalidation are required; no payment is charged.</p>}
+  </section>;
+}
+
 export default function CommercialChangeImpactPanel({
+  workflowEnabled = false,
+  principalId = "",
   model = null,
   loading = false,
   recovering = false,
@@ -720,8 +749,11 @@ export default function CommercialChangeImpactPanel({
           onKeepQuotedPlan={onKeepQuotedPlan}
         />
       )}
+      {view.snapshotAvailable && <BoundCommercialReview model={model} />}
+      {WorkflowPackPolicyPanel && workflowEnabled && view.snapshotAvailable && model?.receiptId && <Suspense fallback={<p role="status">Loading quote review coordination...</p>}><WorkflowPackPolicyPanel organizationId={model.identity.organizationId} quoteId={model.identity.quoteId} principalId={principalId} role={staffRole} enabled={workflowEnabled} workflowKind="quote_review" simulationReceiptId={model.receiptId} sourceVersionId={model.identity.beforeRevisionId} sourceReceiptId={model.receiptId} domainRevision={authorizationReceiptId || model.receiptId} otherMutationBlocked={["submitting", "reconciliation", "applying", "uncertain", "error", "recovery"].includes(mutationState)} /></Suspense>}
       {view.snapshotAvailable && (
         <CommercialChangeAuthorityControls
+          model={model}
           authorityState={authorityState}
           authorizationRequired={authorizationRequired}
           staffRole={staffRole}

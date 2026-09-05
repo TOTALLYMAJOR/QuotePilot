@@ -138,6 +138,11 @@ class OverrunTest(unittest.TestCase):
         return record_from(
             {
                 "eventCompleted": True,
+                "overrunThresholds": {
+                    "laborBasisPoints": 1000, "purchasingBasisPoints": 1000,
+                    "minimumCents": 2500, "declaredBy": "synthetic-operator",
+                    "declaredAtISO": "2026-10-17T04:00:00.000Z",
+                },
                 "costBasis": {"plannedCostCents": {"labor": 208000, "purchasing": 100000}},
                 "actualConsumption": {
                     "laborCostCents": labor,
@@ -148,6 +153,42 @@ class OverrunTest(unittest.TestCase):
             }
         )
 
+    def test_missing_declared_policy_is_unverifiable_instead_of_using_defaults(self):
+        from dataclasses import replace
+        from quotepilot_truthloop.model import OverrunThresholds
+        record = replace(self._delivered(208000, 100000), overrun_thresholds=OverrunThresholds())
+        finding = finding_for(record, self.RULE)
+        self.assertIs(finding.status, Status.UNVERIFIABLE)
+        self.assertIn("explicitly declared", finding.narrative)
+
+    def test_explicit_zero_tolerance_is_preserved(self):
+        from dataclasses import replace
+        from quotepilot_truthloop.model import OverrunThresholds
+        record = replace(self._delivered(208001, 100000), overrun_thresholds=OverrunThresholds(
+            labor_basis_points=0, purchasing_basis_points=0, minimum_cents=0,
+            declared_by="synthetic-operator", declared_at_iso="2026-10-17T04:00:00.000Z"))
+        self.assertIs(finding_for(record, self.RULE).status, Status.DISCREPANCY)
+
+    def test_workflow_policy_availability_preserves_its_actual_blocker(self):
+        from quotepilot_truthloop.loader import load_record
+        from support import clean_record_dict
+        for availability in ("missing", "not_yet_available", "contradictory", "schema_drift", "blocked_by_integration"):
+            raw = clean_record_dict()
+            raw.pop("overrunThresholds", None)
+            raw["overrunPolicyEvidence"] = {
+                "availability": availability, "value": None,
+                "detail": "The pinned workflow policy could not be verified.",
+                "constraintClass": "business_policy", "blockedBy": "synthetic_policy_gate",
+                "provenance": {"sourceObject": "workflowInstances/exact-instance"},
+            }
+            finding = finding_for(load_record(raw), self.RULE)
+            with self.subTest(availability=availability):
+                self.assertIs(finding.status, Status.UNVERIFIABLE)
+                self.assertEqual(finding.blocked_section, "overrunThresholds")
+                self.assertEqual(finding.reason_code.value, "evidence_" + availability)
+                self.assertIn("pinned workflow policy", finding.narrative)
+                self.assertEqual(finding.details["provenance"]["sourceObject"], "workflowInstances/exact-instance")
+
     def test_within_tolerance_is_explained(self):
         # 10% of $2,080.00 is $208.00 of allowance.
         self.assertIs(finding_for(self._delivered(228000, 100000), self.RULE).status, Status.EXPLAINED)
@@ -156,15 +197,21 @@ class OverrunTest(unittest.TestCase):
         finding = finding_for(self._delivered(260000, 100000), self.RULE)
         self.assertIs(finding.status, Status.DISCREPANCY)
         self.assertEqual(finding.amounts_cents["unexplainedCents"], 52000)
-        self.assertIn("Labor consumed $2,600.00", finding.narrative)
+        self.assertIn("Labor recorded costs of $2,600.00", finding.narrative)
 
     def test_purchasing_beyond_tolerance_is_reported(self):
         finding = finding_for(self._delivered(208000, 140000), self.RULE)
         self.assertIs(finding.status, Status.DISCREPANCY)
-        self.assertIn("Purchasing consumed", finding.narrative)
+        self.assertIn("Purchasing recorded costs", finding.narrative)
 
-    def test_undelivered_event_needs_no_consumption(self):
-        self.assertIs(finding_for(record_from(), self.RULE).status, Status.EXPLAINED)
+    def test_recorded_costs_before_delivery_still_require_declared_tolerance(self):
+        record = record_from()
+        self.assertFalse(record.event_completed)
+        self.assertTrue(record.actual_consumption.present)
+        finding = finding_for(record, self.RULE)
+        self.assertIs(finding.status, Status.UNVERIFIABLE)
+        self.assertEqual(finding.blocked_section, "overrunThresholds")
+        self.assertEqual(finding.reason_code.value, "evidence_not_yet_available")
 
     def test_delivered_event_without_consumption_is_unverifiable(self):
         # The exporter marks consumption `missing` once the event is delivered:
@@ -181,12 +228,20 @@ class OverrunTest(unittest.TestCase):
 class RealizedContributionTest(unittest.TestCase):
     RULE = "estimated_versus_realized_contribution"
 
-    def test_undelivered_event_reports_no_realized_figure(self):
-        # Consumption is not applicable before delivery, so the rule passes
-        # with nothing to check rather than reporting a blocked record.
-        finding = finding_for(record_from(), self.RULE)
+    def test_incomplete_cost_capture_remains_unverifiable_before_delivery(self):
+        record = record_from(unavailable={"actualConsumption": "not_yet_available"})
+        finding = finding_for(record, self.RULE)
+        self.assertIs(finding.status, Status.UNVERIFIABLE)
+        self.assertEqual(finding.blocked_section, "actualConsumption")
+        self.assertEqual(finding.reason_code.value, "evidence_not_yet_available")
+
+    def test_explicit_recorded_costs_can_be_compared_without_claiming_delivery(self):
+        record = record_from()
+        self.assertFalse(record.event_completed)
+        self.assertTrue(record.actual_consumption.present)
+        finding = finding_for(record, self.RULE)
         self.assertIs(finding.status, Status.EXPLAINED)
-        self.assertEqual(finding.details["notApplicableSection"], "actualConsumption")
+        self.assertNotIn("notApplicableSection", finding.details)
 
     def test_variance_is_measured_not_flagged(self):
         record = record_from(
@@ -215,6 +270,8 @@ class RealizedContributionTest(unittest.TestCase):
                 "costBasis": {"missingCostCategories": ["rentals"]},
                 "actualConsumption": {
                     "laborCostCents": 208000,
+                    "purchasingCostCents": 0,
+                    "otherCostCents": 0,
                     "recordedAtISO": "2026-10-18T04:00:00.000Z",
                 },
             }

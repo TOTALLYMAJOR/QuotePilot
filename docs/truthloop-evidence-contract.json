@@ -115,11 +115,11 @@
     },
     "actualConsumption": {
       "nodeId": "fact.operations.actual_consumption",
-      "sourceObject": "",
-      "sourceField": "",
-      "producible": false,
-      "constraintClass": "engineering",
-      "notes": "No post-event labor or purchasing capture surface or schema exists yet."
+      "sourceObject": "organizations/{organizationId}/eventOperatingLedgers/{ledgerId}/actualsState/current",
+      "sourceField": "verified complete category declarations and immutable actuals receipts",
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "Operator-declared labor, purchasing, and other costs from the exact accepted source. All three categories must be explicitly complete or not applicable; missing values never become zero. This is recorded cost evidence, not attendance, payroll, payment, physical consumption, or event delivery proof."
     }
   },
   "rules": {
@@ -153,7 +153,8 @@
     },
     "operational_overrun": {
       "chainLink": "operational_consumption",
-      "requires": ["costBasis", "actualConsumption"]
+      "requires": ["costBasis", "actualConsumption"],
+      "policyPrerequisites": ["overrunThresholds"]
     },
     "provisional_cost_basis": {
       "chainLink": "actual_contribution",
@@ -166,6 +167,13 @@
     "estimated_versus_realized_contribution": {
       "chainLink": "actual_contribution",
       "requires": ["acceptedSnapshot", "costBasis", "actualConsumption"]
+    }
+  },
+  "policyPrerequisites": {
+    "overrunThresholds": {
+      "producible": true,
+      "constraintClass": "none",
+      "notes": "Explicit tolerances are exported only from the exact event workflow instance and its immutable tenant-published definition. Seed, absent, invalid and undeclared policy remain unavailable; values are never inferred. Actor and time come from the pinned publication."
     }
   },
   "knownSourceSchemaVersions": {

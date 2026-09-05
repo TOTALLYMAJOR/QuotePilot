@@ -1,6 +1,67 @@
 # Project Status
 
-Last updated: 2026-09-04 10:46:13 CDT
+Last updated: 2026-09-05 17:51:27 CDT
+
+## Tenant Operating Model local development
+
+The Event Operating Spine, Configuration Studio and four bounded catering packs
+are being qualified on `feature/qp-tom-local-pilot-20260905`, reconstructed from
+current main `8f2d2dcf78d4512aa7d02495ee27cbeeea4ccc12`. Only the completed TOM
+file delta was transferred; unrelated historical branch commits were excluded.
+The [accepted ADR](docs/TENANT_OPERATING_MODEL_ADR.md) owns the contract;
+[program plan](docs/plans/20260905-tenant-operating-model.md) tracks the local
+reconciliation and rehearsal; [pilot matrix](docs/acceptance/tenant-operating-model.md)
+separates local evidence from real tenant and human acceptance.
+
+Library lets administrators draft, compare, publish and retire each pack's
+bounded policy. Instances retain immutable pins until an explicit compatible
+migration. Quote review seals its original policy into native simulation,
+authorization and apply receipts even after coordination migrates. Guest-count
+responses remain proposed until reviewed commercial application. An applied
+accepted/booked amendment requires renewed customer acceptance and administrator
+booking review while preserving original payment and booking evidence.
+
+Control Room and Replay compose phases, checkpoints/issues, declared costs and
+coordination progress. Closeout follow-up retains its original owner record.
+Tasks, publication and migration cannot manufacture native outcomes. Original
+A/B/C/D phase, work, actuals and history modules remain unchanged from checkpoint D.
+Pinned comparison policy reaches the read-only exporter through verified evidence.
+Actual attendance remains a separate unfinished Attendance ADR slice.
+
+Current-main qualification passes 4,861 unit tests with 85 skips across 426
+passing and 3 skipped files; Firestore rules pass 83 and Python passes 136.
+Evidence coverage preserves the existing payout/provider and fee-policy blockers.
+The compatibility build is 2,951,114 total JavaScript bytes and Ambient is
+3,850,747; their largest chunk is 385,181 bytes. Both pass current main's unchanged
+profile budgets. Capability mapping, documentation governance, project-state
+reconciliation and the quick lane pass. Sandbox-blocked CLI tests were rerun
+outside the sandbox; no product guard was weakened.
+
+The historical `/tmp/qp-tom-studio-checkpoints/end/` remains unchanged. Its earlier
+browser fixtures and enabled/disabled/restored emulator evidence qualify the
+prior TOM baseline only. Current-main all-four enabled, imported global-disabled and restored acceptance
+pass with the same 15 source hashes, retaining 5 instances, 22 workflow receipts
+and 2 phase ledgers. Whole-app browser rehearsal is being recorded separately. Browser and emulator results do not establish human acceptance.
+
+The offline inventory verifies all four exact-source packs without writes and
+reports native versus coordinator pins separately. The isolated staging profile
+prepares explicit EventSpine and Commercial Change server gates, retaining both
+tenant prerequisites. Publication never enables a gate. The local proof package
+is synthetic; it contains no real tenant activation, provider send or deployment.
+
+Current-main integration preserves catalog-review receipts, configured quote
+actions, catalog drafts and provider controls. Fresh current-catalog confirmed
+quotes support attendance amendments. Accepted/booked quotes with legacy or
+changed-catalog authority remain ineligible: the existing native catalog-review
+owner does not review terminal quotes. A separate terminal amendment/catalog
+policy or new agreement would be needed; the local cohort excludes those sources.
+
+The authorized next steps are local validation, reviewable local commits and a
+whole-app emulator rehearsal. No push, hosted activation, provider send or
+deployment is part of this step. The source checks above apply to the reconstructed candidate;
+whole-app rehearsal remains in progress.
+The real tenant, event cohort, human operator and impact baseline remain open.
+[DEV_TASKS.md](DEV_TASKS.md) owns the remaining pilot and release work.
 
 ## Current Production Release
 
