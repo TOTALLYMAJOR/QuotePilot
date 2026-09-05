@@ -25,9 +25,10 @@ describe("CatalogReadNotice", () => {
   test("keeps the quote-builder recovery bounded to the catalog read", () => {
     const markup = renderToStaticMarkup(<CatalogReadNotice />);
 
-    expect(markup).toContain("Catalog updates are unavailable.");
-    expect(markup).toContain("keep outlining this event");
-    expect(markup).toContain("package, menu, and pricing choices may be incomplete");
+    expect(markup).toContain("Library choices are temporarily unavailable.");
+    expect(markup).toContain("keep recording event details");
+    expect(markup).toContain("offers, menus, rentals, and pricing choices cannot be confirmed");
+    expect(markup).toContain("The published Library remains unchanged");
     expect(markup).toContain("Nothing in this draft was saved or repriced");
     expect(markup).not.toContain("Firebase");
     expect(markup).not.toContain("Missing or insufficient permissions");
@@ -39,10 +40,10 @@ describe("CatalogReadNotice", () => {
     );
 
     expect(markup).toContain('<h1 id="catalog-blocked">');
-    expect(markup).toContain("The catalog couldn’t load.");
+    expect(markup).toContain("Library is required to start this quote.");
     expect(markup).toContain("before quote creation can continue");
-    expect(markup).toContain("no catalog or quote record changed");
-    expect(markup).not.toContain("keep outlining this event");
+    expect(markup).toContain("no Library or quote record changed");
+    expect(markup).not.toContain("keep recording event details");
   });
 
   test("offers one retry and reports its pending state", () => {
@@ -59,6 +60,15 @@ describe("CatalogReadNotice", () => {
       root.render(<CatalogReadNotice loading onRetry={onRetry} />);
     });
     expect(container.querySelector("button").disabled).toBe(true);
-    expect(container.querySelector("button").textContent).toBe("Checking catalog…");
+    expect(container.querySelector("button").textContent).toBe("Loading Library…");
+  });
+
+  test("keeps provider detail behind disclosure", () => {
+    const markup = renderToStaticMarkup(
+      <CatalogReadNotice technicalDetail="Firebase permission denied" />
+    );
+    expect(markup).toContain("Technical details");
+    expect(markup).toContain("Firebase permission denied");
+    expect(markup).not.toContain("<details open");
   });
 });

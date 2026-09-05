@@ -39,6 +39,26 @@
   font-size: 0.9rem;
 }
 
+.catalog-read-notice__details {
+  max-width: 48rem;
+  color: var(--tone-ink-3);
+  font-size: 0.82rem;
+}
+
+.catalog-read-notice__details > summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.catalog-read-notice__details > p {
+  margin: 0;
+  padding: var(--space-2) 0;
+  overflow-wrap: anywhere;
+}
+
 .catalog-read-notice__retry {
   justify-self: start;
   min-height: 44px;

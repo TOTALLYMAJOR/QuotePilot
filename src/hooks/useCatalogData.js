@@ -738,8 +738,10 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     }
     try {
       validateCatalogSettingsMoney(nextCatalog?.settings || {});
+      const { validateCommercialPublication } = await import("../lib/commercialPlatform");
+      validateCommercialPublication({ ...nextCatalog, menuInventoryComplete: false });
     } catch (error) {
-      return { ok: false, error: error?.message || "Catalog pricing contains an invalid amount." };
+      return { ok: false, error: error?.message || "Catalog commercial configuration is invalid." };
     }
     const normalized = normalizeCatalog(nextCatalog);
     const hasPricedPackage = normalized.packages.some((item) => {

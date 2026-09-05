@@ -2,7 +2,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import EventScheduleModal, {
+  buildConflictInsights,
   buildScheduledEvents,
+  buildWeekTimelineModel,
   EventScheduleView,
   formatScheduleDayLabel,
   getScheduleCalendarCountLabels,
@@ -22,14 +24,15 @@ describe("operational workspace presentations", () => {
   test.each([
     ["schedule", EventScheduleView, EventScheduleModal, "event-schedule-title"],
     ["reporting", ReportingDashboardView, ReportingDashboardModal, "reporting-dashboard-title"]
-  ])("renders %s as an embedded region while preserving its modal wrapper", (_name, View, Modal, titleId) => {
+  ])("renders %s as an embedded region while preserving its modal wrapper", (name, View, Modal, titleId) => {
     const embedded = renderToStaticMarkup(<View open onClose={() => {}} organizationId="org-a" />);
     expect(embedded).toContain('role="region"');
     expect(embedded).toContain("embedded-workspace-route");
     expect(embedded).toContain("workspace-route-card");
     expect(embedded).toContain(`aria-labelledby="${titleId}"`);
     expect(embedded).not.toContain('aria-modal="true"');
-    expect(embedded).toContain(">Back to Home</button>");
+    if (name === "schedule") expect(embedded).not.toContain(">Back to Home</button>");
+    else expect(embedded).toContain(">Back to Home</button>");
     expect(embedded).not.toContain(">Close</button>");
 
     const modal = renderToStaticMarkup(<Modal open onClose={() => {}} organizationId="org-a" />);
@@ -43,6 +46,35 @@ describe("operational workspace presentations", () => {
 });
 
 describe("schedule status semantics", () => {
+  test("derives symmetric conflict comparisons without manual resolution state", () => {
+    const events = buildScheduledEvents([
+      {
+        id: "quote-a",
+        quoteNumber: "Q-A",
+        status: "booked",
+        event: { date: "2026-09-06", time: "17:00", hours: 4, venue: "Hall", guests: 260 }
+      },
+      {
+        id: "quote-b",
+        quoteNumber: "Q-B",
+        status: "accepted",
+        event: { date: "2026-09-06", time: "18:00", hours: 4, venue: "Hall", guests: 220 }
+      }
+    ]);
+    const insights = buildConflictInsights(events, 400);
+
+    expect(Array.from(insights.reasonsById.get("quote-a"))).toEqual(["time_overlap", "capacity"]);
+    expect(Array.from(insights.reasonsById.get("quote-b"))).toEqual(["time_overlap", "capacity"]);
+    expect(insights.comparisonsById.get("quote-a")).toEqual([
+      { peerId: "quote-b", reasons: ["time_overlap", "capacity"] }
+    ]);
+    expect(insights.comparisonsById.get("quote-b")).toEqual([
+      { peerId: "quote-a", reasons: ["time_overlap", "capacity"] }
+    ]);
+    expect(JSON.stringify(Array.from(insights.comparisonsById.entries())))
+      .not.toMatch(/resolved|dismissed|acknowledged/i);
+  });
+
   test("keeps quote lifecycle and booking confirmation separately labeled", () => {
     const status = getScheduleStatusPresentation({
       status: "accepted",
@@ -84,10 +116,10 @@ describe("schedule status semantics", () => {
       total: null
     });
     expect(markup).toContain("Untitled event");
-    expect(markup).toContain("Time not set");
-    expect(markup).toContain("Venue not set");
-    expect(markup).toContain("Customer not recorded");
-    expect(markup).toContain("Guest count not set");
+    expect(markup).toContain("<dt>Time</dt><dd>Not set</dd>");
+    expect(markup).toContain("<dt>Venue</dt><dd>Not set</dd>");
+    expect(markup).toContain("<dt>Client</dt><dd>Not recorded</dd>");
+    expect(markup).toContain("<dt>Guests</dt><dd>Not set</dd>");
     expect(markup).toContain("Amount not recorded");
     expect(markup).not.toContain("$0.00");
     expect(markup).not.toContain("0 guests");
@@ -115,13 +147,118 @@ describe("schedule status semantics", () => {
     expect(getScheduleSourceLabel({ source: "firebase" })).toBe("Firestore staff records");
     expect(getScheduleSourceLabel({ loading: true })).toBe("Loading tenant records");
     expect(markup).toContain("0 guests");
-    expect(markup).toContain("Total: $0.00");
+    expect(markup).toContain("<dt>Quote total</dt><dd>$0.00</dd>");
   });
 
   test("does not append a guest suffix to an invalid legacy value", () => {
     const markup = renderToStaticMarkup(<ScheduleEventFacts item={{ guests: "unknown" }} />);
-    expect(markup).toContain("Guest count not set");
-    expect(markup).not.toContain("Guest count not set guests");
+    expect(markup).toContain("<dt>Guests</dt><dd>Not set</dd>");
+    expect(markup).not.toContain("Not set guests");
+  });
+});
+
+describe("Week timeline presentation model", () => {
+  const day = (iso, events = []) => ({
+    iso,
+    date: new Date(`${iso}T12:00:00`),
+    events,
+    conflicts: { total: 0, overlap: 0, unknown: 0, capacity: 0 }
+  });
+  const event = ({ id, time, hours }) => ({
+    id,
+    quoteNumber: id.toUpperCase(),
+    eventName: `${id} dinner`,
+    status: "booked",
+    time,
+    hours,
+    conflictReasons: []
+  });
+
+  test("derives start, height, and stable collision lanes without changing Calendar authority", () => {
+    const eventA = event({ id: "event-a", time: "17:00", hours: 4 });
+    const eventB = event({ id: "event-b", time: "18:00", hours: 2 });
+    const model = buildWeekTimelineModel([day("2026-09-06", [eventB, eventA])]);
+    const reordered = buildWeekTimelineModel([day("2026-09-06", [eventA, eventB])]);
+    const byId = Object.fromEntries(model.days[0].timedEvents.map((item) => [item.event.id, item]));
+    const reorderedById = Object.fromEntries(
+      reordered.days[0].timedEvents.map((item) => [item.event.id, item])
+    );
+
+    expect(byId["event-a"]).toMatchObject({
+      startMinute: 1020,
+      endMinute: 1260,
+      durationMinutes: 240,
+      topPx: 364,
+      heightPx: 208,
+      laneIndex: 0,
+      laneCount: 2
+    });
+    expect(byId["event-b"]).toMatchObject({
+      startMinute: 1080,
+      endMinute: 1200,
+      durationMinutes: 120,
+      topPx: 416,
+      heightPx: 104,
+      laneIndex: 1,
+      laneCount: 2
+    });
+    expect(reorderedById["event-a"].laneIndex).toBe(byId["event-a"].laneIndex);
+    expect(reorderedById["event-b"].laneIndex).toBe(byId["event-b"].laneIndex);
+    expect(model.days[0].events).toEqual([eventB, eventA]);
+  });
+
+  test("reuses the first lane when event windows only abut", () => {
+    const model = buildWeekTimelineModel([day("2026-09-06", [
+      event({ id: "event-a", time: "10:00", hours: 1 }),
+      event({ id: "event-b", time: "11:00", hours: 1 })
+    ])]);
+
+    expect(model.days[0].timedEvents.map((item) => ({
+      id: item.event.id,
+      laneIndex: item.laneIndex,
+      laneCount: item.laneCount
+    }))).toEqual([
+      { id: "event-a", laneIndex: 0, laneCount: 1 },
+      { id: "event-b", laneIndex: 0, laneCount: 1 }
+    ]);
+  });
+
+  test("keeps missing time and duration visible as unplaced presentation records", () => {
+    const missingTime = event({ id: "missing-time", time: "", hours: 4 });
+    const missingDuration = event({ id: "missing-duration", time: "19:00", hours: 0 });
+    const model = buildWeekTimelineModel([day("2026-09-06", [missingTime, missingDuration])]);
+
+    expect(model.days[0].timedEvents).toEqual([]);
+    expect(model.days[0].unplacedEvents).toEqual([
+      { event: missingTime, reason: "time_unavailable" },
+      { event: missingDuration, reason: "duration_unavailable" }
+    ]);
+  });
+
+  test("expands for early events and marks overnight continuation at the day boundary", () => {
+    const model = buildWeekTimelineModel([day("2026-09-06", [
+      event({ id: "early", time: "08:30", hours: 1 }),
+      event({ id: "overnight", time: "21:30", hours: 4 })
+    ])]);
+    const byId = Object.fromEntries(model.days[0].timedEvents.map((item) => [item.event.id, item]));
+
+    expect(model).toMatchObject({
+      startMinute: 480,
+      endMinute: 1440,
+      rangeMinutes: 960,
+      heightPx: 832
+    });
+    expect(model.ticks.at(0).minute).toBe(480);
+    expect(model.ticks.at(-1).minute).toBe(1440);
+    expect(byId.early).toMatchObject({ topPx: 26, heightPx: 52 });
+    expect(byId.overnight).toMatchObject({
+      endMinute: 1530,
+      visualEndMinute: 1440,
+      continuesNextDay: true,
+      topPx: 702,
+      heightPx: 130
+    });
+    expect(byId.overnight.topPx + byId.overnight.heightPx).toBeLessThanOrEqual(model.heightPx);
   });
 });
 

@@ -175,10 +175,6 @@ const ClearDeckView = createRecoverableLazy(
   () => import("./components/LiveOperationsPlanningViews").then((module) => ({ default: module.ClearDeckView })),
   "ClearDeckView"
 );
-const OperationsSwitchboardView = createRecoverableLazy(
-  () => import("./components/LiveOperationsPlanningViews").then((module) => ({ default: module.OperationsSwitchboardView })),
-  "OperationsSwitchboardView"
-);
 const CustomerDirectoryView = createRecoverableLazy(
   () => import("./components/AmbientCustomerDirectoryView"),
   "CustomerDirectoryView"
@@ -1383,6 +1379,20 @@ export default function App({
     );
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
     return navigateAmbientTaskHandoff(handoff, ambientTaskActionId({}, options));
+  }, [navigateAmbientTaskHandoff]);
+  const navigateAmbientCalendar = useCallback((quoteId, options = {}) => {
+    const normalizedQuoteId = String(quoteId || "").trim();
+    if (!AMBIENT_UI_ENABLED || !normalizedQuoteId) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "schedule",
+      object: { id: normalizedQuoteId, type: "opportunity" },
+      focus: { quoteId: normalizedQuoteId },
+      intentId: options.intentId === "review_schedule_conflict"
+        ? "review_schedule_conflict"
+        : "review_event_schedule"
+    });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    return navigateAmbientTaskHandoff(handoff, options.actionId || `open-calendar:${normalizedQuoteId}`);
   }, [navigateAmbientTaskHandoff]);
   const navigateAmbientOpportunity = useCallback((target = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
@@ -2776,6 +2786,7 @@ export default function App({
     (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF
       && authSession.isAdmin
       && OPERATIONAL_STAFFING_UI_ENABLED)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
@@ -2792,6 +2803,7 @@ export default function App({
       || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
       || ([
         WORKSPACE_ROUTE_IDS.STAFF,
+        WORKSPACE_ROUTE_IDS.OPERATIONS,
         WORKSPACE_ROUTE_IDS.SCHEDULE,
         WORKSPACE_ROUTE_IDS.REPORTING,
         WORKSPACE_ROUTE_IDS.CATALOG,
@@ -5499,7 +5511,7 @@ export default function App({
 
   if (portalMode && customerPortalEnabled) {
     return (
-      <div className="app-shell" style={appThemeVars}>
+      <div className="app-shell portal-app-shell" style={appThemeVars}>
         <RecoverableErrorBoundary
           active
           surfaceName="Customer portal"
@@ -5648,6 +5660,7 @@ export default function App({
             canContinue={false}
             loading={catalog.loading}
             onRetry={catalog.reload}
+            technicalDetail={catalog.error}
             headingLevel={1}
             titleId="catalog-blocked-title"
           />
@@ -6063,6 +6076,7 @@ export default function App({
       canContinue
       loading={catalog.loading}
       onRetry={catalog.reload}
+      technicalDetail={catalog.error}
       headingLevel={2}
       titleId="quote-builder-catalog-read-title"
     />
@@ -6293,15 +6307,19 @@ export default function App({
         },
         onEvents: () => navigateWorkspace(WORKSPACE_PATHS.events),
         onClearDeck: () => navigateWorkspace(WORKSPACE_PATHS.clearDeck),
-        onOperations: () => navigateWorkspace(WORKSPACE_PATHS.operations),
+        onOperations: eventScheduleEnabled
+          ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
+          : undefined,
         onMessages: () => navigateWorkspace(WORKSPACE_PATHS.messaging),
         onWorkflow: () => navigateWorkspace(WORKSPACE_PATHS.workflow),
         onStaff: () => navigateWorkspace(WORKSPACE_PATHS.staff),
-        onSchedule: (menuTriggerRef) => openRoutedWorkspaceTool(
-          WORKSPACE_PATHS.schedule,
-          setScheduleOpen,
-          { menuTriggerRef }
-        ),
+        onSchedule: eventScheduleEnabled
+          ? (menuTriggerRef) => openRoutedWorkspaceTool(
+              WORKSPACE_PATHS.schedule,
+              setScheduleOpen,
+              { menuTriggerRef }
+            )
+          : undefined,
         onReporting: (menuTriggerRef) => openRoutedWorkspaceTool(
           WORKSPACE_PATHS.reporting,
           setDashboardOpen,
@@ -6482,6 +6500,12 @@ export default function App({
                   tenantTimeZone={tenantTimeZone}
                   onRefresh={commercialSnapshot.refresh}
                   onOpenWorkflow={openAmbientWorkflow}
+                  onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+                  onOpenCalendar={eventScheduleEnabled
+                    ? (quoteId) => navigateAmbientCalendar(quoteId, {
+                        actionId: `open-now-calendar:${quoteId}`
+                      })
+                    : undefined}
                   onNewQuote={handleGetInstantQuote}
                 />
               ) : (
@@ -6567,7 +6591,9 @@ export default function App({
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
-            onOpenOperations={() => navigateWorkspace(WORKSPACE_PATHS.operations)}
+            onOpenOperations={eventScheduleEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
+              : undefined}
             onOpenEvents={() => navigateWorkspace(WORKSPACE_PATHS.events)}
             onOpenOpportunities={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
             onStartOpportunity={handleGetInstantQuote}
@@ -6575,23 +6601,34 @@ export default function App({
         </WorkspaceLazyRoute>
       )}
 
-      {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && (
-        <WorkspaceLazyRoute surfaceName="Operations" component={OperationsSwitchboardView}>
-          <OperationsSwitchboardView
-            snapshot={commercialSnapshot}
-            organizationName={organizationName}
+      {CUSTOMER_CENTERED_WORKSPACE_ENABLED
+        && eventScheduleEnabled
+        && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && (
+        <WorkspaceLazyRoute surfaceName="Operations" component={EventScheduleView}>
+          <EventScheduleView
+            open
+            presentation="embedded"
+            surfaceTitle="Operations"
+            surfaceEyebrow="Calendar-first operations"
             organizationId={authSession.organizationId}
-            onRefresh={commercialSnapshot.refresh}
-            onOpenEvents={() => navigateWorkspace(WORKSPACE_PATHS.events)}
-            onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
-            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
-            onOpenReporting={() => navigateWorkspace(WORKSPACE_PATHS.reporting)}
-            onOpenCatalog={authSession.isAdmin ? () => {
-              setLibraryContextualOrigin(null);
-              setAdminInitialTab("");
-              navigateWorkspace(WORKSPACE_PATHS.catalog);
-            } : undefined}
-            onOpenDiagnostics={() => navigateWorkspace(WORKSPACE_PATHS.diagnostics)}
+            staffLeads={scheduleStaffLeads}
+            capacityLimit={scheduleCapacityLimit}
+            currentUserEmail={currentUserEmail}
+            arrivalContext={workspaceArrivalContext?.surfaceId === "schedule"
+              ? workspaceArrivalContext
+              : null}
+            onArrivalResolution={handleWorkspaceArrivalResolution}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            onOpenOpportunity={(quoteId) => navigateAmbientOpportunity({
+              quoteId,
+              actionId: `open-calendar-opportunity:${quoteId}`
+            })}
+            onOpenPeople={authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED
+              ? () => navigateWorkspace(WORKSPACE_PATHS.staff)
+              : undefined}
+            onOpenReporting={dashboardEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.reporting)
+              : undefined}
           />
         </WorkspaceLazyRoute>
       )}
@@ -6635,7 +6672,11 @@ export default function App({
             onOpenWorkflow={AMBIENT_UI_ENABLED
               ? openAmbientWorkflow
               : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
-            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
+            onOpenSchedule={eventScheduleEnabled
+              ? (quoteId) => quoteId
+                  ? navigateAmbientCalendar(quoteId)
+                  : navigateWorkspace(WORKSPACE_PATHS.operations)
+              : undefined}
             scheduleAvailable={eventScheduleEnabled}
             tenantTimeZone={tenantTimeZone}
             isAdmin={authSession.isAdmin}
@@ -6690,7 +6731,7 @@ export default function App({
         />
       )}
 
-      {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "schedule" && (
+      {AMBIENT_UI_ENABLED && eventScheduleEnabled && workspaceArrivalContext?.surfaceId === "schedule" && (
         <WorkspaceArrivalNotice
           context={workspaceArrivalContext}
           resolution={workspaceArrivalResolution}
@@ -7204,7 +7245,11 @@ export default function App({
               setHistoryTarget({ quoteId: "", reason: "" });
               returnToWorkspaceOrigin(WORKSPACE_PATHS.quotes);
             }}
-            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
+            onOpenSchedule={eventScheduleEnabled
+              ? (quoteId) => quoteId
+                  ? navigateAmbientCalendar(quoteId)
+                  : navigateWorkspace(WORKSPACE_PATHS.operations)
+              : undefined}
             scheduleAvailable={eventScheduleEnabled}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onOpenOpportunity={(target = {}) => {

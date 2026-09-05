@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 10:46:13 CDT
+Last updated: 2026-09-05 02:28:23 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,296 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Synchronized final acceptance expectations with the selected Operations and
+  Clients compositions without changing runtime behavior or authority. The
+  exact Now-to-Calendar test now addresses the focused event by its accessible
+  name, and the legacy Calm Four Clients assertion now verifies the selected
+  relationship-led heading instead of superseded presentation copy. Five
+  compatibility browser cases now retain the **Catalog Admin** entry-point
+  contract while addressing the selected **Library settings** dialog, opening
+  the intentionally disclosed Advanced policy and customer-facing brand groups
+  before editing, and asserting the real **Changes waiting to save** state
+  rather than misclassifying an unsaved local edit as a synchronization
+  failure. The corrected five-case CI-shaped matrix passes locally without any
+  runtime, catalog, pricing, persistence, or role-authority change. A same-day
+  branch/worktree reconciliation confirms all 30 UX Convergence
+  commits are present on this candidate and no other same-day commit exists
+  outside it; unrelated integration-checkout planning work and older
+  experimental worktrees remain excluded. Whole-candidate local qualification
+  passes 4,548 unit tests, the 526-module production build, the aggregate
+  release/CWV lane, 127 Truth Loop tests, 78 Firestore-rule tests, the 4-case
+  Firebase browser smoke, the 3-case authoritative-pricing browser suite, and
+  the corrected 71-case responsive route/authority matrix. These are
+  source/local results only; exact-head CI, hosted, provider, production,
+  recipient, assistive-technology, and human evidence remain separate.
+- Converged the existing exact-token **Customer Proposal Decision Center** into
+  the selected customer-facing half of Client 360 without adding a portal,
+  quote, pricing, decision, signature, payment, conversation, or route
+  authority. The event story now owns the broad canvas while one secondary rail
+  keeps decision status, total, required deposit, expiry, response choices,
+  mutation feedback, and the authority-gated question continuation together.
+  Event facts, package/menu, and compact optional additions remain client-
+  readable; price detail, planning assumptions, and tenant terms begin
+  collapsed. The public portal no longer inherits the absent staff sidebar's
+  236px desktop offset. All contextual question, reversible addition, explicit
+  acceptance/signature, payment, recovery, and exact-token handlers are reused.
+  Focused component coverage passes 49/49; the 390/768/1440 plus exact-source
+  1487x1058 Chromium matrix passes 5/5 with quote selection/totals/revision
+  equality, 44px targets, no overflow/clipping/collision, and zero axe
+  violations. The exact 1487x1058 source and implementation were inspected
+  together at a local **9.5/10 - GO**. This is local source evidence only;
+  exact-head CI, connected portal behavior, deployment, production data,
+  provider outcomes, recipient use, and human acceptance remain unclaimed.
+- Converged the existing **Clients** directory and Internal Client 360 into the
+  selected relationship-led composition without adding a customer record,
+  activity feed, urgency model, route, or mutation authority. The populated
+  directory now leads with purpose, one relationship in context, and one exact
+  **Review client** continuation. Client 360 presents the recorded customer
+  request as the next decision, the existing Client → Opportunity → Proposal →
+  Event evidence as a four-stage spine, the living opportunity as the active
+  object, and exact lifecycle/request evidence as recent relationship history.
+  A same-quote, same-time customer request and conversation summary appears once
+  rather than as duplicate activity. Consequence copy states only that no state
+  changes until review; it does not invent operational impact or urgency.
+  Conversations, additional opportunities, source detail, and the existing
+  detailed record remain available under disclosure. Focused unit coverage
+  passes 16/16 and the 390/768/1440 Chromium-admin route matrix passes 3/3 with
+  exact arrival, persisted-state equality, 44px targets, layout containment,
+  no horizontal overflow, and zero scoped axe violations. The selected
+  reference and exact 1440px implementation were inspected together at a local
+  **9.5/10 — GO**. This is local source evidence; exact-head CI, hosted data,
+  deployment, production behavior, assistive-technology use, and human
+  acceptance remain unclaimed.
+- Converged **Now** to the approved decision-ledger composition without adding
+  another work queue, event projection, payment state, or completion authority.
+  The masthead now names the highest-pressure recorded condition; **Needs you**
+  preserves the existing deterministic Workflow order while distinguishing true
+  urgency from general waiting and replacing decorative `01/02/03` ranks with
+  accessible ordinal context. Each item pairs the recorded situation with an
+  evidence-bounded consequence and its existing exact Workflow or Customer
+  continuation. The secondary column projects a compact seven-day horizon and
+  accepted/booked events from the existing Calendar inputs, with exact Calendar
+  handoff. The adaptive **Quiet progress** band shows only supported internal
+  completion receipts under **Recently handled** and existing pending/provider
+  payment states under **Waiting on others**; unresolved operator-owned money
+  actions remain separate **Commercial steps**. Desktop, tablet, and phone retain
+  one semantic order and no horizontal overflow. Local Chromium coverage passes
+  2/2 including exact Workflow/Calendar round trips, responsive captures, and
+  zero serious/critical axe violations. The exact 1487×1058 implementation and
+  selected visual were inspected together at a local **9.5/10 — GO**. This is a
+  local, unpushed presentation change; no hosted, provider, production, or human
+  acceptance is claimed.
+- Converged the existing role-safe **Library** to the selected Option 2
+  composition with Option 3 restraint. Desktop gives the broad commercial
+  ledger approximately two-thirds of the canvas and keeps unresolved setup in
+  a quieter secondary rail; mobile preserves the same ledger-first semantic
+  order. Existing Packages appear as **Offers**, Menu/Services/Rentals as
+  **Components**, Event Templates as quote starting points, and existing
+  Pricing and Configuration Rules as one policy group. The Offer editor now
+  uses a compact navigator and broad selected-offer workspace without a
+  permanent health rail; its primary summary retains derived margin while
+  detailed economics move under disclosure, and recorded choice groups project
+  read-only without implying browser authoring. Add-on and Rental editors expose
+  visible derived Usage with stable IDs under Technical details. Event Templates
+  are independently collapsible across eight business groups. Readable Rules
+  and safe structured controls precede Advanced JSON recovery; Pricing separates
+  Base pricing, Adjustments & context, Fees, Tax, and Deposit before Advanced
+  policy. Unresolved readiness expands while healthy evidence compresses; and
+  recovery copy states what cannot happen, what remains active, and the next
+  safe action. Sales can inspect the same objects and readiness outcomes
+  without repeated disabled administrator controls. **Your bundle** remains a
+  derived composition of the one quote draft. The readiness rail uses
+  supplemental semantic icons while text remains authoritative, ordinary text
+  stays at least 12px, one save/retry action owns recovery, and switching an
+  embedded editor tab synchronizes its breadcrumb/title without remounting or
+  dropping staged work. Local Chromium evidence passes Ambient Library 17/17
+  and Calm Four 10/10 with `VITE_OPERATIONAL_STAFFING_ENABLED=true`; exact
+  390/768/1440 captures and combined comparisons received a local visual-review
+  verdict of **9.5/10 — GO**. The exact rendered implementation is local commit
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4`. No Bundle record, route,
+  lifecycle, save path, catalog authority, pricing authority, role authority,
+  or publication path was added. Exact-head CI measures 3,381,257 / 397,428
+  bytes for compatibility; exact-head CI measures 4,319,173 / 432,561 bytes
+  for Ambient. The active temporary exception is pinned to those larger
+  literal graphs with no future-growth headroom; the selected lazy Library
+  experience accounts for 45,724 and 61,440 aggregate bytes respectively. Full unit, build, focused
+  browser, capability/document governance, and local CWV checks pass. The
+  isolated checkout lacks the six Firebase web configuration values required
+  by `check:env`, so the aggregate release lane remains environment-blocked
+  rather than falsely green. This candidate is local and unpushed; no exact-head
+  CI, hosted result, deployment, production-data result, or human acceptance is
+  claimed.
+- Corrected Calendar-first Operations to the selected compositions on the
+  existing schedule authority. Month now gives the full horizontal canvas to
+  the month calendar and reveals the selected day, focused event, conflict
+  consequence, and collapsed operational domains beneath it. Week now renders
+  a seven-day time grid with a vertical time axis, event position and height
+  derived from start time and duration, visible collision lanes, and a
+  secondary contextual detail rail. Both presentations retain one selection,
+  event projection, and conflict model; phone widths retain the same-model
+  agenda rather than a third Calendar implementation. Operational detail begins
+  collapsed, comparison appears only inside the conflict workflow, and Tools
+  remains secondary. Derived conflicts have no manual resolved state; operators
+  correct authoritative date, time, duration, venue, guest-count, or lifecycle
+  inputs on the affected Opportunity and the existing conflict model recomputes
+  the result. The same slice fails Calendar closed when `eventSchedule` is disabled:
+  Operations leaves primary and secondary navigation, `/app/operations` and
+  `/app/schedule` do not render Calendar, and Now, Opportunity, Client, and Event
+  handoffs are withheld. Reporting remains independently gated by
+  `reportingDashboard`; People retains the existing administrator/staffing gate.
+  Local implementation commit `5dd97a20133b592f210d56e2454e699c17d45200`
+  passes the 12-case Operations browser matrix, including 390/768/1440 and
+  same-size 1487×1058 reference captures, serious/critical axe checks, exact
+  handoffs, capability gates, and authoritative staffing/checklist persistence.
+  Final local release qualification also passes 4,509 unit tests, both build
+  and bundle gates, documentation/capability governance, 127 Truth Loop tests,
+  and Lighthouse CWV. No deployment, hosted role result, provider outcome, or
+  human acceptance is claimed.
+- Promoted Calendar-first **Operations** into the Ambient primary orientation,
+  producing the intentionally bounded order **Now**, **Opportunities**,
+  **Operations**, **Clients**, and role-gated **Library**. Removed the duplicate
+  Ambient Operations header dropdown while retaining Operations, Clear the
+  Deck, and Staff in Workspace & tools; Frequent and progressive
+  Administration groups remain unchanged. Focused unit and local browser
+  coverage verifies the direct current route, desktop/mobile grouping,
+  responsive overflow and accessibility boundaries, compatibility navigation,
+  and admin/sales visibility. The existing compatibility bundle exception is
+  pinned to the exact 3,331,404-byte measured graph, an 860-byte aggregate
+  increase with no largest-chunk growth or percentage padding. Final local
+  qualification passes 4,499 unit tests, production build, project/env/secret/
+  workflow/capability/document governance, bundle, 127 Truth Loop tests,
+  Lighthouse CWV, 22 Workbench browser cases, 13 compatibility Proposal
+  Composer cases, and 9 Operations cases. The 238-criterion ledger resolves to
+  236 PASS, one NOT APPLICABLE, and exact-head CI UNVERIFIABLE. This local
+  source candidate has not been pushed, deployed, accepted in a hosted tenant,
+  or reviewed by a human.
+- Added a positive Workbench persistence golden path: a complete supported
+  draft saves into its Living Opportunity, reopens through Opportunities, edits
+  through the existing authority,
+  and saves again as the same quote, quote number, and portal identity while
+  advancing `v0001` to `v0002` with exactly two history records. Customer,
+  venue, guest, and Menu state survive the round trip. Together with the
+  already focused Guided, Pilot, scenario, blocker, long-Menu, margin, and
+  failure-recovery cases, this closes the local quote golden-path set without
+  adding another form, save, pricing, or persistence authority.
+- Certified contextual capability continuity across Workflow, Messages, Pilot,
+  Clear the Deck, Staff, Reporting, Administration, Library, Now, and exact
+  Opportunity/Calendar handoffs using 274 focused regressions plus bounded
+  Clear Deck interaction coverage. Removed the zero-consumer legacy Operations
+  switchboard and its dead CSS, and registered its Calendar-first replacement,
+  retirement condition, and route-preservation disposition. The canonical
+  feature inventory now classifies Workbench, Guided, compatibility quote
+  paths, Operations, Event Focus, Workflow, Messages, and Administration
+  explicitly. No business authority, live-event claim, route, or capability was
+  added or removed; this remains local and unpushed.
+- Consolidated the Ambient Operations menu into the Calendar-first daily
+  execution paths: **Operations**, **Clear the Deck**, and role-gated **Staff**.
+  Workflow, Messages, and Pilot remain Frequent tools; Reporting,
+  Integrations, Import, and Diagnostics remain progressive Administration;
+  exact Event Focus and Schedule compatibility remain directly reachable.
+  Focused shell tests and 9/9 real-route Operations cases now cover the
+  responsive Calendar, exact handoffs, conflict evidence, persisted staff and
+  checklist work, direct Event arrival, and Back/Forward continuity. This is a
+  local source candidate only; it has not been pushed, deployed, or accepted in
+  a hosted environment.
+- Certified the remaining Workbench behavioral boundaries without adding a
+  second authority: service style survives a Guided round-trip, explicit
+  staffing adoption reprices the canonical total, Pilot stays dormant until
+  relevant and previews before applying only to the dirty draft, and ordinary
+  save blockers still govern AI-assisted changes. A forced browser-local
+  persistence exception now has end-to-end evidence that no saved-success
+  claim or quote record is created while event, customer, and Menu work remain
+  intact and the exact failure promotes into save-readiness Attention. This is
+  focused local evidence only; no provider, hosted, or production claim is
+  made.
+- Refined the local-only Commercial Workbench presentation after rendered
+  desktop/mobile review: long Menus now use course-level disclosure with the
+  first and selected groups open, search reveals matching groups, Event starts
+  with a readable evidence-derived summary, semantic region/headings and 44px
+  controls are explicit, and healthy margin detail compresses while missing or
+  below-target evidence expands. Corrected the margin evidence boundary so
+  null/blank recorded costs remain missing rather than coercing to zero.
+  Focused model and real-browser coverage certifies first-viewport hierarchy,
+  blank/long states, keyboard focus, error association, reduced motion, and
+  phone-width Menu flow. No pricing, persistence, catalog, provider, or save
+  authority changed; this slice remains local and unpublished.
+- Certified the existing Compare Scenarios and common save-readiness paths
+  without widening runtime authority: scenario inspection remains isolated
+  until explicit application, focus returns to its invoker, both Workbench save
+  controls expose the same exact blockers, and quote-read, Pilot, intent,
+  impact-review, and authorization blockers remain fail-closed. This is a
+  focused local test/evidence slice only.
+- Continued the full 238-criterion UX convergence program as local-commit-only
+  work. Focused Workbench browser coverage now certifies unsaved Event/Menu
+  continuity across domains, canonical guest repricing and undo, retained
+  validation, explicit staffing recommendations, Rentals and Enhancements,
+  honest unsaved client preview with focus restoration, and collapsed-but-
+  retained advanced pricing. Publication, merge, deployment, and final
+  exact-head qualification remain outside this slice.
+- Completed the local commercial-platform source candidate: new authoritative
+  calculations use integer-minor-unit pricing-v2 with deterministic half-up
+  line, service-fee, tax, deposit, and balance reconciliation; exact price
+  waterfalls and applied policy evidence are retained on the pricing receipt.
+  Explicit invalid tax/season references, malformed/overlapping fee tiers, and
+  ambiguous seasonal rules fail closed. A fixed-seed 5,000-case browser/server
+  differential suite requires exact cent and waterfall parity. Historical
+  pricing-v1 derivation remains explicitly versioned and unchanged.
+- Hardened proposal, stored quote, payment-ledger, and final-balance amount
+  provenance to prefer and cross-check authoritative `totalCents` and
+  `depositCents`. Stripe identity, idempotency, settlement, and provider
+  authority are unchanged. Library now distinguishes Offers, Components,
+  Templates, Pricing, and Rules, and existing versioned catering starter packs
+  derive template/rule seeds while preserving manifest identity, customization
+  fences, and the required post-install pricing review.
+- Split commercial publication validation from the startup route graph. The
+  compatibility profile remains below its prior largest-chunk ceiling; its
+  temporary total-JavaScript exception is widened by exactly 19,424 bytes to
+  the measured 3,330,544-byte candidate for the shared commercial kernel.
+- Added one shared commercial-platform core used by the browser and deployable
+  Functions graph. Existing Packages now adapt to Configurable Offers with
+  optional bounded choice groups; server pricing validates every choice and
+  rejects browser-only selection claims. Existing Event Templates adapt to
+  Commercial Templates with explicit-field preservation and deterministic
+  shallow-module collision reporting. Bounded declarative Configuration Rules
+  accept only enumerated condition/effect operators, detect conflicting
+  mandatory outcomes, and never mutate quotes. Library catalog editing can
+  stage rule JSON, while the existing revision and pricing-confirmation path
+  remains the only publication boundary.
+- Began the reconciled Commercial Platform refinement on the existing UX
+  convergence branch. Added the accepted Kernel -> Vertical Pack -> Tenant
+  Configuration -> Contextual UX decision, the canonical Pricing Constitution,
+  an ordered compatibility-first delivery program, and an 80-case named
+  pricing-v1 Golden Corpus with a frozen output digest. This slice changes no
+  runtime pricing, catalog, payment, provider, or quote authority; it records
+  the current v1 behavior and known policy defects before pricing-v2 semantics.
+- Added the frozen QuotePilot UX Convergence Contract repository copy and an
+  AC-001–AC-238 execution-evidence ledger. The ledger records verdicts and
+  implementation classifications without changing any frozen claim.
+- Evolved the existing Proposal Composer into a presentation-only Commercial
+  Workbench with Event, Customer, Experience, Staffing, and Commercials
+  domains and a reordered Commercial Truth rail. The same App-owned form,
+  calculation, Menu/staffing editors, Guided mode, explicit save/version path,
+  and client-safe Preview remain authoritative. Replaced the `/app/operations`
+  switchboard presentation with the existing Calendar capability, added a
+  same-model mobile agenda, retained `/app/schedule`, and added exact
+  Now/Living Opportunity/Calendar handoffs. No Firebase, pricing, persistence,
+  lifecycle, staffing, catalog, provider, or live-telemetry authority changed.
+  Every existing contextual and secondary navigation entry remains reachable;
+  the later local convergence slice promotes Operations into the five-item
+  primary orientation after its focused local gate. Local and CI evidence do
+  not claim deployment, hosted behavior, production readiness, or human
+  acceptance. The compatibility bundle's
+  existing temporary exception is pinned to the exact CI measurement of
+  3,311,120 total JavaScript bytes (largest chunk 393,416 bytes), a 1,120-byte
+  increase for the new presentation and handoff surfaces with no percentage
+  headroom; the existing removal plan and expiry remain unchanged.
+  The correction is local-only by owner instruction. The draft PR remains at
+  pre-correction SHA `30b6fcd48aa881d83150149eeb942e2d07dd89f8`, whose
+  exact-head run `33902068474` failed that prior ceiling; consequently
+  that earlier Operations promotion was not authorized at that checkpoint.
+  The complete local `lane:release:cwv` passed against the corrected ceiling,
+  but local success did not substitute for that checkpoint's exact-head CI
+  gate.
 - Released annotated tag `v0.16.6` at exact commit
   `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
   `33889897821` passed every required job. Governed Vercel production run

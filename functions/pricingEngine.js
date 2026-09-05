@@ -1,6 +1,18 @@
 const { createHash } = require("node:crypto");
+const {
+  CommercialPlatformError,
+  evaluateOfferConfiguration,
+  validateConfigurableOffer
+} = require("./commercialPlatformCore.cjs");
+const {
+  PRICING_V2_VERSION,
+  PricingV2Error,
+  calculatePricingV2,
+  validatePricingV2Policy
+} = require("./pricingV2Core.cjs");
 
-const PRICING_VERSION = "pricing-v1";
+const PRICING_V1_VERSION = "pricing-v1";
+const PRICING_VERSION = PRICING_V2_VERSION;
 const PRICING_AUTHORITY = "server_authoritative";
 const PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION = "pricing-catalog-authority-v1";
 const PRICING_MODES = new Set(["per_person", "per_item", "per_event"]);
@@ -124,6 +136,15 @@ function moneyValue(source = {}, minorKey, legacyKey, fallback = 0) {
     : toNumber(source?.[legacyKey], fallback);
 }
 
+function moneyMinorValue(source = {}, minorKey, legacyKey, fallback = 0) {
+  if (Object.prototype.hasOwnProperty.call(source || {}, minorKey)) {
+    const minor = Number(source[minorKey]);
+    return Number.isSafeInteger(minor) && minor >= 0 ? minor : Math.round(fallback * 100);
+  }
+  const minor = Math.round(toNumber(source?.[legacyKey], fallback) * 100);
+  return Number.isSafeInteger(minor) && minor >= 0 ? minor : Math.round(fallback * 100);
+}
+
 function toInt(value, fallback = 0) {
   return Math.round(toNumber(value, fallback));
 }
@@ -196,6 +217,16 @@ function normalizeQuantityMap(input) {
     if (!key) return acc;
     acc[key] = Math.max(1, toInt(rawValue, 1));
     return acc;
+  }, {});
+}
+
+function normalizeOfferChoiceSelections(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return Object.entries(input).slice(0, 100).reduce((result, [groupId, ids]) => {
+    const normalizedGroupId = toCatalogId(groupId);
+    if (!normalizedGroupId || !Array.isArray(ids) || ids.length > 100) return result;
+    result[normalizedGroupId] = [...new Set(ids.map((id) => toCatalogId(id)).filter(Boolean))];
+    return result;
   }, {});
 }
 
@@ -469,6 +500,7 @@ function normalizePricingInputPayload(data = {}, staff = {}, {
   const menuItems = normalizeSelectionList(selection.menuItems || rawForm.menuItems || source.menuItems, "per_event");
 
   return {
+    pricingVersion: toText(source.pricingVersion || root.pricingVersion, PRICING_VERSION),
     organizationId,
     quoteId: toText(source.quoteId || root.quoteId),
     quoteNumber: toText(source.quoteNumber || root.quoteNumber),
@@ -505,7 +537,10 @@ function normalizePricingInputPayload(data = {}, staff = {}, {
         addonQuantities,
         rentalQuantities,
         menuItemQuantities
-      }
+      },
+      offerChoiceSelections: normalizeOfferChoiceSelections(
+        selection.offerChoiceSelections || rawForm.offerChoiceSelections
+      )
     },
     labor: {
       bartenderRateTypeId: toText(
@@ -540,9 +575,15 @@ function normalizeCatalogPackage(item = {}) {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
     ppp: moneyValue(item, "pppMinor", "ppp", 0),
+    pppMinor: moneyMinorValue(item, "pppMinor", "ppp", 0),
     includedMenuItemIds: stableIds(item.includedMenuItemIds),
     includedAddonIds: stableIds(item.includedAddonIds),
     includedRentalIds: stableIds(item.includedRentalIds),
+    choiceGroups: Array.isArray(item.choiceGroups) ? item.choiceGroups.map((group) => ({ ...group })) : [],
+    quantityPolicyRefs: stableIds(item.quantityPolicyRefs),
+    ruleRefs: stableIds(item.ruleRefs),
+    offerVersion: toText(item.offerVersion, "configurable-offer-v1"),
+    verticalType: toText(item.verticalType, "catering"),
     active: item.active !== false
   };
 }
@@ -553,6 +594,7 @@ function normalizeCatalogAddon(item = {}) {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
     price: moneyValue(item, "priceMinor", "price", 0),
+    priceMinor: moneyMinorValue(item, "priceMinor", "price", 0),
     pricingType,
     type: pricingType,
     staffRole: resolveAddonStaffRole(item),
@@ -567,6 +609,7 @@ function normalizeCatalogRental(item = {}) {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
     price: moneyValue(item, "priceMinor", "price", 0),
+    priceMinor: moneyMinorValue(item, "priceMinor", "price", 0),
     qtyPerGuests: Math.max(1, toNumber(item.qtyPerGuests, 1)),
     pricingType,
     type: pricingType,
@@ -581,6 +624,7 @@ function normalizeCatalogMenuItem(item = {}) {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
     price: moneyValue(item, "priceMinor", "price", 0),
+    priceMinor: moneyMinorValue(item, "priceMinor", "price", 0),
     pricingType,
     type: pricingType,
     eventTypeId: toText(item.eventTypeId),
@@ -617,6 +661,7 @@ function normalizeMenuSections(sections = []) {
           id,
           name,
           price: moneyValue(item, "priceMinor", "price", 0),
+          priceMinor: moneyMinorValue(item, "priceMinor", "price", 0),
           cost: Object.prototype.hasOwnProperty.call(item || {}, "costMinor")
             ? (item.costMinor === null ? null : fromMinorUnits(item.costMinor, null))
             : toOptionalRate(item?.cost),
@@ -682,7 +727,8 @@ function normalizeBartenderRateTypes(rateTypes, fallbackRate = 30) {
   return source.map((item, idx) => ({
     id: toCatalogId(item?.id, `bartender-rate-${idx + 1}`),
     name: toText(item?.name, `Bartender Type ${idx + 1}`),
-    rate: Math.max(0, moneyValue(item, "rateMinor", "rate", fallbackRate))
+    rate: Math.max(0, moneyValue(item, "rateMinor", "rate", fallbackRate)),
+    rateMinor: moneyMinorValue(item, "rateMinor", "rate", fallbackRate)
   }));
 }
 
@@ -692,7 +738,9 @@ function normalizeStaffingRateTypes(rateTypes, fallbackServerRate = 22, fallback
     id: toCatalogId(item?.id, `staffing-rate-${idx + 1}`),
     name: toText(item?.name, `Staffing Type ${idx + 1}`),
     serverRate: Math.max(0, moneyValue(item, "serverRateMinor", "serverRate", fallbackServerRate)),
-    chefRate: Math.max(0, moneyValue(item, "chefRateMinor", "chefRate", fallbackChefRate))
+    serverRateMinor: moneyMinorValue(item, "serverRateMinor", "serverRate", fallbackServerRate),
+    chefRate: Math.max(0, moneyValue(item, "chefRateMinor", "chefRate", fallbackChefRate)),
+    chefRateMinor: moneyMinorValue(item, "chefRateMinor", "chefRate", fallbackChefRate)
   }));
 }
 
@@ -755,16 +803,26 @@ function normalizePricingSettings(settings = {}) {
         }
       : null,
     perMileRate: Math.max(0, moneyValue(source, "perMileRateMinor", "perMileRate", DEFAULT_PRICING_SETTINGS.perMileRate)),
+    perMileRateMinor: moneyMinorValue(source, "perMileRateMinor", "perMileRate", DEFAULT_PRICING_SETTINGS.perMileRate),
     longDistancePerMileRate: Math.max(0, moneyValue(
       source,
       "longDistancePerMileRateMinor",
       "longDistancePerMileRate",
       DEFAULT_PRICING_SETTINGS.longDistancePerMileRate
     )),
+    longDistancePerMileRateMinor: moneyMinorValue(
+      source,
+      "longDistancePerMileRateMinor",
+      "longDistancePerMileRate",
+      DEFAULT_PRICING_SETTINGS.longDistancePerMileRate
+    ),
     deliveryThresholdMiles: Math.max(0, toNumber(source.deliveryThresholdMiles, DEFAULT_PRICING_SETTINGS.deliveryThresholdMiles)),
     bartenderRate,
+    bartenderRateMinor: moneyMinorValue(source, "bartenderRateMinor", "bartenderRate", bartenderRate),
     serverRate,
+    serverRateMinor: moneyMinorValue(source, "serverRateMinor", "serverRate", serverRate),
     chefRate,
+    chefRateMinor: moneyMinorValue(source, "chefRateMinor", "chefRate", chefRate),
     staffingChargeMode: normalizeStaffingChargeMode(
       source.staffingChargeMode,
       DEFAULT_PRICING_SETTINGS.staffingChargeMode
@@ -988,7 +1046,10 @@ function normalizeCatalogBundle(bundle = {}) {
     addons,
     rentals,
     menuItems,
-    settings
+    settings,
+    rawSettings: bundle?.settings && typeof bundle.settings === "object"
+      ? { ...bundle.settings }
+      : {}
   };
 }
 
@@ -1173,7 +1234,7 @@ function resolveAuthoritativePackageInclusions(selectedPkg, maps, menuItemById) 
   };
 }
 
-function calculateAuthoritativePricing(input, catalog, settings, catalogSource = "") {
+function calculateAuthoritativePricingV1(input, catalog, settings, catalogSource = "") {
   const maps = buildCatalogMaps(catalog);
   const menuItemById = flattenMenuItems(settings, maps.menuItemById);
   const missingReferences = new Set();
@@ -1201,6 +1262,43 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
     throw new PricingEngineError("failed-precondition", `Package ${selectedPkg.id} is inactive.`);
   }
   const packageInclusions = resolveAuthoritativePackageInclusions(selectedPkg, maps, menuItemById);
+  let offerConfiguration;
+  try {
+    validateConfigurableOffer(selectedPkg, { ...catalog, menuItems: [...menuItemById.values()] });
+    offerConfiguration = evaluateOfferConfiguration(
+      selectedPkg,
+      input.selection.offerChoiceSelections,
+      { ...catalog, menuItems: [...menuItemById.values()] }
+    );
+  } catch (error) {
+    if (error instanceof CommercialPlatformError) {
+      throw new PricingEngineError("failed-precondition", error.message);
+    }
+    throw error;
+  }
+  if (!offerConfiguration.valid) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      offerConfiguration.violations.map((violation) => violation.reason).join(" ")
+    );
+  }
+  const selectedComponentIds = {
+    menu_item: new Set(input.selection.menuItems.map((item) => item.id)),
+    addon: new Set(input.selection.addons.map((item) => item.id)),
+    rental: new Set(input.selection.rentals.map((item) => item.id)),
+    resource: new Set()
+  };
+  const selectedChoiceMissingFromQuote = (selectedPkg.choiceGroups || []).flatMap((group) => (
+    (offerConfiguration.selections[group.id] || [])
+      .filter((componentId) => !selectedComponentIds[group.componentType]?.has(componentId))
+      .map((componentId) => `${group.componentType} ${componentId}`)
+  ));
+  if (selectedChoiceMissingFromQuote.length) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      `Offer choices must be present in the authoritative quote selection: ${selectedChoiceMissingFromQuote.join(", ")}.`
+    );
+  }
   const includedAddonIds = new Set(packageInclusions.addons.map((item) => item.id));
   const includedRentalIds = new Set(packageInclusions.rentals.map((item) => item.id));
   const includedMenuItemIds = new Set(packageInclusions.menuItems.map((item) => item.id));
@@ -1616,7 +1714,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         addonQuantities: addonQuantityMap,
         rentalQuantities: rentalQuantityMap,
         menuItemQuantities: menuItemQuantityMap
-      }
+      },
+      offerChoiceSelections: { ...offerConfiguration.selections }
     },
     labor: {
       bartenderRateOverride: input.labor?.bartenderRateOverride ?? "",
@@ -1648,7 +1747,7 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
   };
 
   return {
-    pricingVersion: PRICING_VERSION,
+    pricingVersion: PRICING_V1_VERSION,
     calculatedAt: normalizedInputs.metadata.generatedAt,
     authority: PRICING_AUTHORITY,
     inputs: normalizedInputs,
@@ -1729,6 +1828,7 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         longDistanceRate
       },
       missingReferences: Array.from(missingReferences),
+      offerConfiguration,
       pricingModeDefaults: {
         package: "per_person",
         addons: "per_person",
@@ -1737,6 +1837,65 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       }
     }
   };
+}
+
+function calculateAuthoritativePricing(input, catalog, settings, catalogSource = "") {
+  const legacyStructure = calculateAuthoritativePricingV1(input, catalog, settings, catalogSource);
+  if (input.pricingVersion === PRICING_V1_VERSION) return legacyStructure;
+
+  const form = {
+    ...input.event,
+    pkg: input.selection.package.id,
+    addons: input.selection.addons.map((item) => item.id),
+    rentals: input.selection.rentals.map((item) => item.id),
+    menuItems: input.selection.menuItems.map((item) => item.id),
+    addonQuantities: input.selection.quantities.addonQuantities,
+    rentalQuantities: input.selection.quantities.rentalQuantities,
+    menuItemQuantities: input.selection.quantities.menuItemQuantities,
+    offerChoiceSelections: input.selection.offerChoiceSelections,
+    bartenderRateTypeId: input.labor.bartenderRateTypeId,
+    staffingRateTypeId: input.labor.staffingRateTypeId,
+    bartenderRateOverride: input.labor.bartenderRateOverride,
+    serverRateOverride: input.labor.serverRateOverride,
+    chefRateOverride: input.labor.chefRateOverride,
+    serverRateMixCsv: input.labor.serverRateMixCsv,
+    chefRateMixCsv: input.labor.chefRateMixCsv
+  };
+
+  try {
+    const exactPricing = calculatePricingV2({
+      form,
+      catalog,
+      settings,
+      calculatedAt: legacyStructure.calculatedAt,
+      authority: PRICING_AUTHORITY,
+      catalogSource
+    });
+    return {
+      ...exactPricing,
+      inputs: {
+        ...legacyStructure.inputs,
+        selection: {
+          ...legacyStructure.inputs.selection,
+          offerChoiceSelections: exactPricing.inputs.selection.offerChoiceSelections
+        }
+      },
+      rulesSnapshot: {
+        ...legacyStructure.rulesSnapshot,
+        ...exactPricing.rulesSnapshot,
+        settingsSnapshot: {
+          ...legacyStructure.rulesSnapshot.settingsSnapshot,
+          ...exactPricing.rulesSnapshot.settingsSnapshot
+        },
+        offerConfiguration: exactPricing.rulesSnapshot.offerConfiguration
+      }
+    };
+  } catch (error) {
+    if (error instanceof PricingV2Error) {
+      throw new PricingEngineError("failed-precondition", error.message);
+    }
+    throw error;
+  }
 }
 
 async function calculateQuotePricingAuthoritative({
@@ -1761,6 +1920,16 @@ async function calculateQuotePricingAuthoritative({
   const catalogBundle = await loadCatalogAndSettings(db, organizationsCollection, {
     organizationId: normalizedInput.organizationId
   });
+  if (normalizedInput.pricingVersion !== PRICING_V1_VERSION) {
+    try {
+      validatePricingV2Policy(catalogBundle.rawSettings);
+    } catch (error) {
+      if (error instanceof PricingV2Error) {
+        throw new PricingEngineError("failed-precondition", error.message);
+      }
+      throw error;
+    }
+  }
   if (!isCatalogPricingConfirmationCurrent(catalogBundle.settings)) {
     throw new PricingEngineError(
       "failed-precondition",
@@ -1804,6 +1973,7 @@ async function calculateQuotePricingAuthoritative({
 
 module.exports = {
   PRICING_VERSION,
+  PRICING_V1_VERSION,
   PRICING_AUTHORITY,
   PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION,
   PricingEngineError,

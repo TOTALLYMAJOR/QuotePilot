@@ -404,7 +404,7 @@ const DESTINATION_CONFIG = /* @__PURE__ */ (() => Object.freeze({
     focusConsumerState: "supported"
   }),
   schedule: Object.freeze({
-    routeId: WORKSPACE_ROUTE_IDS.SCHEDULE,
+    routeId: WORKSPACE_ROUTE_IDS.OPERATIONS,
     surfaceId: "schedule",
     focusTransport: "state_only",
     focusConsumerState: "pending"
@@ -678,7 +678,7 @@ function buildPath(destination, focus) {
     return buildWorkflowPath(focus);
   }
   if (destination === "messages") return buildMessagingPath(focus);
-  if (destination === "schedule") return WORKSPACE_PATHS.schedule;
+  if (destination === "schedule") return WORKSPACE_PATHS.operations;
   if (destination === "library") return WORKSPACE_PATHS.catalog;
   return WORKSPACE_PATHS.reporting;
 }

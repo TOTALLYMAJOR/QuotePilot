@@ -1,7 +1,11 @@
-import React from "react";
+// @vitest-environment jsdom
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vitest";
-import { EventPlanningView } from "../LiveOperationsPlanningViews";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { ClearDeckView, EventPlanningView } from "../LiveOperationsPlanningViews";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 function snapshot(overrides = {}) {
   return {
@@ -17,7 +21,39 @@ function snapshot(overrides = {}) {
   };
 }
 
+let container;
+let root;
+
+beforeEach(() => {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+function mountClearDeck(props = {}) {
+  act(() => {
+    root.render(<ClearDeckView snapshot={snapshot()} {...props} />);
+  });
+}
+
 describe("EventPlanningView recovery journeys", () => {
+  test("offers Operations only when the Calendar capability supplies a continuation", () => {
+    const withoutOperations = renderToStaticMarkup(
+      <EventPlanningView snapshot={snapshot()} />
+    );
+    const withOperations = renderToStaticMarkup(
+      <EventPlanningView snapshot={snapshot()} onOpenOperations={() => {}} />
+    );
+
+    expect(withoutOperations).not.toContain(">Operations</button>");
+    expect(withOperations).toContain(">Operations</button>");
+  });
+
   test("replaces raw provider errors with one safe productive recovery", () => {
     const markup = renderToStaticMarkup(
       <EventPlanningView snapshot={snapshot({ error: "Missing or insufficient permissions." })} />
@@ -151,4 +187,116 @@ describe("EventPlanningView recovery journeys", () => {
     expect(markup).not.toContain(">Replay</button>");
   });
 
+});
+
+describe("ClearDeckView bounded decision review", () => {
+  test("limits the review queue and exposes no invented decision authority", () => {
+    const items = [
+      { id: "approval-a", type: "approval", quoteId: "quote-a", quote: { quoteNumber: "QP-1001" } },
+      { id: "decision-b", type: "decision_debt", quoteId: "quote-b", quote: { quoteNumber: "QP-1002" } },
+      { id: "approval-c", type: "approval", quoteId: "quote-c", quote: { quoteNumber: "QP-1003" } },
+      { id: "decision-d", type: "decision_debt", quoteId: "quote-d", quote: { quoteNumber: "QP-1004" } },
+      { id: "follow-up-e", type: "follow_up", quoteId: "quote-e", quote: { quoteNumber: "QP-1005" } }
+    ];
+
+    mountClearDeck({
+      snapshot: snapshot({
+        loadedAt: Date.parse("2026-09-04T18:00:00.000Z"),
+        reads: {
+          attention: { status: "success" },
+          history: { status: "success" }
+        },
+        attentionSummary: { itemCount: items.length, items }
+      })
+    });
+
+    const decisions = Array.from(container.querySelectorAll(".live-ops-decision"));
+    expect(decisions).toHaveLength(3);
+    expect(decisions.map((item) => item.querySelector("h3").textContent))
+      .toEqual(["QP-1001", "QP-1002", "QP-1003"]);
+    expect(container.textContent).toContain("Review the current source evidence in Workflow.");
+    expect(container.textContent).toContain("Skip/defer does not resolve this item in this slice.");
+    expect(container.textContent).toContain("Planning view only");
+    expect(Array.from(container.querySelectorAll("button")).map((button) => button.textContent.trim()))
+      .toEqual(["Refresh", "Review in Workflow", "Review in Workflow", "Review in Workflow"]);
+    expect(container.textContent).not.toContain("QP-1004");
+    expect(container.textContent).not.toContain("QP-1005");
+  });
+
+  test("continues to Workflow with the exact decision focus identity", () => {
+    const onOpenWorkflow = vi.fn();
+    mountClearDeck({
+      onOpenWorkflow,
+      snapshot: snapshot({
+        attentionSummary: {
+          itemCount: 2,
+          items: [
+            {
+              id: "approval:quote-a",
+              type: "approval",
+              quoteId: "quote-a",
+              sourceRequestId: "approval-request-a",
+              quote: { quoteNumber: "QP-1001" }
+            },
+            {
+              id: "decision:quote-b",
+              type: "decision_debt",
+              quoteId: "quote-b",
+              quote: { quoteNumber: "QP-1002" }
+            }
+          ]
+        }
+      })
+    });
+
+    const actions = container.querySelectorAll(".live-ops-decision button");
+    act(() => actions[0].click());
+    act(() => actions[1].click());
+
+    expect(onOpenWorkflow).toHaveBeenNthCalledWith(1, {
+      quoteId: "quote-a",
+      attentionType: "approval",
+      requestId: "approval-request-a"
+    });
+    expect(onOpenWorkflow).toHaveBeenNthCalledWith(2, {
+      quoteId: "quote-b",
+      attentionType: "decision_debt",
+      requestId: "decision:quote-b"
+    });
+  });
+
+  test("keeps refresh on the existing force-refresh callback", () => {
+    const onRefresh = vi.fn();
+    mountClearDeck({ onRefresh });
+
+    act(() => container.querySelector("button").click());
+
+    expect(onRefresh).toHaveBeenCalledOnce();
+    expect(onRefresh).toHaveBeenCalledWith({ force: true });
+  });
+
+  test("describes an empty or unavailable bounded read without claiming all clear", () => {
+    const emptyMarkup = renderToStaticMarkup(
+      <ClearDeckView snapshot={snapshot()} organizationName="Toni Catering" organizationId="org-a" />
+    );
+    const unavailableMarkup = renderToStaticMarkup(
+      <ClearDeckView
+        snapshot={snapshot({ error: "Missing or insufficient permissions." })}
+        organizationName="Toni Catering"
+        organizationId="org-a"
+      />
+    );
+
+    expect(emptyMarkup).toContain("No decision items appear in this bounded snapshot.");
+    expect(emptyMarkup).toContain("stay review-only until durable decision receipts ship");
+    expect(emptyMarkup).toContain('data-capability-state="unavailable"');
+    expect(emptyMarkup).toContain("No complete staff snapshot is available yet.");
+    expect(emptyMarkup).toContain("does not prove provider delivery, customer acceptance, booking, payment, or operational completion");
+    expect(emptyMarkup).not.toContain('class="live-ops-decision"');
+    expect(emptyMarkup).not.toContain("All clear");
+
+    expect(unavailableMarkup).toContain('data-capability-state="unavailable"');
+    expect(unavailableMarkup).not.toContain("No decision items appear in this bounded snapshot.");
+    expect(unavailableMarkup).not.toContain("Missing or insufficient permissions");
+  });
 });

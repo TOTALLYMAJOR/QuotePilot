@@ -1,10 +1,18 @@
 # Dev Tasks
 
-Last updated: 2026-09-02 20:08:21 CDT
+Last updated: 2026-09-04 13:41:00 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
+
+## Commercial platform proof remaining after source qualification
+
+- Require exact-head CI for the single pushed UX Convergence refinement SHA.
+- Keep merge, deployment, production tenant migration, provider readback,
+  authenticated hosted role/tenant checks, cross-browser/device checks,
+  assistive-technology review, and human acceptance as separately authorized
+  proof events. Do not infer them from local or CI success.
 
 ## Capability-to-Backlog Execution Map
 

@@ -31,7 +31,7 @@ const REBOOK_TEST_REQUEST_ID = buildRebookingRequestId({
 
 function buildPricing(overrides = {}) {
   return {
-    pricingVersion: "pricing-v1",
+    pricingVersion: "pricing-v2",
     calculatedAt: "2026-07-27T12:00:00.000Z",
     authority: "server_authoritative",
     inputs: {
@@ -134,9 +134,9 @@ function buildPricing(overrides = {}) {
       }
     },
     lineItems: [
-      { id: "classic", category: "package", total: 1000 },
-      { id: "dessert", category: "addon", total: 150 },
-      { id: "salad", category: "menu_item", total: 50 }
+      { id: "classic", category: "package", total: 1000, lineTotalMinor: 100000 },
+      { id: "dessert", category: "addon", total: 150, lineTotalMinor: 15000 },
+      { id: "salad", category: "menu_item", total: 50, lineTotalMinor: 5000 }
     ],
     fees: {
       labor: 200,
@@ -144,20 +144,26 @@ function buildPricing(overrides = {}) {
       chefLabor: 60,
       bartenderLabor: 40,
       travel: 25,
-      serviceFee: 100
+      serviceFee: 100,
+      laborMinor: 20000,
+      travelMinor: 2500,
+      serviceFeeMinor: 10000
     },
     tax: {
       rate: 0.08,
       amount: 122,
+      amountMinor: 12200,
       regionId: "local",
       regionName: "Local"
     },
     deposit: {
       pct: 0.3,
-      amount: 494.1
+      amount: 494.1,
+      amountMinor: 49410
     },
     subtotal: 1425,
     grandTotal: 1647,
+    grandTotalMinor: 164700,
     rulesSnapshot: {
       serviceFeePctApplied: 0.08,
       taxRateApplied: 0.08,
@@ -672,7 +678,9 @@ describe("trusted server quote creation documents", () => {
         addons: 150,
         menu: 50,
         total: 1647,
-        deposit: 494.1
+        deposit: 494.1,
+        totalCents: 164700,
+        depositCents: 49410
       },
       payment: {
         depositLink: "",
@@ -720,6 +728,8 @@ describe("trusted server quote creation documents", () => {
       status: "draft",
       total: 1647,
       deposit: 494.1,
+      totalCents: 164700,
+      depositCents: 49410,
       totals: {
         serviceFeePctApplied: 0.08
       },

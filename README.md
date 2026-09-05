@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-04 18:01:21 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -11,6 +11,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
+- Commercial platform program: [docs/COMMERCIAL_PLATFORM_PROGRAM.md](docs/COMMERCIAL_PLATFORM_PROGRAM.md)
+- Pricing Constitution: [docs/PRICING_CONSTITUTION.md](docs/PRICING_CONSTITUTION.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
   Firebase staging or Vercel preview only; checksum-verified Firebase binary,
   ADC Rules readback, direct Vercel APIs, and an explicit safe-off, bounded
@@ -110,10 +112,26 @@ evidence paths, freshness, blocker references, and the single next proof event.
 - `/staffing/respond?staffing=<signed-token>`: public bearer response for one
   exact staff assignment invitation. The link records accept or decline only;
   it does not establish attendance, hours, payroll, completion, or readiness.
-- `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
-  schedule and proof-safe commercial reporting workspaces.
-- `/app/operations`: Ambient Operations switchboard over existing daily,
-  business, and system routes. It adds no new backend authority.
+- `/app/operations`: source-candidate canonical Calendar for accepted/booked
+  operations. It composes the existing month/week schedule, conflicts,
+  capacity, staff-lead assignment, production checklist, and run-of-show
+  context without adding backend or live-telemetry authority. Month gives the
+  full primary canvas to the calendar and places selected context below. Week
+  uses a seven-day vertical time grid with start/duration geometry, collision
+  lanes, and a secondary detail rail. Phone widths use an agenda from those
+  same models. The converged Ambient primary navigation opens this Calendar
+  directly; the secondary Workspace & tools Operations group contains
+  **Operations**, **Clear the Deck**, and role-gated **Staff** without a
+  duplicate header menu.
+- `/app/schedule`: compatibility path to the same Calendar capability. Event
+  and schedule deep routes remain reachable from their exact context or URL;
+  they are not duplicated in the Operations menu.
+- `/app/reporting`: temporary-flagged proof-safe commercial reporting
+  workspace. **Reporting Dashboard**, **Integrations Ops**, **Import Studio**,
+  and **Session Diagnostics** remain progressively disclosed Administration
+  tools, while **Workflow**, **Messages**, and **Pilot** remain Frequent tools.
+  These navigation changes are a local source candidate; exact-head CI, hosted
+  behavior, and human acceptance remain pending.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
   workspaces; the existing admin gate remains authoritative. A default-off
   Ambient build presents `/app/catalog` as **Library**, separating catalog
@@ -186,6 +204,13 @@ Tenant safety mode:
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
 - Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
+- Commercial architecture: shared Commercial / Operations Kernel -> Catering
+  Vertical Pack -> organization-scoped Tenant Configuration -> contextual
+  QuotePilot UX. Package and Event Template remain the natural catering terms;
+  Configurable Offer and Commercial Template are shared kernel contracts.
+- Pricing authority: browser preview plus revision-fenced server certification;
+  pricing-v1 remains historical evidence and pricing-v2 introduces exact
+  integer-minor-unit receipts and immutable price waterfalls.
 - Reconciliation tier: Python 3.11+ (`truthloop/`), standard library only, read-only,
   no credentials and no write path; see `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)

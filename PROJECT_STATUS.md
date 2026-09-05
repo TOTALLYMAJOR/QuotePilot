@@ -1,6 +1,143 @@
 # Project Status
 
-Last updated: 2026-09-04 10:46:13 CDT
+Last updated: 2026-09-05 02:28:23 CDT
+
+## UX Convergence Draft Candidate
+
+- The owner has now authorized publication and production intent for the
+  QuotePilot UX Convergence Execution Refinement after the complete app and
+  routes are locally qualified. This authorizes the governed release process;
+  it does not bypass the repository's exact-head CI, release-only `main`,
+  semantic-tag, rollback, protected-environment, or provider-readback gates. The
+  active candidate adds Configurable Offers, Commercial Templates, bounded
+  Configuration Rules, pricing-v2 exact money and waterfalls, exact payment
+  amount provenance, expanded Library presentation, and starter-pack adapters
+  without creating a second quote/catalog/pricing authority. The current
+  Operations presentation refinement has completed local qualification. Exact-
+  head CI run `33949152892` passed classification, quick, core, Firebase/auth,
+  authoritative-pricing, CWV, Docker, and advisory product-truth jobs, but the
+  Playwright lane found five stale compatibility assertions against the
+  selected Library presentation. The test-only correction now passes those
+  five cases locally and awaits a replacement exact-head run. This source state
+  makes no hosted or production claim.
+
+- Whole-candidate local qualification now passes across the synchronized
+  Workbench, Calendar-first Operations, Now, Library, internal Client 360, and
+  customer proposal decision center: 395 unit-test files pass with 4,548 tests
+  passing and 80 skipped; the 526-module production build passes; the aggregate
+  release/CWV lane passes; Truth Loop passes 127/127; Firestore rules pass
+  78/78; the Firebase browser smoke passes 4/4; authoritative-pricing browser
+  coverage passes 3/3; and the integrated responsive route/authority matrix
+  passes 71/71. Environment-dependent local lanes used only the repository's
+  tracked non-secret CI Firebase identifiers and disposable emulators. These
+  results establish source/local evidence, not connected-hosted, provider,
+  production, recipient, assistive-technology, or human-acceptance evidence.
+
+- A same-day branch/worktree reconciliation found all 30 UX Convergence commits
+  on this candidate and confirmed that current `origin/main` is tree-identical
+  to the morning v0.16.6 release receipt. No other same-day commit exists outside
+  this branch. The integration checkout's uncommitted Golden Lattice planning
+  document and older experimental worktrees remain deliberately excluded as
+  unrelated or historically unmerged work rather than being absorbed without
+  capability-level review.
+
+- The local candidate now includes the approved **Now** decision ledger. It
+  preserves the existing three-item Workflow ordering and exact arrivals while
+  separating one or more evidence-backed urgent items from general waiting.
+  The same bounded snapshot supplies its situation and consequence copy; the
+  existing scheduled-event projection supplies the seven-day horizon and
+  Calendar continuation. **Quiet progress** is adaptive: it shows only internal
+  completion receipts and provider/pending payment states, never inferring
+  customer contact, delivery, collection, booking, staffing, readiness, or live
+  operations. Local Chromium acceptance passes 2/2 at 390, 768, and the selected
+  1487×1058 reference viewport with exact Workflow and Calendar round trips,
+  contained layout, and zero serious/critical axe violations. A same-viewport
+  combined comparison received a local **9.5/10 — GO** visual verdict. Commit,
+  exact-head CI, hosted, production, and human evidence remain distinct.
+
+- Draft PR #129 is published at exact remote head
+  `8b64e4e199751018c6ade5592ffa9545611c933b`. The local convergence branch adds
+  only the bounded Library acceptance correction above that head before
+  replacement publication. It contains the Workbench, Calendar-first
+  Operations, Now, Library, internal Client 360, and customer proposal
+  decision-center candidate. The work remains isolated from the integration
+  checkout and its unrelated changes.
+- The Library portion of this candidate now follows the selected
+  Option 2 composition with Option 3 restraint. Desktop uses one broad
+  commercial ledger and one secondary readiness rail; mobile preserves that
+  ledger-first semantic order. **Offers**, **Components**, **Templates**, and
+  **Pricing & Rules** reuse the existing Package, Menu, Service/Add-on, Rental,
+  Event Template, Configuration Rule, catalog draft, revision, publication,
+  and server-pricing authorities. The Offer editor uses a compact navigator
+  and broad selected-offer workspace; derived margin remains visible while
+  detailed economics are disclosed, and recorded choice groups remain a
+  read-only projection. Add-on/Rental objects expose derived Usage with stable
+  IDs subordinate. Templates are independently collapsible across eight
+  business groups. Rules lead with readable summaries and safe structured
+  controls, retaining JSON as Advanced recovery; Pricing separates Base,
+  adjustments/context, Fees, Tax, and Deposit before Advanced policy.
+  Unresolved readiness expands while
+  healthy evidence compresses; and sales can inspect the same objects without
+  gaining edit or publication authority. **Your bundle** remains derived from
+  the one quote draft and has no independent record, route, lifecycle, save, or
+  pricing authority. The right readiness rail uses supplemental semantic icons
+  with text as authority, ordinary text remains at least 12px, one save/retry
+  action owns recovery, and active embedded tabs synchronize breadcrumb/title
+  without remounting or losing the draft. Ambient Library browser evidence is
+  17/17; Calm Four is 10/10 with `VITE_OPERATIONAL_STAFFING_ENABLED=true`.
+  Exact 390/768/1440 captures and combined comparisons were inspected with a
+  local **9.5/10 — GO** visual-review verdict. The exact rendered implementation
+  is local commit `b593fe4d2c45ff5db20bafe205461157952b9ab4`.
+  Full unit, production build, focused browser, capability/document governance,
+  and local CWV checks pass. Exact CI-profile bundle checks pass against an
+  explicitly reviewed no-headroom exception at 3,381,257 / 397,428 bytes for
+  compatibility and 4,319,173 / 432,561 bytes for Ambient. The complete
+  aggregate release/CWV lane also passes when supplied with the repository's
+  canonical non-secret CI Firebase identifiers. Exact-head CI run
+  `33951463058` passed all browser behavior and measured the compatibility
+  graph before its stale prior ceiling rejected that first run. Follow-up run
+  `33952106871` passed compatibility and measured the Ambient graph before its
+  stale prior ceiling rejected that build, so a new exact-head run remains
+  required. No hosted role,
+  production-data, deployment, assistive-technology, or human-acceptance result
+  is claimed.
+- When the existing `eventSchedule` capability is enabled, the local source
+  candidate presents Operations between Opportunities and Clients and opens the
+  reused Calendar directly. Month gives the broad primary canvas to the calendar
+  and places selected-day, focused-event, conflict, and collapsed operational
+  context below. Week presents a true seven-day time grid with vertical time,
+  start/duration geometry, collision lanes, and a secondary detail rail. Phone
+  widths retain the same-model agenda. Operational sections begin collapsed,
+  comparison stays inside the conflict workflow, and derived conflicts clear
+  only after authoritative date, time, duration, venue, guest-count, or
+  lifecycle inputs change on an affected Opportunity.
+- When `eventSchedule` is disabled, Operations is absent from primary and
+  secondary navigation, `/app/operations` and `/app/schedule` do not render the
+  Calendar, and contextual Calendar handoffs are withheld. Reporting remains
+  independently controlled by `reportingDashboard`; People retains the current
+  administrator and staffing-feature gates. This repairs presentation
+  reachability without adding or changing Event, conflict, staffing, checklist,
+  lifecycle, pricing, persistence, or provider authority.
+- Earlier local qualification and screenshots belong to the prior rendered
+  source and remain historical evidence only. Implementation commit
+  `5dd97a20133b592f210d56e2454e699c17d45200` passes 131 focused unit tests, a
+  production build, and the 12-case exact-source Operations browser matrix at
+  390, 768, 1440, and the selected-reference size of 1487×1058. Those browser
+  cases also pass their serious/critical axe scan and console boundary. The
+  complete local release/CWV lane passes 4,509 tests, the 528-module build,
+  exact 3,331,403/394,701-byte bundle limits, documentation/capability
+  governance, 127 Truth Loop tests, and Lighthouse CWV.
+- The 238-row ledger's latest local checkpoint resolves to 236 PASS, one NOT
+  APPLICABLE, and AC-236 UNVERIFIABLE. Publication authority now exists, but
+  AC-236 still requires successful CI evidence for the exact pushed candidate
+  SHA; local qualification cannot substitute for that remote proof.
+- Publication and production intent are authorized, but exact-head CI, hosted
+  role parity, release-candidate evidence, protected-main merge, semantic tag,
+  deployment, and provider readback remain mandatory gates rather than assumed
+  outcomes.
+- No merge, deployment, provider activation, production behavior, authenticated
+  hosted role matrix, assistive-technology acceptance, or human acceptance is
+  claimed by this source candidate.
 
 ## Current Production Release
 
@@ -507,20 +644,23 @@ Last updated: 2026-09-04 10:46:13 CDT
   `mm05366-sandbox` organization, and owner acceptance remain unverified until
   the exact published SHA completes those gates.
 - A ninth source-only checkpoint materially implements the QuotePilot Package
-  Workspace on the existing `Library -> Packages` route without changing the
-  package persistence contract or quote-pricing authority. Catalog Admin now
-  presents a stable-ID package navigator, selected-package overview, recorded
-  cost/contribution/margin evidence, deterministic health with one next action,
-  current-inclusion-first composition groups, reviewed Apply/Cancel searchable
-  inclusion selectors, readiness-gated activation, selected-package revert,
-  dependency-aware confirmed delete, and one in-flow staged save bar on that
-  tab. Mobile uses a compact package switcher, collapsible Health, and a full-
-  viewport selector. Package pricing remains per person, inclusions remain optional
-  and selected-at-$0 only when a staff user explicitly chooses them in Quote
-  Builder, managed-menu mutations remain separate from the ordinary catalog
-  save, and all changes still persist only through the existing catalog save
-  path. This is source/local evidence only: no hosted admin-role acceptance,
-  production deployment, or human acceptance is claimed.
+  Workspace through the `Library -> Offers` presentation without changing the
+  Package record, persistence contract, or quote-pricing authority. Catalog
+  Admin presents a compact stable-ID Offer navigator and one broad selected-
+  Offer workspace. Identity, price, quoting availability, included components,
+  and one deterministic next action lead; cost, contribution, margin,
+  readiness evidence, immutable ID, catalog revision, pricing confirmation,
+  and quote behavior remain available under secondary disclosures instead of a
+  permanent health rail. Reviewed Apply/Cancel inclusion selectors, readiness-
+  gated activation, Offer-scoped revert, dependency-aware confirmed delete,
+  and the one in-flow staged save bar remain unchanged. Mobile uses a compact
+  Offer switcher and the existing full-viewport selector. Package pricing
+  remains per person, inclusions remain optional and selected-at-$0 only when a
+  staff user explicitly chooses them in Quote Builder, managed-menu mutations
+  remain separate from the ordinary catalog save, and all changes still
+  persist only through the existing catalog save path. This is source/local
+  evidence only: no hosted role acceptance, production deployment, or human
+  acceptance is claimed.
 - A fourth source-only checkpoint adds canonical owner/admin Team access
   authority. The same administrator operations surface now exposes an in-flow,
   exact-email role review with current role, consequence, do-nothing outcome,
@@ -734,16 +874,21 @@ Last updated: 2026-09-04 10:46:13 CDT
   role-gated controls remain available under **More client history and
   controls**, and local records remain labeled as browser-local rather than
   customer, provider, payment, booking, or delivery confirmation.
-  The AIUI-20 Library is an administrator-only presentation over the existing
-  organization-scoped catalog snapshot and save authority. It separates
-  Catalog choices from first-class Event Templates, shows source, observation,
-  **Catalog version**, and pricing-review boundaries, and chooses one
-  deterministic next step. Incomplete event-specific menu inventory remains
-  unavailable rather
-  than being misreported as empty. Section and template actions acknowledge
-  immediately, then open the exact existing guarded editor context; structured
-  template changes preserve stable IDs and linked-item references and continue
-  through the existing revision-conflict and save path. Catalog-setting and
+  The AIUI-20 Library is a role-safe presentation over the existing
+  organization-scoped catalog snapshot and save authority. Administrators keep
+  the existing edit, draft, review, and publication authority; sales can
+  inspect the same commercial inventory and readiness outcomes without gaining
+  a mutation path. Its selected desktop composition gives the broad canvas to
+  **Offers**, **Components**, **Templates**, and **Pricing & Rules**, with
+  contextual setup evidence in a secondary rail. Mobile preserves the same
+  commercial order before readiness. Existing Package records appear as
+  Offers, while **Your bundle** remains only the derived composition of one
+  quote draft. Incomplete event-specific menu inventory remains unavailable
+  rather than being misreported as empty. Section and template actions
+  acknowledge immediately, then open the exact existing guarded editor
+  context; structured template changes preserve stable IDs and linked-item
+  references and continue through the existing revision-conflict and save
+  path. Catalog-setting and
   managed-menu dirty domains cannot advance together; one must be finished or
   explicitly discarded first. All seven managed-menu mutations require the
   loaded catalog revision and validate it inside the Firebase transaction or
@@ -753,15 +898,20 @@ Last updated: 2026-09-04 10:46:13 CDT
   and fresher catalog evidence cannot silently replace a dirty draft. A portal
   provider remount waits for the App-level guard to accept the token transition,
   while direct initial portal precedence and token-to-token isolation remain.
-  Invalid exact arrivals show a visible contextual recovery. Browser-local catalog
-  caches are isolated by organization and remain explicitly local, and a sales
-  user receives a contextual role boundary rather than a generic destination.
+  Invalid exact arrivals show a visible contextual recovery. Browser-local
+  catalog caches are isolated by organization and remain explicitly local.
+  Sales sees one administrator-managed boundary instead of repeated disabled
+  controls.
   This adds no read, role, pricing, mutation, provider, or new persistence
   authority.
   AIUI-46 now gives the combined Decision Room plus default-off Ambient
-  exact-token customer portal a calmer,
-  content-first reading order across Event, Menu and service, Pricing,
-  assumptions, tenant terms, optional additions, response, and questions.
+  exact-token customer portal the selected customer-facing Client 360
+  composition. The broad event story and secondary decision rail share one
+  full public canvas; the route no longer inherits the absent staff sidebar's
+  236px offset. Event scope, package/menu, compact optional additions, total,
+  required deposit, expiry, response, feedback, and authority-gated questions
+  remain one client-readable proposal. Price detail, assumptions, and tenant
+  terms begin collapsed.
   Contextual question actions reuse the one existing conversation composer and
   acknowledge staged text, preserved drafts, unresolved sends, read-only
   threads, and unavailable conversations. Staff-marked additions prepare only
@@ -769,9 +919,12 @@ Last updated: 2026-09-04 10:46:13 CDT
   removed as generated content. Browser-local exact-token fallback mirrors the
   same bounded terms and option shape as the canonical projection. A focused
   local suite passes for helper, portal, conversation, and fallback behavior;
-  a dedicated four-case Chromium lane passes at 390, 768, and 1440px with
+  a dedicated five-case Chromium lane passes at 390, 768, 1440, and exact-source
+  1487x1058 with
   44px targets, axe, overflow, clipping, collision, and proposal-nonmutation
-  checks. The local proof images are source evidence only. No new customer
+  checks. Focused component coverage passes 49/49, and the selected source and
+  exact implementation received a local 9.5/10 GO visual review. The local
+  proof images are source evidence only. No new customer
   read, callable, direct quote mutation, pricing authority, payment, booking,
   or provider evidence is introduced; connected exact-token behavior,
   deployment, production data, provider outcomes, and human acceptance remain
@@ -784,14 +937,13 @@ Last updated: 2026-09-04 10:46:13 CDT
   exact candidate passes source, emulator, CI, tagged-main, and deployment
   gates; it does not itself prove hosted use, provider delivery, recipient
   acknowledgement, or human acceptance.
-  Focused local proof for this Library slice passes 122 of 122 tests across its
-  pure model, structured Event Templates editor, exact-arrival contract, route, role
-  boundary, fallback isolation, and existing Catalog Admin tests. A dedicated
-  Chromium-admin lane passes 7 of 7 cases across 390, 768, and 1440px with
-  exact object focus, sub-250ms acknowledgement, preserved unsaved work,
-  guarded focus restoration, 44px pointer targets, axe, overflow, and collision
-  checks. Three overview images and one focused mobile template-editor image
-  are local visual evidence only.
+  The earlier focused Library proof remains historical evidence for the prior
+  presentation. The selected presentation now passes Ambient Library 17/17 and
+  Calm Four 10/10 locally; its exact 390/768/1440 captures and same-viewport
+  comparisons received a 9.5/10 GO review against rendered source
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4`. This evidence is local only and
+  cannot establish exact-head CI, hosted roles, deployment, production-data
+  correctness, assistive-technology acceptance, or human acceptance.
   Package/Menu replacement and equivalent pointer/keyboard reorder handoffs
   are accepted only against the exact parent opportunity revision and fresh
   same-tenant catalog evidence. They arrive in a populated editor review with

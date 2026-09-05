@@ -21,6 +21,11 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId("proposal-composer")).toBeVisible();
 });
 
+async function openWorkbenchDomain(page, domain) {
+  await page.getByTestId(`workbench-domain-${domain}`).click();
+  await expect(page.getByTestId(`workbench-domain-${domain}`)).toHaveAttribute("aria-current", "step");
+}
+
 test("presents the composer as the builder surface with Quote Pulse", async ({ page }) => {
   await expect(page.locator(".wizard-panel")).toHaveCount(0);
   await expect(page.getByText("Current draft", { exact: false }).first()).toBeVisible();
@@ -46,6 +51,7 @@ test("inline guest edit shows consequences and staffing follows the house rule",
   await expect(consequences).toHaveCount(0);
 
   // Buffet at 80 guests: house rule is 1 server / 25 guests, minimum 2 → 4.
+  await openWorkbenchDomain(page, "staffing");
   const recommendation = page.getByTestId("pc-staffing-recommendation");
   await expect(recommendation).toBeVisible();
   await expect(recommendation).toContainText("4 servers");
@@ -62,6 +68,7 @@ test("package choice reprices the pulse from the document", async ({ page }) => 
   await page.getByRole("button", { name: "Apply change" }).click();
   await page.getByTestId("pc-consequences").getByRole("button", { name: "Keep as quoted" }).click();
 
+  await openWorkbenchDomain(page, "experience");
   await page.getByRole("button", { name: /Change package or service style/ }).click();
   const editor = page.getByTestId("pc-experience-editor");
   await expect(editor).toBeVisible();
@@ -70,6 +77,7 @@ test("package choice reprices the pulse from the document", async ({ page }) => 
 
   const total = page.getByTestId("pc-pulse-total");
   await expect(total).not.toHaveText(/\$0\.00/);
+  await openWorkbenchDomain(page, "commercials");
   await expect(page.getByTestId("pc-investment-total")).not.toHaveText(/\$0\.00/);
 });
 
@@ -77,6 +85,7 @@ test("menu composing stays inside the proposal", async ({ page }) => {
   const eventType = page.getByLabel("Event type", { exact: true });
   await eventType.selectOption({ index: 1 });
 
+  await openWorkbenchDomain(page, "experience");
   await page.getByTestId("pc-edit-menu").click();
   const menuEditor = page.getByTestId("pc-menu-editor");
   await expect(menuEditor).toBeVisible();
@@ -109,6 +118,7 @@ test("collapses to the mobile pulse flow at phone width", async ({ page }) => {
 
 test("keeps the client email editor clear of the mobile review bar", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 300 });
+  await openWorkbenchDomain(page, "customer");
   await page.getByRole("button", { name: "Change Email", exact: true }).click();
 
   await expect(page.getByRole("button", { name: /Review quote/ })).toBeHidden();
@@ -135,6 +145,7 @@ async function commitInline(page, label, value) {
 test("staffing rate overrides reprice the quote from the staffing section", async ({ page }) => {
   await commitInline(page, "Guests", "60");
   await page.getByTestId("pc-consequences").getByRole("button", { name: "Keep as quoted" }).click();
+  await openWorkbenchDomain(page, "staffing");
   await page.getByTestId("pc-staffing-recommendation")
     .getByRole("button", { name: /Use recommendation/ }).click();
 
@@ -157,20 +168,28 @@ test("editing a saved quote surfaces the change-impact preview in the composer",
   await commitInline(page, "Guests", "60");
   await page.getByTestId("pc-consequences").getByRole("button", { name: "Keep as quoted" }).click();
   await commitInline(page, "Venue", "Impact Hall");
+  await openWorkbenchDomain(page, "customer");
   await commitInline(page, "Client name", "Impact Client");
   await commitInline(page, "Email", "impact@example.test");
 
+  await openWorkbenchDomain(page, "experience");
   await page.getByTestId("pc-edit-menu").click();
   await page.getByTestId("pc-menu-editor")
     .locator(".pc-choice input[type='checkbox']").first().check();
 
   await page.getByTestId("pc-save").click();
 
-  const history = page.getByRole("dialog", { name: "Quotes" });
-  await expect(history).toBeVisible();
-  const quoteRow = history.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
+  await expect(page.getByRole("heading", { name: /Composer Impact Quote/ })).toBeVisible();
+  const allOpportunities = page.getByRole("button", { name: "All opportunities", exact: true });
+  if (await allOpportunities.isVisible().catch(() => false)) {
+    await allOpportunities.click();
+  } else {
+    await page.getByRole("button", { name: "Quotes", exact: true }).click();
+  }
+  const quoteRow = page.locator(".history-table-wrap tbody tr").filter({
+    hasText: "Impact Client"
   }).first();
+  await expect(quoteRow).toBeVisible();
   await quoteRow.getByRole("button", { name: "Edit" }).click();
 
   await expect(page.getByTestId("proposal-composer")).toBeVisible();
@@ -191,6 +210,7 @@ test("recent activity records this session's changes behind its toggle", async (
   await page.getByTestId("pc-consequences").getByRole("button", { name: "Keep as quoted" }).click();
   await commitInline(page, "Event name", "Activity Gala");
 
+  await page.getByTestId("pc-activity-toggle").click();
   const log = page.getByTestId("pc-activity");
   await expect(log).toBeVisible();
   await expect(log).toContainText("Guests → 50");

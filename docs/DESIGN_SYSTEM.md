@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-03 02:21:52 CDT
+Last updated: 2026-09-05 00:28:05 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -29,6 +29,10 @@ human visual acceptance.
   color or decoration. One restrained brand accent.
 - Progressive disclosure: governance and evidence detail stays available but
   collapsed; screens lead with state and next action.
+- Library is the business-facing definition surface: group Offers with their
+  components, then show Templates, Pricing, and Rules as distinct concepts.
+  Keep catering-native nouns in ordinary UI and reserve kernel/version terms
+  for evidence or administration detail.
 - Re-express trustworthy data before collecting more: one recorded detail may
   orient, explain, rank, preview, or animate another decision only when its
   provenance, freshness, scope, and authority remain explicit. A novel use must
@@ -44,6 +48,58 @@ human visual acceptance.
   terms wherever softer language would blur a consequential boundary.
 - Customer-facing surfaces (portal, proposal PDFs, marketing) keep their
   tenant-branded hospitality treatment and are NOT covered by this system.
+
+## UX Convergence surfaces (source candidate)
+
+- **Commercial Workbench:** retain the sheet-on-bone proposal as the living
+  object. Desktop uses Quote Plan / proposal / Commercial Truth; tablet and
+  phone progressively collapse the same regions. Domain summaries stay visible
+  in Quote Plan while only one domain body is expanded. Guided mode, client
+  Preview, and saved-proposal continuations remain part of the same object.
+- **Calendar-first Operations:** retain the established scheduled-event,
+  conflict, capacity, staffing, checklist, kitchen-checkpoint, and run-of-show
+  models. Month gives the full horizontal canvas to the calendar, then reveals
+  the selected day, focused event, conflict consequence, and collapsed
+  operational domains in a contextual workspace beneath it. Week is a true
+  seven-day time grid: vertical position encodes start time, height encodes
+  duration, and collision lanes make overlapping events visible before their
+  warning copy is read. Its focused context remains a secondary rail. These are
+  two presentations of one workspace, not separate modes or engines.
+  At 390, use an agenda derived from the identical day, event, and conflict
+  models; never shrink the calendar into an unusable miniature. Selected state
+  and conflict meaning need text, exact event identity stays stable, and
+  planning language must not imply live actuals.
+- **Operational disclosure:** event identity, timing, recorded lifecycle, and
+  the next consequential action lead. Staffing, production checklist, kitchen
+  checkpoints, and run-of-show detail begin collapsed and remain available in
+  the focused event. Tools is a secondary disclosure, not a competing page
+  destination.
+- **Derived conflicts:** overlap, unknown-time, and capacity findings are
+  observations recomputed from existing authoritative inputs. Never offer a
+  manual **Mark as resolved** action or persist a second resolution state.
+  Conflict comparison belongs inside the conflict workflow and identifies the
+  exact affected events; resolution routes the operator to the affected
+  Opportunity's authoritative date, time, duration, venue, guest-count, or
+  lifecycle control. Calendar then recomputes the finding.
+- **Visible Operations language:** use event, conflict, schedule, staffing,
+  production, kitchen, and run-of-show language. Provider/source identifiers,
+  design-system terminology, component names, model names, and evidence
+  plumbing stay out of the ordinary task surface unless they are necessary for
+  honest recovery.
+- **Converged navigation:** when the existing Calendar capability is enabled,
+  the local candidate uses five persistent primary destinations in this order:
+  Now, Opportunities, Operations, Clients, and role-gated Library. Operations
+  opens the reused Calendar capability directly; it is not duplicated as a
+  header menu. Workspace & tools retains Operations, Clear the Deck, and Staff
+  as the compact daily-execution group. When Calendar is disabled, Operations
+  is absent from both layers, its direct and compatibility routes do not render
+  Calendar, and contextual Calendar handoffs are withheld. Reporting remains
+  independently capability-gated and People retains the existing
+  administrator/staffing gate. At 390 the enabled five destinations wrap
+  through the established automatic grid without horizontal overflow; at 768
+  and 1440 they remain a stable orientation rail. Exact-head CI, hosted
+  role/reachability proof, and human acceptance remain separate qualification
+  boundaries.
 
 ## Ambient Intelligence extension (source proof, release-profile enabled)
 
@@ -64,7 +120,7 @@ both horizontal edges to a 16px viewport inset when the anchor sits too close
 to either edge. Anchoring may not clip the title, arrival context, evidence, or
 persistent outcome controls.
 
-### v0.16 Calm Four application contract (source candidate)
+### v0.16 Calm Four application contract (historical release contract)
 
 Calm Four applies one information architecture across the authenticated staff
 workspace. It distinguishes three layers and does not trade one for another:
@@ -89,6 +145,31 @@ stays exposed under Operations. Reporting, integrations, import, and diagnostics
 are conditionally rendered only after the user expands Administration, so a
 collapsed section cannot leak gated controls into keyboard order. Closing the
 sheet resets that secondary disclosure without changing any route or authority.
+
+### UX convergence primary-navigation overlay (local source candidate)
+
+The later frozen UX convergence contract promotes the qualified Calendar-first
+**Operations** surface into a five-destination primary set: **Now**,
+**Opportunities**, **Operations**, **Clients**, and **Library**. This supersedes
+only the v0.16 four-item presentation rule; it does not replace any route,
+business authority, role gate, or tenant capability. When `eventSchedule` is
+enabled, Operations opens `/app/operations` directly and uses the same
+Calendar/schedule authority. When it is disabled, Operations and its Calendar
+handoffs are not offered and `/app/operations` plus `/app/schedule` fail closed
+without mounting Calendar.
+
+The former secondary Ambient Operations header menu is removed to avoid two
+same-name destinations. **Workspace & tools** remains the one secondary
+switchboard: Search plus Workflow, Messages, and Pilot under Frequent tools;
+Operations, Clear the Deck, and role-gated Staff under Operations when Calendar
+is enabled; Reporting,
+Integrations, Import, and Diagnostics under progressive Administration; then
+account controls. Reporting is independently hidden when its own capability is
+disabled. New quote remains a global action. At phone width the enabled five
+primary destinations share the safe-area-aware bottom rail; at wider widths
+they remain the existing vertical orientation rail. Exact-head CI, hosted role
+exercise, assistive-technology acceptance, and human acceptance remain separate
+evidence gates.
 
 v0.16 authorizes one organization per signed-in principal. It therefore does
 not present a same-account **Switch workspace** control that the identity and
@@ -150,9 +231,25 @@ whole-page violations, and the dirty-editor case has a clean whole-page scan.
 Cross-browser, forced-colors, 200% zoom, actual assistive technology, hosted,
 and human acceptance remain open.
 
-**Now** is an editorial home, not a KPI dashboard. It pairs the established
-hospitality image with at most three priorities from existing Workflow order,
-recorded upcoming work, and quiet internal progress. **Opportunities** is a
+**Now** is an editorial decision ledger, not a KPI dashboard or another work
+queue. Its masthead promotes the highest-pressure condition supported by the
+current bounded evidence. **Needs you** preserves the existing deterministic
+Workflow order and caps the visible set at three; urgency is a presentation of
+recorded overdue, blocked, invalid, due-today, warning, or blocking evidence,
+not a decorative numeric rank. Each item states the recorded situation, the
+exact consequence the source supports, and one existing continuation. A
+secondary column projects a compact seven-day horizon and accepted/booked event
+context from the existing Calendar inputs without becoming another Calendar.
+The full-width **Quiet progress** band adapts to available evidence: internal
+completion receipts appear as **Recently handled**; only existing pending or
+provider payment states appear as **Waiting on others**. Operator-owned money
+actions remain separately named Commercial steps. No customer contact,
+delivery, collection, staffing, readiness, conflict, or live-operational state
+may be inferred to fill the composition. At tablet and phone widths the same
+semantic order stacks, the seven-day projection may scroll within its own
+bounded region, and exact action/state continuity is preserved.
+
+**Opportunities** is a
 meaningful index on desktop and mobile; groups and ordering come from actual
 attention/current-work state and recorded dates, never fixture position.
 Opening a row preserves the exact opportunity identity and its event, menu,
@@ -552,21 +649,32 @@ keeps **Apply to draft** as the primary next action. Editing the command makes
 
 ### Customer decision room
 
-The default-off customer room keeps the tenant's hospitality identity while
-using the same calm hierarchy and no-overlap discipline. It reads as one open
-proposal, not a staff dashboard: Event, Menu and service, Pricing, assumptions,
-terms, optional additions, response, and questions follow a stable content
-order. Use plain labels such as **Pricing**, **Optional**, and **Your response**;
+The default-off customer room is the customer-facing half of Client 360. It
+keeps the tenant's hospitality identity and reads as one open proposal, not a
+staff dashboard. At desktop, the event story owns the broad canvas and one
+secondary decision rail holds the current decision state, total, required
+deposit, expiry, response choices, mutation feedback, and authority-gated
+question continuation. It must not inherit the staff navigation offset or
+introduce another portal shell.
+
+The event story orders identity, date, guests, venue, service, package/menu,
+and compact optional additions before quiet planning and terms disclosures.
+Price detail, planning assumptions, and tenant terms begin collapsed. Use plain
+labels such as **Package & menu**, **Optional additions**, and **Your response**;
 avoid sales euphemisms, urgency cues, or claims that the application is making
-the customer's decision.
+the customer's decision. **Required deposit** is the safe label: payment alone
+must not imply that the date is secured or the event is booked.
 
 Contextual question and addition controls must acknowledge immediately and
 lead to the existing exact conversation or decision object. At 390, 768, and
-1440px, headings, tenant terms, controls, feedback, focus paint, and the shared
-conversation may wrap but may not cover one another. Optional additions are
-visually inviting without implying inclusion: the customer prepares a note,
-staff reviews it, and only the trusted quote save can establish revised price
-or scope. Tenant colors remain separate from staff Ambient semantics.
+1440px, the two desktop regions become one intentional sequence: proposal
+identity, decision state, event story, commercial summary, response, additions,
+and disclosures. Headings, tenant terms, controls, feedback, focus paint, and
+the shared conversation may wrap but may not cover one another. Optional
+additions are visually inviting without implying inclusion: the customer
+prepares a note, staff reviews it, and only the trusted quote save can establish
+revised price or scope. Tenant colors remain separate from staff Ambient
+semantics.
 
 ### Clients presentation
 
@@ -577,14 +685,24 @@ not infer relationship quality, urgency, or a ranked client order from the
 directory's partial evidence. Loading, stale, partial, truncated, unavailable,
 and browser-local states remain explicit.
 
-The selected client view must answer who this is, what current work appears in
-the completed read, what needs review, and the next supported step before the
-detailed record. Client navigation follows the exact-arrival contract: carry
-the opaque client identity, reason, consequence, and next resolution; resolve
-only after the matching heading is focused; and recover without substituting a
-nearby client. Active opportunities and quote-scoped conversations remain
-separate recorded contexts. Opening a conversation sends nothing and marks
-nothing read.
+The selected client view is a relationship ledger, not a record dashboard. It
+opens with the client identity and recorded contact details, then pairs one
+evidence-supported next decision with a four-stage **Client → Opportunity →
+Proposal → Event** spine. The active opportunity remains the living object;
+recent history below it uses only recorded lifecycle, request, and conversation
+evidence. When a customer request and its quote-scoped conversation summary
+describe the same exact timestamp, the ledger presents the request once rather
+than manufacturing two activities. It does not call general waiting urgent or
+invent a consequence that is absent from authority.
+
+Client navigation follows the exact-arrival contract: carry the opaque client
+identity, reason, consequence, and next resolution; resolve only after the
+matching heading is focused; and recover without substituting a nearby client.
+Additional active opportunities, quote-scoped conversations, source detail,
+and the full record begin collapsed. Opening a conversation sends nothing and
+marks nothing read. At phone width the decision remains before the relationship
+spine, stages become a compact two-column sequence, and history becomes a
+vertical ledger without changing state or authority.
 
 Existing history, rebook, communication, commercial, and role-gated controls
 remain available under **More client history and controls**. Progressive
@@ -595,12 +713,58 @@ borrow connected-workspace or provider-confirmed language.
 
 ### Library presentation
 
-The default-off administrator Library treats the organization catalog as a
-quiet reference surface, not a settings dashboard. Its first view separates
-Catalog choices from first-class Event Templates, uses hairlines and open rows
-instead of nested cards, and keeps source, observation time, revision, and
-pricing-review context visible without promoting them into large metrics. One
-recommended next step may appear only when its evidence is explicit.
+The role-safe Library treats the organization catalog as a quiet commercial
+reference surface, not a settings dashboard. Its selected desktop composition
+uses one broad inventory ledger and one quieter readiness rail at an approximate
+67/33 relationship. The primary ledger groups **Offers**, **Components**,
+**Templates**, and **Pricing & Rules**. It uses hairlines and open rows rather
+than a process strip, dashboard card grid, or repeated `Review` controls. One
+ranked setup action may appear only when its evidence is explicit and may not be
+duplicated in the inventory.
+
+Existing Packages appear as Offers without changing their stored record type,
+IDs, inclusions, pricing, or save path. **Your bundle** remains the derived
+composition of the one quote draft; Library may explain its ingredients but may
+not create a Bundle record, route, lifecycle, save path, or pricing authority.
+Menu, Services/Add-ons, and Rentals appear as Components, while Event Templates
+remain reusable quote starting points.
+
+Readiness follows uncertainty: unresolved setup expands and healthy evidence
+compresses under disclosure. Standalone Library does not treat absent quote or
+proposal context as a setup problem. Administrators retain the existing edit,
+draft, review, and publication actions. Sales can inspect the same objects,
+relationships, and readiness outcomes, then receives one administrator-managed
+permission boundary instead of repeated disabled controls.
+
+The Offer editor uses two desktop zones: a compact Offer navigator and one broad
+selected-Offer workspace. Identity, selling price, quoting availability,
+included components, derived margin, and the next decision lead. Detailed cost
+and contribution evidence, readiness evidence, immutable IDs, catalog revision,
+pricing confirmation, and quote behavior remain available under secondary
+disclosures instead of a permanent health rail. Recorded choice groups may be
+projected read-only with their attention state; the browser does not author them
+or promise end-to-end quote selection. Mobile preserves the same semantic order,
+compact switching, and full-viewport inclusion picker.
+
+Add-ons and Rentals use named commercial-object summaries with business fields
+first, visible derived Offer/Template Usage, and stable identity under
+**Technical details**. Menu retains its existing managed editor and device-only
+buffer boundary. Templates are independently collapsible and use this normal
+group order: Starting Offer; Event context; Preselected components; Service and
+rental defaults; Staffing and resource defaults; Pricing and policy defaults;
+What remains open; Advanced identity and source. Partial Menu-inventory evidence
+stays beside Preselected components, while only true identity/source/version/
+vertical/starter provenance is Advanced.
+
+Configuration Rules lead with the actual **WHEN / THEN / WHY**, enabled state,
+and safe structured controls when the rule can be represented without loss.
+Raw JSON remains available under **Advanced rule source**, opens for invalid or
+non-structurable records, and continues through the same validation and
+publication path. Pricing leads with readiness/consequence, then separates Base
+pricing, Adjustments & context, Fees, Tax, and Deposit; cost/margin evidence and
+technical policy sources remain under Advanced policy. Failure and recovery copy first states what cannot happen,
+what remains active or unchanged, and the next safe action; raw errors and
+provenance remain available under technical disclosure.
 
 Incomplete event-specific menu inventory is **unavailable**, never empty.
 Saved template references remain visible until the existing catalog validation
@@ -611,6 +775,13 @@ routes its single **Back to Library** action through the unsaved-change guard,
 and restores Library orientation after closing. It may not open as an empty
 overlay, paint over neighboring content, or replace the existing catalog save,
 revision, role, or fallback boundary.
+
+The right readiness rail may use restrained semantic icons, but adjacent text
+is always the authority for state and action. Ordinary rendered Library text is
+at least 12px. Save failure or source recovery exposes one owning **Save** or
+**Try again** action, never competing duplicates. Changing the active tab inside
+the embedded editor synchronizes the Library breadcrumb and editor title while
+preserving the mounted draft, staged values, and save authority.
 
 ### Package/Menu evidence and draft review
 
@@ -847,9 +1018,10 @@ retention never crosses organization, quote, source, role, or gate identity.
   matrix contains one fail-closed route-contract drift guard; 45 route cases;
   three Library template-editor cases; 27 header, search, context, and Pilot
   cases; two mobile Live Breakdown cases; and three editor review/feedback
-  cases. The four Calm Four primary destinations are derived from the same
-  frozen navigation contract used by the shell, and every declared route must
-  resolve at least one current visible audit peer. The lane covers Workspace &
+  cases. At that v0.16 checkpoint, the four Calm Four primary destinations were
+  derived from the same frozen navigation contract used by the shell; the later
+  UX convergence overlay adds Operations as the fifth destination. Every
+  declared route must resolve at least one current visible audit peer. The lane covers Workspace &
   tools, declared header popovers, Workspace search, Package, Money, Proposal,
   and Conversation contexts, deterministic Pilot answers, the normal-flow Pilot
   scenario review, and draft-review/feedback states. Every geometry assertion

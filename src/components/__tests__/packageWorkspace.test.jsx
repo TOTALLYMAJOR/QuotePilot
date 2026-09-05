@@ -136,20 +136,36 @@ function packageGroup(label) {
     .find((element) => element.querySelector("h5")?.textContent.trim() === label);
 }
 
-describe("Package workspace", () => {
-  test("uses native list semantics for package navigation", () => {
+function packageSection(sectionId) {
+  return container.querySelector(`[data-package-section="${sectionId}"]`);
+}
+
+function openPackageSection(sectionId) {
+  const section = packageSection(sectionId);
+  expect(section, `package section "${sectionId}"`).toBeTruthy();
+  act(() => {
+    section.open = true;
+    section.dispatchEvent(new Event("toggle", { bubbles: false }));
+  });
+  return section;
+}
+
+describe("Offer package workspace", () => {
+  test("uses native list semantics for the compact offer navigation", () => {
     renderView();
 
     const packageList = container.querySelector(".package-workspace-nav-list");
     expect(packageList.tagName).toBe("UL");
     expect(packageList.querySelectorAll(":scope > li")).toHaveLength(2);
     expect(packageList.querySelector('button[role="listitem"]')).toBeNull();
+    expect(container.querySelector('.package-workspace-nav[aria-label="Offer list"]')).toBeTruthy();
+    expect(container.textContent).toContain("Customer-ready catering packages");
   });
 
   test("keeps a package draft when switching between navigator rows", () => {
     renderView();
 
-    const nameInput = container.querySelector('input[aria-label="Customer-facing package name"]');
+    const nameInput = container.querySelector('input[aria-label="Customer-facing offer name"]');
     expect(nameInput.value).toBe("Classic");
     setInputValue(nameInput, "Classic Plus");
 
@@ -158,18 +174,19 @@ describe("Package workspace", () => {
     act(() => {
       deluxeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(container.querySelector('input[aria-label="Customer-facing package name"]').value).toBe("Deluxe");
+    expect(container.querySelector('input[aria-label="Customer-facing offer name"]').value).toBe("Deluxe");
 
     const classicButton = container.querySelector('button[data-package-id="classic"]');
     act(() => {
       classicButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(container.querySelector('input[aria-label="Customer-facing package name"]').value).toBe("Classic Plus");
+    expect(container.querySelector('input[aria-label="Customer-facing offer name"]').value).toBe("Classic Plus");
   });
 
   test("applies staged add-on selections and keeps inactive options hidden", () => {
     renderView();
 
+    const included = openPackageSection("included");
     clickButtonByText("Add add-ons");
     expect(container.textContent).toContain("Coffee service");
     expect(container.textContent).not.toContain("Retired add-on");
@@ -181,13 +198,21 @@ describe("Package workspace", () => {
       checkbox.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    act(() => {
+      included.open = false;
+      included.dispatchEvent(new Event("toggle", { bubbles: false }));
+      included.open = true;
+      included.dispatchEvent(new Event("toggle", { bubbles: false }));
+    });
+    expect(checkbox.checked).toBe(true);
+
     expect(packageGroup("Add-ons").querySelector(".package-workspace-selection-list").textContent)
       .not.toContain("Coffee service");
     clickButtonByText("Apply 1 selection");
     expect(packageGroup("Add-ons").querySelector(".package-workspace-selection-list").textContent)
       .toContain("Coffee service");
     expect(packageGroup("Add-ons").textContent)
-      .toContain("Selected at $0 when chosen in Quote Builder.");
+      .toContain("Included in the offer when chosen in a quote.");
   });
 
   test("cancels a staged selection without changing the package draft", () => {
@@ -222,9 +247,9 @@ describe("Package workspace", () => {
 
     expect(activeToggle.checked).toBe(false);
     expect(container.querySelector(".package-workspace-activation-notice").textContent)
-      .toContain("Activation is blocked until this package is ready.");
+      .toContain("This offer cannot be made available yet.");
 
-    clickButtonByText("Revert this package");
+    clickButtonByText("Revert this offer");
     expect(activeToggle.checked).toBe(true);
     expect(container.querySelector(".package-workspace-activation-notice")).toBeNull();
   });
@@ -239,26 +264,140 @@ describe("Package workspace", () => {
     });
     renderView({ catalog: fixture });
 
-    clickButtonByText("Package actions");
-    clickButtonByText("Delete package…");
+    clickButtonByText("Offer actions");
+    clickButtonByText("Delete offer…");
 
     const review = container.querySelector('[role="alertdialog"]');
     expect(review).toBeTruthy();
     expect(review.textContent).toContain("1 event template and 1 recommendation rule");
-    clickButtonByText("Keep package");
+    clickButtonByText("Keep offer");
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
   test("reverts the selected package to the last saved catalog snapshot", () => {
     renderView();
 
-    const nameInput = container.querySelector('input[aria-label="Customer-facing package name"]');
+    const nameInput = container.querySelector('input[aria-label="Customer-facing offer name"]');
     setInputValue(nameInput, "Classic Plus");
 
-    clickButtonByText("Revert this package");
+    clickButtonByText("Revert this offer");
 
-    expect(container.querySelector('input[aria-label="Customer-facing package name"]').value).toBe("Classic");
+    expect(container.querySelector('input[aria-label="Customer-facing offer name"]').value).toBe("Classic");
     expect(localStorage.getItem(catalogSetupDeviceBufferKey("test-org"))).toBeNull();
     expect(container.querySelector(".modal-foot").textContent).toContain("reverted to the last saved catalog state");
+  });
+
+  test("keeps identity, commercial summary, and next decision visible above supported offer sections", () => {
+    renderView();
+
+    const workspace = container.querySelector(".package-workspace-shell");
+    expect(workspace.children).toHaveLength(2);
+    expect(container.querySelector(".package-workspace-health-desktop")).toBeNull();
+    expect(container.querySelector("[data-package-health]").textContent).toContain("Next decision");
+    expect(container.querySelector(".package-workspace-overview").textContent).toContain("Classic");
+    expect(container.querySelector(".package-workspace-primary-summary").textContent).toContain("$18.00");
+    expect(container.querySelector(".package-workspace-primary-summary").textContent).toContain("Available");
+
+    const disclosures = [...container.querySelectorAll(".package-workspace-object-section")];
+    expect(disclosures.map((disclosure) => disclosure.dataset.packageSection)).toEqual([
+      "basics",
+      "included",
+      "pricing",
+      "usage",
+      "advanced"
+    ]);
+    expect(disclosures.every((disclosure) => disclosure.open === false)).toBe(true);
+    expect(packageSection("included").querySelector("summary").textContent).toContain("0 included items");
+    expect(packageSection("pricing").querySelector("summary").textContent).toContain("margin");
+    expect(packageSection("usage").querySelector("summary").textContent).toContain("1 template");
+    expect(packageSection("options")).toBeNull();
+  });
+
+  test("opens collapsed pricing before focusing a cost action", async () => {
+    const fixture = catalog();
+    fixture.packages[0].costPpp = null;
+    renderView({ catalog: fixture });
+
+    const pricing = packageSection("pricing");
+    expect(pricing.open).toBe(false);
+    clickButtonByText("Record package cost");
+    await act(async () => {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    });
+
+    expect(pricing.open).toBe(true);
+    expect(document.activeElement.getAttribute("aria-label")).toBe("Cost per person");
+  });
+
+  test("projects recorded choice groups without exposing unsupported authoring", () => {
+    const fixture = catalog();
+    fixture.packages[0].choiceGroups = [{
+      id: "meal-selection-internal",
+      label: "Choose a starter",
+      componentType: "menu_item",
+      componentIds: ["fruit", "missing-choice-internal"],
+      minChoices: 1,
+      maxChoices: 2
+    }];
+    renderView({ catalog: fixture });
+
+    const choices = packageSection("choices");
+    expect(choices.open).toBe(false);
+    expect(choices.querySelector("summary").textContent).toContain("1 customer choice group");
+    expect(choices.querySelector("summary").textContent).toContain("1 issue");
+    openPackageSection("choices");
+    expect(choices.textContent).toContain("Choose a starter");
+    expect(choices.textContent).toContain("Choose at least 1 and no more than 2");
+    expect(choices.textContent).toContain("Fresh fruit");
+    expect(choices.textContent).toContain("Unavailable menu item");
+    expect(choices.textContent).not.toContain("missing-choice-internal");
+    expect(choices.querySelector("input, select, button")).toBeNull();
+  });
+
+  test("presents linked configuration rules by business meaning and flags unavailable references", () => {
+    const fixture = catalog();
+    fixture.packages[0].ruleRefs = ["large-event-staffing", "missing-internal-rule-id"];
+    fixture.settings.configurationRules = [{
+      id: "large-event-staffing",
+      type: "requirement",
+      reason: "Large events require confirmed server coverage.",
+      enabled: true
+    }];
+    renderView({ catalog: fixture });
+
+    const rules = openPackageSection("rules");
+    expect(rules.querySelector("summary").textContent).toContain("2 linked rules");
+    expect(rules.querySelector("summary").textContent).toContain("1 issue");
+    expect(rules.textContent).toContain("Large events require confirmed server coverage.");
+    expect(rules.textContent).not.toContain("missing-internal-rule-id");
+
+    expect(rules.textContent).toContain("Unavailable linked rule");
+    expect(rules.querySelector("input, select, button")).toBeNull();
+  });
+
+  test("keeps record identifiers in advanced details and out of the primary offer flow", () => {
+    const fixture = catalog();
+    fixture.packages = [{
+      ...fixture.packages[0],
+      id: "offer-record-9281",
+      name: "Wedding dinner"
+    }];
+    fixture.settings.eventTemplates = [{
+      id: "template-internal-441",
+      name: "Wedding reception",
+      pkg: "offer-record-9281"
+    }];
+    renderView({ catalog: fixture });
+
+    const primarySections = [
+      container.querySelector(".package-workspace-overview"),
+      packageSection("basics"),
+      packageSection("included"),
+      packageSection("pricing"),
+      packageSection("usage")
+    ].filter(Boolean);
+    expect(primarySections.every((section) => !section.textContent.includes("offer-record-9281"))).toBe(true);
+    expect(packageSection("usage").textContent).toContain("Wedding reception");
+    expect(packageSection("advanced").textContent).toContain("offer-record-9281");
   });
 });

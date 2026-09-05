@@ -504,6 +504,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   onSimulatePricing,
   onOpenWorkflow,
   onOpenConversation,
+  onOpenCalendar,
   onOpenLegacyWorkspace,
   serviceStyles = [],
   onPreviewQuickUpdate,
@@ -558,6 +559,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     ambientContext?.sourceFreshness?.state || "unknown"
   ).trim().toLowerCase() || "unknown";
   const isStaffRole = ["admin", "sales"].includes(ambientRole);
+  const calendarAvailable = ["accepted", "booked"].includes(String(quote?.status || "").trim().toLowerCase())
+    && typeof onOpenCalendar === "function";
   const recordedGuestCount = Math.max(0, Math.round(Number(quote?.event?.guests) || 0));
   const recordedStaffingSignature = [
     quote?.event?.servers,
@@ -646,6 +649,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     ambientRole,
     proposalSourceFreshness
   ]);
+  const openCalendar = () => {
+    if (!calendarAvailable) return;
+    onOpenCalendar(model.identity.quoteId, {
+      actionId: `open-opportunity-calendar:${model.identity.quoteId}`
+    });
+  };
   const attendanceRead = useMemo(() => (
     deriveAttendanceRead(quote, decisionDebtSnapshot)
   ), [decisionDebtSnapshot, quote]);
@@ -3186,6 +3195,16 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             Quick Updates
           </button>
         )}
+        {calendarAvailable && (
+          <button
+            type="button"
+            className="ambient-calendar-handoff ambient-v16-opportunity__desktop"
+            onClick={openCalendar}
+            data-exact-event-id={model.identity.quoteId}
+          >
+            Open Calendar
+          </button>
+        )}
       </div>
 
       <section
@@ -3274,6 +3293,17 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           >
             <NotePencil size={21} aria-hidden="true" />
             Quick Updates
+          </button>
+        )}
+
+        {calendarAvailable && (
+          <button
+            type="button"
+            className="ambient-calendar-handoff ambient-v16-opportunity__mobile"
+            onClick={openCalendar}
+            data-exact-event-id={model.identity.quoteId}
+          >
+            Open in Calendar
           </button>
         )}
 

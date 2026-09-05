@@ -64,6 +64,8 @@ const baseProps = {
   nowDate: NOW_DATE,
   onRefresh: () => {},
   onOpenWorkflow: () => ({ status: "pending" }),
+  onOpenCustomer: () => ({ status: "pending" }),
+  onOpenCalendar: () => ({ status: "pending" }),
   onNewQuote: () => {}
 };
 
@@ -100,10 +102,13 @@ describe("AmbientNowView", () => {
       />
     );
 
-    expect(markup).toContain("Today, in clear view.");
-    expect(markup).toContain("The work that needs you, followed by what is coming next.");
-    expect(markup).toContain('/images/quote-workspace-wedding-table-v1.webp');
-    expect(markup).toContain("Three things deserve attention");
+    expect(markup).toContain("Three urgent items need you today.");
+    expect(markup).toContain("Needs you");
+    expect(markup).toContain('data-now-urgency-count="3"');
+    expect(markup).toContain('data-now-waiting-count="0"');
+    expect(markup).toContain("Overdue follow-up");
+    expect(markup).toContain("No follow-up outcome is recorded yet.");
+    expect(markup).toContain("Next 7 days");
     expect(markup).toContain("1 more priority remains in Workflow");
     expect(markup.match(/class="ambient-now-priority"/gu)).toHaveLength(3);
     expect(markup.match(/data-ambient-action-id="review-now-priority:/gu)).toHaveLength(3);
@@ -111,8 +116,9 @@ describe("AmbientNowView", () => {
     expect(markup).toContain("Event 0");
     expect(markup).toContain("Customer 0");
     expect(markup).not.toContain("Event 3");
-    expect(markup.indexOf("Today, in clear view.")).toBeLessThan(markup.indexOf("Event 0"));
+    expect(markup.indexOf("Three urgent items need you today.")).toBeLessThan(markup.indexOf("Event 0"));
     expect(markup.indexOf("Event 0")).toBeLessThan(markup.indexOf("About this view"));
+    expect(markup).not.toContain('ambient-now-priority__number');
     expect(markup).not.toContain("Start a quote");
     expect(markup).not.toMatch(/bounded workspace snapshot|current workspace snapshot/iu);
   });
@@ -243,9 +249,12 @@ describe("AmbientNowView", () => {
       />
     );
 
-    expect(markup).toContain("Recently completed");
-    expect(markup).toContain("Follow-up marked complete internally");
-    expect(markup).toContain("do not imply customer contact or provider delivery");
+    expect(markup).toContain("Quiet progress");
+    expect(markup).toContain("Recently handled");
+    expect(markup).toContain("Follow-up completed");
+    expect(markup).toContain("Yesterday");
+    expect(markup).not.toContain("delivered");
+    expect(markup).not.toContain("paid");
   });
 
   test("shows only recorded upcoming work and keeps its chronological projection", () => {
@@ -263,7 +272,8 @@ describe("AmbientNowView", () => {
       <AmbientNowView {...baseProps} snapshot={snapshot({ quotes: [later, sooner] })} />
     );
 
-    expect(markup).toContain("Upcoming work");
+    expect(markup).toContain("Coming up");
+    expect(markup).toContain("Commercial steps");
     expect(markup.indexOf("Thursday Dinner")).toBeLessThan(markup.indexOf("Friday Dinner"));
     expect(markup).toContain("17:00 · Garden Terrace");
     expect(markup).toContain("30 guests");
@@ -284,10 +294,50 @@ describe("AmbientNowView", () => {
     expect(css).not.toMatch(/position:\s*(?:fixed|absolute|sticky)/u);
     expect(css).not.toMatch(/\bz-index\s*:/u);
     expect(css).toMatch(/min-height:\s*44px/u);
-    expect(css).toMatch(/@media \(max-width: 980px\)/u);
-    expect(css).toMatch(/@media \(max-width: 720px\)/u);
-    expect(css).toMatch(/@media \(max-width: 430px\)/u);
+    expect(css).toMatch(/@media \(max-width: 1020px\)/u);
+    expect(css).toMatch(/@media \(max-width: 760px\)/u);
+    expect(css).toMatch(/@media \(max-width: 470px\)/u);
     expect(css).toContain("var(--font-editorial)");
+  });
+
+  test("keeps provider-dependent payment states in the quiet waiting band", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientNowView
+        {...baseProps}
+        snapshot={snapshot({
+          quotes: [quote(1, {
+            status: "accepted",
+            payment: { depositStatus: "sent" },
+            totals: { deposit: 1200 }
+          })]
+        })}
+      />
+    );
+
+    expect(markup).toContain('data-progress-group="waiting"');
+    expect(markup).toContain("Waiting on others");
+    expect(markup).toContain("Deposit requested");
+    expect(markup).toContain("$1,200.00");
+  });
+
+  test("routes repeat-event attention to the exact existing Customer continuation", () => {
+    const onOpenCustomer = vi.fn(() => ({ status: "pending" }));
+    const item = attentionItem(1, {
+      id: "anniversary:quote-1",
+      type: "anniversary_rebooking",
+      state: "available",
+      eventName: "Rivera Dinner"
+    });
+    mount({
+      onOpenCustomer,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [item] },
+        quotes: [quote(1, { customerId: "customer-1" })]
+      })
+    });
+
+    act(() => container.querySelector('[data-ambient-action-id^="review-now-priority:"]').click());
+    expect(onOpenCustomer).toHaveBeenCalledWith("customer-1");
   });
 
   test("replaces an unavailable read with one safe productive recovery", () => {

@@ -62,6 +62,25 @@
   backdrop-filter: blur(12px);
 }
 
+.ambient-calendar-handoff {
+  min-height: 44px;
+  border: 1px solid var(--ambient-hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ambient-ink);
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 760;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ambient-calendar-handoff:hover {
+  border-color: var(--ambient-gold-local);
+  background: color-mix(in srgb, var(--ambient-gold-local) 7%, transparent);
+}
+
 .ambient-opportunity-orientation {
   justify-content: flex-start;
   gap: 1rem;
@@ -1391,6 +1410,14 @@ button.ambient-event-logistics-value:focus-visible {
 
   .ambient-opportunity-context-bar .ambient-quick-updates-trigger--context {
     display: none;
+  }
+
+  .ambient-opportunity-context-bar .ambient-calendar-handoff {
+    display: none;
+  }
+
+  .ambient-mobile-remote > .ambient-calendar-handoff {
+    width: 100%;
   }
 
   .ambient-mobile-remote {

@@ -4626,8 +4626,12 @@ export async function updatePortalDecision({
         portalIssuedAtISO: localPortalIssuedAtISO,
         quoteNumber: String(localTarget.quoteNumber || "").trim(),
         currency: "USD",
-        totalMinor: Math.round(Number(localTarget.totals?.total || 0) * 100),
-        depositMinor: Math.round(Number(localTarget.totals?.deposit || 0) * 100),
+        totalMinor: Number.isSafeInteger(localTarget.totals?.totalCents)
+          ? localTarget.totals.totalCents
+          : Math.round(Number(localTarget.totals?.total || 0) * 100),
+        depositMinor: Number.isSafeInteger(localTarget.totals?.depositCents)
+          ? localTarget.totals.depositCents
+          : Math.round(Number(localTarget.totals?.deposit || 0) * 100),
         snapshotSha256: ""
       }
     : null;
