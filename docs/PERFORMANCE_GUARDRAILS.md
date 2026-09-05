@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-05 02:15:15 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,8 +25,8 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,379,162-byte aggregate
-  and 397,409-byte largest-chunk ceiling. The production-equivalent Ambient
+- The current compatibility graph has a temporary 3,381,257-byte aggregate
+  and 397,428-byte largest-chunk ceiling. The production-equivalent Ambient
   graph has a separate temporary 4,301,701-byte aggregate ceiling and
   432,490-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
@@ -127,9 +127,12 @@ Threshold policy:
   delta safely would remove selected editor behavior; chunk splitting would not
   reduce this aggregate guard. The current ceilings therefore equal the literal
   local complete-profile measurements of 3,379,162 / 397,409 and 4,301,701 /
-  432,490 bytes, with no percentage or future-growth headroom. Exact-head CI is
-  still required when publication is authorized; local pinning is not CI,
-  hosted, production, or human-acceptance evidence.
+  432,490 bytes. Exact-head CI run `33951463058` on
+  `3eecfa89d8bf843089bae9921a2bdf655b715b73` then measured the completed
+  compatibility graph at 3,381,257 / 397,428 bytes after every browser case
+  passed. The compatibility ceiling is pinned to that larger literal CI graph;
+  neither profile receives percentage or future-growth headroom. This budget
+  evidence is not hosted, production, or human acceptance.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

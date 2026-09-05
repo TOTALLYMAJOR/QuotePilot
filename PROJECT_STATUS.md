@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 01:58:12 CDT
+Last updated: 2026-09-05 02:15:15 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -90,12 +90,15 @@ Last updated: 2026-09-05 01:58:12 CDT
   is local commit `b593fe4d2c45ff5db20bafe205461157952b9ab4`.
   Full unit, production build, focused browser, capability/document governance,
   and local CWV checks pass. Exact CI-profile bundle checks pass against an
-  explicitly reviewed no-headroom exception at 3,379,162 / 397,409 bytes for
+  explicitly reviewed no-headroom exception at 3,381,257 / 397,428 bytes for
   compatibility and 4,301,701 / 432,490 bytes for Ambient. The complete
   aggregate release/CWV lane also passes when supplied with the repository's
-  canonical non-secret CI Firebase identifiers. No exact-head CI, hosted role,
-  production-data, deployment,
-  assistive-technology, or human-acceptance result is claimed.
+  canonical non-secret CI Firebase identifiers. Exact-head CI run
+  `33951463058` passed all browser behavior and measured the compatibility
+  graph at the recorded ceiling; its stale prior ceiling rejected that first
+  run, so a new exact-head run remains required. No hosted role,
+  production-data, deployment, assistive-technology, or human-acceptance result
+  is claimed.
 - When the existing `eventSchedule` capability is enabled, the local source
   candidate presents Operations between Opportunities and Clients and opens the
   reused Calendar directly. Month gives the broad primary canvas to the calendar

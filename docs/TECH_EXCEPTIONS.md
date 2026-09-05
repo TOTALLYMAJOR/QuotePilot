@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-05 02:15:15 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -110,8 +110,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   nested-editor implementation at
   `b593fe4d2c45ff5db20bafe205461157952b9ab4` measures 3,379,162 /
   397,409 bytes for compatibility and 4,301,701 / 432,490 bytes for Ambient.
-  These literal local measurements are the current ceilings; they add no
-  percentage or future-growth headroom.
+  Exact-head CI run `33951463058` on the completed convergence head
+  `3eecfa89d8bf843089bae9921a2bdf655b715b73` measured the compatibility graph
+  at 3,381,257 / 397,428 bytes after the full Playwright suite passed. The
+  compatibility ceiling is pinned to that larger literal CI artifact; the
+  Ambient ceiling remains pinned to its larger literal local graph. Neither
+  profile adds percentage or future-growth headroom.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -242,9 +246,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   are transferred gzip. Source attribution found no low-risk removal capable of
   restoring the older ceilings without deleting selected nested-editor
   behavior, and splitting chunks would not change the aggregate budget. Both
-  profile checks pass only against the literal ceilings recorded here. The
-  owner has prohibited pushing, so exact-head CI confirmation remains
-  UNVERIFIABLE until separate publication authority is granted.
+  profile checks pass only against the literal ceilings recorded here.
+  Publication authority was later granted. Exact-head CI run `33951463058`
+  measured the completed compatibility graph at 3,381,257 / 397,428 bytes;
+  all browser behavior passed and only the stale literal ceiling rejected the
+  build. The exception now uses that exact CI measurement with no discretionary
+  margin, and a new exact-head CI run remains the release gate.
 
 ## Superseded Exceptions
 

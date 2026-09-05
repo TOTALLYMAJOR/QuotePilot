@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-05 01:58:12 CDT
+Last updated: 2026-09-05 02:15:15 CDT
 
 All notable project changes are documented in this file.
 
@@ -117,11 +117,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   verdict of **9.5/10 — GO**. The exact rendered implementation is local commit
   `b593fe4d2c45ff5db20bafe205461157952b9ab4`. No Bundle record, route,
   lifecycle, save path, catalog authority, pricing authority, role authority,
-  or publication path was added. Exact CI-profile builds measure 3,379,162 /
-  397,409 bytes for compatibility and 4,301,701 / 432,490 bytes for Ambient.
-  The active temporary exception is pinned to those literal local graphs with
-  no future-growth headroom; the selected lazy Library experience accounts for
-  45,724 and 61,440 aggregate bytes respectively. Full unit, build, focused
+  or publication path was added. Exact-head CI measures 3,381,257 / 397,428
+  bytes for compatibility; the exact local Ambient graph measures 4,301,701 /
+  432,490 bytes. The active temporary exception is pinned to those larger
+  literal graphs with no future-growth headroom; the selected lazy Library
+  experience accounts for 45,724 and 61,440 aggregate bytes respectively. Full unit, build, focused
   browser, capability/document governance, and local CWV checks pass. The
   isolated checkout lacks the six Firebase web configuration values required
   by `check:env`, so the aggregate release lane remains environment-blocked
