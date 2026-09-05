@@ -6,6 +6,9 @@ import {
   RELEASE_EVIDENCE_POLICY
 } from "./production-release-evidence.mjs";
 
+// Staging baseline qualification uses this same fail-closed contract without
+// changing any runtime expectation or provider authority.
+
 export const RELEASE_CANDIDATE_POLICY = Object.freeze({
   repository: RELEASE_EVIDENCE_POLICY.repository,
   ciWorkflow: RELEASE_EVIDENCE_POLICY.ciWorkflow,

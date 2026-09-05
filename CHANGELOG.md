@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 10:46:13 CDT
+Last updated: 2026-09-05 02:58:36 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Added a non-behavioral staging-baseline qualification marker so the isolated
+  Firebase candidate can be restored to the existing governed `staging-safe-off`
+  contract before the next provider-acceptance window. This branch changes no
+  runtime expectation, provider authority, production target, or customer state.
 - Released annotated tag `v0.16.6` at exact commit
   `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
   `33889897821` passed every required job. Governed Vercel production run

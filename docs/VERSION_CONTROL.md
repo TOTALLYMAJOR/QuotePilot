@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-03 15:59:15 CDT
+Last updated: 2026-09-05 02:58:36 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -170,6 +170,10 @@ explicit owner promotion after real-run review.
    deployment-owned SMS provider and configuration generation; use
    `not-applicable` for `none` or Twilio. Portal projection backfill is separate
    source/data-operation acceptance, not deployment-target evidence.
+   A baseline-only qualification commit may exercise this unchanged contract to
+   restore the isolated staging project to `staging-safe-off`; it does not waive,
+   replace, or consume the subsequent release SHA's provider-open or closeout
+   receipts and is never production release content.
    Use `npm run release:candidate:deploy` only from the clean, published
    `release/vX.Y.Z` head with its exact successful CI run. The command is fixed
    to the isolated Firebase staging identity or the `quoteflow` Vercel preview
