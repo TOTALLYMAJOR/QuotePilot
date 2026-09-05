@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-05 18:50:11 CDT
+Last updated: 2026-09-05 18:51:02 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -113,6 +113,7 @@ as separate claims.
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
 | Repository operating-system maturity | `docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md` | Adapted solo-agent harness assessment and target architecture; it summarizes but does not replace the owning governance docs. |
+| Portable Codex Desktop governance prompt series | `docs/PORTABLE_CODEX_GOVERNANCE_PROMPT_SERIES.md` | Transferable organization/repository bootstrap prompts for the Commanding Governance Overlay archetype. It is a template and does not govern QuotePilot runtime, release, provider, or product behavior. |
 | Cross-repository architecture adoption evidence | `docs/QUIETPILOT_ARCHITECTURE_ADOPTION_REPORT.md` | Point-in-time, read-only comparison and bounded adoption recommendations. It is not runtime, release, provider, or product authority. |
 | Development task evidence capture | `docs/DEVELOPMENT_EVIDENCE_COMPILER.md` | Local ignored evidence-record contract for request, validation, proof-boundary, residual-risk, and learning capture. |
 | Product truth observability and drift policy | `docs/adr/ADR-0002-product-truth-observability.md`, `docs/design/product-truth-observability-design.md` | Accepted decision and implementation contract for the read-only owner digest and advisory drift gate. `PROJECT_STATUS.md`, the Feature Matrix, release receipts, and other named inputs retain authority; generated digests are projections only. |

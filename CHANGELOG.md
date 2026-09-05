@@ -1,10 +1,22 @@
 # Changelog
 
-Last updated: 2026-09-05 18:50:11 CDT
+Last updated: 2026-09-05 18:51:02 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — combined production candidate
+
+- Integrate the tenant operating model with the UX Convergence release and
+  the current field-state, governed-import and workflow-usability refinements.
+- Bring final-count requests into the eligible quote action, expose exact
+  closeout navigation and durable outcomes, and simplify the workflow Studio
+  and mobile inspection presentation while preserving native authority.
+- Preserve both Calendar capability gating and the workflow Studio entry in
+  the converged Library; combine the 122 native callable export inventory.
+- Retain the current governance, portfolio and Golden Lattice planning artifacts
+  without treating documentation or screenshots as production acceptance.
 
 ## Unreleased — QP-TOM review preparation
 
@@ -874,6 +886,14 @@ This changelog is backfilled from git history and will be maintained going forwa
   so legacy payment records do not gain an empty `finalBalance` field and fail
   the existing exact payment-evidence rule. Payment, role, tenant, portal,
   version-authorship, and immutable-history protections remain unchanged.
+- Added an evidence-led, first-person portfolio case study and self-contained
+  seven-image package for QuotePilot. The narrative presents the product as a
+  demonstration of product strategy, state and authority modeling, UX,
+  full-stack systems work, human-led AI collaboration, and proof-boundary
+  release discipline. Two new editorial images are explicitly labeled as
+  generated metaphors; five repository product images retain source and
+  implementation status in a separate asset guide. This documentation-only
+  addition changes no application behavior or release claim.
 - Closed the final interaction and evidence-language drifts against the
   approved v0.16 contract:
   the standard workspace utility trigger now exposes the exact accessible name
