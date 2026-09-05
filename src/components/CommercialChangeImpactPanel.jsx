@@ -1,3 +1,4 @@
+import "./attendanceWorkflowPresentation.css";
 import { lazy, Suspense } from "react";
 const WorkflowPackPolicyPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true" ? lazy(() => import("./WorkflowPackPolicyPanel")) : null;
 import { useEffect, useRef, useState } from "react";
@@ -632,16 +633,17 @@ function BoundCommercialReview({ model }) {
   const usd = cents => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
   const threshold = policy?.approvalPolicy.thresholdCents ?? null;
   return <section className="workflow-form-section" aria-label="Published approval and guest count evidence">
-    <h4>Approval basis for this preview</h4>
-    <dl className="staff-evidence-details">
+    <h4>{model.attendanceBinding ? "Before you apply this guest count" : "Approval for this change"}</h4>
+    <p><strong>{usd(evaluation.absoluteTotalDeltaCents)} total price change</strong> · {evaluation.impactApprovalRequired || evaluation.thresholdApprovalRequired ? "Administrator approval required" : "No administrator approval required"}</p>
+    <details><summary>Approval policy and threshold</summary><dl className="staff-evidence-details">
       <div><dt>Quote review policy</dt><dd>{policy ? `Published version ${policy.definitionPin.version}` : "Existing commercial approval rules"}</dd></div>
       <div><dt>Absolute total change</dt><dd>{usd(evaluation.absoluteTotalDeltaCents)}</dd></div>
       <div><dt>Declared approval threshold</dt><dd>{threshold === null ? "No additional threshold declared" : `${usd(threshold)} or more`}</dd></div>
       {policy && <div><dt>Permitted participants</dt><dd>{policy.approvalPolicy.allowedRoles.map(role => role === "admin" ? "Administrator" : "Sales").join(", ")}</dd></div>}
-    </dl>
+    </dl></details>
     <p>{evaluation.impactApprovalRequired ? "Administrator approval is required because governed dependencies are affected." : "No governed dependency requires administrator approval."}</p>
     <p>{evaluation.thresholdApprovalRequired ? "Administrator approval is required because the total change meets or exceeds the published threshold." : "The published threshold adds no approval requirement to this preview."}</p>
-    {model.attendanceBinding && <p><strong>Submitted guest count: {model.attendanceBinding.count}.</strong> This exact response remains proposed until you apply the reviewed change, including when the count matches the current price basis. Applying creates a new draft quote revision and clears current acceptance. Prior acceptance, payment and booking history remain preserved. Separate customer acceptance and administrator booking revalidation are required; no payment is charged.</p>}
+    {model.attendanceBinding && <div className="attendance-commercial-review"><p><strong>Submitted guest count: {model.attendanceBinding.count}.</strong> This exact response remains proposed until you apply the reviewed change, even if the number matches the quote.</p><ul className="attendance-commercial-review__changes"><li>Applying creates a new draft quote revision and clears current acceptance.</li><li>Send the revised quote for separate customer acceptance, then revalidate the booking as an administrator.</li><li>Prior acceptance, payment and booking history remain preserved; no payment is charged.</li></ul></div>}
   </section>;
 }
 

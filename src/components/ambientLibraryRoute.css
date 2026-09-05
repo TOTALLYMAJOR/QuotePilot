@@ -927,6 +927,18 @@
   margin: 0;
 }
 
+/* The desktop shell keeps New quote fixed in this header band. Keep the
+   editor's orientation clear of its 10.5rem action and visible focus ring. */
+@media (min-width: 1181px) {
+  .app-shell-ambient-navigation .ambient-library__orientation {
+    padding-inline-end: 12rem;
+  }
+
+  .app-shell-ambient-navigation .ambient-library__orientation > * {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 760px) {
   .ambient-library {
     gap: 1.35rem;

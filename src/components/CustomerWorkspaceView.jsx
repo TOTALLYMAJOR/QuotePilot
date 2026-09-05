@@ -326,6 +326,18 @@ export function CustomerRelationshipBriefing({
   );
 }
 
+export function resolveCustomerCloseoutTarget({ organizationId, workspace, radar, target } = {}) {
+  const quoteId = String(target?.quoteId || "").trim();
+  if (target?.attentionType !== "post_event_closeout" || !quoteId || !organizationId) return null;
+  if (!workspace?.quotes?.some((quote) => quote.id === quoteId && quote.organizationId === organizationId)) return null;
+  const matches = (radar?.opportunities || []).filter((opportunity) => (
+    opportunity.type === "post_event_closeout"
+    && opportunity.quoteId === quoteId
+    && opportunity.organizationId === organizationId
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export default function CustomerWorkspaceView({
   organizationId = "",
   organizationName = "",
@@ -358,6 +370,9 @@ export default function CustomerWorkspaceView({
   const generationRef = useRef(0);
   const tabRefs = useRef({});
   const recordDisclosureRef = useRef(null);
+  const closeoutReturnRef = useRef(null);
+  const closeoutFocusFrameRef = useRef(null);
+  const [revealedCloseout, setRevealedCloseout] = useState(null);
   const previewTriggerRef = useRef(null);
   const returnRestoreCancelRef = useRef(null);
   const requestedScopeKey = `${String(organizationId || "").trim()}\u0000${String(customerId || "").trim()}`;
@@ -546,6 +561,45 @@ export default function CustomerWorkspaceView({
     return { status: "resolved" };
   }, []);
 
+  const openWorkflowOrCloseout = useCallback((target) => {
+    if (target?.attentionType !== "post_event_closeout") return onOpenWorkflow?.(target);
+    const opportunity = !state.loading && !state.stale && !state.error
+      ? resolveCustomerCloseoutTarget({ organizationId, workspace: workspaceForScope, radar: state.revenueRadar, target })
+      : null;
+    if (!opportunity) {
+      return {
+        status: "recovery",
+        reason: "This event’s closeout is not available in the current client read.",
+        nextResolution: "Refresh this client overview to load the exact event review."
+      };
+    }
+    closeoutReturnRef.current = document.activeElement;
+    setRevealedCloseout({ scopeKey: requestedScopeKey, quoteId: opportunity.quoteId });
+    setActiveTab("overview");
+    if (recordDisclosureRef.current) recordDisclosureRef.current.open = true;
+    window.cancelAnimationFrame(closeoutFocusFrameRef.current);
+    closeoutFocusFrameRef.current = window.requestAnimationFrame(() => {
+      closeoutFocusFrameRef.current = window.requestAnimationFrame(() => {
+        const root = headingRef.current?.closest("main");
+        const heading = Array.from(root?.querySelectorAll("[data-closeout-review-heading]") || [])
+          .find((node) => node.dataset.closeoutReviewHeading === opportunity.quoteId);
+        heading?.focus({ preventScroll: true });
+        heading?.scrollIntoView?.({ block: "start", behavior: "auto" });
+      });
+    });
+    return { status: "resolved" };
+  }, [headingRef, onOpenWorkflow, organizationId, requestedScopeKey, state, workspaceForScope]);
+
+  const returnFromCloseout = useCallback(() => {
+    const trigger = closeoutReturnRef.current;
+    const target = trigger?.isConnected ? trigger : headingRef.current;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView?.({ block: "center", behavior: "auto" });
+    setRevealedCloseout(null);
+  }, [headingRef]);
+
+  useEffect(() => () => window.cancelAnimationFrame(closeoutFocusFrameRef.current), [requestedScopeKey]);
+
   const closePreview = useCallback(() => {
     setPreviewQuoteId("");
     const returnTarget = previewTriggerRef.current;
@@ -650,7 +704,7 @@ export default function CustomerWorkspaceView({
               onRefresh={() => setRefreshToken((value) => value + 1)}
               onOpenOpportunity={onOpenOpportunity}
               onOpenConversation={onOpenConversation}
-              onOpenWorkflow={onOpenWorkflow}
+              onOpenWorkflow={openWorkflowOrCloseout}
               onOpenClientRecord={openClientRecord}
               arrivalContext={arrivalContext}
               arrivalAttempted={arrivalAttempted}
@@ -705,7 +759,7 @@ export default function CustomerWorkspaceView({
             scope: workspace.quotePageInfo
           }}
           onOpenQuote={onOpenQuote}
-          onOpenWorkflow={onOpenWorkflow}
+          onOpenWorkflow={openWorkflowOrCloseout}
           />
           </>
         )}
@@ -740,6 +794,8 @@ export default function CustomerWorkspaceView({
           <CustomerRevenueOpportunities
             workflowScope={{ principalId: currentUserUid, role: currentUserRole, enabled: workflowEnabled, source: workspace.source }}
             radar={state.revenueRadar}
+            focusedCloseoutQuoteId={revealedCloseout?.scopeKey === requestedScopeKey ? revealedCloseout.quoteId : ""}
+            onReturnFromCloseout={returnFromCloseout}
             error={state.revenueRadarError}
             loading={state.loading}
             stale={state.stale}

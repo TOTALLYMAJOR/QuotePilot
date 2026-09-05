@@ -1,3 +1,4 @@
+import "./attendanceWorkflowPresentation.css";
 import {
   forwardRef,
   lazy,
@@ -532,6 +533,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const rootRef = useRef(null);
   const guestInlineRef = useRef(null);
   const guestInspectRef = useRef(null);
+  const activeGuestInspectRef = useRef(null);
   const staffingInspectRef = useRef(null);
   const staffingContextTriggerRef = useRef(null);
   const pricingInspectRef = useRef(null);
@@ -736,7 +738,18 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const activeStaffing = staffingScenario || model.staffingObject.current;
   const eventType = opportunityTypeLabel(quote);
   const eventDate = opportunityDateLabel(model.identity.date, { compact: true });
-  const nextActionLabel = taskSpecificNextActionLabel(model.nextAction, model.risk);
+  const attendanceAvailable = Boolean(
+    QuoteAttendancePanel && attendanceEnabled && source === "firebase" && isStaffRole && principalId
+    && quote?.id && quote?.organizationId === ambientContext?.organizationId
+    && ["accepted", "booked"].includes(quote?.status)
+    && (quote?.activeVersionId || quote?.versionMeta?.versionId) && quote?.acceptanceReceipt?.receiptId
+  );
+  const attendanceIsNext = attendanceAvailable && model.nextAction.kind === "caught_up";
+  const visibleNextAction = attendanceIsNext ? {
+    kind: "attendance", title: "Keep the final guest count on track.", label: "Review final guest count"
+  } : model.nextAction;
+  const nextActionLabel = attendanceIsNext ? visibleNextAction.label : taskSpecificNextActionLabel(model.nextAction, model.risk);
+  const visibleNextActionId = attendanceIsNext ? model.actions.inspectGuestCount.id : model.actions.primary?.id;
   const menuSummary = [
     String(quote?.event?.style || "").trim(),
     model.menuObject.items.length > 0
@@ -962,7 +975,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     setEventLogisticsOpenKind(EVENT_LOGISTICS_KINDS.includes(target) ? target : null);
   };
 
-  const openGuestContext = () => {
+  const openGuestContext = (event) => {
+    activeGuestInspectRef.current = event?.currentTarget || guestInspectRef.current;
     const action = model.actions.inspectGuestCount;
     const runtimeToken = beginAction(action);
     openExclusiveContext("guest");
@@ -970,8 +984,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       action,
       runtimeToken,
       kind: "context",
-      label: "Guest count context opened",
-      nextResolution: model.guestObject.preview.nextResolution,
+      label: attendanceAvailable ? "Final guest count opened" : "Guest count context opened",
+      ...(attendanceAvailable ? { consequence: "The saved quote stays unchanged while you request or review the final number." } : {}),
+      nextResolution: attendanceAvailable ? "Use the count panel to record a request, record a response, or review a supplied count." : model.guestObject.preview.nextResolution,
       destination: {
         surface: model.surfaceContracts.guestContext,
         isEmpty: false
@@ -1758,6 +1773,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   };
 
   const runNextAction = (event) => {
+    if (attendanceIsNext) { openGuestContext(event); return; }
     const nextAction = model.nextAction;
     if (nextAction.kind === "workflow") {
       const action = model.actions.primary;
@@ -3276,19 +3292,19 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           />
         </figure>
 
-        <div className="ambient-mobile-remote__next" data-next-action-kind={model.nextAction.kind}>
+        <div className="ambient-mobile-remote__next" data-next-action-kind={visibleNextAction.kind}>
           <div>
             <span>Next</span>
-            <h2>{model.nextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
-            <p>{model.nextAction.title}</p>
+            <h2>{attendanceIsNext ? "Final guest count" : visibleNextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
+            <p>{visibleNextAction.title}</p>
           </div>
-          {model.nextAction.kind === "caught_up" ? (
-            <small>{model.nextAction.label}</small>
+          {visibleNextAction.kind === "caught_up" ? (
+            <small>{visibleNextAction.label}</small>
           ) : (
             <button
               type="button"
               onClick={runNextAction}
-              data-ambient-action-id={model.actions.primary.id}
+              data-ambient-action-id={visibleNextActionId}
             >
               {nextActionLabel}
               <ArrowRight size={19} aria-hidden="true" />
@@ -3419,18 +3435,18 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             />
           </figure>
         </div>
-        <div className="ambient-opportunity-total" data-next-action-kind={model.nextAction.kind}>
+        <div className="ambient-opportunity-total" data-next-action-kind={visibleNextAction.kind}>
           <span>Next</span>
-          <h2>{model.nextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
-          <p>{model.nextAction.title}</p>
-          {model.nextAction.kind === "caught_up" ? (
-            <small>{model.nextAction.label}</small>
+          <h2>{attendanceIsNext ? "Final guest count" : visibleNextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
+          <p>{visibleNextAction.title}</p>
+          {visibleNextAction.kind === "caught_up" ? (
+            <small>{visibleNextAction.label}</small>
           ) : (
             <button
               type="button"
               className="ambient-next-action"
               onClick={runNextAction}
-              data-ambient-action-id={model.actions.primary.id}
+              data-ambient-action-id={visibleNextActionId}
             >
               {nextActionLabel}
               <ArrowRight size={18} aria-hidden="true" />
@@ -3514,15 +3530,17 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         <div className="ambient-v16-opportunity__semantic-state" data-glance="next">
           <dt>Next</dt>
           <dd>
-            <span>{model.nextAction.title}</span>
-            {model.nextAction.kind === "caught_up" ? (
-              <small>{model.nextAction.label}</small>
+            <span>{visibleNextAction.title}</span>
+            {visibleNextAction.kind === "caught_up" ? (
+              <small>{visibleNextAction.label}</small>
             ) : (
               <small>{nextActionLabel}</small>
             )}
           </dd>
         </div>
       </dl>
+
+      {attendanceAvailable && !attendanceIsNext && <div className="ambient-attendance-next"><button type="button" className="ghost" data-ambient-action-id={model.actions.inspectGuestCount.id} onClick={openGuestContext}>Review final guest count</button></div>}
 
       <section
         className="ambient-event-logistics-glance ambient-v16-opportunity__event-logistics"
@@ -4108,22 +4126,22 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
 
       <ContextSurface
         open={guestOpen}
-        title="Guest count connections"
+        title={attendanceAvailable ? "Final guest count" : "Guest count connections"}
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.guestObject.why}
         consequence={model.guestObject.consequence}
         collapseArrivalDetails
         anchorRef={guestInspectRef}
-        returnFocusRef={guestInspectRef}
+        returnFocusRef={activeGuestInspectRef.current ? activeGuestInspectRef : guestInspectRef}
         onClose={dismissGuestContext}
         closeActionId={model.actions.dismissGuestContext.id}
-        footer={guestFooter}
+        footer={attendanceAvailable ? null : guestFooter}
       >
         <div
           className="ambient-context-content ambient-attendance-context"
           data-attendance-state={attendanceView.stateId.toLowerCase()}
         >
-          {guestOpen && QuoteAttendancePanel && attendanceEnabled && ["accepted", "booked"].includes(quote?.status) && (
+          {guestOpen && attendanceAvailable && (
             <Suspense fallback={<p role="status">Loading final guest count...</p>}>
               <QuoteAttendancePanel organizationId={ambientContext?.organizationId} quoteId={quote?.id} principalId={principalId}
                 role={ambientRole} enabled={attendanceEnabled} source={source}
@@ -4133,6 +4151,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
                   ? submission => onEditQuote(quote, { attendanceSubmission: submission }) : undefined} />
             </Suspense>
           )}
+          <details className="attendance-supporting-context" open={!attendanceAvailable}><summary>Pricing, planning and dependencies</summary>
           <dl className="ambient-attendance-strip" data-tone={attendanceView.tone}>
             <div data-attendance-dimension="commercial-basis">
               <dt>Saved priced count</dt>
@@ -4196,6 +4215,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           <p className="ambient-boundary-note">
             Reviewing attendance evidence does not confirm attendance, change pricing or staffing, resize quantities, reserve capacity, update the proposal or BEO, or save this quote.
           </p>
+          </details>
         </div>
       </ContextSurface>
 

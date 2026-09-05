@@ -2,6 +2,10 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+vi.hoisted(() => { vi.stubEnv("VITE_EVENT_OPERATING_SPINE_ENABLED", "true"); });
+vi.mock("../QuoteAttendancePanel", () => ({ default: function AttendancePanel(props) {
+  return <section data-testid="native-attendance" data-source-version={props.sourceVersionId} data-acceptance-receipt={props.acceptanceReceiptId}>Recorded final guest count</section>;
+} }));
 import AmbientLivingOpportunity from "../AmbientLivingOpportunity";
 import { AmbientContextProvider } from "../../context/AmbientContext";
 
@@ -1743,4 +1747,43 @@ describe("AmbientLivingOpportunity", () => {
       .toContain("Guest scenario remains at 120");
     expect(container.querySelector('[aria-label="Change Guest count scenario"]')).not.toBeNull();
   });
+});
+
+
+test.each(["accepted", "booked"])("eligible %s count review replaces no-action cue and returns focus to its exact trigger", async (status) => {
+  const onEditQuote = vi.fn();
+  mount({ quote: { ...QUOTE, status, acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "sales-alpha", onEditQuote, onOpenWorkflow: undefined });
+  const next = container.querySelector('.ambient-mobile-remote__next button');
+  expect(next.textContent).toContain("Review final guest count");
+  expect(container.querySelector('.ambient-mobile-remote__next').textContent).not.toContain("No role-safe action");
+  expect(next.dataset.ambientActionId).toBe("inspect-guest-count");
+  act(() => { next.focus(); next.click(); });
+  await settle();
+  const panel = container.querySelector('[data-testid="native-attendance"]');
+  expect(panel.dataset.sourceVersion).toBe("version-alpha");
+  expect(panel.dataset.acceptanceReceipt).toBe("accept-alpha");
+  expect(container.querySelector('.attendance-supporting-context').open).toBe(false);
+  expect(onEditQuote).not.toHaveBeenCalled();
+  expect(container.querySelector(".ambient-action-acknowledgement").textContent).toContain("The saved quote stays unchanged");
+  expect(container.querySelector(".ambient-action-acknowledgement").textContent).not.toContain("Try another guest count");
+  act(() => container.querySelector('[aria-label="Close context"]').click());
+  await settle();
+  expect(document.activeElement).toBe(next);
+});
+
+test.each([
+  ["disabled", { attendanceEnabled: false }],
+  ["local", { source: "local" }],
+  ["unaccepted", { quote: { ...QUOTE, status: "draft" } }],
+  ["missing source receipt", { quote: { ...QUOTE, status: "booked" } }],
+  ["foreign organization", { quote: { ...QUOTE, organizationId: "other-org", status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } } }]
+])("does not offer native final-count work for %s scope", (_name, overrides) => {
+  mount({ quote: { ...QUOTE, status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "sales-alpha", ...overrides });
+  expect([...container.querySelectorAll('button')].some(node => node.textContent.includes("Review final guest count"))).toBe(false);
+});
+
+
+test("keeps final-count work unavailable to non-staff roles", () => {
+  mount({ quote: { ...QUOTE, status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "finance-alpha" }, { ...CONTEXT, role: "finance" });
+  expect([...container.querySelectorAll('button')].some(node => node.textContent.includes("Review final guest count"))).toBe(false);
 });

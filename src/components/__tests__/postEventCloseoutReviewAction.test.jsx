@@ -460,3 +460,14 @@ test("closeout actuals source uses projected closeout references without current
   expect(closeoutActualsSource({ organizationId: "org-a", quoteId: "quote-a", activeVersionId: "current-version", acceptanceReceipt: { receiptId: "current-receipt" }, reviewedAction: { sourceVersionId: "closeout-version", acceptanceReceiptId: "closeout-receipt" } })).toEqual({ organizationId: "org-a", quoteId: "quote-a", sourceVersionId: "closeout-version", acceptanceReceiptId: "closeout-receipt" });
   expect(closeoutActualsSource({ organizationId: "org-a", quoteId: "quote-a", activeVersionId: "current-version" }).sourceVersionId).toBe("");
 });
+
+
+test("native closeout review leads with explicit progress while policy and notes stay optional", () => {
+  mount(<PostEventCloseoutReviewAction opportunity={opportunity()} />);
+  expect(container.querySelector(".closeout-progress").textContent).toBe("0 of 4 items reviewed");
+  expect(container.querySelectorAll(".post-event-closeout-item")).toHaveLength(4);
+  expect(container.querySelector(".closeout-supporting-detail").open).toBe(false);
+  expect([...container.querySelectorAll(".closeout-item-detail")].every((node) => !node.open)).toBe(true);
+  expect(container.querySelector(".post-event-closeout-items").compareDocumentPosition(container.querySelector(".closeout-supporting-detail")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(recordPostEventCloseoutReview).not.toHaveBeenCalled();
+});

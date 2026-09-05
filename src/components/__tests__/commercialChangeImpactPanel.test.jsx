@@ -503,3 +503,16 @@ describe("published commercial approval review", () => {
     expect(render({ mutationState: "uncertain", mutationKind: "apply" })).toContain("Apply outcome unresolved");
   });
 });
+
+
+test("keeps guest-count apply consequences visible while approval provenance is disclosed", () => {
+  const model = simulation({ attendanceBinding: { count: 175 }, workflowPolicy: { definitionPin: { version: 2 }, approvalPolicy: { thresholdCents: 0, allowedRoles: ["admin"] } }, approvalEvaluation: { absoluteTotalDeltaCents: 0, impactApprovalRequired: false, thresholdApprovalRequired: true } });
+  const html = renderToStaticMarkup(<CommercialChangeImpactPanel model={model} />);
+  const withoutDisclosures = html.replace(/<details[\s\S]*?<\/details>/g, "");
+  expect(withoutDisclosures).toContain("Submitted guest count: 175");
+  expect(withoutDisclosures).toContain("creates a new draft quote revision and clears current acceptance");
+  expect(withoutDisclosures).toContain("separate customer acceptance");
+  expect(withoutDisclosures).toContain("no payment is charged");
+  expect(html).toContain("<summary>Approval policy and threshold</summary>");
+  expect(html).toContain("Published version 2");
+});

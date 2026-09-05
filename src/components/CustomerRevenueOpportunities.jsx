@@ -4,6 +4,7 @@ import {
   formatWorkspaceInteger,
   formatWorkspaceText
 } from "../lib/workspacePresentation";
+import "../styles/customer-closeout.css";
 import CustomerRebookDraftAction from "./CustomerRebookDraftAction";
 import PostEventCloseoutReviewAction from "./PostEventCloseoutReviewAction";
 
@@ -198,7 +199,9 @@ function OpportunityCard({
   rebookCreationAvailable,
   closeoutReviewAvailable,
   workflowScope = null,
-  onCloseoutReceipt
+  onCloseoutReceipt,
+  focusedCloseoutQuoteId = "",
+  onReturnFromCloseout
 }) {
   const actionQuoteId = opportunity.reviewedAction?.sourceQuoteId || opportunity.quoteId;
   const reviewedAction = opportunity.reviewedAction || {};
@@ -211,26 +214,24 @@ function OpportunityCard({
     : typeof onOpenQuote === "function";
   const venue = text(opportunity.event?.venue);
   return (
-    <article className="customer-revenue-opportunity" data-opportunity-type={opportunity.type}>
+    <article className="customer-revenue-opportunity" data-opportunity-type={opportunity.type} data-closeout-focused={focusedCloseoutQuoteId === opportunity.quoteId ? "true" : undefined}>
       <div>
         <span className="customer-revenue-opportunity-type">
           {opportunity.type === "anniversary_rebooking" ? "Repeat-event reminder" : "Post-event follow-up"}
         </span>
-        <h3>{opportunity.title}</h3>
+        {opportunity.type === "post_event_closeout" && focusedCloseoutQuoteId === opportunity.quoteId && (
+          <button type="button" className="workspace-text-link closeout-return" onClick={onReturnFromCloseout}>Return to client summary</button>
+        )}
+        <h3 tabIndex={opportunity.type === "post_event_closeout" ? -1 : undefined}
+          data-closeout-review-heading={opportunity.type === "post_event_closeout" ? opportunity.quoteId : undefined}>
+          {opportunity.type === "post_event_closeout" ? `${opportunity.event?.name || opportunity.quoteNumber || "Event"} · Follow-up review` : opportunity.title}
+        </h3>
         <p>
           {formatWorkspaceDate(opportunity.event?.date)}
           {venue ? ` at ${formatWorkspaceText(venue)}` : ""}
         </p>
         {opportunity.type === "post_event_closeout" && (
           <>
-            <p className="source-note">
-              Review window: {formatWorkspaceDate(opportunity.timing?.eligibleFromDate)} to {formatWorkspaceDate(opportunity.timing?.eligibleThroughDate)}.
-            </p>
-            <ul>
-              {(opportunity.reviewItems || []).map((item) => (
-                <li key={item.code}>{item.label}</li>
-              ))}
-            </ul>
             <PostEventCloseoutReviewAction
               opportunity={opportunity}
               available={closeoutReviewAvailable}
@@ -244,7 +245,14 @@ function OpportunityCard({
             Anniversary date: {formatWorkspaceDate(opportunity.timing?.anniversaryDate)}.
           </p>
         )}
-        <OpportunityEvidence opportunity={opportunity} />
+        {opportunity.type === "post_event_closeout" ? (
+          <details className="staff-evidence-disclosure closeout-evidence">
+            <summary>Source and review window</summary>
+            <p className="source-note">Review window: {formatWorkspaceDate(opportunity.timing?.eligibleFromDate)} to {formatWorkspaceDate(opportunity.timing?.eligibleThroughDate)}.</p>
+            <p className="source-note">Source quote: {opportunity.quoteNumber || opportunity.quoteId}. Accepted version: {opportunity.reviewedAction?.sourceVersionId || "Not available"}.</p>
+            <OpportunityEvidence opportunity={opportunity} />
+          </details>
+        ) : <OpportunityEvidence opportunity={opportunity} />}
         {opportunity.type === "anniversary_rebooking"
           && opportunity.reviewedAction?.state === "ready_for_staff_review" && (
           <CustomerRebookDraftAction
@@ -302,7 +310,9 @@ export function CustomerRevenueOpportunitiesPresentation({
   rebookCreationAvailable = true,
   closeoutReviewAvailable = true,
   workflowScope = null,
-  onCloseoutReceipt
+  onCloseoutReceipt,
+  focusedCloseoutQuoteId = "",
+  onReturnFromCloseout
 }) {
   const state = error && !radar
     ? "error"
@@ -384,6 +394,8 @@ export function CustomerRevenueOpportunitiesPresentation({
                   closeoutReviewAvailable={closeoutReviewAvailable}
                   workflowScope={workflowScope}
                   onCloseoutReceipt={onCloseoutReceipt}
+                  focusedCloseoutQuoteId={focusedCloseoutQuoteId}
+                  onReturnFromCloseout={onReturnFromCloseout}
                 />
               ))}
             </div>
