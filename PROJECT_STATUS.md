@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 02:15:15 CDT
+Last updated: 2026-09-05 02:28:23 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -91,12 +91,14 @@ Last updated: 2026-09-05 02:15:15 CDT
   Full unit, production build, focused browser, capability/document governance,
   and local CWV checks pass. Exact CI-profile bundle checks pass against an
   explicitly reviewed no-headroom exception at 3,381,257 / 397,428 bytes for
-  compatibility and 4,301,701 / 432,490 bytes for Ambient. The complete
+  compatibility and 4,319,173 / 432,561 bytes for Ambient. The complete
   aggregate release/CWV lane also passes when supplied with the repository's
   canonical non-secret CI Firebase identifiers. Exact-head CI run
   `33951463058` passed all browser behavior and measured the compatibility
-  graph at the recorded ceiling; its stale prior ceiling rejected that first
-  run, so a new exact-head run remains required. No hosted role,
+  graph before its stale prior ceiling rejected that first run. Follow-up run
+  `33952106871` passed compatibility and measured the Ambient graph before its
+  stale prior ceiling rejected that build, so a new exact-head run remains
+  required. No hosted role,
   production-data, deployment, assistive-technology, or human-acceptance result
   is claimed.
 - When the existing `eventSchedule` capability is enabled, the local source

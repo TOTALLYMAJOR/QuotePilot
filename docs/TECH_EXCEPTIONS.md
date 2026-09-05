@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-05 02:15:15 CDT
+Last updated: 2026-09-05 02:28:23 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -113,9 +113,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   Exact-head CI run `33951463058` on the completed convergence head
   `3eecfa89d8bf843089bae9921a2bdf655b715b73` measured the compatibility graph
   at 3,381,257 / 397,428 bytes after the full Playwright suite passed. The
-  compatibility ceiling is pinned to that larger literal CI artifact; the
-  Ambient ceiling remains pinned to its larger literal local graph. Neither
-  profile adds percentage or future-growth headroom.
+  compatibility ceiling is pinned to that larger literal CI artifact.
+  Follow-up run `33952106871` measured the completed Ambient graph at
+  4,319,173 / 432,561 bytes after compatibility passed. The Ambient ceiling is
+  pinned to that larger literal CI artifact. Neither profile adds percentage
+  or future-growth headroom.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -251,7 +253,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   measured the completed compatibility graph at 3,381,257 / 397,428 bytes;
   all browser behavior passed and only the stale literal ceiling rejected the
   build. The exception now uses that exact CI measurement with no discretionary
-  margin, and a new exact-head CI run remains the release gate.
+  margin. Follow-up exact-head run `33952106871` passed compatibility and
+  measured the Ambient graph at 4,319,173 / 432,561 bytes before its stale
+  prior literal ceiling rejected that build. The exception now pins both exact
+  CI artifacts with no discretionary margin, and a new exact-head CI run
+  remains the release gate.
 
 ## Superseded Exceptions
 

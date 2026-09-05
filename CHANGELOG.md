@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-05 02:15:15 CDT
+Last updated: 2026-09-05 02:28:23 CDT
 
 All notable project changes are documented in this file.
 
@@ -118,8 +118,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   `b593fe4d2c45ff5db20bafe205461157952b9ab4`. No Bundle record, route,
   lifecycle, save path, catalog authority, pricing authority, role authority,
   or publication path was added. Exact-head CI measures 3,381,257 / 397,428
-  bytes for compatibility; the exact local Ambient graph measures 4,301,701 /
-  432,490 bytes. The active temporary exception is pinned to those larger
+  bytes for compatibility; exact-head CI measures 4,319,173 / 432,561 bytes
+  for Ambient. The active temporary exception is pinned to those larger
   literal graphs with no future-growth headroom; the selected lazy Library
   experience accounts for 45,724 and 61,440 aggregate bytes respectively. Full unit, build, focused
   browser, capability/document governance, and local CWV checks pass. The
