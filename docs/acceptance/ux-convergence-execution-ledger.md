@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 18:11:13 CDT
+Last updated: 2026-09-04 21:58:00 CDT
 
 ## Authority
 
@@ -34,13 +34,14 @@ separate.
 
 The budget review separates this UX program from the independently authorized
 commercial-platform commits that share the branch. Refinement from the interim
-published checkpoint `dbf3516` through exact rendered source `5dd97a2` is
-4,697 additions and 1,021 deletions across code, tests, and documentation;
-`src/` accounts for 3,111 additions and 657 deletions. The whole mixed-purpose
-branch is +11,379/-856 only when the frozen contract, tests, evidence,
-documentation, and separate commercial-platform program are counted together.
-Production `src/` excluding test files is +3,513/-626, net +2,887, so the
-10,000-incremental-production-line architecture stop is not approached.
+published checkpoint `dbf3516` through exact rendered Library source `b593fe4`
+is 11,670 additions and 2,218 deletions across code, tests, and documentation.
+Production `src/` excluding test files is +7,534/-1,659, net +5,875. The whole
+mixed-purpose branch from current remote `main` is +18,292/-1,993 only when the
+frozen contract, tests, evidence, documentation, and separate commercial-
+platform program are counted together; its production-only `src/` delta is
++8,429/-1,673, net +6,756. The 10,000-incremental-production-line architecture
+stop is therefore not approached.
 
 The required duplication audit found one Proposal Composer/form/save path, one
 calculation authority, one existing Schedule/Calendar capability, one shared
@@ -200,11 +201,11 @@ unnecessary transitional layer remains from this convergence.
 | AC-106 | AC-106 — Important warning outranks routine metadata | PASS | Actionable blockers remain directly below the total/deposit and before composition, watching, polish, margin, and activity metadata in Commercial Truth. |
 | AC-107 | AC-107 — Total remains visually prominent | PASS | First-viewport and responsive browser coverage keep the canonical large money total visible in desktop Truth and the mobile review bar. |
 | AC-108 | AC-108 — Workbench looks like evolved QuotePilot, not a separate design system | PASS | Rendered review confirms the existing bone/sheet/brass tokens, editorial/mono typography, native controls, and shared shell remain continuous with QuotePilot. |
-| AC-109 | AC-109 — Bundle budget passes or any exception is explicitly justified | PASS | Local `check:perf:bundle` passes against an exact 3,311,120-byte temporary ceiling; the 1,120-byte CI delta is documented with no percentage headroom. |
-| AC-110 | AC-110 — Existing useful lazy boundaries retained | PASS | This slice changes only mounted Proposal Composer presentation/CSS/models/tests; route-level and existing editor lazy boundaries are untouched. |
+| AC-109 | AC-109 — Bundle budget passes or any exception is explicitly justified | PASS | Exact local CI-profile checks pass against the existing named temporary exception, pinned with no percentage or future-growth headroom to 3,379,162 / 397,409 bytes for compatibility and 4,301,701 / 432,490 bytes for Ambient. The selected lazy Library experience adds 45,724 and 61,440 aggregate bytes respectively; the pre-Library full profiles were already above their stale published ceilings. The clean-main baseline is unchanged and exact-head CI remains separately unverified. |
+| AC-110 | AC-110 — Existing useful lazy boundaries retained | PASS | Proposal Composer route/editor boundaries remain intact. The Library convergence stays inside the existing lazy Catalog, Event Template, and Ambient Library route chunks; it does not pull those editors into the initial workspace graph. |
 | AC-111 | AC-111 — Domain switching causes no unnecessary persistence/network work | PASS | `openDomain` changes local active-domain/editor presentation state and focus only; continuity coverage crosses domains without save or identity creation. |
-| AC-112 | AC-112 — Material LOC overrun triggers architecture review | PASS | The explicit architecture-budget review above separates unrelated commercial work, measures production `src/` excluding tests at +3,513/-626 (net +2,887), and finds no duplicate state, editor, Menu, Schedule, shell, mobile authority, or transitional layer. |
-| AC-113 | AC-113 — Major unexpected implementation-scale increase requires explicit explanation before continuation | NOT APPLICABLE | Production UX work remains in the planned several-thousand-line band. The larger +11,379/-856 mixed branch total includes the frozen contract, tests, evidence, documentation, and the separate commercial-platform program; the production-only net increase is +2,887, so the 10,000-line architecture stop is not approached. |
+| AC-112 | AC-112 — Material LOC overrun triggers architecture review | PASS | The explicit architecture-budget review above separates unrelated commercial work, measures production `src/` excluding tests from the interim published checkpoint at +7,534/-1,659 (net +5,875), and finds no duplicate state, editor, Menu, Schedule, shell, mobile authority, or transitional layer. |
+| AC-113 | AC-113 — Major unexpected implementation-scale increase requires explicit explanation before continuation | NOT APPLICABLE | Production UX work remains below the stop boundary. The larger +18,292/-1,993 mixed branch total includes the frozen contract, tests, evidence, documentation, and the separate commercial-platform program; production-only `src/` is net +6,756 from remote `main`, so the 10,000-line architecture stop is not approached. |
 | AC-114 | AC-114 — Operations menu is no longer an undifferentiated 10+ item feature inventory | PASS | Focused shell units and real-route browser coverage prove the Ambient Operations menu contains only Operations, Clear the Deck, and role-gated Staff. |
 | AC-115 | AC-115 — Daily execution has one obvious operational entry | PASS | Operations is the single Calendar-first daily index; Clear the Deck and Staff are bounded continuations rather than duplicate event indexes. |
 | AC-116 | AC-116 — Calendar/Schedule is reused rather than replaced | PASS | Both `/app/operations` and compatibility `/app/schedule` render the existing `EventScheduleView`. |
@@ -320,13 +321,13 @@ unnecessary transitional layer remains from this convergence.
 | AC-226 | AC-226 — Mobile Workspace/tools navigation remains accessible | PASS | The five-item mobile primary rail and Workspace & tools dialog pass 390px containment, focus restoration, role-aware grouping, and no-overflow coverage. |
 | AC-227 | AC-227 — No route silently aliases to semantically wrong destination | PASS | Schedule arrivals intentionally target Calendar-first Operations while `/app/schedule` remains the same named compatibility capability. |
 | AC-228 | AC-228 — Focused unit/component tests pass | PASS | The final focused Operations authority, route, shell, and presentation cohort passes 131/131 tests; independent source review finds one projection and one conflict derivation. |
-| AC-229 | AC-229 — Relevant pre-existing tests remain green or have evidence-backed expectation updates | PASS | The final full suite passes 4,509 tests across 395 passing files with 80 tests/3 files intentionally skipped. Proposal Composer and Workbench expectations remain authority-bearing rather than weakened. |
+| AC-229 | AC-229 — Relevant pre-existing tests remain green or have evidence-backed expectation updates | PASS | The current full suite passes 4,543 tests across 395 passing files with 80 tests/3 files intentionally skipped. Proposal Composer, Workbench, Calendar, Library, pricing, save, role, and authority expectations remain assertion-bearing rather than weakened. |
 | AC-230 | AC-230 — Quote workbench real-route Playwright passes | PASS | All 22 dedicated Workbench cases pass against rendered source `5dd97a2` under the intended Workbench feature profile, including the Living Opportunity save/reopen/version path and required Ambient Pilot lane. |
 | AC-231 | AC-231 — Operations/Calendar real-route Playwright passes | PASS | All 12 dedicated Operations cases pass at exact rendered source `5dd97a2`, including capability gates, authoritative persistence, 390/768/1440 responsiveness, and 1487×1058 reference-size captures. |
 | AC-232 | AC-232 — Responsive matrix passes | PASS | Operations passes at 390, 768, and 1440; the same suite also passes the exact 1487×1058 selected-reference viewport. Workbench evidence remains separately retained. |
 | AC-233 | AC-233 — Accessibility matrix passes | PASS | Dedicated Operations serious/critical axe scans pass at 390, 768, 1440, and 1487; selected state and conflict meaning remain textual. |
-| AC-234 | AC-234 — Build passes | PASS | Final local release build passes after transforming 528 modules with the corrected Month/Week presentation and enabled release graph included. |
-| AC-235 | AC-235 — Bundle/governance passes | PASS | Final local release qualification passes project-state, env, secret, Ambient-release, Stripe-isolation, workflow, capability-surfacing, 4,509-unit, build, docs, exact 3,331,403/394,701-byte bundle, 127-test Truth Loop, and Lighthouse CWV gates. The isolated worktree consumed the primary checkout's ignored env only in-process; no secret was copied or committed. |
+| AC-234 | AC-234 — Build passes | PASS | Exact local standard builds pass for the 528-module compatibility graph and 613-module Ambient production-equivalent graph with the selected Library implementation included. |
+| AC-235 | AC-235 — Bundle/governance passes | PASS | Current exact-profile bundle checks, capability-surface governance, documentation governance, full unit, focused browser, and Lighthouse CWV gates pass. The named temporary exception records the literal 3,379,162/397,409-byte compatibility graph and 4,301,701/432,490-byte Ambient graph with no general headroom. The isolated checkout currently lacks the six Firebase web configuration values required by `check:env`, so the aggregate release lane is explicitly environment-blocked and is not represented as a full local release qualification. |
 | AC-236 | AC-236 — Exact-head CI passes | UNVERIFIABLE | The completed local branch is intentionally unpushed by owner instruction. No exact-head remote CI run can exist without a separately authorized future push. |
-| AC-237 | AC-237 — Screenshots/visual evidence correspond to exact candidate SHA | PASS | Local 390/768/1440 screenshots and same-size 1487×1058 Month/Week comparisons are named for exact UI source `5dd97a20133b`; implementation-image SHA-256 values are `ad5ab5365674b026ad32f2ec877f09381a8f27c57699756a2d5d176dc8899f1e` and `afacb79f110af76e8499c41a1d4a44517d001107058a6e71756c1d4e41eab8ad`. Side-by-side comparison-image hashes are `55cf93cbe0f3878786a937167fa3a703b6977c1f5e0fce2b91c83c361efc05ba` and `deb64f56f16d5d4c04a5dacd15e9b9899837dbfdf51a1ad19fa698166da05f43`. The later evidence-only commit does not alter rendered source. |
+| AC-237 | AC-237 — Screenshots/visual evidence correspond to exact candidate SHA | PASS | Operations retains its local 390/768/1440 and same-size 1487×1058 Month/Week evidence for exact rendered source `5dd97a20133b`. Library overview and nested-editor captures at 390/768/1440, including combined same-viewport comparisons, render exact local implementation `b593fe4d2c45ff5db20bafe205461157952b9ab4`. Later evidence-only documentation does not alter either rendered source. |
 | AC-238 | AC-238 — Source/CI evidence is not reported as hosted/human acceptance | PASS | Changelog, Project Status, manuals, PR text, and this ledger explicitly withhold hosted, production, provider, assistive-technology, and human claims. |

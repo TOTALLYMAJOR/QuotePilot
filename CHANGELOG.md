@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 18:11:13 CDT
+Last updated: 2026-09-04 21:58:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,46 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Converged the existing role-safe **Library** to the selected Option 2
+  composition with Option 3 restraint. Desktop gives the broad commercial
+  ledger approximately two-thirds of the canvas and keeps unresolved setup in
+  a quieter secondary rail; mobile preserves the same ledger-first semantic
+  order. Existing Packages appear as **Offers**, Menu/Services/Rentals as
+  **Components**, Event Templates as quote starting points, and existing
+  Pricing and Configuration Rules as one policy group. The Offer editor now
+  uses a compact navigator and broad selected-offer workspace without a
+  permanent health rail; its primary summary retains derived margin while
+  detailed economics move under disclosure, and recorded choice groups project
+  read-only without implying browser authoring. Add-on and Rental editors expose
+  visible derived Usage with stable IDs under Technical details. Event Templates
+  are independently collapsible across eight business groups. Readable Rules
+  and safe structured controls precede Advanced JSON recovery; Pricing separates
+  Base pricing, Adjustments & context, Fees, Tax, and Deposit before Advanced
+  policy. Unresolved readiness expands while healthy evidence compresses; and
+  recovery copy states what cannot happen, what remains active, and the next
+  safe action. Sales can inspect the same objects and readiness outcomes
+  without repeated disabled administrator controls. **Your bundle** remains a
+  derived composition of the one quote draft. The readiness rail uses
+  supplemental semantic icons while text remains authoritative, ordinary text
+  stays at least 12px, one save/retry action owns recovery, and switching an
+  embedded editor tab synchronizes its breadcrumb/title without remounting or
+  dropping staged work. Local Chromium evidence passes Ambient Library 17/17
+  and Calm Four 10/10 with `VITE_OPERATIONAL_STAFFING_ENABLED=true`; exact
+  390/768/1440 captures and combined comparisons received a local visual-review
+  verdict of **9.5/10 — GO**. The exact rendered implementation is local commit
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4`. No Bundle record, route,
+  lifecycle, save path, catalog authority, pricing authority, role authority,
+  or publication path was added. Exact CI-profile builds measure 3,379,162 /
+  397,409 bytes for compatibility and 4,301,701 / 432,490 bytes for Ambient.
+  The active temporary exception is pinned to those literal local graphs with
+  no future-growth headroom; the selected lazy Library experience accounts for
+  45,724 and 61,440 aggregate bytes respectively. Full unit, build, focused
+  browser, capability/document governance, and local CWV checks pass. The
+  isolated checkout lacks the six Firebase web configuration values required
+  by `check:env`, so the aggregate release lane remains environment-blocked
+  rather than falsely green. This candidate is local and unpushed; no exact-head
+  CI, hosted result, deployment, production-data result, or human acceptance is
+  claimed.
 - Corrected Calendar-first Operations to the selected compositions on the
   existing schedule authority. Month now gives the full horizontal canvas to
   the month calendar and reveals the selected day, focused event, conflict

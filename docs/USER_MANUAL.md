@@ -1,29 +1,41 @@
 # User Manual
 
-Last updated: 2026-09-04 18:01:21 CDT
+Last updated: 2026-09-04 21:58:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Offers, templates, pricing, and rules
 
-Open **Library** to review how the business sells. The first group separates
-**Offers** from their menu, service, and rental components. **Event templates**
-provide reusable starting points. **Pricing** shows whether the current catalog
-revision has a valid administrator confirmation. **Rules** opens the bounded
-configuration-rule editor.
+Open **Library** to understand how the business sells. The primary ledger groups
+**Offers**, **Components**, **Templates**, and **Pricing & Rules**. On desktop,
+that inventory owns the broad canvas and setup readiness stays in a quieter
+side rail. On smaller screens, the same commercial order appears before
+readiness. Unresolved setup expands; completed setup stays collapsed.
 
-Existing Packages are compatible Offers; no manual migration is required.
-Offer choice groups specify an exact minimum and maximum. Selected choices must
-also be present in the quote, and included components display as included
-rather than being charged twice. Event Templates fill only fields not already
-declared as explicit operator work. Template or rule edits are drafts until the
-existing catalog save/revision path succeeds; any catalog change reopens
-pricing review.
+Existing Packages are displayed as Offers without changing their record type,
+stable ID, inclusions, pricing, or save path. Open an Offer to manage its name,
+per-person price, quoting availability, included Menu, Service/Add-on, and
+Rental components, and derived margin. Detailed cost/contribution, readiness
+evidence, record identity, catalog revision, and quote behavior remain under
+secondary disclosures. Recorded configurable choice groups are visible
+read-only when present; they are not authored or selected end to end in the
+current browser workspace.
 
-Rules are JSON configuration, not executable code. Unknown operators, missing
-references, and conflicting mandatory outcomes block publication. A
-recommendation explains an option but never silently edits a quote.
+**Your bundle** is the current quote's derived combination of its Offer, Menu,
+Services/Add-ons, Rentals or enhancements, quantities, and calculated pricing.
+It is not a separate Library record and has no independent save or pricing
+path. Event Templates remain reusable quote starting points and fill only
+fields not already declared as explicit operator work.
+
+**Rules** opens a structured-first ledger of each Configuration Rule's
+**WHEN**, **THEN**, **WHY**, and enabled state. Administrators can disclose
+**Advanced rule source** when JSON is invalid, a record cannot be represented
+safely by the structured editor, or JSON-level work is necessary. Rules are bounded configuration, not
+executable code: unknown operators, missing references, and conflicting
+mandatory outcomes block publication, and a recommendation never silently
+edits a quote. Template or rule edits remain drafts until the existing catalog
+publication path succeeds.
 
 New authoritative quote calculations store `pricing-v2`: exact cent values,
 the applied service-fee/tax/season policies, and a line-by-line price
@@ -43,11 +55,11 @@ reference for each feature.
 | --- | --- | --- |
 | **Now** | Today's priorities and upcoming work | Open the item that needs attention |
 | **Opportunities** | Active and recent events | Review the next required action or open the event |
+| **Operations** | Accepted/booked Calendar, daily planning, and staff execution | Open the Calendar or a daily execution tool |
 | **Clients** | Contact details and event history | Start or continue an opportunity |
-| **Library** | Business setup, catalog, menus, pricing, and readiness | Follow the first setup row that needs review |
+| **Library** | Offers, components, templates, pricing, rules, and setup readiness | Open the commercial object; use the readiness action only when setup needs attention |
 | **New quote** | A new event or pasted inquiry | Complete the draft blockers, then save |
 | **Search** | A known client, quote, or event | Open the exact matching record |
-| **Operations** | Accepted/booked Calendar, daily planning, and staff execution | Open the Calendar or a daily execution tool |
 
 On a phone, the five primary destinations stay in the bottom navigation. Use
 the workspace/avatar control for Search, Frequent tools, Operations,
@@ -56,19 +68,18 @@ progressively disclosed Administration, account settings, and sign-out.
 ### Five-minute first setup
 
 1. Sign in and open **Library**.
-2. Read **Business ready to quote** first. If it is blocked, use the one action
-   on the first blocking setup row.
-3. Work down the setup checklist: **Identity → Offerings → Pricing → Costs and
-   margin evidence → Quote starting points → Staffing policy → Users and roles
-   → Connections**.
+2. Scan **Offers**, **Components**, **Templates**, and **Pricing & Rules** to
+   understand the current commercial inventory.
+3. If setup needs attention, use the one action in **Before the next quote**.
+   Other unresolved areas remain readable and completed setup is collapsed.
 4. Treat each readiness measure independently. Missing optional starting
    points, additional users, provider connections, or cost evidence does not by
    itself block ordinary quote creation. Missing cost evidence does make margin
    unavailable for the affected scope.
-5. When catalog editing is complete, confirm the draft bar says **Draft saved**
-   or **Ready to review**, then select **Review and publish catalog**. Review the
-   change set and publish it once. Until publication succeeds, the currently
-   published catalog remains the pricing authority.
+5. When Library editing is complete, wait for **Draft ready to check**, select
+   **Check draft before publishing**, then choose **Publish catalog** after the
+   check succeeds. Until publication succeeds, the currently published catalog
+   remains the pricing authority.
 
 Sales staff can read setup status and the next action. An administrator must
 make and publish catalog changes.
@@ -165,10 +176,10 @@ payment, inventory, or readiness telemetry.
    only after selection; use it to **Make available**, **Make unavailable**, or
    **Move selected** once. Stable item identities are preserved and unsafe
    dependency changes are rejected.
-6. Watch the sticky draft bar. Resolve **Device-only** or **Revision conflict**
-   before leaving the session.
-7. Select **Review and publish catalog**, inspect the combined changes, then
-   publish once. Existing quotes are never silently repriced.
+6. Watch the sticky draft bar. Resolve **Library changes are waiting to save**
+   or **A newer Library version needs attention** before leaving the session.
+7. Select **Check draft before publishing**, inspect the combined changes, then
+   choose **Publish catalog** once. Existing quotes are never silently repriced.
 
 On a phone, the context comes first, followed by a bounded item chooser and one
 editor. Scroll inside the chooser to switch items without expanding every item
@@ -213,19 +224,23 @@ form down the page.
 Administrators edit the organization Library without changing active quote
 pricing on each keystroke or field blur. Local edits appear immediately and
 coalesce into a background setup-draft synchronization after a short pause.
-The sticky draft bar distinguishes **Saving draft**, **Draft saved**, **Sync
-failed — changes are device-only**, **Revision conflict**, and **Ready to
-review**. If synchronization fails, keep the workspace open or use **Retry
-sync**; device-only changes have not reached the server and are not published.
+The sticky draft bar names the operator outcome: **Saving the Library draft**,
+**Draft ready to check**, **Library changes are waiting to save**, **A newer
+Library version needs attention**, **Library needs to reconnect**, **Library
+published**, or **Published Library is active**. If changes are waiting, keep
+the workspace open or use **Try saving again**. Those edits are preserved in
+the current workspace but are not in the shared draft and are not published;
+the current published pricing remains active. Technical details remain
+available under disclosure when recovery needs them.
 
-Choose **Review and publish catalog** to validate the complete change set. The
-review itself is read-only and does not confirm pricing. After a successful
-review, choose **Publish reviewed catalog**. Only that publication advances the
-live catalog by one revision and records the administrator-attributed pricing
-confirmation and receipt. A conflict means the active catalog or draft changed
-elsewhere; reload and reconcile instead of assuming either copy won. Sales
-staff may view readiness but cannot edit, review, or publish the private setup
-draft.
+Choose **Check draft before publishing** to validate the complete change set.
+The check is read-only and does not confirm pricing. After it succeeds, choose
+**Publish catalog**. Only publication advances the live catalog by one revision
+and records the administrator-attributed pricing confirmation and receipt. A
+newer-version state means the active catalog or draft changed elsewhere; load
+and reconcile the latest shared version instead of assuming either copy won.
+Sales staff may inspect Library inventory and readiness but cannot edit, check,
+or publish the private setup draft.
 
 ## Primary workspace
 
@@ -1628,17 +1643,23 @@ assistive-technology, or human acceptance.
   completion. Use the proposal/token portal for customer commercial review.
 
 ## Admin Catalog Operations
-- Open `Catalog` or `/app/catalog` (admin users only). Contextual catalog setup
-  from the quote builder may still open the guarded dialog wrapper.
-- `/app/catalog` opens as **Library**. The first view shows independent business
-  readiness, the ordered setup checklist, catalog choices, quote starting
-  points, and pricing state.
-  It does not add a catalog read or save path. A sales user receives a role-
-  specific explanation and **Return to Now** instead of an empty or generic
-  destination.
-- Library recommends one next useful step from the evidence it has. If the
-  complete event-specific menu inventory was not part of that read, **Review
-  menu** means to inspect the existing menu records; it does not mean the menu
+- Open **Library** or `/app/catalog`. Administrators retain edit, draft, check,
+  and publication authority. Sales staff can inspect the same commercial
+  inventory and readiness in a read-only state. Contextual catalog setup from
+  the quote builder may still open the guarded dialog wrapper.
+- The first Library view presents **Offers**, **Components**, **Templates**, and
+  **Pricing & Rules** as the primary commercial ledger. Setup readiness remains
+  secondary and exposes one ranked unresolved action to administrators. Sales
+  sees one statement that an administrator manages changes and publishing,
+  rather than a field of disabled controls. This presentation adds no catalog
+  read, save, pricing, rule, or role authority.
+- The right readiness rail uses icons only as supplemental cues; its text names
+  every state and action. Ordinary Library text remains at least 12px. A save or
+  read failure exposes one owning **Save** or **Try again** action rather than
+  duplicate recovery controls.
+- Library recommends one next useful setup step from the evidence it has. If
+  the complete event-specific menu inventory was not part of that read, **Open
+  menus** means to inspect the existing menu records; it does not mean the menu
   is empty or that a saved template reference is broken. Saved references are
   preserved until an admin compares them with the current menu; the editor does
   not claim that partial inventory was validated. Browser-local records are
@@ -1663,32 +1684,58 @@ assistive-technology, or human acceptance.
   remount the workspace under that portal token until this draft guard accepts
   the transition. Opening a portal link directly still takes precedence, and
   changing from one portal token to another keeps the two public scopes separate.
-- A blank organization starts on one guided screen with four clearly described
-  industry packs. Empty Packages, Addons, Rentals, Menu, and Pricing tabs stay
-  hidden until a pack is populated or the admin explicitly chooses
-  `Create my own catalog`.
+- Switching tabs inside the embedded editor updates the Library breadcrumb and
+  title to the active business object without remounting the editor or losing
+  staged work.
+- A blank organization starts on one guided **Setup** screen with four clearly
+  described setup options. Empty Offers, Addons, Rentals, Menu, and Pricing
+  tabs stay hidden until an option is applied or the administrator explicitly
+  chooses **Set up Library manually**.
 - Use tabbed sections:
-  - Setup presets
-  - Packages
+  - Setup
+  - Offers
   - Addons
   - Rentals
   - Menu
   - Templates
+  - Rules
   - Pricing
-- In `Templates`, add or update reusable quote starting points. A starting point's
-  stable ID does not change after creation. Record its event type, service
-  style, hours, package, add-ons, rentals, and menu references. When the menu
+- In `Offers`, the summary retains selling price, quoting availability,
+  inclusions, derived margin, and the next decision. Detailed economics remain
+  under Pricing. Existing recorded choice groups are inspectable but read-only;
+  this browser does not author them.
+- In `Addons` and `Rentals`, each commercial object leads with name, sell basis,
+  price, and availability. **Usage** visibly derives its Offer and Template
+  relationships; stable identity stays under **Technical details**. Menu keeps
+  its existing managed editor and device-buffer behavior.
+- In `Templates`, add or update reusable quote starting points. Starting points
+  expand independently, and identity/completeness remain visible while their
+  groups are collapsed. The group order is **Starting Offer**, **Event context**,
+  **Preselected components**, **Service and rental defaults**, **Staffing and
+  resource defaults**, **Pricing and policy defaults**, **What remains open**,
+  and **Advanced identity and source**. A starting point's stable ID does not
+  change after creation. Record its event type, service style, hours, starting
+  Offer, add-ons, rentals, and menu references. When the menu
   inventory is not fully loaded, saved menu references remain preserved and
   visibly awaiting catalog validation; they are not silently removed or
   classified as missing. Quote-starting-point edits remain staged until
-  **Review and publish catalog** completes against the current catalog revision.
+  **Check draft before publishing** and **Publish catalog** complete against the
+  current catalog revision.
+- In `Rules`, use the structured **WHEN / THEN / WHY** editor first. Advanced
+  rule source opens for invalid JSON or a rule that cannot be represented safely
+  in structured controls; correcting it still uses the existing draft and
+  publication path.
+- In `Pricing`, readiness and consequence appear first. Normal settings are
+  grouped as **Base pricing**, **Adjustments & context**, **Fees**, **Tax**, and
+  **Deposit**. Cost/margin evidence, guided recommendations, integrations, and
+  raw technical policy sources remain under **Advanced policy**.
 - Menu management flow:
   1. Select an Event type.
   2. Select a Menu section.
   3. Search, add, or edit items in that exact context.
   4. Use selection controls for bulk availability or dependency-safe movement.
   5. Wait for the setup draft to synchronize.
-  6. Review and publish the combined catalog change once.
+  6. Check and publish the combined Library change once.
 - Menu and other catalog edits use the same server-backed setup draft. Field
   blur and Enter may finish local editing, but neither activates pricing nor
   advances the catalog revision. A deliberately entered zero is preserved;
@@ -1707,31 +1754,34 @@ assistive-technology, or human acceptance.
   - Cost
   - Availability
   - Menu section
-- In `Packages`, QuotePilot now opens one package workspace instead of a stack
-  of permanently expanded forms. Use the package list to switch records
-  without saving or discarding the current draft. The selected package leads
-  with its customer-facing name, ID, price, recorded cost, contribution,
-  margin state, readiness, and one next action.
+- In `Offers`, QuotePilot opens the existing Package Workspace through a
+  compact Offer navigator and one broad selected-Offer workspace. Use the Offer
+  list to switch Package records without saving or discarding the current
+  draft. The selected Offer leads with its customer-facing name, per-person
+  price, quoting availability, included components, and one next action. Cost,
+  contribution, margin, readiness evidence, immutable Package ID, catalog
+  revision, pricing confirmation, and quote behavior remain available under
+  secondary disclosures instead of a permanent health rail.
 - Current inclusions appear before any candidate list. `Add menu items`,
   `Add add-ons`, and `Add rentals` reveal the searchable selector for that
   group only. Search or filter by menu section, select multiple records, then use
-  `Apply` to stage that exact group or `Cancel` to leave the package unchanged.
+  `Apply` to stage that exact group or `Cancel` to leave the Offer unchanged.
   The menu event-type control narrows menu candidates for these add actions; it
   does not decide package eligibility or quote behavior.
-- Turning `Available in Quote Builder` on is blocked while deterministic
-  package health is not Ready. QuotePilot names the first blocking reason and
-  focuses Health; turning availability off remains a staged catalog change.
-- `Revert this package` restores the selected package to the last saved catalog
-  snapshot only. `Package actions` -> `Delete package...` first reports the
-  event-template defaults and recommendation rules that reference the package;
-  `Delete from draft` removes the package and those references only after that
+- Turning **Available for quoting** on is blocked while deterministic Offer
+  readiness is not Ready. QuotePilot names the first blocking reason; turning
+  availability off remains a staged catalog change.
+- **Revert this offer** restores the selected Package record to the last saved
+  catalog snapshot only. **Offer actions** → **Delete offer...** first reports
+  the event-template defaults and recommendation rules that reference the
+  Package record; **Delete from draft** removes the Package and those references only after that
   review. Existing saved quotes are unchanged.
 - Package inclusions still do not add themselves to a quote automatically. In
   the quote builder, covered choices remain `Included at no added charge —
   select to add`; unselected choices do not appear in the customer scope, and
   selected choices price at $0 instead of charging twice.
-- The in-flow package workspace and Menu Builder stage into the same setup draft.
-  **Review and publish catalog** validates and activates the whole bounded change
+- The in-flow Offer workspace and Menu Builder stage into the same setup draft.
+  **Check draft before publishing** and **Publish catalog** validate and activate the whole bounded change
   set, not only the currently selected package or menu section.
 - In `Pricing` → `Proposal Details`, set `Business time zone` to a valid IANA value
   such as `America/Chicago`, then review and publish the catalog. Revenue timing uses this
@@ -1749,17 +1799,17 @@ assistive-technology, or human acceptance.
   rewrite already-saved quote snapshots.
 - In `Pricing` → `Your Customer-facing Brand`, choose Midnight Amber,
   Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
-  use **Review and publish catalog** to persist the six existing brand colors for
-  future quotes. Editing an individual color afterward is treated as a custom
-  palette. A theme save uses the same catalog revision check as every other
-  settings save and does not replace package, fee, tax, deposit, travel, or
-  staffing values.
+  use **Check draft before publishing** and then **Publish catalog** to persist
+  the six existing brand colors for future quotes. Editing an individual color
+  afterward is treated as a custom palette. A theme save uses the same catalog
+  revision check as every other settings save and does not replace package,
+  fee, tax, deposit, travel, or staffing values.
 - Upload or clear the customer-facing logo in the same brand section. When no
   logo is defined, QuotePilot uses a monogram fallback in the admin preview,
   Proposal Composer, and PDF letterhead rather than inventing another image.
   Brand readiness calls out logo, business name, document font, and contact
   evidence before save.
-- For a new blank tenant, open `Starter Packs` and apply Wedding & events,
+- For a new blank tenant, open `Setup` and apply Wedding & events,
   Corporate drop-off, BBQ / Southern, or Church & community. This stages a
   complete draft immediately and opens the populated menu; there is no second
   save step for pack application. It does not unlock quote creation.
@@ -2654,23 +2704,25 @@ even reconciliation could not complete — is pre-existing behavior, now
 literally marked for automated coverage; recording a cost uses the exact
 same save path as every other catalog field.
 
-## Business Setup Center and Menu Builder
+## Library readiness and Menu Builder
 
-Open **Library** to answer four immediate questions: whether the business can
-quote, whether unpublished changes exist, whether margin evidence is complete,
-and what to do next. The setup checklist is ordered as Identity, Offerings,
-Pricing, Costs and margin evidence, Quote starting points, Staffing policy,
-Users and roles, and Connections. Each row shows exactly one status and action.
-Costs, optional starting points, additional users, and provider connections do
-not block ordinary quote creation.
+Open **Library** to review the commercial inventory first. **Before the next
+quote** is contextual setup evidence, not the primary content. When something
+needs attention, the first unresolved area receives one administrator action
+and the remaining unresolved areas stay readable. Completed setup compresses
+under a disclosure. Costs, optional starting points, additional users, and
+provider connections do not block ordinary quote creation; missing cost
+evidence does keep margin unavailable for the affected scope. Standalone
+Library does not treat missing quote or proposal context as a setup failure.
 
 Administrators can open the exact setup area. Sales staff receive the same
-readiness summary in read-only form and an instruction to contact an
-administrator when changes are needed. **Draft saved** means unpublished intent
-is durable; it does not mean pricing is active. Only **Review and publish
-catalog** activates a new catalog revision and records pricing confirmation.
-If synchronization fails, **device-only** means those edits have not reached the
-server and must not be treated as saved or published.
+business outcomes in read-only form and one statement that an administrator
+manages changes and publishing. **Draft ready to check** means unpublished
+intent is durable; it does not mean pricing is active. Only **Publish catalog**
+after a successful check activates a new revision and records pricing
+confirmation. **Library changes are waiting to save** means those edits are
+preserved in the current workspace but have not reached the shared draft and
+must not be treated as saved or published.
 
 The Menu Builder follows **Event type → Menu section → Item** in a two-part
 workbench. A distinct context rail holds the event type and menu section;

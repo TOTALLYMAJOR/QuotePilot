@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-04 18:01:21 CDT
+Last updated: 2026-09-04 21:58:00 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -676,12 +676,58 @@ borrow connected-workspace or provider-confirmed language.
 
 ### Library presentation
 
-The default-off administrator Library treats the organization catalog as a
-quiet reference surface, not a settings dashboard. Its first view separates
-Catalog choices from first-class Event Templates, uses hairlines and open rows
-instead of nested cards, and keeps source, observation time, revision, and
-pricing-review context visible without promoting them into large metrics. One
-recommended next step may appear only when its evidence is explicit.
+The role-safe Library treats the organization catalog as a quiet commercial
+reference surface, not a settings dashboard. Its selected desktop composition
+uses one broad inventory ledger and one quieter readiness rail at an approximate
+67/33 relationship. The primary ledger groups **Offers**, **Components**,
+**Templates**, and **Pricing & Rules**. It uses hairlines and open rows rather
+than a process strip, dashboard card grid, or repeated `Review` controls. One
+ranked setup action may appear only when its evidence is explicit and may not be
+duplicated in the inventory.
+
+Existing Packages appear as Offers without changing their stored record type,
+IDs, inclusions, pricing, or save path. **Your bundle** remains the derived
+composition of the one quote draft; Library may explain its ingredients but may
+not create a Bundle record, route, lifecycle, save path, or pricing authority.
+Menu, Services/Add-ons, and Rentals appear as Components, while Event Templates
+remain reusable quote starting points.
+
+Readiness follows uncertainty: unresolved setup expands and healthy evidence
+compresses under disclosure. Standalone Library does not treat absent quote or
+proposal context as a setup problem. Administrators retain the existing edit,
+draft, review, and publication actions. Sales can inspect the same objects,
+relationships, and readiness outcomes, then receives one administrator-managed
+permission boundary instead of repeated disabled controls.
+
+The Offer editor uses two desktop zones: a compact Offer navigator and one broad
+selected-Offer workspace. Identity, selling price, quoting availability,
+included components, derived margin, and the next decision lead. Detailed cost
+and contribution evidence, readiness evidence, immutable IDs, catalog revision,
+pricing confirmation, and quote behavior remain available under secondary
+disclosures instead of a permanent health rail. Recorded choice groups may be
+projected read-only with their attention state; the browser does not author them
+or promise end-to-end quote selection. Mobile preserves the same semantic order,
+compact switching, and full-viewport inclusion picker.
+
+Add-ons and Rentals use named commercial-object summaries with business fields
+first, visible derived Offer/Template Usage, and stable identity under
+**Technical details**. Menu retains its existing managed editor and device-only
+buffer boundary. Templates are independently collapsible and use this normal
+group order: Starting Offer; Event context; Preselected components; Service and
+rental defaults; Staffing and resource defaults; Pricing and policy defaults;
+What remains open; Advanced identity and source. Partial Menu-inventory evidence
+stays beside Preselected components, while only true identity/source/version/
+vertical/starter provenance is Advanced.
+
+Configuration Rules lead with the actual **WHEN / THEN / WHY**, enabled state,
+and safe structured controls when the rule can be represented without loss.
+Raw JSON remains available under **Advanced rule source**, opens for invalid or
+non-structurable records, and continues through the same validation and
+publication path. Pricing leads with readiness/consequence, then separates Base
+pricing, Adjustments & context, Fees, Tax, and Deposit; cost/margin evidence and
+technical policy sources remain under Advanced policy. Failure and recovery copy first states what cannot happen,
+what remains active or unchanged, and the next safe action; raw errors and
+provenance remain available under technical disclosure.
 
 Incomplete event-specific menu inventory is **unavailable**, never empty.
 Saved template references remain visible until the existing catalog validation
@@ -692,6 +738,13 @@ routes its single **Back to Library** action through the unsaved-change guard,
 and restores Library orientation after closing. It may not open as an empty
 overlay, paint over neighboring content, or replace the existing catalog save,
 revision, role, or fallback boundary.
+
+The right readiness rail may use restrained semantic icons, but adjacent text
+is always the authority for state and action. Ordinary rendered Library text is
+at least 12px. Save failure or source recovery exposes one owning **Save** or
+**Try again** action, never competing duplicates. Changing the active tab inside
+the embedded editor synchronizes the Library breadcrumb and editor title while
+preserving the mounted draft, staged values, and save authority.
 
 ### Package/Menu evidence and draft review
 

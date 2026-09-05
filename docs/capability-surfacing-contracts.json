@@ -3982,7 +3982,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 16,
+      "reviewRevision": 17,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -4081,7 +4081,7 @@
         },
         {
           "path": "src/components/PackageWorkspace.jsx",
-          "locator": "Package actions"
+          "locator": "Offer actions"
         }
       ],
       "testPaths": [
@@ -4251,11 +4251,11 @@
         },
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "QuotePilot Package Workspace in Catalog Admin"
+          "locator": "QuotePilot Offer presentation over the existing Package Workspace"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "In `Packages`, QuotePilot now opens one package workspace"
+          "locator": "In `Offers`, QuotePilot opens the existing Package Workspace"
         },
         {
           "path": "docs/PACKAGE_WORKSPACE.md",
@@ -6628,7 +6628,7 @@
     },
     {
       "id": "catalog-draft-publish-authority",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -6721,7 +6721,7 @@
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "## Business Setup Center and Menu Builder"
+          "locator": "## Library readiness and Menu Builder"
         }
       ],
       "surfaceReview": "changed",

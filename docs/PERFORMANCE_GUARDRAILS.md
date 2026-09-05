@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-04 15:23:00 CDT
+Last updated: 2026-09-04 21:58:00 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,10 +25,10 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,331,404-byte aggregate
-  and 395,916-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,172,754-byte aggregate ceiling and
-  429,923-byte largest-chunk ceiling. The pre-authority local
+- The current compatibility graph has a temporary 3,379,162-byte aggregate
+  and 397,409-byte largest-chunk ceiling. The production-equivalent Ambient
+  graph has a separate temporary 4,301,701-byte aggregate ceiling and
+  432,490-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
@@ -109,10 +109,27 @@ Threshold policy:
   The shared commercial kernel subsequently moved the exact compatibility
   ceiling to 3,330,544 bytes. Promoting Calendar-first Operations into the
   existing Ambient orientation adds 860 aggregate compatibility bytes and does
-  not grow the largest chunk; the current ceiling is pinned to the measured
+  not grow the largest chunk; that checkpoint's ceiling is pinned to the measured
   3,331,404 / 394,674-byte graph with no percentage headroom. The separately
-  detected Ambient ceiling remains unchanged because that graph stays below its
-  existing absolute limit.
+  detected Ambient ceiling remained unchanged at that checkpoint because its
+  then-measured graph stayed below the existing absolute limit.
+  A later reproduction of the complete CI flag matrix showed that the
+  pre-Library Operations head itself emitted 3,333,438 / 397,090 bytes for
+  compatibility and 4,240,261 / 431,619 bytes for Ambient, so the published
+  full-profile ceilings were stale even before the Library refinement. The
+  Library nested-commercial-object implementation at
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4` adds 45,724 aggregate
+  compatibility bytes and 61,440 aggregate Ambient bytes. The Ambient delta is
+  isolated to the already-lazy Library surfaces: 45,370 bytes in Catalog Admin,
+  10,380 in Event Templates, 4,819 in the Library route, and 871 in the shared
+  Workspace route. The corresponding transferred gzip growth is approximately
+  10.6 KB for compatibility and 14.6 KB for Ambient. Removing the full raw-byte
+  delta safely would remove selected editor behavior; chunk splitting would not
+  reduce this aggregate guard. The current ceilings therefore equal the literal
+  local complete-profile measurements of 3,379,162 / 397,409 and 4,301,701 /
+  432,490 bytes, with no percentage or future-growth headroom. Exact-head CI is
+  still required when publication is authorized; local pinning is not CI,
+  hosted, production, or human-acceptance evidence.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

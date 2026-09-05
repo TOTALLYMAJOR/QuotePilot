@@ -1,5 +1,7 @@
 # QuotePilot v0.16 Calm Four design QA
 
+Last updated: 2026-09-04 21:58:00 CDT
+
 ## Scope
 
 This review compares the approved 19-screen visual contract in
@@ -46,6 +48,80 @@ captured viewport.
 - Current captures: `output/playwright/v16-calm-four-current/`
 - Behavioral gate: `e2e/v16-calm-four-acceptance.spec.js`
 - Acceptance ledger: `docs/acceptance/quotepilot-v16-calm-four-acceptance-matrix.md`
+
+final result: passed
+
+---
+
+# Library commercial convergence design QA
+
+Final comparison: 2026-09-04 21:33:00 CDT
+
+## Comparison target
+
+- Selected authority: Option 2 Library composition with Option 3 restraint.
+- Candidate base: `7a139aa530da1ea66b1d86ec8c5190f7475c35e5`.
+- Implementation commit: `b593fe4d2c45ff5db20bafe205461157952b9ab4`.
+- Responsive overview captures:
+  `output/playwright/ambient-intelligence-current/ambient-library-390.png`,
+  `ambient-library-768.png`, and `ambient-library-1440.png`.
+- Same-viewport desktop reference:
+  `output/playwright/ambient-intelligence-current/ambient-library-reference-1487x1058.png`.
+- Combined overview comparison:
+  `output/playwright/ambient-intelligence-current/ambient-library-comparison-2974x1058.png`.
+- Combined nested comparisons: `nested-comparison-offer.png`,
+  `nested-comparison-rules.png`, `nested-comparison-pricing.png`, and
+  `nested-comparison-template-mobile.png` in the same directory.
+
+The exact 390, 768, and 1440 overview captures and the combined overview/nested
+comparisons were inspected together against that exact rendered implementation.
+This remains local worktree evidence.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- The broad commercial ledger remains primary and the right readiness rail is
+  visibly secondary. Its semantic icons reinforce state, while adjacent text
+  remains the authority.
+- Offers keep selling identity, availability, inclusion, derived margin, and
+  next decision prominent. Recorded choice groups are read-only projections.
+- Add-ons and Rentals expose visible derived Usage and subordinate stable IDs.
+- Templates use independent disclosures and the selected eight-group business
+  hierarchy. Rules are structured-first with Advanced raw recovery. Pricing
+  separates ordinary policy groups before Advanced policy.
+- Mobile preserves object summaries and compact disclosure flow. Ordinary text
+  remains at least 12px and interactive targets retain the 44px boundary.
+- Recovery presents one owning save/retry action. Changing an embedded editor
+  tab synchronizes the breadcrumb/title without remounting or draft loss.
+
+## Fidelity score
+
+Local design score: **9.5/10 — GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected Option 2/3 composition and hierarchy | 3.0 | 3.0 |
+| Nested commercial-object coherence | 2.0 | 2.0 |
+| Information density and progressive disclosure | 1.5 | 1.5 |
+| Responsive and accessibility execution | 1.5 | 1.5 |
+| Visual finish and product specificity | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, or human acceptance.
+
+## Behavioral evidence
+
+- `e2e/ambient-library.spec.js`: **17/17** local Chromium cases.
+- `VITE_OPERATIONAL_STAFFING_ENABLED=true` with
+  `e2e/v16-calm-four-acceptance.spec.js`: **10/10** local Chromium cases.
+- The responsive captures cover 390, 768, and 1440 pixels; the nested capture
+  inventory covers Offers, Components, Templates, Rules, Pricing, recovery, and
+  sales read-only presentation.
+- Existing catalog draft/save/revision/publication, Package, Template, Rule,
+  server-pricing, and role authorities remain unchanged. **Your bundle** remains
+  derived from one quote draft and has no independent record or save path.
 
 final result: passed
 
