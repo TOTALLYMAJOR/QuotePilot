@@ -1,6 +1,6 @@
 # Tenant Operating Model Acceptance Matrix
 
-Last updated: 2026-09-05 17:51:27 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 Status: local qualification complete; real tenant pilot and human acceptance pending
 
@@ -15,7 +15,7 @@ The local candidate is `feature/qp-tom-local-pilot-20260905`, reconstructed from
 current main `8f2d2dcf78d4512aa7d02495ee27cbeeea4ccc12`. Reconciliation and whole-app
 rehearsal retain the per-slice planner, explicit ownership, focused and integrated
 checks, canonical documentation, local commit and immutable checkpoint contract.
-No remote push is included. Current-main source qualification passes; whole-app rehearsal remains in progress.
+No remote push is included. Current-main source qualification and automated whole-app rehearsal pass; human acceptance remains pending.
 Configuration Studio serves `quote_review`, `final_guest_count`,
 `event_execution` and `closeout_follow_up`. Existing native authorities own
 commercial and event outcomes. Definitions own tenant policy; instances own
@@ -127,3 +127,60 @@ uses the current activated issuance, not a staff role or verified-person claim.
 - Browser-local fallback is separately labeled and cannot claim server receipts.
 - A local green suite, staged manifest or synthetic delivery fixture does not
   substitute for the hosted, provider, production or human evidence above.
+
+
+## Connected whole-app rehearsal results
+
+The ordinary admin journey reaches Library and all four Studio editors. Two
+reversible draft saves produced receipts and fresh readback, restoring the
+original name afterward. Control Room, legacy and current-catalog attendance
+inspectors, and closeout review render at 390/768/1440 with zero horizontal
+overflow and no page errors. Browser verification did not publish policy,
+complete closeout or apply a commercial amendment; native-owner integration is
+qualified separately by the emulator matrix.
+
+Fresh sales and administrator logins pass after named synthetic taxonomy is
+prepared before native pricing confirmation. Sales can reach the commercial,
+attendance and event contexts; Studio and administrator phase mutations remain
+unavailable. Admin retains Studio access. The earlier incomplete-fixture failure
+is preserved in the browser evidence instead of being relabelled as a product
+role defect. Four launcher safety tests pass. Actual Ctrl+C exits successfully
+and releases ports 4174, 5601, 8383 and 9399. A fresh restart reruns the full real
+emulator matrix and native fixture verification with ambient credentials blocked.
+
+Safe browser evidence is in `output/playwright/local-rehearsal/summary.json`
+and `final-role-results.json`; no authentication storage artifact is retained.
+The source and public proof checkpoint is
+`/tmp/qp-tom-studio-checkpoints/local-main-J/`. Setup and stop instructions are
+in [README](../../README.md#local-tenant-workflow-rehearsal). The app is a local
+synthetic rehearsal; human acceptance and customer value remain unproven.
+
+## Customer-facing first-use review
+
+The owner clarified that this must be customer-facing design with useful value
+from the first session. Evaluate the customer's staff workflow and the end
+customer's response journey, not merely whether configuration controls work.
+A successful first session makes the relevant work discoverable, explains why
+it matters, supports a native action and shows its durable result. The first
+benefit should be felt in quote review, final-count follow-through, event-day
+work or post-event follow-up where the person is already working. Configuration
+should support that work; a new user should not need to understand schema,
+coordinator pins or receipt identifiers to begin.
+
+| Finding | Evidence and classification | Proposed change |
+|---|---|---|
+| First login opens catalog onboarding before staff navigation; sales cannot Explore past incomplete setup | Observed connected admin and sales browser; incomplete synthetic catalog triggers existing role-safe first-use gate | Resolved in the rehearsal by creating named synthetic taxonomy before native pricing confirmation; fresh sales login and workspace access pass without bypassing readiness. Review a task-oriented arrival for real tenants while preserving required catalog/pricing confirmation. |
+| Studio starts on a retired definition with historical versions | Observed connected browser; intentionally exhausted acceptance fixture, not the default new-tenant state | Explain the fixture's starting state. Prepare a separate representative first-use cohort before judging onboarding; never auto-publish a real tenant's policy to hide this state. |
+| The Studio leads with configuration terminology, identifiers and a dense settings form | Source review plus `1440-studio.png`: Governing pack policy, Task key, head/lifetime versions and minute offsets precede task outcomes | Priority product change: lead with each workflow's practical benefit and useful starting checklist; use business labels and human time units. Put technical identifiers and detailed evidence in an optional details view; preserve exact publication review and consequence confirmation. |
+| Bare operational fixtures lack the complete commercial presentation of the current-catalog quote | Connected route review: operational fixtures omit display/pricing context; current-catalog booked quote renders complete guests and pricing | Use a fully populated native-created quote/event as the first-value demonstration. Keep minimal acceptance fixtures for contract verification; never invent pricing or customer evidence to fill the screen. |
+| Suggested closeout action loops through Workflow and client overview while actual controls are in More client history and controls | Observed connected customer route and closeout controls | Priority product change: navigate the suggested action directly to the exact event review, preserve event identity, focus its initiating control and show its result there. Keep unavailable actuals explicit. |
+| A booked current-catalog quote says No role-safe action is currently available while its inspector offers Request final guest count | Observed connected booked quote and Guest count → See connections inspector | Priority product change: include eligible final-count work in the existing next-action presentation, using current native eligibility and retaining the exact quote/version. Do not force the user to discover it in a secondary inspector. |
+| Mobile inspectors have zero horizontal overflow but require excessive vertical scanning | Connected current-catalog inspector/dependency view is approximately 9,288 pixels tall at 390px | Show the next task, essential context and result first; progressively disclose secondary policy, dependency and evidence detail. Verify first-use scanability separately from overflow. |
+| Studio orientation text is overlapped by the global New quote button | Confirmed 1440px DOM geometry in `overlap-results.json` and `1440-studio-header.png`; existing shell layout exposed by Studio label length | Reserve header space or reflow the orientation and action through the shared shell layout; verify desktop and smaller breakpoints. |
+| Customer value needs a task-to-result acceptance criterion | Owner requirement; customer impact is not established by green source checks | From an ordinary first session, find relevant work, complete a useful native action and verify its result without first designing a workflow. Rehearse final-count response separately as the end customer's journey. |
+
+These are review findings and proposed changes, not completed redesign claims.
+The initial screenshots are under `output/playwright/local-rehearsal/` in the
+isolated checkout. [DEV_TASKS.md](../../DEV_TASKS.md#p1---tenant-operating-model-program)
+owns prioritization. Fixture friction, product usability, human comprehension
+and measured customer benefit remain separate evidence categories.

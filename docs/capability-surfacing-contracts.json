@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 69,
+  "catalogVersion": 70,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -8718,6 +8718,55 @@
       ],
       "headlessReason": "The inventory is a strictly offline operator tool with no credential lookup, network, application write or apply mode. Candidate profile validation prepares configuration and does not activate a tenant or establish hosted acceptance.",
       "safeOutcome": "Operators receive scoped classifications and explicit blocked reasons from verified native evidence. The report contains safe identifiers and digests and cannot replace current runtime authority or approve migration."
+    },
+    {
+      "id": "tenant-workflow-local-rehearsal",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "operator"
+      ],
+      "summary": "Disposable whole-app rehearsal uses real demo emulators, a coherent synthetic catalog, staff accounts, display records and native-planned synthetic acceptance/booking with ordinary authentication and native authority.",
+      "backendPaths": [
+        "scripts/tenant-operating-model-local-rehearsal.mjs",
+        "scripts/tenant-operating-model-local-rehearsal-seed.mjs"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js",
+          "locator": "local rehearsal replaces hosted browser configuration and disables providers without bypassing auth"
+        },
+        {
+          "path": "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js",
+          "locator": "local rehearsal seeding rejects hosted projects and nonlocal or mismatched emulator endpoints"
+        }
+      ],
+      "documentationPaths": [
+        "README.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/acceptance/tenant-operating-model.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "README.md",
+          "locator": "## Local Tenant Workflow Rehearsal"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Local Tenant Workflow Rehearsal"
+        }
+      ],
+      "headlessReason": "Developer-only launcher and synthetic fixture seeder are restricted to a fixed disposable demo project and loopback Auth/Firestore/Functions. Fresh local setup creates named taxonomy before native pricing confirmation, then staff sign-in/display fixtures and native-planned synthetic acceptance/booking after verifying current catalog authority and preserving version, pricing and payment. There is no hosted seed or tenant activation mode.",
+      "safeOutcome": "Operators rehearse existing user surfaces locally with explicit synthetic evidence, normal role checks and providers disabled. Native acceptance and coordination fixtures are never customer or provider proof."
     }
   ]
 }

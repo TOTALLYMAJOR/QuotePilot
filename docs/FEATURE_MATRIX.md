@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-05 17:45:01 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -639,3 +639,14 @@ records or create historical evidence. The isolated staging EventSpine release
 profile prepares explicit server/browser configuration; tenant activation and
 hosted/operator evidence remain separate. These are developer/operator tools,
 not customer actions or automatic migration approval.
+
+## Local Tenant Workflow Rehearsal
+
+A developer-only launcher starts disposable Auth/Firestore/Functions emulators,
+verifies all four packs and opens the real application with synthetic admin and
+sales sign-in. Normal authentication, role gates and native authority remain in
+force. Library exposes Business workflows; exact quote/event routes are printed.
+The fixture is restricted to a fixed demo project and loopback services, with
+provider sends disabled. It is local rehearsal infrastructure and establishes
+no hosted tenant activation, real customer action or human acceptance. Setup and
+stop instructions live in [README](../README.md#local-tenant-workflow-rehearsal).

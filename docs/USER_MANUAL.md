@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-05 17:47:33 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2900,8 +2900,9 @@ receipt to know whether the price, event or closeout actually changed.
 
 ### Final guest-count request and response
 
-Open Guest count on the saved event. The priced count and reviewed planning
-estimate remain visible separately. Request final guest count to create a
+On the saved quote, open **Guest count**, then **See connections** to reach
+the attendance controls. The priced count and reviewed planning estimate remain
+visible separately. Request final guest count to create a
 record with the deadline from your guest-count policy. Creating that request
 does not send a message. Use the existing approved communication process to
 contact the customer.

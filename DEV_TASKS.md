@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-09-05 17:00:23 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -316,6 +316,18 @@ replace their safety conditions.
 
 ## P1 - Tenant Operating Model Program
 
+- Complete the customer-facing first-value pass recorded in the
+  [review log](docs/acceptance/tenant-operating-model.md#customer-facing-first-use-review):
+  business-language presentation, discoverable next actions and visible durable
+  outcomes before advanced configuration. Include eligible final-count requests
+  in the quote's existing next-action presentation; reduce the long mobile
+  inspector and fix the observed Studio header overlap. Route the suggested closeout action
+  directly to its exact event review and focus the actionable control. Separate fixture-only onboarding and
+  retired-state friction from product defects. Validate staff and end-customer
+  journeys before claiming immediate customer value.
+- Complete the owner's whole-app local rehearsal from the
+  [run instructions](README.md#local-tenant-workflow-rehearsal) and record
+  comprehension, friction and an explicit continue/revise/pause decision.
 - Select the real tenant, explicit event cohort and operator for the
   [pilot acceptance matrix](docs/acceptance/tenant-operating-model.md). Record
   connectivity needs and baseline effort where observable.
@@ -323,8 +335,8 @@ replace their safety conditions.
   current sources. Retain unknown historical evidence without synthesis.
 - Complete moderated role/tenant, recovery, rollback and comprehension evidence,
   then record an explicit continue/revise/pause decision.
-- Qualify an exact committed candidate and separately authorize publication,
-  deployment and tenant activation. Hosted behavior, provider outcomes, human
+- Use the locally qualified committed candidate for any separately authorized
+  publication, deployment and tenant activation. Hosted behavior, provider outcomes, human
   acceptance, adoption and customer impact remain distinct proof gates.
 
 ## P1 - Ambient Intelligence Interface Program

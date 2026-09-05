@@ -1,6 +1,6 @@
 # Work Plan: QuotePilot Tenant Operating Model
 
-Last updated: 2026-09-05 17:42:26 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 Status: source through Phase 4 and Phase 5 local qualification complete; real tenant pilot and promotion decision pending
 Related task: `QP-TOM-020`
@@ -795,3 +795,38 @@ fresh current-catalog confirmed quotes. Legacy/changed-catalog accepted or booke
 quotes cannot be amended through this path because the native catalog-review
 owner rejects terminal sources. Recovery requires separately reviewed policy or
 a new agreement; rehearsal must neither bypass the gate nor invent its receipt.
+
+
+### Slice I completion on current main
+
+Local commit `c028b07473b24ca7082c49a25368910db50d6081` contains the reconciled
+feature: 140 files, 18,192 additions and 380 deletions. Its completion planner
+recorded `2026-09-05T22:52:05.271Z`. The independent checkpoint at
+`/tmp/qp-tom-studio-checkpoints/local-main-I/` binds source blobs and public proof
+hashes; prior checkpoints remain unchanged. The source-only capability and docs
+gates pass with the rehearsal launcher excluded. The full working-candidate
+suite passed 4,861 tests, including two then-present rehearsal safety tests;
+Firestore rules pass 83 and Python passes 136. Both build budgets pass.
+Enabled, imported global-disabled and restored proofs share 15 source digests
+and preserve populated workflow history. This is a local commit, not remote CI,
+hosted activation, provider evidence or human acceptance.
+
+
+### Slice J local rehearsal completion
+
+The demo-only launcher and seed now start the real app with ordinary synthetic
+admin/sales login. Named taxonomy precedes native pricing confirmation; native
+planners prepare an eligible current-catalog booked amendment source while
+preserving its immutable version, price, payment and catalog evidence. No real
+provider credentials or Functions secret/config files are accepted. Four focused
+safety tests and the quick lane pass. The product runtime is unchanged from I,
+so its full suite, rules, Python and both qualified builds remain applicable.
+
+Actual startup, full emulator acceptance, native fixture verification, controlled
+Ctrl+C/port release and fresh restart pass. Browser proof verifies all four
+Studio editors, reversible draft save/readback/restore, three responsive widths,
+connected event/attendance/closeout views and fresh admin/sales boundaries.
+The exact [customer-facing review log](../acceptance/tenant-operating-model.md#customer-facing-first-use-review)
+records remaining first-value gaps; working controls are not a completed
+customer-facing design. Prior checkpoints remain unchanged. No push, hosted
+activation, provider send, moderated human acceptance or customer impact is claimed.

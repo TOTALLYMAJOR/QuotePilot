@@ -1,10 +1,21 @@
 # Changelog
 
-Last updated: 2026-09-05 17:47:33 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — QP-TOM local whole-app rehearsal
+
+- Add a one-command disposable demo rehearsal using real Auth, Firestore,
+  Functions and the full application with ordinary admin/sales login.
+- Seed explicitly synthetic current-catalog acceptance/booking through native
+  planners for a usable amendment source; preserve pricing, version and payment.
+- Print canonical app links, isolate local credentials and provider configuration,
+  and stop the owned app/emulator process chain through Ctrl+C.
+- Keep automated local rehearsal separate from human acceptance and any future
+  push, hosted tenant activation or provider communication.
 
 ## Unreleased — QP-TOM local current-main reconciliation
 

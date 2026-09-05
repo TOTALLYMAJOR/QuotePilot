@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-05 17:45:01 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -1512,3 +1512,39 @@ candidate manifest does not deploy it, select a real tenant, activate a provider
 or establish operator acceptance. The real pilot tenant, bounded cohort,
 walkthrough and baseline remain explicit completion requirements. Use the
 [bounded pilot acceptance matrix](docs/acceptance/tenant-operating-model.md).
+
+## Local Tenant Workflow Rehearsal
+
+From the isolated local candidate with dependencies installed, run:
+
+```bash
+env -u DEBUG node scripts/tenant-operating-model-local-rehearsal.mjs
+```
+
+This launches fresh Auth, Firestore and Functions emulators, verifies all four
+workflow packs, seeds synthetic staff sign-in and starts the real app at
+`http://127.0.0.1:4174/app`. Java and the repository Firebase tooling are required;
+the configured emulator ports and port 4174 must be free. Use
+`event-admin@local.test` or `event-sales@local.test` with the intentionally public,
+emulator-only password `LocalRehearsal-Only-2026!`. Ordinary authentication and
+role checks remain active. Ctrl+C stops the rehearsal; restarting creates a fresh
+disposable fixture. Do not use these synthetic credentials in hosted systems.
+
+If catalog onboarding appears, choose **Explore the workspace** as administrator.
+The verified rehearsal prepares a named event type and menu category before
+native catalog confirmation so sales can enter through normal readiness checks.
+Start with the printed **verified current-catalog booked amendment source** for
+a complete commercial example. Open Library → **Business workflows** when
+reviewing team configuration. The launcher
+prints exact event, quote and closeout links. Acceptance fixtures deliberately
+retire definitions after exercising publication and migration; existing pins
+remain readable. Publish a reviewed new version to use a fresh tenant policy.
+Use the printed verified current-catalog booked source for attendance amendments;
+legacy/changed-catalog terminal quotes remain blocked by native catalog authority.
+
+The seed uses native planners to prepare synthetic renewed acceptance and booking
+for an eligible amendment source while preserving its version, price, catalog
+authority and payment evidence. Provider sends are disabled. Synthetic delivery/acceptance fixtures establish
+local contracts only. This command does not push, deploy or activate a hosted
+tenant. The [pilot matrix](docs/acceptance/tenant-operating-model.md) separates
+this rehearsal from human, customer, hosted and provider acceptance.

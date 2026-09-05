@@ -1,11 +1,11 @@
 # Project Status
 
-Last updated: 2026-09-05 17:51:27 CDT
+Last updated: 2026-09-05 18:13:08 CDT
 
 ## Tenant Operating Model local development
 
 The Event Operating Spine, Configuration Studio and four bounded catering packs
-are being qualified on `feature/qp-tom-local-pilot-20260905`, reconstructed from
+are implemented on `feature/qp-tom-local-pilot-20260905`, reconstructed from
 current main `8f2d2dcf78d4512aa7d02495ee27cbeeea4ccc12`. Only the completed TOM
 file delta was transferred; unrelated historical branch commits were excluded.
 The [accepted ADR](docs/TENANT_OPERATING_MODEL_ADR.md) owns the contract;
@@ -39,9 +39,10 @@ outside the sandbox; no product guard was weakened.
 
 The historical `/tmp/qp-tom-studio-checkpoints/end/` remains unchanged. Its earlier
 browser fixtures and enabled/disabled/restored emulator evidence qualify the
-prior TOM baseline only. Current-main all-four enabled, imported global-disabled and restored acceptance
-pass with the same 15 source hashes, retaining 5 instances, 22 workflow receipts
-and 2 phase ledgers. Whole-app browser rehearsal is being recorded separately. Browser and emulator results do not establish human acceptance.
+prior TOM baseline only. Current-main all-four enabled, imported global-disabled
+and restored acceptance pass with the same 15 source hashes, retaining 5 instances, 22 workflow receipts
+and 2 phase ledgers. Whole-app browser evidence is recorded separately.
+Browser and emulator results do not establish human acceptance.
 
 The offline inventory verifies all four exact-source packs without writes and
 reports native versus coordinator pins separately. The isolated staging profile
@@ -56,11 +57,22 @@ changed-catalog authority remain ineligible: the existing native catalog-review
 owner does not review terminal quotes. A separate terminal amendment/catalog
 policy or new agreement would be needed; the local cohort excludes those sources.
 
-The authorized next steps are local validation, reviewable local commits and a
-whole-app emulator rehearsal. No push, hosted activation, provider send or
-deployment is part of this step. The source checks above apply to the reconstructed candidate;
-whole-app rehearsal remains in progress.
-The real tenant, event cohort, human operator and impact baseline remain open.
+The source integration is committed locally as `c028b074`. The separate whole-app
+emulator rehearsal passes ordinary admin/sales login, current-catalog fixture
+validation and role-safe access. Its launcher is running locally for owner review.
+No push, hosted activation, provider send or deployment is part of this step.
+The source checks above apply to the reconstructed candidate;
+automated whole-app rehearsal also passes.
+Connected browser review verifies all four editors, draft save/readback/restore,
+Control Room, attendance and closeout visibility at 390/768/1440, with no page
+errors or horizontal overflow. First-use customer value remains open: eligible
+final-count work is absent from the quote's next-action cue, closeout controls
+need a direct route, Studio exposes technical detail too early, and its desktop
+header overlaps the global action. The mobile inspector is excessively long.
+The [customer-facing review log](docs/acceptance/tenant-operating-model.md#customer-facing-first-use-review)
+records these observed findings and proposed changes. No completed redesign or
+immediate customer benefit is claimed. The real tenant, event cohort, human
+operator and impact baseline remain open.
 [DEV_TASKS.md](DEV_TASKS.md) owns the remaining pilot and release work.
 
 ## Current Production Release
