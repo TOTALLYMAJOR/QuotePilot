@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 23:41:46 CDT
+Last updated: 2026-09-05 00:28:05 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,24 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Converged the existing exact-token **Customer Proposal Decision Center** into
+  the selected customer-facing half of Client 360 without adding a portal,
+  quote, pricing, decision, signature, payment, conversation, or route
+  authority. The event story now owns the broad canvas while one secondary rail
+  keeps decision status, total, required deposit, expiry, response choices,
+  mutation feedback, and the authority-gated question continuation together.
+  Event facts, package/menu, and compact optional additions remain client-
+  readable; price detail, planning assumptions, and tenant terms begin
+  collapsed. The public portal no longer inherits the absent staff sidebar's
+  236px desktop offset. All contextual question, reversible addition, explicit
+  acceptance/signature, payment, recovery, and exact-token handlers are reused.
+  Focused component coverage passes 49/49; the 390/768/1440 plus exact-source
+  1487x1058 Chromium matrix passes 5/5 with quote selection/totals/revision
+  equality, 44px targets, no overflow/clipping/collision, and zero axe
+  violations. The exact 1487x1058 source and implementation were inspected
+  together at a local **9.5/10 - GO**. This is local source evidence only;
+  exact-head CI, connected portal behavior, deployment, production data,
+  provider outcomes, recipient use, and human acceptance remain unclaimed.
 - Converged the existing **Clients** directory and Internal Client 360 into the
   selected relationship-led composition without adding a customer record,
   activity feed, urgency model, route, or mutation authority. The populated

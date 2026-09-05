@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-04 23:41:46 CDT
+Last updated: 2026-09-05 00:28:05 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -649,21 +649,32 @@ keeps **Apply to draft** as the primary next action. Editing the command makes
 
 ### Customer decision room
 
-The default-off customer room keeps the tenant's hospitality identity while
-using the same calm hierarchy and no-overlap discipline. It reads as one open
-proposal, not a staff dashboard: Event, Menu and service, Pricing, assumptions,
-terms, optional additions, response, and questions follow a stable content
-order. Use plain labels such as **Pricing**, **Optional**, and **Your response**;
+The default-off customer room is the customer-facing half of Client 360. It
+keeps the tenant's hospitality identity and reads as one open proposal, not a
+staff dashboard. At desktop, the event story owns the broad canvas and one
+secondary decision rail holds the current decision state, total, required
+deposit, expiry, response choices, mutation feedback, and authority-gated
+question continuation. It must not inherit the staff navigation offset or
+introduce another portal shell.
+
+The event story orders identity, date, guests, venue, service, package/menu,
+and compact optional additions before quiet planning and terms disclosures.
+Price detail, planning assumptions, and tenant terms begin collapsed. Use plain
+labels such as **Package & menu**, **Optional additions**, and **Your response**;
 avoid sales euphemisms, urgency cues, or claims that the application is making
-the customer's decision.
+the customer's decision. **Required deposit** is the safe label: payment alone
+must not imply that the date is secured or the event is booked.
 
 Contextual question and addition controls must acknowledge immediately and
 lead to the existing exact conversation or decision object. At 390, 768, and
-1440px, headings, tenant terms, controls, feedback, focus paint, and the shared
-conversation may wrap but may not cover one another. Optional additions are
-visually inviting without implying inclusion: the customer prepares a note,
-staff reviews it, and only the trusted quote save can establish revised price
-or scope. Tenant colors remain separate from staff Ambient semantics.
+1440px, the two desktop regions become one intentional sequence: proposal
+identity, decision state, event story, commercial summary, response, additions,
+and disclosures. Headings, tenant terms, controls, feedback, focus paint, and
+the shared conversation may wrap but may not cover one another. Optional
+additions are visually inviting without implying inclusion: the customer
+prepares a note, staff reviews it, and only the trusted quote save can establish
+revised price or scope. Tenant colors remain separate from staff Ambient
+semantics.
 
 ### Clients presentation
 

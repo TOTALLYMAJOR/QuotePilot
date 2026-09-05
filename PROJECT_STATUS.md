@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-04 23:03:12 CDT
+Last updated: 2026-09-05 00:28:05 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -869,9 +869,13 @@ Last updated: 2026-09-04 23:03:12 CDT
   This adds no read, role, pricing, mutation, provider, or new persistence
   authority.
   AIUI-46 now gives the combined Decision Room plus default-off Ambient
-  exact-token customer portal a calmer,
-  content-first reading order across Event, Menu and service, Pricing,
-  assumptions, tenant terms, optional additions, response, and questions.
+  exact-token customer portal the selected customer-facing Client 360
+  composition. The broad event story and secondary decision rail share one
+  full public canvas; the route no longer inherits the absent staff sidebar's
+  236px offset. Event scope, package/menu, compact optional additions, total,
+  required deposit, expiry, response, feedback, and authority-gated questions
+  remain one client-readable proposal. Price detail, assumptions, and tenant
+  terms begin collapsed.
   Contextual question actions reuse the one existing conversation composer and
   acknowledge staged text, preserved drafts, unresolved sends, read-only
   threads, and unavailable conversations. Staff-marked additions prepare only
@@ -879,9 +883,12 @@ Last updated: 2026-09-04 23:03:12 CDT
   removed as generated content. Browser-local exact-token fallback mirrors the
   same bounded terms and option shape as the canonical projection. A focused
   local suite passes for helper, portal, conversation, and fallback behavior;
-  a dedicated four-case Chromium lane passes at 390, 768, and 1440px with
+  a dedicated five-case Chromium lane passes at 390, 768, 1440, and exact-source
+  1487x1058 with
   44px targets, axe, overflow, clipping, collision, and proposal-nonmutation
-  checks. The local proof images are source evidence only. No new customer
+  checks. Focused component coverage passes 49/49, and the selected source and
+  exact implementation received a local 9.5/10 GO visual review. The local
+  proof images are source evidence only. No new customer
   read, callable, direct quote mutation, pricing authority, payment, booking,
   or provider evidence is introduced; connected exact-token behavior,
   deployment, production data, provider outcomes, and human acceptance remain

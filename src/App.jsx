@@ -5511,7 +5511,7 @@ export default function App({
 
   if (portalMode && customerPortalEnabled) {
     return (
-      <div className="app-shell" style={appThemeVars}>
+      <div className="app-shell portal-app-shell" style={appThemeVars}>
         <RecoverableErrorBoundary
           active
           surfaceName="Customer portal"

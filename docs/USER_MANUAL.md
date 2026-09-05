@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-04 23:41:46 CDT
+Last updated: 2026-09-05 00:28:05 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2605,13 +2605,18 @@ receipts for those actions and evidence.
 enabled alone. The AIUI-46 layout additionally requires default-off
 `VITE_AMBIENT_UI_ENABLED`. When both are enabled in a local
 build, the exact-token customer portal arranges the existing customer-safe
-proposal into a calm reading order: **Your event**, **Menu and service**,
-**Pricing**, **Planning assumptions**, tenant-authored **Terms**, **Possible
-additions**, **Your response**, and **Questions for your catering team**. This
-is a presentation change, not a broader customer read. Production builds keep
-this AIUI-46 replacement dormant while the Ambient gate is omitted.
+proposal as the customer-facing half of Client 360. On desktop, the broad event
+story sits beside one quieter decision rail; tablet and phone turn the same
+content into one intentional sequence. The room orders **Your event**,
+**Package & menu**, the proposal total and **Required deposit**, **Your
+response**, **Optional additions**, collapsed **Planning assumptions**, and
+tenant-authored **Terms**. The exact address and recorded payment state remain
+visible when present. This is a presentation change, not a broader customer
+read. Production builds keep this AIUI-46 replacement dormant while the
+Ambient gate is omitted.
 
-Each supported section offers **Ask a question**. It opens the one existing
+Each supported section offers **Ask a question** only when the existing
+conversation authority is available. It opens the one existing
 quote conversation and prepares ordinary editable starter text. The room
 immediately reports whether that text is ready, an existing draft was kept, an
 earlier send still needs reconciliation, or the conversation is read-only or
@@ -2619,7 +2624,7 @@ unavailable. Nothing is sent until the customer chooses **Send message**.
 
 Catalog Admin's existing **Portal offer** checkbox remains off unless staff
 deliberately enable it for an add-on or rental. An active marked option that is
-not already in the proposal may appear under **Possible additions**, with its
+not already in the proposal may appear under **Optional additions**, with its
 unit basis shown as per guest, per item, or for the event. Choosing it prepares
 one `Please add ...` line in the ordinary **Ask for changes** note. Choosing it
 again removes only the exact line the room generated during that browser

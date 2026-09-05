@@ -1,6 +1,6 @@
 # QuotePilot v0.16 Calm Four design QA
 
-Last updated: 2026-09-04 23:41:46 CDT
+Last updated: 2026-09-05 00:28:05 CDT
 
 ## Scope
 
@@ -48,6 +48,113 @@ captured viewport.
 - Current captures: `output/playwright/v16-calm-four-current/`
 - Behavioral gate: `e2e/v16-calm-four-acceptance.spec.js`
 - Acceptance ledger: `docs/acceptance/quotepilot-v16-calm-four-acceptance-matrix.md`
+
+final result: passed
+
+---
+
+# Customer 360 proposal decision-center design QA
+
+Final comparison: 2026-09-05 00:28:05 CDT
+
+## Comparison target
+
+- Source visual truth:
+  `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-1b0bd100-d2e0-4afe-8c02-e496b7f94b3a.png`.
+- Exact implementation:
+  `output/playwright/ambient-intelligence-current/customer-decision-room-1487.png`.
+- Responsive implementation:
+  `customer-decision-room-1440.png`, `customer-decision-room-768.png`, and
+  `customer-decision-room-390.png` in the same output directory.
+- State: exact opaque portal token, sent proposal Q-ROOM-1042, decision pending,
+  unpaid deposit, two reversible optional additions, assumptions and terms
+  collapsed, browser-local Northstar/Maya fixture.
+
+The source and exact implementation are both 1487 x 1058 pixels. The
+implementation uses a 1487 x 1058 CSS viewport at device scale factor 1 and a
+viewport screenshot rather than a full-page crop. Both images were opened in
+the same comparison input at original resolution. The responsive captures use
+390 x 844, 768 x 900, and 1440 x 1000 CSS viewports at device scale factor 1;
+the latter three are full-page captures so the complete responsive flow remains
+inspectable.
+
+## Findings
+
+No actionable P0, P1, or P2 mismatch remains.
+
+- Typography: the final event title stays on one desktop line, the package
+  heading retains the selected title case, and the existing editorial/sans
+  pairing preserves the source hierarchy without adding another font system.
+- Spacing and layout: the public route no longer inherits the absent staff
+  sidebar's 236-pixel offset. The proposal story and decision rail now own the
+  full desktop canvas in the selected proportion; event facts, package/menu,
+  optional rows, and both quiet disclosures fit the exact source viewport.
+- Colors and tokens: warm paper, ink, gold, green readiness, hairlines, and
+  restrained borders use existing portal tokens. No gradient, decorative
+  surface, or duplicate state color was introduced.
+- Image and icon fidelity: the source contains no photography. Existing
+  `ProductIcons` supply every visible icon; no handcrafted SVG, CSS drawing,
+  emoji, placeholder, or duplicate icon language was added.
+- Copy and content: `Required deposit` intentionally replaces the illustrative
+  source's `Deposit to secure date` because payment alone is not booking
+  confirmation. The exact venue address and recorded payment state remain
+  visible because they are authoritative portal evidence. `Ask a question`
+  appears only when the existing conversation authority is available.
+- Interaction and accessibility: decision, signature, payment, option-request,
+  contextual question, mutation recovery, and exact-token behavior remain on
+  their existing handlers. Price detail, assumptions, and terms are collapsed
+  by default. All enabled controls retain 44-pixel targets, the page has no
+  clipping or horizontal overflow, and scoped axe reports zero violations.
+- Responsive behavior: tablet and mobile preserve one proposal and one decision
+  flow rather than introducing another model. Identity, status, event scope,
+  commercial summary, response, additions, and disclosures remain attached in
+  that order.
+
+Focused crops were not needed because the exact-resolution 1487 x 1058 pair
+keeps the typography, icons, controls, rail boundaries, and row-level copy
+legible. The three responsive captures were also inspected individually.
+
+## Comparison history
+
+1. The first implementation comparison found a P2 title wrap and a right-rail
+   alignment drift. The event-title scale was tightened and the decision
+   workspace was aligned with the commercial rail; the 390/768/1440 browser
+   matrix then passed.
+2. The first exact 1487 x 1058 comparison exposed a P2 full-canvas defect: the
+   customer portal inherited the staff shell's 236-pixel desktop offset. It also
+   showed that optional-addition explanation and response guidance consumed
+   substantially more vertical space than the selected composition.
+3. The portal-only shell offset was removed, proposal top rhythm was tightened,
+   optional additions became the selected compact two-row section, and response
+   guidance moved before the choices. The post-fix exact comparison shows the
+   selected two-column relationship and the complete left proposal within the
+   source viewport.
+
+## Behavioral evidence
+
+- Focused Customer Portal component suite: 49/49 passed.
+- `e2e/customer-decision-room.spec.js`: 5/5 Chromium-admin cases passed at
+  390, 768, 1440, and exact-source 1487 pixels, including reversible option
+  requests with quote selection, totals, and revision unchanged.
+- Browser checks: no overflow, clipping, declared child collision, undersized
+  enabled control, serious accessibility violation, or console/page error.
+- Production build: passed after the composition implementation; it will be
+  rerun at the final documentation head.
+
+## Fidelity score
+
+Local design score: **9.5/10 - GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected event-story composition | 3.0 | 3.0 |
+| Commercial and decision hierarchy | 2.0 | 2.0 |
+| Responsive and accessibility execution | 1.5 | 1.5 |
+| Authority and route continuity | 1.5 | 1.5 |
+| Pixel-level finish and product specificity | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, recipient, or human acceptance.
 
 final result: passed
 

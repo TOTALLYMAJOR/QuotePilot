@@ -15,7 +15,8 @@ const PORTAL_KEY = "ambient-decision-room-portal-1234567890";
 const VIEWPORTS = [
   { width: 390, height: 844 },
   { width: 768, height: 900 },
-  { width: 1440, height: 1000 }
+  { width: 1440, height: 1000 },
+  { width: 1487, height: 1058, exactSourceViewport: true }
 ];
 
 const PORTAL_QUOTE = {
@@ -196,6 +197,7 @@ test.describe("Customer decision room", () => {
       await seedDecisionRoom(page);
       await page.goto(`/app?portal=${encodeURIComponent(PORTAL_KEY)}`);
 
+      await expect(page.locator('[data-portal-presentation="event-story"]')).toBeVisible();
       await expect(page.getByRole("heading", { name: "Your proposal from Northstar Catering" })).toBeVisible();
       await expect(page.getByRole("heading", { name: /Autumn Benefit Dinner/ })).toBeVisible();
       await expect(page.getByText("Prepared for Maya Bennett")).toBeVisible();
@@ -203,12 +205,52 @@ test.describe("Customer decision room", () => {
       await expect(page.getByRole("heading", { name: "Your proposal total" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Planning assumptions" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Terms from your catering team" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Possible additions" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Optional additions" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Your response" })).toBeVisible();
       await expect(page.getByRole("group", { name: "Proposal decision" })).toBeVisible();
       await expect(page.locator(".site-header")).toHaveCount(0);
       await expect(page.locator("body")).not.toContainText("Facts that move");
       await expect(page.locator("body")).not.toContainText("drafts a change request");
+      await expect(page.locator(".portal-price-breakdown")).toHaveJSProperty("open", false);
+      await expect(page.locator('[data-portal-block="assumptions"] details')).toHaveJSProperty("open", false);
+      await expect(page.locator('[data-portal-block="terms"] details')).toHaveJSProperty("open", false);
+
+      const composition = await page.evaluate(() => {
+        const box = (selector) => {
+          const bounds = document.querySelector(selector).getBoundingClientRect();
+          return {
+            left: bounds.left,
+            top: bounds.top,
+            right: bounds.right,
+            bottom: bounds.bottom,
+            height: bounds.height
+          };
+        };
+        const title = document.querySelector(".portal-event-title");
+        const titleStyle = getComputedStyle(title);
+        return {
+          proposal: box('[data-portal-region="proposal-story"]'),
+          commercial: box('[data-portal-region="commercial-summary"]'),
+          decision: box('[data-portal-region="decision-workspace"]'),
+          options: box('[data-portal-block="options"]'),
+          assumptions: box('[data-portal-block="assumptions"]'),
+          titleHeight: title.getBoundingClientRect().height,
+          titleLineHeight: Number.parseFloat(titleStyle.lineHeight)
+        };
+      });
+
+      if (viewport.width > 820) {
+        expect(composition.proposal.right).toBeLessThanOrEqual(composition.commercial.left + 1);
+        expect(Math.abs(composition.commercial.left - composition.decision.left)).toBeLessThanOrEqual(1);
+        expect(composition.decision.top).toBeGreaterThan(composition.commercial.top);
+        expect(composition.decision.top).toBeLessThan(composition.proposal.bottom);
+        expect(composition.titleHeight).toBeLessThanOrEqual(composition.titleLineHeight * 1.15);
+      } else {
+        expect(composition.proposal.top).toBeLessThan(composition.commercial.top);
+        expect(composition.commercial.top).toBeLessThan(composition.decision.top);
+        expect(composition.decision.top).toBeLessThan(composition.options.top);
+        expect(composition.options.top).toBeLessThan(composition.assumptions.top);
+      }
 
       const sectionOrder = await page.locator("[data-portal-block]").evaluateAll((blocks) => (
         blocks.map((block) => block.getAttribute("data-portal-block"))
@@ -236,7 +278,7 @@ test.describe("Customer decision room", () => {
         mkdirSync(PROOF_DIRECTORY, { recursive: true });
         await page.screenshot({
           path: `${PROOF_DIRECTORY}/customer-decision-room-${viewport.width}.png`,
-          fullPage: true
+          fullPage: !viewport.exactSourceViewport
         });
       }
     });
