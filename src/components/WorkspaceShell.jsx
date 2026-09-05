@@ -121,6 +121,11 @@ export default function WorkspaceShell({
   const [accountSettingsFeedback, setAccountSettingsFeedback] = useState(
     EMPTY_ACCOUNT_SETTINGS_FEEDBACK
   );
+  const [desktopWorkAreaNewQuote, setDesktopWorkAreaNewQuote] = useState(() => (
+    typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(min-width: 1181px)").matches
+  ));
   const workspaceToolsOpen = ambientOrientation && openMenu === "more";
   const accountSettingsOpen = openMenu === "account-settings";
   const accountSettingsAvailable = typeof actions.onRequestPasswordReset === "function";
@@ -128,6 +133,15 @@ export default function WorkspaceShell({
     || capabilities.integrationsOps !== false
     || isAdmin
     || capabilities.diagnostics !== false;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const query = window.matchMedia("(min-width: 1181px)");
+    const syncPlacement = () => setDesktopWorkAreaNewQuote(query.matches);
+    syncPlacement();
+    query.addEventListener?.("change", syncPlacement);
+    return () => query.removeEventListener?.("change", syncPlacement);
+  }, []);
   const closeAccountSettings = () => {
     accountSettingsRequestRef.current += 1;
     setAccountSettingsFeedback(EMPTY_ACCOUNT_SETTINGS_FEEDBACK);
@@ -493,6 +507,21 @@ export default function WorkspaceShell({
     </span>
   </>;
 
+  const newQuoteAction = (placement = "header") => (
+    <button
+      className={`cta header-quick-cta${ambientOrientation ? " ambient-utility-action" : ""}${
+        placement === "work-area" ? " ambient-workarea-new-quote" : ""
+      }`}
+      type="button"
+      data-ambient-utility={ambientOrientation ? "new-quote" : undefined}
+      data-ambient-utility-placement={ambientOrientation ? placement : undefined}
+      onClick={() => call(actions.onNewQuote)}
+    >
+      <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
+      <span className="shell-nav-label">New quote</span>
+    </button>
+  );
+
   return (
     <div
       ref={shellRef}
@@ -598,15 +627,7 @@ export default function WorkspaceShell({
                 </>
               )
             )}
-            <button
-              className={`cta header-quick-cta${ambientOrientation ? " ambient-utility-action" : ""}`}
-              type="button"
-              data-ambient-utility={ambientOrientation ? "new-quote" : undefined}
-              onClick={() => call(actions.onNewQuote)}
-            >
-              <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
-              <span className="shell-nav-label">New quote</span>
-            </button>
+            {(!ambientOrientation || !desktopWorkAreaNewQuote) && newQuoteAction("header")}
             {workspace && ambientOrientation && (
               <button
                 type="button"
@@ -687,6 +708,8 @@ export default function WorkspaceShell({
           </div>
         </div>
       </header>
+
+      {ambientOrientation && desktopWorkAreaNewQuote && newQuoteAction("work-area")}
 
       {workspaceToolsOpen && (
         <div

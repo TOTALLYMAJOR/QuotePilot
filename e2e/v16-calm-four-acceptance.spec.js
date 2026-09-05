@@ -1078,7 +1078,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(library).toBeVisible({ timeout: 30_000 });
     await expect(library).toHaveAttribute("data-library-context", "standalone");
     await expect(library).not.toContainText("Rivera Wedding");
-    await expect(library.locator('[data-library-record-kind="catalog-section"]')).toHaveCount(6);
+    await expect(library.locator('[data-library-record-kind="catalog-section"]')).toHaveCount(7);
     const standaloneCatalogRows = await library.locator('[data-library-record-kind="catalog-section"]')
       .evaluateAll((rows) => rows.map((row) => ({
         id: row.dataset.libraryRecordId,
@@ -1088,7 +1088,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await captureV16Proof(page, "18-mobile-library-standalone.png");
     await page.setViewportSize({ width: 1440, height: 1000 });
-    for (const sectionId of ["packages", "menu", "addons", "rentals", "templates", "pricing"]) {
+    for (const sectionId of ["packages", "menu", "addons", "rentals", "templates", "pricing", "rules"]) {
       await expect(library.locator(`[data-library-record-id="${sectionId}"]`)).toBeVisible();
     }
 
@@ -1262,7 +1262,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
 
     const salesPort = Number(process.env.PLAYWRIGHT_SALES_PORT || 4176);
     await page.goto(`http://127.0.0.1:${salesPort}/app/catalog`);
-    await expect(page.getByText("Business Setup Center", { exact: true })).toBeVisible();
+    await expect(page.locator("[data-library-readonly]")).toContainText("An administrator manages changes and publishing");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.locator("#catalog-admin-title")).toHaveCount(0);
 

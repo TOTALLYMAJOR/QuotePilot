@@ -19,6 +19,7 @@ import {
   getMenuItems
 } from "../lib/menuService";
 import { buildPackageWorkspaceCollectionModel } from "../lib/packageWorkspaceModel";
+import { isCatalogPricingConfirmationCurrent } from "../lib/catalogPricingConfirmation";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useCatalogSetupDraft } from "../hooks/useCatalogSetupDraft";
 import {
@@ -29,7 +30,10 @@ import {
 } from "../lib/catalogSetupDraftService";
 import PackageWorkspace from "./PackageWorkspace";
 import CatalogDraftStateBar, { catalogDraftCapabilityState } from "./CatalogDraftStateBar";
-import { validateCommercialPublication } from "../lib/commercialPlatform";
+import {
+  validateCommercialPublication,
+  validateConfigurationRule
+} from "../lib/commercialPlatform";
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -93,12 +97,12 @@ const JSON_FIELD_META = [
 const RULE_KIND_META = [
   { value: "addon", label: "Add-on" },
   { value: "rental", label: "Rental" },
-  { value: "package", label: "Package" }
+  { value: "package", label: "Offer" }
 ];
 
 const ADMIN_TABS = [
-  { id: "starter", label: "Starter Packs" },
-  { id: "packages", label: "Packages" },
+  { id: "starter", label: "Setup" },
+  { id: "packages", label: "Offers" },
   { id: "addons", label: "Addons" },
   { id: "rentals", label: "Rentals" },
   { id: "menu", label: "Menu" },
@@ -106,6 +110,376 @@ const ADMIN_TABS = [
   { id: "rules", label: "Rules" },
   { id: "pricing", label: "Pricing" }
 ];
+
+const RULE_TYPE_LABELS = Object.freeze({
+  recommendation: "Recommendation",
+  requirement: "Required choice",
+  selection: "Selection",
+  exclusion: "Excluded choice",
+  validation: "Quote check"
+});
+
+const RULE_TYPE_OPTIONS = Object.freeze(Object.entries(RULE_TYPE_LABELS).map(([value, label]) => ({ value, label })));
+const RULE_CONDITION_OPERATOR_OPTIONS = Object.freeze([
+  { value: "eq", label: "Is" },
+  { value: "neq", label: "Is not" },
+  { value: "gte", label: "Is at least" },
+  { value: "lte", label: "Is at most" },
+  { value: "includes", label: "Includes" },
+  { value: "selected", label: "Has selected" }
+]);
+const RULE_EFFECT_OPERATOR_OPTIONS = Object.freeze([
+  { value: "block", label: "Stop quote" },
+  { value: "require", label: "Require" },
+  { value: "recommend", label: "Recommend" },
+  { value: "select", label: "Select" },
+  { value: "exclude", label: "Exclude" }
+]);
+const RULE_COMPONENT_TYPE_LABELS = Object.freeze({
+  menu_item: "Menu item",
+  addon: "Add-on",
+  rental: "Rental",
+  resource: "Resource"
+});
+
+const RULE_PATH_LABELS = Object.freeze({
+  "event.demandQuantity": "Guests",
+  "event.guests": "Guests",
+  "event.serviceStyle": "Service style",
+  "selection.offerRef": "Offer",
+  "selection.package": "Offer",
+  "selection.bar": "Bar service",
+  "resources.servers": "Servers",
+  "resources.chefs": "Chefs",
+  "resources.bartenders": "Bartenders"
+});
+
+function sentenceCaseIdentifier(value = "") {
+  const normalized = String(value || "")
+    .trim()
+    .split(".")
+    .at(-1)
+    ?.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  if (!normalized) return "Unspecified detail";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function rulePathLabel(value = "") {
+  const normalized = String(value || "").trim();
+  return RULE_PATH_LABELS[normalized] || sentenceCaseIdentifier(normalized);
+}
+
+function ruleValueLabel(value) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  if (value === null || value === undefined || value === "") return "No value";
+  if (Array.isArray(value)) return value.map(ruleValueLabel).join(", ");
+  if (typeof value === "object") return "Configured value";
+  return String(value);
+}
+
+function ruleConditionLabel(condition = {}) {
+  const operator = String(condition?.operator || "").trim();
+  const operatorLabel = {
+    eq: "is",
+    neq: "is not",
+    gte: "is at least",
+    lte: "is at most",
+    includes: "includes",
+    selected: "has selected"
+  }[operator] || sentenceCaseIdentifier(operator || "condition");
+  return `${rulePathLabel(condition?.path)} ${operatorLabel} ${ruleValueLabel(condition?.value)}`;
+}
+
+function isPlainRuleRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function configurationRuleMenuItems(catalog = {}) {
+  const direct = Array.isArray(catalog?.menuItems) ? catalog.menuItems : [];
+  const sectionItems = Array.isArray(catalog?.settings?.menuSections)
+    ? catalog.settings.menuSections.flatMap((section) => Array.isArray(section?.items) ? section.items : [])
+    : [];
+  const byId = new Map();
+  [...direct, ...sectionItems].forEach((item) => {
+    const id = String(item?.id || "").trim();
+    if (id && !byId.has(id)) byId.set(id, item);
+  });
+  return [...byId.values()];
+}
+
+function configurationRuleComponentRecords(catalog = {}, componentType = "") {
+  if (componentType === "menu_item") return configurationRuleMenuItems(catalog);
+  if (componentType === "addon") return Array.isArray(catalog?.addons) ? catalog.addons : [];
+  if (componentType === "rental") return Array.isArray(catalog?.rentals) ? catalog.rentals : [];
+  if (componentType === "resource") return Array.isArray(catalog?.resources) ? catalog.resources : [];
+  return [];
+}
+
+export function resolveConfigurationRuleComponentRef(componentRef = {}, catalog = {}, options = {}) {
+  const componentType = String(componentRef?.componentType || "").trim();
+  const componentId = String(componentRef?.componentId || "").trim();
+  const typeLabel = RULE_COMPONENT_TYPE_LABELS[componentType] || "Component";
+  const record = configurationRuleComponentRecords(catalog, componentType)
+    .find((candidate) => String(candidate?.id || "").trim() === componentId);
+  if (record) {
+    return {
+      label: String(record.name || record.label || "").trim() || `Unnamed ${typeLabel.toLowerCase()}`,
+      available: record.active !== false,
+      evidenceComplete: true
+    };
+  }
+  if (componentType === "menu_item" && options.menuInventoryComplete === false) {
+    return {
+      label: "Menu item awaiting full Library check",
+      available: null,
+      evidenceComplete: false
+    };
+  }
+  return {
+    label: `Unavailable ${typeLabel.toLowerCase()}`,
+    available: false,
+    evidenceComplete: true
+  };
+}
+
+function ruleEffectLabel(effect = {}, catalog = {}, options = {}) {
+  const operator = String(effect?.operator || effect?.action || "").trim();
+  const action = {
+    recommend: "Recommend",
+    require: "Require",
+    exclude: "Exclude",
+    block: "Stop quoting until resolved",
+    select: "Select"
+  }[operator] || sentenceCaseIdentifier(operator || "action");
+  const target = String(effect?.target || "").trim();
+  const componentRef = isPlainRuleRecord(effect?.componentRef)
+    ? resolveConfigurationRuleComponentRef(effect.componentRef, catalog, options).label
+    : "";
+  const hasValue = effect?.value !== undefined && effect?.value !== null && effect?.value !== "";
+  if (!target && componentRef) return `${action} ${componentRef}`;
+  if (!target) return hasValue ? `${action}: ${ruleValueLabel(effect.value)}` : action;
+  return hasValue
+    ? `${action} ${rulePathLabel(target)}: ${ruleValueLabel(effect.value)}`
+    : `${action} ${rulePathLabel(target)}`;
+}
+
+function configurationRuleValidationMessage(error) {
+  const messages = {
+    invalid_rule: "This rule is not structured as an editable record.",
+    invalid_id: "Add a stable rule identity in Advanced rule source.",
+    unknown_rule_type: "Choose a supported rule type.",
+    invalid_rule_conditions: "Conditions must be a list of no more than 20 entries.",
+    invalid_rule_condition: "One of the rule conditions is not structured correctly.",
+    invalid_condition_path: "Each condition needs a valid business-data path.",
+    unknown_condition_operator: "Choose a supported condition operator.",
+    invalid_rule_effect: "The result needs a structured action.",
+    unknown_effect_operator: "Choose a supported result operator.",
+    missing_effect_target: "Choose an exact result target or catalog component.",
+    unavailable_component_reference: "Choose an available catalog component.",
+    unsupported_rule_version: "This rule version requires Advanced rule source review."
+  };
+  return messages[error?.code] || "Correct this rule before publishing the Library draft.";
+}
+
+function isConfigurationRuleStructurable(rule) {
+  return isPlainRuleRecord(rule)
+    && Array.isArray(rule.conditions)
+    && rule.conditions.every(isPlainRuleRecord)
+    && isPlainRuleRecord(rule.effect);
+}
+
+function configurationRuleValidation(rule, catalog, options) {
+  try {
+    // Validation is presentation evidence only. Persist the original record so
+    // forward-compatible fields that the canonical validator does not normalize survive.
+    validateConfigurationRule(rule, catalog);
+    return { state: "ready", message: "" };
+  } catch (error) {
+    const componentType = String(rule?.effect?.componentRef?.componentType || "").trim();
+    const componentId = String(rule?.effect?.componentRef?.componentId || "").trim();
+    const resolved = resolveConfigurationRuleComponentRef(rule?.effect?.componentRef, catalog, options);
+    if (
+      error?.code === "unavailable_component_reference"
+      && componentType === "menu_item"
+      && componentId
+      && options.menuInventoryComplete === false
+      && resolved.evidenceComplete === false
+    ) {
+      return {
+        state: "needs-check",
+        message: "The menu reference needs a full Library inventory check before publication."
+      };
+    }
+    return { state: "attention", message: configurationRuleValidationMessage(error) };
+  }
+}
+
+export function buildConfigurationRulesPresentation(source = "[]", context = {}) {
+  try {
+    const parsed = typeof source === "string" ? JSON.parse(source || "[]") : source;
+    if (!Array.isArray(parsed)) throw new Error("Rule source must be a list.");
+    const catalog = context?.catalog || {};
+    const options = { menuInventoryComplete: context?.menuInventoryComplete !== true ? false : true };
+    const records = parsed.map((rule, index) => {
+      const structurable = isConfigurationRuleStructurable(rule);
+      const safeRule = isPlainRuleRecord(rule) ? rule : {};
+      const conditions = Array.isArray(safeRule.conditions) ? safeRule.conditions : [];
+      const reason = String(safeRule.reason || "").trim();
+      const validation = structurable
+        ? configurationRuleValidation(safeRule, catalog, options)
+        : { state: "attention", message: "Use Advanced rule source to restore this rule's structure." };
+      return {
+        id: String(safeRule.id || `rule-${index + 1}`).trim(),
+        title: String(safeRule.name || "").trim() || `Rule ${index + 1}`,
+        type: RULE_TYPE_LABELS[safeRule.type] || sentenceCaseIdentifier(safeRule.type || "rule"),
+        typeValue: String(safeRule.type || "").trim(),
+        enabled: safeRule.enabled !== false,
+        conditions: conditions.length
+          ? conditions.map(ruleConditionLabel)
+          : ["Applies to every quote"],
+        effect: ruleEffectLabel(safeRule.effect, catalog, options),
+        reason,
+        structurable,
+        validationState: validation.state,
+        validationMessage: validation.message,
+        sourceIndex: index,
+        sourceRule: safeRule
+      };
+    });
+    return {
+      records,
+      enabledCount: records.filter((record) => record.enabled && record.validationState === "ready").length,
+      error: "",
+      requiresAdvancedSource: records.some((record) => !record.structurable)
+    };
+  } catch (error) {
+    return {
+      records: [],
+      enabledCount: 0,
+      error: error?.message || "Rule source is not valid JSON.",
+      requiresAdvancedSource: true
+    };
+  }
+}
+
+export function patchConfigurationRuleSource(source, patch = {}) {
+  const parsed = typeof source === "string" ? JSON.parse(source || "[]") : source;
+  if (!Array.isArray(parsed)) throw new Error("Rule source must be a list.");
+  const ruleIndex = Number(patch.ruleIndex);
+  const currentRule = parsed[ruleIndex];
+  if (!Number.isInteger(ruleIndex) || !isPlainRuleRecord(currentRule)) {
+    throw new Error("The selected rule cannot be edited in the structured view.");
+  }
+  let nextRule;
+  if (patch.section === "condition") {
+    const conditionIndex = Number(patch.conditionIndex);
+    if (!Array.isArray(currentRule.conditions) || !isPlainRuleRecord(currentRule.conditions[conditionIndex])) {
+      throw new Error("The selected condition cannot be edited in the structured view.");
+    }
+    nextRule = {
+      ...currentRule,
+      conditions: currentRule.conditions.map((condition, index) => index === conditionIndex
+        ? { ...condition, [patch.field]: patch.value }
+        : condition)
+    };
+  } else if (patch.section === "effect") {
+    if (!isPlainRuleRecord(currentRule.effect)) throw new Error("The rule result cannot be edited in the structured view.");
+    nextRule = { ...currentRule, effect: { ...currentRule.effect, [patch.field]: patch.value } };
+  } else if (patch.section === "componentRef") {
+    if (!isPlainRuleRecord(currentRule.effect) || !isPlainRuleRecord(currentRule.effect.componentRef)) {
+      throw new Error("The catalog component reference cannot be edited in the structured view.");
+    }
+    nextRule = {
+      ...currentRule,
+      effect: {
+        ...currentRule.effect,
+        componentRef: { ...currentRule.effect.componentRef, [patch.field]: patch.value }
+      }
+    };
+  } else {
+    nextRule = { ...currentRule, [patch.field]: patch.value };
+  }
+  const nextRules = parsed.map((rule, index) => index === ruleIndex ? nextRule : rule);
+  return JSON.stringify(nextRules, null, 2);
+}
+
+function coerceRuleScalarInput(value, currentValue) {
+  if (typeof currentValue === "number") {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : currentValue;
+  }
+  if (typeof currentValue === "boolean") return value === true || value === "true";
+  return value;
+}
+
+function configurationRuleComponentOptions(catalog = {}, componentType = "", selectedId = "") {
+  const options = configurationRuleComponentRecords(catalog, componentType).map((record) => ({
+    value: String(record?.id || "").trim(),
+    label: `${String(record?.name || record?.label || "").trim() || `Unnamed ${(RULE_COMPONENT_TYPE_LABELS[componentType] || "component").toLowerCase()}`}${record?.active === false ? " (not available)" : ""}`
+  })).filter((option) => option.value);
+  const normalizedSelectedId = String(selectedId || "").trim();
+  if (normalizedSelectedId && !options.some((option) => option.value === normalizedSelectedId)) {
+    const resolved = resolveConfigurationRuleComponentRef(
+      { componentType, componentId: normalizedSelectedId },
+      catalog,
+      { menuInventoryComplete: catalog?.menuInventoryComplete === true }
+    );
+    options.unshift({ value: normalizedSelectedId, label: resolved.label });
+  }
+  return options;
+}
+
+function RuleScalarEditor({ value, ariaLabel, onChange }) {
+  if (value && typeof value === "object") {
+    return (
+      <div className="rule-complex-value" data-rule-value-mode="advanced">
+        <strong>Configured value</strong>
+        <small>Edit this value in Advanced rule source. It remains unchanged here.</small>
+      </div>
+    );
+  }
+  if (typeof value === "boolean") {
+    return (
+      <select aria-label={ariaLabel} value={String(value)} onChange={(event) => onChange(event.target.value === "true")}>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    );
+  }
+  return (
+    <input
+      aria-label={ariaLabel}
+      type={typeof value === "number" ? "number" : "text"}
+      value={value ?? ""}
+      onChange={(event) => onChange(coerceRuleScalarInput(event.target.value, value))}
+    />
+  );
+}
+
+export function buildAdvancedPricingPolicySummary({
+  marginsEnabled = false,
+  activeCostCount = 0,
+  recordedCostCount = 0,
+  recordedStaffCostCount = 0,
+  sourceErrorCount = 0
+} = {}) {
+  const missingCostCount = marginsEnabled
+    ? Math.max(0, Number(activeCostCount || 0) - Number(recordedCostCount || 0))
+      + Math.max(0, 3 - Number(recordedStaffCostCount || 0))
+    : 0;
+  const invalidSourceCount = Math.max(0, Number(sourceErrorCount || 0));
+  const attention = [];
+  if (missingCostCount) attention.push(`${missingCostCount} cost ${missingCostCount === 1 ? "entry needs" : "entries need"} attention`);
+  if (invalidSourceCount) attention.push(`${invalidSourceCount} advanced ${invalidSourceCount === 1 ? "source needs" : "sources need"} correction`);
+  return {
+    hasAttention: attention.length > 0,
+    attention,
+    label: attention.length ? `Needs attention · ${attention.join(" · ")}` : "Ready for optional review"
+  };
+}
 
 const FEATURE_FLAG_META = [
   { id: "customerPortal", label: "Customer Portal" },
@@ -123,11 +497,43 @@ const PACKAGE_INCLUSION_FIELD_BY_COLLECTION = Object.freeze({
   addons: "includedAddonIds",
   rentals: "includedRentalIds"
 });
+const TEMPLATE_INCLUSION_FIELD_BY_COLLECTION = Object.freeze({
+  addons: "addons",
+  rentals: "rentals"
+});
 const UPSELL_KIND_BY_COLLECTION = Object.freeze({
   packages: "package",
   addons: "addon",
   rentals: "rental"
 });
+
+export function buildCommercialComponentUsageProjection(draft = {}, collection = "", componentId = "") {
+  const id = String(componentId || "").trim();
+  const packageField = PACKAGE_INCLUSION_FIELD_BY_COLLECTION[collection];
+  const templateField = TEMPLATE_INCLUSION_FIELD_BY_COLLECTION[collection];
+  if (!id || !packageField || !templateField) {
+    return { offerNames: [], templateNames: [], offerCount: 0, templateCount: 0, totalCount: 0 };
+  }
+
+  const offerNames = (Array.isArray(draft?.packages) ? draft.packages : [])
+    .filter((offer) => (
+      Array.isArray(offer?.[packageField]) && offer[packageField].some((reference) => String(reference || "").trim() === id)
+    ))
+    .map((offer) => String(offer?.name || "").trim() || "Unnamed offer");
+  const templateNames = (Array.isArray(draft?.settings?.eventTemplates) ? draft.settings.eventTemplates : [])
+    .filter((template) => (
+      Array.isArray(template?.[templateField]) && template[templateField].some((reference) => String(reference || "").trim() === id)
+    ))
+    .map((template) => String(template?.name || "").trim() || "Unnamed template");
+
+  return {
+    offerNames,
+    templateNames,
+    offerCount: offerNames.length,
+    templateCount: templateNames.length,
+    totalCount: offerNames.length + templateNames.length
+  };
+}
 const EXISTING_CATALOG_CONTENT_CONFLICTS = [
   "already has catalog content",
   "existing catalog content is not attributable"
@@ -328,7 +734,7 @@ function normalizeStaffingChargeMode(value, fallback = "per_hour") {
 
 function defaultRuleName(kind) {
   if (kind === "rental") return "Rental recommendation";
-  if (kind === "package") return "Package recommendation";
+  if (kind === "package") return "Offer recommendation";
   return "Add-on recommendation";
 }
 
@@ -360,6 +766,16 @@ function buildJsonDrafts(catalog) {
     seasonalProfiles: JSON.stringify(settings.seasonalProfiles || [], null, 2),
     brandCrew: JSON.stringify(settings.brandCrew || [], null, 2)
   };
+}
+
+function countInvalidJsonArrayDrafts(jsonDrafts = {}, fields = []) {
+  return fields.reduce((count, field) => {
+    try {
+      return Array.isArray(JSON.parse(jsonDrafts?.[field] || "[]")) ? count : count + 1;
+    } catch {
+      return count + 1;
+    }
+  }, 0);
 }
 
 function buildPersistableCatalogDraft(draft, jsonDrafts) {
@@ -461,15 +877,240 @@ function toDataUrl(file) {
   });
 }
 
-function Section({ title, onAdd, children }) {
+function Section({ title, onAdd, addLabel = "Add", className = "", children, ...sectionProps }) {
   return (
-    <section className="admin-section">
+    <section className={`admin-section ${className}`.trim()} {...sectionProps}>
       <div className="admin-section-head">
         <h3>{title}</h3>
-        {onAdd && <button type="button" className="ghost" onClick={onAdd}>Add</button>}
+        {onAdd && <button type="button" className="ghost" onClick={onAdd}>{addLabel}</button>}
       </div>
       <div className="admin-section-body">{children}</div>
     </section>
+  );
+}
+
+function CommercialComponentRecord({
+  collection,
+  item,
+  index,
+  usage,
+  onPatch,
+  onRemove
+}) {
+  const rental = collection === "rentals";
+  const typeLabel = rental ? "Rental" : "Add-on";
+  const recordedName = String(item?.name || "").trim();
+  const itemName = recordedName || `${typeLabel} ${index + 1}`;
+  const pricingType = normalizePricingType(
+    item?.pricingType || item?.type,
+    rental ? "per_item" : "per_person"
+  );
+  const pricingBasisLabel = {
+    per_person: "per guest",
+    per_item: "per item",
+    per_event: "per event"
+  }[pricingType] || "pricing basis unavailable";
+  const numericPrice = Number(item?.price);
+  const priceRecorded = item?.price !== null && item?.price !== undefined && item?.price !== "";
+  const priceNeedsAttention = !priceRecorded || !Number.isFinite(numericPrice) || numericPrice < 0;
+  const attention = [
+    !recordedName ? "Add a display name" : "",
+    priceNeedsAttention ? "Enter a valid sell price" : ""
+  ].filter(Boolean);
+  const hasAttention = attention.length > 0;
+  const usageProjection = usage || {
+    offerNames: [],
+    templateNames: [],
+    offerCount: 0,
+    templateCount: 0,
+    totalCount: 0
+  };
+
+  return (
+    <details
+      className="commercial-component-record"
+      data-commercial-component-kind={rental ? "rental" : "addon"}
+      data-commercial-component-id={item.id}
+      data-commercial-component-state={hasAttention ? "attention" : "ready"}
+    >
+      <summary className="commercial-component-summary">
+        <span className="commercial-component-summary-identity">
+          <span className="eyebrow">{typeLabel}</span>
+          <strong>{itemName}</strong>
+        </span>
+        <span className="commercial-component-summary-price">
+          <strong>{priceNeedsAttention ? "Price needs attention" : `$${numericPrice.toFixed(2)}`}</strong>
+          <small>{pricingBasisLabel}</small>
+        </span>
+        <span
+          className="commercial-component-summary-availability"
+          data-state={item.active !== false ? "available" : "unavailable"}
+        >
+          {item.active !== false ? "Available" : "Not available"}
+        </span>
+        {hasAttention && (
+          <span className="commercial-component-summary-attention" data-component-attention>
+            Needs attention · {attention.join(" · ")}
+          </span>
+        )}
+      </summary>
+
+      <div className="commercial-component-record-body">
+        <div className="commercial-component-primary-fields" data-commercial-component-group="primary">
+          <label>
+            <span>Display name</span>
+            <input
+              aria-label={`${typeLabel} ${index + 1} display name`}
+              value={item.name}
+              onChange={(event) => onPatch("name", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Sell by</span>
+            <select
+              aria-label={`${itemName} pricing type`}
+              value={pricingType}
+              onChange={(event) => {
+                const nextPricingType = normalizePricingType(
+                  event.target.value,
+                  rental ? "per_item" : "per_person"
+                );
+                onPatch("pricingType", nextPricingType);
+                onPatch("type", nextPricingType);
+              }}
+            >
+              {rental && <option value="per_item">Per item</option>}
+              <option value="per_person">Per guest</option>
+              {!rental && <option value="per_item">Per item</option>}
+              <option value="per_event">Per event</option>
+            </select>
+          </label>
+          <label>
+            <span>Sell price</span>
+            <input
+              aria-label={`${itemName} sell price`}
+              type="number"
+              value={item.price}
+              onChange={(event) => onPatch("price", Number(event.target.value))}
+            />
+          </label>
+          <label className="admin-inline-toggle commercial-component-availability">
+            <span>Available for new quotes</span>
+            <input
+              type="checkbox"
+              aria-label={`${itemName} available for new quotes`}
+              checked={item.active !== false}
+              onChange={(event) => onPatch("active", event.target.checked)}
+            />
+          </label>
+        </div>
+
+        <section className="commercial-component-usage" aria-label={`Usage for ${itemName}`} data-commercial-component-group="usage">
+          <div className="commercial-component-usage-summary">
+            <span className="eyebrow">Usage</span>
+            <strong>
+              {usageProjection.totalCount
+                ? `Used by ${usageProjection.offerCount} ${usageProjection.offerCount === 1 ? "offer" : "offers"} and ${usageProjection.templateCount} ${usageProjection.templateCount === 1 ? "template" : "templates"}`
+                : "Not currently used by an offer or template"}
+            </strong>
+          </div>
+          <div className="commercial-component-usage-groups">
+            <div data-component-usage-kind="offers">
+              <span>Offers <strong>{usageProjection.offerCount}</strong></span>
+              {usageProjection.offerNames.length ? (
+                <ul>{usageProjection.offerNames.map((name, usageIndex) => <li key={`${name}-${usageIndex}`}>{name}</li>)}</ul>
+              ) : <small>None</small>}
+            </div>
+            <div data-component-usage-kind="templates">
+              <span>Templates <strong>{usageProjection.templateCount}</strong></span>
+              {usageProjection.templateNames.length ? (
+                <ul>{usageProjection.templateNames.map((name, usageIndex) => <li key={`${name}-${usageIndex}`}>{name}</li>)}</ul>
+              ) : <small>None</small>}
+            </div>
+          </div>
+        </section>
+
+        {rental && (
+          <details className="commercial-component-group" data-commercial-component-group="quantity-planning">
+            <summary>
+              <span>Quantity planning</span>
+              <small>Set the guest interval used to suggest rental quantities.</small>
+            </summary>
+            <div className="commercial-component-group-body">
+              <label>
+                <span>Guests per item</span>
+                <input
+                  aria-label={`${itemName} guests per item`}
+                  type="number"
+                  value={item.qtyPerGuests}
+                  onChange={(event) => onPatch("qtyPerGuests", Number(event.target.value))}
+                />
+              </label>
+            </div>
+          </details>
+        )}
+
+        {PILOT_DECISION_ROOM_ENABLED && (
+          <details className="commercial-component-group" data-commercial-component-group="customer-choice">
+            <summary>
+              <span>Customer choice</span>
+              <small>Choose whether customers may request this option from their proposal.</small>
+            </summary>
+            <div className="commercial-component-group-body">
+              <label className="admin-inline-toggle">
+                <span>Offer as a customer choice</span>
+                <input
+                  type="checkbox"
+                  aria-label={`Offer ${itemName} as a decidable option in the customer portal`}
+                  checked={item.portalDecidable === true}
+                  onChange={(event) => onPatch("portalDecidable", event.target.checked)}
+                />
+              </label>
+            </div>
+          </details>
+        )}
+
+        {PILOT_MARGINS_ENABLED && (
+          <details className="commercial-component-group" data-commercial-component-group="cost-evidence">
+            <summary>
+              <span>Cost and margin evidence</span>
+              <small>Record internal cost without changing the customer price.</small>
+            </summary>
+            <div className="commercial-component-group-body">
+              <label>
+                <span>Internal cost</span>
+                <input
+                  aria-label={`${itemName} cost`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Not recorded"
+                  value={item.cost ?? ""}
+                  onChange={(event) => onPatch("cost", event.target.value === "" ? null : Number(event.target.value))}
+                />
+              </label>
+            </div>
+          </details>
+        )}
+
+        <details className="commercial-component-group commercial-component-technical" data-commercial-component-group="technical">
+          <summary>
+            <span>Technical details</span>
+            <small>Stable identity used by saved offers, templates, and quotes.</small>
+          </summary>
+          <div className="commercial-component-group-body">
+            <label>
+              <span>Internal item ID</span>
+              <input value={item.id} disabled />
+            </label>
+          </div>
+        </details>
+
+        <div className="commercial-component-actions">
+          <button type="button" className="ghost compact" onClick={onRemove}>Delete {typeLabel.toLowerCase()}</button>
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -484,12 +1125,13 @@ export function AdminCatalogView({
   onReload,
   saving,
   presentation = "embedded",
-  surfaceTitle = "Catalog Admin",
+  surfaceTitle = "Library settings",
   embeddedCloseLabel = "Back to Home",
   returnFocusRef = null,
   initialTab = "",
   focusRequest = null,
   onFocusResolution,
+  onActiveTabChange,
   onInteractionStateChange,
   onDismissGuardChange,
   selectedEventType: selectedEventTypeProp = "",
@@ -647,6 +1289,34 @@ export function AdminCatalogView({
     menuItems,
     selectedPackageId
   });
+  const componentUsageDraft = (() => {
+    let eventTemplates = [];
+    try {
+      eventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
+    } catch {
+      eventTemplates = [];
+    }
+    return {
+      ...(draft || {}),
+      settings: {
+        ...(draft?.settings || {}),
+        eventTemplates
+      }
+    };
+  })();
+  const configurationRuleCatalog = {
+    ...(draft || {}),
+    menuItems: configurationRuleMenuItems({ ...(draft || {}), menuItems }),
+    menuInventoryComplete: false
+  };
+  const configurationRulesPresentation = buildConfigurationRulesPresentation(
+    jsonDrafts.configurationRules,
+    { catalog: configurationRuleCatalog, menuInventoryComplete: false }
+  );
+  const pricingConfirmationCurrent = isCatalogPricingConfirmationCurrent(draft?.settings);
+  const publishedCatalogAvailable = /^firebase(?:-org)?(?:-empty)?$/.test(
+    String(catalog?.source || "").trim().toLowerCase()
+  );
   const packageDeletionSummary = (() => {
     try {
       return packageCatalogDependencySummary(
@@ -1146,6 +1816,11 @@ export function AdminCatalogView({
     }
   }, [open, hasActiveVisibleTab, resolvedActiveTab, activeTab]);
 
+  useEffect(() => {
+    if (!open || !resolvedActiveTab || typeof onActiveTabChange !== "function") return;
+    onActiveTabChange(resolvedActiveTab);
+  }, [onActiveTabChange, open, resolvedActiveTab]);
+
   if (!open) return null;
 
   const handleApplyStarterPack = async (pack) => {
@@ -1497,6 +2172,18 @@ export function AdminCatalogView({
     setJsonDrafts((prev) => ({ ...prev, [field]: value }));
   };
 
+  const patchConfigurationRule = (patch) => {
+    try {
+      patchJsonDraft(
+        "configurationRules",
+        patchConfigurationRuleSource(jsonDrafts.configurationRules, patch)
+      );
+      setStatus("Quote rule updated in this Library draft.");
+    } catch (error) {
+      setStatus(error?.message || "Open Advanced rule source to correct this rule.");
+    }
+  };
+
   const patchEventTemplates = (templates, meta = {}) => {
     const nextTemplates = Array.isArray(templates) ? templates : [];
     setDraft((prev) => ({
@@ -1534,6 +2221,28 @@ export function AdminCatalogView({
       setActiveTab("pricing");
       setStatus(`Fix Event Templates JSON before opening the structured editor: ${error.message}`);
     }
+  };
+
+  const handleAdminTabKeyDown = (event, currentIndex) => {
+    const key = event.key;
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(key)) return;
+    event.preventDefault();
+    const lastIndex = visibleAdminTabs.length - 1;
+    const nextIndex = key === "Home"
+      ? 0
+      : key === "End"
+        ? lastIndex
+        : key === "ArrowRight"
+          ? (currentIndex + 1) % visibleAdminTabs.length
+          : (currentIndex - 1 + visibleAdminTabs.length) % visibleAdminTabs.length;
+    const nextTab = visibleAdminTabs[nextIndex];
+    if (!nextTab) return;
+    selectAdminTab(nextTab.id);
+    window.requestAnimationFrame(() => {
+      dialogRef.current?.querySelector(`[data-admin-tab-id="${nextTab.id}"]`)?.focus?.({
+        preventScroll: true
+      });
+    });
   };
 
   const refreshEventTypes = async (preferredId = "") => {
@@ -1790,7 +2499,7 @@ export function AdminCatalogView({
         packageNames ? `packages: ${packageNames}` : "",
         templateNames ? `event templates: ${templateNames}` : ""
       ].filter(Boolean).join("; ");
-      const message = `Remove this menu item from ${dependencies}, save those catalog changes, then reopen Catalog Admin to delete it.`;
+      const message = `Remove this menu item from ${dependencies}, save those Library changes, then reopen Library settings to delete it.`;
       setActiveTab(packageReferences.length > 0 ? "packages" : "pricing");
       setStatus(message);
       pushToast(message, "error");
@@ -1903,22 +2612,30 @@ export function AdminCatalogView({
   const catalogSaveCapabilityState = saving
     ? "submitting"
     : catalogDraftCapabilityState(catalogSetupDraft);
+  const catalogRecoveryOwnsSaveAction = catalogSetupDraft.status === "sync_failed"
+    || catalogSetupDraft.deviceOnly;
   const catalogEditorStateLabel = saving || catalogSetupDraft.status === "saving"
     ? "Saving draft…"
     : catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
-      ? "Device-only changes"
+      ? "Changes waiting to save"
       : hasAnyUnsavedChanges
         ? "Unsaved changes"
         : Number(catalogSetupDraft.changedRecordCount || 0) > 0
           ? "Draft saved"
-          : "Published catalog active";
+          : publishedCatalogAvailable ? "Published Library active" : "Local Library";
   const catalogFooterStatus = catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
-    ? catalogSetupDraft.label
+    ? publishedCatalogAvailable
+      ? "Changes are preserved here but are not in the shared draft. Published pricing remains active."
+      : "Changes are preserved here but are not in the shared draft. No shared catalog or pricing changed."
     : status || (hasAnyUnsavedChanges
       ? "Your changes are not saved yet."
       : Number(catalogSetupDraft.changedRecordCount || 0) > 0
-        ? "Catalog draft saved. Active pricing is unchanged until publication."
-        : "Published catalog is active.");
+        ? publishedCatalogAvailable
+          ? "Library draft saved. Active pricing is unchanged until publication."
+          : "Library changes are saved here. Publishing is unavailable from this source."
+        : publishedCatalogAvailable
+          ? "Published Library is active."
+          : "Library is available here. Publishing is unavailable from this source.");
 
   const normalizedMenuSearch = String(menuSearch || "").trim().toLowerCase();
   const selectedCategoryItems = menuItems.filter((item) => (
@@ -2030,6 +2747,20 @@ export function AdminCatalogView({
     { id: "bartender", recorded: hasRecordedNonNegativeNumber(draft.settings?.bartenderCostRate) }
   ];
   const recordedStaffCostCount = staffCostRates.filter((item) => item.recorded).length;
+  const serviceFeeSourceNeedsAttention = countInvalidJsonArrayDrafts(jsonDrafts, ["serviceFeeTiers"]) > 0;
+  const taxRegionSourceNeedsAttention = countInvalidJsonArrayDrafts(jsonDrafts, ["taxRegions"]) > 0;
+  const advancedPricingSourceErrorCount = countInvalidJsonArrayDrafts(jsonDrafts, [
+    "eventTemplates",
+    "seasonalProfiles",
+    "brandCrew"
+  ]);
+  const advancedPricingPolicySummary = buildAdvancedPricingPolicySummary({
+    marginsEnabled: PILOT_MARGINS_ENABLED,
+    activeCostCount: activeCostRecords.length,
+    recordedCostCount,
+    recordedStaffCostCount,
+    sourceErrorCount: advancedPricingSourceErrorCount
+  });
   const targetMarginCandidate = Number(draft.settings?.targetMarginPct);
   const targetMarginPct = Number.isFinite(targetMarginCandidate) && targetMarginCandidate >= 0 && targetMarginCandidate <= 1
     ? targetMarginCandidate
@@ -2079,10 +2810,10 @@ export function AdminCatalogView({
       return;
     }
     if (typeof onReload !== "function") {
-      setStatus("Catalog refresh is unavailable. Close and reopen Catalog Admin.");
+      setStatus("The latest Library version cannot be loaded here. Close and reopen Library settings.");
       return;
     }
-    setStatus("Refreshing the latest catalog from the server...");
+    setStatus("Loading the latest shared Library version…");
     onReload({ background: true });
   };
   return (
@@ -2105,16 +2836,6 @@ export function AdminCatalogView({
             <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
               {catalogEditorStateLabel}
             </span>
-            {!starterChoiceOnly && !packageWorkspaceActive && (saving || hasUnsavedChanges) && (
-              <button
-                type="button"
-                className="cta"
-                onClick={handleSave}
-                disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
-              >
-                {saving ? "Saving..." : "Sync draft now"}
-              </button>
-            )}
             <button
               type="button"
               className="ghost"
@@ -2129,6 +2850,7 @@ export function AdminCatalogView({
 
         <CatalogDraftStateBar
           draftState={catalogSetupDraft}
+          publishedCatalogAvailable={publishedCatalogAvailable}
           disabled={saving || menuActionLoading}
           onRetry={catalogSetupDraft.retry}
           onReview={catalogSetupDraft.review}
@@ -2142,8 +2864,8 @@ export function AdminCatalogView({
           }}
         />
 
-        <div className="admin-tabs" role="tablist" aria-label="Catalog admin sections">
-          {visibleAdminTabs.map((tab) => (
+        <div className="admin-tabs" role="tablist" aria-label="Library sections">
+          {visibleAdminTabs.map((tab, index) => (
             <button
               key={tab.id}
               id={`catalog-admin-tab-${tab.id}`}
@@ -2155,6 +2877,7 @@ export function AdminCatalogView({
               className={`admin-tab ${resolvedActiveTab === tab.id ? "active" : ""}`}
               data-admin-tab-id={tab.id}
               onClick={() => selectAdminTab(tab.id)}
+              onKeyDown={(event) => handleAdminTabKeyDown(event, index)}
             >
               {tab.label}
             </button>
@@ -2189,7 +2912,7 @@ export function AdminCatalogView({
               <span> Choose a setup preset to add missing records to the shared draft. Active pricing stays unchanged until review and publication.</span>
             </div>
             <button type="button" className="cta" onClick={() => setActiveTab("starter")}>
-              Choose a recovery pack
+              Choose a setup option
             </button>
           </div>
         )}
@@ -2224,14 +2947,14 @@ export function AdminCatalogView({
                   return (
                     <article className={`starter-pack-card ${selected ? "selected" : ""}`} key={`${pack.id}-${pack.version}`}>
                       <div>
-                        <span className="eyebrow">Starter catalog</span>
+                        <span className="eyebrow">Setup option</span>
                         <h4>{pack.name}</h4>
                         <p className="starter-pack-fit"><strong>Best for:</strong> {pack.bestFor}</p>
                         <p>{pack.outcome}</p>
                       </div>
                       <div className="starter-pack-includes" aria-label={`${pack.name} contents`}>
                         <span>{pack.counts.menuItems} menu items</span>
-                        <span>{pack.counts.packages} packages</span>
+                        <span>{pack.counts.packages} offers</span>
                         <span>{pack.counts.addons} add-ons</span>
                         <span>{pack.counts.rentals} rentals</span>
                       </div>
@@ -2268,7 +2991,7 @@ export function AdminCatalogView({
                       setManualSetupEnabled(true);
                       setActiveTab("packages");
                     }}
-                  >Create my own catalog</button>
+                  >Set up Library manually</button>
                 </div>
               )}
             </div>
@@ -2304,14 +3027,14 @@ export function AdminCatalogView({
                 </span>
                 <small>Edits auto-save as staged intent. Publication is the only action that activates pricing.</small>
               </div>
-              {(saving || hasUnsavedChanges) && (
+              {!catalogRecoveryOwnsSaveAction && (saving || hasUnsavedChanges) && (
                 <button
                   type="button"
                   className="cta"
                   onClick={handleSave}
                   disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
                 >
-                  {saving ? "Saving..." : "Sync draft now"}
+                  {saving ? "Saving..." : "Save draft now"}
                 </button>
               )}
             </div>
@@ -2319,127 +3042,62 @@ export function AdminCatalogView({
         )}
 
         {resolvedActiveTab === "addons" && (
-          <Section title="Add-ons" onAdd={() => addRow("addons")}>
-          <p className="source-note">
-            Add-ons are <strong>price-only</strong> and do not change server/chef/bartender counts.
-            Use quantity with <code>per_item</code> pricing when you need multiple units.
-          </p>
-          <div className="admin-row admin-row-headings" aria-hidden="true">
-            <span>Item ID</span>
-            <span>Display Name</span>
-            <span>Pricing Type</span>
-            <span>Price</span>
-            {PILOT_MARGINS_ENABLED && <span>Cost</span>}
-            <span>Active</span>
-            {PILOT_DECISION_ROOM_ENABLED && <span>Portal offer</span>}
-            <span>Actions</span>
-          </div>
-          {draft.addons.map((item, i) => (
-            <div className="admin-row" key={item.id}>
-              <input value={item.id} disabled />
-              <input value={item.name} onChange={(e) => patchArrayItem("addons", i, "name", e.target.value)} />
-              <select
-                value={item.pricingType || item.type || "per_person"}
-                onChange={(e) => {
-                  const pricingType = normalizePricingType(e.target.value, "per_person");
-                  patchArrayItem("addons", i, "pricingType", pricingType);
-                  patchArrayItem("addons", i, "type", pricingType);
-                }}
-              >
-                <option value="per_person">Per guest</option>
-                <option value="per_item">Per item</option>
-                <option value="per_event">Per event</option>
-              </select>
-              <input type="number" value={item.price} onChange={(e) => patchArrayItem("addons", i, "price", Number(e.target.value))} />
-              {PILOT_MARGINS_ENABLED && (
-                <input
-                  aria-label={`${item.name || `Add-on ${i + 1}`} cost`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Not recorded"
-                  value={item.cost ?? ""}
-                  onChange={(e) => patchArrayItem("addons", i, "cost", e.target.value === "" ? null : Number(e.target.value))}
+          <Section
+            title="Add-ons"
+            onAdd={() => addRow("addons")}
+            addLabel="Add add-on"
+            className="commercial-component-editor"
+            data-commercial-component-collection="addons"
+          >
+            <p className="source-note">
+              Add-ons add a priced service or enhancement to a quote without changing staffing. Choose Per item when a quote may need more than one.
+            </p>
+            <div className="commercial-component-list">
+              {draft.addons.map((item, index) => (
+                <CommercialComponentRecord
+                  key={item.id}
+                  collection="addons"
+                  item={item}
+                  index={index}
+                  usage={buildCommercialComponentUsageProjection(componentUsageDraft, "addons", item.id)}
+                  onPatch={(field, value) => patchArrayItem("addons", index, field, value)}
+                  onRemove={() => removeRow("addons", index)}
                 />
+              ))}
+              {draft.addons.length === 0 && (
+                <p className="source-note">No add-ons are available yet.</p>
               )}
-              <label className="admin-inline-toggle">
-                <span>Active</span>
-                <input
-                  type="checkbox"
-                  checked={item.active !== false}
-                  onChange={(e) => patchArrayItem("addons", i, "active", e.target.checked)}
-                />
-              </label>
-              {PILOT_DECISION_ROOM_ENABLED && (
-                <label className="admin-inline-toggle">
-                  <span>Portal offer</span>
-                  <input
-                    type="checkbox"
-                    aria-label={`Offer ${item.name || `add-on ${i + 1}`} as a decidable option in the customer portal`}
-                    checked={item.portalDecidable === true}
-                    onChange={(e) => patchArrayItem("addons", i, "portalDecidable", e.target.checked)}
-                  />
-                </label>
-              )}
-              <button type="button" className="ghost" onClick={() => removeRow("addons", i)}>Delete</button>
             </div>
-          ))}
           </Section>
         )}
 
         {resolvedActiveTab === "rentals" && (
-          <Section title="Rentals" onAdd={() => addRow("rentals")}>
-          {draft.rentals.map((item, i) => (
-            <div className="admin-row" key={item.id}>
-              <input value={item.id} disabled />
-              <input value={item.name} onChange={(e) => patchArrayItem("rentals", i, "name", e.target.value)} />
-              <select
-                value={item.pricingType || item.type || "per_item"}
-                onChange={(e) => {
-                  const pricingType = normalizePricingType(e.target.value, "per_item");
-                  patchArrayItem("rentals", i, "pricingType", pricingType);
-                  patchArrayItem("rentals", i, "type", pricingType);
-                }}
-              >
-                <option value="per_item">Per item</option>
-                <option value="per_person">Per guest</option>
-                <option value="per_event">Per event</option>
-              </select>
-              <input type="number" value={item.price} onChange={(e) => patchArrayItem("rentals", i, "price", Number(e.target.value))} />
-              {PILOT_MARGINS_ENABLED && (
-                <input
-                  aria-label={`${item.name || `Rental ${i + 1}`} cost`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Not recorded"
-                  value={item.cost ?? ""}
-                  onChange={(e) => patchArrayItem("rentals", i, "cost", e.target.value === "" ? null : Number(e.target.value))}
+          <Section
+            title="Rentals"
+            onAdd={() => addRow("rentals")}
+            addLabel="Add rental"
+            className="commercial-component-editor"
+            data-commercial-component-collection="rentals"
+          >
+            <p className="source-note">
+              Rentals keep customer price and quantity planning together while each quote retains its own selected quantity.
+            </p>
+            <div className="commercial-component-list">
+              {draft.rentals.map((item, index) => (
+                <CommercialComponentRecord
+                  key={item.id}
+                  collection="rentals"
+                  item={item}
+                  index={index}
+                  usage={buildCommercialComponentUsageProjection(componentUsageDraft, "rentals", item.id)}
+                  onPatch={(field, value) => patchArrayItem("rentals", index, field, value)}
+                  onRemove={() => removeRow("rentals", index)}
                 />
+              ))}
+              {draft.rentals.length === 0 && (
+                <p className="source-note">No rentals are available yet.</p>
               )}
-              <input type="number" value={item.qtyPerGuests} onChange={(e) => patchArrayItem("rentals", i, "qtyPerGuests", Number(e.target.value))} />
-              <label className="admin-inline-toggle">
-                <span>Active</span>
-                <input
-                  type="checkbox"
-                  checked={item.active !== false}
-                  onChange={(e) => patchArrayItem("rentals", i, "active", e.target.checked)}
-                />
-              </label>
-              {PILOT_DECISION_ROOM_ENABLED && (
-                <label className="admin-inline-toggle">
-                  <span>Portal offer</span>
-                  <input
-                    type="checkbox"
-                    aria-label={`Offer ${item.name || `rental ${i + 1}`} as a decidable option in the customer portal`}
-                    checked={item.portalDecidable === true}
-                    onChange={(e) => patchArrayItem("rentals", i, "portalDecidable", e.target.checked)}
-                  />
-                </label>
-              )}
-              <button type="button" className="ghost" onClick={() => removeRow("rentals", i)}>Delete</button>
             </div>
-          ))}
           </Section>
         )}
 
@@ -2647,35 +3305,386 @@ export function AdminCatalogView({
 
         {resolvedActiveTab === "rules" && (
           <section className="admin-section" data-commercial-library-section="rules">
-            <div className="admin-section-head"><h3>Configuration Rules</h3></div>
+            <div className="admin-section-head"><h3>Quote rules</h3></div>
             <div className="admin-section-body">
               <p className="source-note">
-                Rules evaluate and explain requirements, recommendations, selections, and exclusions. They never run code or silently change a quote. Publication rejects unknown operators, unavailable references, and conflicting mandatory rules.
+                Set consistent recommendations and requirements for new quotes. Rules explain their result and never silently change a quote.
               </p>
-              <label className="json-label">
-                <span>Rules JSON</span>
-                <textarea
-                  className="json-editor"
-                  data-configuration-rules-editor
-                  value={jsonDrafts.configurationRules}
-                  onChange={(event) => patchJsonDraft("configurationRules", event.target.value)}
-                />
-                <small>Changes remain staged until the existing catalog publication and pricing-confirmation flow succeeds.</small>
-              </label>
+              <div className="rule-system-summary" data-configuration-rule-summary>
+                <div>
+                  <span>{configurationRulesPresentation.enabledCount}</span>
+                  <small>Active rules</small>
+                </div>
+                <div>
+                  <span>{configurationRulesPresentation.records.length}</span>
+                  <small>Total rules</small>
+                </div>
+                <p>
+                  Rule changes stay in the Library draft. Published quote policy remains active until this catalog revision is checked and published.
+                </p>
+              </div>
+
+              {configurationRulesPresentation.error ? (
+                <p className="field-error" role="alert" data-configuration-rule-source-state="invalid">
+                  Rule summaries are unavailable until the advanced rule source is corrected: {configurationRulesPresentation.error}
+                </p>
+              ) : configurationRulesPresentation.records.length ? (
+                <div className="rule-config-list" data-configuration-rule-ledger>
+                  {configurationRulesPresentation.records.map((rule, index) => {
+                    const sourceRule = rule.sourceRule || {};
+                    const statusLabel = rule.validationState === "attention"
+                      ? "Needs attention"
+                      : rule.validationState === "needs-check"
+                        ? "Check menu reference"
+                        : rule.enabled ? "Active" : "Off";
+                    const state = rule.validationState === "attention"
+                      ? "attention"
+                      : rule.validationState === "needs-check"
+                        ? "needs-check"
+                        : rule.enabled ? "active" : "off";
+                    const effect = isPlainRuleRecord(sourceRule.effect) ? sourceRule.effect : {};
+                    const effectOperatorField = Object.prototype.hasOwnProperty.call(effect, "operator")
+                      ? "operator"
+                      : Object.prototype.hasOwnProperty.call(effect, "action") ? "action" : "operator";
+                    const effectOperator = String(effect[effectOperatorField] || "").trim();
+                    const componentRef = isPlainRuleRecord(effect.componentRef) ? effect.componentRef : null;
+                    const componentType = String(componentRef?.componentType || "").trim();
+                    const componentId = String(componentRef?.componentId || "").trim();
+                    const componentOptions = componentRef
+                      ? configurationRuleComponentOptions(configurationRuleCatalog, componentType, componentId)
+                      : [];
+                    return (
+                      <article
+                        className="rule-config-card rule-editor-card"
+                        key={`${rule.id}-${index}`}
+                        data-configuration-rule-id={rule.id}
+                        data-configuration-rule-state={state}
+                      >
+                        <div className="rule-config-head">
+                          <div>
+                            <strong>{rule.title}</strong>
+                            <small>{rule.type}</small>
+                          </div>
+                          <span className="status-chip" data-state={state === "active" ? "ready" : state === "off" ? "neutral" : "watch"}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <dl className="rule-config-sequence">
+                          <div data-rule-statement="when">
+                            <dt>When</dt>
+                            <dd>{rule.conditions.join(" AND ")}</dd>
+                          </div>
+                          <div data-rule-statement="then">
+                            <dt>Then</dt>
+                            <dd>{rule.effect}</dd>
+                          </div>
+                          <div data-rule-statement="why">
+                            <dt>Why</dt>
+                            <dd>{rule.reason || "No explanation recorded."}</dd>
+                          </div>
+                        </dl>
+
+                        {rule.validationMessage && (
+                          <p className="rule-validation-message" role={rule.validationState === "attention" ? "alert" : undefined}>
+                            {rule.validationMessage}
+                          </p>
+                        )}
+
+                        {rule.structurable ? (
+                          <details className="rule-structured-editor" data-configuration-rule-editor={rule.sourceIndex}>
+                            <summary>Edit rule</summary>
+                            <div className="rule-structured-editor-body">
+                              <div className="rule-editor-meta">
+                                <label className="admin-inline-toggle">
+                                  <span>Enabled</span>
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`${rule.title} enabled`}
+                                    checked={sourceRule.enabled !== false}
+                                    onChange={(event) => patchConfigurationRule({
+                                      ruleIndex: rule.sourceIndex,
+                                      field: "enabled",
+                                      value: event.target.checked
+                                    })}
+                                  />
+                                </label>
+                                <label>
+                                  <span>Rule type</span>
+                                  <select
+                                    aria-label={`${rule.title} rule type`}
+                                    value={rule.typeValue}
+                                    onChange={(event) => patchConfigurationRule({
+                                      ruleIndex: rule.sourceIndex,
+                                      field: "type",
+                                      value: event.target.value
+                                    })}
+                                  >
+                                    {!RULE_TYPE_LABELS[rule.typeValue] && rule.typeValue && (
+                                      <option value={rule.typeValue}>Unsupported: {sentenceCaseIdentifier(rule.typeValue)}</option>
+                                    )}
+                                    {RULE_TYPE_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+
+                              <div className="rule-editor-sequence" data-rule-editor-sequence>
+                                <section className="rule-editor-stage" data-rule-editor-stage="when">
+                                  <span className="eyebrow">When</span>
+                                  {sourceRule.conditions.map((condition, conditionIndex) => {
+                                    const conditionOperator = String(condition.operator || "").trim();
+                                    return (
+                                      <div className="rule-condition-editor" key={`${rule.id}-condition-${conditionIndex}`}>
+                                        {conditionIndex > 0 && <strong className="rule-and-marker" data-rule-conjunction="and">AND</strong>}
+                                        <div className="rule-condition-fields">
+                                          <label>
+                                            <span>Business data</span>
+                                            <select
+                                              aria-label={`${rule.title} condition ${conditionIndex + 1} path`}
+                                              value={condition.path || ""}
+                                              onChange={(event) => patchConfigurationRule({
+                                                section: "condition",
+                                                ruleIndex: rule.sourceIndex,
+                                                conditionIndex,
+                                                field: "path",
+                                                value: event.target.value
+                                              })}
+                                            >
+                                              {!condition.path && <option value="">Choose business data</option>}
+                                              {condition.path && !RULE_PATH_LABELS[condition.path] && (
+                                                <option value={condition.path}>Custom field: {sentenceCaseIdentifier(condition.path)}</option>
+                                              )}
+                                              {Object.entries(RULE_PATH_LABELS).map(([value, label]) => (
+                                                <option key={value} value={value}>{label}</option>
+                                              ))}
+                                            </select>
+                                          </label>
+                                          <label>
+                                            <span>Comparison</span>
+                                            <select
+                                              aria-label={`${rule.title} condition ${conditionIndex + 1} operator`}
+                                              value={conditionOperator}
+                                              onChange={(event) => patchConfigurationRule({
+                                                section: "condition",
+                                                ruleIndex: rule.sourceIndex,
+                                                conditionIndex,
+                                                field: "operator",
+                                                value: event.target.value
+                                              })}
+                                            >
+                                              {!RULE_CONDITION_OPERATOR_OPTIONS.some((option) => option.value === conditionOperator) && conditionOperator && (
+                                                <option value={conditionOperator}>Unsupported: {sentenceCaseIdentifier(conditionOperator)}</option>
+                                              )}
+                                              {RULE_CONDITION_OPERATOR_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                              ))}
+                                            </select>
+                                          </label>
+                                          <label>
+                                            <span>Value</span>
+                                            <RuleScalarEditor
+                                              ariaLabel={`${rule.title} condition ${conditionIndex + 1} value`}
+                                              value={condition.value}
+                                              onChange={(value) => patchConfigurationRule({
+                                                section: "condition",
+                                                ruleIndex: rule.sourceIndex,
+                                                conditionIndex,
+                                                field: "value",
+                                                value
+                                              })}
+                                            />
+                                          </label>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  {sourceRule.conditions.length === 0 && (
+                                    <p className="source-note">This rule applies to every quote.</p>
+                                  )}
+                                </section>
+
+                                <section className="rule-editor-stage" data-rule-editor-stage="then">
+                                  <span className="eyebrow">Then</span>
+                                  <div className="rule-effect-fields">
+                                    <label>
+                                      <span>Action</span>
+                                      <select
+                                        aria-label={`${rule.title} result operator`}
+                                        value={effectOperator}
+                                        onChange={(event) => patchConfigurationRule({
+                                          section: "effect",
+                                          ruleIndex: rule.sourceIndex,
+                                          field: effectOperatorField,
+                                          value: event.target.value
+                                        })}
+                                      >
+                                        {!RULE_EFFECT_OPERATOR_OPTIONS.some((option) => option.value === effectOperator) && effectOperator && (
+                                          <option value={effectOperator}>Unsupported: {sentenceCaseIdentifier(effectOperator)}</option>
+                                        )}
+                                        {RULE_EFFECT_OPERATOR_OPTIONS.map((option) => (
+                                          <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    {componentRef ? (
+                                      <>
+                                        <label>
+                                          <span>Catalog component type</span>
+                                          <select
+                                            aria-label={`${rule.title} result component type`}
+                                            value={componentType}
+                                            onChange={(event) => patchConfigurationRule({
+                                              section: "componentRef",
+                                              ruleIndex: rule.sourceIndex,
+                                              field: "componentType",
+                                              value: event.target.value
+                                            })}
+                                          >
+                                            {Object.entries(RULE_COMPONENT_TYPE_LABELS).map(([value, label]) => (
+                                              <option key={value} value={value}>{label}</option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <label>
+                                          <span>Catalog component</span>
+                                          <select
+                                            aria-label={`${rule.title} result component`}
+                                            value={componentId}
+                                            onChange={(event) => patchConfigurationRule({
+                                              section: "componentRef",
+                                              ruleIndex: rule.sourceIndex,
+                                              field: "componentId",
+                                              value: event.target.value
+                                            })}
+                                          >
+                                            {!componentId && <option value="">Choose a component</option>}
+                                            {componentOptions.map((option) => (
+                                              <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                      </>
+                                    ) : (
+                                      <label>
+                                        <span>Business target</span>
+                                        <select
+                                          aria-label={`${rule.title} result target`}
+                                          value={effect.target || ""}
+                                          onChange={(event) => patchConfigurationRule({
+                                            section: "effect",
+                                            ruleIndex: rule.sourceIndex,
+                                            field: "target",
+                                            value: event.target.value
+                                          })}
+                                        >
+                                          {!effect.target && <option value="">Choose a business target</option>}
+                                          {effect.target && !RULE_PATH_LABELS[effect.target] && (
+                                            <option value={effect.target}>Custom field: {sentenceCaseIdentifier(effect.target)}</option>
+                                          )}
+                                          {Object.entries(RULE_PATH_LABELS).map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    )}
+                                    <label>
+                                      <span>Result value</span>
+                                      <RuleScalarEditor
+                                        ariaLabel={`${rule.title} result value`}
+                                        value={effect.value}
+                                        onChange={(value) => patchConfigurationRule({
+                                          section: "effect",
+                                          ruleIndex: rule.sourceIndex,
+                                          field: "value",
+                                          value
+                                        })}
+                                      />
+                                    </label>
+                                  </div>
+                                </section>
+
+                                <section className="rule-editor-stage" data-rule-editor-stage="why">
+                                  <label>
+                                    <span className="eyebrow">Why</span>
+                                    <textarea
+                                      aria-label={`${rule.title} reason`}
+                                      rows="3"
+                                      value={sourceRule.reason || ""}
+                                      onChange={(event) => patchConfigurationRule({
+                                        ruleIndex: rule.sourceIndex,
+                                        field: "reason",
+                                        value: event.target.value
+                                      })}
+                                    />
+                                  </label>
+                                </section>
+                              </div>
+                            </div>
+                          </details>
+                        ) : (
+                          <p className="source-note">This record can only be corrected in Advanced rule source.</p>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="source-note" data-configuration-rule-ledger="empty">
+                  No quote rules have been added. New quotes use the published offers, components, templates, and pricing without additional rule guidance.
+                </p>
+              )}
+
+              <details
+                className="admin-menu-disclosure rule-source-disclosure"
+                open={configurationRulesPresentation.error || configurationRulesPresentation.requiresAdvancedSource ? true : undefined}
+                data-configuration-rule-technical-source
+              >
+                <summary>Advanced rule source</summary>
+                <div className="admin-menu-disclosure-body">
+                  <label className="json-label">
+                    <span>Rule source (JSON)</span>
+                    <textarea
+                      className="json-editor"
+                      data-configuration-rules-editor
+                      value={jsonDrafts.configurationRules}
+                      onChange={(event) => patchJsonDraft("configurationRules", event.target.value)}
+                    />
+                    <small>For advanced administrators. Publication checks operators, references, and conflicting requirements before anything becomes active.</small>
+                  </label>
+                </div>
+              </details>
             </div>
           </section>
         )}
 
         {resolvedActiveTab === "pricing" && (
           <>
-            <section className="admin-section">
-              <div className="admin-section-head"><h3>Review Pricing Before Quoting</h3></div>
+            <section className="admin-section" data-commercial-library-section="pricing">
+              <div className="admin-section-head"><h3>Pricing readiness</h3></div>
               <div className="admin-section-body">
                 <p className="source-note">
-                  Review every fee, tax, deposit, travel, staffing, tier, and seasonal value below for this organization. These values affect customer totals.
+                  This Library supplies the shared rates and defaults used for new quotes. Each quote keeps its own exact total and line-by-line price explanation in the quote workspace.
                 </p>
+                <div className="rule-system-summary" data-pricing-policy-summary>
+                  <div>
+                    <span>{publishedCatalogAvailable ? "Published" : "Review only"}</span>
+                    <small>Library use</small>
+                  </div>
+                  <div>
+                    <span>{pricingConfirmationCurrent ? "Reviewed" : "Needs review"}</span>
+                    <small>Pricing readiness</small>
+                  </div>
+                  <p data-pricing-explanation="quote-waterfall">
+                    {publishedCatalogAvailable && pricingConfirmationCurrent
+                      ? "Pricing is confirmed for this catalog revision. Draft edits do not affect active quote calculations until publication."
+                      : pricingConfirmationCurrent
+                        ? "These rates are checked only in this workspace. Publishing is unavailable from this source, and no shared catalog or pricing changed."
+                        : "Pricing is not confirmed for this catalog revision. Check the rates and defaults below before publishing changes for new quotes."}
+                  </p>
+                </div>
                 <label className="admin-inline-toggle">
-                  <span>I reviewed and approve this organization&apos;s pricing settings.</span>
+                  <span>I confirm these rates and defaults are ready for new quotes.</span>
                   <input
                     type="checkbox"
                     aria-label="Pricing setup reviewed and approved"
@@ -2695,118 +3704,263 @@ export function AdminCatalogView({
               </div>
             </section>
 
-            <section className="admin-section">
-          <div className="admin-section-head"><h3>Pricing &amp; Quote Defaults</h3></div>
-          {PILOT_MARGINS_ENABLED && (
-            <div className="cost-margin-summary" data-testid="catalog-cost-margin-summary">
-              <div>
-                <span>{recordedCostCount}/{activeCostRecords.length}</span>
-                <small>active catalog costs</small>
+            <section className="admin-section pricing-policy-editor" data-pricing-policy-editor>
+              <div className="admin-section-head"><h3>Pricing policy</h3></div>
+              <div className="admin-section-body pricing-policy-groups">
+                <section className="pricing-policy-group pricing-policy-group-primary" data-pricing-policy-group="base">
+                  <div className="pricing-policy-group-head">
+                    <span className="eyebrow">Base pricing</span>
+                    <h4>Standard staffing rates</h4>
+                    <p>Set the sell rates and billing basis used when a quote has no staff-rate override.</p>
+                  </div>
+                  <div className="admin-grid-settings">
+                    <label>
+                      Default server rate
+                      <small className="admin-field-hint">Event Basics uses this unless a quote-level server rate override is entered.</small>
+                      <input type="number" step="0.01" value={draft.settings.serverRate} onChange={(e) => patchNumericSetting("serverRate", e.target.value)} />
+                    </label>
+                    <label>
+                      Default chef rate
+                      <small className="admin-field-hint">Event Basics uses this unless a quote-level chef rate override is entered.</small>
+                      <input type="number" step="0.01" value={draft.settings.chefRate} onChange={(e) => patchNumericSetting("chefRate", e.target.value)} />
+                    </label>
+                    <label>
+                      Default bartender rate
+                      <small className="admin-field-hint">Event Basics uses this unless a quote-level bartender rate override is entered.</small>
+                      <input type="number" step="0.01" min="0" value={draft.settings.bartenderRate} onChange={(e) => patchNumericSetting("bartenderRate", e.target.value)} />
+                    </label>
+                    <label>
+                      <span>Include staffing labor in quote totals</span>
+                      <small className="admin-field-hint">When off, server, chef, and bartender labor is excluded from quote totals.</small>
+                      <input
+                        type="checkbox"
+                        checked={draft.settings.staffingLaborEnabled !== false}
+                        onChange={(e) => patchToggleSetting("staffingLaborEnabled", e.target.checked)}
+                      />
+                    </label>
+                    <label>
+                      Staffing charge mode
+                      <small className="admin-field-hint">Per hour uses rate x staff count x hours. Per event ignores hours.</small>
+                      <select
+                        value={normalizeStaffingChargeMode(draft.settings?.staffingChargeMode, "per_hour")}
+                        onChange={(e) => patchTextSetting("staffingChargeMode", normalizeStaffingChargeMode(e.target.value, "per_hour"))}
+                      >
+                        <option value="per_hour">Per hour x staff count</option>
+                        <option value="per_event_per_staff">Per event x staff count</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <details className="pricing-policy-group" data-pricing-policy-group="adjustments-context">
+                  <summary>
+                    <span>Adjustments &amp; context</span>
+                    <small>Travel rates, quote window, seasonal default, and capacity warning.</small>
+                  </summary>
+                  <div className="admin-grid-settings pricing-policy-group-body">
+                    <label>
+                      Per-mile rate
+                      <small className="admin-field-hint">Travel charge per mile up to the delivery threshold. Shown in Travel / Logistics.</small>
+                      <input type="number" step="0.01" value={draft.settings.perMileRate} onChange={(e) => patchNumericSetting("perMileRate", e.target.value)} />
+                    </label>
+                    <label>
+                      Long-distance per-mile
+                      <small className="admin-field-hint">Travel charge per mile after the threshold is exceeded.</small>
+                      <input type="number" step="0.01" value={draft.settings.longDistancePerMileRate} onChange={(e) => patchNumericSetting("longDistancePerMileRate", e.target.value)} />
+                    </label>
+                    <label>
+                      Delivery threshold miles
+                      <small className="admin-field-hint">Miles billed at Per-mile rate before Long-distance rate starts.</small>
+                      <input type="number" step="1" min="0" value={draft.settings.deliveryThresholdMiles} onChange={(e) => patchNumericSetting("deliveryThresholdMiles", e.target.value)} />
+                    </label>
+                    <label>
+                      Quote validity days
+                      <small className="admin-field-hint">Printed on the proposal as the expiration window.</small>
+                      <input type="number" step="1" min="1" value={draft.settings.quoteValidityDays} onChange={(e) => patchNumericSetting("quoteValidityDays", e.target.value)} />
+                    </label>
+                    <label>
+                      Default season
+                      <input type="text" value={draft.settings.defaultSeasonProfile || "auto"} onChange={(e) => patchTextSetting("defaultSeasonProfile", e.target.value)} />
+                    </label>
+                    <label>
+                      Capacity limit
+                      <small className="admin-field-hint">Operations warning limit for same-venue demand.</small>
+                      <input type="number" step="1" min="1" value={draft.settings.capacityLimit || 400} onChange={(e) => patchNumericSetting("capacityLimit", e.target.value)} />
+                    </label>
+                  </div>
+                </details>
+
+                <details className="pricing-policy-group" data-pricing-policy-group="fees">
+                  <summary>
+                    <span>Fees</span>
+                    <small>Fallback service fee and advanced guest-count tiers.</small>
+                    {serviceFeeSourceNeedsAttention && (
+                      <strong className="pricing-policy-group-attention" data-pricing-policy-attention>
+                        Needs attention · fee tiers source
+                      </strong>
+                    )}
+                  </summary>
+                  <div className="pricing-policy-group-body">
+                    <div className="admin-grid-settings">
+                      <label>
+                        Service fee % fallback
+                        <small className="admin-field-hint">Used only when no service-fee tier matches guest count.</small>
+                        <input type="number" step="0.01" value={draft.settings.serviceFeePct} onChange={(e) => patchNumericSetting("serviceFeePct", e.target.value)} />
+                      </label>
+                    </div>
+                    <details className="admin-menu-disclosure pricing-policy-technical">
+                      <summary>Advanced fee tiers</summary>
+                      <div className="admin-menu-disclosure-body">
+                        <label className="json-label">
+                          <span>Service fee tier source (JSON)</span>
+                          <textarea className="json-editor" value={jsonDrafts.serviceFeeTiers} onChange={(e) => patchJsonDraft("serviceFeeTiers", e.target.value)} />
+                          <small>{JSON_FIELD_META.find((field) => field.key === "serviceFeeTiers")?.hint}</small>
+                        </label>
+                      </div>
+                    </details>
+                  </div>
+                </details>
+
+                <details className="pricing-policy-group" data-pricing-policy-group="tax">
+                  <summary>
+                    <span>Tax</span>
+                    <small>Fallback rate, default region, and advanced regional rates.</small>
+                    {taxRegionSourceNeedsAttention && (
+                      <strong className="pricing-policy-group-attention" data-pricing-policy-attention>
+                        Needs attention · tax region source
+                      </strong>
+                    )}
+                  </summary>
+                  <div className="pricing-policy-group-body">
+                    <div className="admin-grid-settings">
+                      <label>
+                        Tax rate fallback
+                        <small className="admin-field-hint">Used only when no tax region is selected or found.</small>
+                        <input type="number" step="0.01" value={draft.settings.taxRate} onChange={(e) => patchNumericSetting("taxRate", e.target.value)} />
+                      </label>
+                      <label>
+                        Default tax region
+                        <input type="text" value={draft.settings.defaultTaxRegion || ""} onChange={(e) => patchTextSetting("defaultTaxRegion", e.target.value)} />
+                      </label>
+                    </div>
+                    <details className="admin-menu-disclosure pricing-policy-technical">
+                      <summary>Advanced tax regions</summary>
+                      <div className="admin-menu-disclosure-body">
+                        <label className="json-label">
+                          <span>Tax region source (JSON)</span>
+                          <textarea className="json-editor" value={jsonDrafts.taxRegions} onChange={(e) => patchJsonDraft("taxRegions", e.target.value)} />
+                          <small>{JSON_FIELD_META.find((field) => field.key === "taxRegions")?.hint}</small>
+                        </label>
+                      </div>
+                    </details>
+                  </div>
+                </details>
+
+                <details className="pricing-policy-group" data-pricing-policy-group="deposit">
+                  <summary>
+                    <span>Deposit</span>
+                    <small>Required deposit percentage and customer-facing notice.</small>
+                  </summary>
+                  <div className="admin-grid-settings pricing-policy-group-body">
+                    <label>
+                      Deposit %
+                      <small className="admin-field-hint">Controls the required deposit shown in totals and proposal summary.</small>
+                      <input type="number" step="0.01" value={draft.settings.depositPct} onChange={(e) => patchNumericSetting("depositPct", e.target.value)} />
+                    </label>
+                    <label>
+                      Deposit notice
+                      <input type="text" value={draft.settings.depositNotice || ""} onChange={(e) => patchTextSetting("depositNotice", e.target.value)} />
+                    </label>
+                  </div>
+                </details>
               </div>
-              <div>
-                <span>{recordedStaffCostCount}/3</span>
-                <small>staff cost rates</small>
-              </div>
-              <div>
-                <span>{targetMarginPct === null ? "—" : `${Math.round(targetMarginPct * 100)}%`}</span>
-                <small>target margin</small>
-              </div>
-              <p>
-                {missingCostExamples.length
-                  ? `Margin remains unavailable for quotes using missing cost fields, including ${missingCostExamples.join(", ")}.`
-                  : "Active catalog cost fields are recorded. A quote still needs complete selected-line cost coverage before margin is shown."}
-              </p>
-            </div>
-          )}
-          <div className="admin-grid-settings">
-            <label>
-              Per-mile rate
-              <small className="admin-field-hint">Travel charge per mile up to the delivery threshold. Shown in Travel / Logistics.</small>
-              <input type="number" step="0.01" value={draft.settings.perMileRate} onChange={(e) => patchNumericSetting("perMileRate", e.target.value)} />
-            </label>
-            <label>
-              Long-distance per-mile
-              <small className="admin-field-hint">Travel charge per mile after the threshold is exceeded.</small>
-              <input type="number" step="0.01" value={draft.settings.longDistancePerMileRate} onChange={(e) => patchNumericSetting("longDistancePerMileRate", e.target.value)} />
-            </label>
-            <label>
-              Delivery threshold miles
-              <small className="admin-field-hint">Miles billed at Per-mile rate before Long-distance rate starts.</small>
-              <input type="number" step="1" min="0" value={draft.settings.deliveryThresholdMiles} onChange={(e) => patchNumericSetting("deliveryThresholdMiles", e.target.value)} />
-            </label>
-            <label>
-              Capacity limit
-              <small className="admin-field-hint">Operations/scheduling warning limit for same-venue load.</small>
-              <input type="number" step="1" min="1" value={draft.settings.capacityLimit || 400} onChange={(e) => patchNumericSetting("capacityLimit", e.target.value)} />
-            </label>
-            <label>
-              Default bartender rate
-              <small className="admin-field-hint">Event Basics uses this unless a quote-level bartender rate override is entered.</small>
-              <input type="number" step="0.01" min="0" value={draft.settings.bartenderRate} onChange={(e) => patchNumericSetting("bartenderRate", e.target.value)} />
-            </label>
-            <label>
-              Service fee pct fallback
-              <small className="admin-field-hint">Used only when no service-fee tier matches guest count.</small>
-              <input type="number" step="0.01" value={draft.settings.serviceFeePct} onChange={(e) => patchNumericSetting("serviceFeePct", e.target.value)} />
-            </label>
-            <label>
-              Tax rate fallback
-              <small className="admin-field-hint">Used only when no tax region is selected/found.</small>
-              <input type="number" step="0.01" value={draft.settings.taxRate} onChange={(e) => patchNumericSetting("taxRate", e.target.value)} />
-            </label>
-            <label>
-              Deposit pct
-              <small className="admin-field-hint">Controls required deposit shown in totals and proposal summary.</small>
-              <input type="number" step="0.01" value={draft.settings.depositPct} onChange={(e) => patchNumericSetting("depositPct", e.target.value)} />
-            </label>
-            <label>
-              Quote validity days
-              <small className="admin-field-hint">Printed on quote/proposal as the expiration window.</small>
-              <input type="number" step="1" min="1" value={draft.settings.quoteValidityDays} onChange={(e) => patchNumericSetting("quoteValidityDays", e.target.value)} />
-            </label>
-            <label>
-              Default server rate
-              <small className="admin-field-hint">Event Basics uses this unless a quote-level server rate override is entered.</small>
-              <input type="number" step="0.01" value={draft.settings.serverRate} onChange={(e) => patchNumericSetting("serverRate", e.target.value)} />
-            </label>
-            <label>
-              Default chef rate
-              <small className="admin-field-hint">Event Basics uses this unless a quote-level chef rate override is entered.</small>
-              <input type="number" step="0.01" value={draft.settings.chefRate} onChange={(e) => patchNumericSetting("chefRate", e.target.value)} />
-            </label>
-            {PILOT_MARGINS_ENABLED && (
-              <>
-                <label>
-                  Server cost rate
-                  <small className="admin-field-hint">Staff-only; what a server actually costs you per hour. Leave blank until recorded — margin stays unavailable rather than guessing.</small>
-                  <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.serverCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("serverCostRate", e.target.value)} />
-                </label>
-                <label>
-                  Chef cost rate
-                  <small className="admin-field-hint">Staff-only; what a chef actually costs you per hour.</small>
-                  <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.chefCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("chefCostRate", e.target.value)} />
-                </label>
-                <label>
-                  Bartender cost rate
-                  <small className="admin-field-hint">Staff-only; what a bartender actually costs you per hour.</small>
-                  <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.bartenderCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("bartenderCostRate", e.target.value)} />
-                </label>
-                <label>
-                  Target margin %
-                  <small className="admin-field-hint">Staff-only comparison line on the margin strip, e.g. 0.45 for 45%. Leave blank to see raw margin with no target comparison.</small>
-                  <input type="number" step="0.01" min="0" max="1" placeholder="Not set" value={draft.settings.targetMarginPct ?? ""} onChange={(e) => patchNullableNumericSetting("targetMarginPct", e.target.value)} />
-                </label>
-              </>
-            )}
-            <label>Integration retry limit<input type="number" step="1" min="1" max="10" value={draft.settings.integrationRetryLimit || 3} onChange={(e) => patchNumericSetting("integrationRetryLimit", e.target.value)} /></label>
-            <label>Integration audit retention<input type="number" step="1" min="10" max="200" value={draft.settings.integrationAuditRetention || 50} onChange={(e) => patchNumericSetting("integrationAuditRetention", e.target.value)} /></label>
-          </div>
             </section>
 
-            <section className="admin-section">
+            <details className="admin-section admin-menu-disclosure pricing-policy-advanced" data-pricing-policy-group="advanced">
+              <summary>
+                <span className="pricing-policy-summary-title">Advanced policy</span>
+                <small>Margin evidence, recommendations, workspace controls, proposal details, brand, and technical sources.</small>
+                <strong
+                  className="pricing-policy-summary-attention"
+                  data-state={advancedPricingPolicySummary.hasAttention ? "attention" : "ready"}
+                  data-pricing-policy-attention
+                >
+                  {advancedPricingPolicySummary.label}
+                </strong>
+              </summary>
+              <div className="admin-section-body admin-menu-disclosure-body pricing-policy-advanced-body">
+                {PILOT_MARGINS_ENABLED && (
+                  <details className="admin-menu-disclosure pricing-policy-child" data-pricing-policy-advanced-section="margin">
+                    <summary>
+                      <span>Cost and margin evidence</span>
+                      <small>{activeCostRecords.length - recordedCostCount + (3 - recordedStaffCostCount)} cost entries still need evidence.</small>
+                    </summary>
+                    <div className="admin-menu-disclosure-body pricing-policy-child-body">
+                    <div className="cost-margin-summary" data-testid="catalog-cost-margin-summary">
+                      <div>
+                        <span>{recordedCostCount}/{activeCostRecords.length}</span>
+                        <small>active catalog costs</small>
+                      </div>
+                      <div>
+                        <span>{recordedStaffCostCount}/3</span>
+                        <small>staff cost rates</small>
+                      </div>
+                      <div>
+                        <span>{targetMarginPct === null ? "—" : `${Math.round(targetMarginPct * 100)}%`}</span>
+                        <small>target margin</small>
+                      </div>
+                      <p>
+                        {missingCostExamples.length
+                          ? `Margin remains unavailable for quotes using missing cost fields, including ${missingCostExamples.join(", ")}.`
+                          : "Active catalog cost fields are recorded. A quote still needs complete selected-line cost coverage before margin is shown."}
+                      </p>
+                    </div>
+                    <div className="admin-grid-settings">
+                      <label>
+                        Server cost rate
+                        <small className="admin-field-hint">Staff-only; what a server actually costs you per hour. Leave blank until recorded.</small>
+                        <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.serverCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("serverCostRate", e.target.value)} />
+                      </label>
+                      <label>
+                        Chef cost rate
+                        <small className="admin-field-hint">Staff-only; what a chef actually costs you per hour.</small>
+                        <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.chefCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("chefCostRate", e.target.value)} />
+                      </label>
+                      <label>
+                        Bartender cost rate
+                        <small className="admin-field-hint">Staff-only; what a bartender actually costs you per hour.</small>
+                        <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.bartenderCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("bartenderCostRate", e.target.value)} />
+                      </label>
+                      <label>
+                        Target margin %
+                        <small className="admin-field-hint">Staff-only comparison line on the margin strip. Leave blank for no target comparison.</small>
+                        <input type="number" step="0.01" min="0" max="1" placeholder="Not set" value={draft.settings.targetMarginPct ?? ""} onChange={(e) => patchNullableNumericSetting("targetMarginPct", e.target.value)} />
+                      </label>
+                    </div>
+                    </div>
+                  </details>
+                )}
+
+                <details className="admin-menu-disclosure pricing-policy-child pricing-policy-technical" data-pricing-policy-advanced-section="integration">
+                  <summary>
+                    <span>Integration recovery limits</span>
+                    <small>Retry and audit-retention safeguards.</small>
+                  </summary>
+                  <div className="admin-grid-settings admin-menu-disclosure-body">
+                    <label>Retry limit<input type="number" step="1" min="1" max="10" value={draft.settings.integrationRetryLimit || 3} onChange={(e) => patchNumericSetting("integrationRetryLimit", e.target.value)} /></label>
+                    <label>Audit records retained<input type="number" step="1" min="10" max="200" value={draft.settings.integrationAuditRetention || 50} onChange={(e) => patchNumericSetting("integrationAuditRetention", e.target.value)} /></label>
+                  </div>
+                </details>
+
+            <details className="admin-menu-disclosure pricing-policy-child" data-pricing-policy-advanced-section="guided-recommendations">
+              <summary>
+                <span>Guided recommendations</span>
+                <small>{enabledUpsellRules.length} active · suggestions shown in quote context.</small>
+              </summary>
+              <div className="admin-menu-disclosure-body pricing-policy-child-body">
           <div className="admin-section-head">
-            <h3>Suggestions &amp; Staffing</h3>
-            <button type="button" className="ghost" onClick={addUpsellRule}>Add Rule</button>
+            <h3>Recommendation rules</h3>
+            <button type="button" className="ghost" onClick={addUpsellRule}>Add recommendation</button>
           </div>
           <div className="rule-system-summary" data-testid="catalog-rules-summary">
             <div>
@@ -2831,26 +3985,6 @@ export function AdminCatalogView({
                 checked={draft.settings.guidedSellingEnabled !== false}
                 onChange={(e) => patchToggleSetting("guidedSellingEnabled", e.target.checked)}
               />
-            </label>
-            <label>
-              <span>Include staffing labor automation in totals</span>
-              <small className="admin-field-hint">When off, server/chef/bartender labor is excluded from quote totals.</small>
-              <input
-                type="checkbox"
-                checked={draft.settings.staffingLaborEnabled !== false}
-                onChange={(e) => patchToggleSetting("staffingLaborEnabled", e.target.checked)}
-              />
-            </label>
-            <label>
-              Staffing charge mode
-              <small className="admin-field-hint">Per hour = rate x staff count x hours. Per event = rate x staff count (hours ignored).</small>
-              <select
-                value={normalizeStaffingChargeMode(draft.settings?.staffingChargeMode, "per_hour")}
-                onChange={(e) => patchTextSetting("staffingChargeMode", normalizeStaffingChargeMode(e.target.value, "per_hour"))}
-              >
-                <option value="per_hour">Per hour x staff count</option>
-                <option value="per_event_per_staff">Per event x staff count</option>
-              </select>
             </label>
           </div>
           <div className="rule-config-list">
@@ -2943,13 +4077,18 @@ export function AdminCatalogView({
               <p className="source-note">No upsell rules are configured yet. Add at least one to power guided selling.</p>
             )}
           </div>
-            </section>
+              </div>
+            </details>
 
-            <section className="admin-section">
-          <div className="admin-section-head"><h3>Workspace Features</h3></div>
+            <details className="admin-menu-disclosure pricing-policy-child" data-pricing-policy-advanced-section="workspace-access">
+              <summary>
+                <span>Workspace access</span>
+                <small>Plan-controlled tools and assisted-work settings.</small>
+              </summary>
+              <div className="admin-menu-disclosure-body pricing-policy-child-body">
           {enforceOrderFeatureAccess && (
             <p className="source-note">
-              Module access is read only because this organization&apos;s order controls entitlements. To change access, update provisioning entitlements for this org and reopen this modal.
+              These tools reflect the organization&apos;s current workspace plan. Manage plan access in Administration, then reopen Library settings.
             </p>
           )}
           <div className="admin-grid-settings">
@@ -2968,10 +4107,15 @@ export function AdminCatalogView({
               </label>
             ))}
           </div>
-            </section>
+              </div>
+            </details>
 
-            <section className="admin-section">
-          <div className="admin-section-head"><h3>Proposal Details</h3></div>
+            <details className="admin-menu-disclosure pricing-policy-child" data-pricing-policy-advanced-section="proposal-details">
+              <summary>
+                <span>Proposal details</span>
+                <small>Contact, document, and customer-facing proposal defaults.</small>
+              </summary>
+              <div className="admin-menu-disclosure-body pricing-policy-child-body">
           <div className="admin-grid-settings">
             <label>
               Quote prepared by
@@ -3016,7 +4160,7 @@ export function AdminCatalogView({
                 aria-describedby="business-time-zone-help"
               />
               <small id="business-time-zone-help">
-                Use an IANA time zone. Revenue timing stays blocked until this is valid.
+                Use a recognized time zone such as America/Chicago. Revenue timing stays blocked until this is valid.
               </small>
               <datalist id="quote-pilot-iana-time-zones">
                 <option value="America/New_York" />
@@ -3085,14 +4229,6 @@ export function AdminCatalogView({
                 onChange={(e) => patchTextSetting("disposablesNote", e.target.value)}
               />
             </label>
-            <label>
-              Deposit notice
-              <input
-                type="text"
-                value={draft.settings.depositNotice || ""}
-                onChange={(e) => patchTextSetting("depositNotice", e.target.value)}
-              />
-            </label>
             {PILOT_DECISION_ROOM_ENABLED && (
               <label>
                 Portal terms (shown to customers in their proposal; leave blank for no terms block)
@@ -3105,17 +4241,27 @@ export function AdminCatalogView({
               </label>
             )}
           </div>
-            </section>
+              </div>
+            </details>
 
-            <section className="admin-section">
-          <div className="admin-section-head"><h3>CRM integrations</h3></div>
+            <details className="admin-menu-disclosure pricing-policy-child" data-pricing-policy-advanced-section="customer-connections">
+              <summary>
+                <span>Customer-system connections</span>
+                <small>Current delivery boundary and Administration handoff.</small>
+              </summary>
+              <div className="admin-menu-disclosure-body pricing-policy-child-body">
           <p className="source-note">
-            Outbound CRM delivery is not enabled in this release. QuotePilot does not accept endpoint or bearer-token settings here, and Integration Ops records audit events only until a server-authorized connector is installed.
+            Customer-system delivery is not connected. Quotes remain in QuotePilot until an authorized connection is enabled in Administration.
           </p>
-            </section>
+              </div>
+            </details>
 
-            <section className="admin-section">
-          <div className="admin-section-head"><h3>Your Customer-facing Brand</h3></div>
+            <details className="admin-menu-disclosure pricing-policy-child" data-pricing-policy-advanced-section="brand">
+              <summary>
+                <span>Customer-facing brand</span>
+                <small>{brandNamePreview} · {brandReadinessItems.filter((item) => item.state === "ready").length}/{brandReadinessItems.length} brand details ready.</small>
+              </summary>
+              <div className="admin-menu-disclosure-body pricing-policy-child-body">
           <p className="source-note">
             These details identify your catering business on proposals and the customer portal. They do not replace the QuotePilot by MBMApps product identity.
           </p>
@@ -3316,34 +4462,20 @@ export function AdminCatalogView({
               />
             </label>
           </div>
-            </section>
+              </div>
+            </details>
 
-            <section className="admin-section">
-          <div className="admin-section-head"><h3>Smart Defaults</h3></div>
-          <div className="admin-grid-settings">
-            <label>
-              Default tax region id
-              <input
-                type="text"
-                value={draft.settings.defaultTaxRegion || ""}
-                onChange={(e) => patchTextSetting("defaultTaxRegion", e.target.value)}
-              />
-            </label>
-            <label>
-              Default season profile id
-              <input
-                type="text"
-                value={draft.settings.defaultSeasonProfile || "auto"}
-                onChange={(e) => patchTextSetting("defaultSeasonProfile", e.target.value)}
-              />
-            </label>
-          </div>
-            </section>
-
-            <section className="admin-section">
-          <div className="admin-section-head"><h3>Advanced Settings (JSON)</h3></div>
-          <div className="admin-section-body">
-            {JSON_FIELD_META.filter((field) => field.key !== "configurationRules").map((field) => (
+            <details className="admin-menu-disclosure pricing-policy-child pricing-policy-technical" data-pricing-policy-advanced-section="technical-sources">
+          <summary>
+            <span>Technical source data</span>
+            <small>{advancedPricingSourceErrorCount ? `${advancedPricingSourceErrorCount} sources need correction.` : "Provenance and advanced structured sources."}</small>
+          </summary>
+          <div className="admin-section-body admin-menu-disclosure-body">
+            {JSON_FIELD_META.filter((field) => ![
+              "configurationRules",
+              "serviceFeeTiers",
+              "taxRegions"
+            ].includes(field.key)).map((field) => (
               <label key={field.key} className="json-label">
                 <span>{field.label}</span>
                 <textarea
@@ -3355,7 +4487,9 @@ export function AdminCatalogView({
               </label>
             ))}
           </div>
-            </section>
+            </details>
+              </div>
+            </details>
           </>
         )}
         </div>
@@ -3369,14 +4503,14 @@ export function AdminCatalogView({
               Refresh latest catalog
             </button>
           )}
-          {!starterChoiceOnly && !packageWorkspaceActive && (saving || hasUnsavedChanges) && (
+          {!catalogRecoveryOwnsSaveAction && !starterChoiceOnly && !packageWorkspaceActive && (saving || hasUnsavedChanges) && (
             <button
               type="button"
               className="cta"
               onClick={handleSave}
               disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
             >
-              {saving ? "Saving..." : "Sync draft now"}
+                {saving ? "Saving..." : "Save draft now"}
             </button>
           )}
         </div>

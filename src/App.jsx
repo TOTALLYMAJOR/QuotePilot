@@ -5660,6 +5660,7 @@ export default function App({
             canContinue={false}
             loading={catalog.loading}
             onRetry={catalog.reload}
+            technicalDetail={catalog.error}
             headingLevel={1}
             titleId="catalog-blocked-title"
           />
@@ -6075,6 +6076,7 @@ export default function App({
       canContinue
       loading={catalog.loading}
       onRetry={catalog.reload}
+      technicalDetail={catalog.error}
       headingLevel={2}
       titleId="quote-builder-catalog-read-title"
     />

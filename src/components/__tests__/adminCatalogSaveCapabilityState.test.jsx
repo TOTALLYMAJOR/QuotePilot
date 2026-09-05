@@ -115,8 +115,8 @@ function renderView(props = {}) {
 // native-setter tracking on text/number inputs.
 function makeUnsavedEdit() {
   const checkbox = [...container.querySelectorAll('input[type="checkbox"]')]
-    .find((input) => input.getAttribute("aria-label") === "Package 1 active");
-  expect(checkbox, "Package 1 active checkbox").toBeTruthy();
+    .find((input) => input.getAttribute("aria-label") === "Offer 1 active");
+  expect(checkbox, "Offer 1 active checkbox").toBeTruthy();
   act(() => {
     checkbox.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -124,8 +124,8 @@ function makeUnsavedEdit() {
 
 function clickSave() {
   const button = [...container.querySelectorAll("button")]
-    .find((element) => element.textContent.trim() === "Sync draft now");
-  expect(button, 'button "Sync draft now"').toBeTruthy();
+    .find((element) => element.textContent.trim() === "Save draft now");
+  expect(button, 'button "Save draft now"').toBeTruthy();
   return act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -164,6 +164,133 @@ describe("AdminCatalogModal save capability state", () => {
   test("starts ready with no unsaved changes and no message", () => {
     renderView({ onSave: async () => ({ ok: true }) });
     expect(container.innerHTML).toContain('data-capability-state="ready"');
+  });
+
+  test("moves between Library sections with standard tab keys", () => {
+    renderView();
+    const offers = container.querySelector('[data-admin-tab-id="packages"]');
+    const addons = container.querySelector('[data-admin-tab-id="addons"]');
+    act(() => {
+      offers.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(addons.getAttribute("aria-selected")).toBe("true");
+
+    act(() => {
+      addons.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    });
+    expect(offers.getAttribute("aria-selected")).toBe("true");
+  });
+
+  test("edits the authoritative rule JSON source through structured controls", () => {
+    renderView({
+      initialTab: "rules",
+      catalog: {
+        ...catalog(),
+        settings: {
+          ...catalog().settings,
+          configurationRules: [{
+            id: "large-event-staffing",
+            type: "requirement",
+            conditions: [{
+              path: "event.guests",
+              operator: "gte",
+              value: 100,
+              futureConditionField: "preserve"
+            }],
+            effect: {
+              operator: "require",
+              target: "resources.servers",
+              value: 4,
+              futureEffectField: "preserve"
+            },
+            reason: "Large events need coverage.",
+            futureRuleField: "preserve"
+          }]
+        }
+      }
+    });
+
+    const editor = container.querySelector('[data-configuration-rule-editor="0"]');
+    act(() => editor.querySelector("summary").click());
+    const operator = editor.querySelector('[aria-label="Rule 1 condition 1 operator"]');
+    act(() => {
+      operator.value = "lte";
+      operator.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const source = container.querySelector("[data-configuration-rules-editor]").value;
+    const [updated] = JSON.parse(source);
+    expect(updated.conditions[0]).toMatchObject({
+      operator: "lte",
+      futureConditionField: "preserve"
+    });
+    expect(updated.effect.futureEffectField).toBe("preserve");
+    expect(updated.futureRuleField).toBe("preserve");
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("Quote rule updated in this Library draft.");
+  });
+
+  test("opening Advanced policy keeps its business groups collapsed and fields singular", () => {
+    renderView({ initialTab: "pricing" });
+    const advanced = container.querySelector('[data-pricing-policy-group="advanced"]');
+    expect(advanced.open).toBe(false);
+    act(() => advanced.querySelector(":scope > summary").click());
+    expect(advanced.open).toBe(true);
+
+    const childGroups = [...advanced.querySelectorAll("[data-pricing-policy-advanced-section]")];
+    expect(childGroups.length).toBeGreaterThanOrEqual(7);
+    childGroups.forEach((group) => expect(group.open).toBe(false));
+
+    const labelCount = (copy) => [...advanced.querySelectorAll("label")]
+      .filter((label) => label.textContent.includes(copy)).length;
+    expect(labelCount("Retry limit")).toBe(1);
+    expect(labelCount("Enable guided selling recommendations")).toBe(1);
+    expect(labelCount("Quote prepared by")).toBe(1);
+    expect(labelCount("Business name")).toBe(1);
+    expect(labelCount("Event Templates JSON")).toBe(1);
+  });
+
+  test("keeps an edited component draft when its object and collection disclosures change", () => {
+    renderView({
+      initialTab: "addons",
+      catalog: {
+        ...catalog(),
+        addons: [{
+          id: "coffee-service",
+          name: "Coffee service",
+          pricingType: "per_event",
+          type: "per_event",
+          price: 125,
+          active: true
+        }],
+        rentals: [{
+          id: "linen-set",
+          name: "Linen set",
+          pricingType: "per_item",
+          type: "per_item",
+          price: 12,
+          qtyPerGuests: 8,
+          active: true
+        }]
+      }
+    });
+
+    const component = container.querySelector('[data-commercial-component-id="coffee-service"]');
+    const summary = component.querySelector("summary");
+    act(() => summary.click());
+    expect(component.open).toBe(true);
+
+    const nameInput = component.querySelector('[aria-label="Add-on 1 display name"]');
+    setInputValue(nameInput, "Espresso service");
+    expect(nameInput.value).toBe("Espresso service");
+
+    act(() => container.querySelector('[data-admin-tab-id="rentals"]').click());
+    expect(container.querySelector('[data-commercial-component-id="linen-set"]')).toBeTruthy();
+    act(() => container.querySelector('[data-admin-tab-id="addons"]').click());
+
+    expect(container.querySelector('[aria-label="Add-on 1 display name"]').value)
+      .toBe("Espresso service");
+    expect(container.textContent).toContain("Espresso service");
   });
 
   test("reports dirty state and clears it after confirmed discard", () => {
@@ -271,7 +398,7 @@ describe("AdminCatalogModal save capability state", () => {
     renderView({ onSave: async () => ({ ok: true }), onInteractionStateChange });
     makeUnsavedEdit();
     const changedCheckbox = [...container.querySelectorAll('input[type="checkbox"]')]
-      .find((input) => input.getAttribute("aria-label") === "Package 1 active");
+      .find((input) => input.getAttribute("aria-label") === "Offer 1 active");
     expect(changedCheckbox.checked).toBe(false);
 
     renderView({
@@ -288,7 +415,7 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector(".modal-foot").textContent)
       .toContain("A newer Library version is ready");
     expect([...container.querySelectorAll("button")]
-      .find((element) => element.textContent.trim() === "Sync draft now").disabled).toBe(true);
+      .find((element) => element.textContent.trim() === "Save draft now").disabled).toBe(true);
     expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: true, busy: false });
   });
 
@@ -362,7 +489,7 @@ describe("AdminCatalogModal save capability state", () => {
       onCatalogMutation
     });
     const packagesTab = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent.trim() === "Packages");
+      .find((button) => button.textContent.trim() === "Offers");
     expect(packagesTab).toBeTruthy();
     act(() => packagesTab.click());
     await act(async () => Promise.resolve());
@@ -516,7 +643,9 @@ describe("AdminCatalogModal save capability state", () => {
 
     const itemEditor = container.querySelector('[aria-label="Edit Roasted chicken"]');
     expect(itemEditor.querySelector('input[type="number"]').value).toBe("12.34");
-    expect(container.textContent).toContain("Device-only changes");
+    expect(container.textContent).toContain("Changes waiting to save");
+    expect(container.textContent).toContain("Library changes are waiting to save");
+    expect(container.textContent).toContain("cannot be published yet");
     expect(container.textContent).not.toContain("All changes saved");
   });
 });
