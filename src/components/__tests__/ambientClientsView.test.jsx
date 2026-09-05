@@ -216,7 +216,8 @@ describe("AmbientClientsView", () => {
     expect(parsedEmpty.textContent).not.toContain("New relationships");
 
     expect(success).toContain('data-ambient-clients-state="success"');
-    expect(success).toContain("Relationships, in context.");
+    expect(success).toContain(">Clients</h1>");
+    expect(success).toContain("Relationship in context");
     expect(success).toContain("Client 1");
     expect(success).toContain("Event 1");
     expect(success).toContain("Firestore client records");
@@ -225,11 +226,10 @@ describe("AmbientClientsView", () => {
       .toBe("recorded-event-date");
     const featured = parsedSuccess.querySelector(".ambient-clients__featured");
     const featuredImage = featured?.querySelector(".ambient-clients__featured-image");
-    expect(featuredImage).not.toBeNull();
-    expect(featuredImage?.getAttribute("alt")).toBe("");
+    expect(featuredImage).toBeNull();
     expect([...featured.querySelectorAll("[data-client-summary-part]")]
       .map((part) => part.dataset.clientSummaryPart))
-      .toEqual(["identity", "contact", "status", "action", "image"]);
+      .toEqual(["identity", "contact", "status", "action"]);
     expect(featured.querySelectorAll(".ambient-client__primary")).toHaveLength(1);
     expect(parsedSuccess.querySelector(".ambient-clients__filter-empty")).toBeNull();
     expect(parsedSuccess.textContent).toMatch(/recorded contact details/iu);
@@ -493,11 +493,13 @@ describe("AmbientClientsView", () => {
     const primary = overview.querySelector(".ambient-client-overview__primary");
 
     expect(overview.getAttribute("data-client-overview-state")).toBe("attention");
+    expect(overview.getAttribute("data-client-relationship-layout")).toBe("ledger");
     expect(overview.querySelector("h1").textContent).toBe("Jordan Lee");
-    expect(overview.textContent).toContain("2 active opportunities");
-    expect(overview.textContent).toContain("1 client reply needs review");
     expect(overview.textContent).toContain("Sep 20, 2026");
-    expect(overview.textContent).toContain("Suggested next step");
+    expect(overview.textContent).toContain("Next relationship step");
+    expect(overview.querySelectorAll("[data-relationship-stage]")).toHaveLength(4);
+    expect(overview.querySelector("[data-relationship-stage='client']").textContent).toContain("Jordan Lee");
+    expect(overview.querySelector("[data-relationship-stage='opportunity']").textContent).toContain("Foundation dinner");
     expect(primary.textContent).toContain("Review client reply");
     expect(overview.textContent).toContain("A recorded client reply needs review.");
     expect(overview.textContent).not.toMatch(/bounded read|non-terminal|read context/iu);

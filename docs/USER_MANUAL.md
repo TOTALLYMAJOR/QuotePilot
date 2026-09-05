@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-04 23:03:12 CDT
+Last updated: 2026-09-04 23:41:46 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -624,18 +624,13 @@ code.
   `/app/clients/<customerId>` replace themselves with the corresponding
   canonical `/app/customers` route. They do not create a second directory,
   duplicate customer state, or relax opaque-ID validation.
-- In the Ambient Clients view, use the compact command header to inspect only
-  this page's **Clients shown**, **With linked work**, **Upcoming events**, and **Contact details to add**
-  counts. The filters narrow the current bounded page; they do not rank a
-  relationship, search older pages, or infer engagement. Each dense row keeps
-  identity, the latest recorded link, contact data, one relationship state,
-  and one **Review client** action aligned.
-- On a phone, QuotePilot replaces those four desktop metric cards with one
-  **Suggested next view** based only on the current page. Select its action to
-  focus the bounded directory on contact gaps, upcoming events, or all clients;
-  use **View clients** to choose another exact page filter. This changes no
-  customer, quote, conversation, booking, payment, or provider evidence.
-- Select a customer name or `Open 360` to open
+- In the Ambient Clients view, the populated page opens with the directory's
+  identity and purpose, one **Relationship in context**, and one **Review
+  client** action. Search and filters narrow only the current bounded page;
+  they do not rank relationship quality, search older pages, or infer
+  engagement. A phone keeps the same identity-first order and makes the action
+  full-width without introducing a different client model.
+- Select **Review client** to open
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
 - `Customer directory read context` and `Customer 360 read context` name the
@@ -644,11 +639,20 @@ code.
   not prove delivery, viewing, acceptance, booking, payment, or operational
   completion. A refresh failure keeps only a prior result from the exact same
   tenant, search/page, or customer scope.
-- The `What matters next` briefing shows active records, current Attention,
-  next dated event, latest recorded activity, and the exact next safe staff
-  action from the bounded DTO. When older quotes exist, missing event/activity
-  copy says that it is limited to the bounded view instead of implying a
-  lifetime absence.
+- Client 360 opens as a relationship ledger. It shows the client identity, one
+  supported next step, the **Client → Opportunity → Proposal → Event**
+  relationship spine, the active opportunity, and recent recorded history
+  before deeper controls. A customer request is labeled **Needs review**, not
+  urgent, unless an authoritative urgency state exists. The request's exact
+  wording may appear; consequence copy is limited to what the current action
+  contract can establish. If a customer request and conversation summary share
+  the same quote and timestamp, the history shows the request once.
+- Additional active opportunities, **Conversations**, source information, and
+  **More client history and controls** begin collapsed. Expanding them changes
+  no customer, quote, conversation, booking, payment, or provider evidence and
+  preserves the existing record tabs and actions. On a phone, the next decision
+  remains first, the relationship spine becomes two columns, and history becomes
+  a vertical ledger.
 - `Overview` starts with `Follow-ups worth revisiting`, a bounded, read-only view of
   one-week post-event closeout checks and same-week anniversary cues from
   recorded booked events. A cue is not a lead, booking, customer contact, or

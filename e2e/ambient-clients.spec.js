@@ -146,7 +146,6 @@ async function expectFeaturedClientSummaryLayout(featured, viewportWidth) {
     const contact = part("contact");
     const status = part("status");
     const action = part("action");
-    const image = part("image");
     const contactValue = contact?.querySelector("dd");
     return {
       domOrder: [...root.querySelectorAll("[data-client-summary-part]")]
@@ -157,15 +156,13 @@ async function expectFeaturedClientSummaryLayout(featured, viewportWidth) {
       contact: box(contact),
       status: box(status),
       action: box(action),
-      image: box(image),
-      imageVisible: image ? getComputedStyle(image).display !== "none" : false,
       contactOverflowPx: contactValue
         ? Math.max(0, contactValue.scrollWidth - contactValue.clientWidth)
         : Number.POSITIVE_INFINITY
     };
   });
 
-  expect(layout.domOrder).toEqual(["identity", "contact", "status", "action", "image"]);
+  expect(layout.domOrder).toEqual(["identity", "contact", "status", "action"]);
   expect(layout.actionCount).toBe(1);
   expect(layout.action.height).toBeGreaterThanOrEqual(44);
   expect(layout.contactOverflowPx).toBeLessThanOrEqual(1);
@@ -174,9 +171,7 @@ async function expectFeaturedClientSummaryLayout(featured, viewportWidth) {
     expect(layout.identity.bottom).toBeLessThanOrEqual(layout.contact.top + 1);
     expect(layout.contact.bottom).toBeLessThanOrEqual(layout.status.top + 1);
     expect(layout.status.bottom).toBeLessThanOrEqual(layout.action.top + 1);
-    expect(layout.action.bottom).toBeLessThanOrEqual(layout.image.top + 1);
     expect(layout.action.width).toBeGreaterThanOrEqual(layout.root.width - 1);
-    expect(layout.imageVisible).toBe(true);
     return;
   }
 
@@ -184,7 +179,6 @@ async function expectFeaturedClientSummaryLayout(featured, viewportWidth) {
   expect(layout.contact.top).toBeGreaterThanOrEqual(
     Math.max(layout.identity.bottom, layout.action.bottom) - 1
   );
-  expect(layout.imageVisible).toBe(false);
 }
 
 async function expectContainedAmbientLayout(page, surfaceSelector, groupSelectors) {
@@ -279,7 +273,7 @@ test.describe("Ambient Clients", () => {
 
       const directory = page.locator(".ambient-clients");
       const directoryHeading = directory.getByRole("heading", {
-        name: "Relationships, in context.",
+        name: "Clients",
         level: 1,
         exact: true
       });
@@ -321,7 +315,7 @@ test.describe("Ambient Clients", () => {
       expect(directoryAccessibility.violations).toEqual([]);
       await expectContainedAmbientLayout(page, ".ambient-clients", [
         ".ambient-clients__populated-hero > div",
-        ".ambient-clients__featured"
+        ".ambient-clients__featured-details"
       ]);
       await capture(page, `ambient-clients-directory-${viewport.width}`);
 
@@ -344,13 +338,17 @@ test.describe("Ambient Clients", () => {
       await expect(arrival).toContainText("Next step:");
 
       await expect(overview.locator(".ambient-client-overview__identity")).toContainText("Maya Bennett");
-      await expect(overview.locator(".ambient-client-overview__signals")).toContainText("Current work");
-      await expect(overview.locator(".ambient-client-overview__signals")).toContainText("Needs review");
-      await expect(overview.locator(".ambient-client-overview__next")).toContainText("Suggested next step");
-      await expect(overview.locator(".ambient-client-overview__next")).toContainText("Review requested changes");
+      await expect(overview).toHaveAttribute("data-client-relationship-layout", "ledger");
+      await expect(overview.locator(".ambient-client-overview__decision")).toContainText("Needs review");
+      await expect(overview.locator(".ambient-client-overview__decision")).toContainText("Please review the updated arrival time.");
+      await expect(overview.locator(".ambient-client-overview__decision")).toContainText("No resolution is recorded for this customer request.");
+      await expect(overview.locator(".ambient-client-overview__spine [data-relationship-stage]"))
+        .toHaveCount(4);
+      await expect(overview.locator("[data-relationship-stage='proposal']")).toContainText("Version 2 sent");
+      await expect(overview.locator("[data-relationship-stage='event']")).toContainText("Not accepted or booked");
 
       const topLayer = await overview.evaluate((root) => {
-        const summary = root.querySelector(".ambient-client-overview__summary");
+        const summary = root.querySelector(".ambient-client-overview__decision");
         const rootRect = root.getBoundingClientRect();
         const summaryRect = summary.getBoundingClientRect();
         return {
@@ -362,7 +360,16 @@ test.describe("Ambient Clients", () => {
 
       const conversation = overview.locator(".ambient-client-overview__conversations li");
       await expect(conversation).toHaveCount(1);
+      const conversationDisclosure = overview.locator('[data-client-disclosure="conversations"]');
+      await expect(conversationDisclosure).not.toHaveAttribute("open", "");
+      await conversationDisclosure.locator("summary").click();
       await expect(conversation).toContainText("2 recorded messages");
+      const history = overview.locator("[data-client-history-ledger] li");
+      await expect(history).toHaveCount(3);
+      await expect(history.filter({ hasText: "Customer requested changes" })).toHaveCount(1);
+      await expect(history.filter({ hasText: "Customer sent a conversation message" })).toHaveCount(0);
+      await conversationDisclosure.locator("summary").click();
+      await expect(conversationDisclosure).not.toHaveAttribute("open", "");
       expect(await overview.innerText()).not.toMatch(/\bunread\b/iu);
       expect(await readPersistedOpportunityState(page)).toEqual(persistedBeforeBrowse);
 
@@ -376,9 +383,9 @@ test.describe("Ambient Clients", () => {
         .analyze();
       expect(overviewAccessibility.violations).toEqual([]);
       await expectContainedAmbientLayout(page, ".ambient-client-overview", [
-        ".ambient-client-overview__identity",
-        ".ambient-client-overview__summary",
-        ".ambient-client-overview__opportunities li",
+        ".ambient-client-overview__spine ol",
+        ".ambient-client-overview__opportunity-row",
+        ".ambient-client-overview__history ol",
         ".ambient-client-overview__conversations li"
       ]);
       await capture(page, `ambient-client-overview-${viewport.width}`);

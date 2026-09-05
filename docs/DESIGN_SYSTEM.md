@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-04 23:03:12 CDT
+Last updated: 2026-09-04 23:41:46 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -674,14 +674,24 @@ not infer relationship quality, urgency, or a ranked client order from the
 directory's partial evidence. Loading, stale, partial, truncated, unavailable,
 and browser-local states remain explicit.
 
-The selected client view must answer who this is, what current work appears in
-the completed read, what needs review, and the next supported step before the
-detailed record. Client navigation follows the exact-arrival contract: carry
-the opaque client identity, reason, consequence, and next resolution; resolve
-only after the matching heading is focused; and recover without substituting a
-nearby client. Active opportunities and quote-scoped conversations remain
-separate recorded contexts. Opening a conversation sends nothing and marks
-nothing read.
+The selected client view is a relationship ledger, not a record dashboard. It
+opens with the client identity and recorded contact details, then pairs one
+evidence-supported next decision with a four-stage **Client → Opportunity →
+Proposal → Event** spine. The active opportunity remains the living object;
+recent history below it uses only recorded lifecycle, request, and conversation
+evidence. When a customer request and its quote-scoped conversation summary
+describe the same exact timestamp, the ledger presents the request once rather
+than manufacturing two activities. It does not call general waiting urgent or
+invent a consequence that is absent from authority.
+
+Client navigation follows the exact-arrival contract: carry the opaque client
+identity, reason, consequence, and next resolution; resolve only after the
+matching heading is focused; and recover without substituting a nearby client.
+Additional active opportunities, quote-scoped conversations, source detail,
+and the full record begin collapsed. Opening a conversation sends nothing and
+marks nothing read. At phone width the decision remains before the relationship
+spine, stages become a compact two-column sequence, and history becomes a
+vertical ledger without changing state or authority.
 
 Existing history, rebook, communication, commercial, and role-gated controls
 remain available under **More client history and controls**. Progressive

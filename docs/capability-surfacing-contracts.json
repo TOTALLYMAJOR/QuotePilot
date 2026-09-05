@@ -539,14 +539,14 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 8,
+      "reviewRevision": 9,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The v0.16 Ambient presentation reuses that authority in a sparse hospitality-led empty state and a populated relationship view led by client identity, current or recent event, recorded memory, current attention, and one next action; search and filtering appear only for a populated bounded page. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The Ambient presentation reuses that authority in a sparse start state, a populated relationship-led directory, and an internal relationship ledger composed from existing Client, Opportunity, Proposal, Event, request, conversation-summary, and lifecycle evidence. It does not add relationship memory, activity, urgency, or consequence authority. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
@@ -587,7 +587,7 @@
         },
         {
           "path": "src/components/AmbientClientsView.jsx",
-          "locator": "Suggested next step"
+          "locator": "data-client-relationship-layout=\"ledger\""
         },
         {
           "path": "src/components/CustomerCommercialMeasures.jsx",
@@ -694,7 +694,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 8 preserves the Revision 7 sparse Clients hierarchy and reconciles development review data precedence: an explicitly seeded tenant quote directory now owns exact populated or empty acceptance state, while the generic local_fixture remains the fallback only when no explicit directory exists. Production Firebase reads, Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, keyboard behavior, and recovery controls remain intact.",
+      "surfaceReviewNote": "Revision 9 converges the internal Client 360 presentation into the selected relationship ledger: identity and one evidence-supported next step lead; the existing Client, Opportunity, Proposal, and Event facts form a relationship spine; exact lifecycle and request activity follows; same-quote same-time request and conversation summaries are displayed once; and deeper conversations, source detail, additional opportunities, and record controls remain available under disclosure. Production Firebase reads, Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, keyboard behavior, and recovery controls remain intact.",
       "stateEvidence": [
         {
           "state": "loading",

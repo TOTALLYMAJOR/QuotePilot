@@ -1,6 +1,6 @@
 # QuotePilot v0.16 Calm Four design QA
 
-Last updated: 2026-09-04 23:03:12 CDT
+Last updated: 2026-09-04 23:41:46 CDT
 
 ## Scope
 
@@ -48,6 +48,76 @@ captured viewport.
 - Current captures: `output/playwright/v16-calm-four-current/`
 - Behavioral gate: `e2e/v16-calm-four-acceptance.spec.js`
 - Acceptance ledger: `docs/acceptance/quotepilot-v16-calm-four-acceptance-matrix.md`
+
+final result: passed
+
+---
+
+# Client 360 relationship-led design QA
+
+Final comparison: 2026-09-04 23:41:46 CDT
+
+## Comparison target
+
+- Selected visual authority:
+  `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-9c294527-3fbc-4103-8150-4dcf6500d129.png`
+  at 1487×1058.
+- Exact implementation:
+  `output/playwright/ambient-intelligence-current/ambient-client-overview-1440.png`.
+- Responsive implementation:
+  `ambient-client-overview-768.png` and `ambient-client-overview-390.png` in
+  the same output directory.
+
+The selected source and exact implementation capture were opened together in
+one comparison input. The implementation preserves the repository's global
+Current task rail, exact lifecycle labels, and evidence-safe consequence copy;
+the illustrative source's invented operational impact and duplicate activity
+row were intentionally not reproduced.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- P3: the existing detailed-record disclosure remains one full-width row below
+  the relationship presentation because its owner is the parent Customer
+  Workspace. Conversations and source detail remain collapsed immediately
+  above it, preserving capability reachability without restructuring authority.
+
+The result reproduces the selected identity-led composition, customer-request
+decision, four-stage relationship spine, living opportunity, restrained recent
+history, warm editorial type, hairline rhythm, and quiet disclosures. It adds no
+route, model, customer activity, urgency, lifecycle, conversation, or mutation
+authority. The populated directory adopts the same relationship language and
+removes its unrelated decorative image; the empty-state hospitality image is
+unchanged.
+
+## Fidelity score
+
+Local design score: **9.5/10 — GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected composition and relationship hierarchy | 3.0 | 3.0 |
+| Evidence semantics and next-decision clarity | 2.0 | 2.0 |
+| Responsive composition and scanability | 1.5 | 1.5 |
+| Accessibility and route continuity | 1.5 | 1.5 |
+| Pixel-level finish and product specificity | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, or human acceptance.
+
+## Behavioral and accessibility evidence
+
+- `src/components/__tests__/ambientClientsView.test.jsx`: 16/16 passed.
+- `e2e/ambient-clients.spec.js`: 3/3 Chromium-admin cases at 390, 768, and
+  1440 pixels.
+- Exact opaque-client arrival, Opportunity handoff, persisted quote/history
+  equality, 44px targets, horizontal containment, declared-layout containment,
+  and zero scoped axe violations passed.
+- The same-quote, same-timestamp customer request and conversation-summary
+  activity is presented once; the underlying records remain unchanged.
+- Production build passed.
 
 final result: passed
 

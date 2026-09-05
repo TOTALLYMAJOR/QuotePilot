@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 23:03:12 CDT
+Last updated: 2026-09-04 23:41:46 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,26 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Converged the existing **Clients** directory and Internal Client 360 into the
+  selected relationship-led composition without adding a customer record,
+  activity feed, urgency model, route, or mutation authority. The populated
+  directory now leads with purpose, one relationship in context, and one exact
+  **Review client** continuation. Client 360 presents the recorded customer
+  request as the next decision, the existing Client → Opportunity → Proposal →
+  Event evidence as a four-stage spine, the living opportunity as the active
+  object, and exact lifecycle/request evidence as recent relationship history.
+  A same-quote, same-time customer request and conversation summary appears once
+  rather than as duplicate activity. Consequence copy states only that no state
+  changes until review; it does not invent operational impact or urgency.
+  Conversations, additional opportunities, source detail, and the existing
+  detailed record remain available under disclosure. Focused unit coverage
+  passes 16/16 and the 390/768/1440 Chromium-admin route matrix passes 3/3 with
+  exact arrival, persisted-state equality, 44px targets, layout containment,
+  no horizontal overflow, and zero scoped axe violations. The selected
+  reference and exact 1440px implementation were inspected together at a local
+  **9.5/10 — GO**. This is local source evidence; exact-head CI, hosted data,
+  deployment, production behavior, assistive-technology use, and human
+  acceptance remain unclaimed.
 - Converged **Now** to the approved decision-ledger composition without adding
   another work queue, event projection, payment state, or completion authority.
   The masthead now names the highest-pressure recorded condition; **Needs you**
