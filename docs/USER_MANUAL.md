@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-04 23:03:12 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2336,15 +2336,25 @@ receipts for those actions and evidence.
   **Now** becomes an open briefing with no more than three priorities from the
   current bounded Workflow snapshot. The order comes from the existing
   deterministic Workflow evidence; NOW does not invent a blended score or
-  re-rank it with a model. Each row opens its exact Workflow item and first
-  acknowledges what is opening and what remains unchanged.
+  re-rank it with a model. The headline names the strongest recorded condition,
+  while **Needs you** distinguishes evidence-backed urgency from ordinary
+  waiting without displaying a decorative `01/02/03` rank. Each row explains
+  the supported consequence, opens its exact Workflow or Customer continuation,
+  and first acknowledges what is opening and what remains unchanged.
+- **Next 7 days** and **Coming up** are compact projections of the same recorded
+  event dates used by Calendar. Use **Open in Calendar** to retain the exact
+  event identity. They are not a second Calendar and do not infer staffing,
+  readiness, conflicts, or live event state.
 - **You are caught up** appears only when all expected staff reads completed,
   bounds are known and not truncated, the snapshot is current, and no recorded
-  payment step remains in the same view. **Recently completed** names only recorded
-  internal follow-up completion, request handling, or approval decisions. It
-  does not mean a customer was contacted, a provider delivered anything, or a
-  payment was collected. Expand **Read details** whenever the compact freshness
-  line reports stale, partial, unavailable, unknown, or bounded evidence.
+  payment step remains in the same view. **Recently handled** names only recorded
+  internal follow-up completion, request handling, or approval decisions.
+  **Waiting on others** contains only recorded pending/provider payment states;
+  staff-owned unpaid steps remain separately visible as **Commercial steps**.
+  None of these labels means a customer was contacted, a provider delivered
+  anything, or a payment was collected. Expand **Read details** whenever the
+  compact freshness line reports stale, partial, unavailable, unknown, or
+  bounded evidence.
 - If the first **Now** read is unavailable, the briefing withholds priorities
   and caught-up language, hides raw provider text, and presents one **Try
   again** action plus **Start a quote**. No quote, customer, or Workflow record

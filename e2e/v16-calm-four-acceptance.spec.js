@@ -506,8 +506,10 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
       .toHaveAttribute("aria-current", "page");
     const now = page.locator(".ambient-now");
     await expect(now).toBeVisible({ timeout: 30_000 });
-    await expect(now.locator(".ambient-now__attention-label--desktop"))
-      .toHaveText("One thing deserves attention");
+    await expect(now.getByTestId("now-daily-brief"))
+      .toContainText(/follow-up .*needs you today/iu);
+    await expect(now.locator('[data-now-urgency-count="1"]')).toBeVisible();
+    await expect(now.getByTestId("now-temporal-horizon")).toBeVisible();
     await expect(now.getByRole("list", { name: "Upcoming events" }))
       .toContainText("Autumn Benefit Dinner");
     await captureV16Proof(page, "01-desktop-now.png");

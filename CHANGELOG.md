@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-04 23:03:12 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,25 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Converged **Now** to the approved decision-ledger composition without adding
+  another work queue, event projection, payment state, or completion authority.
+  The masthead now names the highest-pressure recorded condition; **Needs you**
+  preserves the existing deterministic Workflow order while distinguishing true
+  urgency from general waiting and replacing decorative `01/02/03` ranks with
+  accessible ordinal context. Each item pairs the recorded situation with an
+  evidence-bounded consequence and its existing exact Workflow or Customer
+  continuation. The secondary column projects a compact seven-day horizon and
+  accepted/booked events from the existing Calendar inputs, with exact Calendar
+  handoff. The adaptive **Quiet progress** band shows only supported internal
+  completion receipts under **Recently handled** and existing pending/provider
+  payment states under **Waiting on others**; unresolved operator-owned money
+  actions remain separate **Commercial steps**. Desktop, tablet, and phone retain
+  one semantic order and no horizontal overflow. Local Chromium coverage passes
+  2/2 including exact Workflow/Calendar round trips, responsive captures, and
+  zero serious/critical axe violations. The exact 1487×1058 implementation and
+  selected visual were inspected together at a local **9.5/10 — GO**. This is a
+  local, unpushed presentation change; no hosted, provider, production, or human
+  acceptance is claimed.
 - Converged the existing role-safe **Library** to the selected Option 2
   composition with Option 3 restraint. Desktop gives the broad commercial
   ledger approximately two-thirds of the canvas and keeps unresolved setup in

@@ -6500,6 +6500,7 @@ export default function App({
                   tenantTimeZone={tenantTimeZone}
                   onRefresh={commercialSnapshot.refresh}
                   onOpenWorkflow={openAmbientWorkflow}
+                  onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
                   onOpenCalendar={eventScheduleEnabled
                     ? (quoteId) => navigateAmbientCalendar(quoteId, {
                         actionId: `open-now-calendar:${quoteId}`

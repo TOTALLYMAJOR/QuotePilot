@@ -1,6 +1,6 @@
 # QuotePilot UX Convergence Execution Evidence Ledger
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-04 23:03:12 CDT
 
 ## Authority
 
@@ -229,7 +229,7 @@ unnecessary transitional layer remains from this convergence.
 | AC-134 | AC-134 — Exact Event routes remain functional for direct/deep arrival | PASS | Operations browser coverage opens `/app/events/operations-event-a` directly and retains the exact quote/event identity. |
 | AC-135 | AC-135 — Event Focus remains available where supported | PASS | The same direct-route case asserts Event Focus, the exact event heading, and semantic Event basics region. |
 | AC-136 | AC-136 — Existing Workflow authority remains unchanged | PASS | Workflow source is untouched; exact-focus and write/readback suites remain green in the 274-test contextual regression. |
-| AC-137 | AC-137 — Now can continue to deep-link exact Workflow attention | PASS | `ambientNowView.test.jsx` proves priority and request-backed items carry the exact shared Workflow focus identity. |
+| AC-137 | AC-137 — Now can continue to deep-link exact Workflow attention | PASS | `ambient-now.spec.js` opens the selected request into the exact existing `/app/workflow` query and focused attention row; component tests preserve request identity and the anniversary Customer continuation. |
 | AC-138 | AC-138 — Opportunity can continue to deep-link exact Workflow attention | PASS | Living Opportunity tests prove exact final-count, customer-request, and follow-up continuations target existing Workflow items without substitution. |
 | AC-139 | AC-139 — Removing/demoting a menu entry does not make Workflow unreachable | PASS | Workflow remains in Frequent tools and `/app/workflow`; focused shell and route tests pass after Operations consolidation. |
 | AC-140 | AC-140 — Bulk/global Workflow route remains available if supported use cases require it | PASS | The global `/app/workflow` route and aggregate Workflow action remain registered and tested. |
@@ -258,10 +258,10 @@ unnecessary transitional layer remains from this convergence.
 | AC-163 | AC-163 — Catalog administration remains preserved | PASS | Administrator Library retains the existing guarded catalog editor and `/app/catalog` compatibility route. |
 | AC-164 | AC-164 — Ambient Library remains or becomes the conceptual home for business-building-block configuration where current IA supports it | PASS | Ambient Library tests prove Catalog and Templates remain its purpose-bearing business-building-block sections. |
 | AC-165 | AC-165 — Catalog is not redundantly surfaced under Operations without documented need | PASS | Catalog Admin is absent from Ambient Operations; role-safe Library remains the intended home. |
-| AC-166 | AC-166 — Now may show compact upcoming operational horizon | PASS | Now tests cap the ordered priority horizon at three and render only recorded upcoming work. |
+| AC-166 | AC-166 — Now may show compact upcoming operational horizon | PASS | The pure seven-day presentation uses only supplied accepted/booked event dates; unit and 390/768/1487 browser evidence prove the compact projection while the priority ledger remains capped at three. |
 | AC-167 | AC-167 — Now does not duplicate full Calendar | PASS | Now renders compact priority rows and exact continuations, not Month/Week controls or a Calendar grid. |
-| AC-168 | AC-168 — Upcoming event can navigate to exact Calendar/Event context | PASS | Operations Playwright clicks Now's exact Open in Calendar action and focuses `operations-event-a`. |
-| AC-169 | AC-169 — Conflict/attention language shown in Now is evidence-backed | PASS | Now presentation tests preserve supplied bounded attention order and receipt-backed quiet progress without invented state. |
+| AC-168 | AC-168 — Upcoming event can navigate to exact Calendar/Event context | PASS | `ambient-now.spec.js` clicks the exact accepted event and verifies the existing Operations focused-event marker retains `autumn-benefit`. |
+| AC-169 | AC-169 — Conflict/attention language shown in Now is evidence-backed | PASS | Pure/component tests preserve supplied Workflow order, distinguish source-supported urgency from waiting, and restrict Quiet progress to internal receipts plus existing pending/provider payment evidence. No conflict or live-state claim is added. |
 | AC-170 | AC-170 — Accepted/booked Opportunity can open operational Calendar/Event context | PASS | Living Opportunity tests hand an accepted exact quote ID to Calendar without mutation. |
 | AC-171 | AC-171 — Commercial and operational contexts retain same exact opportunity/event identity | PASS | Browser and component tests carry `operations-event-a` from Now/Opportunity into Calendar and back to the same Opportunity. |
 | AC-172 | AC-172 — Transition introduces no duplicate persisted Event entity unless one already exists authoritatively | PASS | Implementation adds presentation callbacks/markers only and retains quote-history projection. |

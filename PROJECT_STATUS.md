@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-04 23:03:12 CDT
 
 ## UX Convergence Draft Candidate
 
@@ -14,6 +14,20 @@ Last updated: 2026-09-04 21:58:00 CDT
   Operations presentation refinement has completed local qualification;
   exact-head CI remains unavailable until a future, separately authorized
   push. This source state makes no hosted or production claim.
+
+- The local candidate now includes the approved **Now** decision ledger. It
+  preserves the existing three-item Workflow ordering and exact arrivals while
+  separating one or more evidence-backed urgent items from general waiting.
+  The same bounded snapshot supplies its situation and consequence copy; the
+  existing scheduled-event projection supplies the seven-day horizon and
+  Calendar continuation. **Quiet progress** is adaptive: it shows only internal
+  completion receipts and provider/pending payment states, never inferring
+  customer contact, delivery, collection, booking, staffing, readiness, or live
+  operations. Local Chromium acceptance passes 2/2 at 390, 768, and the selected
+  1487×1058 reference viewport with exact Workflow and Calendar round trips,
+  contained layout, and zero serious/critical axe violations. A same-viewport
+  combined comparison received a local **9.5/10 — GO** visual verdict. Commit,
+  exact-head CI, hosted, production, and human evidence remain distinct.
 
 - Draft PR #129 remains frozen at exact remote head
   `dbf35164e77c1d441c254b110f0a5372f60ac162`. The local convergence branch is

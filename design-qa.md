@@ -1,6 +1,6 @@
 # QuotePilot v0.16 Calm Four design QA
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-04 23:03:12 CDT
 
 ## Scope
 
@@ -48,6 +48,74 @@ captured viewport.
 - Current captures: `output/playwright/v16-calm-four-current/`
 - Behavioral gate: `e2e/v16-calm-four-acceptance.spec.js`
 - Acceptance ledger: `docs/acceptance/quotepilot-v16-calm-four-acceptance-matrix.md`
+
+final result: passed
+
+---
+
+# Ambient Now decision-ledger design QA
+
+Final comparison: 2026-09-04 23:03:12 CDT
+
+## Comparison target
+
+- Selected visual authority:
+  `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-1638bb79-e312-4905-869c-5f802960c156.png`
+  at 1487×1058.
+- Exact-viewport implementation:
+  `output/playwright/ambient-now/ambient-now-reference-1487x1058.png`.
+- Mandatory combined comparison input:
+  `output/playwright/ambient-now/ambient-now-side-by-side.png`.
+- Responsive implementation captures:
+  `output/playwright/ambient-now/ambient-now-768.png` and
+  `output/playwright/ambient-now/ambient-now-390.png`.
+
+The exact implementation and reference were inspected together. Fixture names,
+amounts, current dates, and the existing deterministic Workflow order are
+authoritative content differences rather than presentation defects.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- P3: the product's evidence-authoritative order places the current customer
+  request before the overdue follow-up, while the illustrative reference places
+  overdue work first. Preserving the existing ranking authority is intentional.
+  The explicit urgency count, warm attention field, consequence, and headline
+  keep the overdue item perceptible without introducing a second sort.
+
+The implementation reproduces the selected open editorial composition: a
+decision-specific masthead, broad Needs-you ledger, secondary temporal/event
+column, full-width Quiet-progress band, and quiet evidence footer. Decorative
+numeric ranks, the former hospitality image, duplicate dashboard state, and
+infrastructure-first copy are absent. Existing ProductIcons, tokens, type,
+hairlines, and action grammar remain intact.
+
+## Fidelity score
+
+Local design score: **9.5/10 — GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected composition and visual hierarchy | 3.0 | 3.0 |
+| Evidence semantics and next-decision clarity | 2.0 | 2.0 |
+| Responsive composition and scanability | 1.5 | 1.5 |
+| Accessibility and interaction continuity | 1.5 | 1.5 |
+| Pixel-level density and product finish | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, or human acceptance.
+
+## Behavioral and accessibility evidence
+
+- `ambient-now.spec.js`: 2/2 local Chromium-admin cases.
+- Exact Workflow request arrival and exact Operations event identity both pass.
+- 390, 768, and 1487×1058 remain horizontally contained and retain the same
+  semantic order.
+- Serious/critical axe violations: zero in the audited Now region.
+- Focused model/component cohort: 42/42.
+- Production build: pass.
 
 final result: passed
 

@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-04 21:58:00 CDT
+Last updated: 2026-09-04 23:03:12 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -231,9 +231,25 @@ whole-page violations, and the dirty-editor case has a clean whole-page scan.
 Cross-browser, forced-colors, 200% zoom, actual assistive technology, hosted,
 and human acceptance remain open.
 
-**Now** is an editorial home, not a KPI dashboard. It pairs the established
-hospitality image with at most three priorities from existing Workflow order,
-recorded upcoming work, and quiet internal progress. **Opportunities** is a
+**Now** is an editorial decision ledger, not a KPI dashboard or another work
+queue. Its masthead promotes the highest-pressure condition supported by the
+current bounded evidence. **Needs you** preserves the existing deterministic
+Workflow order and caps the visible set at three; urgency is a presentation of
+recorded overdue, blocked, invalid, due-today, warning, or blocking evidence,
+not a decorative numeric rank. Each item states the recorded situation, the
+exact consequence the source supports, and one existing continuation. A
+secondary column projects a compact seven-day horizon and accepted/booked event
+context from the existing Calendar inputs without becoming another Calendar.
+The full-width **Quiet progress** band adapts to available evidence: internal
+completion receipts appear as **Recently handled**; only existing pending or
+provider payment states appear as **Waiting on others**. Operator-owned money
+actions remain separately named Commercial steps. No customer contact,
+delivery, collection, staffing, readiness, conflict, or live-operational state
+may be inferred to fill the composition. At tablet and phone widths the same
+semantic order stacks, the seven-day projection may scroll within its own
+bounded region, and exact action/state continuity is preserved.
+
+**Opportunities** is a
 meaningful index on desktop and mobile; groups and ordering come from actual
 attention/current-work state and recorded dates, never fixture position.
 Opening a row preserves the exact opportunity identity and its event, menu,
