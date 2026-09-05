@@ -1160,7 +1160,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     const clients = page.locator(".ambient-clients");
     await expect(clients).toBeVisible({ timeout: 30_000 });
     await expect(clients).toHaveAttribute("data-ambient-clients-state", /success|ready/u);
-    await expect(clients).toContainText("Relationships, in context.");
+    await expect(clients.getByText("Client relationships", { exact: true })).toBeVisible();
+    await expect(clients.getByRole("heading", { name: "Clients", exact: true })).toBeVisible();
     await expect(clients).toContainText("Recorded contact details");
     await expect(clients).toContainText("Avery & Jordan Rivera");
     await expect(clients).toContainText("rivera@example.test");

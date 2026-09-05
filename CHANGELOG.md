@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-05 00:28:05 CDT
+Last updated: 2026-09-05 01:06:23 CDT
 
 All notable project changes are documented in this file.
 
@@ -9,6 +9,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 ## [Unreleased]
 
 ### Changed
+- Synchronized final acceptance expectations with the selected Operations and
+  Clients compositions without changing runtime behavior or authority. The
+  exact Now-to-Calendar test now addresses the focused event by its accessible
+  name, and the legacy Calm Four Clients assertion now verifies the selected
+  relationship-led heading instead of superseded presentation copy. A
+  same-day branch/worktree reconciliation confirms all 17 UX Convergence
+  commits are present on this candidate and no other same-day commit exists
+  outside it; unrelated integration-checkout planning work and older
+  experimental worktrees remain excluded. Whole-candidate local qualification
+  passes 4,548 unit tests, the 526-module production build, the aggregate
+  release/CWV lane, 127 Truth Loop tests, 78 Firestore-rule tests, the 4-case
+  Firebase browser smoke, the 3-case authoritative-pricing browser suite, and
+  the corrected 71-case responsive route/authority matrix. These are
+  source/local results only; exact-head CI, hosted, provider, production,
+  recipient, assistive-technology, and human evidence remain separate.
 - Converged the existing exact-token **Customer Proposal Decision Center** into
   the selected customer-facing half of Client 360 without adding a portal,
   quote, pricing, decision, signature, payment, conversation, or route

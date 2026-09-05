@@ -358,7 +358,7 @@ test("honors Calendar and Reporting capability gates across navigation and direc
 
 test("preserves exact Now to Calendar and Calendar to Opportunity handoffs", async ({ page }) => {
   await page.goto("/app");
-  const calendarHandoff = page.getByRole("button", { name: "Open in Calendar", exact: true }).first();
+  const calendarHandoff = page.getByRole("button", { name: "Open Q-OPS-1 Dinner in Calendar", exact: true });
   await expect(calendarHandoff).toBeVisible();
   await calendarHandoff.click();
 

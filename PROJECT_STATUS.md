@@ -1,19 +1,41 @@
 # Project Status
 
-Last updated: 2026-09-05 00:28:05 CDT
+Last updated: 2026-09-05 01:06:23 CDT
 
 ## UX Convergence Draft Candidate
 
-- The owner has authorized completion of the QuotePilot UX Convergence
-  Execution Refinement through local commits only. No push, merge, deployment,
-  provider mutation, or production change is authorized. The
+- The owner has now authorized publication and production intent for the
+  QuotePilot UX Convergence Execution Refinement after the complete app and
+  routes are locally qualified. This authorizes the governed release process;
+  it does not bypass the repository's exact-head CI, release-only `main`,
+  semantic-tag, rollback, protected-environment, or provider-readback gates. The
   active candidate adds Configurable Offers, Commercial Templates, bounded
   Configuration Rules, pricing-v2 exact money and waterfalls, exact payment
   amount provenance, expanded Library presentation, and starter-pack adapters
   without creating a second quote/catalog/pricing authority. The current
   Operations presentation refinement has completed local qualification;
-  exact-head CI remains unavailable until a future, separately authorized
-  push. This source state makes no hosted or production claim.
+  exact-head CI remains pending publication of the complete candidate. This
+  source state makes no hosted or production claim.
+
+- Whole-candidate local qualification now passes across the synchronized
+  Workbench, Calendar-first Operations, Now, Library, internal Client 360, and
+  customer proposal decision center: 395 unit-test files pass with 4,548 tests
+  passing and 80 skipped; the 526-module production build passes; the aggregate
+  release/CWV lane passes; Truth Loop passes 127/127; Firestore rules pass
+  78/78; the Firebase browser smoke passes 4/4; authoritative-pricing browser
+  coverage passes 3/3; and the integrated responsive route/authority matrix
+  passes 71/71. Environment-dependent local lanes used only the repository's
+  tracked non-secret CI Firebase identifiers and disposable emulators. These
+  results establish source/local evidence, not connected-hosted, provider,
+  production, recipient, assistive-technology, or human-acceptance evidence.
+
+- A same-day branch/worktree reconciliation found all 17 UX Convergence commits
+  on this candidate and confirmed that current `origin/main` is tree-identical
+  to the morning v0.16.6 release receipt. No other same-day commit exists outside
+  this branch. The integration checkout's uncommitted Golden Lattice planning
+  document and older experimental worktrees remain deliberately excluded as
+  unrelated or historically unmerged work rather than being absorbed without
+  capability-level review.
 
 - The local candidate now includes the approved **Now** decision ledger. It
   preserves the existing three-item Workflow ordering and exact arrivals while
@@ -31,10 +53,11 @@ Last updated: 2026-09-05 00:28:05 CDT
 
 - Draft PR #129 remains frozen at exact remote head
   `dbf35164e77c1d441c254b110f0a5372f60ac162`. The local convergence branch is
-  ahead and intentionally unpushed; it contains the Workbench and Calendar-first
-  Operations source candidate. The work remains isolated from the integration
-  checkout and its unrelated changes.
-- The Library portion of this unpushed candidate now follows the selected
+  ahead and pending whole-branch qualification before publication. It contains
+  the Workbench, Calendar-first Operations, Now, Library, internal Client 360,
+  and customer proposal decision-center candidate. The work remains isolated
+  from the integration checkout and its unrelated changes.
+- The Library portion of this candidate now follows the selected
   Option 2 composition with Option 3 restraint. Desktop uses one broad
   commercial ledger and one secondary readiness rail; mobile preserves that
   ledger-first semantic order. **Offers**, **Components**, **Templates**, and
@@ -63,10 +86,10 @@ Last updated: 2026-09-05 00:28:05 CDT
   Full unit, production build, focused browser, capability/document governance,
   and local CWV checks pass. Exact CI-profile bundle checks pass against an
   explicitly reviewed no-headroom exception at 3,379,162 / 397,409 bytes for
-  compatibility and 4,301,701 / 432,490 bytes for Ambient. The isolated
-  checkout lacks the six Firebase web configuration values required by
-  `check:env`, so the aggregate release lane remains environment-blocked. No
-  exact-head CI, hosted role, production-data, deployment,
+  compatibility and 4,301,701 / 432,490 bytes for Ambient. The complete
+  aggregate release/CWV lane also passes when supplied with the repository's
+  canonical non-secret CI Firebase identifiers. No exact-head CI, hosted role,
+  production-data, deployment,
   assistive-technology, or human-acceptance result is claimed.
 - When the existing `eventSchedule` capability is enabled, the local source
   candidate presents Operations between Opportunities and Clients and opens the
@@ -94,11 +117,14 @@ Last updated: 2026-09-05 00:28:05 CDT
   complete local release/CWV lane passes 4,509 tests, the 528-module build,
   exact 3,331,403/394,701-byte bundle limits, documentation/capability
   governance, 127 Truth Loop tests, and Lighthouse CWV.
-- The 238-row ledger now resolves to 236 PASS, one NOT APPLICABLE, and AC-236
-  UNVERIFIABLE because local-commit-only authority cannot create remote
-  exact-head CI.
-- The local-only publication restriction remains in force. Exact-head CI,
-  hosted role parity, merge, and deployment require separate future authority.
+- The 238-row ledger's latest local checkpoint resolves to 236 PASS, one NOT
+  APPLICABLE, and AC-236 UNVERIFIABLE. Publication authority now exists, but
+  AC-236 still requires successful CI evidence for the exact pushed candidate
+  SHA; local qualification cannot substitute for that remote proof.
+- Publication and production intent are authorized, but exact-head CI, hosted
+  role parity, release-candidate evidence, protected-main merge, semantic tag,
+  deployment, and provider readback remain mandatory gates rather than assumed
+  outcomes.
 - No merge, deployment, provider activation, production behavior, authenticated
   hosted role matrix, assistive-technology acceptance, or human acceptance is
   claimed by this source candidate.
