@@ -1743,3 +1743,111 @@ describe("portal decidable-option projection", () => {
     ]);
   });
 });
+
+
+describe("reviewed attendance planning persistence", () => {
+  const reviewed = { kind: "approximate", value: 50, min: null, max: null, sourceType: "staff_intake" };
+  const create = (attendancePlanning) => buildTrustedQuoteCreationDocuments({
+    quoteId: "quote-planning", quoteNumber: "Q-PLANNING", portalKey: "0123456789abcdef0123456789abcdef",
+    organizationId: "org-a", staff: { uid: "staff-a", email: "staff@example.com", role: "sales" },
+    form: sanitizeQuoteCreationRequest({ form: buildForm(attendancePlanning === undefined ? {} : { attendancePlanning }) }).form,
+    pricing: buildPricing(), catalogSource: "firebase-org", settings: {}, nowISO: "2026-09-05T20:00:00.000Z"
+  });
+  test("preserves a reviewed estimate beside exact pricing with server provenance in the immutable version", () => {
+    const result = create(reviewed);
+    expect(result.quote.event.guests).toBe(50);
+    expect(result.quote.event.attendance).toMatchObject({ schemaVersion: 1,
+      planning: { ...reviewed, recordedByUid: "staff-a", observedAtISO: "2026-09-05T20:00:00.000Z", sourceReferenceId: "quote-planning:v0001:planning" },
+      confirmation: { state: "not_requested", submittedCount: null },
+      commercialBasis: { source: "planning", appliedRevisionId: "v0001" }
+    });
+    expect(result.version.snapshot.event.attendance).toEqual(result.quote.event.attendance);
+    expect(create().quote.event).not.toHaveProperty("attendance");
+    expect(buildDuplicateQuoteForm(result.quote)).not.toHaveProperty("attendancePlanning");
+  });
+  test("rejects forged provenance confirmation malformed bounds and mismatched pricing", () => {
+    for (const planning of [null, { ...reviewed, recordedByUid: "another-staff" }, { ...reviewed, confirmation: { state: "applied" } },
+      { ...reviewed, sourceType: "customer_inquiry" }, { ...reviewed, value: "50" }, { ...reviewed, value: 51 },
+      { ...reviewed, min: 40 }, { ...reviewed, kind: "range", min: 50, max: 50 }, { ...reviewed, kind: "range", min: 40, max: 401 }]) {
+      expect(() => create(planning)).toThrow(QuoteCreationError);
+    }
+    expect(create({ ...reviewed, kind: "range", min: 40, max: 60 }).quote.event.attendance.planning.min).toBe(40);
+  });
+  test("edits stamp the new version and preserve unchanged source evidence when planning is omitted", () => {
+    const original = create(reviewed);
+    const edit = (form) => buildTrustedQuoteEditDocuments({ quoteId: "quote-planning", quote: original.quote,
+      staff: { uid: "staff-b", email: "second@example.com", role: "admin" }, form,
+      pricing: buildPricing(), catalogSource: "firebase-org", settings: {}, nowISO: "2026-09-05T21:00:00.000Z" });
+    const edited = edit(sanitizeQuoteCreationRequest({ form: buildForm({ attendancePlanning: { ...reviewed, kind: "exact" } }) }).form);
+    expect(edited.version.snapshot.event.attendance.planning).toMatchObject({ kind: "exact", sourceReferenceId: "quote-planning:v0002:planning", recordedByUid: "staff-b" });
+    const preserved = edit(sanitizeQuoteCreationRequest({ form: buildForm() }).form);
+    expect(preserved.version.snapshot.event.attendance).toEqual(original.quote.event.attendance);
+    expect(original.quote.event.attendance.planning.kind).toBe("approximate");
+  });
+});
+
+
+describe("accepted attendance amendment lifecycle", () => {
+  const delivery = require("../../../functions/quoteDelivery.js");
+  const acceptance = require("../../../functions/proposalAcceptance.js");
+  const { planContractConversion } = require("../../../functions/contractWorkflow.js");
+  function fixture() {
+    const created = buildTrustedQuoteCreationDocuments({ quoteId: "quote-amendment", quoteNumber: "Q-AMENDMENT",
+      portalKey: "0123456789abcdef0123456789abcdef", organizationId: "org-a",
+      staff: { uid: "staff-a", email: "staff@example.com", role: "admin" },
+      form: sanitizeQuoteCreationRequest({ form: buildForm() }).form, pricing: buildPricing(), catalogSource: "firebase-org", settings: {}, nowISO: "2026-09-01T10:00:00.000Z" });
+    const quote = { ...created.quote, status: "booked", latestVersionNumber: 2,
+      acceptanceReceipt: { receiptId: "acceptance-original", quoteRevisionId: "v0001", acceptedAtISO: "2026-09-02T10:00:00.000Z" },
+      portalDecision: { decision: "accepted", requestId: "acceptance-original" },
+      payment: { ...created.quote.payment, depositStatus: "paid", stripeSessionId: "cs_existing", depositConfirmedAtISO: "2026-09-02T10:30:00.000Z" },
+      booking: { ...created.quote.booking, contractNumber: "C-ORIGINAL", bookedAtISO: "2026-09-02T11:00:00.000Z", contractConvertedAtISO: "2026-09-02T11:00:00.000Z", confirmationStatus: "confirmed" } };
+    const binding = { organizationId: "org-a", quoteId: "quote-amendment", sourceVersionId: "v0001", acceptanceReceiptId: "acceptance-original",
+      submissionReceiptId: "attendance_command_" + "a".repeat(48), submissionReceiptDigest: "b".repeat(64), count: 60 };
+    const pricing = buildPricing(); pricing.inputs.event.guests = 60;
+    const args = { quoteId: "quote-amendment", quote, staff: { uid: "staff-a", email: "staff@example.com", role: "admin" },
+      form: { ...buildDuplicateQuoteForm(quote), guests: 60 }, pricing, catalogSource: "firebase-org", settings: {}, nowISO: "2026-09-05T20:00:00.000Z",
+      attendanceAmendmentBinding: binding, attendanceAmendmentApplyReceiptId: "ccp_" + "c".repeat(48) };
+    return { quote, binding, args };
+  }
+  test("amendment requires exact trusted attendance source and keeps ordinary accepted edits forbidden", () => {
+    const { args, binding } = fixture();
+    const { attendanceAmendmentBinding, attendanceAmendmentApplyReceiptId, ...ordinary } = args;
+    expect(() => buildTrustedQuoteEditDocuments(ordinary)).toThrow(/Only draft, sent, or viewed/);
+    for (const invalid of [{ ...binding, sourceVersionId: "v0002" }, { ...binding, acceptanceReceiptId: "other" }, { ...binding, organizationId: "other" },
+      { ...binding, submissionReceiptDigest: "B".repeat(64) }, { ...binding, count: "60" }, { ...binding, count: 61 }, { ...binding, unexpected: true }]) {
+      expect(() => buildTrustedQuoteEditDocuments({ ...args, attendanceAmendmentBinding: invalid })).toThrow(QuoteCreationError);
+    }
+    expect(() => buildTrustedQuoteEditDocuments({ ...args, form: { ...args.form, venue: "Other venue" } })).toThrow(/only the reviewed guest count/);
+    expect(() => buildTrustedQuoteEditDocuments({ ...args, attendanceAmendmentApplyReceiptId: "forged" })).toThrow(QuoteCreationError);
+    expect(() => buildTrustedQuoteEditDocuments({ ...args, staff: { ...args.staff, role: "customer" } })).toThrow(/Staff role required/);
+  });
+  test("amendment preserves paid contract history and reuses original delivery acceptance and booking authorities", () => {
+    const { quote, args } = fixture(); const before = JSON.stringify(quote);
+    const result = buildTrustedQuoteEditDocuments(args);
+    expect(result.quotePatch).toMatchObject({ status: "draft", acceptanceReceipt: null, portalDecision: {}, activeVersionId: "v0003",
+      attendanceAmendment: { sourceVersionId: "v0001", acceptanceReceiptId: "acceptance-original", applyReceiptId: args.attendanceAmendmentApplyReceiptId, requiresAcceptance: true } });
+    expect(result.quotePatch.payment).toEqual(quote.payment); expect(result.quotePatch.booking).toEqual(quote.booking);
+    expect(result.portal.acceptanceReceipt).toBeNull(); expect(result.portal.portalDecision).toEqual({});
+    expect(result.version.snapshot.acceptanceReceipt).toBeNull(); expect(JSON.stringify(quote)).toBe(before);
+    const amended = { ...quote, ...result.quotePatch };
+    const revisionId = delivery.resolveQuoteDeliveryRevisionId(amended, args.quoteId);
+    const claimed = delivery.claimQuoteDelivery({ quote: amended, quoteId: args.quoteId, organizationId: "org-a", expectedRevisionId: revisionId,
+      actorEmail: "staff@example.com", attemptId: "local-amendment-delivery", attemptProvider: "resend", payloadSha256: "d".repeat(64), nowISO: "2026-09-05T20:01:00.000Z" });
+    expect(claimed.state).toBe("acquired");
+    // Synthetic provider observation is local test input only. No send occurs.
+    const delivered = delivery.buildQuoteDeliverySuccess({ delivery: claimed.delivery, email: { provider: "resend", messageId: "local-proof" },
+      nowISO: "2026-09-05T20:02:00.000Z", portalKey: amended.portalKey, portalIssuedAtISO: amended.portalIssuedAtISO });
+    const sent = { ...amended, status: "sent", workflow: { ...amended.workflow, quoteDelivery: delivered } };
+    const portal = buildCanonicalPortalSnapshot(args.quoteId, sent);
+    const signed = acceptance.planProposalAcceptance({ quoteId: args.quoteId, quote: sent, portal, portalKey: sent.portalKey,
+      signerName: "Customer Example", consentVersion: acceptance.ACCEPTANCE_CONSENT_VERSION, expectedRevisionId: revisionId,
+      expectedPortalIssuedAtISO: sent.portalIssuedAtISO, acceptedAtISO: "2026-09-05T20:03:00.000Z", receiptId: "acceptance-amended", actor: {} });
+    expect(signed.acceptanceReceipt.receiptId).toBe("acceptance-amended");
+    const acceptedQuote = { ...sent, ...signed.quotePatch };
+    const booked = planContractConversion({ quoteId: args.quoteId, quote: acceptedQuote, peerQuotes: [], actorEmail: "staff@example.com",
+      nowISO: "2026-09-05T20:04:00.000Z", contractNumber: "C-UNUSED-NEW", capacityLimit: 400 });
+    expect(booked.contractNumber).toBe("C-ORIGINAL"); expect(booked.status).toBe("booked");
+    expect(booked.quotePatch).not.toHaveProperty("payment"); expect(acceptedQuote.payment).toEqual(quote.payment);
+    expect(quote.acceptanceReceipt.receiptId).toBe("acceptance-original");
+  });
+});

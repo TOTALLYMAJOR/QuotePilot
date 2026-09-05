@@ -197,6 +197,7 @@ function OpportunityCard({
   onCreateRebook,
   rebookCreationAvailable,
   closeoutReviewAvailable,
+  workflowScope = null,
   onCloseoutReceipt
 }) {
   const actionQuoteId = opportunity.reviewedAction?.sourceQuoteId || opportunity.quoteId;
@@ -233,6 +234,7 @@ function OpportunityCard({
             <PostEventCloseoutReviewAction
               opportunity={opportunity}
               available={closeoutReviewAvailable}
+              workflowScope={workflowScope}
               onReceipt={onCloseoutReceipt}
             />
           </>
@@ -299,6 +301,7 @@ export function CustomerRevenueOpportunitiesPresentation({
   onCreateRebook,
   rebookCreationAvailable = true,
   closeoutReviewAvailable = true,
+  workflowScope = null,
   onCloseoutReceipt
 }) {
   const state = error && !radar
@@ -379,6 +382,7 @@ export function CustomerRevenueOpportunitiesPresentation({
                   onCreateRebook={onCreateRebook}
                   rebookCreationAvailable={rebookCreationAvailable}
                   closeoutReviewAvailable={closeoutReviewAvailable}
+                  workflowScope={workflowScope}
                   onCloseoutReceipt={onCloseoutReceipt}
                 />
               ))}

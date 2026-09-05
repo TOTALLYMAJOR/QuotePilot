@@ -241,10 +241,11 @@ class SentinelIntegerTest(unittest.TestCase):
         raw["currentCatalogRevision"] = None
         self.assertEqual(load_record(raw).current_catalog_revision, -1)
 
-    def test_null_overrun_threshold_keeps_the_declared_default(self):
+    def test_null_overrun_threshold_cannot_create_a_declared_default(self):
         raw = clean_record_dict()
         raw["overrunThresholds"] = {"laborBasisPoints": None}
-        self.assertEqual(load_record(raw).overrun_thresholds.labor_basis_points, 1_000)
+        with self.assertRaises(BundleError):
+            load_record(raw)
 
 
 class DeepCopyIndependenceTest(unittest.TestCase):
@@ -253,6 +254,66 @@ class DeepCopyIndependenceTest(unittest.TestCase):
         before = copy.deepcopy(payload)
         load_bundle(payload)
         self.assertEqual(payload, before)
+
+
+class DeclaredOperationalCostsTest(unittest.TestCase):
+    def test_missing_actual_cost_category_is_never_defaulted_to_zero(self):
+        for omitted in ("laborCostCents", "purchasingCostCents", "otherCostCents", "recordedAtISO"):
+            raw = clean_record_dict()
+            costs = {"laborCostCents": 0, "purchasingCostCents": 0, "otherCostCents": 0,
+                     "recordedAtISO": "2026-08-20T00:00:00.000Z"}
+            del costs[omitted]
+            raw["evidence"]["actualConsumption"].update(availability="available", value=costs)
+            with self.subTest(omitted=omitted), self.assertRaises(BundleError):
+                load_record(raw)
+
+    def test_tolerance_requires_complete_declaration_evidence(self):
+        policy = {"laborBasisPoints": 0, "purchasingBasisPoints": 0, "minimumCents": 0,
+                  "declaredBy": "synthetic-operator", "declaredAtISO": "2026-08-20T00:00:00.000Z"}
+        for omitted in policy:
+            raw = clean_record_dict()
+            raw["overrunThresholds"] = {key: value for key, value in policy.items() if key != omitted}
+            with self.subTest(omitted=omitted), self.assertRaises(BundleError):
+                load_record(raw)
+        raw = clean_record_dict()
+        raw["overrunThresholds"] = policy
+        raw.pop("overrunPolicyEvidence", None)  # Explicit legacy declaration remains supported.
+        loaded = load_record(raw).overrun_thresholds
+        self.assertTrue(loaded.declared)
+        self.assertEqual(loaded.minimum_cents, 0)
+        self.assertEqual(loaded.labor_basis_points, 0)
+        self.assertEqual(loaded.declared_by, "synthetic-operator")
+
+
+class WorkflowPolicyEnvelopeTest(unittest.TestCase):
+    POLICY = {"laborBasisPoints": 0, "purchasingBasisPoints": 0, "minimumCents": 0,
+              "declaredBy": "synthetic-admin", "declaredAtISO": "2026-08-20T00:00:00.000Z"}
+
+    def test_available_policy_matches_the_exact_declared_values(self):
+        raw = clean_record_dict()
+        raw["overrunThresholds"] = self.POLICY.copy()
+        raw["overrunPolicyEvidence"] = {"availability": "available", "value": self.POLICY.copy()}
+        record = load_record(raw)
+        self.assertTrue(record.overrun_thresholds.declared)
+        self.assertIs(record.overrun_policy_evidence.availability, Availability.AVAILABLE)
+        raw["overrunPolicyEvidence"]["value"]["minimumCents"] = 1
+        with self.assertRaises(BundleError):
+            load_record(raw)
+
+    def test_unavailable_policy_cannot_smuggle_a_tolerance(self):
+        for availability in ("missing", "not_applicable", "not_yet_available", "contradictory", "schema_drift"):
+            raw = clean_record_dict()
+            raw["overrunThresholds"] = self.POLICY.copy()
+            raw["overrunPolicyEvidence"] = {"availability": availability, "value": None}
+            with self.subTest(availability=availability), self.assertRaises(BundleError):
+                load_record(raw)
+
+    def test_available_policy_requires_values_in_both_locations(self):
+        raw = clean_record_dict()
+        raw.pop("overrunThresholds", None)
+        raw["overrunPolicyEvidence"] = {"availability": "available", "value": self.POLICY.copy()}
+        with self.assertRaises(BundleError):
+            load_record(raw)
 
 
 if __name__ == "__main__":

@@ -343,6 +343,8 @@ export default function CustomerWorkspaceView({
   tenantTimeZone = "",
   isAdmin = false,
   currentUserRole = "staff",
+  currentUserUid = "",
+  workflowEnabled = false,
   ambientMode = false,
   arrivalContext = null,
   arrivalAttempted = false,
@@ -736,6 +738,7 @@ export default function CustomerWorkspaceView({
 
         <section id="customer-panel-overview" role="tabpanel" aria-labelledby="customer-tab-overview" tabIndex={0} hidden={activeTab !== "overview"}>
           <CustomerRevenueOpportunities
+            workflowScope={{ principalId: currentUserUid, role: currentUserRole, enabled: workflowEnabled, source: workspace.source }}
             radar={state.revenueRadar}
             error={state.revenueRadarError}
             loading={state.loading}

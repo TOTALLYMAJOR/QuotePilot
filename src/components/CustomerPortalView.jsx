@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import {
   getPortalQuote,
@@ -36,6 +36,9 @@ import {
 } from "./ProductIcons";
 import "./portalCeremony.css";
 import "./customerPortalView.css";
+
+const PortalAttendanceQuestionnaire = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./PortalAttendanceQuestionnaire")) : null;
 
 const PAYMENT_CONFIRMATION_POLL_INTERVAL_MS = 1500;
 const PAYMENT_CONFIRMATION_MAX_ATTEMPTS = 10;
@@ -1948,6 +1951,13 @@ export default function CustomerPortalView({
               </section>
             )}
 
+            {PortalAttendanceQuestionnaire && quote.attendanceAvailable === true && ["accepted", "booked"].includes(quote.status) && (
+              <Suspense fallback={<p role="status">Loading your guest count request...</p>}>
+                <PortalAttendanceQuestionnaire portalKey={portalKey} enabled
+                  expectedSourceVersionId={quote.deliveryEvidence?.revisionId || quote.activeVersionId || ""}
+                  expectedPortalIssuedAtISO={quote.portalIssuedAtISO || ""} />
+              </Suspense>
+            )}
             <AcceptanceCeremonyReceipt quote={quote} />
 
             {quote.portalDecision?.message && decisionLocked && (

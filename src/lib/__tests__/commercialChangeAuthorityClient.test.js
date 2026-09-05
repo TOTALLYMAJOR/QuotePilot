@@ -947,3 +947,52 @@ describe("Commercial Change Authority uncertainty and browser boundary", () => {
     expect(source).not.toMatch(/localStorage|sessionStorage|URLSearchParams|pushState|replaceState/u);
   });
 });
+
+function boundEvidence(overrides = {}) {
+  return {
+    workflowPolicy: {
+      organizationId: SCOPE.organizationId,
+      definitionPin: { workflowKind: "quote_review", schemaVersion: 2, definitionId: "quote_review", versionId: "quote_review_v1", version: 1, definitionDigest: DIGEST },
+      approvalPolicy: { basis: "absolute_total_delta_cents", thresholdCents: 0, allowedRoles: ["admin", "sales"] },
+      declaredBy: "admin-one", declaredAtISO: "2026-08-01T00:00:00.000Z"
+    },
+    attendanceBinding: { ...SCOPE, sourceVersionId: BASE_REVISION_ID, acceptanceReceiptId: "acceptance-one", submissionReceiptId: "attendance-one", submissionReceiptDigest: DIGEST, count: 175 },
+    approvalEvaluation: { currency: "USD", beforeTotalCents: 1248000, proposedTotalCents: 1692000, absoluteTotalDeltaCents: 444000, impactApprovalRequired: true, thresholdApprovalRequired: true },
+    ...overrides
+  };
+}
+describe("bound commercial review receipts", () => {
+  const input = { ...SCOPE, expectedActiveVersionId: BASE_REVISION_ID, requestId: SIMULATION_REQUEST_ID, attendanceSubmissionReceiptId: "attendance-one", form: { guests: 175 } };
+  test("preserves the exact published threshold and attendance binding in the review projection", async () => {
+    mockState.callable.mockResolvedValue({ data: simulationResponse({ simulationReceipt: simulationReceipt({ schemaVersion: "commercial-change-simulation-receipt-v2", ...boundEvidence() }) }) });
+    const result = await simulateCommercialQuoteChange(input);
+    expect(result.simulation.workflowPolicy.approvalPolicy.thresholdCents).toBe(0);
+    expect(result.simulation.attendanceBinding).toEqual(boundEvidence().attendanceBinding);
+    expect(result.simulation.approvalEvaluation.thresholdApprovalRequired).toBe(true);
+  });
+  test("rejects contradictory policy, count, source, and evaluation instead of granting approval", async () => {
+    const changes = [
+      seal => { seal.attendanceBinding.sourceVersionId = "other-version"; },
+      seal => { seal.attendanceBinding.count = 0; },
+      seal => { seal.approvalEvaluation.thresholdApprovalRequired = false; },
+      seal => { seal.approvalEvaluation.impactApprovalRequired = false; },
+      seal => { seal.approvalEvaluation.beforeTotalCents = 1248001; seal.approvalEvaluation.absoluteTotalDeltaCents = 443999; },
+      seal => { seal.workflowPolicy.approvalPolicy.allowedRoles = ["admin"]; },
+      seal => { seal.workflowPolicy.definitionPin.versionId = "quote_review_v2"; },
+      seal => { seal.workflowPolicy.declaredAtISO = "2099-01-01T00:00:00.000Z"; },
+      seal => { seal.attendanceBinding.untrusted = true; }
+    ];
+    for (const mutate of changes) {
+      const seal = boundEvidence(); mutate(seal);
+      mockState.callable.mockResolvedValue({ data: simulationResponse({ simulationReceipt: simulationReceipt({ schemaVersion: "commercial-change-simulation-receipt-v2", ...seal }) }) });
+      await expect(simulateCommercialQuoteChange(input)).rejects.toMatchObject({ code: "invalid-server-response" });
+    }
+  });
+  test("accepts bound authorization and rejects v1 receipts that assert v2 authority", async () => {
+    mockState.callable.mockResolvedValue({ data: { ok: true, storage: "firebase", ...SCOPE, idempotent: false, approval: approval("authorized"), authorizationReceipt: authorizationReceipt({ schemaVersion: "commercial-change-authorization-receipt-v2", ...boundEvidence() }) } });
+    const result = await authorizeCommercialQuoteChange({ ...SCOPE, simulationReceiptId: SIMULATION_RECEIPT_ID, requestId: AUTHORIZATION_REQUEST_ID });
+    expect(result.authorizationReceipt.workflowPolicy.definitionPin.version).toBe(1);
+    mockState.callable.mockResolvedValue({ data: simulationResponse({ simulationReceipt: simulationReceipt(boundEvidence()) }) });
+    await expect(simulateCommercialQuoteChange(input)).rejects.toMatchObject({ code: "invalid-server-response" });
+  });
+});

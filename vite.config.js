@@ -133,6 +133,14 @@ export default defineConfig(({ mode }) => {
       }
     },
     rollupOptions: {
+      // Our proposal, BEO and briefing exporters draw text, shapes and images.
+      // They do not use jsPDF's optional HTML/SVG rasterizers. jsPDF documents
+      // externalizing these optional imports to avoid emitting unused chunks.
+      // Scope this to jsPDF: a direct application import must still be bundled.
+      external(id, importer = "") {
+        return ["canvg", "html2canvas", "dompurify"].includes(id)
+          && importer.replace(/\\/g, "/").includes("/jspdf/");
+      },
       output: {
         manualChunks(id) {
           const normalizedId = id.replace(/\\/g, "/");
@@ -145,6 +153,9 @@ export default defineConfig(({ mode }) => {
             normalizedId.includes("/node_modules/scheduler/")
           ) {
             return "vendor-react";
+          }
+          if (normalizedId.endsWith("/src/components/LegacyCustomerPortalView.jsx")) {
+            return "legacy-customer-portal";
           }
           if (normalizedId.endsWith("/src/lib/quoteStore.js")) {
             return "workspace-quote-store";

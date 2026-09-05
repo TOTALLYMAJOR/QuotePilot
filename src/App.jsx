@@ -142,6 +142,7 @@ const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
+const EVENT_OPERATING_SPINE_UI_ENABLED = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true";
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
@@ -3178,10 +3179,16 @@ export default function App({
   // never reaches authoritative pricing; typing any different exact count
   // resolves it.
   const [guestBand, setGuestBand] = useState(null);
+  const [attendanceChange, setAttendanceChange] = useState(null);
   useEffect(() => {
     if (!guestBand) return;
     if (Number(form.guests) !== Number(guestBand.appliedValue)) setGuestBand(null);
   }, [form.guests, guestBand]);
+  useEffect(() => {
+    if (form.attendancePlanning && Number(form.guests) !== form.attendancePlanning.value) {
+      setForm(current => { const next = { ...current }; delete next.attendancePlanning; return next; });
+    }
+  }, [form.guests, form.attendancePlanning]);
 
   const applyIntentDraft = (draft = {}, meta = null) => {
     const { eventTypeId, ...rest } = draft || {};
@@ -3518,7 +3525,8 @@ export default function App({
         quoteId: editingQuote.id,
         expectedActiveVersionId: editingQuote.activeVersionId,
         requestId: simulationRequestId,
-        form: candidateForm
+        form: candidateForm,
+        ...(attendanceChange ? { attendanceSubmissionReceiptId: attendanceChange.submissionReceiptId } : {})
       });
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
@@ -3679,6 +3687,7 @@ export default function App({
     && changeImpactPreview.formKey
     && changeImpactPreview.formKey === JSON.stringify(form)
     && changeImpactPreview.simulationReceiptId
+    && (attendanceChange?.submissionReceiptId || "") === (changeImpactPreview.model?.attendanceBinding?.submissionReceiptId || "")
     && changeImpactPreview.model?.identity?.beforeRevisionId === editingQuote.activeVersionId
   );
 
@@ -3927,7 +3936,7 @@ export default function App({
   };
 
   const handleApplyCommercialChange = async () => {
-    if (!changeImpactScopeIsCurrent() || !changeImpactPreview.authorizationReceiptId) return;
+    if (!changeImpactScopeIsCurrent() || (changeImpactPreview.authorizationRequired && !changeImpactPreview.authorizationReceiptId)) return;
     if (changeImpactPreview.applyRequestId) {
       await handleReconcileCommercialChangeApplyOutcome();
       return;
@@ -3962,7 +3971,7 @@ export default function App({
         applyOutcome: null,
         mutationState: "receipt",
         mutationKind: "apply",
-        mutationMessage: result.commercialChange?.authorityState === "enforced"
+        mutationMessage: attendanceChange ? "Reviewed attendance was applied to a new draft revision. Prior payment and booking history remain preserved. Separate customer acceptance and administrator booking revalidation are required; no payment was charged." : result.commercialChange?.authorityState === "enforced"
           ? `The edit and ${result.commercialChange.totalInvalidationCount} dependency invalidation receipt(s) were committed atomically.`
           : "The quote edit was saved while commercial-change enforcement remained dormant."
       }));
@@ -4167,7 +4176,7 @@ export default function App({
       }
       if (
         changeImpactPreview.authorityState === "enforced"
-        && changeImpactPreview.authorizationRequired
+        && (changeImpactPreview.authorizationRequired || changeImpactPreview.model?.attendanceBinding)
       ) {
         setStep(5);
         setSubmitState((current) => ({
@@ -5026,7 +5035,8 @@ export default function App({
       navigateToRoute = true,
       draftPatch = null,
       draftIntent = null,
-      ambientCatalogContext = null
+      ambientCatalogContext = null,
+      attendanceSubmission = null
     } = {},
     ambientArrival = null
   ) => {
@@ -5105,11 +5115,19 @@ export default function App({
         nextResolution: draftRuntime.nextResolution
       };
     }
-    const stagedDraftFields = draftRuntime.stagedFields;
+    if (attendanceSubmission && (
+      !EVENT_OPERATING_SPINE_UI_ENABLED || catalog.settings?.eventOperatingSpineEnabled !== true
+      || attendanceSubmission.organizationId !== authSession.organizationId || attendanceSubmission.quoteId !== quote.id
+      || attendanceSubmission.sourceVersionId !== (quote.activeVersionId || quote.versionMeta?.versionId)
+      || attendanceSubmission.acceptanceReceiptId !== quote.acceptanceReceipt?.receiptId
+      || !Number.isInteger(attendanceSubmission.count) || attendanceSubmission.count < 1 || attendanceSubmission.count > 400
+    )) return { status: "recovery", reason: "The submitted count no longer matches the selected accepted quote. Refresh attendance before review." };
+    const stagedDraftFields = attendanceSubmission ? [...new Set([...draftRuntime.stagedFields, "guests"])] : draftRuntime.stagedFields;
     resetChangeImpactPreview();
     clearPilotScenarioDraftReview();
     setGlobalEventTypeId(draftRuntime.eventTypeId);
-    setForm(draftRuntime.form);
+    setAttendanceChange(attendanceSubmission);
+    setForm(attendanceSubmission ? { ...draftRuntime.form, guests: attendanceSubmission.count } : draftRuntime.form);
     setEditingQuote(draftRuntime.editingQuote);
     const packageMenuDraftIntent = draftRuntime.ambientDraftIntent?.family === "package_menu"
       ? draftRuntime.ambientDraftIntent
@@ -5134,7 +5152,9 @@ export default function App({
     const rebookReviewRequired = quote.rebooking?.state === "draft_created_for_staff_review";
     setSubmitState({
       saving: false,
-      message: safeArrivalContext
+      message: attendanceSubmission
+        ? `Submitted count ${attendanceSubmission.count} is staged for commercial review. Preview and explicitly apply it; no attendance confirmation or price change has been saved.`
+        : safeArrivalContext
         ? `${quote.event?.name || quote.quoteNumber || quote.id}: ${safeArrivalContext.object.label || "Selected object"}. ${safeArrivalContext.reason} ${safeArrivalContext.consequence} Next step: ${safeArrivalContext.nextResolution}`
         : rebookReviewRequired
         ? `Rebook review required for ${quote.quoteNumber || quote.id}: choose a current-or-future event date, review the copied scope, then save. Delivery remains blocked until that trusted edit succeeds.`
@@ -5790,6 +5810,9 @@ export default function App({
         selectedEventType: globalEventTypeId,
         onEventTypeChange: setGlobalEventTypeId,
         currentUserRole: authSession.role,
+        principalId: authSession.user?.uid || "",
+        workflowStudioEnabled: EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true,
+        workflowSource: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source,
         arrivalContext: workspaceArrivalContext?.surfaceId === "ambient-library"
           ? workspaceArrivalContext
           : null,
@@ -6134,6 +6157,8 @@ export default function App({
         >
           <Suspense fallback={<p className="source-note" role="status">Loading change-impact presentation…</p>}>
             <CommercialChangeImpactPanel
+              workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
+              principalId={authSession.user?.uid || ""}
               model={changeImpactPreview.model}
               loading={changeImpactPreview.loading}
               recovering={changeImpactPreview.recovering}
@@ -6575,6 +6600,9 @@ export default function App({
       ].includes(resolvedWorkspaceRouteId) && (
         <WorkspaceLazyRoute surfaceName="Events" component={EventPlanningView}>
           <EventPlanningView
+            principalId={authSession.user?.uid || ""}
+            role={authSession.role}
+            eventOperationsEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
             snapshot={commercialSnapshot}
             organizationName={organizationName}
             organizationId={authSession.organizationId}
@@ -6591,6 +6619,7 @@ export default function App({
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
+            onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onOpenOperations={eventScheduleEnabled
               ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
               : undefined}
@@ -6681,6 +6710,8 @@ export default function App({
             tenantTimeZone={tenantTimeZone}
             isAdmin={authSession.isAdmin}
             currentUserRole={authSession.role}
+            currentUserUid={authSession.user?.uid || ""}
+            workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
             ambientMode={AMBIENT_UI_ENABLED}
             arrivalContext={workspaceArrivalContext?.surfaceId === "client-overview"
               ? workspaceArrivalContext
@@ -7207,6 +7238,7 @@ export default function App({
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
+            attendanceEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
             tenantTimeZone={tenantTimeZone}
             serviceStyles={Object.keys(STAFF_RULES)}
             ambientPricingCatalog={AMBIENT_UI_ENABLED ? catalog : null}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..contracts import ChainLink, EvidenceRef, EvidenceStatus, Finding, Severity
+from ..contracts import AVAILABILITY_REASON_CODES, Availability, ChainLink, EvidenceRef, EvidenceStatus, Finding, ReasonCode, Severity
 from ..model import CommercialRecord
 from ..money import apply_basis_points, format_usd
 from .base import Rule
@@ -179,8 +179,19 @@ class OperationalOverrunRule(Rule):
                 COST_BASIS_NODE,
             )
 
-        planned = record.cost_basis.planned_cost_cents
+        policy_evidence = record.overrun_policy_evidence
+        if policy_evidence is not None and policy_evidence.availability is not Availability.AVAILABLE:
+            return self.unverifiable_section(
+                "overrunThresholds", policy_evidence,
+                AVAILABILITY_REASON_CODES.get(policy_evidence.availability, ReasonCode.EVIDENCE_INCOMPLETE),
+            )
         thresholds = record.overrun_thresholds
+        if not thresholds.declared:
+            return self.unverifiable(
+                "Recorded costs have no explicitly declared overrun tolerance with actor and time evidence.",
+                "policy.operations.overrun_tolerance",
+            )
+        planned = record.cost_basis.planned_cost_cents
         overruns: list[str] = []
         details: dict[str, object] = {}
         total_overrun = 0
@@ -209,12 +220,18 @@ class OperationalOverrunRule(Rule):
             if overage > allowance:
                 total_overrun += overage
                 overruns.append(
-                    f"{label} consumed {format_usd(actual_cents)} against a planned "
+                    f"{label} recorded costs of {format_usd(actual_cents)} against a planned "
                     f"{format_usd(planned_cents)}, {format_usd(overage)} over "
                     f"(tolerance {format_usd(allowance)})"
                 )
 
         evidence = (
+            EvidenceRef(
+                node_id="policy.operations.overrun_tolerance",
+                status=EvidenceStatus.RECORDED,
+                source="operator-declared comparison policy",
+                detail=f"declared by {thresholds.declared_by} at {thresholds.declared_at_iso}",
+            ),
             EvidenceRef(
                 node_id=COST_BASIS_NODE,
                 status=EvidenceStatus.RECORDED,
@@ -231,7 +248,7 @@ class OperationalOverrunRule(Rule):
         if not overruns:
             return self.explained(
                 "Labor and purchasing stayed within the declared tolerance.",
-                f"Recorded consumption of {format_usd(actual.total_cents)} is within "
+                f"Operator-declared costs of {format_usd(actual.total_cents)} are within "
                 "tolerance of the planned cost basis.",
                 evidence=evidence,
                 details=details,

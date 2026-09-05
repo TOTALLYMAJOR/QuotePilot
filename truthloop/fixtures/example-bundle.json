@@ -28,11 +28,11 @@
         "section": "processorFeeSchedule"
       },
       {
-        "producerId": "actual-consumption-producer-v1",
+        "producerId": "actual-consumption-producer-v2",
         "section": "actualConsumption"
       }
     ],
-    "recordsDigestSha256": "aac160efd0a03615db11e725b1d574da0748aa57d1357659068dbc5c7c2f3071"
+    "recordsDigestSha256": "fa2f571885da97ff1917d24dbcaa2179e13186030ddf1edca85a61a27f2f93a2"
   },
   "records": [
     {
@@ -107,16 +107,59 @@
           }
         },
         "actualConsumption": {
-          "availability": "not_applicable",
+          "availability": "available",
           "constraintClass": "none",
-          "detail": "The event has not been delivered, so there is nothing to consume yet.",
+          "detail": "Operator-declared USD costs with explicit category completeness. Not evidence of attendance, physical consumption, delivery, payment or settlement; no rate or tolerance was inferred.",
           "provenance": {
             "exporterVersion": "commercial-evidence-exporter-v1",
-            "observedAtISO": "",
-            "revision": "",
-            "sourceField": "",
-            "sourceObject": "",
-            "sourceSchemaVersion": ""
+            "fields": {
+              "acceptedSource": {
+                "derivation": "Private acceptance digest and immutable accepted version verified",
+                "detail": "",
+                "revision": "rev_7",
+                "sourceField": "proposalSnapshot",
+                "sourceObject": "organizations/org_demo/proposalAcceptanceReceipts/rcpt_demo_1"
+              },
+              "laborDeclaration": {
+                "derivation": "Explicit category declaration verified against retained category entries",
+                "detail": "Declared complete at 2026-08-20T12:00:04.000Z",
+                "revision": "4",
+                "sourceField": "request.state",
+                "sourceObject": "organizations/org_demo/eventOperatingLedgers/event_ops_6634c25489c9be30adc343a9165c8f0bfb91b33ccbc10916/actualsReceipts/event_actuals_command_e3513fc7edd7d5d2e143800062a84bbc87c0a5b36ce47a45"
+              },
+              "otherDeclaration": {
+                "derivation": "Explicit category declaration verified against retained category entries",
+                "detail": "Declared complete at 2026-08-20T12:00:06.000Z",
+                "revision": "6",
+                "sourceField": "request.state",
+                "sourceObject": "organizations/org_demo/eventOperatingLedgers/event_ops_6634c25489c9be30adc343a9165c8f0bfb91b33ccbc10916/actualsReceipts/event_actuals_command_367dba8e46122c3dec393feeec72e6578e4d93f953454a32"
+              },
+              "phase": {
+                "derivation": "Initialized phase identity verified; no delivery inference",
+                "detail": "",
+                "revision": "1",
+                "sourceField": "resultLedger",
+                "sourceObject": "organizations/org_demo/eventOperatingLedgers/event_ops_6634c25489c9be30adc343a9165c8f0bfb91b33ccbc10916/receipts/event_ops_command_503e528c50e71e4c1ead0b6ab9a9045d8bd93cb83d584bbf"
+              },
+              "purchasingDeclaration": {
+                "derivation": "Explicit category declaration verified against retained category entries",
+                "detail": "Declared complete at 2026-08-20T12:00:05.000Z",
+                "revision": "5",
+                "sourceField": "request.state",
+                "sourceObject": "organizations/org_demo/eventOperatingLedgers/event_ops_6634c25489c9be30adc343a9165c8f0bfb91b33ccbc10916/actualsReceipts/event_actuals_command_c73ad7454c9b2b72253282bbf63b6eba46361864bddebc75"
+              }
+            },
+            "observedAtISO": "2026-08-20T12:00:06.000Z",
+            "revision": "6",
+            "sourceField": "resultActualsState.entries",
+            "sourceObject": "organizations/org_demo/eventOperatingLedgers/event_ops_6634c25489c9be30adc343a9165c8f0bfb91b33ccbc10916/actualsReceipts/event_actuals_command_367dba8e46122c3dec393feeec72e6578e4d93f953454a32",
+            "sourceSchemaVersion": "1"
+          },
+          "value": {
+            "laborCostCents": 208000,
+            "otherCostCents": 96000,
+            "purchasingCostCents": 612000,
+            "recordedAtISO": "2026-08-20T12:00:06.000Z"
           }
         },
         "authorizedQuote": {
@@ -308,6 +351,19 @@
         }
       },
       "organizationId": "org_demo",
+      "overrunPolicyEvidence": {
+        "availability": "not_yet_available",
+        "constraintClass": "business_policy",
+        "detail": "No verified instance-pinned comparison policy is available; no tolerance is inferred.",
+        "provenance": {
+          "exporterVersion": "commercial-evidence-exporter-v1",
+          "observedAtISO": "",
+          "revision": "",
+          "sourceField": "definition.config.comparisonPolicy",
+          "sourceObject": "",
+          "sourceSchemaVersion": ""
+        }
+      },
       "quoteId": "quote_demo_1",
       "quoteNumber": "QP-1042"
     }

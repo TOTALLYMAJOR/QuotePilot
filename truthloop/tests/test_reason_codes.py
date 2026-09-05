@@ -79,13 +79,13 @@ class ReasonCodeMetricsTest(unittest.TestCase):
         # estimated_versus_realized_contribution.
         self.assertEqual(tally["evidence_missing"], 3)
 
-    def test_the_current_state_bundle_is_blocked_only_by_the_connect_gate(self):
+    def test_current_state_preserves_connect_and_incomplete_actual_cost_blockers(self):
         _, records, rejected = load_bundle(current_state_bundle())
         self.assertEqual(rejected, [])
         metrics = reconcile(records, INSTANT).metrics
         self.assertEqual(
             metrics["blockedReasonCodes"],
-            {"evidence_blocked_by_integration": 1},
+            {"evidence_blocked_by_integration": 1, "evidence_not_yet_available": 2},
         )
 
     def test_records_without_a_commercial_chain_are_segmented(self):

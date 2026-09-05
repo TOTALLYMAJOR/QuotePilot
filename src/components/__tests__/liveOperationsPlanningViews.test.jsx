@@ -300,3 +300,19 @@ describe("ClearDeckView bounded decision review", () => {
     expect(unavailableMarkup).not.toContain("Missing or insufficient permissions");
   });
 });
+
+test("event operating entry requires enabled connected booked scope and authorized staff", () => {
+  const props = { snapshot: snapshot({ quotes: [{ id: "booked-a", status: "booked", event: { name: "Booked event" } }] }), quoteId: "booked-a", routeMode: "detail", principalId: "admin-a", role: "admin", eventOperationsEnabled: true };
+  expect(renderToStaticMarkup(<EventPlanningView {...props} />)).toContain('data-event-operations-entry="control-room"');
+  expect(renderToStaticMarkup(<EventPlanningView {...props} role="sales" />)).toContain("Open Control Room");
+  for (const denied of [{ role: "customer" }, { eventOperationsEnabled: false }, { principalId: "" }, { snapshot: snapshot({ source: "local", quotes: props.snapshot.quotes }) }, { snapshot: snapshot({ quotes: [{ ...props.snapshot.quotes[0], status: "accepted" }] }) }]) {
+    expect(renderToStaticMarkup(<EventPlanningView {...props} {...denied} />)).not.toContain("Open Control Room");
+  }
+});
+
+test("operational Replay is discoverable only for the connected booked staff scope", () => {
+  const props = { snapshot: snapshot({ quotes: [{ id: "event-a", status: "booked", activeVersionId: "version-a", acceptanceReceipt: { receiptId: "accept-a" }, event: { name: "Booked event" } }] }), routeMode: "detail", quoteId: "event-a", principalId: "staff-a", eventOperationsEnabled: true, role: "sales" };
+  expect(renderToStaticMarkup(<EventPlanningView {...props} />)).toContain('data-event-operations-entry="replay"');
+  for (const denied of [{ role: "customer" }, { eventOperationsEnabled: false }, { snapshot: snapshot({ source: "local", quotes: props.snapshot.quotes }) }]) expect(renderToStaticMarkup(<EventPlanningView {...props} {...denied} />)).not.toContain('data-event-operations-entry="replay"');
+  expect(renderToStaticMarkup(<EventPlanningView {...props} routeMode="replay" />)).not.toContain("Replay is unavailable");
+});

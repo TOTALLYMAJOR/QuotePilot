@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-05 00:28:05 CDT
+Last updated: 2026-09-05 18:49:28 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -2879,3 +2879,217 @@ The configured quote view ranks one next action from the quote's recorded lifecy
 - **Create alternate draft** lives under **More** unless it is the ranked outcome for a closed opportunity. It creates a separate quote after an explicit consequence confirmation. Named customer, event, selection, pricing, and proposal-presentation fields carry forward through a nested schema projection; unknown nested fields and delivery, credential, acceptance, rebooking, payment-provider, integration-receipt, and booking proof do not transfer. The new quote receives its own `v0001` and version-history record. On success, QuotePilot opens that created draft while the source quote remains unchanged.
 - Firebase-backed lifecycle management uses an explicit **Expire quote** action rather than a generic lifecycle selector; the browser-local fallback retains its existing status selector for compatibility.
 - **Request deposit**, **Create contract**, **Request final balance**, **Record customer confirmation**, **Restore as draft**, and **Renew customer link** retain their existing approval, provider, portal, payment, and role boundaries. The action ranking does not change whether the organization's workflow treats contract creation before or after deposit settlement.
+
+## Event Operating Spine phase recording
+
+This bounded first slice is available only where the Event Operating Spine has
+been separately enabled. Open the exact event's **Control Room** from its event
+workspace. Administrators can initialize the operational record for an eligible
+booked event, then record the next phase in order: **Prepared**, **In progress**,
+and **Completed**. Sales users can read the phase and latest receipt but cannot
+record a phase. A phase cannot skip forward or move backward in this slice.
+
+Confirm that the displayed event and accepted source are the intended ones before
+recording a phase. A stale source must be refreshed and reviewed. While submitting,
+wait for the server receipt. If the outcome is uncertain, reconcile the same
+attempt before starting another command; a timeout is not proof of failure. A
+rejection or unavailable connection must be resolved before trying again. Local
+fallback does not create an authoritative operational record.
+
+The latest receipt identifies the recorded command; complete Replay history is
+still unavailable. **Completed** means an administrator recorded the operational
+phase. It does not establish staffing readiness, attendance, worked hours,
+purchasing, post-event closeout review, customer communication, payment, or
+settlement. Continue using the existing staffing and closeout surfaces for their
+own evidence. This documented source slice does not imply hosted availability,
+tenant activation, production verification, or operator acceptance.
+
+## Event Operating Work Journal
+
+In an enabled event's **Control Room**, initialize the event phase before using
+its checkpoints and issue log. Administrators can record or reopen the four fixed
+operator checkpoints: Venue access, Team briefing, Service handoff, and Pack down. Sales users can review the records and issues. A checkpoint
+record is the operator's statement; it does not establish staffing readiness,
+attendance, payment, or event completion.
+
+To open an issue, enter a note of no more than 240 characters and choose normal or
+urgent severity. Severity remains fixed after opening. Resolve or reopen an issue
+with a new note explaining the decision. Reopening a checkpoint also requires a
+note; recording one allows an optional note. Resolved issues remain in the log and
+count toward its limit of 25. This slice has no deletion or automatic issue closure.
+
+Wait for the exact work receipt before treating a change as recorded. While any
+phase or work request is submitting or unresolved, complete that request's
+reconciliation before starting another mutation. A returned historical receipt
+establishes the old command; current journal evidence must refresh before the next
+action. Changing the accepted source opens its own journal context and preserves
+historical records and pending requests.
+
+Journal corrections remain available after the event phase is **Completed**.
+They neither reopen the phase nor complete the separate post-event closeout
+review. The journal records checkpoints and issues only. Declared actuals use their
+separate surface below; full Replay, customer communication and financial
+outcomes remain outside the work journal. This
+source documentation does not establish hosted availability or tenant activation.
+
+
+## Event Operating Actuals
+
+In an enabled event's **Control Room**, initialize the event phase before recording
+actuals. Administrators can record labor, purchasing, and other costs. Sales users
+can review the bounded records and captured totals. Enter explicitly known USD
+costs; labor also requires whole duration minutes and a role category. These are
+operator declarations, not inferred wages, attendance, invoice verification, or
+proof that purchased materials were consumed.
+
+Correct an entry with its replacement details and a reason, or void it with a
+reason. Its category and identity stay fixed. Voids are final and remain in the
+history; the limit is 50 retained entries including voids. Notes and reasons are
+limited to 240 characters. Corrections remain available after the event phase is
+completed and do not reopen or otherwise change that phase.
+
+Review completeness separately for **Labor**, **Purchasing**, and **Other**.
+An untouched category is **Not declared**. Recording, correcting, or voiding an
+entry makes that category **Partial**, even if it was previously complete.
+Declare **Complete** only when its captured costs are complete, including an
+explicit confirmation of zero if appropriate. **Not applicable** is allowed only
+when that category has no active entries. Captured totals stay provisional while
+any category is undeclared or partial; an unknown amount is not a zero amount.
+
+Wait for the exact actuals receipt before treating a command as recorded. An
+unresolved phase, work, or actuals request must reconcile before another command
+starts. A historical receipt confirms that original command; refresh current
+evidence before proceeding. A changed accepted source has its own actuals context
+and preserves the old records. These records do not establish delivery, closeout,
+payment, settlement, or an approved overrun tolerance. This source slice does not
+establish hosted availability or tenant activation.
+
+
+## Event Operating Replay
+
+For an enabled booked event, open Replay from the event workspace to inspect
+recorded phase changes, checkpoints and issues, and declared-cost changes.
+Each page belongs to the same accepted event source and the channel heads
+captured when you opened the history. Load more to continue that history;
+refresh to include newer actions. If the accepted source changes or the
+underlying receipt evidence cannot be verified, refresh and review the error
+instead of treating an incomplete history as complete.
+
+Staffing, kitchen BEO, dependency status and run-of-show are current planning
+references. Their own source and freshness labels remain visible. They do not
+prove what happened at the event. Closeout continues through its existing
+customer workflow. Its read-only actuals summary matches both the closeout
+accepted version and acceptance receipt, shows the observed revision/time,
+and suppresses totals when the sources differ. Refreshing that summary never
+records or completes a closeout review.
+
+Cost entries and category declarations are operator records. Expand an entry
+for its full description. A declared zero is different from an unknown or
+partial category. The read-only evidence export uses costs only after all
+three categories have been explicitly completed or marked not applicable and
+their private receipts verify. It never creates a payment, payroll result,
+physical-consumption record or overrun policy.
+
+
+## Tenant Workflow Configuration Studio
+
+For an enabled organization, an administrator can open **Business workflows**
+from Library. The editor distinguishes the QuotePilot seed, a tenant-published
+version, a saved draft and a retired definition.
+
+1. Edit task roles, task templates, due and escalation offsets, and optional
+   review or comparison policy. Administrator authority remains required for
+   operational commands and cost review. Communication references provide
+   manual handoff guidance; choosing one does not send a message.
+2. Save the draft. Resolve validation errors before requesting a preview.
+3. Review the exact future-instance effect and enter the displayed publication
+   confirmation. Publishing creates an immutable version. Existing events keep
+   their pinned version.
+4. To stop new bindings, retire the active version with a reason. Existing
+   instances keep their version; retirement never silently restores the seed.
+
+A missing threshold is different from an explicit zero. Comparison tolerances
+must all be declared together; the publication records their declaring actor
+and time. No rate is learned from past costs. Leaving a dirty Library editor
+uses the existing dismissal guard.
+
+If a command outcome is uncertain, reconcile that exact request before editing
+or submitting another one. Once its receipt is confirmed, refresh the current
+configuration; an older successful receipt is not the latest draft or version.
+A conflict requires a current read and new preview. Publication does not enable
+a tenant, deploy software, grant a new platform role or activate a provider.
+
+## Event Workflow Coordination
+
+Open an enabled booked event's Control Room to inspect its pinned coordination
+policy. New instances use the explicit seed or active tenant publication at
+initialization. Older phase records without a binding remain labeled legacy;
+they do not acquire a tenant policy retrospectively.
+
+Review task instructions, ownership, due time and escalation. An acknowledgement
+records that the named obligation was checked, and reopening requires a reason.
+It does not prove attendance, BEO generation, delivery, payment, or another
+domain action. Due and escalation labels are observations, not notifications.
+Workflow due time and individual task due times are separately anchored to
+instance creation.
+
+When complete actual costs meet the configured review threshold, an
+administrator can acknowledge that exact cost revision and receipt. Incomplete
+capture cannot be reviewed as complete. A correction, void, or later category
+declaration requires a fresh review; the earlier receipt remains historical.
+
+For a compatible policy update, use the separate migration preview in the
+event policy panel. Review its exact source, current and proposed versions,
+changed open tasks and additions, then type the displayed confirmation.
+Removed tasks, changes to acknowledged task meaning, and review/comparison
+policy changes are initially incompatible. Publishing alone never migrates an
+event, and migration never rewrites operational or historical receipts.
+
+Phase, checkpoint/issue, actual-cost and coordination requests share the event's
+uncertain-outcome exclusion. Reconcile the original request and refresh its
+current state before starting a different action.
+
+
+## Catering Workflow Packs
+
+In Library, choose the workflow you want to configure. Quote review controls
+which staff may participate and whether the size of a proposed price change
+requires approval. Existing administrator approval requirements still apply.
+Event execution can require checkpoints before another checkpoint or phase,
+and can block progression while an urgent issue is open. Closeout lets you
+assign responsibility and choose a follow-up offset from the closeout due date.
+
+Each running workflow displays the published version it uses. Publishing a new
+version affects later workflows. To change a compatible running workflow,
+preview the migration, review the differences and confirm the exact proposed
+version. A completed task records an acknowledgement; check the separate domain
+receipt to know whether the price, event or closeout actually changed.
+
+### Final guest-count request and response
+
+On the saved quote, open **Guest count**, then **See connections** to reach
+the attendance controls. The priced count and reviewed planning estimate remain
+visible separately. Request final guest count to create a
+record with the deadline from your guest-count policy. Creating that request
+does not send a message. Use the existing approved communication process to
+contact the customer.
+
+The current active customer portal can show the request and collect a whole
+number from 1 to 400. Staff can also record a response with its stated source.
+A response is proposed evidence, including when it matches the priced count.
+Review the response through Commercial Change before applying it. That review
+shows the exact source, count and approval requirements. It does not prove who
+personally used a customer portal link.
+
+Applying a response to an accepted or booked event creates a revised draft for
+renewed customer acceptance and booking review. The old acceptance, booking and
+payment history remain evidence for the earlier agreement. No new payment or
+customer send happens automatically. Complete the existing proposal delivery,
+acceptance and administrator booking steps before treating the revised event
+as the current accepted operating source. A final count is never actual
+attendance or proof of service.
+
+If a request's result is uncertain, check the original request before submitting
+another. Refresh after its receipt is confirmed. A changed accepted version or
+portal link requires reviewing the current source; an old response cannot be
+silently applied to a different agreement.

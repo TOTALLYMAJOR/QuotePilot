@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createAmbientActionResult } from "../lib/ambientContracts";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createAmbientAction, createAmbientActionResult } from "../lib/ambientContracts";
 import {
   AMBIENT_LIBRARY_SECTION_ORDER,
   buildAmbientLibrary
@@ -15,9 +15,12 @@ import { AdminCatalogView } from "./AdminCatalogModal";
 import BusinessSetupCenter from "./BusinessSetupCenter";
 import "./ambientLibraryRoute.css";
 
-const CATALOG_SECTION_IDS = new Set(["starter", ...AMBIENT_LIBRARY_SECTION_ORDER]);
+const TenantWorkflowConfigurationStudio = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./TenantWorkflowConfigurationStudio")) : null;
+const CATALOG_SECTION_IDS = new Set(["starter", "workflow", ...AMBIENT_LIBRARY_SECTION_ORDER]);
 const EDITOR_SECTION_LABELS = Object.freeze({
   starter: "Library setup",
+  workflow: "Business workflows",
   packages: "Offers",
   addons: "Services",
   rentals: "Rentals",
@@ -306,6 +309,9 @@ export default function AmbientLibraryRoute({
   catalog,
   organizationId = "",
   currentUserRole = "admin",
+  principalId = "",
+  workflowStudioEnabled = false,
+  workflowSource = "",
   onClose,
   onSave,
   onApplyStarterPack,
@@ -395,6 +401,10 @@ export default function AmbientLibraryRoute({
       refresh: typeof onReload === "function"
     }
   }), [catalog, currentUserRole, isAdmin, onReload, organizationId]);
+
+  const workflowAllowed = workflowStudioEnabled === true && currentUserRole === "admin" && workflowSource === "firebase" && Boolean(organizationId && principalId);
+  const workflowAction = useMemo(() => createAmbientAction({ id: "open-workflow-studio", outcomeLabel: "Open Configuration Studio", purpose: "reveal_context", roles: ["admin"], authorityLevel: "presentation", previewPolicy: "none", executionTarget: { kind: "context", targetId: "workflow", surfaceId: "workflow-configuration-studio" }, receiptType: "none", reversibility: { kind: "none" }, arrivalContract: { object: { id: "workflow", type: "workflow-definition", label: "Workflow Configuration Studio" }, reason: "Review quote approval, final guest count, event execution, and closeout follow-up workflows.", consequence: "Draft changes take effect for new workflow instances only after explicit publication.", nextResolutionIds: ["open-workflow-studio"] }, primary: false, enabled: workflowAllowed, ...(!workflowAllowed ? { disabledReason: "An enabled connected admin workspace is required." } : {}) }), [workflowAllowed]);
+  const librarySections = useMemo(() => workflowAllowed ? [...model.sections, { id: "workflow", primaryAction: workflowAction }] : model.sections, [model.sections, workflowAllowed, workflowAction]);
 
   const captureLibraryReturnView = useCallback((hint = {}) => {
     const root = headingRef.current?.closest(".ambient-library");
@@ -672,7 +682,7 @@ export default function AmbientLibraryRoute({
     if (!open) return;
     const destination = navigation?.returnContextDestination;
     if (destination?.kind === "library-editor") {
-      const section = model.sections.find((item) => item.id === destination.sectionId);
+      const section = librarySections.find((item) => item.id === destination.sectionId);
       const template = model.templates.find((item) => item.id === destination.recordId);
       const action = destination.recordId ? template?.primaryAction : section?.primaryAction;
       if (action?.id === destination.actionId) {
@@ -713,7 +723,7 @@ export default function AmbientLibraryRoute({
     }
   }, [
     headingRef,
-    model.sections,
+    librarySections,
     model.templates,
     navigation?.returnContextDestination,
     open
@@ -806,7 +816,7 @@ export default function AmbientLibraryRoute({
           settledLabel="Open"
         />
         <section className="ambient-library__editor" aria-label={`${editorLabel} editor`}>
-          <AdminCatalogView
+          {editorTarget.sectionId === "workflow" && workflowAllowed && TenantWorkflowConfigurationStudio ? <Suspense fallback={<p role="status">Loading Configuration Studio...</p>}><TenantWorkflowConfigurationStudio organizationId={organizationId} principalId={principalId} role={currentUserRole} enabled={workflowStudioEnabled} source={workflowSource} open={open} onClose={closeEditor} onDismissGuardChange={handleEditorDismissGuardChange} onInteractionStateChange={onInteractionStateChange} /></Suspense> : editorTarget.sectionId === "workflow" ? <p>Workflow Configuration Studio is unavailable for this workspace.</p> : <AdminCatalogView
             open={open}
             presentation="embedded"
             catalog={catalog}
@@ -831,7 +841,7 @@ export default function AmbientLibraryRoute({
             onEventTypeChange={onEventTypeChange}
             onToast={onToast}
             catalogSetupDraftController={setupDraft}
-          />
+          />}
         </section>
       </main>
     );
@@ -865,6 +875,7 @@ export default function AmbientLibraryRoute({
 
       {contextualBanner}
 
+      {workflowAllowed && <section className="ambient-library__group" data-library-section="workflow" aria-label="Workflow configuration"><div className="ambient-library__group-title"><p>Workflow configuration</p><span aria-hidden="true" /></div><ol className="ambient-library__row-list"><li><article className="ambient-library__row" data-library-record-id="workflow"><span className="ambient-library__row-icon" aria-hidden="true">◎</span><h3>Business workflows</h3><p>Set tasks, timing, and review rules for quote approval, final guest count, event execution, and closeout follow-up.</p><button type="button" className="ambient-library__row-action" data-library-action-id="open-workflow-studio" data-workflow-studio-entry="library" onClick={(event) => openAction(workflowAction, event.currentTarget)}><span className="ambient-library__row-action-label">Open Configuration Studio</span><span aria-hidden="true">→</span></button></article></li></ol></section>}
       <div className="ambient-library__workspace" data-library-workspace="commercial">
         <div className="ambient-library__catalog-column">
           {model.sections.length === 0 ? (

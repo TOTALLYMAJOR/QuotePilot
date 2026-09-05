@@ -605,6 +605,8 @@ function buildCloseoutOpportunity({ quote, event, calendarContext, eventDate, qu
       kind: "review_post_event_closeout",
       state: displayState,
       closeoutId: closeout.closeoutId,
+      sourceVersionId: safeOpaqueId(closeout.sourceVersionId),
+      acceptanceReceiptId: safeOpaqueId(closeout.acceptanceReceiptId),
       dueDate: text(closeout.dueDate),
       policy: isRecord(closeout.policy) ? { ...closeout.policy } : {},
       completedAtISO: text(closeout.completedAtISO),

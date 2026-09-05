@@ -20,7 +20,13 @@ const PILOT_MEMORY_ENABLED = ["1", "true", "yes", "on"].includes(
 export function buildApplyPayload(result) {
   const draft = result?.draft || {};
   const guestFact = (result?.facts || []).find((fact) => fact.id === "guests") || null;
-  return { draft, guestBand: deriveGuestBand(guestFact) };
+  const guestBand = deriveGuestBand(guestFact);
+  const value = Number(guestFact?.value);
+  const planning = guestFact && Number.isInteger(value) && value >= 1 && value <= 400
+    ? { kind: guestBand?.kind || "exact", value, min: guestBand?.kind === "range" ? guestBand.min : null,
+        max: guestBand?.kind === "range" ? guestBand.max : null, sourceType: "staff_intake" }
+    : null;
+  return { draft: planning ? { ...draft, attendancePlanning: planning } : draft, guestBand };
 }
 
 // Flag-gated CREATE intake canvas (docs/INTENT_INTAKE_ADR.md). The operator
@@ -148,7 +154,8 @@ export default function CreateIntake({
 
   const confirmFact = (fact) => {
     if (!fact?.field) return;
-    onApplyDraft?.({ [fact.field]: fact.value });
+    const payload = fact.field === "guests" ? buildApplyPayload({ draft: { guests: fact.value }, facts: [fact] }) : { draft: { [fact.field]: fact.value } };
+    onApplyDraft?.(payload.draft, payload);
     setConfirmedIds((prev) => (prev.includes(fact.id) ? prev : [...prev, fact.id]));
   };
 

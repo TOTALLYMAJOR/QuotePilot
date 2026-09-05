@@ -1,10 +1,125 @@
 # Changelog
 
-Last updated: 2026-09-05 09:32:23 CDT
+Last updated: 2026-09-05 18:49:28 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — QP-TOM review preparation
+
+- Generate a fresh local-emulator login password for each disposable rehearsal
+  session, retaining the fixed demo-project and localhost checks.
+
+## Unreleased — QP-TOM local whole-app rehearsal
+
+- Add a one-command disposable demo rehearsal using real Auth, Firestore,
+  Functions and the full application with ordinary admin/sales login.
+- Seed explicitly synthetic current-catalog acceptance/booking through native
+  planners for a usable amendment source; preserve pricing, version and payment.
+- Print canonical app links, isolate local credentials and provider configuration,
+  and stop the owned app/emulator process chain through Ctrl+C.
+- Keep automated local rehearsal separate from human acceptance and any future
+  push, hosted tenant activation or provider communication.
+
+## Unreleased — QP-TOM local current-main reconciliation
+
+- Reconstruct the completed tenant model on current main while retaining its
+  catalog drafts, configured quote actions and provider controls.
+- Preserve exact current-catalog review evidence through attendance amendment
+  rebuilds; legacy/changed-catalog terminal sources remain blocked without writes.
+- Make all four packs discoverable under Library's Business workflows entry.
+- Retain every existing release profile's allowed keys and deployment batch
+  quota while composing the 121-export candidate with its isolated TOM profile.
+- Replace a fixed-delay Library arrival assertion with an observable UI wait.
+
+## Unreleased — QP-TOM-020 Four domain packs and qualification
+
+- Extend bounded tenant definitions with schema 2 domain policies while
+  preserving schema 1 seeds, receipts and existing instance pins.
+- Seal tenant approval policy and exact attendance submission references in
+  Commercial Change simulation, authorization and apply receipts. Existing
+  administrator approval requirements remain in force.
+- Persist reviewed attendance planning with server-stamped source provenance;
+  preserve approximate counts without inventing bounds or customer confirmation.
+- Expose all four bounded packs in Configuration Studio and their role-safe
+  domain panels, with exact uncertain-request recovery across pack selection.
+- Apply reviewed attendance amendments through the original commercial owner,
+  preserving paid/booking history and requiring renewed customer acceptance.
+- Keep native policy origin separate from a later migrated coordinator pin;
+  verify both and preserve canonical receipt bytes.
+- Add offline migration inventory and an isolated EventSpine staging profile;
+  tenant activation, hosted proof and moderated acceptance remain separate.
+- Qualify all four native owner workflows with real disposable emulators, then
+  import populated evidence through global disable and restore with identical
+  source hashes and retained receipts. Add a bounded real-pilot walkthrough.
+- Restore the existing compatibility bundle budget by excluding unused optional
+  jsPDF renderers and splitting the legacy portal chunk; no budget was raised.
+
+## Unreleased — QP-TOM-020-E/F Versioned coordination and Configuration Studio
+
+- Add immutable tenant workflow definitions, explicit seed evidence, draft and
+  publication previews, typed confirmation, retirement and exact request receipts.
+- Bind new event instances atomically to a definition while preserving fixed
+  operational authority. Add bounded task acknowledgements, complete-cost review,
+  due/escalation projections and separately previewed compatible migration.
+- Add the administrator Library Studio and staff event-policy surface with
+  guarded navigation, source/pin evidence and uncertain-outcome recovery.
+- Export comparison policy only from an exact pinned tenant publication; keep
+  policy availability independent from declared-cost availability and preserve
+  its reasons in reconciliation. No automatic messaging or provider activation.
+
+## Unreleased — QP-TOM-020-D Operational Replay and actual-cost evidence
+
+- Add bounded, anchored operational history across phase, checkpoint/issue,
+  and actual-cost receipts, with current authority checks and explicit refresh
+  when newer records exist. Reject gaps and retained evidence without a parent.
+- Export exact-source operator-declared costs only after explicit category
+  completeness and private receipt verification. Preserve incomplete evidence
+  and require declared overrun tolerances with actor/time evidence.
+- Compose current operational references through their existing domain reads;
+  local verification remains separate from hosted or human acceptance.
+
+## Unreleased — QP-TOM-020-C Declared operational actuals
+
+- Add exact-source operator-recorded labor, purchasing and other costs with
+  independent correction/void receipts and explicit category completeness.
+  Missing costs remain undeclared/partial; captured zero is never inferred.
+- Preserve phase/work history, role/tenant/source authority, bounded private
+  storage, and shared uncertainty recovery across all three command channels.
+- Leave physical consumption, payroll, payment, delivery and trusted export
+  unavailable unless their own evidence is established.
+
+## Unreleased — QP-TOM-020-B Event checkpoints and issues
+
+- Add fixed operator checkpoints and a bounded issue journal to Control Room,
+  with record/reopen and open/resolve/reopen receipts. The work journal binds
+  the exact accepted event and has its own policy and revision; existing phase
+  and commercial records remain authoritative and unchanged.
+- Keep admin writes and sales reads, strict text/capacity bounds, browser
+  collection denial and independent current authorization checks. Coordinate
+  uncertain phase and work requests through a shared browser guard while
+  preserving server transaction authority.
+- No actuals, full Replay, tenant workflow publication, provider actions,
+  deployment or tenant activation is included.
+
+## Unreleased — QP-TOM-020-A Event Operating Spine
+
+- Add a default-off, tenant-gated operational ledger bound to an exact booked
+  quote, immutable accepted version, and private acceptance receipt. Admins can
+  initialize and record sequential operational phases; sales staff can read the
+  bounded snapshot. Immutable request receipts support exact retry and reject
+  stale revisions or changed payloads.
+- Connect the existing Event Focus route to a role-safe Control Room with
+  explicit submission, uncertain-outcome, reconciliation, receipt and recovery
+  states. Direct browser ledger/receipt access and tenant-gate edits are denied.
+- Update the explicit callable inventory test and preserve identical synthetic
+  secret-rejection fixtures using runtime construction, clearing the existing
+  scanner false positives without changing scanner policy.
+- Record the delegated Phase 0 decisions in the Tenant Operating Model ADR.
+  This is the first local source slice: checkpoints, issues, actuals, full
+  Replay, tenant policy publication and Truth Loop export remain subsequent
+  work. No tenant activation, deployment, provider or human proof is implied.
 
 ## [Unreleased]
 

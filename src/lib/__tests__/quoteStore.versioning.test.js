@@ -321,6 +321,24 @@ describe("quoteStore versioning and delete behavior", () => {
     expect(created.selection.chefRateMixCsv).toBe("50,55");
   });
 
+  test("local reviewed planning survives immutable versioning without claiming customer confirmation", async () => {
+    const planning = { kind: "approximate", value: 120, min: null, max: null, sourceType: "staff_intake" };
+    const request = { form: { name: "Client", email: "client@example.com", guests: 120, pkg: "classic", addons: [], rentals: [], menuItems: ["smoked-ribs"], attendancePlanning: planning },
+      totals: { selectedPkg: { id: "classic", name: "Classic" }, total: 1200, deposit: 360 },
+      catalogSource: "local", settings: {}, ownerUid: "local-reviewer" };
+    const created = await submitQuote(request);
+    let stored = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY))[0];
+    expect(stored.event.guests).toBe(120);
+    expect(stored.event.attendance).toMatchObject({ planning: { ...planning, recordedByUid: "local-reviewer" }, confirmation: { state: "not_requested" } });
+    expect(stored.event.attendance.planning.sourceReferenceId).toMatch(/^local:/);
+    expect(JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY))[0].snapshot.event.attendance).toEqual(stored.event.attendance);
+    const { attendancePlanning, ...plainForm } = request.form;
+    await updateQuote({ ...request, form: plainForm, quoteId: created.id });
+    const updated = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY))[0];
+    expect(updated.event.attendance).toEqual(stored.event.attendance);
+    await expect(submitQuote({ ...request, form: { ...request.form, attendancePlanning: { ...planning, recordedByUid: "forged" } } })).rejects.toThrow(/supported planning fields/);
+  });
+
   test("updates an existing quote with versioning and locked labor-rate snapshot", async () => {
     seedQuotes([
       makeQuote({
