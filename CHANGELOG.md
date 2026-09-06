@@ -1,12 +1,16 @@
 # Changelog
 
-Last updated: 2026-09-05 19:05:50 CDT
+Last updated: 2026-09-05 19:17:44 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
 ## Unreleased — combined production candidate
+
+- Extend the approved RagnaKoK runtime scope to staffing actions and Revenue
+  Autopilot preparation; retain explicit policy setup and disabled scheduling
+  and automated sends. Other organizations remain denied.
 
 - Add a tenant-scoped RagnaKoK runtime profile with global flags off, exact
   organization isolation, environment validation and per-Function readback.

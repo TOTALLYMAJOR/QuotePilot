@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-05 19:05:50 CDT
+Last updated: 2026-09-05 19:17:44 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -399,3 +399,12 @@ Vercel retain their safe-off deployment profile and include role/tenant-gated
 workflow presentation. Follow [the activation and rollback procedure](LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release)
 only after successful backend deployment. Source publication is not activation
 or policy publication.
+
+
+RagnaKoK test access also admits operational staffing and Revenue Autopilot
+preparation through the same exact-tenant runtime guard. The staffing tenant
+setting remains required. Revenue policy configuration remains explicit; no
+outreach policy is invented or published during activation. The global scheduler
+receives no tenant scope and stays disabled, and the outbound-send gate stays
+off. Other tenants cannot use these scoped authorities. Existing explicit
+operator email actions retain their normal authorization and confirmations.

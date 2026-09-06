@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-05 19:05:50 CDT
+Last updated: 2026-09-05 19:17:44 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -1620,12 +1620,22 @@ Both frontend builds include the workflow presentation flag; the Studio remains
 restricted to a connected administrator whose tenant workflow setting is enabled.
 After the exact tagged release passes main CI and backend deployment/readback,
 update only the existing `organizations/mm05366-sandbox/settings/config` fields
-`eventOperatingSpineEnabled` and `commercialChangeAuthorityEnabled` to true.
+`eventOperatingSpineEnabled`, `commercialChangeAuthorityEnabled`, and
+`operationalStaffingAuthorityEnabled` to true.
 First verify `brandName=RagnaKoK Inc`, capture prior field presence/value and
-updateTime, use an updateTime precondition plus an explicit two-field update
-mask, then read back both fields. A concurrent change requires a fresh review;
+updateTime, use an updateTime precondition plus an explicit three-field update
+mask, then read back all three fields. A concurrent change requires a fresh review;
 never create a missing config document. Retain the activation receipt outside
-source control. Rollback restores those two prior values/presence with the same
+source control. Rollback restores those three prior values/presence with the same
 concurrency protection, then uses each target's last-known-good release.
 This activation does not publish workflow policies, migrate existing events,
 perform provider sends, or establish operator acceptance.
+
+
+RagnaKoK test access also admits operational staffing and Revenue Autopilot
+preparation through the same exact-tenant runtime guard. The staffing tenant
+setting remains required. Revenue policy configuration remains explicit; no
+outreach policy is invented or published during activation. The global scheduler
+receives no tenant scope and stays disabled, and the outbound-send gate stays
+off. Other tenants cannot use these scoped authorities. Existing explicit
+operator email actions retain their normal authorization and confirmations.

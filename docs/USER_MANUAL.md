@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-05 19:05:50 CDT
+Last updated: 2026-09-05 19:17:44 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -3215,3 +3215,12 @@ publish explicitly before relying on a customized policy for new workflow
 instances. Enabling the workspace does not itself publish drafts or change
 existing event bindings. Native quote approval, attendance, event execution and
 closeout actions continue to enforce their own permissions and source records.
+
+
+RagnaKoK test access also admits operational staffing and Revenue Autopilot
+preparation through the same exact-tenant runtime guard. The staffing tenant
+setting remains required. Revenue policy configuration remains explicit; no
+outreach policy is invented or published during activation. The global scheduler
+receives no tenant scope and stays disabled, and the outbound-send gate stays
+off. Other tenants cannot use these scoped authorities. Existing explicit
+operator email actions retain their normal authorization and confirmations.

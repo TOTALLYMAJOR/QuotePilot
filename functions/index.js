@@ -1301,13 +1301,15 @@ function configBoolean(path, fallback = false) {
   return value === "true" || value === "1" || value === "yes";
 }
 
-function getRevenueAutopilotGlobalControl(nowISO = new Date().toISOString()) {
+function getRevenueAutopilotGlobalControl(nowISO = new Date().toISOString(), organizationId = "") {
   const email = getEmailConfig();
   const providerConfigured = email.provider === "resend"
     && Boolean(email.resendApiKey)
     && email.senderApproved;
   return {
-    enabled: configBoolean("revenue_autopilot.enabled", false),
+    enabled: tenantWorkflowRuntimeEnabled("REVENUE_AUTOPILOT_ENABLED", organizationId, {
+      ...process.env, REVENUE_AUTOPILOT_ENABLED: configBoolean("revenue_autopilot.enabled", false) ? "true" : "false"
+    }),
     sendsEnabled: configBoolean("revenue_autopilot.sends_enabled", false),
     provider: {
       evidenceId: `provider_${createHash("sha256")
@@ -1953,7 +1955,7 @@ async function readRevenueAutopilotExecutionAuthority({
     organizationId,
     customerId
   });
-  const global = getRevenueAutopilotGlobalControl(nowISO);
+  const global = getRevenueAutopilotGlobalControl(nowISO, organizationId);
   const canonical = {
     quote,
     portal: revenueAutopilotPortalEvidence({
@@ -2117,7 +2119,7 @@ async function reconcileRevenueAutopilotReplyAttentionForQuote({
       organizationId,
       quoteId,
       evidence: { conversation: evidence },
-      global: getRevenueAutopilotGlobalControl(nowISO),
+      global: getRevenueAutopilotGlobalControl(nowISO, organizationId),
       tenantPolicy,
       activeAttention: activeAttentionSnap?.exists
         ? { attentionId: activeAttentionSnap.id, ...(activeAttentionSnap.data() || {}) }
@@ -11329,9 +11331,6 @@ exports.recordProductAnalyticsEvents = functions.region(REGION).https.onCall(asy
   return { ok: true, ...result };
 });
 
-const OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED =
-  normalizeText(process.env.OPERATIONAL_STAFFING_AUTHORITY_ENABLED).toLowerCase() === "true";
-
 function operationalStaffingScope(data = {}, { requireQuote = true, requireStaff = false } = {}) {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
@@ -11417,7 +11416,7 @@ function assertOperationalStaffingQuote(quote, { organizationId, quoteId } = {})
   return activeQuoteRevisionId;
 }
 
-function assertOperationalStaffingStorageEnabled(settingsSnap) {
+function assertOperationalStaffingStorageEnabled(settingsSnap, organizationId) {
   if (!settingsSnap?.exists) {
     throw new OperationalStaffingRuntimeError(
       "failed-precondition",
@@ -11425,7 +11424,7 @@ function assertOperationalStaffingStorageEnabled(settingsSnap) {
     );
   }
   return assertOperationalStaffingAuthorityEnabled(
-    OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED,
+    tenantWorkflowRuntimeEnabled("OPERATIONAL_STAFFING_AUTHORITY_ENABLED", organizationId),
     settingsSnap.data() || {}
   );
 }
@@ -11490,7 +11489,7 @@ exports.getOperationalStaffingSnapshot = functions.region(REGION).https.onCall(a
         tx.get(refs.planRef),
         tx.get(profilesQuery)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (!quoteSnap.exists) {
         throw new OperationalStaffingRuntimeError("not-found", "Quote not found.");
       }
@@ -11577,7 +11576,7 @@ exports.configureOperationalStaffProfile = functions.region(REGION).https.onCall
         tx.get(receiptRef),
         tx.get(refs.profileRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       const planned = planOperationalStaffProfileCommand({
         request,
         currentProfile: profileSnap.exists ? profileSnap.data() || {} : null,
@@ -11706,7 +11705,7 @@ async function readStaffInvitationContext(tx, scope) {
     tx.get(refs.staffRecordRef),
     tx.get(versionRef)
   ]);
-  assertOperationalStaffingStorageEnabled(settingsSnap);
+  assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
   if (!planSnap.exists || !profileSnap.exists || !recordSnap.exists || !versionSnap.exists) {
     throw new StaffInvitationAuthorityError(
       "failed-precondition",
@@ -12209,7 +12208,7 @@ exports.getStaffDirectory = functions.region(REGION).https.onCall(async (data, c
         tx.get(plansQuery),
         tx.get(invitationsQuery)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       const profilesTruncated = profilesSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
       const recordsTruncated = recordsSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
       const assignmentsTruncated = plansSnap.size > 100;
@@ -12323,7 +12322,7 @@ exports.saveStaffRecord = functions.region(REGION).https.onCall(async (data, con
         tx.get(profileReceiptRef),
         tx.get(recordReceiptRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (profileReceiptSnap.exists !== recordReceiptSnap.exists) {
         throw new StaffDirectoryAuthorityError(
           "data-loss",
@@ -12434,7 +12433,7 @@ exports.applyOperationalStaffingPlan = functions.region(REGION).https.onCall(asy
         tx.get(refs.settingsRef),
         tx.get(receiptRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (receiptSnap.exists) {
         return planOperationalStaffingCommand({
           request,
@@ -13230,7 +13229,7 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         organizationId: binding.organizationId,
         quoteId: binding.quoteId,
         evidence: conversationEvidence,
-        global: getRevenueAutopilotGlobalControl(nowISO),
+        global: getRevenueAutopilotGlobalControl(nowISO, binding.organizationId),
         tenantPolicy,
         activeAttention: priorAttentionSnap?.exists
           ? { attentionId: priorAttentionSnap.id, ...(priorAttentionSnap.data() || {}) }
@@ -19435,7 +19434,7 @@ exports.getRevenueAutopilotOperations = functions.region(REGION).https.onCall(as
     const policy = normalizeRevenueAutopilotTenantPolicy(
       policySnap.exists ? policySnap.data() || {} : null
     );
-    const global = getRevenueAutopilotGlobalControl(observedAtISO);
+    const global = getRevenueAutopilotGlobalControl(observedAtISO, organizationId);
     const authority = projectRevenueAutopilotAuthorityForStaff({
       organizationId,
       policy,
@@ -19970,7 +19969,7 @@ exports.materializeRevenueAutopilotJobs = functions
           organizationId,
           customerId
         });
-        const global = getRevenueAutopilotGlobalControl(nowISO);
+        const global = getRevenueAutopilotGlobalControl(nowISO, organizationId);
         const provider = { organizationId, ...global.provider };
         const suppression = revenueAutopilotSuppressionEvidence(controlsRaw, {
           organizationId,

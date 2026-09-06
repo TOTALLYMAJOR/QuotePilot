@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 19:10:07 CDT
+Last updated: 2026-09-05 19:17:44 CDT
 
 ## Combined production candidate
 
@@ -11,7 +11,7 @@ workflow/attendance/closeout usability refinements. Original worktrees remain
 intact. Duplicate ZIP archives were not treated as application source.
 
 Documentation, capability, field-state, secret and project-state checks pass;
-Python passes 136 tests. The final combined JavaScript suite passes 5,121 tests
+Python passes 136 tests. The final combined JavaScript suite passes 5,125 tests
 across 444 files (89 tests in three files remain intentionally skipped).
 The Studio/bundle/interaction suite passes 27; actual-callable tenant isolation
 rejects another enabled organization without writes.
@@ -24,7 +24,11 @@ The owner selected RagnaKoK Inc (verified brand on `mm05366-sandbox`) for workfl
 activation. The isolated candidate now adds a runtime override restricted to that
 organization with both global authority flags off; 340 focused runtime/profile
 and integration tests pass. Exact-SHA CI, production deployment and tenant
-activation remain pending. Real tenant piloting and human acceptance are unperformed. The source checkpoints below apply
+activation remain pending. The owner additionally requested maximum testable
+features; scoped staffing and Revenue Autopilot preparation are now included,
+with scheduling and automated sends off. The expanded full suite and capability
+surfacing checks pass; exact final CI remains required.
+Real tenant piloting and human acceptance are unperformed. The source checkpoints below apply
 only to their named revisions and are not combined-release acceptance.
 
 

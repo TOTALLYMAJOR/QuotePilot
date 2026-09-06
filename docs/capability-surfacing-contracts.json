@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 73,
+  "catalogVersion": 74,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -1051,7 +1051,7 @@
     },
     {
       "id": "quote-conversation-receipts",
-      "reviewRevision": 6,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -1064,7 +1064,8 @@
         "firestore.rules",
         "functions/index.js",
         "src/lib/customerWorkspace.js",
-        "src/lib/portalConversationClient.js"
+        "src/lib/portalConversationClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#sendQuotePortalConversationMessage"
@@ -1179,7 +1180,10 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff or the exact token holder can reconcile one quote-scoped message request without turning a stored receipt into a delivery, read, payment, or acceptance claim."
+      "safeOutcome": "Staff or the exact token holder can reconcile one quote-scoped message request without turning a stored receipt into a delivery, read, payment, or acceptance claim.",
+      "affectedBackendExports": [
+        "functions/index.js#sendQuotePortalConversationMessage"
+      ]
     },
     {
       "id": "event-messaging-station-read",
@@ -3479,7 +3483,7 @@
     },
     {
       "id": "revenue-autopilot-operations",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -3495,7 +3499,8 @@
         "functions/revenueAutopilotTemplates.js",
         "scripts/customer-centered-authority-emulator-acceptance.mjs",
         "src/lib/quoteWorkflow.js",
-        "src/lib/revenueAutopilotClient.js"
+        "src/lib/revenueAutopilotClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getRevenueAutopilotOperations",
@@ -6232,7 +6237,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 6,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -6255,7 +6260,8 @@
         "src/lib/proposalExport.js",
         "src/lib/staffBriefingSheet.js",
         "src/lib/staffDirectoryClient.js",
-        "src/lib/staffInvitationClient.js"
+        "src/lib/staffInvitationClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getOperationalStaffingSnapshot",
