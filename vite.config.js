@@ -157,6 +157,9 @@ export default defineConfig(({ mode }) => {
           if (normalizedId.endsWith("/src/components/LegacyCustomerPortalView.jsx")) {
             return "legacy-customer-portal";
           }
+          if (normalizedId.endsWith("/src/lib/workspaceActionFeedback.js")) {
+            return "workspace-action-feedback-model";
+          }
           if (normalizedId.endsWith("/src/lib/quoteStore.js")) {
             return "workspace-quote-store";
           }

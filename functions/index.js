@@ -1,3 +1,4 @@
+const { tenantWorkflowRuntimeEnabled } = require("./tenantWorkflowRuntime");
 const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -13326,16 +13327,15 @@ const COMMERCIAL_CHANGE_PERSISTED_EFFECTS_VERSION =
   "commercial-change-persisted-effects-v1";
 const COMMERCIAL_CHANGE_INVALIDATION_LIMIT = 64;
 const COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION = 1;
-const COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED =
-  normalizeText(process.env.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toLowerCase() === "true";
 
-function commercialChangeEnforcementState(settings = {}) {
+function commercialChangeEnforcementState(settings = {}, organizationId = "") {
+  const globalEnabled = tenantWorkflowRuntimeEnabled("COMMERCIAL_CHANGE_AUTHORITY_ENABLED", organizationId);
   const tenantEnabled = settings?.commercialChangeAuthorityEnabled === true;
   return {
-    authorityState: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED && tenantEnabled
+    authorityState: globalEnabled && tenantEnabled
       ? "enforced"
       : "dormant",
-    globalEnabled: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED,
+    globalEnabled,
     tenantEnabled
   };
 }
@@ -13843,7 +13843,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
           quote,
           documents: projectedEditDocuments
         }),
-        enforcement: commercialChangeEnforcementState(settingsSnap.data() || {})
+        enforcement: commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId)
       };
     });
     return {
@@ -15789,7 +15789,7 @@ async function updateTrustedQuoteDraftInternal({
     };
     let documents = applyCatalogReviewEvidence(buildTrustedQuoteEditDocuments(editInput));
     const enforcement = commercialChangeEnforcementState(
-      transactionPricingSettingsSnapshot.data() || {}
+      transactionPricingSettingsSnapshot.data() || {}, staff.organizationId
     );
     let commercialChangePlan = {
       authorityState: enforcement.authorityState,
@@ -17389,7 +17389,7 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
           closeoutSnap.exists ? closeoutSnap.data() || {} : closeoutRecord
         );
         if (!closeoutSnap.exists && closeoutRecord.policy.state === "configured"
-          && process.env.EVENT_OPERATING_SPINE_ENABLED === "true" && settingsSnap.data()?.eventOperatingSpineEnabled === true) {
+          && tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true) {
           await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
           const catalog = (await readWorkflowConfiguration(tx, organizationRef, "closeout_follow_up")).snapshot;
           if (catalog.state === "published" && catalog.activeVersion?.schemaVersion === 2) {
@@ -17707,7 +17707,7 @@ async function assertEventOperatingTransactionAuthority(tx, organizationRef, sta
   if (!organizationSnap.exists || tombstoneSnap.exists || !isOrganizationRecordActive(organizationSnap.data())) {
     throw new eventOperations.EventOperationsError("failed-precondition", "The organization is unavailable for event operations.");
   }
-  eventOperations.assertEnabled(process.env.EVENT_OPERATING_SPINE_ENABLED === "true", settingsSnap.data() || {});
+  eventOperations.assertEnabled(tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id), settingsSnap.data() || {});
 }
 async function readEventOperatingSource(tx, organizationRef, scope) {
   const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId);
@@ -17875,7 +17875,7 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
       const closeout = closeoutSnap.data() || {};
       const packSource = workflowPackAdapters.acceptedSource(closeout, "closeout_follow_up");
       const existingPack = await readWorkflowPackInstance(tx, organizationRef, packSource);
-      const packEnabled = process.env.EVENT_OPERATING_SPINE_ENABLED === "true" && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+      const packEnabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
       if (packEnabled || existingPack.instance) await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
       if (
         normalizeOrganizationId(quote.organizationId) !== request.organizationId
@@ -18078,7 +18078,7 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
       const closeout = closeoutSnap.data() || {};
       const packSource = workflowPackAdapters.acceptedSource(closeout, "closeout_follow_up");
       const existingPack = await readWorkflowPackInstance(tx, organizationRef, packSource);
-      const packEnabled = process.env.EVENT_OPERATING_SPINE_ENABLED === "true" && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+      const packEnabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
       if (packEnabled || existingPack.instance) await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
       if (
         normalizeOrganizationId(quote.organizationId) !== request.organizationId
@@ -27733,7 +27733,7 @@ async function readAttendancePortal(tx, portalKey, nowISO, operation = "read") {
     tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId)), tx.get(organizationRef),
     tx.get(db.collection(ORGANIZATION_TOMBSTONES_COLLECTION).doc(scope.organizationId)), tx.get(organizationRef.collection("settings").doc("config"))
   ]);
-  if (process.env.EVENT_OPERATING_SPINE_ENABLED !== "true" || settingsSnap.data()?.eventOperatingSpineEnabled !== true) throw new eventOperations.EventOperationsError("failed-precondition", "Attendance confirmation is unavailable for this organization.");
+  if (!tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) || settingsSnap.data()?.eventOperatingSpineEnabled !== true) throw new eventOperations.EventOperationsError("failed-precondition", "Attendance confirmation is unavailable for this organization.");
   const activation = assertPortalConversationActivation({ quote: quoteSnap.data(), quoteId: scope.quoteId, organizationId: scope.organizationId,
     portalSnapshot: portal, requestedPortalKey: portalKey, organizationActive: orgSnap.exists && isOrganizationRecordActive(orgSnap.data()),
     organizationTombstoned: tombstoneSnap.exists, operation, nowISO, assertPortalActivation: assertQuoteDeliveryPortalActivation });
@@ -27994,7 +27994,7 @@ exports.applyWorkflowPackCommand = functions.region(REGION).https.onCall(async (
 });
 async function resolveCommercialWorkflowContext(tx, refs, staff, { nowISO, catalogAuthority, simulation = null, attendanceSubmissionReceiptId = "" }) {
   const settingsSnap = await tx.get(refs.settingsRef);
-  const enabled = process.env.EVENT_OPERATING_SPINE_ENABLED === "true" && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+  const enabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", refs.organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
   const hasStoredBinding = Boolean(simulation?.workflowPolicy || simulation?.attendanceBinding);
   const base = commercialChangeTrustedContext({ staff, nowISO, catalogAuthority });
   if (!enabled) {
@@ -28037,7 +28037,7 @@ async function resolveCommercialWorkflowContext(tx, refs, staff, { nowISO, catal
     if (attendanceBinding && workflowExecution.digest(resolved) !== workflowExecution.digest(attendanceBinding)) throw new CommercialChangeAuthorityError("aborted", "The submitted attendance binding changed.");
     attendanceBinding = resolved;
   }
-  if ((workflowPolicy || attendanceBinding) && commercialChangeEnforcementState(settingsSnap.data() || {}).authorityState !== "enforced") throw new CommercialChangeAuthorityError("failed-precondition", "Commercial Change authority must be enforced before applying a workflow-bound policy or attendance response.");
+  if ((workflowPolicy || attendanceBinding) && commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId).authorityState !== "enforced") throw new CommercialChangeAuthorityError("failed-precondition", "Commercial Change authority must be enforced before applying a workflow-bound policy or attendance response.");
   return { definition, workflowPolicy, attendanceBinding,
     trustedContext: workflowPolicy || attendanceBinding ? { ...base, workflowPolicy, attendanceBinding } : base };
 }

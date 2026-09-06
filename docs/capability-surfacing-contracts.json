@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 72,
+  "catalogVersion": 73,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -2303,7 +2303,7 @@
     },
     {
       "id": "authoritative-post-event-closeout",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2323,7 +2323,8 @@
         "functions/workflowDefinitions.js",
         "functions/workflowExecution.js",
         "functions/workflowPackAdapters.js",
-        "src/lib/workflowPackClient.js"
+        "src/lib/workflowPackClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#recordPostEventCloseoutReview",
@@ -2732,7 +2733,7 @@
     },
     {
       "id": "commercial-change-authority",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2756,7 +2757,8 @@
         "functions/workflowDefinitions.js",
         "functions/workflowExecution.js",
         "functions/workflowPackAdapters.js",
-        "functions/quoteAttendance.js"
+        "functions/quoteAttendance.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#simulateCommercialQuoteChange",
@@ -7239,7 +7241,7 @@
     },
     {
       "id": "event-operating-spine",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -7254,7 +7256,8 @@
         "functions/eventOperations.js",
         "src/lib/eventOperationsClient.js",
         "scripts/event-operating-spine-emulator-acceptance.mjs",
-        "src/lib/eventOperatingMutationGuard.js"
+        "src/lib/eventOperatingMutationGuard.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getEventOperatingSnapshot",
@@ -7421,7 +7424,7 @@
     },
     {
       "id": "event-operating-work-journal",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -7436,7 +7439,8 @@
         "functions/eventOperatingWork.js",
         "src/lib/eventOperatingWorkClient.js",
         "src/lib/eventOperatingMutationGuard.js",
-        "scripts/event-operating-spine-emulator-acceptance.mjs"
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getEventOperatingWorkSnapshot",
@@ -7607,7 +7611,7 @@
     },
     {
       "id": "event-operating-actuals",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -7622,7 +7626,8 @@
         "functions/eventOperatingActuals.js",
         "src/lib/eventOperatingActualsClient.js",
         "src/lib/eventOperatingMutationGuard.js",
-        "scripts/event-operating-spine-emulator-acceptance.mjs"
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getEventOperatingActualsSnapshot",
@@ -7810,7 +7815,7 @@
     },
     {
       "id": "event-operating-history",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -7823,7 +7828,8 @@
         "functions/index.js",
         "functions/eventOperatingHistory.js",
         "src/lib/eventOperatingHistoryClient.js",
-        "scripts/event-operating-spine-emulator-acceptance.mjs"
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getEventOperatingHistory"
@@ -7942,7 +7948,7 @@
     },
     {
       "id": "tenant-workflow-configuration",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -7956,7 +7962,8 @@
         "firestore.rules",
         "scripts/workflow-configuration-emulator-acceptance.mjs",
         "functions/workflowDefinitions.js",
-        "functions/workflowPackAdapters.js"
+        "functions/workflowPackAdapters.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getWorkflowConfiguration",
@@ -8123,7 +8130,7 @@
     },
     {
       "id": "event-workflow-coordination",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -8141,7 +8148,8 @@
         "functions/eventWorkflowAdapter.js",
         "functions/workflowDefinitions.js",
         "src/lib/eventOperatingMutationGuard.js",
-        "functions/workflowPackAdapters.js"
+        "functions/workflowPackAdapters.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getEventWorkflowSnapshot",
@@ -8313,7 +8321,7 @@
     },
     {
       "id": "final-guest-count",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -8326,7 +8334,8 @@
         "functions/index.js",
         "functions/quoteAttendance.js",
         "src/lib/quoteAttendanceClient.js",
-        "firestore.rules"
+        "firestore.rules",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getQuoteAttendance",
@@ -8469,7 +8478,7 @@
     },
     {
       "id": "portal-final-guest-count",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -8481,7 +8490,8 @@
         "functions/index.js",
         "functions/quoteAttendance.js",
         "src/lib/quoteAttendanceClient.js",
-        "firestore.rules"
+        "firestore.rules",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#submitQuoteAttendanceResponse"
@@ -8613,7 +8623,7 @@
     },
     {
       "id": "workflow-pack-coordination",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -8628,7 +8638,8 @@
         "functions/workflowExecution.js",
         "functions/workflowPackAdapters.js",
         "src/lib/workflowPackClient.js",
-        "firestore.rules"
+        "firestore.rules",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getWorkflowPackSnapshot",

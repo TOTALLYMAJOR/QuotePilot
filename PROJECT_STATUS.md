@@ -1,14 +1,31 @@
 # Project Status
 
-Last updated: 2026-09-05 18:49:28 CDT
+Last updated: 2026-09-05 19:05:50 CDT
 
 ## Combined production candidate
 
 The owner authorized integrating and deploying all current work on September 5.
-The integration candidate combines the UX release, tenant operating model and
-current uncommitted UI/import refinements. Combined validation, exact-SHA CI and
-provider deployment are pending. Prior checkpoints below remain historical
-evidence for their named sources; no combined or production pass is implied.
+The isolated candidate combines the committed v0.17.0 UX release, tenant
+operating model, current field-state and governed-import work, and the latest
+workflow/attendance/closeout usability refinements. Original worktrees remain
+intact. Duplicate ZIP archives were not treated as application source.
+
+Documentation, capability, field-state, secret and project-state checks pass;
+Python passes 136 tests. The latest complete JavaScript run passed 5,113 tests
+and found seven assertions in one harness that needed the new runtime dependency.
+The repaired event callable suite passes all 18 tests, and the new real-callable
+cross-tenant denial test passes. The Studio/bundle/interaction suite passes 27.
+Both CI build profiles pass the existing size limits after splitting the
+shared action-feedback model from the workspace entry chunk. The PDF runtime
+retains its separately pinned file, size and digest contract.
+
+Import Studio and Library pass 18 browser checks, including mobile PDF review.
+The owner selected RagnaKoK Inc (verified brand on `mm05366-sandbox`) for workflow
+activation. The isolated candidate now adds a runtime override restricted to that
+organization with both global authority flags off; 340 focused runtime/profile
+and integration tests pass. Exact-SHA CI, production deployment and tenant
+activation remain pending. Real tenant piloting and human acceptance are unperformed. The source checkpoints below apply
+only to their named revisions and are not combined-release acceptance.
 
 
 ## UX Convergence Draft Candidate

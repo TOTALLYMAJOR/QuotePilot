@@ -6,6 +6,7 @@
 }
 
 .field-state-indicator {
+  position: relative;
   display: grid;
   justify-items: start;
   gap: 7px;

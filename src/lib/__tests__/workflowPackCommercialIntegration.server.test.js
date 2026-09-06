@@ -286,6 +286,7 @@ function harness({ commercialServer = true, commercialTenant = true } = {}) {
   for (const name of ["quoteCreation", "quoteCatalogRevisionReview", "pricingEngine", "quoteDelivery", "proposalAcceptance", "postEventCloseout", "commercialChangeAuthority", "commercialChangeImpactPreview", "decisionDebt", "organizationAuthority", "portalConversation"]) {
     Object.assign(sandbox, require(`../../../functions/${name}.js`));
   }
+  sandbox.tenantWorkflowRuntimeEnabled = (flag, organizationId) => require("../../../functions/tenantWorkflowRuntime.js").tenantWorkflowRuntimeEnabled(flag, organizationId, sandbox.process.env);
   vm.createContext(sandbox);
   // Evaluate the real top-level owner functions without initializing Firebase,
   // secrets, scheduled work or any provider. Only the selected actual handlers run.

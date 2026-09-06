@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-05 09:12:00 CDT
+Last updated: 2026-09-05 19:05:50 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -387,3 +387,15 @@ If a topic changes, only update the owning doc and cross-link from others.
 - Product truth decision: `docs/adr/ADR-0002-product-truth-observability.md`
 - Product truth design: `docs/design/product-truth-observability-design.md`
 - Product truth work plan: `docs/plans/20260828-feature-product-truth-observability.md`
+
+## RagnaKoK workflow activation profile
+
+The `ragnakok-workflows` profile is restricted to Firebase backend/all and the
+exact approved runtime tenant `mm05366-sandbox` (brand `RagnaKoK Inc`). It retains
+Resend, sets a tenant-scoped runtime override, and leaves global authority flags
+off. The same exact-tag, main CI, protected environment, rollback and per-Function
+readback gates apply. Other organizations cannot use the override. Hosting and
+Vercel retain their safe-off deployment profile and include role/tenant-gated
+workflow presentation. Follow [the activation and rollback procedure](LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release)
+only after successful backend deployment. Source publication is not activation
+or policy publication.

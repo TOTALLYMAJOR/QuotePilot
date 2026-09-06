@@ -518,3 +518,15 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     ).toBe(existing);
   });
 });
+
+
+test("materializes only the approved tenant runtime with global workflow authority off", () => {
+  const result = runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox" });
+  expect(result.result.status).toBe(0);
+  expect(fs.readFileSync(path.join(result.cwd, "functions/.env.tonicatering"), "utf8")).toContain("TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox");
+  expect(fs.readFileSync(path.join(result.cwd, "functions/.env.tonicatering"), "utf8")).toContain("EVENT_OPERATING_SPINE_ENABLED=false");
+  expect(fs.readFileSync(path.join(result.cwd, "functions/.env.tonicatering"), "utf8")).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false");
+  expect(runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "other" }).result.status).not.toBe(0);
+  expect(runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" }).result.status).not.toBe(0);
+  expect(runMaterializer({ EVENT_OPERATING_SPINE_ENABLED: "true" }).result.status).not.toBe(0);
+});

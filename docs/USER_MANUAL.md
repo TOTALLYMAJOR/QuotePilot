@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-05 18:50:11 CDT
+Last updated: 2026-09-05 19:05:50 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -3206,3 +3206,12 @@ If a request's result is uncertain, check the original request before submitting
 another. Refresh after its receipt is confirmed. A changed accepted version or
 portal link requires reviewing the current source; an old response cannot be
 silently applied to a different agreement.
+
+## Workflow availability in the RagnaKoK workspace
+
+After deployment and tenant activation, a connected RagnaKoK administrator can
+open Workflow Configuration Studio from Library. Save a draft, review it, and
+publish explicitly before relying on a customized policy for new workflow
+instances. Enabling the workspace does not itself publish drafts or change
+existing event bindings. Native quote approval, attendance, event execution and
+closeout actions continue to enforce their own permissions and source records.

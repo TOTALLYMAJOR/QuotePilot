@@ -108,6 +108,7 @@ jobs:
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+          VITE_EVENT_OPERATING_SPINE_ENABLED: "true"
           VITE_BUYER_ACCESS_ENABLED: "false"
           VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
           RELEASE_SHA: ${{ inputs.release_sha }}

@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-03 20:20:30 CDT
+Last updated: 2026-09-05 19:05:50 CDT
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -59,7 +59,8 @@ Both workflows require the full semantically tagged release SHA, the matching
 successful main-push `CI Quality` run id, a target-specific rollback ancestor,
 an allowed release profile, and an exact typed confirmation. `safe-off` is the
 only profile accepted by Vercel and Firebase Hosting-only deployments. Firebase
-backend/all may instead select `email-active`, which changes only
+backend/all may select the tenant-restricted `ragnakok-workflows` profile described
+below, or `email-active`, which changes only
 `NOTIFICATIONS_EMAIL_PROVIDER` from `none` to `resend`; SMS, buyer access,
 Commercial Change, operational staffing authority, and both Revenue Autopilot
 gates remain off. Firebase additionally requires an explicit `hosting`,
@@ -1603,3 +1604,28 @@ Signed provider-specific last-known-good receipts remain a follow-up hardening
 item. Until they are automated, retain the exact provider deployment id, source
 SHA, target, timestamp, and post-launch result manually. Local `npx` commands
 are not an approved break-glass substitute.
+
+## RagnaKoK tenant workflow release
+
+The owner-approved `ragnakok-workflows` backend/all profile preserves Resend and
+keeps both global workflow/Commercial Change flags false. It sets only
+`TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox`. The shared runtime guard
+admits this exact organization and rejects other organizations even if their
+tenant setting or a global flag is enabled. Production environment materialization
+rejects any other scoped organization or globally enabled workflow runtime.
+Provider readback must prove this scope on every active Function; safe-off and
+email-active readback reject a residual tenant override.
+
+Both frontend builds include the workflow presentation flag; the Studio remains
+restricted to a connected administrator whose tenant workflow setting is enabled.
+After the exact tagged release passes main CI and backend deployment/readback,
+update only the existing `organizations/mm05366-sandbox/settings/config` fields
+`eventOperatingSpineEnabled` and `commercialChangeAuthorityEnabled` to true.
+First verify `brandName=RagnaKoK Inc`, capture prior field presence/value and
+updateTime, use an updateTime precondition plus an explicit two-field update
+mask, then read back both fields. A concurrent change requires a fresh review;
+never create a missing config document. Retain the activation receipt outside
+source control. Rollback restores those two prior values/presence with the same
+concurrency protection, then uses each target's last-known-good release.
+This activation does not publish workflow policies, migrate existing events,
+perform provider sends, or establish operator acceptance.

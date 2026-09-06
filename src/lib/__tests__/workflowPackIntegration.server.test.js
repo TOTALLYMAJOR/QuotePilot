@@ -97,6 +97,7 @@ function callableHarness({ globalEnabled = "true", tenantEnabled = true, staff =
   class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
   const exports = {};
   const sandbox = { ...closeout, FieldValue: { serverTimestamp: () => ({ localTimestamp: true }) }, normalizeOrganizationId: (value) => String(value || "").trim(), PortalConversationError: portalConversation.PortalConversationError, QuoteDeliveryError: quoteDelivery.QuoteDeliveryError, assertPortalConversationActivation: portalConversation.assertPortalConversationActivation, assertQuoteDeliveryPortalActivation: quoteDelivery.assertQuoteDeliveryPortalActivation, quoteAttendance: require("../../../functions/quoteAttendance.js"), workflowPackAdapters: require("../../../functions/workflowPackAdapters.js"), createHash, addCalendarDaysDateOnly: closeout.addCalendarDaysDateOnly, DECISION_DEBT_POLICIES_COLLECTION: "decisionDebtPolicies", PORTAL_COLLECTION: "quotePortals", decisionDebtPolicyRecord: (raw) => ({ revision: raw?.revision || 0, policy: require("../../../functions/decisionDebt.js").DEFAULT_DECISION_DEBT_POLICY }), workflowDefinitions: require("../../../functions/workflowDefinitions.js"), workflowExecution: require("../../../functions/workflowExecution.js"), eventWorkflowAdapter: require("../../../functions/eventWorkflowAdapter.js"), exports, eventOperations: phaseAuthority, eventOperatingWork: workAuthority, eventOperatingActuals: actualsAuthority, eventOperatingHistory: authority, PostEventCloseoutError: closeout.PostEventCloseoutError, db, REGION: "test", ORGANIZATIONS_COLLECTION: "organizations", QUOTES_COLLECTION: "quotes", ORGANIZATION_TOMBSTONES_COLLECTION: "organizationTombstones", PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION: "proposalAcceptanceReceipts", process: { env: { EVENT_OPERATING_SPINE_ENABLED: globalEnabled } }, functions: { region: () => ({ https: { onCall: (handler) => handler } }), https: { HttpsError }, logger: { error: () => {} } }, assertStaff: async () => staff, normalizeText: (value) => String(value || "").trim(), normalizeEmail: (value) => String(value || "").trim().toLowerCase(), isOrganizationRecordActive: (value) => value?.active !== false && value?.archived !== true && [undefined, "", "active"].includes(value?.status) };
+  sandbox.tenantWorkflowRuntimeEnabled = (flag, organizationId) => require("../../../functions/tenantWorkflowRuntime.js").tenantWorkflowRuntimeEnabled(flag, organizationId, sandbox.process.env);
   const index = readFileSync(new URL("../../../functions/index.js", import.meta.url), "utf8");
   const start = index.indexOf("function eventOperatingActor(");
   const end = index.indexOf("exports.recordPostEventCloseoutReview =", start);
@@ -112,6 +113,7 @@ function callableHarness({ globalEnabled = "true", tenantEnabled = true, staff =
   vm.runInNewContext(index.slice(closeoutStart, index.indexOf("exports.", refreshStart + 10)), sandbox);
   return {
     store, reads, queries, fixture,
+    setRuntimeScope: (organizationId) => { sandbox.process.env.TENANT_WORKFLOW_ORGANIZATION_ID = organizationId; },
     invoke: (name, data) => exports[name](data, {}),
     setStaff: (next) => { staff = next; store.set(`userRoles/${staff.uid}`, { organizationId: staff.organizationId, role: staff.role, email: staff.email }); },
     configuration: () => exports.getWorkflowConfiguration(configScope, {}),
@@ -333,4 +335,14 @@ describe("closeout owner callable workflow coordination", () => {
     await expect(h.invoke("refreshPostEventCloseoutConfiguration", { ...refresh, requestId: "closeout-disabled-refresh-0001" })).rejects.toMatchObject({ code: "failed-precondition" });
     expect([...h.store.keys()]).toEqual(before.map(([path]) => path));
   });
+});
+
+
+test("the production tenant scope denies real workflow callables for another enabled organization without writes", async () => {
+  const h = callableHarness();
+  h.setRuntimeScope("mm05366-sandbox");
+  const before = structuredClone([...h.store]);
+  await expect(h.configuration()).rejects.toMatchObject({ code: "failed-precondition" });
+  await expect(h.invoke("applyQuoteAttendanceCommand", request())).rejects.toMatchObject({ code: "failed-precondition" });
+  expect([...h.store]).toEqual(before);
 });

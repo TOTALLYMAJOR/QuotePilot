@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-05 18:50:11 CDT
+Last updated: 2026-09-05 19:05:50 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -723,3 +723,12 @@ The fixture is restricted to a fixed demo project and loopback services, with
 provider sends disabled. It is local rehearsal infrastructure and establishes
 no hosted tenant activation, real customer action or human acceptance. Setup and
 stop instructions live in [README](../README.md#local-tenant-workflow-rehearsal).
+
+## Tenant-scoped workflow runtime
+
+The production workflow profile can admit RagnaKoK Inc (`mm05366-sandbox`) while
+global workflow and Commercial Change authority flags remain off. The connected
+admin Studio and native actions still require tenant settings and current role
+checks. Other organizations remain unavailable even if their settings are changed.
+Deployment, tenant activation, draft publication and event migration are separate
+operations; see [the runtime activation procedure](LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release).

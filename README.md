@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-05 18:49:28 CDT
+Last updated: 2026-09-05 19:05:50 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -1573,3 +1573,10 @@ authority and payment evidence. Provider sends are disabled. Synthetic delivery/
 local contracts only. This command does not push, deploy or activate a hosted
 tenant. The [pilot matrix](docs/acceptance/tenant-operating-model.md) separates
 this rehearsal from human, customer, hosted and provider acceptance.
+
+## RagnaKoK production workflow activation
+
+The tenant-scoped `ragnakok-workflows` Firebase profile is documented in the
+[launch runbook](docs/LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release). It keeps
+global workflow authority off and admits only the approved production tenant;
+exact release CI, provider readback and tenant settings remain required.
