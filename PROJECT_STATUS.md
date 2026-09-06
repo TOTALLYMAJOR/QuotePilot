@@ -1,8 +1,8 @@
 # Project Status
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-05 21:23:56 CDT
 
-## Combined production candidate
+## Combined production release
 
 The owner authorized integrating and deploying all current work on September 5.
 The isolated candidate combines the committed v0.17.0 UX release, tenant
@@ -23,8 +23,7 @@ Import Studio and Library pass 18 browser checks, including mobile PDF review.
 The owner selected RagnaKoK Inc (verified brand on `mm05366-sandbox`) for workflow
 activation. The isolated candidate now adds a runtime override restricted to that
 organization with both global authority flags off; 340 focused runtime/profile
-and integration tests pass. Exact-SHA CI, production deployment and tenant
-activation remain pending. The owner additionally requested maximum testable
+and integration tests pass. The owner additionally requested maximum testable
 features; scoped staffing and Revenue Autopilot preparation are now included,
 with scheduling and automated sends off. The expanded full suite and capability
 surfacing checks pass. Exact-head CI run `34001025904` passed six of the eight
@@ -41,9 +40,28 @@ required before merge. Exact-head run `34003264925` then stopped in the core
 governance lane because the refreshed shared E2E seeder was not owned by a
 changed capability contract. The seeder is now bound to the developer-only
 local-rehearsal contract and independently rejects non-demo projects or
-non-loopback Auth/Firestore endpoints; a fresh exact-head run remains required.
-Real tenant piloting and human acceptance are unperformed. The source checkpoints below apply
-only to their named revisions and are not combined-release acceptance.
+non-loopback Auth/Firestore endpoints. Final PR-head run `34003951099` then
+passed all required jobs. PR #130 was squash-merged through protected `main` as
+`530f31e9a33e94a652bbd73b2c7ccbe627ab0bad`; exact main-push run
+`34004519972` passed all eight hard gates and the SHA was published as annotated
+tag `v0.17.0`.
+
+Firebase backend/rules run `34005131796` deployed the exact tag with the
+`ragnakok-workflows` profile and passed complete Function inventory/runtime
+readback. Firebase Hosting run `34005880426` and Vercel run `34006160784`
+deployed the same SHA with `safe-off`; both provider health checks and independent
+public `/`, `/app`, and `/system` probes passed. The existing RagnaKoK Inc
+configuration document was then updated with an exact update-time precondition
+and three-field mask. Fresh readback at Firestore update time
+`2026-09-06T02:22:17.925520Z` confirms Event Operating Spine, Commercial Change,
+and operational staffing are true for `mm05366-sandbox`.
+
+Revenue Autopilot preparation is available only through that exact-tenant
+runtime. No outreach policy was invented or published, the scheduler has no
+tenant scope, automated sends remain off, and no message was sent. The deployed
+`/app` route renders the branded staff sign-in boundary; authenticated tenant
+piloting and human acceptance remain unperformed. The source checkpoints below
+apply only to their named revisions and are not combined-release acceptance.
 
 
 ## UX Convergence Draft Candidate
