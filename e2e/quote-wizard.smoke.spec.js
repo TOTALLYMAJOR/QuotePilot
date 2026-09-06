@@ -108,15 +108,26 @@ async function createQuoteToHistory(page, { guests = 72, eventName, venue, date 
 }
 
 function quoteRows(page) {
-  return page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
-  });
+  return page.locator(".history-table-wrap tbody tr[data-quote-id]");
+}
+
+function quoteLifecycleSelect(row) {
+  return row.getByRole("combobox", { name: "Change quote / proposal lifecycle" });
+}
+
+async function expectQuoteStatus(row, status) {
+  const labels = {
+    accepted: "Accepted",
+    booked: "Booked",
+    sent: "Sent"
+  };
+  await expect(row.locator("td").nth(7).locator(".status-chip")).toContainText(labels[status] || status);
 }
 
 async function setQuoteStatus(row, status) {
-  const statusSelect = row.locator("select").first();
+  const statusSelect = quoteLifecycleSelect(row);
   await statusSelect.selectOption(status);
-  await expect(statusSelect).toHaveValue(status);
+  await expectQuoteStatus(row, status);
 }
 
 async function openOperationsItem(page, name) {
@@ -385,8 +396,8 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
   });
   await expect(page.getByText(`No menu items are configured for ${selectedEventType} yet.`)).toBeVisible();
   await page.getByRole("button", { name: "Add menu items" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Catalog Admin" }) });
-  await expect(catalogAdmin.getByRole("heading", { name: "Catalog Admin" })).toBeVisible();
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
+  await expect(catalogAdmin.getByRole("heading", { name: "Library settings" })).toBeVisible();
   await expect(page.locator(".admin-tab.active")).toHaveText("Menu");
   await expect(catalogAdmin.getByRole("combobox", { name: "Event type", exact: true }))
     .toHaveValue(selectedEventTypeId);
@@ -440,9 +451,7 @@ test("a menu item stages immediately without activating the current quote", asyn
 
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({
-    has: page.getByRole("heading", { name: "Catalog Admin" })
-  });
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
   await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
   await catalogAdmin.getByRole("combobox", { name: "Event type", exact: true })
     .selectOption(selectedEventTypeId);
@@ -458,8 +467,10 @@ test("a menu item stages immediately without activating the current quote", asyn
   await catalogAdmin.getByRole("button", { name: "Add Item" }).click();
   await expect(catalogAdmin.getByLabel("Edit Immediate Recovery Entree").getByLabel("Name", { exact: true }))
     .toHaveValue("Immediate Recovery Entree");
-  await expect(catalogAdmin.getByText("Ready to review", { exact: true })).toBeVisible();
-  await expect(catalogAdmin.getByText("1 changed record; active pricing is unchanged.")).toBeVisible();
+  await expect(catalogAdmin.getByText("Library changes are in this workspace only", { exact: true })).toBeVisible();
+  await expect(catalogAdmin.getByText(
+    "1 change is available here. Publishing is unavailable from this source. No shared catalog or pricing changed."
+  )).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__catalogDraftSaveCalls.length)).toBe(1);
 
   await catalogAdmin.getByRole("button", { name: "Close" }).click();
@@ -1242,7 +1253,10 @@ test("portal refreshes webhook-backed payment state after a Stripe success retur
 test("valid and expired portal links use tenant branding without exposing token entry", async ({ page }) => {
   const activeKey = "portal-branded-active-12345678901234567890";
   const expiredKey = "portal-branded-expired-1234567890123456";
-  const createdAtISO = "2026-08-06T12:00:00.000Z";
+  // Keep the active fixture inside the authoritative 30-day portal window.
+  // A fixed issue date turns this into a wall-clock failure while the
+  // explicitly expired sibling below already covers the terminal path.
+  const createdAtISO = new Date().toISOString();
   await page.addInitScript(({ activePortalKey, expiredPortalKey, createdAt }) => {
     const nativeClear = Storage.prototype.clear;
     Storage.prototype.clear = function preservePortalFixture() {
@@ -1424,9 +1438,7 @@ test("accepted event production checklist persists completion", async ({ page })
 test("create then edit keeps one quote row and reflects updated fields", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 70 });
 
-  const quoteRows = page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
-  });
+  const quoteRows = page.locator(".history-table-wrap tbody tr[data-quote-id]");
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("70");
   const originalQuoteId = await quoteRows.first().getAttribute("data-quote-id");
@@ -1447,7 +1459,7 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await expect(quoteRows.first()).toContainText("95");
 
   await setQuoteStatus(quoteRows.first(), "sent");
-  await expect(quoteRows.first().locator("select").first()).toHaveValue("sent");
+  await expectQuoteStatus(quoteRows.first(), "sent");
 });
 
 test("Catalog Admin menu browsing never mutates the clean quote being edited", async ({ page }) => {
@@ -1467,9 +1479,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
 
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({
-    has: page.getByRole("heading", { name: "Catalog Admin" })
-  });
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
   await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
   const adminEventType = catalogAdmin.getByRole("combobox", { name: "Event type", exact: true });
   await expect.poll(() => adminEventType.locator("option").count()).toBeGreaterThan(2);
@@ -1513,7 +1523,7 @@ test("accepted quote can be converted and confirmation lifecycle is trackable", 
 
   await row.getByRole("button", { name: "Convert" }).click();
   await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
-  await expect(row.locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(row, "booked");
 
   const confirmationSelect = row.locator("td").nth(10).locator("select");
   await expect(confirmationSelect).toHaveValue("pending");
@@ -1542,7 +1552,7 @@ test("conversion is blocked when another quote is already booked for same venue/
   await setQuoteStatus(baselineRow, "accepted");
   await baselineRow.getByRole("button", { name: "Convert" }).click();
   await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
-  await expect(baselineRow.locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(baselineRow, "booked");
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "New Quote" }).click();
@@ -1563,5 +1573,5 @@ test("conversion is blocked when another quote is already booked for same venue/
 
   const conflictRows = quoteRows(page);
   await expect(conflictRows).toHaveCount(1);
-  await expect(conflictRows.first().locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(conflictRows.first(), "booked");
 });

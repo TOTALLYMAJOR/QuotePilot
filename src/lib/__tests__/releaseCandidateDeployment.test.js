@@ -6,6 +6,8 @@ import { describe, expect, test } from "vitest";
 import {
   RELEASE_CANDIDATE_POLICY,
   RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+  RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE,
+  candidateEventSpineRequirements,
   RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
   RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
@@ -26,10 +28,12 @@ import {
 } from "../../../scripts/release-candidate-policy.mjs";
 import {
   buildVercelOutputConfig,
+  writeCandidateManifest,
   collectVercelBuildFiles,
   isEnabledFirebaseSecretVersion,
   providerRequestHeaders,
   resolveGitHubToken,
+  validateFunctionsDependencyInstall,
   validateHostedManifest,
   vercelAutomationBypassToken,
   vercelDeploymentPayload
@@ -116,6 +120,31 @@ describe("governed release candidate deployment", () => {
         throw new Error("provider-specific authentication output");
       }
     })).toThrow(/GITHUB_TOKEN, GH_TOKEN, or an authenticated GitHub CLI session/i);
+  });
+
+  test("rejects an incomplete Functions dependency install before provider work", () => {
+    expect(validateFunctionsDependencyInstall({
+      root: "/tmp/quotepilot-release-fixture",
+      inspect: (_command, args) => ({
+        status: 0,
+        stdout: JSON.stringify({
+          dependencies: {
+            "firebase-functions": { version: "7.3.2" }
+          }
+        }),
+        args
+      })
+    })).toMatchObject({
+      source: "npm dependency tree",
+      packageName: "firebase-functions",
+      version: "7.3.2"
+    });
+    expect(() => validateFunctionsDependencyInstall({
+      inspect: () => ({ status: 1, stdout: "{}" })
+    })).toThrow(/npm ci --prefix functions/i);
+    expect(() => validateFunctionsDependencyInstall({
+      inspect: () => ({ status: 0, stdout: "{}" })
+    })).toThrow(/firebase-functions is unavailable/i);
   });
 
   test("binds Firebase Rules user-ADC requests to the fixed staging quota project", () => {
@@ -236,6 +265,7 @@ describe("governed release candidate deployment", () => {
     );
     const rulesPreflightOffset = source.lastIndexOf("await readFirebaseRulesReleases(firebaseRulesAccessToken)");
     const vercelPreflightOffset = source.lastIndexOf("await validateVercelProjectAccess(vercelToken)");
+    const functionsDependencyOffset = source.lastIndexOf("validateFunctionsDependencyInstall()");
     const reserveOffset = source.lastIndexOf("reservation = reserveCandidateReceipt");
     const mutationOffset = source.indexOf("attempt.providerMutationAttempted = true");
     const firebaseMutation = source.slice(mutationOffset, source.indexOf("response = parseJsonOutput", mutationOffset));
@@ -246,6 +276,8 @@ describe("governed release candidate deployment", () => {
     expect(reserveOffset).toBeGreaterThan(providerSafeOffOffset);
     expect(reserveOffset).toBeGreaterThan(rulesPreflightOffset);
     expect(reserveOffset).toBeGreaterThan(vercelPreflightOffset);
+    expect(functionsDependencyOffset).toBeGreaterThan(0);
+    expect(reserveOffset).toBeGreaterThan(functionsDependencyOffset);
     expect(firebaseMutation).toContain("capture(firebaseCliPath");
     expect(firebaseMutation).not.toContain('capture("npx"');
     expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
@@ -811,5 +843,64 @@ describe("governed release candidate deployment", () => {
       source.indexOf("await deployFirebase(context)")
     );
     expect(source).toContain('status: attempt.providerMutationAttempted ? "partial" : "failed"');
+  });
+});
+
+
+describe("isolated Event Operating Spine candidate profile", () => {
+  function browserEnvironment() {
+    const firebase = RELEASE_CANDIDATE_POLICY.firebase;
+    return { VITE_FIREBASE_API_KEY: "public-test-web-config", VITE_FIREBASE_PROJECT_ID: firebase.projectId,
+      VITE_FIREBASE_AUTH_DOMAIN: firebase.authDomain, VITE_FIREBASE_STORAGE_BUCKET: firebase.storageBucket,
+      VITE_FIREBASE_MESSAGING_SENDER_ID: firebase.messagingSenderId, VITE_FIREBASE_APP_ID: firebase.appId };
+  }
+  test("event candidate profile binds explicit server browser and separate tenant gates without changing old profiles", () => {
+    const oldRuntime = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_UAT_PROFILE);
+    const staffing = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_STAFFING_UAT_PROFILE);
+    expect(staffing).toEqual({ ...oldRuntime, OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true" });
+    expect(oldRuntime).not.toHaveProperty("EVENT_OPERATING_SPINE_ENABLED");
+    expect(staffing).not.toHaveProperty("EVENT_OPERATING_SPINE_ENABLED");
+    expect(candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE)).not.toHaveProperty("EVENT_OPERATING_SPINE_ENABLED");
+    expect(() => validateCandidateFunctionsEnvironment({ ...candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE), EVENT_OPERATING_SPINE_ENABLED: "true" }, RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE)).toThrow(/unreviewed variables/);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({ EVENT_OPERATING_SPINE_ENABLED: "true" }))).toThrow(/unreviewed variables/);
+    const runtime = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+    expect(runtime).toEqual({ ...oldRuntime, EVENT_OPERATING_SPINE_ENABLED: "true", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" });
+    expect(runtime).toMatchObject({ NOTIFICATIONS_EMAIL_PROVIDER: "none", NOTIFICATIONS_SMS_PROVIDER: "none", REVENUE_AUTOPILOT_SENDS_ENABLED: "false", BUYER_ACCESS_ENABLED: "false", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" });
+    const oldBrowser = validateCandidateBrowserEnvironment(browserEnvironment());
+    expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_STAFFING_UAT_PROFILE)).toEqual(oldBrowser);
+    expect(oldBrowser).not.toHaveProperty("VITE_EVENT_OPERATING_SPINE_ENABLED");
+    expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toEqual({ ...oldBrowser, VITE_EVENT_OPERATING_SPINE_ENABLED: "true" });
+    expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE).VITE_AMBIENT_UI_ENABLED).toBe("true");
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED|EVENT_OPERATING_SPINE_ENABLED/);
+    expect(validateCandidateFunctionsEnvironment(functionsEnvironment({ EVENT_OPERATING_SPINE_ENABLED: "true", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" }), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toMatchObject({ EVENT_OPERATING_SPINE_ENABLED: "true" });
+    const requirements = candidateEventSpineRequirements(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+    expect(requirements).toMatchObject({ tenantActivationIncluded: false, tenantSelectionRequired: true, operatorAcceptanceEstablished: false,
+      tenantGate: { field: "eventOperatingSpineEnabled", requiredValue: true, availability: "not_yet_available", observedValue: null } });
+    expect(requirements.commercialServerFlag).toEqual({ name: "COMMERCIAL_CHANGE_AUTHORITY_ENABLED", value: true });
+    expect(requirements.commercialTenantGate).toMatchObject({ field: "commercialChangeAuthorityEnabled", requiredValue: true, observedValue: null, availability: "not_yet_available" });
+    expect(oldRuntime.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toBe("false");
+    expect(staffing.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toBe("false");
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({ EVENT_OPERATING_SPINE_ENABLED: "true" }), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED/);
+    expect(candidateEventSpineRequirements(RELEASE_CANDIDATE_UAT_PROFILE)).toBeNull();
+  });
+  test("event candidate manifest and reserved receipt keep rollout requirements separate from activation proof", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "event-profile-test-"));
+    try {
+      const runtime = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+      const manifest = writeCandidateManifest(path.join(root, "output"), SHA, 123, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE, runtime);
+      expect(manifest).toMatchObject({ sourceSha: SHA, eventOperatingSpineBrowserEnabled: true, eventOperatingSpineAuthorityEnabled: true, rolloutRequirements: { tenantActivationIncluded: false } });
+      expect(JSON.parse(fs.readFileSync(path.join(root, "output", "release-candidate.json"), "utf8"))).toEqual(manifest);
+      const reservation = reserveVercelCandidateReceipt(root, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+      const receipt = JSON.parse(fs.readFileSync(reservation.receiptPath, "utf8"));
+      expect(receipt.rolloutRequirements.tenantGate.observedValue).toBeNull();
+      expect(receipt.providerMutationAttempted).toBe(false);
+      expect(() => updateCandidateReceipt(reservation, { rolloutRequirements: {} })).toThrow(/immutable/);
+      const old = writeCandidateManifest(path.join(root, "old-output"), SHA, 123, RELEASE_CANDIDATE_UAT_PROFILE, candidateFunctionsRuntimeExpected());
+      expect(old).not.toHaveProperty("eventOperatingSpineBrowserEnabled"); expect(old).not.toHaveProperty("rolloutRequirements");
+      const source = fs.readFileSync(SCRIPT, "utf8");
+      expect(source).toContain("candidateBrowserEnvironment(firebaseCliPath, candidateProfile)");
+      expect(source).toMatch(/validateCandidateBrowserEnvironment\(\{[\s\S]*?\.\.\.providerConfig,[\s\S]*?\}, candidateProfile\)/);
+      expect(source).toContain("VITE_EVENT_OPERATING_SPINE_ENABLED: true");
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 });

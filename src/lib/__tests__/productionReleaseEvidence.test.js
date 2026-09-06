@@ -1287,6 +1287,35 @@ describe("direct deployment workflow validator", () => {
       )).toThrow(/email-active.*firebase-backend or firebase-all/i);
     }
   );
+  test.each(["firebase-backend", "firebase-all"])(
+    "allows the ragnakok-workflows profile only for a Functions-bearing %s deployment",
+    (profile) => {
+      expect(validateDirectDeploymentRun(
+        makeDirectDeploymentRun(profile, {
+          display_title: makeDirectDeploymentTitle({
+            profile,
+            releaseProfile: "ragnakok-workflows"
+          })
+        }),
+        makeDirectDeploymentOptions(profile, { releaseProfile: "ragnakok-workflows" })
+      )).toEqual({ operatorId: OPERATOR_ID });
+    }
+  );
+
+  test.each(["firebase-hosting", "vercel"])(
+    "rejects the ragnakok-workflows profile for non-Functions target %s",
+    (profile) => {
+      expect(() => validateDirectDeploymentRun(
+        makeDirectDeploymentRun(profile, {
+          display_title: makeDirectDeploymentTitle({
+            profile,
+            releaseProfile: "ragnakok-workflows"
+          })
+        }),
+        makeDirectDeploymentOptions(profile, { releaseProfile: "ragnakok-workflows" })
+      )).toThrow(/ragnakok-workflows.*firebase-backend or firebase-all/i);
+    }
+  );
 
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, /different repository/i],

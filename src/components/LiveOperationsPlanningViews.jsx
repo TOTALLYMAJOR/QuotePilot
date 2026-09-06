@@ -1,4 +1,12 @@
 import StatusChip from "./StatusChip";
+import { lazy, Suspense } from "react";
+const EventOperationsPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./EventOperationsPanel"))
+  : () => null;
+const EventOperatingHistoryPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./EventOperatingHistoryPanel")) : () => null;
+const EventExecutionContextPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./EventExecutionContextPanel")) : () => null;
 import StaffEvidenceRail from "./StaffEvidenceRail";
 import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
@@ -150,6 +158,9 @@ export function EventPlanningView({
   snapshot,
   organizationName = "",
   organizationId = "",
+  principalId = "",
+  role = "customer",
+  eventOperationsEnabled = false,
   routeMode = "list",
   quoteId = "",
   onRefresh,
@@ -157,6 +168,7 @@ export function EventPlanningView({
   onOpenQuote,
   onOpenLive,
   onOpenReplay,
+  onOpenCustomer,
   onOpenOperations,
   onOpenEvents,
   onOpenOpportunities,
@@ -177,6 +189,7 @@ export function EventPlanningView({
     || state.truncated
     || state.truncationKnown === false
   );
+  const eventOperationsAvailable = eventOperationsEnabled && state.source === "firebase" && ["admin", "sales"].includes(role) && selected?.status === "booked" && Boolean(principalId);
   const unavailableMode = routeMode === "live" || routeMode === "replay";
   const heading = routeMode === "live"
     ? "Control Room"
@@ -212,7 +225,9 @@ export function EventPlanningView({
                 {state.loading ? "Refreshing..." : "Refresh"}
               </button>
             )}
-            <button type="button" className="ghost" onClick={onOpenOperations}>Operations</button>
+            {typeof onOpenOperations === "function" && (
+              <button type="button" className="ghost" onClick={onOpenOperations}>Operations</button>
+            )}
           </div>
         </div>
 
@@ -267,8 +282,14 @@ export function EventPlanningView({
           />
         )}
 
-        {!selected && !expectsSelection && hasEvents && <LiveAuthorityNotice />}
+        {!selected && !expectsSelection && hasEvents && (eventOperationsEnabled && state.source === "firebase" && ["admin", "sales"].includes(role)
+          ? <p className="source-note">Open a booked event to review its recorded phase, checkpoints, issues, and actuals. Replay reads operational receipts for the current accepted source.</p>
+          : <LiveAuthorityNotice />)}
 
+        {selected && routeMode === "live" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading event operations...</p>}><EventOperationsPanel organizationId={organizationId} quoteId={selected.id} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} quoteStatus={selected.status} sourceVersionId={selected.activeVersionId || selected.versionMeta?.versionId || ""} acceptanceReceiptId={selected.acceptanceReceipt?.receiptId || ""} /></Suspense>}
+
+        {selected && routeMode === "replay" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading Replay...</p>}><EventOperatingHistoryPanel organizationId={organizationId} quoteId={selected.id} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} sourceVersionId={selected.activeVersionId || selected.versionMeta?.versionId || ""} acceptanceReceiptId={selected.acceptanceReceipt?.receiptId || ""} /></Suspense>}
+        {selected && routeMode === "live" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading execution context...</p>}><EventExecutionContextPanel organizationId={organizationId} quote={selected} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} onOpenQuote={onOpenQuote} onOpenCustomer={onOpenCustomer} /></Suspense>}
         {selected && (
           <div className="live-ops-focus-grid">
             <section className="live-ops-focus-card" aria-label="Event basics">
@@ -285,8 +306,10 @@ export function EventPlanningView({
               <p className="source-note">
                 {classifyQuoteStatus(selected.status).label} is the recorded opportunity state. The scheduled date does not by itself confirm operational readiness.
               </p>
-              <LiveAuthorityNotice compact />
-              {unavailableMode && (
+              {eventOperationsAvailable
+                ? <p className="source-note">Control Room records event phases, checkpoints, issues, and actuals against the accepted source. Replay reads operational receipts for the current accepted source.</p>
+                : <LiveAuthorityNotice compact />}
+              {unavailableMode && !eventOperationsAvailable && (
                 <p className="error-note" role="status">
                   {routeMode === "live"
                     ? "Control Room is unavailable until live operations authority is enabled."
@@ -328,6 +351,9 @@ export function EventPlanningView({
 
         {selected && (
           <div className="live-ops-actions">
+            {routeMode === "detail" && eventOperationsAvailable && <button type="button" className="cta" data-event-operations-entry="control-room" onClick={() => onOpenLive?.(selected.id)}>Open Control Room</button>}
+            {routeMode !== "replay" && eventOperationsAvailable && <button type="button" className="ghost" data-event-operations-entry="replay" onClick={() => onOpenReplay?.(selected.id)}>Open Replay</button>}
+            {routeMode === "replay" && eventOperationsAvailable && <button type="button" className="ghost" onClick={() => onOpenLive?.(selected.id)}>Open Control Room</button>}
             <button type="button" className="ghost" onClick={() => onOpenQuote?.(selected.id)}>Open quote record</button>
             {unavailableMode && (
               <button type="button" className="ghost" onClick={() => onOpenEvent?.(selected.id)}>Back to Event Focus</button>
@@ -387,68 +413,6 @@ export function ClearDeckView({
             </button>
           </article>
         ))}
-      </section>
-    </main>
-  );
-}
-
-export function OperationsSwitchboardView({
-  snapshot,
-  organizationName = "",
-  organizationId = "",
-  onRefresh,
-  onOpenEvents,
-  onOpenWorkflow,
-  onOpenSchedule,
-  onOpenReporting,
-  onOpenCatalog,
-  onOpenDiagnostics
-}) {
-  const headingRef = useWorkspaceRouteHeadingFocus(true);
-  const events = acceptedEvents(snapshot?.quotes);
-  const openAttention = snapshot?.attentionSummary?.items?.length || 0;
-
-  return (
-    <main className="container workspace-route-main live-ops-route">
-      <section className="panel live-ops-panel" aria-labelledby="operations-heading">
-        <div className="command-center-head">
-          <div>
-            <p className="eyebrow">Operations</p>
-            <h2 ref={headingRef} id="operations-heading" className="workspace-route-heading" tabIndex={-1}>
-              Daily, business, and system workspaces
-            </h2>
-          </div>
-          <button type="button" className="ghost" onClick={() => onRefresh?.({ force: true })} disabled={snapshot?.loading}>
-            {snapshot?.loading ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-        <EvidenceRail snapshot={snapshot} organizationName={organizationName} organizationId={organizationId} />
-        <div className="live-ops-switchboard">
-          <button type="button" onClick={onOpenEvents}>
-            <strong>Events</strong>
-            <span>{events.length} accepted/booked in the bounded read</span>
-          </button>
-          <button type="button" onClick={() => onOpenWorkflow?.({})}>
-            <strong>Workflow</strong>
-            <span>{openAttention} attention item{openAttention === 1 ? "" : "s"}</span>
-          </button>
-          <button type="button" onClick={onOpenSchedule}>
-            <strong>Schedule</strong>
-            <span>Calendar and capacity planning</span>
-          </button>
-          <button type="button" onClick={onOpenReporting}>
-            <strong>Reporting</strong>
-            <span>Existing commercial reporting surface</span>
-          </button>
-          <button type="button" onClick={onOpenCatalog} disabled={!onOpenCatalog}>
-            <strong>Library</strong>
-            <span>{onOpenCatalog ? "Catalog choices and event templates" : "Admin access required"}</span>
-          </button>
-          <button type="button" onClick={onOpenDiagnostics}>
-            <strong>System</strong>
-            <span>Session diagnostics and integration health</span>
-          </button>
-        </div>
       </section>
     </main>
   );

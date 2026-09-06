@@ -1,6 +1,9 @@
 # Proposal Composer — Design & Implementation Plan
 
-Status: implementing (feature/proposal-composer, Aug 2026)
+Last updated: 2026-09-04 12:43:00 CDT
+
+Status: Commercial Workbench source candidate in draft PR #129; deployment and
+human acceptance are unclaimed.
 Owner surface: quote builder routes (`/app/quotes/new`, `/app/quotes/:id/edit`)
 Flag: `VITE_PROPOSAL_COMPOSER_ENABLED` — **default ON**, disabled only by explicit
 `0/false/no/off` (same convention as `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`).
@@ -19,6 +22,18 @@ Source brief: "QuotePilot Quote Experience — Proposal Composer Redesign Prompt
 (user-provided, Aug 2026). This plan maps that brief onto the real data model;
 anything the model cannot support honestly is listed in §8 (deferred) rather than
 faked.
+
+### UX Convergence execution refinement
+
+The composer remains a proposal document, not a generic dashboard or second
+quote builder. A pure presentation model now groups its existing evidence into
+Event, Customer, Experience, Staffing, and Commercials. One domain expands at
+a time while the Quote Plan retains concise domain summaries and the evolved
+Commercial Truth rail retains calculated total, deposit, blockers,
+consequences, gated margin, scenarios, preview, save state, and collapsed
+healthy activity. Domain switching owns no pricing, persistence, versioning,
+network, catalog, or lifecycle action. Guided and Workbench still receive the
+same form, review surfaces, calculators, and explicit save callback.
 
 ## 2. Architecture
 

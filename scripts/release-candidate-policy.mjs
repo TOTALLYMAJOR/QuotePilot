@@ -32,10 +32,12 @@ export const RELEASE_CANDIDATE_UAT_PROFILE = "staging-safe-off";
 export const RELEASE_CANDIDATE_STAFFING_UAT_PROFILE = "staging-staffing-authority";
 export const RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE =
   RELEASE_ACCEPTANCE_CANDIDATE_PROFILE;
+export const RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE = "staging-event-operating-spine";
 export const RELEASE_CANDIDATE_UAT_PROFILES = Object.freeze([
   RELEASE_CANDIDATE_UAT_PROFILE,
   RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
-  RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+  RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+  RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE
 ]);
 
 const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
@@ -80,7 +82,23 @@ export function candidateFunctionsRuntimeExpected(
       [
         RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
         RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
-      ].includes(profile) ? "true" : "false"
+      ].includes(profile) ? "true" : "false",
+    ...(profile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { EVENT_OPERATING_SPINE_ENABLED: "true", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" } : {})
+  });
+}
+
+export function candidateEventSpineRequirements(profileValue) {
+  const profile = requireCandidateUatProfile(profileValue);
+  if (profile !== RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE) return null;
+  return Object.freeze({
+    serverFlag: Object.freeze({ name: "EVENT_OPERATING_SPINE_ENABLED", value: true }),
+    commercialServerFlag: Object.freeze({ name: "COMMERCIAL_CHANGE_AUTHORITY_ENABLED", value: true }),
+    commercialTenantGate: Object.freeze({ documentPath: "organizations/{organizationId}/settings/config", field: "commercialChangeAuthorityEnabled", requiredValue: true, availability: "not_yet_available", reasonCode: "tenant_activation_not_performed", observedValue: null }),
+    browserFlags: Object.freeze({ VITE_AMBIENT_UI_ENABLED: true, VITE_EVENT_OPERATING_SPINE_ENABLED: true }),
+    tenantGate: Object.freeze({ documentPath: "organizations/{organizationId}/settings/config", field: "eventOperatingSpineEnabled", requiredValue: true, availability: "not_yet_available", reasonCode: "tenant_activation_not_performed", observedValue: null }),
+    tenantActivationIncluded: false,
+    tenantSelectionRequired: true,
+    operatorAcceptanceEstablished: false
   });
 }
 
@@ -126,7 +144,9 @@ const CANDIDATE_FUNCTIONS_DISABLED_RESIDUE = Object.freeze([
 ]);
 
 const CANDIDATE_FUNCTIONS_ALLOWED_KEYS = new Set([
-  ...RELEASE_CANDIDATE_UAT_PROFILES.flatMap((profile) => (
+  ...RELEASE_CANDIDATE_UAT_PROFILES.filter((profile) => (
+    profile !== RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE
+  )).flatMap((profile) => (
     Object.keys(candidateFunctionsRuntimeExpected(profile))
   ))
 ]);
@@ -300,7 +320,8 @@ export function validateCandidateBrowserEnvironment(
     VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: providerAcceptance ? "true" : "false",
     VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: providerAcceptance
       ? turnstileSiteKey
-      : ""
+      : "",
+    ...(profile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { VITE_EVENT_OPERATING_SPINE_ENABLED: "true" } : {})
   });
 }
 
@@ -349,7 +370,7 @@ export function validateCandidateFunctionsEnvironment(
   }
   const unknownKeys = Object.keys(environment)
     .filter((name) => String(environment[name] || "").trim())
-    .filter((name) => !CANDIDATE_FUNCTIONS_ALLOWED_KEYS.has(name));
+    .filter((name) => !CANDIDATE_FUNCTIONS_ALLOWED_KEYS.has(name) && !Object.hasOwn(expectedRuntime, name));
   if (unknownKeys.length) {
     reject(`Functions environment contains unreviewed variables: ${unknownKeys.sort().join(", ")}.`);
   }
@@ -583,6 +604,7 @@ const CANDIDATE_RECEIPT_IMMUTABLE_FIELDS = Object.freeze([
   "reservationId",
   "target",
   "uatProfile",
+  "rolloutRequirements",
   "sourceSha",
   "ci",
   "createdAt"
@@ -728,6 +750,7 @@ export function reserveCandidateReceipt({
     status: "reserved",
     target: normalizedTarget,
     uatProfile: normalizedUatProfile,
+    ...(candidateEventSpineRequirements(normalizedUatProfile) ? { rolloutRequirements: candidateEventSpineRequirements(normalizedUatProfile) } : {}),
     sourceSha: sha,
     ci,
     provider,

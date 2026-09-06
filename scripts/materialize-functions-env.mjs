@@ -204,6 +204,17 @@ if (!["true", "false"].includes(commercialChangeAuthorityEnabled)) {
   throw new Error("COMMERCIAL_CHANGE_AUTHORITY_ENABLED must be true or false.");
 }
 
+const tenantWorkflowOrganizationId = optional("TENANT_WORKFLOW_ORGANIZATION_ID", "");
+if (tenantWorkflowOrganizationId && tenantWorkflowOrganizationId !== "mm05366-sandbox") {
+  throw new Error("TENANT_WORKFLOW_ORGANIZATION_ID must be the approved RagnaKoK organization.");
+}
+if (tenantWorkflowOrganizationId && commercialChangeAuthorityEnabled !== "false") {
+  throw new Error("Tenant-scoped workflow activation requires global Commercial Change authority off.");
+}
+if (optional("EVENT_OPERATING_SPINE_ENABLED", "false") !== "false") {
+  throw new Error("Production event workflow runtime requires tenant-scoped activation, with its global flag off.");
+}
+
 const operationalStaffingAuthorityEnabled = optional(
   "OPERATIONAL_STAFFING_AUTHORITY_ENABLED",
   "false"
@@ -315,6 +326,8 @@ const values = {
   } : {}),
   STRIPE_MODE: stripeMode,
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: commercialChangeAuthorityEnabled,
+  EVENT_OPERATING_SPINE_ENABLED: "false",
+  ...(tenantWorkflowOrganizationId ? { TENANT_WORKFLOW_ORGANIZATION_ID: tenantWorkflowOrganizationId } : {}),
   OPERATIONAL_STAFFING_AUTHORITY_ENABLED: operationalStaffingAuthorityEnabled,
   REVENUE_AUTOPILOT_ENABLED: revenueAutopilotEnabled,
   REVENUE_AUTOPILOT_SENDS_ENABLED: revenueAutopilotSendsEnabled,

@@ -1,0 +1,69 @@
+/* The native review stays ahead of optional policy, costs, and provenance. */
+.customer-revenue-opportunity[data-opportunity-type="post_event_closeout"] {
+  scroll-margin-top: 7rem;
+  display: block;
+}
+[data-closeout-review-heading] {
+  scroll-margin-top: 7rem;
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+[data-closeout-review-heading]:focus-visible {
+  outline: 2px solid rgba(141, 97, 26, .55);
+  outline-offset: 3px;
+}
+.customer-revenue-opportunity[data-opportunity-type="post_event_closeout"] > .right-actions {
+  justify-content: flex-start;
+  margin-top: .5rem;
+}
+.closeout-return { min-height: 44px; margin-bottom: .5rem; }
+.post-event-closeout-action {
+  padding: 1rem 0;
+  border: 0;
+  border-top: 1px solid var(--tone-line, #e4e4e0);
+  border-radius: 0;
+  background: transparent;
+  gap: 1rem;
+}
+.post-event-closeout-action .workflow-attention-head { align-items: start; gap: .75rem; }
+.post-event-closeout-action .closeout-progress { font-weight: 600; color: var(--tone-ink-1, #1f2023); margin: .35rem 0; }
+.post-event-closeout-items { gap: 0; }
+.post-event-closeout-action .post-event-closeout-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .25rem 1rem;
+  padding: .9rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--tone-line, #e4e4e0);
+  border-radius: 0;
+  background: transparent;
+}
+.post-event-closeout-item > .right-actions { grid-column: 2; grid-row: 1; }
+.post-event-closeout-item .closeout-item-detail { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
+.closeout-item-detail summary,
+.closeout-supporting-detail > summary,
+.closeout-evidence > summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  color: var(--tone-ink-2, #3b3d42);
+  font-size: .8125rem;
+}
+.closeout-item-detail summary::before,
+.closeout-supporting-detail > summary::before,
+.closeout-evidence > summary::before { content: "+"; }
+.closeout-item-detail[open] summary::before,
+.closeout-supporting-detail[open] > summary::before,
+.closeout-evidence[open] > summary::before { content: "−"; }
+.closeout-item-detail .compact-field { margin-top: .5rem; max-width: 38rem; }
+.closeout-supporting-detail { min-width: 0; }
+.closeout-supporting-detail > .source-note { margin-bottom: .75rem; }
+.post-event-closeout-item .right-actions button { min-height: 44px; }
+@media (max-width: 760px) {
+  .post-event-closeout-item > .right-actions,
+  .post-event-closeout-item > .right-actions button { width: auto; }
+  .post-event-closeout-action .post-event-closeout-item { gap: .2rem .6rem; }
+  .post-event-closeout-item strong { font-size: .875rem; }
+}

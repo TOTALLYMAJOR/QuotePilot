@@ -40,6 +40,35 @@ import {
   PRODUCTION_CHECKLIST_IDS
 } from "./quoteWorkflow";
 import { normalizeDecisionRoomOptions } from "./customerDecisionRoom";
+import { deriveAttendanceState } from "../components/attendanceState";
+
+// Local demo storage has no server authority. Preserve reviewed evidence using
+// the same read-model schema; Firebase requests always go through quoteCreation.
+function localAttendancePlanning(form, { referenceId, versionId, actorUid, nowISO, existingEvent }) {
+  if (form.attendancePlanning === undefined) {
+    return existingEvent?.guests === Number(form.guests) && existingEvent?.attendance
+      ? { attendance: JSON.parse(JSON.stringify(existingEvent.attendance)) } : {};
+  }
+  const input = form.attendancePlanning;
+  const keys = ["kind", "value", "min", "max", "sourceType"];
+  if (!input || typeof input !== "object" || Array.isArray(input)
+    || Object.keys(input).length !== keys.length || keys.some((key) => !Object.hasOwn(input, key))
+    || input.sourceType !== "staff_intake" || !["exact", "approximate", "range"].includes(input.kind)
+    || !Number.isInteger(input.value) || input.value !== Number(form.guests)
+    || [input.min, input.max].some((value) => value !== null && !Number.isInteger(value))) {
+    throw new Error("Reviewed attendance planning must match the exact count and supported planning fields.");
+  }
+  const sourceReferenceId = `local:${referenceId}:${versionId}:planning`;
+  const attendance = {
+    schemaVersion: 1,
+    planning: { ...input, sourceReferenceId, observedAtISO: nowISO, recordedByUid: actorUid || "" },
+    confirmation: { state: "not_requested", requestedAtISO: "", dueDate: "", submittedCount: null,
+      sourceType: "", sourceReferenceId: "", submittedAtISO: "", submittedByRole: "", appliedRevisionId: "", commercialChangeReceiptId: "" },
+    commercialBasis: { source: "planning", sourceReferenceId, appliedRevisionId: versionId }
+  };
+  deriveAttendanceState({ quote: { activeVersionId: versionId, event: { guests: Number(form.guests), attendance } } });
+  return { attendance };
+}
 
 const LOCAL_QUOTES_KEY = "quoteWizard.quotes";
 const LOCAL_QUOTE_HISTORY_KEY = "quoteWizard.quoteHistory";
@@ -2992,6 +3021,7 @@ export async function submitQuote({
       venue: form.venue || "",
       venueAddress: form.venueAddress || "",
       guests: Number(form.guests || 0),
+      ...(!firebaseReady ? localAttendancePlanning(form, { referenceId: quoteNumber, versionId: "v0001", actorUid: ownerUid, nowISO }) : {}),
       hours: Number(form.hours || 0),
       servers: Number(form.servers || 0),
       chefs: Number(form.chefs || 0),
@@ -3459,6 +3489,7 @@ export async function updateQuote({
       venue: form.venue || "",
       venueAddress: form.venueAddress || "",
       guests: Number(form.guests || 0),
+      ...localAttendancePlanning(form, { referenceId: id, versionId: `v${String(Number(existing.latestVersionNumber || 0) + 1).padStart(4, "0")}`, actorUid: ownerUid, nowISO, existingEvent: existing.event }),
       hours: Number(form.hours || 0),
       servers: Number(form.servers || 0),
       chefs: Number(form.chefs || 0),
@@ -4626,8 +4657,12 @@ export async function updatePortalDecision({
         portalIssuedAtISO: localPortalIssuedAtISO,
         quoteNumber: String(localTarget.quoteNumber || "").trim(),
         currency: "USD",
-        totalMinor: Math.round(Number(localTarget.totals?.total || 0) * 100),
-        depositMinor: Math.round(Number(localTarget.totals?.deposit || 0) * 100),
+        totalMinor: Number.isSafeInteger(localTarget.totals?.totalCents)
+          ? localTarget.totals.totalCents
+          : Math.round(Number(localTarget.totals?.total || 0) * 100),
+        depositMinor: Number.isSafeInteger(localTarget.totals?.depositCents)
+          ? localTarget.totals.depositCents
+          : Math.round(Number(localTarget.totals?.deposit || 0) * 100),
         snapshotSha256: ""
       }
     : null;

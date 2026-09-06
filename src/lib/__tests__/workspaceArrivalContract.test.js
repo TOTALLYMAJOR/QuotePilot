@@ -587,7 +587,7 @@ describe("workspace exact-arrival handoff", () => {
 
     expect(schedule).toMatchObject({
       ok: true,
-      navigation: { path: "/app/schedule", primaryActionReady: true },
+      navigation: { path: "/app/operations", primaryActionReady: true },
       contract: {
         focusTransport: "state_only",
         focusConsumerState: "supported",

@@ -49,7 +49,7 @@ def clean_record_dict() -> dict[str, Any]:
 #: Keys that live on the record itself rather than inside an evidence section.
 RECORD_FIELDS = frozenset(
     {"eventCompleted", "currentCatalogRevision", "quoteNumber", "eventDate",
-     "organizationId", "quoteId", "overrunThresholds"}
+     "organizationId", "quoteId", "overrunThresholds", "overrunPolicyEvidence"}
 )
 
 
@@ -70,6 +70,14 @@ def record_from(
     for section, patch in (values or {}).items():
         if section in RECORD_FIELDS:
             raw[section] = patch
+            if section == "overrunThresholds" and "overrunPolicyEvidence" not in (values or {}):
+                # An explicit synthetic policy override supplies its own matching
+                # envelope, just as evidence-value overrides do below.
+                raw["overrunPolicyEvidence"] = {
+                    "availability": "available", "value": copy.deepcopy(patch),
+                    "constraintClass": "none", "detail": "Explicit synthetic operator declaration.",
+                    "provenance": {},
+                }
             continue
         if section not in raw["evidence"]:
             raise AssertionError(f"Unknown evidence section in test: {section}")

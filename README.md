@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-05 19:05:50 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -11,6 +11,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
+- Commercial platform program: [docs/COMMERCIAL_PLATFORM_PROGRAM.md](docs/COMMERCIAL_PLATFORM_PROGRAM.md)
+- Pricing Constitution: [docs/PRICING_CONSTITUTION.md](docs/PRICING_CONSTITUTION.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
   Firebase staging or Vercel preview only; checksum-verified Firebase binary,
   ADC Rules readback, direct Vercel APIs, and an explicit safe-off, bounded
@@ -110,10 +112,26 @@ evidence paths, freshness, blocker references, and the single next proof event.
 - `/staffing/respond?staffing=<signed-token>`: public bearer response for one
   exact staff assignment invitation. The link records accept or decline only;
   it does not establish attendance, hours, payroll, completion, or readiness.
-- `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
-  schedule and proof-safe commercial reporting workspaces.
-- `/app/operations`: Ambient Operations switchboard over existing daily,
-  business, and system routes. It adds no new backend authority.
+- `/app/operations`: source-candidate canonical Calendar for accepted/booked
+  operations. It composes the existing month/week schedule, conflicts,
+  capacity, staff-lead assignment, production checklist, and run-of-show
+  context without adding backend or live-telemetry authority. Month gives the
+  full primary canvas to the calendar and places selected context below. Week
+  uses a seven-day vertical time grid with start/duration geometry, collision
+  lanes, and a secondary detail rail. Phone widths use an agenda from those
+  same models. The converged Ambient primary navigation opens this Calendar
+  directly; the secondary Workspace & tools Operations group contains
+  **Operations**, **Clear the Deck**, and role-gated **Staff** without a
+  duplicate header menu.
+- `/app/schedule`: compatibility path to the same Calendar capability. Event
+  and schedule deep routes remain reachable from their exact context or URL;
+  they are not duplicated in the Operations menu.
+- `/app/reporting`: temporary-flagged proof-safe commercial reporting
+  workspace. **Reporting Dashboard**, **Integrations Ops**, **Import Studio**,
+  and **Session Diagnostics** remain progressively disclosed Administration
+  tools, while **Workflow**, **Messages**, and **Pilot** remain Frequent tools.
+  These navigation changes are a local source candidate; exact-head CI, hosted
+  behavior, and human acceptance remain pending.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
   workspaces; the existing admin gate remains authoritative. A default-off
   Ambient build presents `/app/catalog` as **Library**, separating catalog
@@ -186,6 +204,13 @@ Tenant safety mode:
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
 - Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
+- Commercial architecture: shared Commercial / Operations Kernel -> Catering
+  Vertical Pack -> organization-scoped Tenant Configuration -> contextual
+  QuotePilot UX. Package and Event Template remain the natural catering terms;
+  Configurable Offer and Commercial Template are shared kernel contracts.
+- Pricing authority: browser preview plus revision-fenced server certification;
+  pricing-v1 remains historical evidence and pricing-v2 introduces exact
+  integer-minor-unit receipts and immutable price waterfalls.
 - Reconciliation tier: Python 3.11+ (`truthloop/`), standard library only, read-only,
   no credentials and no write path; see `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
@@ -1442,3 +1467,116 @@ the primary targets.
 - Current operational state: [PROJECT_STATUS.md](PROJECT_STATUS.md)
 - Prioritized backlog: [DEV_TASKS.md](DEV_TASKS.md)
 - Change history: [CHANGELOG.md](CHANGELOG.md)
+
+### Event Operating Spine local acceptance
+
+The default-off `QP-TOM-020-A/B/C/D` phase, operator-work, declared-actuals and Replay slices share a disposable
+acceptance harness:
+
+```bash
+env -u DEBUG EVENT_OPERATING_SPINE_ENABLED=true npx firebase-tools --config firebase.e2e.json --project demo-event-operating-spine emulators:exec --only auth,firestore,functions "node scripts/event-operating-spine-emulator-acceptance.mjs"
+```
+
+This command must use the explicit `demo-event-operating-spine` emulator
+project. It creates synthetic local data only. The
+[Tenant Operating Model ADR](docs/TENANT_OPERATING_MODEL_ADR.md) owns the role,
+source, policy, online-only and rollout boundaries. Runtime and tenant gates
+remain off outside this disposable check; a passing harness does not activate
+a tenant or authorize deployment.
+
+For a local build of the actual Ambient Control Room and its default-off event
+panels, use all three build switches:
+
+```bash
+VITE_AMBIENT_UI_ENABLED=true VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true VITE_EVENT_OPERATING_SPINE_ENABLED=true npm run build -- --outDir output/tom-enabled-build
+```
+
+The default compatibility build selects the legacy application. Enabling only
+the event switch does not validate the Ambient event panels. The build switches
+do not enable server or tenant mutation authority.
+
+
+### Workflow configuration local acceptance
+
+The default-off tenant workflow Studio and event coordinator use the same
+Event Operating Spine environment and tenant gates. The disposable local
+acceptance script is `scripts/workflow-configuration-emulator-acceptance.mjs`.
+It accepts only demo projects and loopback emulator hosts and exercises real
+configuration/instance transactions. Runtime publication never enables a gate.
+See [Configuration Studio](docs/USER_MANUAL.md#tenant-workflow-configuration-studio)
+and the [accepted execution contract](docs/TENANT_OPERATING_MODEL_ADR.md#slices-e-and-f--versioned-coordination-and-configuration-studio).
+
+
+## Tenant Workflow Migration Inventory
+
+`scripts/event-workflow-migration-inventory.mjs` reads an explicitly named local
+private input bundle and emits a bounded advisory inventory:
+
+```bash
+node scripts/event-workflow-migration-inventory.mjs --input /secure/path/offline-proof.json > /tmp/tenant-workflow-inventory.json
+```
+
+Schema 2 inputs name one organization and an explicit four-pack subject cohort,
+with current source/native proof, retained publication/instance receipts and
+separate server/tenant gate observations. Inputs must be regular JSON files no
+larger than 16 MiB. The tool fails closed if proof cannot be verified. It has no network,
+credentials, application writes or apply mode. Keep private source bundles out
+of version control; exported inventory contains safe scope IDs, digests, pins
+and classifications. See the script's argument validation and the
+[Tenant Operating Model ADR](docs/TENANT_OPERATING_MODEL_ADR.md#phase-5--local-inventory-and-release-preparation)
+for source and proof boundaries. A report does not authorize migration; runtime
+commands recheck the current source and policy.
+
+The release tooling accepts the isolated `staging-event-operating-spine`
+profile for a deliberately selected candidate. It binds server and browser
+EventSpine flags and server Commercial Change Authority enforcement. EventSpine
+and Commercial Change each retain a separate tenant activation prerequisite;
+neither is enabled by publication or a candidate manifest. Existing
+release profiles retain their default-off contracts. Preparing or validating a
+candidate manifest does not deploy it, select a real tenant, activate a provider
+or establish operator acceptance. The real pilot tenant, bounded cohort,
+walkthrough and baseline remain explicit completion requirements. Use the
+[bounded pilot acceptance matrix](docs/acceptance/tenant-operating-model.md).
+
+## Local Tenant Workflow Rehearsal
+
+From the isolated local candidate with dependencies installed, run:
+
+```bash
+env -u DEBUG node scripts/tenant-operating-model-local-rehearsal.mjs
+```
+
+This launches fresh Auth, Firestore and Functions emulators, verifies all four
+workflow packs, seeds synthetic staff sign-in and starts the real app at
+`http://127.0.0.1:4174/app`. Java and the repository Firebase tooling are required;
+the configured emulator ports and port 4174 must be free. Use
+`event-admin@local.test` or `event-sales@local.test` with the emulator-only
+password printed by the launcher. A fresh password is generated for each
+disposable session. Ordinary authentication and role checks remain active. Ctrl+C
+stops the rehearsal; restarting creates a fresh disposable fixture. Do not use these synthetic credentials in hosted systems.
+
+If catalog onboarding appears, choose **Explore the workspace** as administrator.
+The verified rehearsal prepares a named event type and menu category before
+native catalog confirmation so sales can enter through normal readiness checks.
+Start with the printed **verified current-catalog booked amendment source** for
+a complete commercial example. Open Library → **Business workflows** when
+reviewing team configuration. The launcher
+prints exact event, quote and closeout links. Acceptance fixtures deliberately
+retire definitions after exercising publication and migration; existing pins
+remain readable. Publish a reviewed new version to use a fresh tenant policy.
+Use the printed verified current-catalog booked source for attendance amendments;
+legacy/changed-catalog terminal quotes remain blocked by native catalog authority.
+
+The seed uses native planners to prepare synthetic renewed acceptance and booking
+for an eligible amendment source while preserving its version, price, catalog
+authority and payment evidence. Provider sends are disabled. Synthetic delivery/acceptance fixtures establish
+local contracts only. This command does not push, deploy or activate a hosted
+tenant. The [pilot matrix](docs/acceptance/tenant-operating-model.md) separates
+this rehearsal from human, customer, hosted and provider acceptance.
+
+## RagnaKoK production workflow activation
+
+The tenant-scoped `ragnakok-workflows` Firebase profile is documented in the
+[launch runbook](docs/LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release). It keeps
+global workflow authority off and admits only the approved production tenant;
+exact release CI, provider readback and tenant settings remain required.

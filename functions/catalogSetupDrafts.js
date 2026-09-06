@@ -8,6 +8,10 @@ const MAX_CHANGED_RECORDS = 400;
 const MAX_CHANGE_BYTES = 30_000;
 const MAX_DRAFT_BYTES = 900_000;
 const DRAFT_ID = "current";
+const DRAFT_MUTATION_RECEIPTS_COLLECTION = "catalogDraftMutationReceipts";
+const DRAFT_PUBLICATION_LINEAGES_COLLECTION = "catalogDraftPublicationLineages";
+const DRAFT_MUTATION_RECEIPT_KIND = "catalog_setup_draft_mutation";
+const DRAFT_PUBLICATION_LINEAGE_KIND = "catalog_setup_draft_publication_lineage";
 const MISSING_BASELINE_HASH = "missing";
 const CATALOG_COLLECTIONS = Object.freeze([
   "catalogPackages",
@@ -433,13 +437,315 @@ function draftProjection(draft = null) {
   };
 }
 
+function actorProjection({ actorUid = "", actorEmail = "" } = {}) {
+  return {
+    uid: text(actorUid, 160),
+    email: text(actorEmail, 320).toLowerCase()
+  };
+}
+
+function createDraftSessionId({ organizationId, baseCatalogRevision, openingRequestId }) {
+  return hashValue({
+    schemaVersion: CATALOG_SETUP_DRAFT_SCHEMA_VERSION,
+    kind: "catalog_setup_draft_session",
+    organizationId,
+    baseCatalogRevision,
+    openingRequestId
+  });
+}
+
+function normalizeDraftSessionId(value) {
+  const id = text(value, 64).toLowerCase();
+  return /^[a-f0-9]{64}$/.test(id) ? id : "";
+}
+
+function draftMutationRequestHash({
+  organizationId,
+  requestId,
+  actorUid,
+  expectedGeneration,
+  baseCatalogRevision,
+  changes
+}) {
+  return hashValue({
+    schemaVersion: CATALOG_SETUP_DRAFT_SCHEMA_VERSION,
+    kind: DRAFT_MUTATION_RECEIPT_KIND,
+    organizationId,
+    requestId,
+    actorUid,
+    expectedGeneration,
+    baseCatalogRevision,
+    changes
+  });
+}
+
+function draftMutationConflict(message = "This request id is already bound to another catalog draft mutation.") {
+  return new CatalogSetupDraftError("failed-precondition", message);
+}
+
+function compatibleStagedIntent(requestedIntent, stagedIntent) {
+  return requestedIntent === stagedIntent || stagedIntent === "create";
+}
+
+function payloadMatches(actual = {}, expected = {}) {
+  if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
+  return Object.entries(expected || {}).every(([key, value]) => (
+    Object.prototype.hasOwnProperty.call(actual, key)
+    && hashValue({ value: actual[key] }) === hashValue({ value })
+  ));
+}
+
+function buildDraftMutationReceipt({
+  organizationId,
+  requestId,
+  actor,
+  requestHash,
+  expectedGeneration,
+  baseCatalogRevision,
+  draftSessionId,
+  draftGeneration,
+  resultingDraftChangedRecordCount,
+  requestedChanges,
+  stagedChangesById,
+  nowISO,
+  serverTimestamp
+}) {
+  const changes = requestedChanges.map((requested) => {
+    const staged = stagedChangesById.get(requested.id);
+    if (
+      !staged
+      || staged.collection !== requested.collection
+      || staged.recordId !== requested.recordId
+      || !compatibleStagedIntent(requested.intent, staged.intent)
+      || hashValue(staged.payload) !== hashValue(requested.payload)
+    ) {
+      throw draftMutationConflict("The accepted catalog draft no longer contains the exact requested patch set.");
+    }
+    return {
+      id: requested.id,
+      collection: requested.collection,
+      recordId: requested.recordId,
+      requestedIntent: requested.intent,
+      stagedIntent: staged.intent,
+      payload: requested.payload
+    };
+  });
+  const receipt = {
+    schemaVersion: CATALOG_SETUP_DRAFT_SCHEMA_VERSION,
+    kind: DRAFT_MUTATION_RECEIPT_KIND,
+    requestId,
+    organizationId,
+    actor,
+    requestHash,
+    expectedGeneration,
+    baseCatalogRevision,
+    draftSessionId,
+    draftGeneration,
+    resultingDraftChangedRecordCount,
+    requestedChangeCount: changes.length,
+    changes,
+    stagedAtISO: nowISO,
+    ...(serverTimestamp ? { createdAt: serverTimestamp() } : {})
+  };
+  if (Buffer.byteLength(JSON.stringify(receipt), "utf8") > MAX_DRAFT_BYTES) {
+    throw new CatalogSetupDraftError("resource-exhausted", "The exact catalog draft mutation receipt is too large.");
+  }
+  return receipt;
+}
+
+function requestedChangesFromReceipt(receipt = {}) {
+  if (!Array.isArray(receipt.changes)) return [];
+  return receipt.changes.map((change) => ({
+    id: change.id,
+    collection: change.collection,
+    recordId: change.recordId,
+    intent: change.requestedIntent,
+    payload: change.payload
+  }));
+}
+
+function assertDraftMutationReceiptBinding({
+  receipt,
+  organizationId,
+  requestId,
+  actorUid,
+  expectedGeneration,
+  baseCatalogRevision,
+  requestHash,
+  requestedChanges
+}) {
+  const storedChanges = requestedChangesFromReceipt(receipt);
+  const storedChangesValid = Array.isArray(receipt?.changes)
+    && receipt.changes.every((change) => (
+      text(change?.id, 600) === changeId(text(change?.collection, 80), text(change?.recordId, 256))
+      && (change.collection === "settings" || CATALOG_COLLECTIONS.includes(change.collection))
+      && RECORD_INTENTS.has(change.requestedIntent)
+      && RECORD_INTENTS.has(change.stagedIntent)
+      && compatibleStagedIntent(change.requestedIntent, change.stagedIntent)
+      && change.payload
+      && typeof change.payload === "object"
+      && !Array.isArray(change.payload)
+    ));
+  if (
+    receipt?.schemaVersion !== CATALOG_SETUP_DRAFT_SCHEMA_VERSION
+    || receipt?.kind !== DRAFT_MUTATION_RECEIPT_KIND
+    || receipt?.organizationId !== organizationId
+    || receipt?.requestId !== requestId
+    || text(receipt?.actor?.uid, 160) !== actorUid
+    || receipt?.requestHash !== requestHash
+    || Number(receipt?.expectedGeneration) !== expectedGeneration
+    || Number(receipt?.baseCatalogRevision) !== baseCatalogRevision
+    || !normalizeDraftSessionId(receipt?.draftSessionId)
+    || !Number.isSafeInteger(Number(receipt?.draftGeneration))
+    || Number(receipt?.draftGeneration) !== expectedGeneration + 1
+    || !Number.isSafeInteger(Number(receipt?.resultingDraftChangedRecordCount))
+    || Number(receipt?.resultingDraftChangedRecordCount) < requestedChanges.length
+    || Number(receipt?.requestedChangeCount) !== requestedChanges.length
+    || !storedChangesValid
+    || storedChanges.length !== requestedChanges.length
+    || hashValue(storedChanges) !== hashValue(requestedChanges)
+  ) {
+    throw draftMutationConflict();
+  }
+}
+
+function draftContainsMutationReceipt(draft, receipt) {
+  if (
+    draft?.state !== "open"
+    || normalizeDraftSessionId(draft.draftSessionId) !== normalizeDraftSessionId(receipt.draftSessionId)
+    || Number(draft.baseCatalogRevision) !== Number(receipt.baseCatalogRevision)
+  ) return false;
+  const currentById = new Map((draft.changes || []).map((change) => [change.id, change]));
+  return receipt.changes.every((expected) => {
+    const current = currentById.get(expected.id);
+    return Boolean(current)
+      && current.collection === expected.collection
+      && current.recordId === expected.recordId
+      && current.intent === expected.stagedIntent
+      && hashValue(current.payload) === hashValue(expected.payload);
+  });
+}
+
+function publicationLineageContainsMutation(lineage, receipt) {
+  const revisionBefore = Number(lineage?.catalogRevisionBefore);
+  const revisionAfter = Number(lineage?.catalogRevisionAfter);
+  const draftGeneration = Number(lineage?.draftGeneration);
+  if (
+    lineage?.schemaVersion !== CATALOG_SETUP_DRAFT_SCHEMA_VERSION
+    || lineage?.kind !== DRAFT_PUBLICATION_LINEAGE_KIND
+    || lineage?.organizationId !== receipt.organizationId
+    || normalizeDraftSessionId(lineage?.draftSessionId) !== normalizeDraftSessionId(receipt.draftSessionId)
+    || !Number.isSafeInteger(revisionBefore)
+    || revisionBefore !== Number(receipt.baseCatalogRevision)
+    || !Number.isSafeInteger(revisionAfter)
+    || revisionAfter !== revisionBefore + 1
+    || !Number.isSafeInteger(draftGeneration)
+    || draftGeneration < Number(receipt.draftGeneration)
+    || !Number.isSafeInteger(Number(lineage?.changedRecordCount))
+    || Number(lineage.changedRecordCount) < Number(receipt.requestedChangeCount)
+    || !Array.isArray(lineage?.changes)
+  ) return false;
+  const publishedById = new Map((lineage.changes || []).map((change) => [change.id, change]));
+  return receipt.changes.every((expected) => {
+    const published = publishedById.get(expected.id);
+    return Boolean(published)
+      && published.collection === expected.collection
+      && published.recordId === expected.recordId
+      && published.intent === expected.stagedIntent
+      && published.publishedHash === hashValue(expected.payload);
+  });
+}
+
+function draftMutationReceiptProjection(receipt, status, lineage = null) {
+  return {
+    schemaVersion: CATALOG_SETUP_DRAFT_SCHEMA_VERSION,
+    requestId: receipt.requestId,
+    status,
+    organizationId: receipt.organizationId,
+    actor: receipt.actor || null,
+    draftSessionId: normalizeDraftSessionId(receipt.draftSessionId),
+    baseCatalogRevision: Number(receipt.baseCatalogRevision),
+    expectedGeneration: Number(receipt.expectedGeneration),
+    draftGeneration: Number(receipt.draftGeneration),
+    resultingDraftChangedRecordCount: Number(receipt.resultingDraftChangedRecordCount || 0),
+    requestedChangeCount: Number(receipt.requestedChangeCount || 0),
+    stagedAtISO: text(receipt.stagedAtISO),
+    changes: (receipt.changes || []).map((change) => ({
+      id: change.id,
+      collection: change.collection,
+      recordId: change.recordId,
+      requestedIntent: change.requestedIntent,
+      intent: change.stagedIntent,
+      payload: change.payload
+    })),
+    ...(status === "published" && lineage
+      ? {
+          publicationReceiptId: text(lineage.publicationReceiptId),
+          catalogRevisionAfter: Number(lineage.catalogRevisionAfter),
+          publishedAtISO: text(lineage.publishedAtISO)
+        }
+      : {})
+  };
+}
+
+function draftSaveResult({ receipt, status, currentDraft, currentCatalogRevision, idempotentReplay, lineage = null }) {
+  return {
+    ok: true,
+    idempotentReplay,
+    mutationStatus: status,
+    organizationId: receipt.organizationId,
+    currentCatalogRevision: Number(currentCatalogRevision),
+    draft: draftProjection(currentDraft),
+    mutationReceipt: draftMutationReceiptProjection(receipt, status, lineage)
+  };
+}
+
+async function reconcileDraftMutationReceipt({ transaction, refs, receipt, currentDraft, settings }) {
+  const revision = currentRevision(settings);
+  if (revision === Number(receipt.baseCatalogRevision)) {
+    if (draftContainsMutationReceipt(currentDraft, receipt)) {
+      return { status: "staged", lineage: null };
+    }
+    throw draftMutationConflict("The exact accepted mutation is no longer present in the current catalog draft.");
+  }
+  if (revision < Number(receipt.baseCatalogRevision)) {
+    throw draftMutationConflict("The catalog revision is older than the accepted mutation receipt.");
+  }
+
+  const lineageRef = refs.publicationLineageCollection.doc(receipt.draftSessionId);
+  const lineageSnap = await transaction.get(lineageRef);
+  const lineage = lineageSnap.exists ? lineageSnap.data() || {} : null;
+  if (
+    !publicationLineageContainsMutation(lineage, receipt)
+    || Number(lineage.catalogRevisionAfter) > revision
+  ) {
+    throw draftMutationConflict("The exact accepted mutation cannot be reconciled to a catalog publication.");
+  }
+  const activeSnapshots = await Promise.all(receipt.changes.map((change) => (
+    change.collection === "settings"
+      ? null
+      : transaction.get(recordRef(refs.organizationRef, change))
+  )));
+  const exactMutationIsActive = receipt.changes.every((change, index) => {
+    if (change.collection === "settings") return payloadMatches(settings, change.payload);
+    const snapshot = activeSnapshots[index];
+    return snapshot?.exists && payloadMatches(snapshot.data() || {}, change.payload);
+  });
+  if (!exactMutationIsActive) {
+    throw draftMutationConflict("The accepted mutation was published, but its exact values are no longer active.");
+  }
+  return { status: "published", lineage };
+}
+
 function refsForOrganization(db, organizationId) {
   const organizationRef = db.collection("organizations").doc(organizationId);
   return {
     organizationRef,
     settingsRef: organizationRef.collection("settings").doc("config"),
     draftRef: organizationRef.collection("catalogSetupDrafts").doc(DRAFT_ID),
-    receiptCollection: organizationRef.collection("catalogPublicationReceipts")
+    receiptCollection: organizationRef.collection("catalogPublicationReceipts"),
+    mutationReceiptCollection: organizationRef.collection(DRAFT_MUTATION_RECEIPTS_COLLECTION),
+    publicationLineageCollection: organizationRef.collection(DRAFT_PUBLICATION_LINEAGES_COLLECTION)
   };
 }
 
@@ -610,12 +916,23 @@ async function saveCatalogSetupDraft({
     ))
   ] : [];
   const changes = normalizeChanges([...presetPatches, ...(Array.isArray(patches) ? patches : [])]);
-  if (!db || !normalizedOrganizationId || !normalizedRequestId || !text(actorUid)) {
+  const actor = actorProjection({ actorUid, actorEmail });
+  if (!db || !normalizedOrganizationId || !normalizedRequestId || !actor.uid) {
     throw new CatalogSetupDraftError("invalid-argument", "Organization, request id, and actor are required.");
   }
+  const requestHash = draftMutationRequestHash({
+    organizationId: normalizedOrganizationId,
+    requestId: normalizedRequestId,
+    actorUid: actor.uid,
+    expectedGeneration: generationFence,
+    baseCatalogRevision: revisionFence,
+    changes
+  });
   const refs = refsForOrganization(db, normalizedOrganizationId);
+  const mutationReceiptRef = refs.mutationReceiptCollection.doc(normalizedRequestId);
   return db.runTransaction(async (transaction) => {
-    const [draftSnap, settingsSnap] = await Promise.all([
+    const [mutationReceiptSnap, draftSnap, settingsSnap] = await Promise.all([
+      transaction.get(mutationReceiptRef),
       transaction.get(refs.draftRef),
       transaction.get(refs.settingsRef)
     ]);
@@ -623,21 +940,93 @@ async function saveCatalogSetupDraft({
       throw new CatalogSetupDraftError("failed-precondition", "Organization catalog settings are missing.");
     }
     const settings = settingsSnap.data() || {};
+    const stored = draftSnap.exists ? draftSnap.data() || {} : null;
+    const open = stored?.state === "open" ? stored : null;
+    const currentGeneration = open ? Number(open.generation || 0) : 0;
+
+    if (mutationReceiptSnap.exists) {
+      const mutationReceipt = mutationReceiptSnap.data() || {};
+      assertDraftMutationReceiptBinding({
+        receipt: mutationReceipt,
+        organizationId: normalizedOrganizationId,
+        requestId: normalizedRequestId,
+        actorUid: actor.uid,
+        expectedGeneration: generationFence,
+        baseCatalogRevision: revisionFence,
+        requestHash,
+        requestedChanges: changes
+      });
+      const reconciliation = await reconcileDraftMutationReceipt({
+        transaction,
+        refs,
+        receipt: mutationReceipt,
+        currentDraft: stored,
+        settings
+      });
+      return draftSaveResult({
+        receipt: mutationReceipt,
+        status: reconciliation.status,
+        currentDraft: stored,
+        currentCatalogRevision: currentRevision(settings),
+        idempotentReplay: true,
+        lineage: reconciliation.lineage
+      });
+    }
+
+    // Safely adopt the exact final-request replay of a draft created before
+    // durable mutation receipts were introduced. No payload-blind fallback is
+    // permitted: actor, fences, and every staged field must still match.
+    if (open?.lastRequestId === normalizedRequestId) {
+      const openById = new Map((open.changes || []).map((change) => [change.id, change]));
+      const exactLegacyReplay = currentRevision(settings) === revisionFence
+        && Number(open.baseCatalogRevision) === revisionFence
+        && currentGeneration === generationFence + 1
+        && text(open.actor?.uid, 160) === actor.uid
+        && changes.every((change) => {
+          const staged = openById.get(change.id);
+          return Boolean(staged)
+            && staged.collection === change.collection
+            && staged.recordId === change.recordId
+            && compatibleStagedIntent(change.intent, staged.intent)
+            && hashValue(staged.payload) === hashValue(change.payload);
+        });
+      if (!exactLegacyReplay) throw draftMutationConflict();
+      const draftSessionId = normalizeDraftSessionId(open.draftSessionId) || createDraftSessionId({
+        organizationId: normalizedOrganizationId,
+        baseCatalogRevision: revisionFence,
+        openingRequestId: normalizedRequestId
+      });
+      const adoptedDraft = open.draftSessionId ? open : { ...open, draftSessionId };
+      const mutationReceipt = buildDraftMutationReceipt({
+        organizationId: normalizedOrganizationId,
+        requestId: normalizedRequestId,
+        actor,
+        requestHash,
+        expectedGeneration: generationFence,
+        baseCatalogRevision: revisionFence,
+        draftSessionId,
+        draftGeneration: currentGeneration,
+        resultingDraftChangedRecordCount: Number(open.changedRecordCount || 0),
+        requestedChanges: changes,
+        stagedChangesById: openById,
+        nowISO,
+        serverTimestamp
+      });
+      if (!open.draftSessionId) transaction.set(refs.draftRef, adoptedDraft, { merge: false });
+      transaction.create(mutationReceiptRef, mutationReceipt);
+      return draftSaveResult({
+        receipt: mutationReceipt,
+        status: "staged",
+        currentDraft: adoptedDraft,
+        currentCatalogRevision: currentRevision(settings),
+        idempotentReplay: true
+      });
+    }
+
     if (currentRevision(settings) !== revisionFence) {
       throw new CatalogSetupDraftError("aborted", "Catalog revision changed before the draft could sync.", {
         currentCatalogRevision: currentRevision(settings)
       });
-    }
-    const stored = draftSnap.exists ? draftSnap.data() || {} : null;
-    const open = stored?.state === "open" ? stored : null;
-    const currentGeneration = open ? Number(open.generation || 0) : 0;
-    if (open?.lastRequestId === normalizedRequestId) {
-      return {
-        ok: true,
-        idempotentReplay: true,
-        organizationId: normalizedOrganizationId,
-        draft: draftProjection(open)
-      };
     }
     if (currentGeneration !== generationFence) {
       throw new CatalogSetupDraftError("aborted", "Catalog draft generation changed on another device.", {
@@ -679,14 +1068,20 @@ async function saveCatalogSetupDraft({
     if (Buffer.byteLength(JSON.stringify(mergedChanges), "utf8") > MAX_DRAFT_BYTES) {
       throw new CatalogSetupDraftError("resource-exhausted", "Catalog setup draft is too large.");
     }
+    const draftSessionId = normalizeDraftSessionId(open?.draftSessionId) || createDraftSessionId({
+      organizationId: normalizedOrganizationId,
+      baseCatalogRevision: revisionFence,
+      openingRequestId: normalizedRequestId
+    });
     const next = {
       schemaVersion: CATALOG_SETUP_DRAFT_SCHEMA_VERSION,
       state: "open",
+      draftSessionId,
       baseCatalogRevision: revisionFence,
       generation: currentGeneration + 1,
       changedRecordCount: mergedChanges.length,
       changes: mergedChanges,
-      actor: { uid: text(actorUid, 160), email: text(actorEmail, 320).toLowerCase() },
+      actor,
       createdAtISO: open?.createdAtISO || nowISO,
       updatedAtISO: nowISO,
       lastRequestId: normalizedRequestId,
@@ -694,13 +1089,30 @@ async function saveCatalogSetupDraft({
         ? { createdAt: open?.createdAt || serverTimestamp(), updatedAt: serverTimestamp() }
         : {})
     };
-    transaction.set(refs.draftRef, next, { merge: false });
-    return {
-      ok: true,
-      idempotentReplay: false,
+    const mutationReceipt = buildDraftMutationReceipt({
       organizationId: normalizedOrganizationId,
-      draft: draftProjection(next)
-    };
+      requestId: normalizedRequestId,
+      actor,
+      requestHash,
+      expectedGeneration: generationFence,
+      baseCatalogRevision: revisionFence,
+      draftSessionId,
+      draftGeneration: next.generation,
+      resultingDraftChangedRecordCount: mergedChanges.length,
+      requestedChanges: changes,
+      stagedChangesById: existingById,
+      nowISO,
+      serverTimestamp
+    });
+    transaction.set(refs.draftRef, next, { merge: false });
+    transaction.create(mutationReceiptRef, mutationReceipt);
+    return draftSaveResult({
+      receipt: mutationReceipt,
+      status: "staged",
+      currentDraft: next,
+      currentCatalogRevision: currentRevision(settings),
+      idempotentReplay: false
+    });
   });
 }
 
@@ -746,6 +1158,7 @@ function publicationResult(receipt = {}, { idempotentReplay = false } = {}) {
     idempotentReplay,
     organizationId: text(receipt.organizationId),
     receiptId: text(receipt.receiptId),
+    draftSessionId: normalizeDraftSessionId(receipt.draftSessionId),
     catalogRevisionBefore: Number(receipt.catalogRevisionBefore),
     catalogRevisionAfter: Number(receipt.catalogRevisionAfter),
     changedRecordCount: Number(receipt.changedRecordCount || 0),
@@ -796,9 +1209,39 @@ async function publishCatalogSetupDraft({
     });
     const revisionBefore = currentRevision(active.settings);
     const revisionAfter = revisionBefore + 1;
+    const draftSessionId = normalizeDraftSessionId(active.draft.draftSessionId) || createDraftSessionId({
+      organizationId: normalizedOrganizationId,
+      baseCatalogRevision: revisionBefore,
+      openingRequestId: normalizeRequestId(active.draft.lastRequestId) || hashValue(active.draft.changes || [])
+    });
+    const publicationChanges = changes.map((change) => ({
+      id: change.id,
+      collection: change.collection,
+      recordId: change.recordId,
+      intent: change.intent,
+      baselineHash: change.baselineHash,
+      publishedHash: hashValue(change.payload)
+    }));
     const changedCounts = {};
     changes.forEach((change) => {
       changedCounts[change.collection] = Number(changedCounts[change.collection] || 0) + 1;
+    });
+    const publicationLineage = {
+      schemaVersion: CATALOG_SETUP_DRAFT_SCHEMA_VERSION,
+      kind: DRAFT_PUBLICATION_LINEAGE_KIND,
+      draftSessionId,
+      organizationId: normalizedOrganizationId,
+      publicationReceiptId: normalizedRequestId,
+      draftGeneration: Number(expectedGeneration),
+      catalogRevisionBefore: revisionBefore,
+      catalogRevisionAfter: revisionAfter,
+      changedRecordCount: changes.length,
+      changes: publicationChanges,
+      publishedAtISO: nowISO,
+      ...(serverTimestamp ? { createdAt: serverTimestamp() } : {})
+    };
+    transaction.create(refs.publicationLineageCollection.doc(draftSessionId), publicationLineage);
+    changes.forEach((change) => {
       if (change.collection === "settings") return;
       transaction.set(recordRef(refs.organizationRef, change), {
         ...change.payload,
@@ -853,19 +1296,13 @@ async function publishCatalogSetupDraft({
       receiptId: normalizedRequestId,
       organizationId: normalizedOrganizationId,
       draftId: DRAFT_ID,
+      draftSessionId,
       draftGeneration: Number(expectedGeneration),
       catalogRevisionBefore: revisionBefore,
       catalogRevisionAfter: revisionAfter,
       changedRecordCount: changes.length,
       changedCounts,
-      changes: changes.map((change) => ({
-        id: change.id,
-        collection: change.collection,
-        recordId: change.recordId,
-        intent: change.intent,
-        baselineHash: change.baselineHash,
-        publishedHash: hashValue(change.payload)
-      })),
+      changes: publicationChanges,
       confirmationActor,
       confirmedAtISO: nowISO,
       readiness,
@@ -874,6 +1311,7 @@ async function publishCatalogSetupDraft({
     transaction.create(receiptRef, receipt);
     transaction.set(refs.draftRef, {
       ...active.draft,
+      draftSessionId,
       state: "published",
       publishedCatalogRevision: revisionAfter,
       publicationReceiptId: normalizedRequestId,

@@ -211,6 +211,16 @@ function stateMarker(state) {
 
 function selectServer() {
   const select = container.querySelector('select[aria-label="Required server assignment"]');
+  if (!select) {
+    const assignOnlyCandidate = Array.from(container.querySelectorAll("button"))
+      .find((button) => (
+        button.textContent === "Assign Avery Cook"
+        && button.closest('[data-adaptive-choice-mode="suggested"]')?.textContent.includes("Required server assignment")
+      ));
+    expect(assignOnlyCandidate).not.toBeUndefined();
+    act(() => assignOnlyCandidate.click());
+    return container.querySelector('[data-adaptive-choice-mode="single"]');
+  }
   act(() => {
     select.value = "staff-one";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -324,7 +334,6 @@ describe("OperationalStaffingPanel read authority", () => {
     mount();
     await flush();
     expect(container.innerHTML).toContain('data-capability-state="ready"');
-    selectServer();
     const apply = Array.from(container.querySelectorAll("button")).find((button) => button.textContent.includes("Save staffing assignments"));
     expect(apply.disabled).toBe(true);
     expect(stateMarker(state)).not.toBeNull();
@@ -332,6 +341,36 @@ describe("OperationalStaffingPanel read authority", () => {
 });
 
 describe("OperationalStaffingPanel role and fallback boundaries", () => {
+  test("renders staffing candidate zero, one, and many states without silently assigning the only candidate", async () => {
+    client.getOperationalStaffingSnapshot.mockResolvedValueOnce(envelope("empty", { profiles: [] }));
+    mount();
+    await flush();
+    expect(container.querySelector('[data-adaptive-choice-mode="empty"]')).not.toBeNull();
+    expect(container.textContent).toContain("No active server candidates have recorded availability");
+    expect(container.querySelector('[data-field-state-primary="blocked"]')).not.toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    client.getOperationalStaffingSnapshot.mockResolvedValueOnce(envelope());
+    mount();
+    await flush();
+    expect(container.querySelector('[data-adaptive-choice-mode="suggested"]')).not.toBeNull();
+    expect(container.textContent).toContain("This is a candidate only");
+    expect(container.querySelector('select[aria-label="Required server assignment"]')).toBeNull();
+    selectServer();
+    expect(container.querySelector('[data-adaptive-choice-mode="single"]')).not.toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    client.getOperationalStaffingSnapshot.mockResolvedValueOnce(envelope("empty", {
+      profiles: [profile(), profile({ staffId: "staff-two", displayName: "Morgan Lead" })]
+    }));
+    mount();
+    await flush();
+    expect(container.querySelectorAll('[data-adaptive-choice-mode="select"]')).toHaveLength(2);
+    expect(container.querySelectorAll(".operational-staffing-slot select")[0].querySelectorAll("option").length).toBe(3);
+  });
+
   test.each([
     ["local", "admin"],
     ["firebase", "customer"]
@@ -592,7 +631,9 @@ describe("OperationalStaffingPanel mutation authority", () => {
     mount();
     await flush();
     expect(stateMarker("uncertain")).not.toBeNull();
-    expect(container.querySelector('select[aria-label="Required server assignment"]').disabled).toBe(true);
+    expect(container.querySelector('[data-adaptive-choice-mode="suggested"]')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Assign Avery Cook")).toBe(false);
+    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save staffing assignments").disabled).toBe(true);
   });
 
   test("restores an uncertain profile command after unmount and reconciles the identical identity", async () => {

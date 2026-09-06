@@ -26,7 +26,7 @@
 .event-templates-editor__eyebrow {
   margin: 0 0 6px;
   color: color-mix(in srgb, var(--template-gold) 82%, var(--template-ink));
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 760;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -152,7 +152,7 @@
 
 .event-templates-editor__index {
   color: var(--template-muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
 }
@@ -188,6 +188,159 @@
 
 .event-templates-editor__panel {
   padding: 4px 0 26px 44px;
+}
+
+.event-templates-editor__object-identity {
+  padding: 18px 0 20px;
+  border-bottom: 1px solid var(--template-line);
+}
+
+.event-templates-editor__object-identity .event-templates-editor__identity-grid {
+  grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.15fr);
+  align-items: stretch;
+}
+
+.event-templates-editor__completeness {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 74px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--template-gold);
+  background: color-mix(in srgb, var(--template-gold) 7%, transparent);
+}
+
+.event-templates-editor__completeness > span,
+.event-templates-editor__provenance dt {
+  color: var(--template-muted);
+  font-size: 0.75rem;
+  font-weight: 760;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.event-templates-editor__completeness > strong {
+  font-size: 0.92rem;
+}
+
+.event-templates-editor__completeness > small {
+  color: var(--template-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.event-templates-editor__completeness[data-template-completeness="ready"] {
+  border-left-color: var(--ambient-mint, #65ad82);
+  background: color-mix(in srgb, var(--ambient-mint, #65ad82) 7%, transparent);
+}
+
+.event-templates-editor__completeness[data-template-completeness="attention"] {
+  border-left-color: var(--template-coral);
+  background: color-mix(in srgb, var(--template-coral) 7%, transparent);
+}
+
+.event-templates-editor__warning-count[data-template-completeness-summary="ready"] {
+  color: color-mix(in srgb, var(--ambient-mint, #65ad82) 72%, var(--template-ink));
+}
+
+.event-templates-editor__warning-count[data-template-completeness-summary="check"] {
+  color: color-mix(in srgb, var(--template-gold) 80%, var(--template-ink));
+}
+
+.event-templates-editor__object-groups {
+  display: grid;
+}
+
+.event-templates-editor__object-group {
+  border: 0;
+  border-bottom: 1px solid var(--template-line);
+  background: transparent;
+}
+
+.event-templates-editor__object-group > summary {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 2px;
+  color: var(--template-ink);
+  cursor: pointer;
+  list-style-position: outside;
+}
+
+.event-templates-editor__object-group > summary > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.event-templates-editor__object-group > summary strong,
+.event-templates-editor__object-group > summary small {
+  display: block;
+}
+
+.event-templates-editor__object-group > summary strong {
+  font-size: 0.88rem;
+}
+
+.event-templates-editor__object-group > summary small {
+  overflow: hidden;
+  color: var(--template-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-templates-editor__object-group[open] > summary {
+  color: color-mix(in srgb, var(--template-gold) 76%, var(--template-ink));
+}
+
+.event-templates-editor__object-group > summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ambient-teal, #237f78) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.event-templates-editor__object-group-body {
+  padding: 2px 2px 22px 18px;
+}
+
+.event-templates-editor__object-group--advanced > summary,
+.event-templates-editor__object-group--advanced .event-templates-editor__object-group-body {
+  color: var(--template-muted);
+}
+
+.event-templates-editor__dependency-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.event-templates-editor__dependency-grid--paired {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.event-templates-editor__provenance {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 18px 0 0;
+  border-top: 1px solid var(--template-line);
+}
+
+.event-templates-editor__provenance > div {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--template-line);
+}
+
+.event-templates-editor__provenance dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--template-muted);
+  font-size: 0.78rem;
 }
 
 .event-templates-editor__identity-grid,
@@ -227,7 +380,7 @@
 }
 
 .event-templates-editor__identity-grid small {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -303,7 +456,7 @@
 .event-templates-editor__scope-note {
   margin: 8px 0 0;
   color: var(--template-muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
@@ -377,10 +530,12 @@
 }
 
 @media (max-width: 860px) {
+  .event-templates-editor__object-identity .event-templates-editor__identity-grid,
   .event-templates-editor__identity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .event-templates-editor__dependency-grid--paired,
   .event-templates-editor__dependency-grid {
     grid-template-columns: 1fr;
   }
@@ -412,7 +567,31 @@
     padding-left: 0;
   }
 
+  .event-templates-editor__object-identity .event-templates-editor__identity-grid,
   .event-templates-editor__identity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .event-templates-editor__object-identity {
+    padding-block: 14px 16px;
+  }
+
+  .event-templates-editor__object-group > summary {
+    min-height: 58px;
+    padding-inline: 0;
+  }
+
+  .event-templates-editor__object-group > summary small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .event-templates-editor__object-group-body {
+    padding: 2px 0 18px 10px;
+  }
+
+  .event-templates-editor__provenance {
     grid-template-columns: 1fr;
   }
 }

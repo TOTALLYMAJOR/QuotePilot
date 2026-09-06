@@ -26,6 +26,7 @@ const NAV_ICONS = {
   home: CalendarBlank,
   opportunities: NotePencil,
   quotes: NotePencil,
+  operations: CalendarBlank,
   events: CalendarBlank,
   clients: UserCircle,
   customers: UserCircle,
@@ -44,7 +45,7 @@ const MENU_ICONS = {
 
 const WORKSPACE_TOOL_GROUPS = Object.freeze({
   frequent: ["Workflow", "Messages", "Pilot"],
-  operations: ["Clear the Deck", "Operations", "Events", "Event Schedule", "Staff"],
+  operations: ["Operations", "Clear the Deck", "Staff"],
   administration: [
     "Reporting Dashboard",
     "Integrations Ops",
@@ -120,6 +121,11 @@ export default function WorkspaceShell({
   const [accountSettingsFeedback, setAccountSettingsFeedback] = useState(
     EMPTY_ACCOUNT_SETTINGS_FEEDBACK
   );
+  const [desktopWorkAreaNewQuote, setDesktopWorkAreaNewQuote] = useState(() => (
+    typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(min-width: 1181px)").matches
+  ));
   const workspaceToolsOpen = ambientOrientation && openMenu === "more";
   const accountSettingsOpen = openMenu === "account-settings";
   const accountSettingsAvailable = typeof actions.onRequestPasswordReset === "function";
@@ -127,6 +133,15 @@ export default function WorkspaceShell({
     || capabilities.integrationsOps !== false
     || isAdmin
     || capabilities.diagnostics !== false;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const query = window.matchMedia("(min-width: 1181px)");
+    const syncPlacement = () => setDesktopWorkAreaNewQuote(query.matches);
+    syncPlacement();
+    query.addEventListener?.("change", syncPlacement);
+    return () => query.removeEventListener?.("change", syncPlacement);
+  }, []);
   const closeAccountSettings = () => {
     accountSettingsRequestRef.current += 1;
     setAccountSettingsFeedback(EMPTY_ACCOUNT_SETTINGS_FEEDBACK);
@@ -215,7 +230,7 @@ export default function WorkspaceShell({
         { capability: "live-operations-planning" }
       ],
       [
-        ambientOrientation && operations,
+        ambientOrientation && operations && capabilities.eventSchedule !== false,
         actions.onOperations,
         "Operations",
         false,
@@ -492,6 +507,21 @@ export default function WorkspaceShell({
     </span>
   </>;
 
+  const newQuoteAction = (placement = "header") => (
+    <button
+      className={`cta header-quick-cta${ambientOrientation ? " ambient-utility-action" : ""}${
+        placement === "work-area" ? " ambient-workarea-new-quote" : ""
+      }`}
+      type="button"
+      data-ambient-utility={ambientOrientation ? "new-quote" : undefined}
+      data-ambient-utility-placement={ambientOrientation ? placement : undefined}
+      onClick={() => call(actions.onNewQuote)}
+    >
+      <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
+      <span className="shell-nav-label">New quote</span>
+    </button>
+  );
+
   return (
     <div
       ref={shellRef}
@@ -559,7 +589,10 @@ export default function WorkspaceShell({
               ambientOrientation ? (
                 <nav className="ambient-primary-navigation" aria-label="Primary workspace">
                   {AMBIENT_PRIMARY_WORKSPACE_NAVIGATION
-                    .filter((destination) => !destination.adminOnly || isAdmin)
+                    .filter((destination) => (
+                      (!destination.adminOnly || isAdmin)
+                      && (!destination.capability || capabilities[destination.capability] !== false)
+                    ))
                     .map((destination) => navButton(
                       destination.label,
                       destination.section,
@@ -594,15 +627,7 @@ export default function WorkspaceShell({
                 </>
               )
             )}
-            <button
-              className={`cta header-quick-cta${ambientOrientation ? " ambient-utility-action" : ""}`}
-              type="button"
-              data-ambient-utility={ambientOrientation ? "new-quote" : undefined}
-              onClick={() => call(actions.onNewQuote)}
-            >
-              <Plus className="shell-nav-icon" size={20} weight="bold" aria-hidden="true" />
-              <span className="shell-nav-label">New quote</span>
-            </button>
+            {(!ambientOrientation || !desktopWorkAreaNewQuote) && newQuoteAction("header")}
             {workspace && ambientOrientation && (
               <button
                 type="button"
@@ -649,9 +674,7 @@ export default function WorkspaceShell({
               <span className="shell-nav-label">Workflow</span><AttentionBadge count={attentionCount} />
             </button>}
 
-            {HEADER_MENUS.filter(([id]) => (
-              ambientOrientation ? id === "operations" : true
-            )).map(([id, label]) => {
+            {HEADER_MENUS.filter(() => !ambientOrientation).map(([id, label]) => {
               const mobile = id === "more";
               const open = openMenu === id;
               const MenuIcon = MENU_ICONS[id] || Plus;
@@ -685,6 +708,8 @@ export default function WorkspaceShell({
           </div>
         </div>
       </header>
+
+      {ambientOrientation && desktopWorkAreaNewQuote && newQuoteAction("work-area")}
 
       {workspaceToolsOpen && (
         <div

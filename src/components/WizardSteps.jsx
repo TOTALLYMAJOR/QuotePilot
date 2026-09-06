@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { calculateQuote, currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import DecisionCard from "./DecisionCard";
+import FieldStateIndicator from "./FieldStateIndicator";
 import { buildGuidedSellingCards } from "./guidedSellingPresentation";
 import { playCue } from "./soundKit";
 import "./wizardMotion.css";
@@ -222,6 +224,40 @@ function Field({ label, children, error = "", hint = "", required = false, class
   );
 }
 
+function ChoiceStateField({
+  choiceField,
+  label,
+  required = false,
+  valueLabel = "",
+  state,
+  reason = "",
+  provenance = "",
+  supportingDetail = "",
+  recoveryAction
+}) {
+  return (
+    <div className="field" data-choice-field={choiceField}>
+      <span>
+        {label}
+        {required && <em className="field-required" aria-hidden="true">*</em>}
+      </span>
+      {valueLabel ? (
+        <strong className="adaptive-choice-field__single-value" data-choice-static-value="true">
+          {valueLabel}
+        </strong>
+      ) : null}
+      <FieldStateIndicator
+        state={state}
+        label={`${label} state`}
+        reason={reason}
+        provenance={provenance}
+        supportingDetail={supportingDetail}
+        recoveryAction={recoveryAction}
+      />
+    </div>
+  );
+}
+
 function AccordionGroup({
   id,
   title,
@@ -365,6 +401,28 @@ export function StepEvent({
   const templates = Array.isArray(settings?.eventTemplates) ? settings.eventTemplates : [];
   const taxRegions = Array.isArray(settings?.taxRegions) ? settings.taxRegions : [];
   const seasonProfiles = Array.isArray(settings?.seasonalProfiles) ? settings.seasonalProfiles : [];
+  const templateOptions = [
+    { value: "custom", label: "Custom" },
+    ...templates.map((template) => ({
+      value: String(template.id),
+      label: template.name || String(template.id)
+    }))
+  ];
+  const styleOptions = (Array.isArray(styles) ? styles : [])
+    .filter((style) => String(style || "").trim())
+    .map((style) => ({ value: String(style), label: String(style) }));
+  const taxRegionOptions = taxRegions
+    .filter((region) => String(region?.id || "").trim())
+    .map((region) => ({
+      value: String(region.id),
+      label: `${region.name || region.id} (${Math.round(Number(region.rate || 0) * 1000) / 10}%)`
+    }));
+  const seasonOptions = [
+    { value: "auto", label: "Auto detect" },
+    ...seasonProfiles
+      .filter((season) => String(season?.id || "").trim())
+      .map((season) => ({ value: String(season.id), label: season.name || String(season.id) }))
+  ];
   const [openGroups, setOpenGroups] = useState({
     core: true,
     contact: true,
@@ -404,6 +462,35 @@ export function StepEvent({
     }
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+  const eventTypeChoices = (Array.isArray(eventTypes) ? eventTypes : [])
+    .filter((eventType) => String(eventType?.id || "").trim());
+  const onlyEventType = eventTypeChoices.length === 1 ? eventTypeChoices[0] : null;
+  const currentEventTypeId = String(form.eventTypeId || "").trim();
+  const currentEventTypeIsAvailable = eventTypeChoices.some(
+    (eventType) => String(eventType.id) === currentEventTypeId
+  );
+
+  useEffect(() => {
+    const onlyEventTypeId = String(onlyEventType?.id || "").trim();
+    if (!onlyEventTypeId || currentEventTypeId) return;
+    if (typeof onEventTypeChange === "function") {
+      onEventTypeChange(onlyEventTypeId);
+      return;
+    }
+    if (typeof onFieldChange === "function") {
+      onFieldChange("eventTypeId", onlyEventTypeId);
+      return;
+    }
+    setForm((prev) => ({ ...prev, eventTypeId: onlyEventTypeId }));
+  }, [currentEventTypeId, onlyEventType?.id, onEventTypeChange, onFieldChange, setForm]);
+
+  const chooseEventType = (eventTypeId) => {
+    if (typeof onEventTypeChange === "function") {
+      onEventTypeChange(eventTypeId);
+      return;
+    }
+    updateField("eventTypeId", eventTypeId);
+  };
 
   return (
     <div className="event-step-layout">
@@ -415,23 +502,65 @@ export function StepEvent({
         onToggle={toggleGroup}
       >
         <div className="grid two-col">
-          <Field label="Event type" error={getError("eventTypeId")} required>
-            <select
-              value={form.eventTypeId || ""}
-              onChange={(e) => (typeof onEventTypeChange === "function"
-                ? onEventTypeChange(e.target.value)
-                : updateField("eventTypeId", e.target.value))}
-              onBlur={() => markBlur("eventTypeId")}
-              aria-invalid={Boolean(getError("eventTypeId"))}
-            >
-              <option value="">
-                {eventTypes.length ? "Select event type" : "No event types available"}
-              </option>
-              {eventTypes.map((eventType) => (
-                <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-              ))}
-            </select>
-          </Field>
+          {eventTypeChoices.length === 0 ? (
+            <ChoiceStateField
+              choiceField="event-type"
+              label="Event type"
+              required
+              valueLabel={currentEventTypeId}
+              state={{ availability: currentEventTypeId ? "unknown" : "not_provided" }}
+              supportingDetail={currentEventTypeId
+                ? "The saved event type is not in the current Library. An administrator must publish a current event type before this quote can continue."
+                : "No event types are published for this organization. An administrator must add one in Library before this quote can continue."}
+            />
+          ) : onlyEventType && !currentEventTypeId ? (
+            <ChoiceStateField
+              choiceField="event-type"
+              label="Event type"
+              required
+              valueLabel={onlyEventType.name || onlyEventType.id}
+              state={{ origin: "defaulted" }}
+              provenance="The only published event type"
+              supportingDetail="Applying this event type to the quote."
+            />
+          ) : onlyEventType && currentEventTypeIsAvailable ? (
+            <div data-choice-field="event-type" onBlur={() => markBlur("eventTypeId")}>
+              <AdaptiveChoiceField
+                label="Event type"
+                required
+                options={[{ value: onlyEventType.id, label: onlyEventType.name || onlyEventType.id }]}
+                value={currentEventTypeId}
+              />
+            </div>
+          ) : onlyEventType ? (
+            <ChoiceStateField
+              choiceField="event-type"
+              label="Event type"
+              required
+              valueLabel={currentEventTypeId}
+              state={{ evidence: "stale" }}
+              reason="The previously selected event type is no longer in the current Library."
+              recoveryAction={{
+                label: `Use ${onlyEventType.name || onlyEventType.id}`,
+                onClick: () => chooseEventType(String(onlyEventType.id))
+              }}
+            />
+          ) : (
+            <Field label="Event type" error={getError("eventTypeId")} required>
+              <select
+                data-choice-control="event-type"
+                value={currentEventTypeIsAvailable ? currentEventTypeId : ""}
+                onChange={(event) => chooseEventType(event.target.value)}
+                onBlur={() => markBlur("eventTypeId")}
+                aria-invalid={Boolean(getError("eventTypeId") || (currentEventTypeId && !currentEventTypeIsAvailable))}
+              >
+                <option value="">Select event type</option>
+                {eventTypeChoices.map((eventType) => (
+                  <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <TemplateDefaultsBanner
             notice={templateNotice}
             onClearDefaults={onClearTemplateDefaults}
@@ -624,48 +753,59 @@ export function StepEvent({
         onToggle={toggleGroup}
       >
         <div className="grid two-col">
-          <Field label="Event template">
-            <select
+          <div data-choice-field="event-template" onBlur={() => markBlur("eventTemplateId")}>
+            <AdaptiveChoiceField
+              label="Event template"
+              options={templateOptions}
               value={form.eventTemplateId || "custom"}
-              onChange={(e) => onTemplateChange(e.target.value)}
-              onBlur={() => markBlur("eventTemplateId")}
-            >
-              <option value="custom">Custom</option>
-              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Service style">
-            <select
-              value={form.style}
-              onChange={(e) => updateField("style", e.target.value)}
-              onBlur={() => markBlur("style")}
-            >
-              {styles.map((style) => <option key={style} value={style}>{style}</option>)}
-            </select>
-          </Field>
-          <Field label="Tax region">
-            <select
-              value={form.taxRegion || ""}
-              onChange={(e) => updateField("taxRegion", e.target.value)}
-              onBlur={() => markBlur("taxRegion")}
-            >
-              {taxRegions.map((region) => (
-                <option key={region.id} value={region.id}>
-                  {region.name} ({Math.round(Number(region.rate || 0) * 1000) / 10}%)
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Season profile">
-            <select
+              onChange={(event) => onTemplateChange(event.target.value)}
+              singleChoiceDetail="Custom is the only available starting point; no event templates have been published."
+            />
+          </div>
+          {styleOptions.length > 0 ? (
+            <div data-choice-field="service-style" onBlur={() => markBlur("style")}>
+              <AdaptiveChoiceField
+                label="Service style"
+                options={styleOptions}
+                value={form.style || styleOptions[0].value}
+                onChange={(event) => updateField("style", event.target.value)}
+              />
+            </div>
+          ) : (
+            <ChoiceStateField
+              choiceField="service-style"
+              label="Service style"
+              valueLabel={form.style}
+              state={{ availability: "not_provided" }}
+              supportingDetail="An administrator must restore a service style before this override can be changed."
+            />
+          )}
+          {taxRegionOptions.length > 0 ? (
+            <div data-choice-field="tax-region" onBlur={() => markBlur("taxRegion")}>
+              <AdaptiveChoiceField
+                label="Tax region"
+                options={taxRegionOptions}
+                value={form.taxRegion || taxRegionOptions[0].value}
+                onChange={(event) => updateField("taxRegion", event.target.value)}
+              />
+            </div>
+          ) : (
+            <ChoiceStateField
+              choiceField="tax-region"
+              label="Tax region"
+              state={{ availability: "not_provided" }}
+              supportingDetail="No tax region has been configured. The quote keeps the current pricing default until an administrator adds one."
+            />
+          )}
+          <div data-choice-field="season-profile" onBlur={() => markBlur("seasonProfileId")}>
+            <AdaptiveChoiceField
+              label="Season profile"
+              options={seasonOptions}
               value={form.seasonProfileId || "auto"}
-              onChange={(e) => updateField("seasonProfileId", e.target.value)}
-              onBlur={() => markBlur("seasonProfileId")}
-            >
-              <option value="auto">Auto detect</option>
-              {seasonProfiles.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}
-            </select>
-          </Field>
+              onChange={(event) => updateField("seasonProfileId", event.target.value)}
+              singleChoiceDetail="Automatic date-based pricing is the only available behavior; no seasonal profiles have been published."
+            />
+          </div>
           <Field label="Show disposables on quote">
             <select
               value={form.includeDisposables === false ? "no" : "yes"}
@@ -1084,7 +1224,10 @@ export function StepServices({
   const activePackages = catalog.packages.filter((item) => item?.active !== false);
   const activeAddons = catalog.addons.filter((item) => item?.active !== false);
   const activeRentals = catalog.rentals.filter((item) => item?.active !== false);
-  const selectedPackage = activePackages.find((item) => item.id === form.pkg) || activePackages[0] || {};
+  const currentPackageId = String(form.pkg || "").trim();
+  const selectedPackageMatch = activePackages.find((item) => item.id === currentPackageId);
+  const selectedPackage = selectedPackageMatch || (!currentPackageId ? activePackages[0] : null) || {};
+  const onlyPackage = activePackages.length === 1 ? activePackages[0] : null;
   const includedAddonIds = new Set(selectedPackage.includedAddonIds || []);
   const includedRentalIds = new Set(selectedPackage.includedRentalIds || []);
   const menuItemsById = new Map(
@@ -1106,6 +1249,7 @@ export function StepServices({
     .filter(Boolean);
   const selectedAddons = activeAddons.filter((item) => stableSelectionIds(form.addons).includes(item.id));
   const selectedRentals = activeRentals.filter((item) => stableSelectionIds(form.rentals).includes(item.id));
+
   const resolvePricingType = (item, fallback = "per_event") => {
     const raw = String(item?.pricingType || item?.type || "").trim().toLowerCase();
     if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
@@ -1246,32 +1390,90 @@ export function StepServices({
         onClearDefaults={onClearTemplateDefaults}
         onDismiss={onDismissTemplateNotice}
       />
-      <Field label="Package tier">
-        <select
-          data-ambient-field="pkg"
-          value={form.pkg}
-          onChange={(e) => {
-            if (typeof onSelectionTouched === "function") onSelectionTouched("pkg");
-            setForm((f) => ({ ...f, pkg: e.target.value }));
+      {activePackages.length === 0 ? (
+        <ChoiceStateField
+          choiceField="package-tier"
+          label="Package tier"
+          valueLabel={currentPackageId}
+          state={{ availability: currentPackageId ? "unknown" : "not_provided" }}
+          supportingDetail={currentPackageId
+            ? "The saved package is not active in the current Library. An administrator must publish a current offer before this quote can continue."
+            : "No active offers are published for this organization. An administrator must add one in Library before this quote can continue."}
+        />
+      ) : onlyPackage && !currentPackageId ? (
+        <ChoiceStateField
+          choiceField="package-tier"
+          label="Package tier"
+          valueLabel={`${onlyPackage.name} · ${currency(onlyPackage.ppp)}/person`}
+          state={{ origin: "suggested" }}
+          provenance="The only active Library offer"
+          supportingDetail="This is the only available offer. Confirm it to add it to the quote draft."
+          recoveryAction={{
+            label: `Use ${onlyPackage.name}`,
+            onClick: () => {
+              if (typeof onSelectionTouched === "function") onSelectionTouched("pkg");
+              setForm((current) => ({ ...current, pkg: onlyPackage.id }));
+            }
           }}
-        >
-          {activePackages.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} - {currency(p.ppp)}/person{packageInclusionCount(p) ? ` · ${packageInclusionCount(p)} select-to-add choices included` : ""}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <PackageComparison
-        form={form}
-        setForm={setForm}
-        catalog={catalog}
-        settings={pricingSettings || catalog.settings || {}}
-        totals={totals}
-        activePackages={activePackages}
-        packageInclusionCount={packageInclusionCount}
-        onSelectionTouched={onSelectionTouched}
-      />
+        />
+      ) : onlyPackage && selectedPackageMatch ? (
+        <div data-choice-field="package-tier">
+          <AdaptiveChoiceField
+            label="Package tier"
+            options={[{
+              value: onlyPackage.id,
+              label: `${onlyPackage.name} · ${currency(onlyPackage.ppp)}/person${packageInclusionCount(onlyPackage) ? ` · ${packageInclusionCount(onlyPackage)} select-to-add choices included` : ""}`
+            }]}
+            value={currentPackageId}
+          />
+        </div>
+      ) : onlyPackage ? (
+        <ChoiceStateField
+          choiceField="package-tier"
+          label="Package tier"
+          valueLabel={currentPackageId}
+          state={{ evidence: "stale" }}
+          reason="The previously selected package is no longer active in the current Library."
+          recoveryAction={{
+            label: `Use ${onlyPackage.name}`,
+            onClick: () => {
+              if (typeof onSelectionTouched === "function") onSelectionTouched("pkg");
+              setForm((current) => ({ ...current, pkg: onlyPackage.id }));
+            }
+          }}
+        />
+      ) : (
+        <Field label="Package tier">
+          <select
+            data-ambient-field="pkg"
+            data-choice-control="package-tier"
+            value={selectedPackageMatch ? currentPackageId : ""}
+            onChange={(event) => {
+              if (typeof onSelectionTouched === "function") onSelectionTouched("pkg");
+              setForm((current) => ({ ...current, pkg: event.target.value }));
+            }}
+          >
+            <option value="">Select package</option>
+            {activePackages.map((pkg) => (
+              <option key={pkg.id} value={pkg.id}>
+                {pkg.name} - {currency(pkg.ppp)}/person{packageInclusionCount(pkg) ? ` · ${packageInclusionCount(pkg)} select-to-add choices included` : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {activePackages.length > 1 ? (
+        <PackageComparison
+          form={form}
+          setForm={setForm}
+          catalog={catalog}
+          settings={pricingSettings || catalog.settings || {}}
+          totals={totals}
+          activePackages={activePackages}
+          packageInclusionCount={packageInclusionCount}
+          onSelectionTouched={onSelectionTouched}
+        />
+      ) : null}
       {packageInclusionLabels.length > 0 && (
         <div className="package-inclusion-summary" role="status">
           <strong>Available at no added charge with {selectedPackage.name || "this package"}</strong>

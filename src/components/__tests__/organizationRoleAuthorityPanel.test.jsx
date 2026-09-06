@@ -102,6 +102,32 @@ describe("OrganizationRoleAuthorityPanel", () => {
     expect(container.innerHTML).toContain('data-capability-state="receipt"');
   });
 
+  test("gives every disabled authority control one visible blocker", async () => {
+    const assertDisabledControlsDescribeVisibleBlockers = () => {
+      const disabledControls = Array.from(container.querySelectorAll("button:disabled"));
+      expect(disabledControls.length).toBeGreaterThan(0);
+      for (const control of disabledControls) {
+        const descriptionId = control.getAttribute("aria-describedby");
+        expect(descriptionId, control.textContent).toBeTruthy();
+        const description = container.querySelector(`#${descriptionId}`);
+        expect(description, `${control.textContent} -> ${descriptionId}`).not.toBeNull();
+        expect(description.textContent.trim(), descriptionId).not.toBe("");
+        expect(description.hasAttribute("hidden"), descriptionId).toBe(false);
+      }
+    };
+
+    assertDisabledControlsDescribeVisibleBlockers();
+    expect(container.querySelector("#role-authority-protected-person").textContent)
+      .toContain("owner record cannot be changed");
+    expect(container.querySelector("#role-authority-prepare-blocker").textContent)
+      .toContain("complete verified email address");
+
+    await act(async () => findButton(container, "sales@example.com").click());
+    assertDisabledControlsDescribeVisibleBlockers();
+    expect(container.querySelector("#role-authority-outcome-blocker").textContent)
+      .toContain("Sales is the current role");
+  });
+
   test("marks submitting while the exact authority request is in flight", async () => {
     let resolveMutation;
     serviceMocks.mutateOrganizationRole.mockImplementationOnce(() => new Promise((resolve) => {

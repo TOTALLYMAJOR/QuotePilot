@@ -1,9 +1,23 @@
 #!/usr/bin/env node
 
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 
-const admin = loadFirebaseAdmin();
+const LOOPBACK_EMULATOR_HOST = /^(?:127\.0\.0\.1|localhost|\[::1\]):\d+$/;
+let admin;
+
+export function assertE2EEmulatorSafety({ projectId, authHost, firestoreHost }) {
+  if (
+    !String(projectId || "").startsWith("demo-")
+    || !LOOPBACK_EMULATOR_HOST.test(String(authHost || "").trim())
+    || !LOOPBACK_EMULATOR_HOST.test(String(firestoreHost || "").trim())
+  ) {
+    throw new Error(
+      "E2E auth seeding is restricted to a demo-* project with loopback Auth and Firestore emulators."
+    );
+  }
+}
 
 function readArg(name, fallback = "") {
   const idx = process.argv.indexOf(name);
@@ -51,10 +65,11 @@ async function ensureUser({ auth, email, password }) {
 async function seedPortalConversationFixture({ db, organizationId, uid, email }) {
   const quoteId = "conversation-e2e-quote";
   const portalKey = "conversation-e2e-portal-token-1234567890";
-  const portalIssuedAtISO = "2026-08-06T17:00:00.000Z";
-  const portalExpiresAtISO = "2099-12-31T23:59:59.000Z";
+  const fixtureClockMs = Date.now();
+  const portalIssuedAtISO = new Date(fixtureClockMs - 60_000).toISOString();
+  const portalExpiresAtISO = new Date(fixtureClockMs + (29 * 24 * 60 * 60 * 1000)).toISOString();
   const revisionId = `v0001@${portalIssuedAtISO}`;
-  const providerAcceptedAtISO = "2026-08-06T17:05:00.000Z";
+  const providerAcceptedAtISO = new Date(fixtureClockMs).toISOString();
   const deliveryEvidence = {
     revisionId,
     state: "provider_accepted",
@@ -191,6 +206,14 @@ async function main() {
     throw new Error("email and password are required.");
   }
 
+  assertE2EEmulatorSafety({
+    projectId,
+    authHost: process.env.FIREBASE_AUTH_EMULATOR_HOST,
+    firestoreHost: process.env.FIRESTORE_EMULATOR_HOST
+  });
+
+  admin = loadFirebaseAdmin();
+
   if (!admin.getApps().length) {
     admin.initializeApp({ projectId });
   }
@@ -228,7 +251,9 @@ async function main() {
   console.log(`Seeded e2e auth user: ${email} (${uid}) in org ${organizationId}`);
 }
 
-main().catch((error) => {
-  console.error("E2E auth seed failed:", error?.message || error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  main().catch((error) => {
+    console.error("E2E auth seed failed:", error?.message || error);
+    process.exitCode = 1;
+  });
+}

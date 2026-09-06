@@ -11,6 +11,8 @@ import {
   RELEASE_CANDIDATE_POLICY,
   RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
   RELEASE_CANDIDATE_UAT_PROFILE,
+  RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE,
+  candidateEventSpineRequirements,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   candidateFunctionsRuntimeExpected,
   candidateReceiptRelativePath,
@@ -158,6 +160,49 @@ export function resolveGitHubToken({
   );
 }
 
+export function validateFunctionsDependencyInstall({
+  root = ROOT,
+  inspect = (command, args) => spawnSync(command, args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: false
+  })
+} = {}) {
+  const functionsDirectory = path.join(root, "functions");
+  const result = inspect("npm", [
+    "ls",
+    "--prefix",
+    functionsDirectory,
+    "--omit=dev",
+    "--depth=0",
+    "--json"
+  ]);
+  if (result?.error || result?.status !== 0) {
+    throw new Error(
+      "Release candidate rejected: the Functions production dependency install is incomplete. Run npm ci --prefix functions before candidate deployment."
+    );
+  }
+  let listing;
+  try {
+    listing = JSON.parse(String(result.stdout || ""));
+  } catch {
+    throw new Error(
+      "Release candidate rejected: the Functions production dependency install could not be verified. Run npm ci --prefix functions before candidate deployment."
+    );
+  }
+  if (!listing?.dependencies?.["firebase-functions"]?.version) {
+    throw new Error(
+      "Release candidate rejected: firebase-functions is unavailable in the Functions dependency install. Run npm ci --prefix functions before candidate deployment."
+    );
+  }
+  return {
+    source: "npm dependency tree",
+    packageName: "firebase-functions",
+    version: listing.dependencies["firebase-functions"].version
+  };
+}
+
 function validateWorkspace(releaseSha) {
   const head = requireFullSha(capture("git", ["rev-parse", "HEAD"]), "HEAD");
   if (head !== releaseSha) throw new Error("Release candidate rejected: HEAD does not match --release-sha.");
@@ -294,7 +339,7 @@ function validateFunctionsEnvironmentFile(candidateProfile) {
   );
 }
 
-function writeCandidateManifest(
+export function writeCandidateManifest(
   outputDirectory,
   releaseSha,
   ciRunId,
@@ -317,7 +362,12 @@ function writeCandidateManifest(
       candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
     buyerAccessServerEnabled: functionsGates.BUYER_ACCESS_ENABLED === "true",
     emailProvider: functionsGates.NOTIFICATIONS_EMAIL_PROVIDER,
-    quotePaymentMode: functionsGates.STRIPE_MODE
+    quotePaymentMode: functionsGates.STRIPE_MODE,
+    ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? {
+      eventOperatingSpineBrowserEnabled: true,
+      eventOperatingSpineAuthorityEnabled: functionsGates.EVENT_OPERATING_SPINE_ENABLED === "true",
+      rolloutRequirements: candidateEventSpineRequirements(candidateProfile)
+    } : {})
   };
   fs.writeFileSync(
     path.join(outputDirectory, "release-candidate.json"),
@@ -606,7 +656,8 @@ async function deployFirebase({
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:
         candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
       VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY_CONFIGURED:
-        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { VITE_EVENT_OPERATING_SPINE_ENABLED: true } : {})
     },
     serverGates: functionsGates
   };
@@ -936,8 +987,10 @@ async function deployVercel({
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:
         candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
       VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY_CONFIGURED:
-        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+        candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+      ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { VITE_EVENT_OPERATING_SPINE_ENABLED: true } : {})
     },
+    ...(candidateProfile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { serverGates: functionsGates } : {}),
     dependencies: {
       firebaseFunctions: stagingBackendEvidence
     }
@@ -988,6 +1041,7 @@ async function main() {
       throw new Error(`Candidate deployment requires --confirm "${expectedConfirmation}".`);
     }
     const branch = validateWorkspace(releaseSha);
+    if (target === "firebase-all") validateFunctionsDependencyInstall();
     const ciEvidence = await verifyCi(args["--ci-run-id"], releaseSha, branch);
     const firebaseCliPath = await prepareFirebaseToolsBinary();
     const browserEnv = candidateBrowserEnvironment(firebaseCliPath, candidateProfile);

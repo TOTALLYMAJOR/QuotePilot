@@ -417,6 +417,12 @@ export const DEFAULT_SETTINGS = {
   guidedSellingEnabled: true,
   staffingLaborEnabled: true,
   upsellRules: DEFAULT_UPSELL_RULES,
+  configurationRules: [],
+  commercialTemplateModules: [],
+  verticalPack: {
+    id: "catering",
+    version: "vertical-pack-v1"
+  },
   eventTemplates: DEFAULT_EVENT_TEMPLATES,
   seasonalProfiles: DEFAULT_SEASONAL_PROFILES,
   defaultSeasonProfile: "auto"
@@ -898,6 +904,11 @@ export function normalizeCatalog(raw) {
     includedMenuItemIds: normalizeStableIdList(p.includedMenuItemIds),
     includedAddonIds: normalizeStableIdList(p.includedAddonIds),
     includedRentalIds: normalizeStableIdList(p.includedRentalIds),
+    choiceGroups: Array.isArray(p.choiceGroups) ? p.choiceGroups.map((group) => ({ ...group })) : [],
+    quantityPolicyRefs: normalizeStableIdList(p.quantityPolicyRefs),
+    ruleRefs: normalizeStableIdList(p.ruleRefs),
+    offerVersion: toText(p.offerVersion, "configurable-offer-v1"),
+    verticalType: toText(p.verticalType, "catering"),
     active: p.active !== false
   }));
   const addons = (raw.addons || DEFAULT_ADDONS).map((a) => ({
@@ -1232,6 +1243,15 @@ export function normalizeCatalog(raw) {
         false
       ),
       upsellRules,
+      configurationRules: Array.isArray(rawSettings.configurationRules)
+        ? rawSettings.configurationRules.map((rule) => ({ ...rule }))
+        : [],
+      commercialTemplateModules: Array.isArray(rawSettings.commercialTemplateModules)
+        ? rawSettings.commercialTemplateModules.map((module) => ({ ...module }))
+        : [],
+      verticalPack: rawSettings.verticalPack && typeof rawSettings.verticalPack === "object"
+        ? { ...rawSettings.verticalPack }
+        : { id: "catering", version: "vertical-pack-v1" },
       eventTemplates,
       seasonalProfiles,
       defaultSeasonProfile
@@ -1249,6 +1269,11 @@ export function toStorageCatalog(catalog) {
       includedMenuItemIds,
       includedAddonIds,
       includedRentalIds,
+      choiceGroups,
+      quantityPolicyRefs,
+      ruleRefs,
+      offerVersion,
+      verticalType,
       active
     }) => ({
       id,
@@ -1258,6 +1283,11 @@ export function toStorageCatalog(catalog) {
       includedMenuItemIds: normalizeStableIdList(includedMenuItemIds),
       includedAddonIds: normalizeStableIdList(includedAddonIds),
       includedRentalIds: normalizeStableIdList(includedRentalIds),
+      choiceGroups: Array.isArray(choiceGroups) ? choiceGroups.map((group) => ({ ...group })) : [],
+      quantityPolicyRefs: normalizeStableIdList(quantityPolicyRefs),
+      ruleRefs: normalizeStableIdList(ruleRefs),
+      offerVersion: toText(offerVersion, "configurable-offer-v1"),
+      verticalType: toText(verticalType, "catering"),
       active: active !== false
     })),
     addons: catalog.addons.map(({ id, name, type, pricingType, price, cost, staffRole, active, portalDecidable }) => ({

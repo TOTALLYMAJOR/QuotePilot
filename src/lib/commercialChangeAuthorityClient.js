@@ -470,6 +470,67 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+const WORKFLOW_SEAL_FIELDS = ["workflowPolicy", "attendanceBinding", "approvalEvaluation"];
+function isBoundReceipt(value, kind) {
+  return value?.schemaVersion === `commercial-change-${kind}-receipt-v2`;
+}
+
+// Validate server-declared policy/evidence. These values do not price the browser form.
+function normalizeWorkflowSeal(value, scope, { impact = null, commercialValues = null } = {}) {
+  if (!isBoundReceipt(value, value.receiptType)) return {};
+  const policy = value.workflowPolicy;
+  const attendance = value.attendanceBinding;
+  if (policy === null && attendance === null) fail("Bound receipt has no workflow or attendance evidence.");
+  if (policy !== null) {
+    exactKeys(policy, ["organizationId", "definitionPin", "approvalPolicy", "declaredBy", "declaredAtISO"], "Workflow policy");
+    const pin = policy.definitionPin;
+    exactKeys(pin, ["workflowKind", "schemaVersion", "definitionId", "versionId", "version", "definitionDigest"], "Workflow pin");
+    if (policy.organizationId !== scope.organizationId || pin.workflowKind !== "quote_review" || pin.definitionId !== "quote_review"
+      || pin.schemaVersion !== 2 || !Number.isInteger(pin.version) || pin.version < 1 || pin.version > 50 || pin.versionId !== `quote_review_v${pin.version}`) fail("Workflow pin is outside the quote review scope.");
+    digest(pin.definitionDigest, "Workflow definition digest");
+    const rule = policy.approvalPolicy;
+    exactKeys(rule, ["basis", "thresholdCents", "allowedRoles"], "Approval policy");
+    if (rule.basis !== "absolute_total_delta_cents") fail("Unsupported workflow approval basis.");
+    if (rule.thresholdCents !== null) boundedInteger(rule.thresholdCents, "Approval threshold", 1e9);
+    if (!Array.isArray(rule.allowedRoles) || !rule.allowedRoles.includes("admin") || rule.allowedRoles.length > 2
+      || new Set(rule.allowedRoles).size !== rule.allowedRoles.length || rule.allowedRoles.some(role => !["admin", "sales"].includes(role))
+      || !sameJson(rule.allowedRoles, [...rule.allowedRoles].sort())) fail("Invalid workflow participant roles.");
+    if (!rule.allowedRoles.includes((value.simulatedBy || value.authorizedFor)?.role)) fail("Workflow policy excludes the receipt participant.");
+    exactOpaqueId(policy.declaredBy, "Policy declaring actor", 256, "invalid-server-response");
+    if (exactISO(policy.declaredAtISO, "Policy publication time") > (value.simulatedAtISO || value.authorizedAtISO)) fail("Workflow policy was published after the receipt.");
+  }
+  if (attendance !== null) {
+    exactKeys(attendance, ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", "submissionReceiptId", "submissionReceiptDigest", "count"], "Attendance binding");
+    if (attendance.organizationId !== scope.organizationId || attendance.quoteId !== scope.quoteId || attendance.sourceVersionId !== value.baseRevisionId) fail("Attendance binding does not match this exact commercial source.");
+    for (const key of ["sourceVersionId", "acceptanceReceiptId", "submissionReceiptId"]) exactOpaqueId(attendance[key], `Attendance ${key}`, 256, "invalid-server-response");
+    digest(attendance.submissionReceiptDigest, "Attendance receipt digest");
+    if (boundedInteger(attendance.count, "Submitted attendance", 400) < 1) fail("Submitted attendance must be positive.");
+  }
+  const evaluation = value.approvalEvaluation;
+  exactKeys(evaluation, ["currency", "beforeTotalCents", "proposedTotalCents", "absoluteTotalDeltaCents", "impactApprovalRequired", "thresholdApprovalRequired"], "Approval evaluation");
+  const before = boundedInteger(evaluation.beforeTotalCents, "Prior total cents", 1e14);
+  const after = boundedInteger(evaluation.proposedTotalCents, "Proposed total cents", 1e14);
+  const threshold = policy?.approvalPolicy.thresholdCents ?? null;
+  if (evaluation.currency !== "USD" || evaluation.absoluteTotalDeltaCents !== Math.abs(after - before)
+    || evaluation.thresholdApprovalRequired !== (threshold !== null && Math.abs(after - before) >= threshold)) fail("Workflow threshold evaluation is inconsistent.");
+  exactBoolean(evaluation.impactApprovalRequired, "Dependency approval requirement");
+  if (impact && evaluation.impactApprovalRequired !== (impact.counts.total > 0)) fail("Workflow dependency approval evaluation is inconsistent.");
+  if (commercialValues) {
+    // Decimal-string half-up matches the owning server's dollar evidence conversion.
+    const cents = (number) => {
+      const [mantissa, exponent = "0"] = String(number).toLowerCase().split("e");
+      const [whole, fraction = ""] = mantissa.split(".");
+      const digits = BigInt(whole + fraction);
+      const shift = 2 + Number(exponent) - fraction.length;
+      if (shift >= 0) return Number(digits * 10n ** BigInt(shift));
+      const divisor = 10n ** BigInt(-shift);
+      return Number((digits + divisor / 2n) / divisor);
+    };
+    if (before !== cents(commercialValues.authoritativeTotal.before) || after !== cents(commercialValues.authoritativeTotal.proposedAfter)) fail("Workflow evaluation differs from authoritative commercial values.");
+  }
+  return jsonClone({ workflowPolicy: policy, attendanceBinding: attendance, approvalEvaluation: evaluation }, "Bound commercial evidence");
+}
+
 function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersionId) {
   exactKeys(value, [
     "schemaVersion",
@@ -494,10 +555,11 @@ function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersi
     "expiresAtISO",
     "simulatedBy",
     "boundary",
-    "receiptDigest"
+    "receiptDigest",
+    ...(isBoundReceipt(value, "simulation") ? WORKFLOW_SEAL_FIELDS : [])
   ], "Simulation receipt");
   if (
-    value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.simulation
+    (!isBoundReceipt(value, "simulation") && value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.simulation)
     || value.authority !== "server_authoritative"
     || value.receiptType !== "simulation"
     || value.organizationId !== scope.organizationId
@@ -517,7 +579,8 @@ function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersi
     value.authorizationRequired,
     "Simulation authorization requirement"
   );
-  if (authorizationRequired !== (impact.counts.total > 0)) {
+  const seal = normalizeWorkflowSeal(value, scope, { impact, commercialValues: normalizeCommercialValues(value.commercialValues) });
+  if (authorizationRequired !== (impact.counts.total > 0 || seal.approvalEvaluation?.thresholdApprovalRequired === true)) {
     fail("Simulation authorization requirement does not match its dependency impact.");
   }
   return {
@@ -556,7 +619,8 @@ function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersi
     expiresAtISO,
     simulatedBy: exactActor(value.simulatedBy, "Simulation actor"),
     boundary: exactText(value.boundary, "Simulation boundary", 2_000),
-    receiptDigest: digest(value.receiptDigest, "Simulation receipt digest")
+    receiptDigest: digest(value.receiptDigest, "Simulation receipt digest"),
+    ...seal
   };
 }
 
@@ -624,6 +688,7 @@ function normalizeSimulationProjection(value, scope, receipt) {
   return {
     schemaVersion: value.schemaVersion,
     advisory: true,
+    ...(isBoundReceipt(receipt, "simulation") ? Object.fromEntries(WORKFLOW_SEAL_FIELDS.map(key => [key, receipt[key]])) : {}),
     receiptId: receipt.receiptId,
     receiptDigest: receipt.receiptDigest,
     authorizationRequired: receipt.authorizationRequired,
@@ -741,10 +806,11 @@ function normalizeAuthorizationReceipt(value, scope, simulationReceiptId, reques
     "authorizedBy",
     "authorizedFor",
     "boundary",
-    "receiptDigest"
+    "receiptDigest",
+    ...(isBoundReceipt(value, "authorization") ? WORKFLOW_SEAL_FIELDS : [])
   ], "Commercial change authorization receipt");
   if (
-    value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.authorization
+    (!isBoundReceipt(value, "authorization") && value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.authorization)
     || value.authority !== "server_authoritative"
     || value.receiptType !== "authorization"
     || value.organizationId !== scope.organizationId
@@ -796,7 +862,8 @@ function normalizeAuthorizationReceipt(value, scope, simulationReceiptId, reques
     authorizedBy: exactActor(value.authorizedBy, "Authorizing actor", { adminOnly: true }),
     authorizedFor: exactActor(value.authorizedFor, "Authorized requester"),
     boundary: exactText(value.boundary, "Authorization boundary", 2_000),
-    receiptDigest: digest(value.receiptDigest, "Authorization receipt digest")
+    receiptDigest: digest(value.receiptDigest, "Authorization receipt digest"),
+    ...normalizeWorkflowSeal(value, scope)
   };
 }
 
@@ -1385,7 +1452,8 @@ export async function simulateCommercialQuoteChange(input = {}) {
     quoteId: scope.quoteId,
     expectedActiveVersionId,
     requestId,
-    form
+    form,
+    ...(input.attendanceSubmissionReceiptId ? { attendanceSubmissionReceiptId: exactOpaqueId(input.attendanceSubmissionReceiptId, "attendanceSubmissionReceiptId") } : {})
   });
   const result = response?.data;
   exactEnvelope(result, scope, [
@@ -1410,6 +1478,7 @@ export async function simulateCommercialQuoteChange(input = {}) {
     requestId,
     expectedActiveVersionId
   );
+  if ((input.attendanceSubmissionReceiptId || "") !== (simulationReceipt.attendanceBinding?.submissionReceiptId || "")) fail("Simulation does not bind the reviewed attendance response.");
   const simulation = normalizeSimulationProjection(result.simulation, scope, simulationReceipt);
   const persistedEffects = COMMERCIAL_CHANGE_PERSISTED_EFFECTS_ENABLED
     ? normalizeActivePersistedEffects(

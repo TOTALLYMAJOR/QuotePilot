@@ -1,14 +1,16 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
 import { currency } from "../lib/quoteCalculator";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
 import { detectBreakdownValueChanges, MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
-import { buildMarginPresentation } from "./marginPresentation";
+import { buildMarginPresentation, marginRequiresExpandedEvidence } from "./marginPresentation";
 import { playCue } from "./soundKit";
 import {
   buildCompositionLine,
+  buildCommercialWorkbenchModel,
   buildExperienceModel,
   buildExperienceSectionStatus,
   buildGuestChangeConsequences,
@@ -111,7 +113,7 @@ function SectionHeading({ id, eyebrow, title, complete, status = null }) {
   } : null);
   return (
     <header className="pc-section-head">
-      <p className="pc-eyebrow" id={id}>{eyebrow}</p>
+      <h2 className="pc-eyebrow" id={id}>{eyebrow}</h2>
       <div className="pc-section-title-row">
         {title ? <h3 className="pc-section-title">{title}</h3> : null}
         {resolvedStatus ? (
@@ -139,6 +141,32 @@ function PcSelect({ label, value, onChange, children, hint }) {
       {hint ? <small className="pc-field-hint">{hint}</small> : null}
     </div>
   );
+}
+
+function buildChoiceSet(items, {
+  currentValue = "",
+  getValue = (item) => item?.id,
+  getLabel = (item) => item?.name
+} = {}) {
+  const seenValues = new Set();
+  const options = (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      value: String(getValue(item) ?? "").trim(),
+      label: String(getLabel(item) ?? "").trim()
+    }))
+    .filter((option) => {
+      if (!option.value || !option.label || seenValues.has(option.value)) return false;
+      seenValues.add(option.value);
+      return true;
+    });
+  const selectedValue = String(currentValue || "").trim();
+  const stale = Boolean(selectedValue && !options.some((option) => option.value === selectedValue));
+  return {
+    stale,
+    options: stale && options.length > 0
+      ? [{ value: selectedValue, label: `${selectedValue} (no longer available)`, disabled: true }, ...options]
+      : options
+  };
 }
 
 function PcQuietInput({ label, value, onChange, hint, type = "text", inputMode, placeholder }) {
@@ -421,10 +449,13 @@ export default function ProposalComposer({
   const [menuEditorOpen, setMenuEditorOpen] = useState(false);
   const [ratesEditorOpen, setRatesEditorOpen] = useState(false);
   const [menuQuery, setMenuQuery] = useState("");
+  const [openMenuGroups, setOpenMenuGroups] = useState(() => new Set());
+  const [marginDetailOpen, setMarginDetailOpen] = useState(false);
   const [experienceEditorOpen, setExperienceEditorOpen] = useState(false);
   const [rentalEditorOpen, setRentalEditorOpen] = useState(false);
   const [enhancementEditorOpen, setEnhancementEditorOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [activeDomain, setActiveDomain] = useState("event");
   const [pulseOpen, setPulseOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [guestAnchor, setGuestAnchor] = useState(null);
@@ -432,11 +463,60 @@ export default function ProposalComposer({
   const [liveNote, setLiveNote] = useState("");
   // Session-only running log of the changes made to this draft — a working
   // memory for the operator, not a record; saved history stays in versions.
-  const [activityOpen, setActivityOpen] = useState(true);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
   const activityIdRef = useRef(0);
   const saveReadinessRef = useRef(null);
   const pendingSaveReviewFocusRef = useRef(false);
+
+  const eventTypeChoices = buildChoiceSet(eventTypes, {
+    currentValue: form.eventTypeId
+  });
+  const templateChoices = buildChoiceSet([
+    { id: "custom", name: "Custom" },
+    ...(eventTemplates || [])
+  ], {
+    currentValue: form.eventTemplateId || "custom"
+  });
+  const taxRegionChoices = buildChoiceSet(settings?.taxRegions, {
+    currentValue: form.taxRegion,
+    getLabel: (region) => `${region?.name || region?.id} (${Math.round(Number(region?.rate || 0) * 1000) / 10}%)`
+  });
+  const seasonChoices = buildChoiceSet([
+    { id: "auto", name: "Auto detect" },
+    ...(settings?.seasonalProfiles || [])
+  ], {
+    currentValue: form.seasonProfileId || "auto"
+  });
+  const setupRecoveryAction = typeof onOpenCatalogPricing === "function"
+    ? { label: "Open Library setup", onClick: onOpenCatalogPricing }
+    : { label: "Review guided setup", onClick: onGuidedMode };
+
+  useEffect(() => {
+    if (
+      eventTypeChoices.options.length === 1
+      && !eventTypeChoices.stale
+      && String(form.eventTypeId || "") !== eventTypeChoices.options[0].value
+    ) {
+      onEventTypeChange(eventTypeChoices.options[0].value);
+    }
+    if (
+      taxRegionChoices.options.length === 1
+      && !taxRegionChoices.stale
+      && String(form.taxRegion || "") !== taxRegionChoices.options[0].value
+    ) {
+      onFieldChange("taxRegion", taxRegionChoices.options[0].value);
+    }
+  }, [
+    eventTypeChoices.options,
+    eventTypeChoices.stale,
+    form.eventTypeId,
+    form.taxRegion,
+    onEventTypeChange,
+    onFieldChange,
+    taxRegionChoices.options,
+    taxRegionChoices.stale
+  ]);
 
   const currentSaveBlockers = Array.isArray(saveBlockers)
     ? saveBlockers.filter((blocker) => blocker && String(blocker.message || "").trim())
@@ -503,6 +583,17 @@ export default function ProposalComposer({
     [completeness.experience, editingQuote?.id, touchedFields?.pkg, touchedFields?.style]
   );
   const staffing = useMemo(() => buildStaffingRecommendation(form), [form]);
+  const workbench = useMemo(
+    () => buildCommercialWorkbenchModel({
+      form,
+      totals,
+      catalog,
+      completeness,
+      blockers: currentSaveBlockers,
+      staffing
+    }),
+    [form, totals, catalog, completeness, currentSaveBlockers, staffing]
+  );
   const watching = useMemo(
     () => buildWatchingList({ form, totals, readiness, staffing }),
     [form, totals, readiness, staffing]
@@ -582,6 +673,19 @@ export default function ProposalComposer({
   }, []);
 
   const flashAttr = (key) => (flashKeys.has(key) ? "on" : undefined);
+
+  const openDomain = (domainId) => {
+    setActiveDomain(domainId);
+    if (domainId !== "experience") {
+      setExperienceEditorOpen(false);
+      setMenuEditorOpen(false);
+      setRentalEditorOpen(false);
+      setEnhancementEditorOpen(false);
+    }
+    window.requestAnimationFrame?.(() => {
+      document.querySelector(`[data-workbench-panel="${domainId}"]`)?.focus({ preventScroll: true });
+    });
+  };
 
   const commitField = (field) => (value) => {
     onFieldChange(field, value);
@@ -856,6 +960,10 @@ export default function ProposalComposer({
     }
   ];
   const proposalPolishReadyCount = proposalPolishItems.filter((item) => item.state === "ready").length;
+  const marginNeedsAttention = marginRequiresExpandedEvidence(margin);
+  useEffect(() => {
+    setMarginDetailOpen(marginNeedsAttention);
+  }, [marginNeedsAttention]);
 
   const pulseBody = (
     <>
@@ -885,6 +993,33 @@ export default function ProposalComposer({
           <p className="pc-pulse-note">{margin.targetNote}</p>
         ) : null}
       </div>
+
+      {workbench.blockerTargets.length ? (
+        <div className="pc-pulse-block pc-truth-blockers" data-testid="commercial-truth-blockers">
+          <p className="pc-eyebrow">Actionable blockers</p>
+          <ul>
+            {workbench.blockerTargets.map((blocker) => (
+              <li key={blocker.id || blocker.message}>
+                <button type="button" onClick={() => openDomain(blocker.domainId)}>
+                  <span>{blocker.message}</span>
+                  <small>Review {workbench.domains.find((domain) => domain.id === blocker.domainId)?.label}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {consequences ? (
+        <div className="pc-pulse-block" data-testid="commercial-truth-consequence">
+          <p className="pc-eyebrow">Current consequence</p>
+          <p>
+            Guests changed from {consequences.from || "—"} to {consequences.to}; the total moved by{" "}
+            <ImpactTag delta={consequences.totalDelta} />.
+          </p>
+          <button type="button" className="pc-watch-link" onClick={() => openDomain("event")}>Review guest change</button>
+        </div>
+      ) : null}
 
       {composition.length ? (
         <div className="pc-pulse-block">
@@ -954,48 +1089,52 @@ export default function ProposalComposer({
       </div>
 
       {margin ? (
-        <div
+        <details
           className="pc-pulse-block pc-margin-cost"
           data-testid="pc-margin-cost"
-          data-state={margin.available ? "ready" : "unavailable"}
+          data-state={!margin.available ? "unavailable" : marginNeedsAttention ? "attention" : "ready"}
+          open={marginDetailOpen}
+          onToggle={(event) => setMarginDetailOpen(event.currentTarget.open)}
         >
-          <div className="pc-pulse-block-head">
+          <summary className="pc-pulse-block-head">
             <p className="pc-eyebrow">Cost &amp; margin</p>
-            <small>Staff-only</small>
+            <small>{marginNeedsAttention ? "Review · Staff-only" : "Healthy · Staff-only"}</small>
+          </summary>
+          <div className="pc-margin-detail">
+            {margin.available ? (
+              <>
+                <dl>
+                  <div>
+                    <dt>Revenue scope</dt>
+                    <dd>{currency(margin.revenue)}</dd>
+                  </div>
+                  <div>
+                    <dt>Recorded cost</dt>
+                    <dd>{currency(margin.cost)}</dd>
+                  </div>
+                  <div>
+                    <dt>Margin</dt>
+                    <dd>{(margin.marginPct * 100).toFixed(1)}%</dd>
+                  </div>
+                  <div>
+                    <dt>Target</dt>
+                    <dd>{margin.target === null || margin.target === undefined ? "Not set" : `${Math.round(margin.target * 100)}%`}</dd>
+                  </div>
+                </dl>
+                <p>{margin.targetNote || margin.note}</p>
+              </>
+            ) : (
+              <>
+                <p>{margin.note}</p>
+                {margin.missing?.length ? (
+                  <ul className="pc-margin-missing">
+                    {margin.missing.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                ) : null}
+              </>
+            )}
           </div>
-          {margin.available ? (
-            <>
-              <dl>
-                <div>
-                  <dt>Revenue scope</dt>
-                  <dd>{currency(margin.revenue)}</dd>
-                </div>
-                <div>
-                  <dt>Recorded cost</dt>
-                  <dd>{currency(margin.cost)}</dd>
-                </div>
-                <div>
-                  <dt>Margin</dt>
-                  <dd>{(margin.marginPct * 100).toFixed(1)}%</dd>
-                </div>
-                <div>
-                  <dt>Target</dt>
-                  <dd>{margin.target === null || margin.target === undefined ? "Not set" : `${Math.round(margin.target * 100)}%`}</dd>
-                </div>
-              </dl>
-              <p>{margin.targetNote || margin.note}</p>
-            </>
-          ) : (
-            <>
-              <p>{margin.note}</p>
-              {margin.missing?.length ? (
-                <ul className="pc-margin-missing">
-                  {margin.missing.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              ) : null}
-            </>
-          )}
-        </div>
+        </details>
       ) : null}
 
       <div className="pc-pulse-block pc-draft-activity">
@@ -1058,6 +1197,9 @@ export default function ProposalComposer({
       </div>
 
       <div className="pc-pulse-actions">
+        <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
+          Preview client view
+        </button>
         <button
           type="button"
           className="pc-cta"
@@ -1139,6 +1281,40 @@ export default function ProposalComposer({
       </header>
 
       <div className="pc-columns">
+        <nav className="pc-quote-plan" aria-label="Quote plan" data-testid="commercial-workbench-plan">
+          <div className="pc-quote-plan-head">
+            <p className="pc-eyebrow">Quote plan</p>
+            <span>{workbench.domains.filter((domain) => domain.status === "complete").length}/5 ready</span>
+          </div>
+          <ol>
+            {workbench.domains.map((domain, index) => (
+              <li key={domain.id} data-state={domain.status}>
+                <button
+                  type="button"
+                  aria-current={activeDomain === domain.id ? "step" : undefined}
+                  onClick={() => openDomain(domain.id)}
+                  data-testid={`workbench-domain-${domain.id}`}
+                  data-workbench-domain-status={domain.status}
+                >
+                  <span className="pc-domain-index" aria-hidden="true">{index + 1}</span>
+                  <span className="pc-domain-copy">
+                    <strong>{domain.label}</strong>
+                    <small>{domain.summary}</small>
+                  </span>
+                  <span className="pc-domain-state">
+                    {domain.blockerCount > 0
+                      ? `${domain.blockerCount} blocker${domain.blockerCount === 1 ? "" : "s"}`
+                      : domain.status === "complete"
+                        ? "Ready"
+                        : domain.status === "attention"
+                          ? "Review"
+                          : "In progress"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
         <div className="pc-document" data-testid="pc-document">
           {reviewSurfaces}
 
@@ -1187,15 +1363,23 @@ export default function ProposalComposer({
             </aside>
           ) : null}
 
-          <article className="pc-sheet">
+          <article
+            className="pc-sheet"
+            aria-label="Living proposal document"
+            data-active-domain={activeDomain}
+            data-testid="commercial-workbench-object"
+          >
             {proposalIntroTitle || proposalIntroMessage ? (
               <section className="pc-proposal-note" aria-label="Proposal introduction">
                 {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
                 {proposalIntroMessage ? <p className="pc-proposal-note-copy">{proposalIntroMessage}</p> : null}
               </section>
             ) : null}
-            <section className="pc-section" aria-labelledby="pc-sec-event">
+            <section className="pc-section" aria-labelledby="pc-sec-event" data-workbench-panel="event" tabIndex={-1}>
               <SectionHeading id="pc-sec-event" eyebrow="Event" complete={completeness.event} />
+              <p className="pc-domain-summary" data-testid="pc-event-summary">
+                {workbench.domains.find((domain) => domain.id === "event")?.summary}
+              </p>
               <div className="pc-inline-grid">
                 <InlineValue
                   className="pc-inline"
@@ -1206,16 +1390,28 @@ export default function ProposalComposer({
                   editActionId="pc-edit-event-name"
                 />
                 <div className="pc-inline pc-inline-static">
-                  <PcSelect
+                  <AdaptiveChoiceField
+                    id="proposal-event-type"
                     label="Event type"
+                    options={eventTypeChoices.options}
                     value={form.eventTypeId || ""}
-                    onChange={(value) => onEventTypeChange(value)}
-                  >
-                    <option value="">Choose event type</option>
-                    {(eventTypes || []).map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </PcSelect>
+                    onChange={(event) => onEventTypeChange(event.target.value)}
+                    placeholder="Choose event type"
+                    emptyReason={eventTypeChoices.stale
+                      ? `The saved event type “${form.eventTypeId}” is no longer available. The draft value is preserved until setup is repaired.`
+                      : "No event types are available for this workspace."}
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={eventTypeChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={eventTypeChoices.stale ? {
+                      reason: "This draft references an event type outside the current workspace set.",
+                      recoveryAction: {
+                        label: "Choose a current event type",
+                        onClick: () => document.getElementById("proposal-event-type")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="This is the only event type currently available to this workspace."
+                    className="pc-select"
+                  />
                 </div>
                 <InlineValue
                   className="pc-inline"
@@ -1287,7 +1483,7 @@ export default function ProposalComposer({
               </label>
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-client">
+            <section className="pc-section" aria-labelledby="pc-sec-client" data-workbench-panel="customer" tabIndex={-1}>
               <SectionHeading id="pc-sec-client" eyebrow="Client" complete={completeness.client} />
               <div className="pc-inline-grid">
                 <InlineValue
@@ -1329,9 +1525,9 @@ export default function ProposalComposer({
               </div>
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-experience">
+            <section className="pc-section" aria-labelledby="pc-sec-experience" data-workbench-panel="experience" tabIndex={-1}>
               <SectionHeading id="pc-sec-experience" eyebrow="Experience" status={experienceSectionStatus} />
-              <h4 className="pc-experience-title">{experience.title}</h4>
+              <h3 className="pc-experience-title">{experience.title}</h3>
               <p className="pc-experience-blurb">{experience.blurb}</p>
               {experience.facts.length ? (
                 <ul className="pc-fact-row">
@@ -1407,7 +1603,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-menu">
+            <section className="pc-section" aria-labelledby="pc-sec-menu" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-menu" eyebrow="Menu" complete={completeness.menu} />
               {menuLoading ? <p className="pc-muted">Loading the menu for this event type…</p> : null}
               {menuError ? <p className="pc-error" role="alert">{menuError}</p> : null}
@@ -1437,7 +1633,17 @@ export default function ProposalComposer({
                 type="button"
                 className="pc-section-action"
                 aria-expanded={menuEditorOpen}
-                onClick={() => setMenuEditorOpen((open) => !open)}
+                onClick={() => {
+                  if (!menuEditorOpen) {
+                    const selectedIds = new Set((form.menuItems || []).map(String));
+                    const initialGroups = (menuSections || [])
+                      .filter((section, index) => index === 0 || (section?.items || [])
+                        .some((item) => selectedIds.has(String(item?.id))))
+                      .map((section) => String(section?.id ?? section?.name));
+                    setOpenMenuGroups(new Set(initialGroups));
+                  }
+                  setMenuEditorOpen((open) => !open);
+                }}
                 data-testid="pc-edit-menu"
               >
                 {menuEditorOpen ? "Close menu editor" : "Edit menu →"}
@@ -1464,46 +1670,71 @@ export default function ProposalComposer({
                       </button>.
                     </p>
                   ) : null}
-                  {menuEditorSections.map((section) => (
-                    <div key={section.id} className="pc-editor-group">
-                      <p className="pc-menu-course">{section.name}</p>
-                      <ul className="pc-choice-list">
-                        {section.items.map((item) => (
-                          <li key={item.id}>
-                            <label className="pc-choice">
-                              <input
-                                type="checkbox"
-                                checked={item.selected}
-                                onChange={() => toggleCatalogSelection("menuItems", "menuItemQuantities", item.id, item.name)}
-                              />
-                              <span className="pc-choice-copy">
-                                <strong>{item.name}</strong>
-                                <ImpactTag delta={item.delta} />
-                              </span>
-                            </label>
-                            {item.selected ? (
-                              <input
-                                className="pc-qty"
-                                type="number"
-                                min={1}
-                                aria-label={`${item.name} quantity`}
-                                value={Number((form.menuItemQuantities || {})[item.id]) > 0
-                                  ? Math.round(Number(form.menuItemQuantities[item.id]))
-                                  : ""}
-                                placeholder="auto"
-                                onChange={(event) => setSelectionQuantity("menuItems", "menuItemQuantities", item.id, event.target.value, item.name)}
-                              />
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                  {menuEditorSections.map((section) => {
+                    const forcedOpen = Boolean(menuQuery.trim());
+                    const sectionOpen = forcedOpen || openMenuGroups.has(section.id);
+                    const selectedCount = section.items.filter((item) => item.selected).length;
+                    return (
+                      <details
+                        key={section.id}
+                        className="pc-editor-group pc-menu-editor-group"
+                        open={sectionOpen}
+                        onToggle={(event) => {
+                          const isOpen = event.currentTarget.open;
+                          if (forcedOpen) return;
+                          setOpenMenuGroups((current) => {
+                            if (isOpen === current.has(section.id)) return current;
+                            const next = new Set(current);
+                            if (isOpen) next.add(section.id);
+                            else next.delete(section.id);
+                            return next;
+                          });
+                        }}
+                      >
+                        <summary>
+                          <span>{section.name}</span>
+                          <small>
+                            {selectedCount > 0 ? `${selectedCount} selected · ` : ""}{section.items.length} option{section.items.length === 1 ? "" : "s"}
+                          </small>
+                        </summary>
+                        <ul className="pc-choice-list">
+                          {section.items.map((item) => (
+                            <li key={item.id}>
+                              <label className="pc-choice">
+                                <input
+                                  type="checkbox"
+                                  checked={item.selected}
+                                  onChange={() => toggleCatalogSelection("menuItems", "menuItemQuantities", item.id, item.name)}
+                                />
+                                <span className="pc-choice-copy">
+                                  <strong>{item.name}</strong>
+                                  <ImpactTag delta={item.delta} />
+                                </span>
+                              </label>
+                              {item.selected ? (
+                                <input
+                                  className="pc-qty"
+                                  type="number"
+                                  min={1}
+                                  aria-label={`${item.name} quantity`}
+                                  value={Number((form.menuItemQuantities || {})[item.id]) > 0
+                                    ? Math.round(Number(form.menuItemQuantities[item.id]))
+                                    : ""}
+                                  placeholder="auto"
+                                  onChange={(event) => setSelectionQuantity("menuItems", "menuItemQuantities", item.id, event.target.value, item.name)}
+                                />
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-staffing">
+            <section className="pc-section" aria-labelledby="pc-sec-staffing" data-workbench-panel="staffing" tabIndex={-1}>
               <SectionHeading id="pc-sec-staffing" eyebrow="Staffing" complete={completeness.staffing} />
               <div className="pc-inline-grid pc-inline-grid-tight">
                 <InlineValue
@@ -1636,7 +1867,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-rentals">
+            <section className="pc-section" aria-labelledby="pc-sec-rentals" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-rentals" eyebrow="Rentals" complete={null} />
               {rentalRows.length ? (
                 <ul className="pc-rental-list">
@@ -1699,7 +1930,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-enhancements">
+            <section className="pc-section" aria-labelledby="pc-sec-enhancements" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-enhancements" eyebrow="Enhancements" complete={null} />
               {selectedAddonEntries.length ? (
                 <ul className="pc-enhancement-list">
@@ -1761,7 +1992,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section pc-section-investment" aria-labelledby="pc-sec-investment">
+            <section className="pc-section pc-section-investment" aria-labelledby="pc-sec-investment" data-workbench-panel="commercials" tabIndex={-1}>
               <SectionHeading id="pc-sec-investment" eyebrow="Investment" complete={completeness.investment} />
               <div className="pc-investment-lede">
                 <p className="pc-investment-total" data-pc-flash={flashAttr("total")} data-testid="pc-investment-total">
@@ -1792,37 +2023,65 @@ export default function ProposalComposer({
               >
                 <summary>Advanced pricing</summary>
                 <div className="pc-advanced-grid">
-                  <PcSelect
+                  <AdaptiveChoiceField
+                    id="proposal-event-template"
                     label="Event template"
+                    options={templateChoices.options}
                     value={form.eventTemplateId || "custom"}
-                    onChange={(value) => onTemplateChange(value)}
-                  >
-                    <option value="custom">Custom</option>
-                    {(eventTemplates || []).map((template) => (
-                      <option key={template.id} value={template.id}>{template.name}</option>
-                    ))}
-                  </PcSelect>
-                  <PcSelect
+                    onChange={(event) => onTemplateChange(event.target.value)}
+                    emptyReason="No proposal templates are available for this workspace."
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={templateChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={templateChoices.stale ? {
+                      reason: "The draft keeps its historical template identity until you choose a current template or Custom.",
+                      recoveryAction: {
+                        label: "Choose a current template",
+                        onClick: () => document.getElementById("proposal-event-template")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="Custom is the only proposal template currently available."
+                    className="pc-select"
+                  />
+                  <AdaptiveChoiceField
+                    id="proposal-tax-region"
                     label="Tax region"
+                    options={taxRegionChoices.options}
                     value={form.taxRegion || ""}
-                    onChange={(value) => onFieldChange("taxRegion", value)}
-                  >
-                    {(settings.taxRegions || []).map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.name} ({Math.round(Number(region.rate || 0) * 1000) / 10}%)
-                      </option>
-                    ))}
-                  </PcSelect>
-                  <PcSelect
+                    onChange={(event) => onFieldChange("taxRegion", event.target.value)}
+                    emptyReason={taxRegionChoices.stale
+                      ? `The saved tax region “${form.taxRegion}” is no longer available. The draft value is preserved and pricing remains blocked.`
+                      : "No tax regions are configured, so authoritative tax cannot be calculated."}
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={taxRegionChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={taxRegionChoices.stale ? {
+                      reason: "This tax region is outside the current workspace configuration.",
+                      recoveryAction: {
+                        label: "Choose a current tax region",
+                        onClick: () => document.getElementById("proposal-tax-region")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="This is the only tax region configured for this workspace."
+                    className="pc-select"
+                  />
+                  <AdaptiveChoiceField
+                    id="proposal-season-profile"
                     label="Season profile"
+                    options={seasonChoices.options}
                     value={form.seasonProfileId || "auto"}
-                    onChange={(value) => onFieldChange("seasonProfileId", value)}
-                  >
-                    <option value="auto">Auto detect</option>
-                    {(settings.seasonalProfiles || []).map((season) => (
-                      <option key={season.id} value={season.id}>{season.name}</option>
-                    ))}
-                  </PcSelect>
+                    onChange={(event) => onFieldChange("seasonProfileId", event.target.value)}
+                    emptyReason="No season profiles are available for this workspace."
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={seasonChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={seasonChoices.stale ? {
+                      reason: "The draft keeps its historical season profile until you choose a current profile or Auto detect.",
+                      recoveryAction: {
+                        label: "Choose a current season profile",
+                        onClick: () => document.getElementById("proposal-season-profile")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="Auto detect is the only season choice currently available."
+                    className="pc-select"
+                  />
                   <PcQuietInput
                     label="Travel (round-trip miles)"
                     type="number"
@@ -1869,9 +2128,10 @@ export default function ProposalComposer({
           className={`pc-pulse${pulseOpen ? " is-open" : ""}`}
           aria-label="Quote Pulse"
           data-testid="pc-pulse"
+          data-commercial-truth="true"
         >
           <div className="pc-pulse-head">
-            <p className="pc-eyebrow">Quote Pulse</p>
+            <p className="pc-eyebrow">Commercial truth</p>
             <button type="button" className="pc-ghost pc-pulse-close" onClick={() => setPulseOpen(false)}>
               Close
             </button>

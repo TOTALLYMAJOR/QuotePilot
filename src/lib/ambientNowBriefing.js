@@ -178,15 +178,18 @@ function normalizePrioritySignals(snapshot, freshness) {
   });
 }
 
-function quietProgressFor(snapshot, { nowISO, timeZone }) {
-  const timing = buildWorkflowTimingCues({
-    attentionSummary: { items: [] },
+function workflowTimingFor(snapshot, { nowISO, timeZone }) {
+  return buildWorkflowTimingCues({
+    attentionSummary: snapshot?.attentionSummary || { items: [] },
     quotes: safeArray(snapshot?.quotes),
     nowISO,
     timeZone,
-    cueLimit: 1,
+    cueLimit: AMBIENT_NOW_PRIORITY_LIMIT,
     receiptLimit: AMBIENT_NOW_QUIET_PROGRESS_LIMIT
   });
+}
+
+function quietProgressFor(timing) {
   const receipts = timing.receipts
     .filter((receipt) => QUIET_PROGRESS_KINDS.has(receipt.kind))
     .slice(0, AMBIENT_NOW_QUIET_PROGRESS_LIMIT)
@@ -251,6 +254,7 @@ export function buildAmbientNowBriefing({
     returnedAttentionCount: attentionItems.length
   });
   const signals = normalizePrioritySignals(snapshot, freshness);
+  const workflowTiming = workflowTimingFor(snapshot, { nowISO, timeZone });
   const signalsAvailable = signals.length > 0
     && signals.every((signal) => signal.id !== "now-attention:unavailable")
     && signals[0]?.id !== "now-attention:caught-up";
@@ -260,11 +264,15 @@ export function buildAmbientNowBriefing({
   const priorities = signalsAvailable
     ? signals.slice(0, AMBIENT_NOW_PRIORITY_LIMIT).map((signal, index) => Object.freeze({
         item: attentionItems[index],
-        signal
+        signal,
+        timingCue: workflowTiming.cues.find((cue) => (
+          cue.quoteId === attentionItems[index]?.quoteId
+          && cue.type === attentionItems[index]?.type
+        )) || null
       }))
     : [];
   const overflowCount = Math.max(0, attentionItemCount - priorities.length);
-  const quietProgress = quietProgressFor(snapshot, { nowISO, timeZone });
+  const quietProgress = quietProgressFor(workflowTiming);
   const caughtUp = caughtUpContract({
     attentionItemCount,
     prioritiesAvailable: signalsAvailable,

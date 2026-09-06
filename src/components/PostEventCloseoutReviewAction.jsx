@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import {
   isDefinitivePostEventCloseoutError,
   readPendingPostEventCloseoutConfigurationAttempt,
@@ -9,12 +9,21 @@ import {
   resetDefinitivePostEventCloseoutAttempt
 } from "../lib/postEventCloseoutClient";
 import StatusChip from "./StatusChip";
+import "../styles/customer-closeout.css";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
   formatWorkspaceText
 } from "../lib/workspacePresentation";
 
+const WorkflowPackPolicyPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./WorkflowPackPolicyPanel")) : null;
+const EventActualsCloseoutSummary = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./EventActualsCloseoutSummary")) : null;
+export function closeoutActualsSource(opportunity = {}) {
+  const source = opportunity.reviewedAction || {};
+  return { organizationId: opportunity.organizationId || "", quoteId: opportunity.quoteId || "", sourceVersionId: source.sourceVersionId || "", acceptanceReceiptId: source.acceptanceReceiptId || "" };
+}
 const CLOSEOUT_STATE_PRESENTATION = Object.freeze({
   scheduled: { family: "info", label: "Scheduled" },
   due: { family: "action", label: "Due today" },
@@ -83,6 +92,7 @@ export function buildPostEventCloseoutPresentation(opportunity = {}, available =
 export default function PostEventCloseoutReviewAction({
   opportunity,
   available = true,
+  workflowScope = null,
   onReceipt
 }) {
   const view = useMemo(
@@ -182,6 +192,15 @@ export default function PostEventCloseoutReviewAction({
     });
   };
 
+  const reviewItems = Array.isArray(opportunity.reviewItems) ? opportunity.reviewItems : [];
+  const reviewedCount = reviewItems.filter((item) => item.state === "reviewed").length;
+  const itemLabels = {
+    internal_closeout: "Internal event review",
+    thank_you: "Thank-you opportunity",
+    review_request: "Review-request opportunity",
+    operational_follow_up: "Operational follow-up"
+  };
+
   return (
     <section
       className="post-event-closeout-action"
@@ -192,11 +211,14 @@ export default function PostEventCloseoutReviewAction({
     >
       <div className="workflow-attention-head">
         <div>
-          <h4 id={`post-event-closeout-${text(opportunity.quoteId)}-title`}>Closeout review record</h4>
-          <p className="source-note">{view.detail}</p>
+          <h4 id={`post-event-closeout-${text(opportunity.quoteId)}-title`}>Review the event follow-up</h4>
+          <p className="closeout-progress">{view.authoritative ? `${reviewedCount} of ${reviewItems.length} items reviewed` : "Review record unavailable"}</p>
+          <p className="source-note">Internal review only. Sending a message is a separate action.</p>
+          {["scheduled", "blocked_configuration", "completed", "read_only_cue"].includes(view.state) && <p className="source-note">{view.detail}</p>}
         </div>
         <StatusChip {...view.presentation} />
       </div>
+
 
       {view.state === "blocked_configuration" && view.authoritative && available && (
         <div className="post-event-closeout-configuration" data-closeout-item="configuration">
@@ -233,7 +255,7 @@ export default function PostEventCloseoutReviewAction({
       )}
 
       <div className="post-event-closeout-items">
-        {(Array.isArray(opportunity.reviewItems) ? opportunity.reviewItems : []).map((item) => {
+        {reviewItems.map((item) => {
           const reviewed = item.state === "reviewed";
           const itemBusy = busy && mutation.itemCode === item.code;
           const needsReconcile = mutation.state === "uncertain" && mutation.itemCode === item.code;
@@ -241,13 +263,15 @@ export default function PostEventCloseoutReviewAction({
           return (
             <article className="post-event-closeout-item" key={item.code} data-closeout-item={item.code}>
               <div>
-                <strong>{item.label}</strong>
-                <p className="source-note">
-                  {reviewed
-                    ? `Reviewed ${formatWorkspaceDateTime(item.reviewedAtISO)} by ${formatWorkspaceText(item.reviewedBy, { emptyLabel: "recorded staff" })}.`
-                    : "Pending explicit internal review."}
-                </p>
+                <strong>{itemLabels[item.code] || item.label}</strong>
+                <p className="source-note">{reviewed ? "Reviewed" : "Awaiting review"}</p>
               </div>
+              <details className="closeout-item-detail">
+                <summary>{notes[item.code] ? "Note added · details" : "Note and details"}</summary>
+                <p className="source-note">{item.label}</p>
+                <p className="source-note">{reviewed
+                  ? `Reviewed ${formatWorkspaceDateTime(item.reviewedAtISO)} by ${formatWorkspaceText(item.reviewedBy, { emptyLabel: "recorded staff" })}.`
+                  : "Pending explicit internal review."}</p>
               <label className="field compact-field">
                 <span>Internal note (optional)</span>
                 <input
@@ -260,6 +284,7 @@ export default function PostEventCloseoutReviewAction({
                   }))}
                 />
               </label>
+              </details>
               <div className="right-actions">
                 {needsReconcile ? (
                   <button type="button" className="cta compact" onClick={() => void run(item, mutation.action, { reconcile: true })}>
@@ -299,6 +324,12 @@ export default function PostEventCloseoutReviewAction({
           {mutation.receipt?.requestId ? <> Request <code>{mutation.receipt.requestId}</code>.</> : null}
         </div>
       )}
+      <details className="staff-evidence-disclosure closeout-supporting-detail">
+        <summary>Review policy and recorded costs</summary>
+        <p className="source-note">{view.detail}</p>
+      {WorkflowPackPolicyPanel && available && view.authoritative && workflowScope?.enabled && <Suspense fallback={<p role="status">Loading closeout coordination...</p>}><WorkflowPackPolicyPanel {...workflowScope} organizationId={opportunity.organizationId} quoteId={opportunity.quoteId} workflowKind="closeout_follow_up" sourceVersionId={opportunity.reviewedAction?.sourceVersionId || ""} sourceReceiptId={opportunity.reviewedAction?.acceptanceReceiptId || ""} domainRevision={mutation.receipt?.receiptId || opportunity.reviewedAction?.completedAtISO || ""} otherMutationBlocked={["submitting", "uncertain", "reconciliation", "error", "recovery"].includes(mutation.state)} /></Suspense>}
+      {EventActualsCloseoutSummary && available && view.authoritative && ["due", "overdue", "completed"].includes(view.state) && <Suspense fallback={<p role="status">Loading closeout actuals...</p>}><EventActualsCloseoutSummary {...closeoutActualsSource(opportunity)} available={available} /></Suspense>}
+      </details>
     </section>
   );
 }

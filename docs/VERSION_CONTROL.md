@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-03 15:59:15 CDT
+Last updated: 2026-09-05 20:17:12 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -171,8 +171,11 @@ explicit owner promotion after real-run review.
    `not-applicable` for `none` or Twilio. Portal projection backfill is separate
    source/data-operation acceptance, not deployment-target evidence.
    Use `npm run release:candidate:deploy` only from the clean, published
-   `release/vX.Y.Z` head with its exact successful CI run. The command is fixed
-   to the isolated Firebase staging identity or the `quoteflow` Vercel preview
+   `release/vX.Y.Z` head with its exact successful CI run. The command requires
+   a complete root and Functions dependency install; Firebase-all preflight
+   verifies the Functions production dependency tree before receipt reservation
+   or provider mutation, with `npm ci --prefix functions` as the bounded repair.
+   It is fixed to the isolated Firebase staging identity or the `quoteflow` Vercel preview
    project, requires a SHA-bound confirmation, and records a hosted source/gate
    manifest plus provider deployment id. The receipt path is reserved before
    mutation and retains failed or partial outcomes. Hosted manifest equality is
@@ -384,3 +387,40 @@ If a topic changes, only update the owning doc and cross-link from others.
 - Product truth decision: `docs/adr/ADR-0002-product-truth-observability.md`
 - Product truth design: `docs/design/product-truth-observability-design.md`
 - Product truth work plan: `docs/plans/20260828-feature-product-truth-observability.md`
+
+## Time-bound browser fixtures
+
+Release-gate fixtures that represent active portal or provider-bound access must
+derive their issuance and bounded expiry from the test execution clock. A fixed
+historical issuance can cross QuotePilot's authoritative validity window and
+silently turn an active-path test into an expired-path test. Explicit expiry
+fixtures remain fixed and separate so terminal recovery behavior is still
+deterministic. Changing fixture time does not change production validity policy.
+
+Shared emulator seeders that can create Auth or Firestore records must fail
+closed before Firebase Admin initialization unless the requested project uses
+the `demo-*` namespace and every required emulator endpoint is loopback. Runner
+configuration alone is not an adequate production-write boundary. These
+seeders belong to a headless developer-infrastructure capability contract even
+when their only functional change is test-fixture freshness.
+
+## RagnaKoK workflow activation profile
+
+The `ragnakok-workflows` profile is restricted to Firebase backend/all and the
+exact approved runtime tenant `mm05366-sandbox` (brand `RagnaKoK Inc`). It retains
+Resend, sets a tenant-scoped runtime override, and leaves global authority flags
+off. The same exact-tag, main CI, protected environment, rollback and per-Function
+readback gates apply. Other organizations cannot use the override. Hosting and
+Vercel retain their safe-off deployment profile and include role/tenant-gated
+workflow presentation. Follow [the activation and rollback procedure](LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release)
+only after successful backend deployment. Source publication is not activation
+or policy publication.
+
+
+RagnaKoK test access also admits operational staffing and Revenue Autopilot
+preparation through the same exact-tenant runtime guard. The staffing tenant
+setting remains required. Revenue policy configuration remains explicit; no
+outreach policy is invented or published during activation. The global scheduler
+receives no tenant scope and stays disabled, and the outbound-send gate stays
+off. Other tenants cannot use these scoped authorities. Existing explicit
+operator email actions retain their normal authorization and confirmations.

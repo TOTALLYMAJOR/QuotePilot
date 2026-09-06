@@ -28,6 +28,8 @@ import {
   quickUpdatesReducer,
   shouldGuardQuickUpdatesDismissal
 } from "../lib/quickUpdatesState";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import "./quickUpdatesPanel.css";
 
 const FOCUSABLE_SELECTOR = [
@@ -224,10 +226,17 @@ export default function QuickUpdatesPanel({
     || state.recoveryAction === "reconcile_only";
   const editorHandoff = state.recoveryAction === "open_editor";
   const persistedEffects = state.preview?.persistedEffects || null;
-  const styles = useMemo(() => Array.from(new Set([
-    savedStyle,
-    ...serviceStyles
-  ].map((item) => String(item || "").trim()).filter(Boolean))), [savedStyle, serviceStyles]);
+  const availableStyles = useMemo(() => Array.from(new Set(
+    serviceStyles.map((item) => String(item || "").trim()).filter(Boolean)
+  )), [serviceStyles]);
+  const styleOptions = useMemo(() => {
+    const current = String(state.draftStyle || savedStyle || "").trim();
+    return Array.from(new Set([current, ...availableStyles].filter(Boolean))).map((style) => ({
+      value: style,
+      label: `${quickUpdateStyleLabel(style)}${availableStyles.includes(style) ? "" : " · saved value no longer available"}`,
+      disabled: Boolean(current === style && !availableStyles.includes(style))
+    }));
+  }, [availableStyles, savedStyle, state.draftStyle]);
 
   useEffect(() => {
     const prior = openSessionRef.current;
@@ -305,11 +314,36 @@ export default function QuickUpdatesPanel({
       continuation,
       returnFocus: current.phase === QUICK_UPDATES_PHASE.REVIEW
         ? reviewPrimaryRef.current
-        : serviceStyleRef.current || returnFocus || document.activeElement
+        : serviceStyleRef.current?.querySelector?.("select, button, [tabindex]:not([tabindex='-1'])")
+          || serviceStyleRef.current
+          || returnFocus
+          || document.activeElement
     };
     dispatch({ type: "REQUEST_DISMISS", reason });
     return { status: "guarded" };
   }, [finishDismissal]);
+
+  const openLibraryHandoff = (returnFocus = null) => requestDismissal("library", () => onOpenQuickUpdatesLibrary?.({
+    modelId: "quick-updates-library-handoff-v1",
+    quoteId,
+    opportunityId: quoteId,
+    organizationId: String(quote?.organizationId || "").trim(),
+    sectionId: "overview",
+    label: eventName,
+    opportunityLabel: eventName,
+    opportunity: {
+      id: quoteId,
+      label: eventName
+    },
+    requestedSection: "overview",
+    returnLabel: `Return to ${eventName}`
+  }), returnFocus);
+
+  const focusServiceStyle = useCallback(() => {
+    const field = serviceStyleRef.current;
+    const target = field?.querySelector?.("select, button, [tabindex]:not([tabindex='-1'])");
+    (target || field)?.focus?.();
+  }, []);
 
   useEffect(() => {
     if (!open || state.phase === QUICK_UPDATES_PHASE.CLOSED) {
@@ -339,10 +373,10 @@ export default function QuickUpdatesPanel({
       } else if (stateRef.current.phase === QUICK_UPDATES_PHASE.REVIEW) {
         reviewPrimaryRef.current?.focus();
       } else {
-        serviceStyleRef.current?.focus();
+        focusServiceStyle();
       }
     });
-  }, []);
+  }, [focusServiceStyle]);
 
   const discardDraft = useCallback(() => {
     const pending = pendingContinuationRef.current;
@@ -537,11 +571,11 @@ export default function QuickUpdatesPanel({
   const returnToRecoveryPhase = () => {
     if (state.recoveryPhase === QUICK_UPDATES_PHASE.REVIEW && state.reviewDelta) {
       dispatch({ type: "BACK_TO_EDIT" });
-      window.requestAnimationFrame(() => serviceStyleRef.current?.focus());
+      window.requestAnimationFrame(focusServiceStyle);
       return;
     }
     dispatch({ type: "BACK_TO_EDIT" });
-    window.requestAnimationFrame(() => serviceStyleRef.current?.focus());
+    window.requestAnimationFrame(focusServiceStyle);
   };
 
   if (!open || state.phase === QUICK_UPDATES_PHASE.CLOSED || typeof document === "undefined") return null;
@@ -763,20 +797,78 @@ export default function QuickUpdatesPanel({
                       role="region"
                       aria-labelledby={menuTriggerId}
                     >
-                      <label className="qup-field">
-                        <span>Service style</span>
-                        <select
-                          ref={serviceStyleRef}
-                          aria-label="Service style"
-                          value={state.draftStyle}
-                          onChange={(event) => dispatch({ type: "EDIT_STYLE", value: event.target.value })}
-                          disabled={controlsDisabled}
-                        >
-                          {styles.map((style) => (
-                            <option key={style} value={style}>{quickUpdateStyleLabel(style)}</option>
-                          ))}
-                        </select>
-                      </label>
+                      <div ref={serviceStyleRef} tabIndex={-1}>
+                        {availableStyles.length === 0 && !state.draftStyle ? (
+                          <AdaptiveChoiceField
+                            className="qup-field qup-service-style-choice"
+                            label="Service style"
+                            options={[]}
+                            emptyState="unavailable"
+                            emptyReason="No current service styles are available for this organization."
+                            recoveryAction={{
+                              label: "Open full Library",
+                              onClick: (event) => openLibraryHandoff(event.currentTarget)
+                            }}
+                          />
+                        ) : availableStyles.length === 0 ? (
+                          <div className="qup-field qup-service-style-choice" data-adaptive-choice-mode="stale">
+                            <span className="adaptive-choice-field__label">Service style</span>
+                            <strong className="adaptive-choice-field__single-value">{quickUpdateStyleLabel(state.draftStyle)}</strong>
+                            <FieldStateIndicator
+                              state={{ evidence: "stale" }}
+                              label="Service style state"
+                              reason="The saved service style is no longer in the organization's current choices."
+                              supportingDetail="The saved value remains unchanged until you resolve it in Library."
+                              recoveryAction={{
+                                label: "Open full Library",
+                                onClick: (event) => openLibraryHandoff(event.currentTarget)
+                              }}
+                            />
+                          </div>
+                        ) : availableStyles.length === 1 && !state.draftStyle ? (
+                          <div className="qup-field qup-service-style-choice" data-adaptive-choice-mode="suggested">
+                            <span className="adaptive-choice-field__label">Service style</span>
+                            <strong className="adaptive-choice-field__single-value">{quickUpdateStyleLabel(availableStyles[0])}</strong>
+                            <FieldStateIndicator
+                              state={{ origin: "suggested" }}
+                              label="Service style state"
+                              provenance="The only current Library service style"
+                              supportingDetail="Confirm this style to stage it in the Quick Updates draft."
+                              recoveryAction={{
+                                label: `Use ${quickUpdateStyleLabel(availableStyles[0])}`,
+                                onClick: () => dispatch({ type: "EDIT_STYLE", value: availableStyles[0] })
+                              }}
+                            />
+                          </div>
+                        ) : availableStyles.length === 1 && state.draftStyle === availableStyles[0] ? (
+                          <AdaptiveChoiceField
+                            className="qup-field qup-service-style-choice"
+                            label="Service style"
+                            options={[{ value: availableStyles[0], label: quickUpdateStyleLabel(availableStyles[0]) }]}
+                            value={state.draftStyle}
+                            singleChoiceDetail="This is the saved style and the only current Library choice."
+                          />
+                        ) : (
+                          <AdaptiveChoiceField
+                            className="qup-field qup-service-style-choice"
+                            label="Service style"
+                            options={styleOptions}
+                            value={state.draftStyle}
+                            onChange={(event) => dispatch({ type: "EDIT_STYLE", value: event.target.value })}
+                            disabled={controlsDisabled}
+                            placeholder="Choose a service style"
+                            fieldState={!availableStyles.includes(state.draftStyle) ? { evidence: "stale" } : undefined}
+                            fieldStateDetails={!availableStyles.includes(state.draftStyle) ? {
+                              reason: "The saved service style is no longer in the organization's current choices.",
+                              supportingDetail: "The saved value remains visible until you choose a current style.",
+                              recoveryAction: {
+                                label: `Use ${quickUpdateStyleLabel(availableStyles[0])}`,
+                                onClick: () => dispatch({ type: "EDIT_STYLE", value: availableStyles[0] })
+                              }
+                            } : {}}
+                          />
+                        )}
+                      </div>
                       <p
                         id={statusId}
                         className={`qup-draft-status${state.phase === QUICK_UPDATES_PHASE.DIRTY ? " qup-draft-status--dirty" : ""}`}
@@ -870,21 +962,7 @@ export default function QuickUpdatesPanel({
                 >
                 <button
                   type="button"
-                  onClick={(event) => requestDismissal("library", () => onOpenQuickUpdatesLibrary?.({
-                    modelId: "quick-updates-library-handoff-v1",
-                    quoteId,
-                    opportunityId: quoteId,
-                    organizationId: String(quote?.organizationId || "").trim(),
-                    sectionId: "overview",
-                    label: eventName,
-                    opportunityLabel: eventName,
-                    opportunity: {
-                      id: quoteId,
-                      label: eventName
-                    },
-                    requestedSection: "overview",
-                    returnLabel: `Return to ${eventName}`
-                  }), event.currentTarget)}
+                  onClick={(event) => openLibraryHandoff(event.currentTarget)}
                   disabled={controlsDisabled || typeof onOpenQuickUpdatesLibrary !== "function"}
                 >
                   <span className="qup-icon" aria-hidden="true"><Package size={21} /></span>

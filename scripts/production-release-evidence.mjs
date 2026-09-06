@@ -151,7 +151,8 @@ export const RELEASE_SMS_PROVIDERS = Object.freeze(["none", "twilio", "pingram"]
 export const RELEASE_ACCEPTANCE_CANDIDATE_PROFILE = "staging-provider-acceptance";
 export const PRODUCTION_RELEASE_PROFILES = Object.freeze([
   "safe-off",
-  "email-active"
+  "email-active",
+  "ragnakok-workflows"
 ]);
 
 function evidenceError(message) {
@@ -180,11 +181,11 @@ export function validateProductionReleaseProfileTarget(profileValue, targetValue
   const profile = parseProductionReleaseProfile(profileValue);
   const target = String(targetValue || "").trim();
   if (
-    profile === "email-active"
+    ["email-active", "ragnakok-workflows"].includes(profile)
     && !new Set(["firebase-backend", "firebase-all"]).has(target)
   ) {
     throw evidenceError(
-      "the email-active production profile is restricted to firebase-backend or firebase-all."
+      `the ${profile} production profile is restricted to firebase-backend or firebase-all.`
     );
   }
   return profile;

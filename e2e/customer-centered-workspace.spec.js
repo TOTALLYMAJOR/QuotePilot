@@ -905,8 +905,10 @@ test.describe("customer-centered workspace", () => {
 
     await page.goto(`/app/quotes/new?portal=${encodeURIComponent(portalKey)}`);
 
+    await expect(page.locator('[data-portal-presentation="event-story"]')).toBeVisible();
     await expect(page.getByRole("heading", { name: "Your proposal from Northstar Catering" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Portal Route Dinner on June 12, 2027/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Portal Route Dinner/ })).toBeVisible();
+    await expect(page.locator(".portal-event-date")).toHaveText("June 12, 2027");
     await expect(page.locator(".site-header")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: HOME_HEADING })).toHaveCount(0);
   });

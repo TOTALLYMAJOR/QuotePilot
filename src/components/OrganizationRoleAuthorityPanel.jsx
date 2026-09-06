@@ -103,11 +103,28 @@ export default function OrganizationRoleAuthorityPanel() {
   const availableOutcomes = roster.authority === "owner"
     ? ["admin", "sales", "none"]
     : ["sales", "none"];
-  const canPrepare = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(targetEmail))
+  const targetEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(targetEmail));
+  const protectedRosterRowsVisible = roster.roles.some((row) => (
+    row.owner || (row.role === "admin" && roster.authority !== "owner")
+  ));
+  const prepareBlocker = roster.loading
+    ? "The trusted team roster is still loading."
+    : roster.error
+      ? "Refresh the trusted team roster before preparing an access change."
+      : !targetEmailValid
+        ? "Enter one complete verified email address to review an access change."
+        : exactTarget?.owner && nextRole !== "admin"
+          ? "The organization owner is protected and cannot be changed through this surface."
+          : roster.authority !== "owner" && currentRole === "admin"
+            ? "Only the organization owner can change an administrator's access."
+            : currentRole === nextRole
+              ? `${ROLE_LABELS[currentRole]} is already the authoritative role for this person.`
+              : !availableOutcomes.includes(nextRole)
+                ? "This role outcome is unavailable with your current authority."
+                : "";
+  const canPrepare = !prepareBlocker
     && availableOutcomes.includes(nextRole)
-    && currentRole !== nextRole
-    && !(exactTarget?.owner && nextRole !== "admin")
-    && !(roster.authority !== "owner" && currentRole === "admin");
+    && currentRole !== nextRole;
 
   const prepare = async () => {
     setState({ phase: "ready", busy: false, error: "", receipt: null });
@@ -197,39 +214,59 @@ export default function OrganizationRoleAuthorityPanel() {
               : "You can shape sales access; the owner keeps admin authority."}
           </p>
         </div>
-        <button type="button" className="ghost" onClick={() => void loadRoster()} disabled={roster.loading}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => void loadRoster()}
+          disabled={roster.loading}
+          aria-describedby={roster.loading ? "role-authority-roster-loading" : undefined}
+        >
           {roster.loading ? "Checking…" : "Refresh team"}
         </button>
       </div>
 
+      {roster.loading && (
+        <p id="role-authority-roster-loading" className="source-note" role="status">
+          Checking the trusted team roster before another action can begin.
+        </p>
+      )}
       {roster.error && <p className="error-note">{roster.error} Refresh this exact team view to recover.</p>}
       {!roster.error && !roster.loading && roster.roles.length === 0 && (
         <p className="source-note">No staff roles are visible yet. Add the first verified team member below.</p>
       )}
       {roster.roles.length > 0 && (
         <div className="role-authority-roster" aria-label="Current team access">
-          {roster.roles.map((row) => (
-            <button
-              type="button"
-              className="role-authority-person"
-              key={row.uid}
-              onClick={() => {
-                setTargetEmail(row.email);
-                setNextRole(
-                  roster.authority === "owner"
-                    ? (row.role === "admin" ? "sales" : "admin")
-                    : "none"
-                );
-                setPreview(null);
-                setState({ phase: "ready", busy: false, error: "", receipt: null });
-              }}
-              disabled={row.owner || (row.role === "admin" && roster.authority !== "owner")}
-            >
-              <span><strong>{row.email}</strong><small>{row.owner ? "Owner" : ROLE_LABELS[row.role]}</small></span>
-              <span aria-hidden="true">→</span>
-            </button>
-          ))}
+          {roster.roles.map((row) => {
+            const protectedRow = row.owner || (row.role === "admin" && roster.authority !== "owner");
+            return (
+              <button
+                type="button"
+                className="role-authority-person"
+                key={row.uid}
+                onClick={() => {
+                  setTargetEmail(row.email);
+                  setNextRole(
+                    roster.authority === "owner"
+                      ? (row.role === "admin" ? "sales" : "admin")
+                      : "none"
+                  );
+                  setPreview(null);
+                  setState({ phase: "ready", busy: false, error: "", receipt: null });
+                }}
+                disabled={protectedRow}
+                aria-describedby={protectedRow ? "role-authority-protected-person" : undefined}
+              >
+                <span><strong>{row.email}</strong><small>{row.owner ? "Owner" : ROLE_LABELS[row.role]}</small></span>
+                <span aria-hidden="true">→</span>
+              </button>
+            );
+          })}
         </div>
+      )}
+      {protectedRosterRowsVisible && (
+        <p id="role-authority-protected-person" className="source-note">
+          Protected access stays visible here, but only the organization owner can change an administrator; the owner record cannot be changed on this surface.
+        </p>
       )}
       {roster.truncated && <p className="warning-note">Only the first 200 role records are shown. Narrow this change by exact email.</p>}
 
@@ -250,22 +287,31 @@ export default function OrganizationRoleAuthorityPanel() {
         <div>
           <span className="role-authority-label">Outcome</span>
           <div className="role-authority-outcomes">
-            {availableOutcomes.map((role) => (
-              <button
-                key={role}
-                type="button"
-                className={nextRole === role ? "active" : "ghost"}
-                onClick={() => {
-                  setNextRole(role);
-                  setPreview(null);
-                  setState({ phase: "ready", busy: false, error: "", receipt: null });
-                }}
-                disabled={currentRole === role || (exactTarget?.owner && role !== "admin")}
-              >
-                {role === "none" ? "Remove" : ROLE_LABELS[role]}
-              </button>
-            ))}
+            {availableOutcomes.map((role) => {
+              const outcomeUnavailable = currentRole === role || (exactTarget?.owner && role !== "admin");
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  className={nextRole === role ? "active" : "ghost"}
+                  onClick={() => {
+                    setNextRole(role);
+                    setPreview(null);
+                    setState({ phase: "ready", busy: false, error: "", receipt: null });
+                  }}
+                  disabled={outcomeUnavailable}
+                  aria-describedby={outcomeUnavailable ? "role-authority-outcome-blocker" : undefined}
+                >
+                  {role === "none" ? "Remove" : ROLE_LABELS[role]}
+                </button>
+              );
+            })}
           </div>
+          <p id="role-authority-outcome-blocker" className="source-note">
+            {exactTarget?.owner
+              ? "The owner role is protected on this surface."
+              : `${ROLE_LABELS[currentRole]} is the current role, so choosing it again would make no change.`}
+          </p>
         </div>
         <div className="role-authority-inference" aria-live="polite">
           <span>Current</span>
@@ -275,11 +321,24 @@ export default function OrganizationRoleAuthorityPanel() {
       </div>
 
       {!preview && (
-        <div className="right-actions">
-          <button type="button" className="cta" disabled={!canPrepare || roster.loading} onClick={() => void prepare()}>
-            Review this access change
-          </button>
-        </div>
+        <>
+          <div className="right-actions">
+            <button
+              type="button"
+              className="cta"
+              disabled={!canPrepare}
+              aria-describedby={!canPrepare ? "role-authority-prepare-blocker" : undefined}
+              onClick={() => void prepare()}
+            >
+              Review this access change
+            </button>
+          </div>
+          {!canPrepare && (
+            <p id="role-authority-prepare-blocker" className="source-note" role="status">
+              {prepareBlocker}
+            </p>
+          )}
+        </>
       )}
 
       {preview && (
@@ -295,16 +354,39 @@ export default function OrganizationRoleAuthorityPanel() {
 
           {recentAuth?.recent !== true && (
             <div className="role-authority-reauth">
-              <p><strong>Confirm it’s you</strong><br /><span className="source-note">Sensitive access changes need a sign-in from the last five minutes.</span></p>
+              <p><strong>Confirm it’s you</strong><br /><span id="role-authority-reauth-requirement" className="source-note">Sensitive access changes need a sign-in from the last five minutes.</span></p>
               {methods.includes("password") && (
                 <label>
                   <span>Password</span>
                   <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
                 </label>
               )}
+              {methods.includes("password") && !password && !state.busy && (
+                <p id="role-authority-password-required" className="source-note">
+                  Enter your current password to use password confirmation.
+                </p>
+              )}
               <div className="right-actions">
-                {methods.includes("password") && <button type="button" disabled={state.busy || !password} onClick={() => void confirmIdentity("password")}>Confirm with password</button>}
-                {methods.includes("google") && <button type="button" disabled={state.busy} onClick={() => void confirmIdentity("google")}>Confirm with Google</button>}
+                {methods.includes("password") && (
+                  <button
+                    type="button"
+                    disabled={state.busy || !password}
+                    aria-describedby={state.busy ? "role-authority-mutation-busy" : !password ? "role-authority-password-required" : undefined}
+                    onClick={() => void confirmIdentity("password")}
+                  >
+                    Confirm with password
+                  </button>
+                )}
+                {methods.includes("google") && (
+                  <button
+                    type="button"
+                    disabled={state.busy}
+                    aria-describedby={state.busy ? "role-authority-mutation-busy" : undefined}
+                    onClick={() => void confirmIdentity("google")}
+                  >
+                    Confirm with Google
+                  </button>
+                )}
               </div>
               {methods.length === 0 && <p className="error-note">This sign-in provider cannot confirm sensitive changes. Sign out and return with password or Google.</p>}
             </div>
@@ -315,6 +397,7 @@ export default function OrganizationRoleAuthorityPanel() {
               type="button"
               className="ghost"
               disabled={state.busy}
+              aria-describedby={state.busy ? "role-authority-mutation-busy" : undefined}
               onClick={() => {
                 setPreview(null);
                 setState({ phase: "ready", busy: false, error: "", receipt: null });
@@ -323,7 +406,15 @@ export default function OrganizationRoleAuthorityPanel() {
               Keep current access
             </button>
             {!['uncertain', 'error'].includes(state.phase) && (
-              <button type="button" className="cta" disabled={state.busy || recentAuth?.recent !== true} onClick={() => void apply()}>
+              <button
+                type="button"
+                className="cta"
+                disabled={state.busy || recentAuth?.recent !== true}
+                aria-describedby={state.busy
+                  ? "role-authority-mutation-busy"
+                  : recentAuth?.recent !== true ? "role-authority-reauth-requirement" : undefined}
+                onClick={() => void apply()}
+              >
                 {state.phase === "reconciliation"
                   ? "Checking exact change…"
                   : state.busy ? "Applying access…" : actionLabel(preview.nextRole)}
@@ -333,12 +424,24 @@ export default function OrganizationRoleAuthorityPanel() {
         </div>
       )}
 
+      {state.busy && (
+        <p id="role-authority-mutation-busy" className="source-note" role="status">
+          {state.phase === "reconciliation"
+            ? "Checking the exact prior access request before another action is available."
+            : "This exact access action is in progress. Wait for its confirmed outcome before choosing another action."}
+        </p>
+      )}
       {state.error && (
         <div className="role-authority-recovery" role="alert">
           <p className={state.phase === "uncertain" ? "warning-note" : "error-note"}>{state.error}</p>
           <div className="right-actions">
             {state.phase === "uncertain" && preview && recentAuth?.recent === true && (
-              <button type="button" disabled={state.busy} onClick={() => void apply({ reconcile: true })}>
+              <button
+                type="button"
+                disabled={state.busy}
+                aria-describedby={state.busy ? "role-authority-mutation-busy" : undefined}
+                onClick={() => void apply({ reconcile: true })}
+              >
                 Check exact change
               </button>
             )}

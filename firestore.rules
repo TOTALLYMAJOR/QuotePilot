@@ -732,6 +732,7 @@ service cloud.firestore {
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
+        "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
       ])
@@ -753,6 +754,7 @@ service cloud.firestore {
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
+        "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
       ])
@@ -1057,6 +1059,72 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/postEventCloseouts/{closeoutId}/actionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Event phase ledgers and immutable command receipts are server-private.
+    // Staff receive only bounded callable snapshots; no browser role owns these records.
+    match /organizations/{orgId}/eventOperatingLedgers/{ledgerId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventOperatingLedgers/{ledgerId}/receipts/{requestHash} {
+      allow read, write: if false;
+    }
+
+    // Work journals have separate revision and receipt authority; no browser
+    // principal may access current work state or immutable work receipts directly.
+    match /organizations/{orgId}/eventOperatingLedgers/{ledgerId}/workState/{stateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventOperatingLedgers/{ledgerId}/workReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Declared actuals and their receipts are independent server authority.
+    // Browser reads, lists, and writes are denied for every principal.
+    match /organizations/{orgId}/eventOperatingLedgers/{ledgerId}/actualsState/{stateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventOperatingLedgers/{ledgerId}/actualsReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Workflow definitions, publications, instances and receipts are server-private.
+    // Even administrators use bounded callables rather than direct browser reads.
+    match /organizations/{orgId}/workflowDefinitions/{definitionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/workflowDefinitions/{definitionId}/versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/workflowDefinitions/{definitionId}/lifecycleReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/workflowInstances/{instanceId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/workflowInstances/{instanceId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Native adapter proof and attendance journals are server-only evidence.
+    // An issued customer portal token grants no direct document access.
+    match /organizations/{orgId}/workflowInstances/{instanceId}/observations/{evidenceId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/quoteAttendance/{ledgerId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/quoteAttendance/{ledgerId}/receipts/{receiptId} {
       allow read, write: if false;
     }
 

@@ -1,3 +1,4 @@
+const { tenantWorkflowRuntimeEnabled } = require("./tenantWorkflowRuntime");
 const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -78,6 +79,15 @@ const {
   planPostEventCloseoutPolicyRefresh,
   resolvePostEventCloseoutSource
 } = require("./postEventCloseout");
+const eventOperations = require("./eventOperations");
+const eventOperatingWork = require("./eventOperatingWork");
+const eventOperatingActuals = require("./eventOperatingActuals");
+const eventOperatingHistory = require("./eventOperatingHistory");
+const workflowDefinitions = require("./workflowDefinitions");
+const workflowExecution = require("./workflowExecution");
+const eventWorkflowAdapter = require("./eventWorkflowAdapter");
+const workflowPackAdapters = require("./workflowPackAdapters");
+const quoteAttendance = require("./quoteAttendance");
 const commercialDependencyGraphCore = require("./commercialDependencyGraphCore.cjs");
 const {
   KITCHEN_BEO_FRESHNESS_STATES,
@@ -420,9 +430,15 @@ const CUSTOMER_EMAIL_CLAIMS_COLLECTION = "customerEmailClaims";
 const CUSTOMER_IMPORT_BATCH_KIND = "customer";
 const CUSTOMER_IMPORT_SOURCE = "import_studio";
 const CUSTOMER_IMPORT_TYPE = "customers";
+const CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION = "customerImportPreflights";
+const CUSTOMER_IMPORT_PREFLIGHT_KIND = "customer_import_preflight";
+const CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS = 15 * 60 * 1000;
+const CUSTOMER_IMPORT_SESSION_CONTINUATION_MS = 24 * 60 * 60 * 1000;
 const CUSTOMER_IMPORT_MAX_RECORDS = 350;
+const CUSTOMER_IMPORT_MAX_SESSION_RECORDS = 1500;
 const CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS = 2000;
 const CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES = 500;
+const CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES = 2;
 const PORTAL_CONVERSATION_MESSAGES_COLLECTION = "portalConversationMessages";
 const PORTAL_CONVERSATION_REQUESTS_COLLECTION = "portalConversationRequests";
 const PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION = "portalConversationRateLimits";
@@ -1285,13 +1301,15 @@ function configBoolean(path, fallback = false) {
   return value === "true" || value === "1" || value === "yes";
 }
 
-function getRevenueAutopilotGlobalControl(nowISO = new Date().toISOString()) {
+function getRevenueAutopilotGlobalControl(nowISO = new Date().toISOString(), organizationId = "") {
   const email = getEmailConfig();
   const providerConfigured = email.provider === "resend"
     && Boolean(email.resendApiKey)
     && email.senderApproved;
   return {
-    enabled: configBoolean("revenue_autopilot.enabled", false),
+    enabled: tenantWorkflowRuntimeEnabled("REVENUE_AUTOPILOT_ENABLED", organizationId, {
+      ...process.env, REVENUE_AUTOPILOT_ENABLED: configBoolean("revenue_autopilot.enabled", false) ? "true" : "false"
+    }),
     sendsEnabled: configBoolean("revenue_autopilot.sends_enabled", false),
     provider: {
       evidenceId: `provider_${createHash("sha256")
@@ -1937,7 +1955,7 @@ async function readRevenueAutopilotExecutionAuthority({
     organizationId,
     customerId
   });
-  const global = getRevenueAutopilotGlobalControl(nowISO);
+  const global = getRevenueAutopilotGlobalControl(nowISO, organizationId);
   const canonical = {
     quote,
     portal: revenueAutopilotPortalEvidence({
@@ -2101,7 +2119,7 @@ async function reconcileRevenueAutopilotReplyAttentionForQuote({
       organizationId,
       quoteId,
       evidence: { conversation: evidence },
-      global: getRevenueAutopilotGlobalControl(nowISO),
+      global: getRevenueAutopilotGlobalControl(nowISO, organizationId),
       tenantPolicy,
       activeAttention: activeAttentionSnap?.exists
         ? { attentionId: activeAttentionSnap.id, ...(activeAttentionSnap.data() || {}) }
@@ -9494,13 +9512,47 @@ function customerImportText(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
 }
 
+function customerImportBoundedText(value, {
+  field,
+  maxLength,
+  rowNumber = null
+} = {}) {
+  const text = String(value ?? "").trim();
+  if (text.length > maxLength) {
+    const location = rowNumber !== null && Number.isSafeInteger(Number(rowNumber))
+      ? `row ${Number(rowNumber)} `
+      : "";
+    throw new CustomerImportError(
+      "invalid-argument",
+      `Customer import ${location}${field} exceeds ${maxLength} characters. Shorten it and run server preflight again.`
+    );
+  }
+  return text;
+}
+
+function normalizeCustomerImportFileName(value) {
+  return customerImportBoundedText(value, {
+    field: "file name",
+    maxLength: 240
+  });
+}
+
 function customerImportNameKey(value) {
   return customerImportText(value, 160).toLowerCase().replace(/\s+/g, " ");
 }
 
 function normalizeCustomerImportBatchId(value) {
-  const batchId = customerImportText(value, 128);
+  const batchId = String(value ?? "").trim();
   return /^[A-Za-z0-9_-]{20,128}$/.test(batchId) ? batchId : "";
+}
+
+function createCustomerImportPreflightId() {
+  return `customer_preflight_${randomUUID().replace(/-/g, "")}`;
+}
+
+function normalizeCustomerImportPreflightId(value) {
+  const preflightId = String(value ?? "").trim().toLowerCase();
+  return /^customer_preflight_[a-f0-9]{32}$/.test(preflightId) ? preflightId : "";
 }
 
 function stableCustomerImportValue(value) {
@@ -9559,8 +9611,16 @@ function customerImportDocumentId(data = {}) {
 
 function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   const source = input && typeof input === "object" ? input : {};
-  const name = customerImportText(source.name, 160);
-  const email = normalizeEmail(customerImportText(source.email, 254));
+  const name = customerImportBoundedText(source.name, {
+    field: "name",
+    maxLength: 160,
+    rowNumber
+  });
+  const email = normalizeEmail(customerImportBoundedText(source.email, {
+    field: "email",
+    maxLength: 254,
+    rowNumber
+  }));
   if (!name && !email) {
     throw new CustomerImportError(
       "invalid-argument",
@@ -9576,9 +9636,21 @@ function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   const data = {
     name,
     email,
-    phone: customerImportText(source.phone, 80),
-    company: customerImportText(source.company || source.organization, 160),
-    notes: customerImportText(source.notes, 2_000),
+    phone: customerImportBoundedText(source.phone, {
+      field: "phone",
+      maxLength: 80,
+      rowNumber
+    }),
+    company: customerImportBoundedText(source.company || source.organization, {
+      field: "company",
+      maxLength: 160,
+      rowNumber
+    }),
+    notes: customerImportBoundedText(source.notes, {
+      field: "notes",
+      maxLength: 2_000,
+      rowNumber
+    }),
     nameKey: customerImportNameKey(name),
     emailKey: email
   };
@@ -9589,14 +9661,14 @@ function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   };
 }
 
-function normalizeCustomerImportRows(records = []) {
+function normalizeCustomerImportRows(records = [], { maxRecords = CUSTOMER_IMPORT_MAX_RECORDS } = {}) {
   if (!Array.isArray(records) || records.length === 0) {
     throw new CustomerImportError("invalid-argument", "No valid customer records are ready to import.");
   }
-  if (records.length > CUSTOMER_IMPORT_MAX_RECORDS) {
+  if (records.length > maxRecords) {
     throw new CustomerImportError(
       "resource-exhausted",
-      `Customer import batches are limited to ${CUSTOMER_IMPORT_MAX_RECORDS} records.`
+      `Customer import batches are limited to ${maxRecords} records.`
     );
   }
   return records.map((entry, index) => {
@@ -9613,12 +9685,254 @@ function normalizeCustomerImportRows(records = []) {
   });
 }
 
-function customerImportRequestHash({ fileName = "", rows = [] } = {}) {
+function customerImportRequestHash({ organizationId = "", fileName = "", rows = [] } = {}) {
   return customerImportHash({
+    organizationId: normalizeOrganizationId(organizationId),
     importType: CUSTOMER_IMPORT_TYPE,
-    fileName: customerImportText(fileName, 240),
+    fileName: normalizeCustomerImportFileName(fileName),
     rows: rows.map((row) => ({ rowNumber: row.rowNumber, data: row.data }))
   });
+}
+
+function customerImportChunkPlanHash(chunks = []) {
+  return customerImportHash(chunks.map((chunk) => ({
+    index: chunk.index,
+    sourceIndexes: chunk.sourceIndexes,
+    rowNumbers: chunk.rowNumbers,
+    recordCount: chunk.recordCount,
+    distinctEmailCount: chunk.distinctEmailCount,
+    maximumWrites: chunk.maximumWrites
+  })));
+}
+
+function bindCustomerImportBatchToPreflight({
+  organizationId = "",
+  fileName = "",
+  rows = [],
+  preflightId = "",
+  preflightPlanHash = "",
+  preflightRecords,
+  preflightChunkIndex,
+  preflightSessionId = "",
+  importBatchId = ""
+} = {}) {
+  const normalizedPreflightId = normalizeCustomerImportPreflightId(preflightId);
+  const normalizedPlanHash = String(preflightPlanHash ?? "").trim().toLowerCase();
+  const normalizedSessionId = normalizeCustomerImportBatchId(preflightSessionId);
+  const normalizedBatchId = normalizeCustomerImportBatchId(importBatchId);
+  if (
+    !normalizedPreflightId
+    || !/^[a-f0-9]{64}$/.test(normalizedPlanHash)
+    || !Array.isArray(preflightRecords)
+    || !Number.isSafeInteger(preflightChunkIndex)
+    || preflightChunkIndex < 0
+    || !normalizedSessionId
+  ) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "This customer import is missing its complete server preflight binding. Run preflight again."
+    );
+  }
+  const preflightRows = normalizeCustomerImportRows(preflightRecords, {
+    maxRecords: CUSTOMER_IMPORT_MAX_SESSION_RECORDS
+  });
+  const expectedPlanHash = customerImportRequestHash({
+    organizationId,
+    fileName,
+    rows: preflightRows
+  });
+  if (expectedPlanHash !== normalizedPlanHash) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The customer rows or source file changed after server preflight. Run preflight again."
+    );
+  }
+  const chunks = buildCustomerImportChunkPlan(preflightRows);
+  const chunkIndex = preflightChunkIndex;
+  const expectedChunk = chunks[chunkIndex];
+  if (!expectedChunk) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "The requested customer import part is not present in the server preflight plan."
+    );
+  }
+  const expectedBatchId = chunks.length === 1
+    ? normalizedSessionId
+    : `${normalizedSessionId}_part_${String(chunkIndex + 1).padStart(3, "0")}`;
+  if (expectedBatchId.length > 128) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "The customer import session identity is too long for its server-issued chunk plan. Start a new import."
+    );
+  }
+  if (!normalizedBatchId || normalizedBatchId !== expectedBatchId) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "This customer import part is not bound to the expected session identity. Run server preflight again."
+    );
+  }
+  const expectedRows = expectedChunk.sourceIndexes.map((sourceIndex) => preflightRows[sourceIndex]);
+  const batchHash = customerImportHash(rows.map((row) => ({ rowNumber: row.rowNumber, data: row.data })));
+  const expectedBatchHash = customerImportHash(expectedRows.map((row) => ({
+    rowNumber: row.rowNumber,
+    data: row.data
+  })));
+  if (batchHash !== expectedBatchHash) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "This customer import part no longer matches the server preflight plan. Run preflight again."
+    );
+  }
+  return {
+    preflightId: normalizedPreflightId,
+    planHash: normalizedPlanHash,
+    chunkPlanHash: customerImportChunkPlanHash(chunks),
+    sourceCount: preflightRows.length,
+    chunkIndex,
+    chunkCount: chunks.length,
+    sessionId: normalizedSessionId,
+    expectedBatchId
+  };
+}
+
+function assertIssuedCustomerImportPreflight(snapshot, {
+  organizationId,
+  actorUid,
+  actorEmail,
+  fileName,
+  binding,
+  importBatchId,
+  requestHash,
+  nowISO,
+  allowExpired = false
+} = {}) {
+  if (!snapshot?.exists) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight receipt is unavailable. Run preflight again."
+    );
+  }
+  const receipt = snapshot.data() || {};
+  const receiptActor = receipt.actor && typeof receipt.actor === "object" ? receipt.actor : {};
+  const completedChunks = receipt.completedChunks && typeof receipt.completedChunks === "object"
+    ? receipt.completedChunks
+    : {};
+  const completedChunkEntries = Object.entries(completedChunks);
+  const hasBoundSession = Boolean(receipt.sessionImportBatchId);
+  if (
+    receipt.schemaVersion !== 1
+    || receipt.kind !== CUSTOMER_IMPORT_PREFLIGHT_KIND
+    || !["issued", "in_progress", "completed"].includes(receipt.status)
+    || receipt.preflightId !== binding.preflightId
+    || receipt.organizationId !== organizationId
+    || receipt.importType !== CUSTOMER_IMPORT_TYPE
+    || receipt.fileName !== fileName
+    || receipt.planHash !== binding.planHash
+    || receipt.chunkPlanHash !== binding.chunkPlanHash
+    || Number(receipt.sourceCount) !== binding.sourceCount
+    || Number(receipt.chunkCount) !== binding.chunkCount
+    || receiptActor.uid !== actorUid
+    || normalizeEmail(receiptActor.email) !== normalizeEmail(actorEmail)
+    || (receipt.sessionImportBatchId && receipt.sessionImportBatchId !== binding.sessionId)
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The customer import no longer matches its server-issued preflight receipt. Run preflight again."
+    );
+  }
+  const expiresAtMs = Date.parse(String(receipt.expiresAtISO || ""));
+  const issuedAtMs = Date.parse(String(receipt.issuedAtISO || ""));
+  const expiresAtTimestampMs = typeof receipt.expiresAt?.toMillis === "function"
+    ? receipt.expiresAt.toMillis()
+    : Number.NaN;
+  const sessionActivatedAtMs = Date.parse(String(receipt.sessionActivatedAtISO || ""));
+  const sessionExpiresAtMs = Date.parse(String(receipt.sessionExpiresAtISO || ""));
+  const sessionExpiresAtTimestampMs = typeof receipt.sessionExpiresAt?.toMillis === "function"
+    ? receipt.sessionExpiresAt.toMillis()
+    : Number.NaN;
+  const nowMs = Date.parse(String(nowISO || ""));
+  if (
+    !Number.isFinite(expiresAtMs)
+    || !Number.isFinite(issuedAtMs)
+    || !Number.isFinite(expiresAtTimestampMs)
+    || !Number.isFinite(nowMs)
+    || expiresAtTimestampMs !== expiresAtMs
+    || expiresAtMs - issuedAtMs !== CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight has expired. Run preflight again."
+    );
+  }
+  const sessionEvidenceValid = hasBoundSession
+    && Number.isFinite(sessionActivatedAtMs)
+    && Number.isFinite(sessionExpiresAtMs)
+    && Number.isFinite(sessionExpiresAtTimestampMs)
+    && sessionExpiresAtTimestampMs === sessionExpiresAtMs
+    && sessionExpiresAtMs - sessionActivatedAtMs === CUSTOMER_IMPORT_SESSION_CONTINUATION_MS
+    && sessionActivatedAtMs >= issuedAtMs
+    && sessionActivatedAtMs <= expiresAtMs;
+  const completedEvidenceValid = completedChunkEntries.every(([key, value]) => {
+    const index = Number(key);
+    const expectedBatchId = binding.chunkCount === 1
+      ? receipt.sessionImportBatchId
+      : `${receipt.sessionImportBatchId}_part_${String(index + 1).padStart(3, "0")}`;
+    return Number.isSafeInteger(index)
+      && index >= 0
+      && index < binding.chunkCount
+      && value
+      && typeof value === "object"
+      && value.importBatchId === expectedBatchId
+      && /^[a-f0-9]{64}$/.test(String(value.requestHash || ""))
+      && Number.isFinite(Date.parse(String(value.completedAtISO || "")));
+  });
+  const statusEvidenceValid = receipt.status === "issued"
+    ? !hasBoundSession && completedChunkEntries.length === 0
+    : sessionEvidenceValid
+      && completedEvidenceValid
+      && completedChunkEntries.length > 0
+      && (
+        (receipt.status === "in_progress" && completedChunkEntries.length < binding.chunkCount)
+        || (receipt.status === "completed" && completedChunkEntries.length === binding.chunkCount)
+      );
+  if (!statusEvidenceValid) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight has inconsistent session evidence. Run reconciliation before retrying."
+    );
+  }
+  if (
+    !allowExpired
+    && (
+      (!hasBoundSession && expiresAtMs <= nowMs)
+      || (hasBoundSession && sessionExpiresAtMs <= nowMs)
+    )
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      hasBoundSession
+        ? "The customer import session continuation window has expired. Undo the partial session or start a new import."
+        : "The server-issued customer import preflight has expired. Run preflight again."
+    );
+  }
+  const completedChunk = completedChunks[String(binding.chunkIndex)];
+  if (completedChunk && (
+    completedChunk.importBatchId !== importBatchId
+    || completedChunk.requestHash !== requestHash
+  )) {
+    throw new CustomerImportError(
+      "already-exists",
+      "This server preflight chunk is already bound to a different customer import batch."
+    );
+  }
+  return {
+    receipt,
+    completedChunks,
+    completedChunk,
+    expiresAtISO: String(receipt.expiresAtISO || ""),
+    sessionActivatedAtISO: hasBoundSession ? String(receipt.sessionActivatedAtISO || "") : "",
+    sessionExpiresAtISO: hasBoundSession ? String(receipt.sessionExpiresAtISO || "") : ""
+  };
 }
 
 function customerImportResultFromReceipt(receipt = {}, { idempotentReplay = true } = {}) {
@@ -9632,6 +9946,12 @@ function customerImportResultFromReceipt(receipt = {}, { idempotentReplay = true
     createdRecords: Array.isArray(receipt.createdRecords) ? receipt.createdRecords : [],
     skippedRows: Array.isArray(receipt.skippedRows) ? receipt.skippedRows : [],
     status: customerImportText(receipt.status, 40) || "completed",
+    preflightId: normalizeCustomerImportPreflightId(receipt.preflightId),
+    preflightPlanHash: customerImportText(receipt.preflightPlanHash, 64),
+    preflightChunkIndex: Number.isSafeInteger(Number(receipt.preflightChunkIndex))
+      ? Number(receipt.preflightChunkIndex)
+      : null,
+    preflightSessionId: normalizeCustomerImportBatchId(receipt.preflightSessionId),
     idempotentReplay
   };
 }
@@ -9656,7 +9976,11 @@ function customerImportRollbackResultFromReceipt(receipt = {}, { idempotentRepla
 function assertCustomerImportReceiptIdentity(receipt = {}, {
   organizationId,
   importBatchId,
-  requestHash
+  requestHash,
+  preflightId,
+  preflightPlanHash,
+  preflightChunkIndex,
+  preflightSessionId
 } = {}) {
   if (
     receipt.batchKind !== CUSTOMER_IMPORT_BATCH_KIND
@@ -9666,6 +9990,10 @@ function assertCustomerImportReceiptIdentity(receipt = {}, {
     || receipt.importType !== CUSTOMER_IMPORT_TYPE
     || receipt.targetCollection !== "customers"
     || receipt.requestHash !== requestHash
+    || receipt.preflightId !== preflightId
+    || receipt.preflightPlanHash !== preflightPlanHash
+    || Number(receipt.preflightChunkIndex) !== Number(preflightChunkIndex)
+    || receipt.preflightSessionId !== preflightSessionId
   ) {
     throw new CustomerImportError(
       "already-exists",
@@ -9696,12 +10024,208 @@ function assertExistingCustomerImportIdentity(snapshot, organizationId) {
   return customerImportDuplicateKey(data);
 }
 
+function buildCustomerImportChunkPlan(rows = []) {
+  const chunks = [];
+  let current = null;
+  const startChunk = () => ({
+    index: chunks.length,
+    sourceIndexes: [],
+    rowNumbers: [],
+    recordCount: 0,
+    distinctEmailCount: 0,
+    maximumWrites: CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES,
+    emailKeys: new Set()
+  });
+  rows.forEach((row, sourceIndex) => {
+    if (!current) current = startChunk();
+    const emailKey = normalizeEmail(row?.data?.emailKey || row?.data?.email);
+    const addsEmail = emailKey && !current.emailKeys.has(emailKey) ? 1 : 0;
+    const nextRecords = current.recordCount + 1;
+    const nextEmails = current.distinctEmailCount + addsEmail;
+    if (
+      current.recordCount > 0
+      && (
+        nextRecords > CUSTOMER_IMPORT_MAX_RECORDS
+        || nextRecords + nextEmails + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES
+          > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES
+      )
+    ) {
+      chunks.push(current);
+      current = startChunk();
+    }
+    if (emailKey) current.emailKeys.add(emailKey);
+    current.sourceIndexes.push(sourceIndex);
+    current.rowNumbers.push(row.rowNumber);
+    current.recordCount += 1;
+    current.distinctEmailCount = current.emailKeys.size;
+    current.maximumWrites = current.recordCount
+      + current.distinctEmailCount
+      + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES;
+  });
+  if (current?.recordCount) chunks.push(current);
+  return chunks.map(({ emailKeys, ...chunk }, index) => ({ ...chunk, index }));
+}
+
+async function preflightCustomerImportBatchInternal({
+  organizationId = "",
+  fileName = "",
+  records = [],
+  actorUid = "",
+  actorEmail = "",
+  nowISO = new Date().toISOString()
+} = {}) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  if (!normalizedOrganizationId) {
+    throw new CustomerImportError("invalid-argument", "organizationId is required.");
+  }
+  const normalizedFileName = normalizeCustomerImportFileName(fileName);
+  const normalizedActorUid = customerImportBoundedText(actorUid, {
+    field: "actor identity",
+    maxLength: 160
+  });
+  const normalizedActorEmail = normalizeEmail(customerImportBoundedText(actorEmail, {
+    field: "actor email",
+    maxLength: 254
+  }));
+  if (!normalizedActorUid) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "Customer import preflight requires an authenticated actor identity."
+    );
+  }
+  const issuedAtMs = Date.parse(nowISO);
+  if (!Number.isFinite(issuedAtMs)) {
+    throw new CustomerImportError("internal", "Customer import preflight time is invalid.");
+  }
+  const expiresAtISO = new Date(issuedAtMs + CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS).toISOString();
+  const rows = normalizeCustomerImportRows(records, {
+    maxRecords: CUSTOMER_IMPORT_MAX_SESSION_RECORDS
+  });
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
+  const customerCollectionRef = organizationRef.collection("customers");
+  const customerEmailClaimCollectionRef = organizationRef.collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
+  const existingSnapshot = await customerCollectionRef
+    .limit(CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS + 1)
+    .get();
+  if (existingSnapshot.docs.length > CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS) {
+    throw new CustomerImportError(
+      "resource-exhausted",
+      `This destination has more than ${CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS} customer records. Use a managed migration so duplicate checks remain complete.`
+    );
+  }
+
+  const existingKeys = new Map();
+  existingSnapshot.docs.forEach((snapshot) => {
+    const duplicateKey = assertExistingCustomerImportIdentity(snapshot, normalizedOrganizationId);
+    if (!duplicateKey) return;
+    const priorId = existingKeys.get(duplicateKey);
+    if (priorId && priorId !== snapshot.id) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "Multiple customer records already share the same normalized identity. Repair the collision before importing."
+      );
+    }
+    existingKeys.set(duplicateKey, snapshot.id);
+  });
+
+  const requestedEmailKeys = [...new Set(rows
+    .map((row) => normalizeEmail(row.data.emailKey || row.data.email))
+    .filter(Boolean))];
+  const claimRefs = requestedEmailKeys.map((emailKey) => (
+    customerEmailClaimCollectionRef.doc(customerEmailClaimDocumentId(emailKey))
+  ));
+  const claimSnapshots = [];
+  for (let offset = 0; offset < claimRefs.length; offset += 250) {
+    claimSnapshots.push(...await db.getAll(...claimRefs.slice(offset, offset + 250)));
+  }
+  claimSnapshots.forEach((snapshot, index) => {
+    if (!snapshot.exists) return;
+    const emailKey = requestedEmailKeys[index];
+    const binding = readCustomerEmailClaim(snapshot, normalizedOrganizationId, emailKey);
+    const existingCustomerId = existingKeys.get(`email:${emailKey}`);
+    if (!existingCustomerId || existingCustomerId !== binding.customerId) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "A customer email claim does not match the existing customer directory. Repair it before importing."
+      );
+    }
+  });
+
+  const seenKeys = new Set(existingKeys.keys());
+  const decisions = rows.map((row) => {
+    const duplicate = seenKeys.has(row.duplicateKey);
+    seenKeys.add(row.duplicateKey);
+    return {
+      rowNumber: row.rowNumber,
+      status: duplicate ? "skip" : "create",
+      ...(duplicate ? { reason: "duplicate" } : {})
+    };
+  });
+  const chunks = buildCustomerImportChunkPlan(rows);
+  const planHash = customerImportRequestHash({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows
+  });
+  const chunkPlanHash = customerImportChunkPlanHash(chunks);
+  const preflightId = createCustomerImportPreflightId();
+  const preflightReceipt = {
+    schemaVersion: 1,
+    kind: CUSTOMER_IMPORT_PREFLIGHT_KIND,
+    preflightId,
+    organizationId: normalizedOrganizationId,
+    importType: CUSTOMER_IMPORT_TYPE,
+    fileName: normalizedFileName,
+    planHash,
+    chunkPlanHash,
+    sourceCount: rows.length,
+    chunkCount: chunks.length,
+    status: "issued",
+    completedChunks: {},
+    actor: {
+      uid: normalizedActorUid,
+      email: normalizedActorEmail
+    },
+    issuedAtISO: nowISO,
+    expiresAtISO,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromDate(new Date(expiresAtISO))
+  };
+  await organizationRef
+    .collection(CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION)
+    .doc(preflightId)
+    .set(preflightReceipt);
+  return {
+    ok: true,
+    status: "ready",
+    authority: "server_preflight",
+    organizationId: normalizedOrganizationId,
+    importType: CUSTOMER_IMPORT_TYPE,
+    preflightId,
+    planHash,
+    expiresAtISO,
+    observedAtISO: nowISO,
+    sourceCount: rows.length,
+    projectedCreateCount: decisions.filter((entry) => entry.status === "create").length,
+    projectedSkipCount: decisions.filter((entry) => entry.status === "skip").length,
+    destinationRecordCount: existingSnapshot.docs.length,
+    decisions,
+    chunks
+  };
+}
+
 async function createCustomerImportBatchInternal({
   organizationId = "",
   organizationName = "",
   fileName = "",
   records = [],
   importBatchId = "",
+  preflightId = "",
+  preflightPlanHash = "",
+  preflightRecords,
+  preflightChunkIndex,
+  preflightSessionId = "",
   actorUid = "",
   actorEmail = "",
   nowISO = new Date().toISOString()
@@ -9714,13 +10238,36 @@ async function createCustomerImportBatchInternal({
   if (!normalizedBatchId) {
     throw new CustomerImportError("invalid-argument", "A stable importBatchId is required.");
   }
+  const normalizedFileName = normalizeCustomerImportFileName(fileName);
+  const normalizedOrganizationName = customerImportBoundedText(organizationName, {
+    field: "organization name",
+    maxLength: 300
+  });
   const rows = normalizeCustomerImportRows(records);
-  const operationHash = customerImportRequestHash({ fileName, rows });
+  const preflightBinding = bindCustomerImportBatchToPreflight({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows,
+    preflightId,
+    preflightPlanHash,
+    preflightRecords,
+    preflightChunkIndex,
+    preflightSessionId,
+    importBatchId: normalizedBatchId
+  });
+  const operationHash = customerImportRequestHash({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows
+  });
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
   const customerCollectionRef = organizationRef.collection("customers");
   const customerEmailClaimCollectionRef = organizationRef
     .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
   const receiptRef = organizationRef.collection("importBatches").doc(normalizedBatchId);
+  const preflightRef = organizationRef
+    .collection(CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION)
+    .doc(preflightBinding.preflightId);
   const emailClaimRefs = new Map();
   rows.forEach((row) => {
     const emailKey = normalizeEmail(row.data.emailKey || row.data.email);
@@ -9731,21 +10278,54 @@ async function createCustomerImportBatchInternal({
     );
   });
   return db.runTransaction(async (transaction) => {
-    const receiptSnapshot = await transaction.get(receiptRef);
+    const [receiptSnapshot, preflightSnapshot] = await Promise.all([
+      transaction.get(receiptRef),
+      transaction.get(preflightRef)
+    ]);
+    const preflightAuthority = assertIssuedCustomerImportPreflight(preflightSnapshot, {
+      organizationId: normalizedOrganizationId,
+      actorUid,
+      actorEmail,
+      fileName: normalizedFileName,
+      binding: preflightBinding,
+      importBatchId: normalizedBatchId,
+      requestHash: operationHash,
+      nowISO,
+      allowExpired: receiptSnapshot.exists
+    });
     if (receiptSnapshot.exists) {
       const receipt = receiptSnapshot.data() || {};
       assertCustomerImportReceiptIdentity(receipt, {
         organizationId: normalizedOrganizationId,
         importBatchId: normalizedBatchId,
-        requestHash: operationHash
+        requestHash: operationHash,
+        preflightId: preflightBinding.preflightId,
+        preflightPlanHash: preflightBinding.planHash,
+        preflightChunkIndex: preflightBinding.chunkIndex,
+        preflightSessionId: preflightBinding.sessionId
       });
-      if (receipt.status === "completed") return customerImportResultFromReceipt(receipt);
+      if (receipt.status === "completed" && preflightAuthority.completedChunk) {
+        return customerImportResultFromReceipt(receipt);
+      }
       throw new CustomerImportError(
         "failed-precondition",
-        "This customer import was already rolled back. Start a new import batch."
+        receipt.status === "rolled_back"
+          ? "This customer import was already rolled back. Start a new import batch."
+          : "The customer import receipt and preflight completion evidence disagree. Run reconciliation before retrying."
       );
     }
-    if (rows.length + emailClaimRefs.size + 1 > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES) {
+    if (preflightAuthority.completedChunk) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "The server preflight marks this chunk complete but its import receipt is missing. Run reconciliation before retrying."
+      );
+    }
+    if (
+      rows.length
+      + emailClaimRefs.size
+      + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES
+      > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES
+    ) {
       throw new CustomerImportError(
         "resource-exhausted",
         "This customer import has too many email identities for one atomic batch. Split it into smaller files."
@@ -9885,17 +10465,30 @@ async function createCustomerImportBatchInternal({
       });
     });
 
+    const sessionActivatedAtISO = preflightAuthority.sessionActivatedAtISO || nowISO;
+    const sessionExpiresAtISO = preflightAuthority.sessionExpiresAtISO || new Date(
+      Date.parse(sessionActivatedAtISO) + CUSTOMER_IMPORT_SESSION_CONTINUATION_MS
+    ).toISOString();
     transaction.set(receiptRef, {
       schemaVersion: 3,
       batchKind: CUSTOMER_IMPORT_BATCH_KIND,
       operation: "customer_import",
       importBatchId: normalizedBatchId,
       organizationId: normalizedOrganizationId,
-      organizationName: customerImportText(organizationName, 300),
+      organizationName: normalizedOrganizationName,
       importType: CUSTOMER_IMPORT_TYPE,
       targetCollection: "customers",
-      fileName: customerImportText(fileName, 240),
+      fileName: normalizedFileName,
       requestHash: operationHash,
+      preflightId: preflightBinding.preflightId,
+      preflightPlanHash: preflightBinding.planHash,
+      preflightSourceCount: preflightBinding.sourceCount,
+      preflightChunkIndex: preflightBinding.chunkIndex,
+      preflightChunkCount: preflightBinding.chunkCount,
+      preflightSessionId: preflightBinding.sessionId,
+      preflightExpiresAtISO: preflightAuthority.expiresAtISO,
+      preflightSessionActivatedAtISO: sessionActivatedAtISO,
+      preflightSessionExpiresAtISO: sessionExpiresAtISO,
       status: "completed",
       sourceRows: rows.length,
       createdCount: createdRecords.length,
@@ -9911,6 +10504,26 @@ async function createCustomerImportBatchInternal({
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     });
+    const completedChunks = {
+      ...preflightAuthority.completedChunks,
+      [String(preflightBinding.chunkIndex)]: {
+        importBatchId: normalizedBatchId,
+        requestHash: operationHash,
+        completedAtISO: nowISO
+      }
+    };
+    transaction.set(preflightRef, {
+      sessionImportBatchId: preflightBinding.sessionId,
+      sessionActivatedAtISO,
+      sessionExpiresAtISO,
+      sessionExpiresAt: Timestamp.fromDate(new Date(sessionExpiresAtISO)),
+      status: Object.keys(completedChunks).length === preflightBinding.chunkCount
+        ? "completed"
+        : "in_progress",
+      completedChunks,
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
     return {
       ...customerImportResultFromReceipt({
         importBatchId: normalizedBatchId,
@@ -9919,7 +10532,11 @@ async function createCustomerImportBatchInternal({
         skippedCount: skippedRows.length,
         createdRecords,
         skippedRows,
-        status: "completed"
+        status: "completed",
+        preflightId: preflightBinding.preflightId,
+        preflightPlanHash: preflightBinding.planHash,
+        preflightChunkIndex: preflightBinding.chunkIndex,
+        preflightSessionId: preflightBinding.sessionId
       }, { idempotentReplay: false })
     };
   });
@@ -10147,6 +10764,24 @@ function toCustomerImportHttpsError(error, fallbackMessage) {
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
 
+exports.preflightCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await preflightCustomerImportBatchInternal({
+      organizationId: staff.organizationId,
+      fileName: data?.fileName,
+      records: data?.records,
+      actorUid: staff.uid,
+      actorEmail: staff.email
+    });
+  } catch (error) {
+    throw toCustomerImportHttpsError(error, "Failed to preflight customer records.");
+  }
+});
+
 exports.createCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, {
@@ -10159,6 +10794,11 @@ exports.createCustomerImportBatch = functions.region(REGION).https.onCall(async 
       fileName: data?.fileName,
       records: data?.records,
       importBatchId: data?.importBatchId,
+      preflightId: data?.preflightId,
+      preflightPlanHash: data?.preflightPlanHash,
+      preflightRecords: data?.preflightRecords,
+      preflightChunkIndex: data?.preflightChunkIndex,
+      preflightSessionId: data?.preflightSessionId,
       actorUid: staff.uid,
       actorEmail: staff.email
     });
@@ -10691,9 +11331,6 @@ exports.recordProductAnalyticsEvents = functions.region(REGION).https.onCall(asy
   return { ok: true, ...result };
 });
 
-const OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED =
-  normalizeText(process.env.OPERATIONAL_STAFFING_AUTHORITY_ENABLED).toLowerCase() === "true";
-
 function operationalStaffingScope(data = {}, { requireQuote = true, requireStaff = false } = {}) {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
@@ -10779,7 +11416,7 @@ function assertOperationalStaffingQuote(quote, { organizationId, quoteId } = {})
   return activeQuoteRevisionId;
 }
 
-function assertOperationalStaffingStorageEnabled(settingsSnap) {
+function assertOperationalStaffingStorageEnabled(settingsSnap, organizationId) {
   if (!settingsSnap?.exists) {
     throw new OperationalStaffingRuntimeError(
       "failed-precondition",
@@ -10787,7 +11424,7 @@ function assertOperationalStaffingStorageEnabled(settingsSnap) {
     );
   }
   return assertOperationalStaffingAuthorityEnabled(
-    OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED,
+    tenantWorkflowRuntimeEnabled("OPERATIONAL_STAFFING_AUTHORITY_ENABLED", organizationId),
     settingsSnap.data() || {}
   );
 }
@@ -10852,7 +11489,7 @@ exports.getOperationalStaffingSnapshot = functions.region(REGION).https.onCall(a
         tx.get(refs.planRef),
         tx.get(profilesQuery)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (!quoteSnap.exists) {
         throw new OperationalStaffingRuntimeError("not-found", "Quote not found.");
       }
@@ -10939,7 +11576,7 @@ exports.configureOperationalStaffProfile = functions.region(REGION).https.onCall
         tx.get(receiptRef),
         tx.get(refs.profileRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       const planned = planOperationalStaffProfileCommand({
         request,
         currentProfile: profileSnap.exists ? profileSnap.data() || {} : null,
@@ -11068,7 +11705,7 @@ async function readStaffInvitationContext(tx, scope) {
     tx.get(refs.staffRecordRef),
     tx.get(versionRef)
   ]);
-  assertOperationalStaffingStorageEnabled(settingsSnap);
+  assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
   if (!planSnap.exists || !profileSnap.exists || !recordSnap.exists || !versionSnap.exists) {
     throw new StaffInvitationAuthorityError(
       "failed-precondition",
@@ -11571,7 +12208,7 @@ exports.getStaffDirectory = functions.region(REGION).https.onCall(async (data, c
         tx.get(plansQuery),
         tx.get(invitationsQuery)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       const profilesTruncated = profilesSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
       const recordsTruncated = recordsSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
       const assignmentsTruncated = plansSnap.size > 100;
@@ -11685,7 +12322,7 @@ exports.saveStaffRecord = functions.region(REGION).https.onCall(async (data, con
         tx.get(profileReceiptRef),
         tx.get(recordReceiptRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (profileReceiptSnap.exists !== recordReceiptSnap.exists) {
         throw new StaffDirectoryAuthorityError(
           "data-loss",
@@ -11796,7 +12433,7 @@ exports.applyOperationalStaffingPlan = functions.region(REGION).https.onCall(asy
         tx.get(refs.settingsRef),
         tx.get(receiptRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (receiptSnap.exists) {
         return planOperationalStaffingCommand({
           request,
@@ -12592,7 +13229,7 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         organizationId: binding.organizationId,
         quoteId: binding.quoteId,
         evidence: conversationEvidence,
-        global: getRevenueAutopilotGlobalControl(nowISO),
+        global: getRevenueAutopilotGlobalControl(nowISO, binding.organizationId),
         tenantPolicy,
         activeAttention: priorAttentionSnap?.exists
           ? { attentionId: priorAttentionSnap.id, ...(priorAttentionSnap.data() || {}) }
@@ -12689,16 +13326,15 @@ const COMMERCIAL_CHANGE_PERSISTED_EFFECTS_VERSION =
   "commercial-change-persisted-effects-v1";
 const COMMERCIAL_CHANGE_INVALIDATION_LIMIT = 64;
 const COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION = 1;
-const COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED =
-  normalizeText(process.env.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toLowerCase() === "true";
 
-function commercialChangeEnforcementState(settings = {}) {
+function commercialChangeEnforcementState(settings = {}, organizationId = "") {
+  const globalEnabled = tenantWorkflowRuntimeEnabled("COMMERCIAL_CHANGE_AUTHORITY_ENABLED", organizationId);
   const tenantEnabled = settings?.commercialChangeAuthorityEnabled === true;
   return {
-    authorityState: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED && tenantEnabled
+    authorityState: globalEnabled && tenantEnabled
       ? "enforced"
       : "dormant",
-    globalEnabled: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED,
+    globalEnabled,
     tenantEnabled
   };
 }
@@ -13085,6 +13721,7 @@ function throwCommercialChangeFailure(error, operation, context = {}) {
 }
 
 exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(async (data, context) => {
+  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
   const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId);
@@ -13141,6 +13778,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         catalogSource: pricingResult.catalogSource,
         settings: settingsSnap.data() || {}
       });
+      const workflowContext = await resolveCommercialWorkflowContext(tx, refs, staff, { nowISO, catalogAuthority: pricingResult.catalogAuthority, attendanceSubmissionReceiptId: data.attendanceSubmissionReceiptId || "" });
       const preview = buildCommercialChangeImpactPreviewSnapshots({
         organizationId,
         quoteId,
@@ -13151,6 +13789,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       });
       const evaluatedImpact = evaluateCommercialChangeImpact(preview);
       const projectedEditDocuments = buildTrustedQuoteEditDocuments({
+        attendanceAmendmentBinding: workflowContext.attendanceBinding || undefined,
         quoteId,
         quote,
         staff,
@@ -13169,11 +13808,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         canonicalQuote: quote,
         proposedForm: sanitized.form,
         proposedPricing: pricingResult.pricing,
-        trustedContext: commercialChangeTrustedContext({
-          staff,
-          nowISO,
-          catalogAuthority: pricingResult.catalogAuthority
-        })
+        trustedContext: workflowContext.trustedContext
       });
       const receiptRef = refs.simulationsRef.doc(proposed.receipt.receiptId);
       const existingSnap = await tx.get(receiptRef);
@@ -13183,14 +13818,11 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
           canonicalQuote: quote,
           proposedForm: sanitized.form,
           proposedPricing: pricingResult.pricing,
-          trustedContext: commercialChangeTrustedContext({
-            staff,
-            nowISO,
-            catalogAuthority: pricingResult.catalogAuthority
-          }),
+          trustedContext: workflowContext.trustedContext,
           existingReceipt: existingSnap.data()?.receipt
         })
         : proposed;
+      const coordinator = workflowContext.definition ? await prepareWorkflowPackObservation(tx, refs.organizationRef, { observation: workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: planned.receipt, definition: workflowContext.definition }), definition: workflowContext.definition, actor: eventOperatingActor(staff, organizationId), requestId, nowISO }) : null;
       if (!existingSnap.exists) {
         tx.create(receiptRef, {
           organizationId,
@@ -13201,6 +13833,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
           createdAt: FieldValue.serverTimestamp()
         });
       }
+      coordinator?.commit();
       return {
         planned,
         evaluatedImpact,
@@ -13209,7 +13842,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
           quote,
           documents: projectedEditDocuments
         }),
-        enforcement: commercialChangeEnforcementState(settingsSnap.data() || {})
+        enforcement: commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId)
       };
     });
     return {
@@ -13286,6 +13919,7 @@ exports.requestCommercialQuoteChangeAuthorization = functions.region(REGION).htt
         catalogAuthority,
         nowISO: requestedAtISO
       });
+      await resolveCommercialWorkflowContext(tx, refs, staff, { nowISO: requestedAtISO, catalogAuthority, simulation });
       if (!simulation.authorizationRequired) {
         throw new CommercialChangeAuthorityError(
           "failed-precondition",
@@ -13457,14 +14091,11 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
         catalogAuthority,
         nowISO: authorizedAtISO
       });
+      const workflowContext = await resolveCommercialWorkflowContext(tx, refs, staff, { nowISO: authorizedAtISO, catalogAuthority, simulation });
       const proposed = commercialChangeAuthority.authorize({
         simulationReceipt: simulation,
         request: { requestId, organizationId, quoteId },
-        trustedContext: commercialChangeTrustedContext({
-          staff,
-          nowISO: authorizedAtISO,
-          catalogAuthority
-        }),
+        trustedContext: workflowContext.trustedContext,
         current: {
           activeRevisionId: normalizeText(quote.activeVersionId || quote.versionMeta?.versionId),
           catalogAuthorityDigest: normalizeText(catalogAuthority.settingsFingerprintSha256),
@@ -13477,11 +14108,7 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
         ? commercialChangeAuthority.authorize({
           simulationReceipt: simulation,
           request: { requestId, organizationId, quoteId },
-          trustedContext: commercialChangeTrustedContext({
-            staff,
-            nowISO: authorizedAtISO,
-            catalogAuthority
-          }),
+          trustedContext: workflowContext.trustedContext,
           current: {
             activeRevisionId: normalizeText(quote.activeVersionId || quote.versionMeta?.versionId),
             catalogAuthorityDigest: normalizeText(catalogAuthority.settingsFingerprintSha256),
@@ -13490,6 +14117,7 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
           existingReceipt: authorizationSnap.data()?.receipt
         })
         : proposed;
+      const coordinator = workflowContext.definition ? await prepareWorkflowPackObservation(tx, refs.organizationRef, { observation: workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: simulation, authorizationReceipt: planned.receipt, definition: workflowContext.definition }), definition: workflowContext.definition, actor: eventOperatingActor(staff, organizationId), requestId, nowISO: authorizedAtISO }) : null;
       if (!authorizationSnap.exists) {
         tx.create(authorizationRef, {
           organizationId,
@@ -13519,6 +14147,7 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
           updatedAt: FieldValue.serverTimestamp()
         });
       }
+      coordinator?.commit();
       return {
         planned,
         approval: approvalSnap.exists
@@ -15120,7 +15749,14 @@ async function updateTrustedQuoteDraftInternal({
       }
     }
 
-    const documents = buildTrustedQuoteEditDocuments({
+    const workflowRefs = commercialChangeRefs(organizationId, quoteId);
+    const suppliedEnvelope = normalizeCommercialChangeApplyEnvelope(commercialChangeAuthorityInput);
+    const bindingSimulationSnap = suppliedEnvelope ? await tx.get(workflowRefs.simulationsRef.doc(suppliedEnvelope.simulationReceiptId)) : null;
+    const bindingSimulation = bindingSimulationSnap?.exists ? commercialChangeAuthority.validateSimulationReceipt(bindingSimulationSnap.data()?.receipt) : null;
+    const workflowContext = await resolveCommercialWorkflowContext(tx, workflowRefs, staff, { nowISO, catalogAuthority: pricingResult.catalogAuthority, simulation: bindingSimulation });
+    let workflowCoordinator = null;
+    const editInput = {
+      attendanceAmendmentBinding: workflowContext.attendanceBinding || undefined,
       quoteId,
       quote,
       staff,
@@ -15134,21 +15770,25 @@ async function updateTrustedQuoteDraftInternal({
         organizationName: normalizeText(organizationSnap.data()?.name)
       },
       nowISO
-    });
-    if (catalogReviewReceipt) {
-      documents.quotePatch.catalogRevisionReview = {
-        state: "updated_to_current_catalog",
-        receiptId: reviewReceiptId,
-        sourceQuoteVersionId: review.quoteVersionId,
-        reviewedCatalogRevision: review.currentCatalogRevision,
-        commercialInputsFrozen: false,
-        recordedAtISO: nowISO,
-        recordedByEmail: normalizeEmail(staff.email)
-      };
-      documents.version.snapshot.catalogRevisionReview = documents.quotePatch.catalogRevisionReview;
-    }
+    };
+    const applyCatalogReviewEvidence = (documents) => {
+      if (catalogReviewReceipt) {
+        documents.quotePatch.catalogRevisionReview = {
+          state: "updated_to_current_catalog",
+          receiptId: reviewReceiptId,
+          sourceQuoteVersionId: review.quoteVersionId,
+          reviewedCatalogRevision: review.currentCatalogRevision,
+          commercialInputsFrozen: false,
+          recordedAtISO: nowISO,
+          recordedByEmail: normalizeEmail(staff.email)
+        };
+        documents.version.snapshot.catalogRevisionReview = documents.quotePatch.catalogRevisionReview;
+      }
+      return documents;
+    };
+    let documents = applyCatalogReviewEvidence(buildTrustedQuoteEditDocuments(editInput));
     const enforcement = commercialChangeEnforcementState(
-      transactionPricingSettingsSnapshot.data() || {}
+      transactionPricingSettingsSnapshot.data() || {}, staff.organizationId
     );
     let commercialChangePlan = {
       authorityState: enforcement.authorityState,
@@ -15198,11 +15838,7 @@ async function updateTrustedQuoteDraftInternal({
         );
       }
       const canonicalQuote = { id: quoteId, ...quote };
-      const trustedContext = commercialChangeTrustedContext({
-        staff,
-        nowISO,
-        catalogAuthority: pricingResult.catalogAuthority
-      });
+      const trustedContext = workflowContext.trustedContext;
       assertCommercialChangeSimulationCurrent({
         simulationReceipt: existingSimulation,
         organizationId,
@@ -15350,11 +15986,7 @@ async function updateTrustedQuoteDraftInternal({
           "Commercial dependency evidence contains an unknown state and requires repair."
         );
       }
-      const trustedContext = commercialChangeTrustedContext({
-        staff,
-        nowISO,
-        catalogAuthority: pricingResult.catalogAuthority
-      });
+      const trustedContext = workflowContext.trustedContext;
       let simulationPlan;
       let authoritativeSimulationRef = simulationRef;
       let persistSimulation = false;
@@ -15431,7 +16063,7 @@ async function updateTrustedQuoteDraftInternal({
         }
       }
       if (
-        simulationPlan.receipt.authorizationRequired
+        (simulationPlan.receipt.approvalEvaluation?.impactApprovalRequired ?? simulationPlan.receipt.authorizationRequired)
           !== (evaluatedImpact.impact.counts.total > 0)
       ) {
         throw new CommercialChangeAuthorityError(
@@ -15490,6 +16122,30 @@ async function updateTrustedQuoteDraftInternal({
           ...applyInput,
           existingReceipt: existingApplySnap.data()?.receipt
         });
+      }
+      if (workflowContext.attendanceBinding) {
+        documents = applyCatalogReviewEvidence(buildTrustedQuoteEditDocuments({ ...editInput, attendanceAmendmentApplyReceiptId: applyPlan.receipt.receiptId }));
+        const binding = workflowContext.attendanceBinding;
+        const sourceIdentity = { organizationId, quoteId, sourceVersionId: binding.sourceVersionId, acceptanceReceiptId: binding.acceptanceReceiptId };
+        const attendanceRef = organizationRef.collection("quoteAttendance").doc(quoteAttendance.ledgerIdFor(sourceIdentity));
+        const submissionSnap = await tx.get(attendanceRef.collection("receipts").doc(binding.submissionReceiptId));
+        const submission = quoteAttendance.verifyReceipt(submissionSnap.data());
+        if (submission.receiptDigest !== binding.submissionReceiptDigest || submission.resultState.latestResponse.count !== binding.count) throw new CommercialChangeAuthorityError("data-loss", "The applied attendance response does not match its sealed receipt.");
+        const response = submission.resultState.latestResponse;
+        const requested = submission.resultState.currentRequest;
+        const attendance = { schemaVersion: 1,
+          planning: quote.event?.attendance?.planning || { kind: "unknown", value: null, min: null, max: null, sourceType: "legacy", sourceReferenceId: "", observedAtISO: "", recordedByUid: "" },
+          confirmation: { state: "applied", requestedAtISO: requested.requestedAtISO, dueDate: requested.dueDate, submittedCount: response.count,
+            sourceType: response.sourceType, sourceReferenceId: binding.submissionReceiptId, submittedAtISO: response.submittedAtISO,
+            submittedByRole: response.submittedByRole, appliedRevisionId: documents.version.versionId, commercialChangeReceiptId: applyPlan.receipt.receiptId },
+          commercialBasis: { source: "confirmation", sourceReferenceId: binding.submissionReceiptId, appliedRevisionId: documents.version.versionId } };
+        documents.quotePatch.event.attendance = attendance;
+        documents.version.snapshot.event.attendance = attendance;
+        documents.portal.attendanceAvailable = false;
+      }
+      if (workflowContext.definition) {
+        const observation = workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: simulationPlan.receipt, authorizationReceipt, applyReceipt: applyPlan.receipt, definition: workflowContext.definition });
+        workflowCoordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, definition: workflowContext.definition, actor: eventOperatingActor(staff, organizationId), requestId: applyRequestId, nowISO });
       }
       commercialChangePlan = {
         authorityState: enforcement.authorityState,
@@ -15712,6 +16368,7 @@ async function updateTrustedQuoteDraftInternal({
       customerProjection.customerId
     );
 
+    workflowCoordinator?.commit();
     tx.update(quoteRef, {
       ...boundDocuments.quotePatch,
       updatedAt: FieldValue.serverTimestamp()
@@ -16682,6 +17339,7 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         id: quoteId
       };
       let closeoutRecord = null;
+      let closeoutCoordinator = null;
       let closeoutRef = null;
       let closeoutSnap = null;
       let closeoutProjection = projectUnavailablePostEventCloseoutToQuote({
@@ -16729,6 +17387,18 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         closeoutProjection = projectPostEventCloseoutToQuote(
           closeoutSnap.exists ? closeoutSnap.data() || {} : closeoutRecord
         );
+        if (!closeoutSnap.exists && closeoutRecord.policy.state === "configured"
+          && tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true) {
+          await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
+          const catalog = (await readWorkflowConfiguration(tx, organizationRef, "closeout_follow_up")).snapshot;
+          if (catalog.state === "published" && catalog.activeVersion?.schemaVersion === 2) {
+            const proof = workflowPackAdapters.buildCloseoutObservationProof({ source: closeoutSource, record: closeoutRecord });
+            closeoutCoordinator = await prepareWorkflowPackObservation(tx, organizationRef, {
+              observation: workflowPackAdapters.closeoutObservation({ proof, definition: catalog.activeVersion }), definition: catalog.activeVersion,
+              proof, actor: eventOperatingActor(staff, organizationId), nowISO: convertedAtISO,
+              requestId: `workflow-closeout-init-${workflowExecution.digest({ approvalRequestId, closeoutId: closeoutRecord.closeoutId }).slice(0, 48)}` });
+          }
+        }
       } catch (error) {
         if (!(error instanceof PostEventCloseoutError)) throw error;
         if (closeoutSnap?.exists) throw error;
@@ -16830,6 +17500,7 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         completedAtISO: convertedAtISO,
         result: response
       }));
+      closeoutCoordinator?.commit();
       if (closeoutRecord && closeoutRef && closeoutSnap && !closeoutSnap.exists) {
         tx.create(closeoutRef, {
           ...closeoutRecord,
@@ -16857,12 +17528,308 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
   }
 });
 
+// Event operations owns recorded phase only. Accepted commercial truth remains
+// in the canonical booked quote, immutable version and private acceptance receipt.
+function eventOperatingActor(staff, organizationId, mutation = false) {
+  if (staff.principalOrganizationId !== organizationId) {
+    throw new eventOperations.EventOperationsError("permission-denied", "Event operations requires exact same-organization authority.");
+  }
+  return eventOperations.normalizeActor(staff, organizationId, mutation);
+}
+async function assertEventOperatingParentNotOrphaned(tx, ledgerRef, source) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(source.organizationId);
+  const workflowRef = eventWorkflowInstanceRef(organizationRef, source);
+  const v2Ref = eventWorkflowInstanceRef(organizationRef, source, 2);
+  const [v2State, v2History, v2Proofs] = await Promise.all([tx.get(v2Ref), tx.get(v2Ref.collection("receipts").limit(1)), tx.get(v2Ref.collection("observations").limit(1))]);
+  if (v2State.exists || !v2History.empty || !v2Proofs.empty) throw new eventOperations.EventOperationsError("data-loss", "Version two workflow evidence has no phase parent.");
+  const [phaseHistory, workState, workHistory, actualsState, actualsHistory, workflowState, workflowHistory] = await Promise.all([
+    tx.get(ledgerRef.collection("receipts").limit(1)),
+    tx.get(ledgerRef.collection("workState").doc("current")),
+    tx.get(ledgerRef.collection("workReceipts").limit(1)),
+    tx.get(ledgerRef.collection("actualsState").doc("current")),
+    tx.get(ledgerRef.collection("actualsReceipts").limit(1)),
+    tx.get(workflowRef), tx.get(workflowRef.collection("receipts").limit(1))
+  ]);
+  if (!phaseHistory.empty || workState.exists || !workHistory.empty
+    || actualsState.exists || !actualsHistory.empty || workflowState.exists || !workflowHistory.empty) {
+    throw new eventOperations.EventOperationsError("data-loss", "Retained operational evidence has no initialized phase ledger.");
+  }
+}
+function workflowExactKeys(value, keys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key))) {
+    throw new eventOperations.EventOperationsError("invalid-argument", "Workflow request contains missing or unsupported fields.");
+  }
+}
+function workflowConfigurationScope(data, extra = []) {
+  workflowExactKeys(data, ["organizationId", "workflowKind", ...extra]);
+  eventOperations.normalizeScope({ organizationId: data.organizationId, quoteId: "workflow_configuration" });
+  if (!workflowDefinitions.RUNTIME_KINDS.includes(data.workflowKind)) throw new eventOperations.EventOperationsError("invalid-argument", "This workflow configuration kind is unavailable.");
+  return { organizationId: data.organizationId, workflowKind: data.workflowKind };
+}
+function workflowAssertRevision(expected, actual) {
+  if (!Number.isSafeInteger(expected) || expected < 0 || expected >= Number.MAX_SAFE_INTEGER) {
+    throw new eventOperations.EventOperationsError("invalid-argument", "A bounded expected workflow revision is required.");
+  }
+  if (expected !== actual) throw new eventOperations.EventOperationsError("aborted", "Workflow evidence changed. Refresh and preview again.");
+}
+async function workflowAuthorizedTransaction(context, organizationId, adminOnly, callback) {
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  const actor = eventOperatingActor(staff, organizationId, adminOnly);
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return db.runTransaction(async (tx) => {
+    await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, adminOnly);
+    return callback(tx, organizationRef, actor);
+  });
+}
+async function readWorkflowConfiguration(tx, organizationRef, workflowKind = "event_execution") {
+  if (!workflowDefinitions.RUNTIME_KINDS.includes(workflowKind)) throw new eventOperations.EventOperationsError("invalid-argument", "This workflow kind is unsupported.");
+  const definitionRef = organizationRef.collection("workflowDefinitions").doc(workflowKind);
+  const headSnap = await tx.get(definitionRef);
+  const head = headSnap.exists ? headSnap.data() || {} : null;
+  let currentReceipt = null;
+  let activeVersion = null;
+  if (!head) {
+    const [versions, receipts] = await Promise.all([
+      tx.get(definitionRef.collection("versions").limit(1)),
+      tx.get(definitionRef.collection("lifecycleReceipts").limit(1))
+    ]);
+    if (!versions.empty || !receipts.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained workflow definitions have no current catalog head.");
+  } else if (head.schemaVersion === 1) {
+    if (!/^workflow_definition_command_[a-f0-9]{48}$/.test(head.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The definition lifecycle receipt reference is invalid.");
+    const receiptSnap = await tx.get(definitionRef.collection("lifecycleReceipts").doc(head.lastReceiptId));
+    currentReceipt = receiptSnap.exists ? receiptSnap.data() : null;
+    if (head.activeVersionId) {
+      if (!new RegExp(`^${workflowKind}_v(?:[1-9]|[1-4][0-9]|50)$`).test(head.activeVersionId)) throw new eventOperations.EventOperationsError("data-loss", "The active definition version reference is invalid.");
+      const versionSnap = await tx.get(definitionRef.collection("versions").doc(head.activeVersionId));
+      activeVersion = versionSnap.exists ? versionSnap.data() : null;
+    }
+  }
+  const snapshot = workflowDefinitions.projectDefinitionSnapshot({ organizationId: organizationRef.id, workflowKind, head, currentReceipt, activeVersion });
+  return { definitionRef, head, currentReceipt, activeVersion, snapshot };
+}
+function eventWorkflowInstanceRef(organizationRef, source, schemaVersion = 1) {
+  return organizationRef.collection("workflowInstances").doc(workflowExecution.instanceIdFor(eventWorkflowAdapter.eventSource(source, schemaVersion)));
+}
+async function assertWorkflowPinnedDefinition(tx, organizationRef, instance) {
+  const definition = workflowDefinitions.validatePublishedVersion(instance.definition, { allowSeed: true, workflowKind: instance.source.workflowKind });
+  if (!definition.seed) {
+    if (definition.organizationId !== organizationRef.id) throw new eventOperations.EventOperationsError("data-loss", "Workflow publication belongs to another tenant.");
+    const versionSnap = await tx.get(organizationRef.collection("workflowDefinitions").doc(instance.source.workflowKind).collection("versions").doc(definition.versionId));
+    if (!versionSnap.exists || workflowExecution.digest(versionSnap.data()) !== workflowExecution.digest(definition)) {
+      throw new eventOperations.EventOperationsError("data-loss", "The exact pinned workflow publication is unavailable or changed.");
+    }
+  }
+}
+async function readEventWorkflowInstance(tx, organizationRef, source) {
+  const candidates = [];
+  for (const schemaVersion of [1, 2]) {
+    const instanceRef = eventWorkflowInstanceRef(organizationRef, source, schemaVersion);
+    const snapshot = await tx.get(instanceRef);
+    if (!snapshot.exists) {
+      const [receipts, observations] = await Promise.all([tx.get(instanceRef.collection("receipts").limit(1)), tx.get(instanceRef.collection("observations").limit(1))]);
+      if (!receipts.empty || !observations.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained workflow evidence has no current instance.");
+      candidates.push({ instanceRef, instance: null, currentReceipt: null });
+      continue;
+    }
+    const instance = snapshot.data() || {};
+    if (!/^workflow_command_[a-f0-9]{48}$/.test(instance.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The coordinator receipt reference is invalid.");
+    const receiptSnap = await tx.get(instanceRef.collection("receipts").doc(instance.lastReceiptId));
+    const currentReceipt = receiptSnap.exists ? receiptSnap.data() : null;
+    workflowExecution.verifyInstance(eventWorkflowAdapter.eventSource(source, schemaVersion), instance, currentReceipt);
+    await assertWorkflowPinnedDefinition(tx, organizationRef, instance);
+    candidates.push({ instanceRef, instance, currentReceipt });
+  }
+  if (candidates.every((item) => item.instance)) throw new eventOperations.EventOperationsError("data-loss", "This exact event source has conflicting workflow bindings.");
+  return candidates.find((item) => item.instance) || candidates[0];
+}
+async function readEventWorkflowPhase(tx, organizationRef, source) {
+  const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+  const ledgerSnap = await tx.get(ledgerRef);
+  if (!ledgerSnap.exists) {
+    await assertEventOperatingParentNotOrphaned(tx, ledgerRef, source);
+    return { ledgerRef, ledger: null, receipt: null, snapshot: null, domainRef: null };
+  }
+  const ledger = ledgerSnap.data() || {};
+  if (!/^event_ops_command_[a-f0-9]{48}$/.test(ledger.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The phase receipt reference is invalid.");
+  const receiptSnap = await tx.get(ledgerRef.collection("receipts").doc(ledger.lastReceiptId));
+  const receipt = receiptSnap.exists ? receiptSnap.data() : null;
+  return { ledgerRef, ledger, receipt, snapshot: eventOperations.projectSnapshot(source, ledger, receipt),
+    domainRef: eventWorkflowAdapter.phaseReference(source, ledger, receipt) };
+}
+function assertWorkflowCurrentPhase(instance, phase) {
+  if (!phase.ledger || workflowExecution.digest(instance.domainRef) !== workflowExecution.digest(eventWorkflowAdapter.phaseReference(phase.ledger, phase.ledger, phase.receipt, instance.schemaVersion))) {
+    throw new eventOperations.EventOperationsError("data-loss", "The workflow binding does not match the current trusted event phase.");
+  }
+}
+function workflowEventRequest(data, extra = []) {
+  workflowExactKeys(data, ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", ...extra]);
+  eventWorkflowAdapter.eventSource(data);
+  return { organizationId: data.organizationId, quoteId: data.quoteId, sourceVersionId: data.sourceVersionId, acceptanceReceiptId: data.acceptanceReceiptId };
+}
+function assertWorkflowExactSource(request, source) {
+  if (eventOperations.ledgerIdFor(request) !== eventOperations.ledgerIdFor(source)) throw new eventOperations.EventOperationsError("aborted", "The accepted event source changed. Refresh the workflow.");
+}
+function workflowDefinitionPublicReceipt(receipt) {
+  workflowDefinitions.verifyLifecycleReceipt(receipt);
+  return { receiptId: receipt.receiptId, requestId: receipt.requestId, command: receipt.request.command,
+    priorRevision: receipt.priorHead.revision, resultRevision: receipt.resultHead.revision, recordedAtISO: receipt.recordedAtISO,
+    versionId: receipt.publishedVersion?.versionId || (receipt.request.command === "retire" ? receipt.request.versionId : "") };
+}
+function eventWorkflowPublicReceipt(receipt) {
+  workflowExecution.verifyReceipt(receipt);
+  return { receiptId: receipt.receiptId, requestId: receipt.request.requestId, command: receipt.request.command,
+    priorRevision: receipt.priorRevision, resultRevision: receipt.resultRevision, recordedAtISO: receipt.recordedAtISO,
+    definitionPin: { ...receipt.resultInstance.definitionPin } };
+}
+
+function throwEventOperatingError(error) {
+  if (error instanceof eventOperations.EventOperationsError || error instanceof PostEventCloseoutError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  if (error instanceof functions.https.HttpsError) throw error;
+  functions.logger.error("Event operating command failed", { code: normalizeText(error?.code) });
+  throw new functions.https.HttpsError("internal", "Event operations could not confirm the result. Reconcile the same request before retrying.");
+}
+async function assertEventOperatingTransactionAuthority(tx, organizationRef, staff, mutation = false) {
+  const [roleSnap, organizationSnap, tombstoneSnap, settingsSnap] = await Promise.all([
+    tx.get(db.collection("userRoles").doc(staff.uid)),
+    tx.get(organizationRef),
+    tx.get(db.collection(ORGANIZATION_TOMBSTONES_COLLECTION).doc(staff.organizationId)),
+    tx.get(organizationRef.collection("settings").doc("config"))
+  ]);
+  const currentRole = roleSnap.data() || {};
+  if (!roleSnap.exists || currentRole.organizationId !== staff.organizationId || currentRole.role !== staff.role || (normalizeEmail(currentRole.email) && normalizeEmail(currentRole.email) !== staff.email)) {
+    throw new eventOperations.EventOperationsError("permission-denied", "Current same-organization staff authority changed. Sign in again.");
+  }
+  eventOperatingActor({ ...staff, role: currentRole.role, principalOrganizationId: currentRole.organizationId }, staff.organizationId, mutation);
+  if (!organizationSnap.exists || tombstoneSnap.exists || !isOrganizationRecordActive(organizationSnap.data())) {
+    throw new eventOperations.EventOperationsError("failed-precondition", "The organization is unavailable for event operations.");
+  }
+  eventOperations.assertEnabled(tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id), settingsSnap.data() || {});
+}
+async function readEventOperatingSource(tx, organizationRef, scope) {
+  const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId);
+  const quoteSnap = await tx.get(quoteRef);
+  if (!quoteSnap.exists) throw new eventOperations.EventOperationsError("not-found", "The booked quote is unavailable.");
+  const quote = { ...(quoteSnap.data() || {}), id: quoteSnap.id };
+  const sourceVersionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+  const acceptanceReceiptId = normalizeText(quote.acceptanceReceipt?.receiptId);
+  // Validate identifiers before using them to form document paths.
+  eventOperations.ledgerIdFor({ ...scope, sourceVersionId, acceptanceReceiptId });
+  const [versionSnap, acceptanceSnap] = await Promise.all([
+    tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+    tx.get(organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId))
+  ]);
+  if (!versionSnap.exists || !acceptanceSnap.exists) throw new eventOperations.EventOperationsError("failed-precondition", "Exact accepted source evidence is unavailable.");
+  return eventOperations.resolveSource({ ...scope, sourceQuote: quote, sourceVersion: { ...(versionSnap.data() || {}), id: versionSnap.id }, acceptanceReceiptDocument: acceptanceSnap.data() || {} });
+}
+exports.getEventOperatingSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = eventOperations.normalizeScope(data);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      const ledgerSnap = await tx.get(ledgerRef);
+      if (!ledgerSnap.exists) {
+        await assertEventOperatingParentNotOrphaned(tx, ledgerRef, source);
+        return eventOperations.projectSnapshot(source);
+      }
+      const ledger = ledgerSnap.data() || {};
+      if (!/^event_ops_command_[a-f0-9]{48}$/.test(ledger.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The latest phase receipt reference is invalid.");
+      const receiptSnap = await tx.get(ledgerRef.collection("receipts").doc(ledger.lastReceiptId));
+      return eventOperations.projectSnapshot(source, ledger, receiptSnap.exists ? receiptSnap.data() : null);
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.applyEventOperatingCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    workflowExactKeys(data, ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", "requestId", "command", "expectedLedgerRevision", "targetPhase"]);
+    const request = eventOperations.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    const actor = eventOperatingActor(staff, scope.organizationId, true);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(request));
+    const receiptRef = ledgerRef.collection("receipts").doc(eventOperations.receiptIdFor(request));
+    const result = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, true);
+      const candidates = [];
+      for (const schemaVersion of [1, 2]) {
+        const identity = eventWorkflowAdapter.eventSource(request, schemaVersion);
+        const ref = eventWorkflowInstanceRef(organizationRef, request, schemaVersion);
+        const receipt = ref.collection("receipts").doc(workflowExecution.receiptIdFor(identity, request.requestId));
+        const [instanceSnap, workflowReceiptSnap] = await Promise.all([tx.get(ref), tx.get(receipt)]);
+        candidates.push({ instanceRef: ref, workflowReceiptRef: receipt, instanceSnap, workflowReceiptSnap });
+      }
+      if (candidates.every((item) => item.instanceSnap.exists || item.workflowReceiptSnap.exists)) throw new eventOperations.EventOperationsError("data-loss", "Conflicting versioned workflow evidence exists for this phase command.");
+      const selected = candidates.find((item) => item.instanceSnap.exists || item.workflowReceiptSnap.exists) || candidates[0];
+      const { instanceRef, workflowReceiptRef, instanceSnap, workflowReceiptSnap } = selected;
+      const receiptSnap = await tx.get(receiptRef);
+      // Exact immutable paired success reconciles before current source/catalog freshness.
+      if (receiptSnap.exists) {
+        if (!instanceSnap.exists && !workflowReceiptSnap.exists) {
+          const history = await tx.get(instanceRef.collection("receipts").limit(1));
+          if (!history.empty) throw new eventOperations.EventOperationsError("data-loss", "Historical phase command has orphaned workflow evidence.");
+        }
+        const replay = eventWorkflowAdapter.planEventCommand({ request, actor, source: null,
+          phaseExistingReceipt: receiptSnap.data(), instance: instanceSnap.exists ? instanceSnap.data() : null,
+          workflowExistingReceipt: workflowReceiptSnap.exists ? workflowReceiptSnap.data() : null });
+        if (replay.workflowPlan) await assertWorkflowPinnedDefinition(tx, organizationRef, replay.workflowPlan.receipt.resultInstance);
+        if (replay.workflowPlan?.receipt.schemaVersion === 2 && request.command === "transition") await verifyEventConstraintOutcome(tx, instanceRef, replay.phasePlan.receipt);
+        return replay.phasePlan;
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      assertWorkflowExactSource(request, source);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      if (current.instance) assertWorkflowCurrentPhase(current.instance, phase);
+      let definition = null;
+      if (request.command === "initialize") {
+        const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+        if (!configuration.newInstanceEligible || !configuration.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Workflow configuration blocks new event initialization.");
+        definition = configuration.activeVersion;
+      }
+      const work = current.instance?.schemaVersion === 2 ? await readEventOperatingWorkState(tx, phase.ledgerRef, source) : null;
+      const planned = eventWorkflowAdapter.planEventCommand({ request, actor, source,
+        workState: work?.workState || null, workReceipt: work?.currentReceipt || null,
+        ledger: phase.ledger, phaseCurrentReceipt: phase.receipt,
+        instance: current.instance, workflowCurrentReceipt: current.currentReceipt,
+        workflowExistingReceipt: workflowReceiptSnap.exists ? workflowReceiptSnap.data() : null,
+        definition, nowISO: new Date().toISOString() });
+      let constraintProof = null;
+      if (current.instance?.schemaVersion === 2 && request.command === "transition") {
+        constraintProof = workflowPackAdapters.buildEventConstraintProof({ source, definition: current.instance.definition, ledger: phase.ledger, phaseReceipt: phase.receipt,
+          workState: work?.workState || null, workReceipt: work?.currentReceipt || null, resultReceipt: planned.phasePlan.receipt });
+        if ((await tx.get(current.instanceRef.collection("observations").doc(constraintProof.evidenceId))).exists) throw new eventOperations.EventOperationsError("data-loss", "This phase constraint proof already exists without its outcome.");
+      }
+      if (phase.ledger) tx.set(ledgerRef, planned.phasePlan.nextLedger);
+      else tx.create(ledgerRef, planned.phasePlan.nextLedger);
+      if (constraintProof) tx.create(current.instanceRef.collection("observations").doc(constraintProof.evidenceId), constraintProof);
+      tx.create(receiptRef, planned.phasePlan.receipt);
+      if (planned.workflowPlan) {
+        const targetRef = organizationRef.collection("workflowInstances").doc(planned.workflowPlan.nextInstance.instanceId);
+        if (current.instance) tx.set(targetRef, planned.workflowPlan.nextInstance);
+        else tx.create(targetRef, planned.workflowPlan.nextInstance);
+        tx.create(targetRef.collection("receipts").doc(planned.workflowPlan.receipt.receiptId), planned.workflowPlan.receipt);
+      }
+      return planned.phasePlan;
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot: result.snapshot, idempotent: result.idempotent, receipt: eventOperations.publicReceipt(result.receipt) };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+
 exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(async (data, context) => {
   let request;
   try {
     request = normalizePostEventCloseoutActionRequest(data);
   } catch (err) {
-    if (err instanceof PostEventCloseoutError) {
+    if (err instanceof PostEventCloseoutError || err instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     throw err;
@@ -16905,6 +17872,10 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
       }
       const quote = quoteSnap.data() || {};
       const closeout = closeoutSnap.data() || {};
+      const packSource = workflowPackAdapters.acceptedSource(closeout, "closeout_follow_up");
+      const existingPack = await readWorkflowPackInstance(tx, organizationRef, packSource);
+      const packEnabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+      if (packEnabled || existingPack.instance) await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
       if (
         normalizeOrganizationId(quote.organizationId) !== request.organizationId
         || normalizeText(closeout.organizationId) !== request.organizationId
@@ -16972,6 +17943,21 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
       });
       const nextRecord = planned.nextRecord || workingRecord;
       const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+      let coordinator = null;
+      if (packEnabled) {
+        const catalog = existingPack.instance ? null : (await readWorkflowConfiguration(tx, organizationRef, "closeout_follow_up")).snapshot;
+        const definition = existingPack.instance?.definition || (catalog?.state === "published" && catalog.activeVersion?.schemaVersion === 2 ? catalog.activeVersion : null);
+        if (definition) {
+          let proof;
+          if (planned.idempotent) {
+            const stored = await tx.get(existingPack.instanceRef.collection("observations").doc(planned.receipt.receiptId));
+            if (!stored.exists) throw new eventOperations.EventOperationsError("data-loss", "The closeout command is missing its paired adapter proof.");
+            proof = stored.data();
+          } else proof = workflowPackAdapters.buildCloseoutObservationProof({ source, priorRecord: workingRecord, record: nextRecord, actionReceipt: planned.receipt });
+          const observation = workflowPackAdapters.closeoutObservation({ proof, definition });
+          coordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, definition, proof, actor: eventOperatingActor(staff, request.organizationId), requestId: request.requestId, nowISO });
+        }
+      }
 
       if (!receiptSnap.exists) {
         tx.create(receiptRef, {
@@ -16993,6 +17979,7 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
         });
       }
 
+      coordinator?.commit();
       return {
         kind: planned.kind,
         idempotent: planned.idempotent,
@@ -17023,7 +18010,7 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
     };
   } catch (err) {
     if (err instanceof functions.https.HttpsError) throw err;
-    if (err instanceof PostEventCloseoutError) {
+    if (err instanceof PostEventCloseoutError || err instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     functions.logger.error("Post-event closeout review failed", {
@@ -17045,7 +18032,7 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
   try {
     request = normalizePostEventCloseoutPolicyRefreshRequest(data);
   } catch (error) {
-    if (error instanceof PostEventCloseoutError) {
+    if (error instanceof PostEventCloseoutError || error instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(error.code, error.message);
     }
     throw error;
@@ -17088,6 +18075,10 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
       }
       const quote = quoteSnap.data() || {};
       const closeout = closeoutSnap.data() || {};
+      const packSource = workflowPackAdapters.acceptedSource(closeout, "closeout_follow_up");
+      const existingPack = await readWorkflowPackInstance(tx, organizationRef, packSource);
+      const packEnabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+      if (packEnabled || existingPack.instance) await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
       if (
         normalizeOrganizationId(quote.organizationId) !== request.organizationId
         || normalizeText(closeout.organizationId) !== request.organizationId
@@ -17141,6 +18132,22 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
       });
       const nextRecord = planned.nextRecord || closeout;
       const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+      let coordinator = null;
+      if (packEnabled) {
+        const catalog = existingPack.instance ? null : (await readWorkflowConfiguration(tx, organizationRef, "closeout_follow_up")).snapshot;
+        const definition = existingPack.instance?.definition || (catalog?.state === "published" && catalog.activeVersion?.schemaVersion === 2 ? catalog.activeVersion : null);
+        if (definition) {
+          let proof;
+          if (planned.idempotent) {
+            const stored = await tx.get(existingPack.instanceRef.collection("observations").doc(planned.receipt.receiptId));
+            if (!stored.exists) throw new eventOperations.EventOperationsError("data-loss", "The closeout refresh is missing its paired adapter proof.");
+            proof = stored.data();
+          } else proof = workflowPackAdapters.buildCloseoutObservationProof({ source, priorRecord: closeout, record: nextRecord, actionReceipt: planned.receipt });
+          const observation = workflowPackAdapters.closeoutObservation({ proof, definition });
+          coordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, definition, proof,
+            actor: eventOperatingActor(staff, request.organizationId), requestId: request.requestId, nowISO });
+        }
+      }
 
       if (!receiptSnap.exists) {
         tx.create(receiptRef, {
@@ -17160,6 +18167,7 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
         });
       }
 
+      coordinator?.commit();
       return {
         kind: planned.kind,
         idempotent: planned.idempotent,
@@ -17190,7 +18198,7 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
     };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    if (error instanceof PostEventCloseoutError) {
+    if (error instanceof PostEventCloseoutError || error instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(error.code, error.message);
     }
     functions.logger.error("Post-event closeout configuration refresh failed", {
@@ -18426,7 +19434,7 @@ exports.getRevenueAutopilotOperations = functions.region(REGION).https.onCall(as
     const policy = normalizeRevenueAutopilotTenantPolicy(
       policySnap.exists ? policySnap.data() || {} : null
     );
-    const global = getRevenueAutopilotGlobalControl(observedAtISO);
+    const global = getRevenueAutopilotGlobalControl(observedAtISO, organizationId);
     const authority = projectRevenueAutopilotAuthorityForStaff({
       organizationId,
       policy,
@@ -18961,7 +19969,7 @@ exports.materializeRevenueAutopilotJobs = functions
           organizationId,
           customerId
         });
-        const global = getRevenueAutopilotGlobalControl(nowISO);
+        const global = getRevenueAutopilotGlobalControl(nowISO, organizationId);
         const provider = { organizationId, ...global.provider };
         const suppression = revenueAutopilotSuppressionEvidence(controlsRaw, {
           organizationId,
@@ -26187,3 +27195,848 @@ exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, co
     parsedAtISO: new Date().toISOString()
   };
 });
+
+// Event work journal is independently pinned and never writes phase authority.
+async function readEventOperatingWorkPhase(tx, ledgerRef, source) {
+  const phaseSnap = await tx.get(ledgerRef);
+  if (!phaseSnap.exists) {
+    await assertEventOperatingParentNotOrphaned(tx, ledgerRef, source);
+    return null;
+  }
+  const ledger = phaseSnap.data() || {};
+  if (!/^event_ops_command_[a-f0-9]{48}$/.test(ledger.lastReceiptId || "")) {
+    throw new eventOperations.EventOperationsError("data-loss", "The phase receipt reference is invalid.");
+  }
+  const receiptSnap = await tx.get(ledgerRef.collection("receipts").doc(ledger.lastReceiptId));
+  return eventOperations.projectSnapshot(source, ledger, receiptSnap.exists ? receiptSnap.data() : null);
+}
+
+async function verifyEventConstraintOutcome(tx, instanceRef, receipt) {
+  const stored = await tx.get(instanceRef.collection("observations").doc(receipt.receiptId));
+  if (!stored.exists) throw new eventOperations.EventOperationsError("data-loss", "The native outcome is missing its configured constraint evidence.");
+  const proof = workflowPackAdapters.verifyEventConstraintProof(stored.data());
+  if (workflowExecution.digest(proof.resultReceipt) !== workflowExecution.digest(receipt)) throw new eventOperations.EventOperationsError("data-loss", "The constraint proof names a different native outcome.");
+}
+async function readEventOperatingWorkState(tx, ledgerRef, source) {
+  const stateRef = ledgerRef.collection("workState").doc("current");
+  const stateSnap = await tx.get(stateRef);
+  if (!stateSnap.exists) {
+    const historySnap = await tx.get(ledgerRef.collection("workReceipts").limit(1));
+    if (!historySnap.empty) {
+      throw new eventOperations.EventOperationsError("data-loss", "Retained event work receipts have no current journal state.");
+    }
+    if (source) {
+      const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(source.organizationId);
+      const instanceRef = eventWorkflowInstanceRef(organizationRef, source, 2);
+      if ((await tx.get(instanceRef)).exists) {
+        const proofs = await tx.get(instanceRef.collection("observations").where("sourceChannel", "==", "work").limit(1));
+        if (!proofs.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained native work constraint evidence has no current journal.");
+      }
+    }
+    return { stateRef, workState: null, currentReceipt: null };
+  }
+  const workState = stateSnap.data() || {};
+  if (!/^event_work_command_[a-f0-9]{48}$/.test(workState.lastReceiptId || "")) {
+    throw new eventOperations.EventOperationsError("data-loss", "The work journal receipt reference is invalid.");
+  }
+  const receiptSnap = await tx.get(ledgerRef.collection("workReceipts").doc(workState.lastReceiptId));
+  return { stateRef, workState, currentReceipt: receiptSnap.exists ? receiptSnap.data() : null };
+}
+
+exports.getEventOperatingWorkSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = eventOperatingWork.normalizeReadRequest(data);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        const orphan = await readEventOperatingWorkState(tx, ledgerRef, source);
+        if (orphan.workState) {
+          throw new eventOperations.EventOperationsError("data-loss", "Recorded event work has no initialized phase ledger.");
+        }
+        return eventOperatingWork.projectSnapshot({ source, phaseInitialized: false });
+      }
+      const { workState, currentReceipt } = await readEventOperatingWorkState(tx, ledgerRef, source);
+      return eventOperatingWork.projectSnapshot({ source, workState, receipt: currentReceipt });
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+exports.applyEventOperatingWorkCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = eventOperatingWork.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    const actor = eventOperatingActor(staff, scope.organizationId, true);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(request));
+    const receiptRef = ledgerRef.collection("workReceipts").doc(eventOperatingWork.receiptIdFor(request));
+    const result = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, true);
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        const replay = eventOperatingWork.planCommand({ request, actor, existingReceipt: receiptSnap.data() });
+        const workflow = await readEventWorkflowInstance(tx, organizationRef, request);
+        if (workflow.instance?.schemaVersion === 2) await verifyEventConstraintOutcome(tx, workflow.instanceRef, replay.receipt);
+        return replay;
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      if (eventOperations.ledgerIdFor(source) !== ledgerRef.id) {
+        throw new eventOperations.EventOperationsError("aborted", "The accepted event source changed. Reload before recording work.");
+      }
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        throw new eventOperations.EventOperationsError("failed-precondition", "Initialize a valid event phase ledger before recording work.");
+      }
+      const { stateRef, workState, currentReceipt } = await readEventOperatingWorkState(tx, ledgerRef, source);
+      const workflow = await readEventWorkflowInstance(tx, organizationRef, source);
+      const phase = workflow.instance?.schemaVersion === 2 ? await readEventWorkflowPhase(tx, organizationRef, source) : null;
+      if (phase) {
+        assertWorkflowCurrentPhase(workflow.instance, phase);
+        workflowPackAdapters.assertEventConstraints({ source, definition: workflow.instance.definition, ledger: phase.ledger, phaseReceipt: phase.receipt, workState, workReceipt: currentReceipt, command: request });
+      }
+      const planned = eventOperatingWork.planCommand({
+        request, actor, source, phaseSnapshot, workState, currentReceipt,
+        nowISO: new Date().toISOString()
+      });
+      let proof = null;
+      if (phase) {
+        proof = workflowPackAdapters.buildEventConstraintProof({ source, definition: workflow.instance.definition, ledger: phase.ledger, phaseReceipt: phase.receipt, workState, workReceipt: currentReceipt, resultReceipt: planned.receipt });
+        if ((await tx.get(workflow.instanceRef.collection("observations").doc(proof.evidenceId))).exists) throw new eventOperations.EventOperationsError("data-loss", "This work constraint proof already exists without its outcome.");
+      }
+      if (workState) tx.set(stateRef, planned.nextWorkState);
+      else tx.create(stateRef, planned.nextWorkState);
+      tx.create(receiptRef, planned.receipt);
+      if (proof) tx.create(workflow.instanceRef.collection("observations").doc(proof.evidenceId), proof);
+      return planned;
+    });
+    return {
+      ok: true, storage: "firebase", ...scope, snapshot: result.snapshot,
+      idempotent: result.idempotent, receipt: eventOperatingWork.publicReceipt(result.receipt)
+    };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+// Operational actuals is a separate journal; phase and work evidence remain read-only.
+async function readEventOperatingActualsState(tx, ledgerRef) {
+  const stateRef = ledgerRef.collection("actualsState").doc("current");
+  const stateSnap = await tx.get(stateRef);
+  if (!stateSnap.exists) {
+    const historySnap = await tx.get(ledgerRef.collection("actualsReceipts").limit(1));
+    if (!historySnap.empty) {
+      throw new eventOperations.EventOperationsError("data-loss", "Retained event actuals receipts have no current journal state.");
+    }
+    return { stateRef, actualsState: null, currentReceipt: null };
+  }
+  const actualsState = stateSnap.data() || {};
+  if (!/^event_actuals_command_[a-f0-9]{48}$/.test(actualsState.lastReceiptId || "")) {
+    throw new eventOperations.EventOperationsError("data-loss", "The actuals journal receipt reference is invalid.");
+  }
+  const receiptSnap = await tx.get(ledgerRef.collection("actualsReceipts").doc(actualsState.lastReceiptId));
+  return { stateRef, actualsState, currentReceipt: receiptSnap.exists ? receiptSnap.data() : null };
+}
+
+exports.getEventOperatingActualsSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = eventOperatingActuals.normalizeReadRequest(data);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        const orphan = await readEventOperatingActualsState(tx, ledgerRef);
+        if (orphan.actualsState) {
+          throw new eventOperations.EventOperationsError("data-loss", "Recorded event actuals has no initialized phase ledger.");
+        }
+        return eventOperatingActuals.projectSnapshot({ source, phaseInitialized: false });
+      }
+      const { actualsState, currentReceipt } = await readEventOperatingActualsState(tx, ledgerRef);
+      return eventOperatingActuals.projectSnapshot({ source, actualsState, receipt: currentReceipt });
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+exports.applyEventOperatingActualsCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = eventOperatingActuals.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    const actor = eventOperatingActor(staff, scope.organizationId, true);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(request));
+    const receiptRef = ledgerRef.collection("actualsReceipts").doc(eventOperatingActuals.receiptIdFor(request));
+    const result = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, true);
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        return eventOperatingActuals.planCommand({ request, actor, existingReceipt: receiptSnap.data() });
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      if (eventOperations.ledgerIdFor(source) !== ledgerRef.id) {
+        throw new eventOperations.EventOperationsError("aborted", "The accepted event source changed. Reload before recording actuals.");
+      }
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        throw new eventOperations.EventOperationsError("failed-precondition", "Initialize a valid event phase ledger before recording actuals.");
+      }
+      const { stateRef, actualsState, currentReceipt } = await readEventOperatingActualsState(tx, ledgerRef);
+      const planned = eventOperatingActuals.planCommand({
+        request, actor, source, phaseSnapshot, actualsState, currentReceipt,
+        nowISO: new Date().toISOString()
+      });
+      if (actualsState) tx.set(stateRef, planned.nextActualsState);
+      else tx.create(stateRef, planned.nextActualsState);
+      tx.create(receiptRef, planned.receipt);
+      return planned;
+    });
+    return {
+      ok: true, storage: "firebase", ...scope, snapshot: result.snapshot,
+      idempotent: result.idempotent, receipt: eventOperatingActuals.publicReceipt(result.receipt)
+    };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+// Bounded operational history is observation-only and never reconciles a command.
+exports.getEventOperatingHistory = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = eventOperatingHistory.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      if (request.cursor && eventOperations.ledgerIdFor(request.cursor.source) !== ledgerRef.id) {
+        throw new eventOperations.EventOperationsError("aborted", "The accepted source changed. Refresh operational history.");
+      }
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        eventOperatingHistory.preparePage({
+          source, cursor: request.cursor,
+          currentHeads: Object.fromEntries(eventOperatingHistory.CHANNELS.map((channel) => [channel, { revision: 0, receiptId: "" }]))
+        });
+        return eventOperatingHistory.emptyHistory(source);
+      }
+      const work = await readEventOperatingWorkState(tx, ledgerRef, source);
+      const actuals = await readEventOperatingActualsState(tx, ledgerRef);
+      const workSnapshot = eventOperatingWork.projectSnapshot({ source, workState: work.workState, receipt: work.currentReceipt });
+      const actualsSnapshot = eventOperatingActuals.projectSnapshot({ source, actualsState: actuals.actualsState, receipt: actuals.currentReceipt });
+      const currentHeads = {
+        phase: { revision: phaseSnapshot.revision, receiptId: phaseSnapshot.lastReceiptId },
+        work: { revision: workSnapshot.revision, receiptId: workSnapshot.lastReceiptId },
+        actuals: { revision: actualsSnapshot.revision, receiptId: actualsSnapshot.lastReceiptId }
+      };
+      const page = eventOperatingHistory.preparePage({ source, currentHeads, cursor: request.cursor });
+      const collectionNames = { phase: "receipts", work: "workReceipts", actuals: "actualsReceipts" };
+      const anchorDocuments = {};
+      const boundaryDocuments = {};
+      const documents = {};
+      const privateDocument = (snap) => snap.exists ? { id: snap.id, data: snap.data() || {} } : null;
+      await Promise.all(eventOperatingHistory.CHANNELS.map(async (channel) => {
+        const receiptsRef = ledgerRef.collection(collectionNames[channel]);
+        const anchor = page.anchors[channel];
+        const position = page.positions[channel];
+        anchorDocuments[channel] = anchor.revision > 0
+          ? privateDocument(await tx.get(receiptsRef.doc(anchor.receiptId))) : null;
+        boundaryDocuments[channel] = position.nextRevision < anchor.revision
+          ? privateDocument(await tx.get(receiptsRef.doc(position.lastConsumedReceiptId))) : null;
+        if (position.nextRevision === 0) {
+          documents[channel] = [];
+        } else {
+          const candidates = await tx.get(receiptsRef
+            .where("resultRevision", "<=", position.nextRevision)
+            .orderBy("resultRevision", "desc")
+            .limit(eventOperatingHistory.PAGE_SIZE));
+          documents[channel] = candidates.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+        }
+      }));
+      return eventOperatingHistory.buildPage({ page, anchorDocuments, boundaryDocuments, documents });
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+// Configuration publication governs future bindings only and never enables gates.
+exports.getWorkflowConfiguration = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowConfigurationScope(data);
+    const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef) =>
+      (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot);
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.previewWorkflowDefinition = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowConfigurationScope(data, ["expectedRevision"]);
+    const preview = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef, actor) => {
+      const current = await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind);
+      workflowAssertRevision(data.expectedRevision, current.snapshot.revision);
+      return workflowDefinitions.previewPublish({ ...scope, actor, head: current.head, currentReceipt: current.currentReceipt });
+    });
+    return { ok: true, storage: "firebase", ...scope, preview };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.applyWorkflowDefinitionCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = workflowDefinitions.normalizeRequest(data);
+    const scope = { organizationId: request.organizationId, workflowKind: request.workflowKind };
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef, actor) => {
+      const definitionRef = organizationRef.collection("workflowDefinitions").doc(scope.workflowKind);
+      const receiptRef = definitionRef.collection("lifecycleReceipts").doc(workflowDefinitions.receiptIdFor(request));
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) return workflowDefinitions.planCommand({ request, actor, existingReceipt: receiptSnap.data() });
+      const current = await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind);
+      const planned = workflowDefinitions.planCommand({ request, actor, head: current.head, currentReceipt: current.currentReceipt, nowISO: new Date().toISOString() });
+      let versionRef = null;
+      if (planned.publishedVersion) {
+        versionRef = definitionRef.collection("versions").doc(planned.publishedVersion.versionId);
+        if ((await tx.get(versionRef)).exists) throw new eventOperations.EventOperationsError("data-loss", "The next immutable workflow version already exists.");
+      }
+      if (current.head) tx.set(definitionRef, planned.nextHead);
+      else tx.create(definitionRef, planned.nextHead);
+      if (versionRef) tx.create(versionRef, planned.publishedVersion);
+      tx.create(receiptRef, planned.receipt);
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: workflowDefinitionPublicReceipt(result.receipt) };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.getEventWorkflowSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    workflowExactKeys(data, ["organizationId", "quoteId"]);
+    const scope = eventOperations.normalizeScope(data);
+    const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef) => {
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      const observedAtISO = new Date().toISOString();
+      const refs = { organizationId: source.organizationId, quoteId: source.quoteId, sourceVersionId: source.sourceVersionId,
+        acceptanceReceiptId: source.acceptanceReceiptId, ledgerId: eventOperations.ledgerIdFor(source),
+        phaseRevision: phase.snapshot?.revision || 0, phaseReceiptId: phase.snapshot?.lastReceiptId || "" };
+      if (!current.instance) {
+        const projection = workflowExecution.projectSnapshot({ source: eventWorkflowAdapter.eventSource(source), observedAtISO });
+        let nextDefinition = null;
+        let initializationEligibility = { eligible: false, reasonCode: "legacy_unbound" };
+        if (!phase.ledger) {
+          const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+          nextDefinition = configuration.activeVersion || null;
+          initializationEligibility = { eligible: configuration.newInstanceEligible === true,
+            reasonCode: configuration.availability === "schema_drift" ? "definition_schema_unsupported" : configuration.state };
+        }
+        return { ...projection, ...refs, reasonCode: phase.ledger ? "legacy_unbound" : "phase_ledger_missing", nextDefinition, initializationEligibility };
+      }
+      assertWorkflowCurrentPhase(current.instance, phase);
+      const costs = await readEventOperatingActualsState(tx, phase.ledgerRef);
+      const actualsRef = eventWorkflowAdapter.actualsReference(source, costs.actualsState, costs.currentReceipt);
+      return { ...workflowExecution.projectSnapshot({ source: current.instance.source, instance: current.instance,
+        receipt: current.currentReceipt, actualsRef, observedAtISO }), ...refs };
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.previewEventWorkflowMigration = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = workflowEventRequest(data, ["expectedRevision"]);
+    const scope = eventOperations.normalizeScope(request);
+    const preview = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef) => {
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      assertWorkflowExactSource(request, source);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      if (!current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "Legacy events have no configured instance to migrate.");
+      assertWorkflowCurrentPhase(current.instance, phase);
+      workflowAssertRevision(data.expectedRevision, current.instance.revision);
+      const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+      if (configuration.state !== "published" || !configuration.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires a currently active tenant publication.");
+      return workflowExecution.previewMigration({ source: current.instance.source, instance: current.instance,
+        currentReceipt: current.currentReceipt, targetDefinition: configuration.activeVersion });
+    });
+    return { ok: true, storage: "firebase", ...scope, preview };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.applyEventWorkflowCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const commandInput = { ...data };
+    for (const key of ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId"]) delete commandInput[key];
+    const command = workflowExecution.normalizeRequest(commandInput);
+    const request = workflowEventRequest(data, Object.keys(command));
+    const scope = eventOperations.normalizeScope(request);
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, ["review_ack", "migrate"].includes(command.command), async (tx, organizationRef, actor) => {
+      const retries = [];
+      for (const schemaVersion of [1, 2]) {
+        const identity = eventWorkflowAdapter.eventSource(request, schemaVersion);
+        const ref = eventWorkflowInstanceRef(organizationRef, request, schemaVersion);
+        const receiptSnap = await tx.get(ref.collection("receipts").doc(workflowExecution.receiptIdFor(identity, command.requestId)));
+        if (receiptSnap.exists) retries.push({ identity, receipt: receiptSnap.data() });
+      }
+      if (retries.length > 1) throw new eventOperations.EventOperationsError("data-loss", "The command has conflicting schema bindings.");
+      if (retries.length) {
+        const replay = workflowExecution.planCommand({ source: retries[0].identity, request: command, actor, existingReceipt: retries[0].receipt });
+        await assertWorkflowPinnedDefinition(tx, organizationRef, replay.receipt.resultInstance);
+        return replay;
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      assertWorkflowExactSource(request, source);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      if (!current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "The event has no configured workflow binding.");
+      assertWorkflowCurrentPhase(current.instance, phase);
+      let definition = null;
+      let actualsRef = null;
+      if (command.command === "migrate") {
+        const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+        if (configuration.state !== "published" || !configuration.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires the active tenant publication.");
+        definition = configuration.activeVersion;
+      } else if (command.command === "review_ack") {
+        const costs = await readEventOperatingActualsState(tx, phase.ledgerRef);
+        actualsRef = eventWorkflowAdapter.actualsReference(source, costs.actualsState, costs.currentReceipt);
+      }
+      const planned = workflowExecution.planCommand({ source: current.instance.source, request: command, actor, instance: current.instance,
+        currentReceipt: current.currentReceipt, definition, actualsRef, nowISO: new Date().toISOString() });
+      tx.set(current.instanceRef, planned.nextInstance);
+      tx.create(current.instanceRef.collection("receipts").doc(planned.receipt.receiptId), planned.receipt);
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: eventWorkflowPublicReceipt(result.receipt) };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+
+// Version two pack coordination consumes exact domain evidence; public commands
+// cannot initialize or manufacture a domain observation.
+function throwWorkflowPackError(error) {
+  if (error instanceof quoteAttendance.QuoteAttendanceError
+    || error instanceof PortalConversationError || error instanceof QuoteDeliveryError) throw new functions.https.HttpsError(error.code, error.message);
+  return throwEventOperatingError(error);
+}
+function workflowPackSource(scope) {
+  return workflowExecution.normalizeSource({ schemaVersion: 2, organizationId: scope.organizationId,
+    workflowKind: scope.workflowKind, subjectId: scope.quoteId,
+    sourceVersionId: scope.sourceVersionId, sourceReceiptId: scope.sourceReceiptId });
+}
+async function readWorkflowPackInstance(tx, organizationRef, source) {
+  const instanceRef = organizationRef.collection("workflowInstances").doc(workflowExecution.instanceIdFor(source));
+  const snapshot = await tx.get(instanceRef);
+  if (!snapshot.exists) {
+    const [receipts, observations] = await Promise.all([tx.get(instanceRef.collection("receipts").limit(1)), tx.get(instanceRef.collection("observations").limit(1))]);
+    if (!receipts.empty || !observations.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained pack evidence has no current instance.");
+    return { instanceRef, instance: null, currentReceipt: null };
+  }
+  const instance = snapshot.data();
+  if (!/^workflow_command_[a-f0-9]{48}$/.test(instance?.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The pack receipt reference is invalid.");
+  const receiptSnap = await tx.get(instanceRef.collection("receipts").doc(instance.lastReceiptId));
+  const currentReceipt = receiptSnap.exists ? receiptSnap.data() : null;
+  workflowExecution.verifyInstance(source, instance, currentReceipt);
+  await assertWorkflowPinnedDefinition(tx, organizationRef, instance);
+  return { instanceRef, instance, currentReceipt };
+}
+async function prepareWorkflowPackObservation(tx, organizationRef, { observation, actor, requestId, nowISO, definition = null, proof = null }) {
+  const current = await readWorkflowPackInstance(tx, organizationRef, observation.source);
+  const receiptRef = current.instanceRef.collection("receipts").doc(workflowExecution.receiptIdFor(observation.source, requestId));
+  const existingSnap = await tx.get(receiptRef);
+  let selected = definition;
+  if (!current.instance && !existingSnap.exists && !selected) {
+    const catalog = (await readWorkflowConfiguration(tx, organizationRef, observation.source.workflowKind)).snapshot;
+    if (catalog.state !== "published" || catalog.activeVersion?.schemaVersion !== 2) return null;
+    selected = catalog.activeVersion;
+  }
+  const planned = workflowPackAdapters.planObservation({ ...observation, actor, requestId,
+    instance: current.instance, currentReceipt: current.currentReceipt,
+    existingReceipt: existingSnap.exists ? existingSnap.data() : null,
+    definition: selected, nowISO });
+  let proofRef = null;
+  if (proof) {
+    workflowPackAdapters.verifyCloseoutObservationProof(proof);
+    proofRef = current.instanceRef.collection("observations").doc(proof.evidenceId);
+    const stored = await tx.get(proofRef);
+    if (stored.exists && workflowExecution.digest(stored.data()) !== workflowExecution.digest(proof)) throw new eventOperations.EventOperationsError("data-loss", "The immutable adapter proof changed.");
+    if (stored.exists) proofRef = null;
+  }
+  return { planned, commit() {
+    if (planned.idempotent) return;
+    if (current.instance) tx.set(current.instanceRef, planned.nextInstance);
+    else tx.create(current.instanceRef, planned.nextInstance);
+    tx.create(receiptRef, planned.receipt);
+    if (proofRef) tx.create(proofRef, proof);
+  } };
+}
+async function readQuoteAttendanceState(tx, organizationRef, source) {
+  const stateRef = organizationRef.collection("quoteAttendance").doc(quoteAttendance.ledgerIdFor(source));
+  const snapshot = await tx.get(stateRef);
+  if (!snapshot.exists) {
+    const retained = await tx.get(stateRef.collection("receipts").limit(1));
+    if (!retained.empty) throw new eventOperations.EventOperationsError("data-loss", "Attendance history exists without its current journal.");
+    return { stateRef, state: null, currentReceipt: null };
+  }
+  const state = snapshot.data();
+  if (!/^attendance_command_[a-f0-9]{48}$/.test(state?.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "Attendance receipt reference is invalid.");
+  const receipt = await tx.get(stateRef.collection("receipts").doc(state.lastReceiptId));
+  const currentReceipt = receipt.exists ? receipt.data() : null;
+  quoteAttendance.projectSnapshot({ source, state, receipt: currentReceipt });
+  return { stateRef, state, currentReceipt };
+}
+async function readQuoteAttendanceSource(tx, organizationRef, scope) {
+  const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId);
+  const quote = await tx.get(quoteRef);
+  if (!quote.exists) throw new eventOperations.EventOperationsError("not-found", "The accepted quote is unavailable.");
+  const value = quote.data();
+  const sourceVersionId = value.activeVersionId || value.versionMeta?.versionId;
+  const acceptanceReceiptId = value.acceptanceReceipt?.receiptId;
+  if (typeof sourceVersionId !== "string" || typeof acceptanceReceiptId !== "string" || /[\s/?#\\\u0000]/u.test(sourceVersionId + acceptanceReceiptId)) throw new eventOperations.EventOperationsError("failed-precondition", "Exact current acceptance evidence is required.");
+  const [version, receipt] = await Promise.all([tx.get(quoteRef.collection("versions").doc(sourceVersionId)), tx.get(organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId))]);
+  return quoteAttendance.resolveAcceptedSource({ organizationId: scope.organizationId, quoteId: scope.quoteId,
+    sourceQuote: { ...value, id: scope.quoteId }, sourceVersion: version.exists ? version.data() : null, acceptanceReceiptDocument: receipt.exists ? receipt.data() : null });
+}
+async function readQuoteAttendanceTiming(tx, organizationRef, source) {
+  const [settingsSnap, policySnap, versionSnap] = await Promise.all([
+    tx.get(organizationRef.collection("settings").doc("config")),
+    tx.get(organizationRef.collection(DECISION_DEBT_POLICIES_COLLECTION).doc("current")),
+    tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(source.quoteId).collection("versions").doc(source.sourceVersionId))
+  ]);
+  const policyRecord = decisionDebtPolicyRecord(policySnap.exists ? policySnap.data() : null);
+  const timezone = normalizeText(settingsSnap.data()?.businessTimeZone || settingsSnap.data()?.timeZone);
+  const dueDate = addCalendarDaysDateOnly(versionSnap.data()?.snapshot?.event?.date, -policyRecord.policy.decisionTypes.guest_count.lockWindowDays);
+  return quoteAttendance.normalizeTiming({ dueDate, timezone,
+    policyReferenceId: `decision_debt_guest_count_${workflowExecution.digest({ organizationId: organizationRef.id, revision: policyRecord.revision, policy: policyRecord.policy }).slice(0, 48)}` });
+}
+async function readAttendancePortal(tx, portalKey, nowISO, operation = "read") {
+  const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
+  const portalSnap = await tx.get(portalRef);
+  if (!portalSnap.exists) throw new eventOperations.EventOperationsError("not-found", "The current proposal link is unavailable.");
+  const portal = portalSnap.data();
+  const scope = eventOperations.normalizeScope({ organizationId: portal.organizationId, quoteId: portal.quoteId });
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+  const [quoteSnap, orgSnap, tombstoneSnap, settingsSnap] = await Promise.all([
+    tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId)), tx.get(organizationRef),
+    tx.get(db.collection(ORGANIZATION_TOMBSTONES_COLLECTION).doc(scope.organizationId)), tx.get(organizationRef.collection("settings").doc("config"))
+  ]);
+  if (!tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) || settingsSnap.data()?.eventOperatingSpineEnabled !== true) throw new eventOperations.EventOperationsError("failed-precondition", "Attendance confirmation is unavailable for this organization.");
+  const activation = assertPortalConversationActivation({ quote: quoteSnap.data(), quoteId: scope.quoteId, organizationId: scope.organizationId,
+    portalSnapshot: portal, requestedPortalKey: portalKey, organizationActive: orgSnap.exists && isOrganizationRecordActive(orgSnap.data()),
+    organizationTombstoned: tombstoneSnap.exists, operation, nowISO, assertPortalActivation: assertQuoteDeliveryPortalActivation });
+  const source = await readQuoteAttendanceSource(tx, organizationRef, scope);
+  const actor = { organizationId: scope.organizationId, role: "customer", portalKeySha256: createHash("sha256").update(portalKey).digest("hex"), portalIssuedAtISO: activation.portalIssuedAtISO };
+  return { scope, source, actor, organizationRef, portalRef };
+}
+exports.getQuoteAttendance = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    if (data?.accessMode === "staff") {
+      workflowExactKeys(data, ["accessMode", "organizationId", "quoteId"]);
+      const scope = eventOperations.normalizeScope(data);
+      const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef) => {
+        const source = await readQuoteAttendanceSource(tx, organizationRef, scope);
+        const current = await readQuoteAttendanceState(tx, organizationRef, source);
+        return quoteAttendance.projectSnapshot({ source, state: current.state, receipt: current.currentReceipt });
+      });
+      return { ok: true, storage: "firebase", ...scope, snapshot };
+    }
+    workflowExactKeys(data, ["accessMode", "portalKey"]);
+    if (data.accessMode !== "portal" || !/^[A-Za-z0-9_-]{20,128}$/.test(data.portalKey || "")) throw new eventOperations.EventOperationsError("invalid-argument", "A current portal link is required.");
+    return await db.runTransaction(async (tx) => {
+      const binding = await readAttendancePortal(tx, data.portalKey, new Date().toISOString());
+      const current = await readQuoteAttendanceState(tx, binding.organizationRef, binding.source);
+      return { ok: true, storage: "firebase", ...binding.scope, snapshot: quoteAttendance.projectSnapshot({ source: binding.source, state: current.state, receipt: current.currentReceipt, accessMode: "portal", portalIdentity: binding.actor }) };
+    });
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+async function verifyAttendanceWorkflowReplay(tx, organizationRef, receipt, actor) {
+  const observation = workflowPackAdapters.attendanceObservation({ source: receipt.source, state: receipt.resultState,
+    receipt, portalIdentity: actor.role === "customer" ? actor : null });
+  const current = await readWorkflowPackInstance(tx, organizationRef, observation.source);
+  if (!current.instance) return;
+  const paired = await tx.get(current.instanceRef.collection("receipts").doc(workflowExecution.receiptIdFor(observation.source, receipt.request.requestId)));
+  if (paired.exists) {
+    const replay = workflowPackAdapters.planObservation({ ...observation, actor, requestId: receipt.request.requestId,
+      existingReceipt: paired.data(), nowISO: receipt.recordedAtISO });
+    await assertWorkflowPinnedDefinition(tx, organizationRef, replay.receipt.resultInstance);
+    return;
+  }
+  // A native receipt may legitimately predate tenant workflow initialization.
+  // Prove that ordering from the original native revisions, not wall-clock ties.
+  const initial = await tx.get(current.instanceRef.collection("receipts").where("priorRevision", "==", 0).limit(2));
+  if (initial.docs.length !== 1) throw new eventOperations.EventOperationsError("data-loss", "The attendance workflow initialization evidence is unavailable.");
+  const first = workflowExecution.verifyReceipt(initial.docs[0].data());
+  if (first.request.command !== "initialize" || workflowExecution.digest(first.source) !== workflowExecution.digest(observation.source)) throw new eventOperations.EventOperationsError("data-loss", "The attendance workflow initialization scope is invalid.");
+  const native = await tx.get(organizationRef.collection("quoteAttendance").doc(receipt.ledgerId).collection("receipts").doc(first.domainRef.evidenceId));
+  if (!native.exists) throw new eventOperations.EventOperationsError("data-loss", "The original attendance binding receipt is missing.");
+  const firstNative = quoteAttendance.verifyReceipt(native.data());
+  const firstObservation = workflowPackAdapters.attendanceObservation({ source: firstNative.source, state: firstNative.resultState, receipt: firstNative });
+  if (workflowExecution.digest(firstObservation.domainRef) !== workflowExecution.digest(first.domainRef)
+    || receipt.resultRevision >= firstNative.resultRevision) throw new eventOperations.EventOperationsError("data-loss", "The paired attendance workflow receipt is missing.");
+}
+exports.applyQuoteAttendanceCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = quoteAttendance.normalizeStaffCommand(data);
+    const scope = eventOperations.normalizeScope(request);
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef, actor) => {
+      const stateRef = organizationRef.collection("quoteAttendance").doc(quoteAttendance.ledgerIdFor(request));
+      const receiptRef = stateRef.collection("receipts").doc(quoteAttendance.receiptIdFor(request));
+      const existing = await tx.get(receiptRef);
+      if (existing.exists) {
+        const replay = quoteAttendance.planCommand({ request, actor, existingReceipt: existing.data() });
+        await verifyAttendanceWorkflowReplay(tx, organizationRef, replay.receipt, actor);
+        return replay;
+      }
+      const source = await readQuoteAttendanceSource(tx, organizationRef, scope);
+      const current = await readQuoteAttendanceState(tx, organizationRef, source);
+      const timing = request.command === "request_confirmation" ? await readQuoteAttendanceTiming(tx, organizationRef, source) : null;
+      const nowISO = new Date().toISOString();
+      const planned = quoteAttendance.planCommand({ request, actor, source, state: current.state, currentReceipt: current.currentReceipt, timing, nowISO });
+      const observation = workflowPackAdapters.attendanceObservation({ source, state: planned.nextState, receipt: planned.receipt });
+      const coordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, actor, requestId: request.requestId, nowISO });
+      const quote = await tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId));
+      const portalKey = quote.data()?.portalKey;
+      const portalRef = typeof portalKey === "string" && /^[A-Za-z0-9_-]{20,128}$/.test(portalKey) ? db.collection(PORTAL_COLLECTION).doc(portalKey) : null;
+      const portal = portalRef ? await tx.get(portalRef) : null;
+      if (current.state) tx.set(stateRef, planned.nextState); else tx.create(stateRef, planned.nextState);
+      tx.create(receiptRef, planned.receipt);
+      coordinator?.commit();
+      if (portal?.exists && portal.data()?.organizationId === scope.organizationId && portal.data()?.quoteId === scope.quoteId) tx.set(portalRef, { ...portal.data(), attendanceAvailable: true });
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: quoteAttendance.publicReceipt(result.receipt) };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+exports.submitQuoteAttendanceResponse = functions.region(REGION).https.onCall(async (data) => {
+  try {
+    const input = quoteAttendance.normalizePortalCommand(data);
+    return await db.runTransaction(async (tx) => {
+      const nowISO = new Date().toISOString();
+      const binding = await readAttendancePortal(tx, input.portalKey, nowISO, "send");
+      if (input.expectedSourceVersionId !== binding.source.sourceVersionId || input.expectedPortalIssuedAtISO !== binding.actor.portalIssuedAtISO) throw new eventOperations.EventOperationsError("aborted", "The proposal source or portal issuance changed.");
+      const request = { organizationId: binding.source.organizationId, quoteId: binding.source.quoteId, sourceVersionId: binding.source.sourceVersionId,
+        acceptanceReceiptId: binding.source.acceptanceReceiptId, requestId: input.requestId, expectedAttendanceRevision: input.expectedAttendanceRevision,
+        command: "submit_response", confirmationRequestId: input.confirmationRequestId, count: input.count };
+      const current = await readQuoteAttendanceState(tx, binding.organizationRef, binding.source);
+      const receiptRef = current.stateRef.collection("receipts").doc(quoteAttendance.receiptIdFor(request));
+      const existing = await tx.get(receiptRef);
+      const planned = quoteAttendance.planCommand({ request, actor: binding.actor, source: binding.source, state: current.state,
+        currentReceipt: current.currentReceipt, existingReceipt: existing.exists ? existing.data() : null, nowISO });
+      if (planned.idempotent) await verifyAttendanceWorkflowReplay(tx, binding.organizationRef, planned.receipt, binding.actor);
+      if (!planned.idempotent) {
+        const observation = workflowPackAdapters.attendanceObservation({ source: binding.source, state: planned.nextState, receipt: planned.receipt, portalIdentity: binding.actor });
+        const bound = await readWorkflowPackInstance(tx, binding.organizationRef, observation.source);
+        const coordinator = bound.instance ? await prepareWorkflowPackObservation(tx, binding.organizationRef, { observation, actor: binding.actor, requestId: request.requestId, nowISO }) : null;
+        tx.set(current.stateRef, planned.nextState); tx.create(receiptRef, planned.receipt); coordinator?.commit();
+      }
+      return { ok: true, storage: "firebase", ...binding.scope, idempotent: planned.idempotent, receipt: quoteAttendance.publicReceipt(planned.receipt) };
+    });
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+function workflowPackRequest(data, extra = []) {
+  const quoteReview = data?.workflowKind === "quote_review";
+  workflowExactKeys(data, ["organizationId", "quoteId", "workflowKind", ...(quoteReview ? ["simulationReceiptId"] : []), ...extra]);
+  eventOperations.normalizeScope(data);
+  if (!workflowDefinitions.RUNTIME_KINDS.includes(data.workflowKind)) throw new eventOperations.EventOperationsError("invalid-argument", "This workflow pack is unavailable.");
+  if (quoteReview && !/^ccs_[a-f0-9]{48}$/.test(data.simulationReceiptId || "")) throw new eventOperations.EventOperationsError("invalid-argument", "An exact commercial simulation receipt is required.");
+  return { organizationId: data.organizationId, quoteId: data.quoteId, workflowKind: data.workflowKind,
+    ...(quoteReview ? { simulationReceiptId: data.simulationReceiptId } : {}) };
+}
+async function readWorkflowPackContext(tx, organizationRef, scope) {
+  let source;
+  let domainSource;
+  let observation = null;
+  let current;
+  if (scope.workflowKind === "quote_review") {
+    const simulationSnap = await tx.get(organizationRef.collection(COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION).doc(scope.simulationReceiptId));
+    if (!simulationSnap.exists) throw new eventOperations.EventOperationsError("not-found", "The commercial simulation is unavailable.");
+    const simulation = commercialChangeAuthority.validateSimulationReceipt(simulationSnap.data()?.receipt);
+    if (simulation.organizationId !== scope.organizationId || simulation.quoteId !== scope.quoteId || simulation.receiptId !== scope.simulationReceiptId) throw new eventOperations.EventOperationsError("permission-denied", "The simulation is outside this exact quote scope.");
+    source = workflowPackSource({ ...scope, sourceVersionId: simulation.baseRevisionId, sourceReceiptId: simulation.receiptId });
+    current = await readWorkflowPackInstance(tx, organizationRef, source);
+    let applyReceipt = null;
+    let authorizationReceipt = null;
+    const reference = current.instance?.domainRef;
+    if (reference && reference.evidenceId !== simulation.receiptId) {
+      if (reference.stateCode === "applied") {
+        const applied = await tx.get(organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION).doc(reference.evidenceId));
+        if (!applied.exists) throw new eventOperations.EventOperationsError("data-loss", "The pinned commercial apply receipt is missing.");
+        applyReceipt = commercialChangeAuthority.validateApplyReceipt(applied.data()?.receipt);
+      }
+      const authorizationId = applyReceipt?.authorizationReceiptId || (reference.stateCode === "authorized" ? reference.evidenceId : "");
+      if (authorizationId) {
+        const authorized = await tx.get(organizationRef.collection(COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION).doc(authorizationId));
+        if (!authorized.exists) throw new eventOperations.EventOperationsError("data-loss", "The pinned authorization receipt is missing.");
+        authorizationReceipt = commercialChangeAuthority.validateAuthorizationReceipt(authorized.data()?.receipt);
+      }
+    }
+    const quote = await tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId));
+    if (!quote.exists || quote.data()?.organizationId !== scope.organizationId || quote.data()?.activeVersionId !== (applyReceipt?.newRevisionId || simulation.baseRevisionId)) throw new eventOperations.EventOperationsError("aborted", "The current quote source changed. Refresh its workflow.");
+    if (current.instance) {
+      // Coordination metadata may migrate; native commercial policy remains pinned
+      // to the immutable publication sealed into this original simulation.
+      const pin = simulation.workflowPolicy?.definitionPin;
+      if (!pin || pin.workflowKind !== "quote_review") throw new eventOperations.EventOperationsError("data-loss", "The commercial source has no immutable origin policy.");
+      const origin = await tx.get(organizationRef.collection("workflowDefinitions").doc("quote_review").collection("versions").doc(pin.versionId));
+      if (!origin.exists) throw new eventOperations.EventOperationsError("data-loss", "The original commercial publication is missing.");
+      const definition = workflowDefinitions.validatePublishedVersion(origin.data(), { workflowKind: "quote_review", allowSeed: false });
+      observation = workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: simulation, authorizationReceipt, applyReceipt, definition });
+    }
+  } else {
+    domainSource = scope.workflowKind === "final_guest_count" ? await readQuoteAttendanceSource(tx, organizationRef, scope) : await readEventOperatingSource(tx, organizationRef, scope);
+    source = workflowPackAdapters.acceptedSource(domainSource, scope.workflowKind);
+    current = await readWorkflowPackInstance(tx, organizationRef, source);
+    if (scope.workflowKind === "final_guest_count") {
+      const journal = await readQuoteAttendanceState(tx, organizationRef, domainSource);
+      if (journal.state) observation = workflowPackAdapters.attendanceObservation({ source: domainSource, state: journal.state, receipt: journal.currentReceipt,
+        portalIdentity: journal.currentReceipt.actor.role === "customer" ? journal.currentReceipt.actor : null });
+    } else if (scope.workflowKind === "event_execution") {
+      const phase = await readEventWorkflowPhase(tx, organizationRef, domainSource);
+      if (phase.ledger) observation = workflowPackAdapters.eventObservation({ source: domainSource, ledger: phase.ledger, receipt: phase.receipt });
+    } else {
+      const closeoutId = `closeout_${createHash("sha256").update([domainSource.organizationId, domainSource.quoteId, domainSource.sourceVersionId, domainSource.acceptanceReceiptId].join("\u0000")).digest("hex").slice(0, 48)}`;
+      const record = await tx.get(organizationRef.collection("postEventCloseouts").doc(closeoutId));
+      if (current.instance) {
+        const proofSnap = await tx.get(current.instanceRef.collection("observations").doc(current.instance.domainRef.evidenceId));
+        if (!record.exists || !proofSnap.exists) throw new eventOperations.EventOperationsError("data-loss", "The pinned closeout record or immutable adapter proof is missing.");
+        const proof = proofSnap.data();
+        workflowPackAdapters.verifyCloseoutObservationProof(proof);
+        const currentProof = workflowPackAdapters.buildCloseoutObservationProof({ source: domainSource, record: record.data(), priorRecord: proof.priorRecord, actionReceipt: proof.actionReceipt });
+        if (currentProof.proofDigest !== proof.proofDigest) throw new eventOperations.EventOperationsError("data-loss", "Current closeout state differs from its pinned observation.");
+        observation = workflowPackAdapters.closeoutObservation({ proof, definition: current.instance.definition });
+      }
+    }
+  }
+  if (current.instance && (!observation || workflowExecution.digest(current.instance.domainRef) !== workflowExecution.digest(observation.domainRef))) throw new eventOperations.EventOperationsError("data-loss", "The workflow instance differs from its current verified domain evidence.");
+  return { source, domainSource, current, observation };
+}
+exports.getWorkflowPackSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowPackRequest(data);
+    const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef) => {
+      const state = await readWorkflowPackContext(tx, organizationRef, scope);
+      const projected = workflowExecution.projectSnapshot({ source: state.source, instance: state.current.instance, receipt: state.current.currentReceipt, observedAtISO: new Date().toISOString() });
+      if (state.current.instance) return projected;
+      const catalog = (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot;
+      const nextDefinition = catalog.activeVersion?.schemaVersion === 2 ? catalog.activeVersion : null;
+      return { ...projected, nextDefinition, initializationEligibility: { eligible: Boolean(nextDefinition), reasonCode: nextDefinition ? "published" : catalog.state === "retired" ? "retired" : "unpublished" } };
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+exports.previewWorkflowPackMigration = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowPackRequest(data, ["sourceVersionId", "sourceReceiptId", "expectedRevision"]);
+    const expectedSource = workflowPackSource(data);
+    const preview = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef) => {
+      const state = await readWorkflowPackContext(tx, organizationRef, scope);
+      if (workflowExecution.digest(state.source) !== workflowExecution.digest(expectedSource)) throw new eventOperations.EventOperationsError("aborted", "The workflow source changed.");
+      if (!state.current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "This source has no configured workflow instance.");
+      workflowAssertRevision(data.expectedRevision, state.current.instance.revision);
+      const catalog = (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot;
+      if (catalog.state !== "published" || !catalog.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires an active tenant publication.");
+      return workflowExecution.previewMigration({ source: state.source, instance: state.current.instance, currentReceipt: state.current.currentReceipt, targetDefinition: catalog.activeVersion });
+    });
+    return { ok: true, storage: "firebase", ...scope, preview };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+exports.applyWorkflowPackCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const commandInput = { ...data };
+    for (const key of ["organizationId", "quoteId", "workflowKind", "simulationReceiptId", "sourceVersionId", "sourceReceiptId"]) delete commandInput[key];
+    const command = workflowExecution.normalizeRequest(commandInput);
+    const scope = workflowPackRequest(data, ["sourceVersionId", "sourceReceiptId", ...Object.keys(command)]);
+    const source = workflowPackSource(data);
+    if (scope.workflowKind === "quote_review" && data.sourceReceiptId !== scope.simulationReceiptId) throw new eventOperations.EventOperationsError("invalid-argument", "The quote workflow must bind its exact simulation.");
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, ["migrate", "review_ack"].includes(command.command), async (tx, organizationRef, actor) => {
+      const instanceRef = organizationRef.collection("workflowInstances").doc(workflowExecution.instanceIdFor(source));
+      const receiptRef = instanceRef.collection("receipts").doc(workflowExecution.receiptIdFor(source, command.requestId));
+      const existing = await tx.get(receiptRef);
+      if (existing.exists) {
+        const replay = workflowExecution.planCommand({ source, request: command, actor, existingReceipt: existing.data() });
+        await assertWorkflowPinnedDefinition(tx, organizationRef, replay.receipt.resultInstance);
+        return replay;
+      }
+      const state = await readWorkflowPackContext(tx, organizationRef, scope);
+      if (workflowExecution.digest(state.source) !== workflowExecution.digest(source)) throw new eventOperations.EventOperationsError("aborted", "The workflow source changed.");
+      if (!state.current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "This source has no configured workflow instance.");
+      let definition = null;
+      let actualsRef = null;
+      if (command.command === "migrate") {
+        const catalog = (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot;
+        if (catalog.state !== "published" || !catalog.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires an active tenant publication.");
+        definition = catalog.activeVersion;
+      } else if (command.command === "review_ack") {
+        if (scope.workflowKind !== "event_execution") throw new eventOperations.EventOperationsError("invalid-argument", "Actuals review belongs only to event execution.");
+        const phase = await readEventWorkflowPhase(tx, organizationRef, state.domainSource);
+        const actuals = await readEventOperatingActualsState(tx, phase.ledgerRef);
+        actualsRef = eventWorkflowAdapter.actualsReference(state.domainSource, actuals.actualsState, actuals.currentReceipt);
+      }
+      const planned = workflowExecution.planCommand({ source, request: command, actor, instance: state.current.instance, currentReceipt: state.current.currentReceipt, definition, actualsRef, nowISO: new Date().toISOString() });
+      tx.set(instanceRef, planned.nextInstance); tx.create(receiptRef, planned.receipt);
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: eventWorkflowPublicReceipt(result.receipt) };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+async function resolveCommercialWorkflowContext(tx, refs, staff, { nowISO, catalogAuthority, simulation = null, attendanceSubmissionReceiptId = "" }) {
+  const settingsSnap = await tx.get(refs.settingsRef);
+  const enabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", refs.organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+  const hasStoredBinding = Boolean(simulation?.workflowPolicy || simulation?.attendanceBinding);
+  const base = commercialChangeTrustedContext({ staff, nowISO, catalogAuthority });
+  if (!enabled) {
+    if (hasStoredBinding || attendanceSubmissionReceiptId) throw new CommercialChangeAuthorityError("failed-precondition", "The tenant workflow gate must be enabled for this bound commercial change.");
+    return { trustedContext: base, definition: null, workflowPolicy: null, attendanceBinding: null };
+  }
+  await assertEventOperatingTransactionAuthority(tx, refs.organizationRef, staff, false);
+  let definition = null;
+  let workflowPolicy = null;
+  if (simulation?.workflowPolicy) {
+    const pin = simulation.workflowPolicy.definitionPin;
+    const version = await tx.get(refs.organizationRef.collection("workflowDefinitions").doc("quote_review").collection("versions").doc(pin.versionId));
+    if (!version.exists) throw new CommercialChangeAuthorityError("data-loss", "The pinned quote review publication is unavailable.");
+    definition = workflowDefinitions.validatePublishedVersion(version.data(), { workflowKind: "quote_review", allowSeed: false });
+    workflowPolicy = workflowPackAdapters.quotePolicy(definition);
+    if (workflowExecution.digest(workflowPolicy) !== workflowExecution.digest(simulation.workflowPolicy)) throw new CommercialChangeAuthorityError("data-loss", "The quote review policy changed or does not match its sealed simulation.");
+  } else if (!simulation) {
+    const catalog = (await readWorkflowConfiguration(tx, refs.organizationRef, "quote_review")).snapshot;
+    if (catalog.state === "published" && catalog.activeVersion?.schemaVersion === 2) {
+      definition = catalog.activeVersion;
+      workflowPolicy = workflowPackAdapters.quotePolicy(definition);
+    } else if (catalog.state === "retired") throw new CommercialChangeAuthorityError("failed-precondition", "Quote review publication is retired for new simulations.");
+  } else {
+    const catalog = (await readWorkflowConfiguration(tx, refs.organizationRef, "quote_review")).snapshot;
+    if (catalog.activeVersion?.schemaVersion === 2) throw new CommercialChangeAuthorityError("aborted", "This legacy simulation predates the mandatory quote policy. Refresh the simulation.");
+  }
+  if (workflowPolicy && !workflowPolicy.approvalPolicy.allowedRoles.includes(staff.role)) throw new CommercialChangeAuthorityError("permission-denied", "This role is not enabled by the pinned commercial review policy.");
+  let attendanceBinding = simulation?.attendanceBinding || null;
+  if (attendanceSubmissionReceiptId || attendanceBinding) {
+    const scope = { organizationId: refs.organizationRef.id, quoteId: refs.quoteRef.id };
+    const source = await readQuoteAttendanceSource(tx, refs.organizationRef, scope);
+    const current = await readQuoteAttendanceState(tx, refs.organizationRef, source);
+    const submissionId = attendanceSubmissionReceiptId || attendanceBinding.submissionReceiptId;
+    if (!/^attendance_command_[a-f0-9]{48}$/.test(submissionId) || current.state?.latestResponse?.submissionReceiptId !== submissionId) throw new CommercialChangeAuthorityError("aborted", "The current submitted guest count changed. Review the latest response.");
+    const receipt = await tx.get(current.stateRef.collection("receipts").doc(submissionId));
+    if (!receipt.exists) throw new CommercialChangeAuthorityError("data-loss", "The exact submitted guest-count receipt is unavailable.");
+    const verified = quoteAttendance.submissionReference(receipt.data());
+    const resolved = { organizationId: source.organizationId, quoteId: source.quoteId, sourceVersionId: source.sourceVersionId,
+      acceptanceReceiptId: source.acceptanceReceiptId, submissionReceiptId: submissionId, submissionReceiptDigest: verified.receiptDigest, count: verified.count };
+    if (attendanceBinding && workflowExecution.digest(resolved) !== workflowExecution.digest(attendanceBinding)) throw new CommercialChangeAuthorityError("aborted", "The submitted attendance binding changed.");
+    attendanceBinding = resolved;
+  }
+  if ((workflowPolicy || attendanceBinding) && commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId).authorityState !== "enforced") throw new CommercialChangeAuthorityError("failed-precondition", "Commercial Change authority must be enforced before applying a workflow-bound policy or attendance response.");
+  return { definition, workflowPolicy, attendanceBinding,
+    trustedContext: workflowPolicy || attendanceBinding ? { ...base, workflowPolicy, attendanceBinding } : base };
+}

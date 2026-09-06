@@ -1,3 +1,4 @@
+import "./attendanceWorkflowPresentation.css";
 import {
   forwardRef,
   lazy,
@@ -73,6 +74,7 @@ import AmbientProposalContext from "./AmbientProposalContext";
 import AmbientOperationalReceipts from "./AmbientOperationalReceipts";
 import { deriveAttendanceState } from "./attendanceState";
 import QuickUpdatesPanel from "./QuickUpdatesPanel";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import "./ambientLivingOpportunity.css";
 
 const AMBIENT_INTERACTION_EVENT_NAME = "quotepilot:ambient-interaction";
@@ -431,6 +433,9 @@ function ActionAcknowledgement({ value }) {
       aria-live="polite"
     >
       <strong>{value.label}</strong>
+      {value.reason && value.reason !== value.consequence && (
+        <span data-acknowledgement-reason>{value.reason}</span>
+      )}
       <span>{value.consequence}</span>
       <small>{value.nextResolutions[0]?.label}</small>
     </div>
@@ -489,10 +494,16 @@ function DisclosureFacts({ items }) {
   );
 }
 
+const QuoteAttendancePanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./QuoteAttendancePanel")) : null;
+
 const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   quote,
   source,
   ordinaryEditAllowed = false,
+  attendanceEnabled = false,
+  attendanceReviewAllowed = false,
+  principalId = "",
   conversationAvailable = false,
   pricingPreviewAvailable = false,
   pricingMargin = null,
@@ -504,6 +515,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   onSimulatePricing,
   onOpenWorkflow,
   onOpenConversation,
+  onOpenCalendar,
   onOpenLegacyWorkspace,
   serviceStyles = [],
   onPreviewQuickUpdate,
@@ -521,6 +533,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const rootRef = useRef(null);
   const guestInlineRef = useRef(null);
   const guestInspectRef = useRef(null);
+  const activeGuestInspectRef = useRef(null);
   const staffingInspectRef = useRef(null);
   const staffingContextTriggerRef = useRef(null);
   const pricingInspectRef = useRef(null);
@@ -539,6 +552,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const quickUpdatesMobileTriggerRef = useRef(null);
   const quickUpdatesReturnFocusRef = useRef(null);
   const quickUpdatesDialogId = useId();
+  const menuReplacementSourceFieldId = useId();
   const pilotContextAnchorRef = useRef(null);
   const eventLogisticsTriggerRefs = useRef(Object.fromEntries(
     EVENT_LOGISTICS_KINDS.map((kind) => [kind, { current: null }])
@@ -558,6 +572,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     ambientContext?.sourceFreshness?.state || "unknown"
   ).trim().toLowerCase() || "unknown";
   const isStaffRole = ["admin", "sales"].includes(ambientRole);
+  const calendarAvailable = ["accepted", "booked"].includes(String(quote?.status || "").trim().toLowerCase())
+    && typeof onOpenCalendar === "function";
   const recordedGuestCount = Math.max(0, Math.round(Number(quote?.event?.guests) || 0));
   const recordedStaffingSignature = [
     quote?.event?.servers,
@@ -646,6 +662,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     ambientRole,
     proposalSourceFreshness
   ]);
+  const openCalendar = () => {
+    if (!calendarAvailable) return;
+    onOpenCalendar(model.identity.quoteId, {
+      actionId: `open-opportunity-calendar:${model.identity.quoteId}`
+    });
+  };
   const attendanceRead = useMemo(() => (
     deriveAttendanceRead(quote, decisionDebtSnapshot)
   ), [decisionDebtSnapshot, quote]);
@@ -716,13 +738,29 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const activeStaffing = staffingScenario || model.staffingObject.current;
   const eventType = opportunityTypeLabel(quote);
   const eventDate = opportunityDateLabel(model.identity.date, { compact: true });
-  const nextActionLabel = taskSpecificNextActionLabel(model.nextAction, model.risk);
+  const attendanceAvailable = Boolean(
+    QuoteAttendancePanel && attendanceEnabled && source === "firebase" && isStaffRole && principalId
+    && quote?.id && quote?.organizationId === ambientContext?.organizationId
+    && ["accepted", "booked"].includes(quote?.status)
+    && (quote?.activeVersionId || quote?.versionMeta?.versionId) && quote?.acceptanceReceipt?.receiptId
+  );
+  const attendanceIsNext = attendanceAvailable && model.nextAction.kind === "caught_up";
+  const visibleNextAction = attendanceIsNext ? {
+    kind: "attendance", title: "Keep the final guest count on track.", label: "Review final guest count"
+  } : model.nextAction;
+  const nextActionLabel = attendanceIsNext ? visibleNextAction.label : taskSpecificNextActionLabel(model.nextAction, model.risk);
+  const visibleNextActionId = attendanceIsNext ? model.actions.inspectGuestCount.id : model.actions.primary?.id;
   const menuSummary = [
     String(quote?.event?.style || "").trim(),
     model.menuObject.items.length > 0
       ? `${model.menuObject.items.length} saved ${model.menuObject.items.length === 1 ? "item" : "items"}`
       : "Menu not recorded"
   ].filter(Boolean).join(" · ");
+  const menuReplacementSourceOptions = model.menuObject.items.flatMap((item) => {
+    const value = String(item?.id || "").trim();
+    if (!value) return [];
+    return [{ value, label: item.savedName || value }];
+  });
   const proposalActivity = model.disclosureLayers.supporting.find((item) => item.id === "activity");
   const quickUpdatesAvailable = Boolean(
     ordinaryEditAllowed
@@ -937,7 +975,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     setEventLogisticsOpenKind(EVENT_LOGISTICS_KINDS.includes(target) ? target : null);
   };
 
-  const openGuestContext = () => {
+  const openGuestContext = (event) => {
+    activeGuestInspectRef.current = event?.currentTarget || guestInspectRef.current;
     const action = model.actions.inspectGuestCount;
     const runtimeToken = beginAction(action);
     openExclusiveContext("guest");
@@ -945,8 +984,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       action,
       runtimeToken,
       kind: "context",
-      label: "Guest count context opened",
-      nextResolution: model.guestObject.preview.nextResolution,
+      label: attendanceAvailable ? "Final guest count opened" : "Guest count context opened",
+      ...(attendanceAvailable ? { consequence: "The saved quote stays unchanged while you request or review the final number." } : {}),
+      nextResolution: attendanceAvailable ? "Use the count panel to record a request, record a response, or review a supplied count." : model.guestObject.preview.nextResolution,
       destination: {
         surface: model.surfaceContracts.guestContext,
         isEmpty: false
@@ -1733,6 +1773,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   };
 
   const runNextAction = (event) => {
+    if (attendanceIsNext) { openGuestContext(event); return; }
     const nextAction = model.nextAction;
     if (nextAction.kind === "workflow") {
       const action = model.actions.primary;
@@ -1947,7 +1988,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     }
   };
 
-  const openLegacyWorkspace = () => {
+  const openLegacyWorkspace = async () => {
     const action = model.actions.openLegacyControls;
     if (!action.enabled || typeof onOpenLegacyWorkspace !== "function") return;
     const runtimeToken = beginAction(action);
@@ -1960,7 +2001,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       deferRuntime: true
     });
     try {
-      const navigationResult = onOpenLegacyWorkspace({
+      const navigationResult = await onOpenLegacyWorkspace({
         object: action.arrivalContract.object,
         reason: action.arrivalContract.reason,
         consequence: action.arrivalContract.consequence,
@@ -1993,7 +2034,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         runtimeToken,
         kind: "recovery",
         label: "Full opportunity controls were not opened",
-        reason: error?.userMessage || "The existing role-safe controls could not be opened.",
+        reason: error?.userMessage || error?.message || "The existing role-safe controls could not be opened.",
         consequence: "The opportunity and unsaved preview remain unchanged.",
         nextActionId: "back-to-opportunities",
         nextResolution: "Return to Opportunities or continue reviewing here."
@@ -3186,6 +3227,16 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             Quick Updates
           </button>
         )}
+        {calendarAvailable && (
+          <button
+            type="button"
+            className="ambient-calendar-handoff ambient-v16-opportunity__desktop"
+            onClick={openCalendar}
+            data-exact-event-id={model.identity.quoteId}
+          >
+            Open Calendar
+          </button>
+        )}
       </div>
 
       <section
@@ -3241,19 +3292,19 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           />
         </figure>
 
-        <div className="ambient-mobile-remote__next" data-next-action-kind={model.nextAction.kind}>
+        <div className="ambient-mobile-remote__next" data-next-action-kind={visibleNextAction.kind}>
           <div>
             <span>Next</span>
-            <h2>{model.nextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
-            <p>{model.nextAction.title}</p>
+            <h2>{attendanceIsNext ? "Final guest count" : visibleNextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
+            <p>{visibleNextAction.title}</p>
           </div>
-          {model.nextAction.kind === "caught_up" ? (
-            <small>{model.nextAction.label}</small>
+          {visibleNextAction.kind === "caught_up" ? (
+            <small>{visibleNextAction.label}</small>
           ) : (
             <button
               type="button"
               onClick={runNextAction}
-              data-ambient-action-id={model.actions.primary.id}
+              data-ambient-action-id={visibleNextActionId}
             >
               {nextActionLabel}
               <ArrowRight size={19} aria-hidden="true" />
@@ -3274,6 +3325,17 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           >
             <NotePencil size={21} aria-hidden="true" />
             Quick Updates
+          </button>
+        )}
+
+        {calendarAvailable && (
+          <button
+            type="button"
+            className="ambient-calendar-handoff ambient-v16-opportunity__mobile"
+            onClick={openCalendar}
+            data-exact-event-id={model.identity.quoteId}
+          >
+            Open in Calendar
           </button>
         )}
 
@@ -3373,18 +3435,18 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             />
           </figure>
         </div>
-        <div className="ambient-opportunity-total" data-next-action-kind={model.nextAction.kind}>
+        <div className="ambient-opportunity-total" data-next-action-kind={visibleNextAction.kind}>
           <span>Next</span>
-          <h2>{model.nextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
-          <p>{model.nextAction.title}</p>
-          {model.nextAction.kind === "caught_up" ? (
-            <small>{model.nextAction.label}</small>
+          <h2>{attendanceIsNext ? "Final guest count" : visibleNextAction.kind === "caught_up" ? "Ready for now." : "Ready except one thing."}</h2>
+          <p>{visibleNextAction.title}</p>
+          {visibleNextAction.kind === "caught_up" ? (
+            <small>{visibleNextAction.label}</small>
           ) : (
             <button
               type="button"
               className="ambient-next-action"
               onClick={runNextAction}
-              data-ambient-action-id={model.actions.primary.id}
+              data-ambient-action-id={visibleNextActionId}
             >
               {nextActionLabel}
               <ArrowRight size={18} aria-hidden="true" />
@@ -3468,15 +3530,17 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         <div className="ambient-v16-opportunity__semantic-state" data-glance="next">
           <dt>Next</dt>
           <dd>
-            <span>{model.nextAction.title}</span>
-            {model.nextAction.kind === "caught_up" ? (
-              <small>{model.nextAction.label}</small>
+            <span>{visibleNextAction.title}</span>
+            {visibleNextAction.kind === "caught_up" ? (
+              <small>{visibleNextAction.label}</small>
             ) : (
               <small>{nextActionLabel}</small>
             )}
           </dd>
         </div>
       </dl>
+
+      {attendanceAvailable && !attendanceIsNext && <div className="ambient-attendance-next"><button type="button" className="ghost" data-ambient-action-id={model.actions.inspectGuestCount.id} onClick={openGuestContext}>Review final guest count</button></div>}
 
       <section
         className="ambient-event-logistics-glance ambient-v16-opportunity__event-logistics"
@@ -4062,21 +4126,32 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
 
       <ContextSurface
         open={guestOpen}
-        title="Guest count connections"
+        title={attendanceAvailable ? "Final guest count" : "Guest count connections"}
         description={`${model.identity.eventName}, ${model.identity.quoteNumber}`}
         reason={model.guestObject.why}
         consequence={model.guestObject.consequence}
         collapseArrivalDetails
         anchorRef={guestInspectRef}
-        returnFocusRef={guestInspectRef}
+        returnFocusRef={activeGuestInspectRef.current ? activeGuestInspectRef : guestInspectRef}
         onClose={dismissGuestContext}
         closeActionId={model.actions.dismissGuestContext.id}
-        footer={guestFooter}
+        footer={attendanceAvailable ? null : guestFooter}
       >
         <div
           className="ambient-context-content ambient-attendance-context"
           data-attendance-state={attendanceView.stateId.toLowerCase()}
         >
+          {guestOpen && attendanceAvailable && (
+            <Suspense fallback={<p role="status">Loading final guest count...</p>}>
+              <QuoteAttendancePanel organizationId={ambientContext?.organizationId} quoteId={quote?.id} principalId={principalId}
+                role={ambientRole} enabled={attendanceEnabled} source={source}
+                sourceVersionId={quote?.activeVersionId || quote?.versionMeta?.versionId || ""}
+                acceptanceReceiptId={quote?.acceptanceReceipt?.receiptId || ""}
+                onStageCommercialChange={attendanceReviewAllowed && typeof onEditQuote === "function"
+                  ? submission => onEditQuote(quote, { attendanceSubmission: submission }) : undefined} />
+            </Suspense>
+          )}
+          <details className="attendance-supporting-context" open={!attendanceAvailable}><summary>Pricing, planning and dependencies</summary>
           <dl className="ambient-attendance-strip" data-tone={attendanceView.tone}>
             <div data-attendance-dimension="commercial-basis">
               <dt>Saved priced count</dt>
@@ -4140,6 +4215,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           <p className="ambient-boundary-note">
             Reviewing attendance evidence does not confirm attendance, change pricing or staffing, resize quantities, reserve capacity, update the proposal or BEO, or save this quote.
           </p>
+          </details>
         </div>
       </ContextSurface>
 
@@ -4358,40 +4434,87 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             )}
           </section>
 
-          {model.actions.replaceMenuItemInDraft && (
+          {(model.actions.replaceMenuItemInDraft || menuReplacementSourceOptions.length === 0) && (
             <section className="ambient-menu-replacement">
-              <h3>Available menu replacements</h3>
-              <label>
-                <span>Replace this saved item</span>
-                <select
+              <h3>{model.actions.replaceMenuItemInDraft
+                ? "Available menu replacements"
+                : "Menu replacement unavailable"}</h3>
+              {menuReplacementSourceOptions.length === 0 ? (
+                <div
+                  className="adaptive-choice-field ambient-menu-replacement-source"
+                  role="group"
+                  aria-labelledby={`${menuReplacementSourceFieldId}-label`}
+                  aria-describedby={`${menuReplacementSourceFieldId}-reason`}
+                  data-adaptive-choice-mode="empty"
+                  data-menu-replacement-source-state="unavailable"
+                >
+                  <span
+                    className="adaptive-choice-field__label"
+                    id={`${menuReplacementSourceFieldId}-label`}
+                  >
+                    Replace this saved item
+                  </span>
+                  <span
+                    className="adaptive-choice-field__description"
+                    id={`${menuReplacementSourceFieldId}-reason`}
+                    role="status"
+                  >
+                    <strong>Unavailable.</strong>{" "}
+                    {model.menuObject.savedSelection.reason
+                      || "No exact saved menu item is available to use as the replacement source."}
+                  </span>
+                  <button
+                    type="button"
+                    className="field-state-indicator__recovery"
+                    onClick={model.actions.openLegacyControls.enabled
+                      ? openLegacyWorkspace
+                      : dismissMenuContext}
+                    data-ambient-action-id={model.actions.openLegacyControls.enabled
+                      ? model.actions.openLegacyControls.id
+                      : model.actions.dismissMenuContext.id}
+                  >
+                    {model.actions.openLegacyControls.enabled
+                      ? "Open quote workspace"
+                      : "Close menu details"}
+                  </button>
+                </div>
+              ) : (
+                <AdaptiveChoiceField
+                  className="ambient-menu-replacement-source"
+                  id={menuReplacementSourceFieldId}
+                  label="Replace this saved item"
+                  description="Choose the exact saved item whose quantity and position the editor should preserve."
+                  options={menuReplacementSourceOptions}
                   value={menuReplacementSourceId}
                   onChange={(event) => setMenuReplacementSourceId(event.target.value)}
-                >
-                  {model.menuObject.items.map((item) => (
-                    <option key={item.id} value={item.id}>{item.savedName || item.id}</option>
-                  ))}
-                </select>
-              </label>
-              <p className="ambient-object-instruction">
-                QuotePilot keeps this item's saved quantity and position. Review price and connected effects in the editor.
-              </p>
-              <div className="ambient-candidate-list">
-                {model.menuObject.replacementCandidates.items
-                  .filter((candidate) => candidate.draftReplacementEligible)
-                  .map((candidate) => (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      className="ambient-candidate-action"
-                      onClick={() => stageMenuReplacement(candidate)}
-                      data-ambient-action-id={model.actions.replaceMenuItemInDraft.id}
-                    >
-                      <span>{candidate.name}</span>
-                      <small>{candidate.section.label} · review replacement</small>
-                      <ArrowRight size={17} aria-hidden="true" />
-                    </button>
-                  ))}
-              </div>
+                  placeholder="Choose a saved menu item"
+                  singleChoiceDetail="This is the only saved menu item, so there is nothing to choose. Its exact quantity and position will be preserved."
+                />
+              )}
+              {model.actions.replaceMenuItemInDraft && (
+                <>
+                  <p className="ambient-object-instruction">
+                    QuotePilot keeps this item's saved quantity and position. Review price and connected effects in the editor.
+                  </p>
+                  <div className="ambient-candidate-list">
+                    {model.menuObject.replacementCandidates.items
+                      .filter((candidate) => candidate.draftReplacementEligible)
+                      .map((candidate) => (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          className="ambient-candidate-action"
+                          onClick={() => stageMenuReplacement(candidate)}
+                          data-ambient-action-id={model.actions.replaceMenuItemInDraft.id}
+                        >
+                          <span>{candidate.name}</span>
+                          <small>{candidate.section.label} · review replacement</small>
+                          <ArrowRight size={17} aria-hidden="true" />
+                        </button>
+                      ))}
+                  </div>
+                </>
+              )}
             </section>
           )}
 

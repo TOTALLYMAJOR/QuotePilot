@@ -21,7 +21,8 @@ export const AMBIENT_LIBRARY_SURFACE_CONTRACT = createSurfacePurposeContract({
     "tenant-catalog",
     "catalog-section",
     "event-template",
-    "pricing-settings"
+    "pricing-settings",
+    "configuration-rules"
   ],
   purposes: ["clarify", "advance", "resolve", "reveal_context"],
   entryReason: "Show an administrator what the current catalog contains, what its templates depend on, and the next exact place that needs review.",
@@ -43,6 +44,7 @@ export const AMBIENT_LIBRARY_BOUNDS = Object.freeze({
   addons: 500,
   rentals: 500,
   templates: 250,
+  rules: 500,
   referencesPerTemplate: 500,
   idCharacters: 160,
   labelCharacters: 240,
@@ -54,8 +56,9 @@ export const AMBIENT_LIBRARY_SECTION_ORDER = Object.freeze([
   "menu",
   "addons",
   "rentals",
+  "templates",
   "pricing",
-  "templates"
+  "rules"
 ]);
 
 const SECTION_DEFINITIONS = Object.freeze({
@@ -64,7 +67,8 @@ const SECTION_DEFINITIONS = Object.freeze({
   addons: Object.freeze({ label: "Add-ons", singular: "add-on", targetId: "addons" }),
   rentals: Object.freeze({ label: "Rentals", singular: "rental", targetId: "rentals" }),
   pricing: Object.freeze({ label: "Pricing", singular: "pricing setting", targetId: "pricing" }),
-  templates: Object.freeze({ label: "Templates", singular: "event template", targetId: "eventTemplates" })
+  templates: Object.freeze({ label: "Templates", singular: "event template", targetId: "eventTemplates" }),
+  rules: Object.freeze({ label: "Rules", singular: "configuration rule", targetId: "rules" })
 });
 
 const RECOGNIZED_FIREBASE_SOURCES = new Set([
@@ -492,6 +496,41 @@ function recordsSummary(records) {
   };
 }
 
+function normalizeRules(settings, issues) {
+  const source = settings.configurationRules;
+  if (source === undefined) return { records: [], issueCount: 0 };
+  if (!Array.isArray(source)) {
+    issues.push("settings.configurationRules was not supplied as an array.");
+    return { records: [], issueCount: 1 };
+  }
+  const seen = new Set();
+  let issueCount = 0;
+  const records = source.slice(0, AMBIENT_LIBRARY_BOUNDS.rules).flatMap((entry, index) => {
+    if (!isRecord(entry)) {
+      issues.push(`settings.configurationRules[${index}] is not a plain record.`);
+      issueCount += 1;
+      return [];
+    }
+    const id = safeId(entry.id);
+    if (!id || seen.has(id)) {
+      issues.push(`settings.configurationRules[${index}] has a missing or duplicate id.`);
+      issueCount += 1;
+      return [];
+    }
+    seen.add(id);
+    return [{
+      id,
+      name: text(entry.name || entry.reason, AMBIENT_LIBRARY_BOUNDS.labelCharacters) || id,
+      active: entry.enabled !== false
+    }];
+  });
+  if (source.length > AMBIENT_LIBRARY_BOUNDS.rules) {
+    issues.push(`settings.configurationRules exceeded the ${AMBIENT_LIBRARY_BOUNDS.rules}-record presentation bound; later rules are withheld.`);
+    issueCount += 1;
+  }
+  return { records, issueCount };
+}
+
 function pricingState(settings, boundary) {
   const catalogRevision = nonNegativeInteger(settings.catalogRevision);
   const confirmationCurrent = isCatalogPricingConfirmationCurrent(settings);
@@ -598,6 +637,17 @@ function sectionDependencies(sectionId, summaries, pricing, templates) {
       consequence: pricing.catalogRevision === null
         ? "No exact catalog version is available."
         : `Pricing review applies only to catalog version ${pricing.catalogRevision}.`
+    }, {
+      object: { id: "rules", type: "configuration-rules", label: "Rules" },
+      relationship: "pricing_evaluates_bounded_rules",
+      consequence: `${summaries.rules.activeCount} active configuration rules are recorded for review.`
+    }];
+  }
+  if (sectionId === "rules") {
+    return [{
+      object: { id: "pricing", type: "pricing-settings", label: "Pricing" },
+      relationship: "rules_may_affect_pricing_context",
+      consequence: "Rules remain bounded configuration inputs; authoritative pricing and save paths retain final authority."
     }];
   }
   if (sectionId === "packages") {
@@ -698,7 +748,7 @@ function buildSectionDescriptor({
       : `${summary.activeCount} active of ${summary.totalCount} recorded ${definition.label.toLowerCase()}.`;
   return createIntelligentObjectDescriptor({
     id: sectionId,
-    type: sectionId === "pricing" ? "pricing-settings" : "catalog-section",
+    type: sectionId === "pricing" ? "pricing-settings" : sectionId === "rules" ? "configuration-rules" : "catalog-section",
     label: definition.label,
     summary: summaryText,
     inspectorSurfaceId: sectionId === "templates" ? "library-templates" : "catalog-admin-section",
@@ -956,6 +1006,7 @@ export function buildAmbientLibrary({
     rentals: new Map(rentals.map((record) => [record.id, record])),
     menu: new Map(menu.items.map((record) => [record.id, record]))
   }, issues, { menuInventoryComplete, organizationId });
+  const rules = normalizeRules(settings, issues);
   const pricing = pricingState(settings, boundary);
   const revision = pricing.catalogRevision === null
     ? {
@@ -990,6 +1041,7 @@ export function buildAmbientLibrary({
     addons: recordsSummary(addons),
     rentals: recordsSummary(rentals),
     pricing,
+    rules: recordsSummary(rules.records),
     templates: {
       totalCount: templates.length,
       activeCount: templates.filter((template) => template.dependencyState === "resolved").length,
@@ -1003,7 +1055,7 @@ export function buildAmbientLibrary({
     const definition = SECTION_DEFINITIONS[sectionId];
     const sectionObject = {
       id: sectionId,
-      type: sectionId === "pricing" ? "pricing-settings" : "catalog-section",
+      type: sectionId === "pricing" ? "pricing-settings" : sectionId === "rules" ? "configuration-rules" : "catalog-section",
       label: definition.label
     };
     return actionDefinition({
@@ -1170,6 +1222,7 @@ export function buildAmbientLibrary({
     addons: summaries.addons.totalCount === 0 ? 1 : 0,
     rentals: summaries.rentals.totalCount === 0 ? 1 : 0,
     pricing: ["confirmed", "local_only"].includes(pricing.state) ? 0 : 1,
+    rules: rules.issueCount,
     templates: summaries.templates.attentionCount + (summaries.templates.totalCount === 0 ? 1 : 0)
   };
   const sections = AMBIENT_LIBRARY_SECTION_ORDER.map((sectionId) => {

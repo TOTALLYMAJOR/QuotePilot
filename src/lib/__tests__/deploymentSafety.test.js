@@ -225,9 +225,9 @@ describe("direct production deployment safety", () => {
     }
     expect(source).toContain("- email-active");
     expect(source).toMatch(
-      /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ inputs\.release_profile == 'email-active' && 'resend' \|\| 'none' \}\}/
+      /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ \(inputs\.release_profile == 'email-active' \|\| inputs\.release_profile == 'ragnakok-workflows'\) && 'resend' \|\| 'none' \}\}/
     );
-    expect(source).toMatch(/email-active\)[\s\S]*FIREBASE_SCOPE[\s\S]*EXPECTED_EMAIL_PROVIDER[\s\S]*resend/);
+    expect(source).toMatch(/email-active\|ragnakok-workflows\)[\s\S]*FIREBASE_SCOPE[\s\S]*EXPECTED_EMAIL_PROVIDER[\s\S]*resend/);
     expect(source).not.toContain("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
     expect(source).not.toContain("NOTIFICATIONS_OWNER_PHONE");
     expect(source).not.toContain("NOTIFICATIONS_OWNER_SMS_CONSENT");
@@ -251,9 +251,15 @@ describe("direct production deployment safety", () => {
     );
     const batches = planFunctionDeployBatches(ids);
 
-    expect(ids).toHaveLength(102);
+    expect(ids).toHaveLength(122);
+    expect(new Set(ids).size).toBe(122);
+    expect(ids).toEqual(expect.arrayContaining([
+      "getEventOperatingSnapshot", "applyEventOperatingCommand", "getWorkflowConfiguration",
+      "applyWorkflowDefinitionCommand", "getQuoteAttendance", "submitQuoteAttendanceResponse",
+      "getWorkflowPackSnapshot", "applyWorkflowPackCommand"
+    ]));
     expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
-    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 32]);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 17]);
     expect(batches.flat()).toEqual(ids);
     expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
     expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(
@@ -275,6 +281,7 @@ describe("direct production deployment safety", () => {
       NOTIFICATIONS_SMS_PROVIDER: "none",
       STRIPE_MODE: "live",
       COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",
+      EVENT_OPERATING_SPINE_ENABLED: "false",
       OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
       REVENUE_AUTOPILOT_ENABLED: "false",
       REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
@@ -313,6 +320,13 @@ describe("direct production deployment safety", () => {
       functionCount: 2,
       profile: "email-active"
     });
+    const scopedResponse = { ...response, result: expectedIds.map(id => entry(id, {
+      ...runtime, NOTIFICATIONS_EMAIL_PROVIDER: "resend", TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox"
+    })) };
+    expect(validateProductionFunctionsReadback(scopedResponse, expectedIds, "ragnakok-workflows").profile).toBe("ragnakok-workflows");
+    expect(() => validateProductionFunctionsReadback(scopedResponse, expectedIds, "email-active")).toThrow(/TENANT_WORKFLOW_ORGANIZATION_ID/);
+    scopedResponse.result[0].environmentVariables.TENANT_WORKFLOW_ORGANIZATION_ID = "other";
+    expect(() => validateProductionFunctionsReadback(scopedResponse, expectedIds, "ragnakok-workflows")).toThrow(/TENANT_WORKFLOW_ORGANIZATION_ID/);
     expect(() => validateProductionFunctionsReadback(
       response,
       expectedIds,

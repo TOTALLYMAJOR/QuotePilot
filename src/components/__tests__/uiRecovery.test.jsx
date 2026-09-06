@@ -136,15 +136,16 @@ describe("recoverable lazy surfaces", () => {
     expect(recoverySource).not.toMatch(/\{\s*(?:error|this\.state\.error)\.(?:message|stack)/);
   });
 
-  test("keeps Ambient Opportunities recovery ahead of legacy Quote History diagnostics", () => {
+  test("keeps Ambient Opportunities read recovery while surfacing mutation failures", () => {
     const historySource = readSource("../QuoteHistoryModal.jsx");
 
     expect(historySource).toContain(
       '{!AMBIENT_UI_ENABLED && <details className="staff-evidence-disclosure workspace-data-details">'
     );
     expect(historySource).toContain(
-      '{state.error && !AMBIENT_UI_ENABLED && <p className="error-note" role="alert">{state.error}</p>}'
+      '{state.error && (!AMBIENT_UI_ENABLED || state.error !== state.readError) && ('
     );
+    expect(historySource).toContain('<p className="error-note" role="alert">{state.error}</p>');
     expect(historySource).toContain("<AmbientOpportunitiesStream");
   });
 

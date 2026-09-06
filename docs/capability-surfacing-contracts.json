@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 67,
+  "catalogVersion": 75,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -539,14 +539,14 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 8,
+      "reviewRevision": 10,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The v0.16 Ambient presentation reuses that authority in a sparse hospitality-led empty state and a populated relationship view led by client identity, current or recent event, recorded memory, current attention, and one next action; search and filtering appear only for a populated bounded page. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The Ambient presentation reuses that authority in a sparse start state, a populated relationship-led directory, and an internal relationship ledger composed from existing Client, Opportunity, Proposal, Event, request, conversation-summary, and lifecycle evidence. It does not add relationship memory, activity, urgency, or consequence authority. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
@@ -587,7 +587,7 @@
         },
         {
           "path": "src/components/AmbientClientsView.jsx",
-          "locator": "Suggested next step"
+          "locator": "data-client-relationship-layout=\"ledger\""
         },
         {
           "path": "src/components/CustomerCommercialMeasures.jsx",
@@ -619,7 +619,8 @@
         "src/lib/__tests__/customerWorkspace.test.js",
         "src/lib/__tests__/localCustomerDirectoryFixture.test.js",
         "src/lib/__tests__/quoteVersionComparison.test.js",
-        "src/rules/__tests__/firestore.rules.test.js"
+        "src/rules/__tests__/firestore.rules.test.js",
+        "src/lib/__tests__/customerRebookingRadar.test.js"
       ],
       "testLocators": [
         {
@@ -677,6 +678,10 @@
         {
           "path": "src/lib/__tests__/quoteVersionComparison.test.js",
           "locator": "ignores lifecycle, portal, payment, booking, provider, and mutable totals evidence"
+        },
+        {
+          "path": "src/lib/__tests__/customerRebookingRadar.test.js",
+          "locator": "closeout actuals references come only from the exact closeout projection"
         }
       ],
       "documentationPaths": [
@@ -694,7 +699,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 8 preserves the Revision 7 sparse Clients hierarchy and reconciles development review data precedence: an explicitly seeded tenant quote directory now owns exact populated or empty acceptance state, while the generic local_fixture remains the fallback only when no explicit directory exists. Production Firebase reads, Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, keyboard behavior, and recovery controls remain intact.",
+      "surfaceReviewNote": "Revision 9 converges the internal Client 360 presentation into the selected relationship ledger: identity and one evidence-supported next step lead; the existing Client, Opportunity, Proposal, and Event facts form a relationship spine; exact lifecycle and request activity follows; same-quote same-time request and conversation summaries are displayed once; and deeper conversations, source detail, additional opportunities, and record controls remain available under disclosure. Production Firebase reads, Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, keyboard behavior, and recovery controls remain intact. Tenant workflow integration also preserves exact accepted-version and acceptance-receipt identifiers on closeout projections; missing references stay unavailable without current-quote fallbacks.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -861,26 +866,44 @@
     },
     {
       "id": "trusted-customer-import",
-      "reviewRevision": 1,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "admin"
       ],
-      "summary": "Customer CSV import and rollback use tenant-bound server callables, stable batch identity, reversible receipts, and explicit uncertain-outcome reconciliation.",
+      "summary": "The tenant Import Workbench combines exact-value CSV/searchable-PDF review with SHA-256-bound customer sessions, receipt-bounded partial recovery, and catalog-draft staging whose durable request receipt can reconcile the exact mutation as staged or already published.",
       "backendPaths": [
         "firestore.rules",
+        "functions/catalogSetupDrafts.js",
         "functions/index.js",
-        "src/lib/importBatchService.js"
+        "src/lib/fieldState.js",
+        "src/lib/importBatchService.js",
+        "src/lib/importWorkbenchModel.js",
+        "src/lib/pdfImport.js",
+        "src/lib/catalogSetupDraftService.js"
       ],
       "backendExports": [
+        "functions/index.js#preflightCustomerImportBatch",
         "functions/index.js#createCustomerImportBatch",
         "functions/index.js#rollbackCustomerImportBatch"
       ],
+      "affectedBackendExports": [
+        "functions/index.js#preflightCustomerImportBatch",
+        "functions/index.js#createCustomerImportBatch",
+        "functions/index.js#rollbackCustomerImportBatch",
+        "functions/index.js#saveCatalogSetupDraft",
+        "functions/index.js#publishCatalogSetupDraft"
+      ],
       "frontendPaths": [
         "src/App.jsx",
-        "src/components/ImportStudioModal.jsx"
+        "src/components/ImportStudioModal.jsx",
+        "src/hooks/useCatalogData.js",
+        "src/lib/catalogSetupDraftService.js",
+        "src/lib/importBatchService.js",
+        "src/lib/importWorkbenchModel.js",
+        "src/lib/pdfImport.js"
       ],
       "entryPointLocators": [
         {
@@ -889,19 +912,74 @@
         }
       ],
       "testPaths": [
+        "e2e/import-workbench-pdf.spec.js",
+        "src/components/__tests__/importWorkbenchFlow.test.jsx",
         "src/components/__tests__/importStudioPresentation.test.jsx",
+        "src/hooks/__tests__/useCatalogData.observation.test.jsx",
+        "src/lib/__tests__/catalogSetupDraftImport.test.js",
+        "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+        "src/lib/__tests__/importWorkbenchModel.test.js",
+        "src/lib/__tests__/pdfImport.test.js",
         "src/lib/__tests__/customerImport.emulator.test.js",
         "src/lib/__tests__/importBatchService.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
         {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "makes every inferred source row reachable through explicit review pages"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "renders every mapped PDF value, resolved relationship, and source excerpt before preflight"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "uploads CSV, explicitly excludes a blocked row, preflights, and hands a multi-batch customer session to the service"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "renders a reconciled published catalog receipt without offering draft undo"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "keeps an unresolved customer batch locked to its issued preflight while resuming"
+        },
+        {
+          "path": "src/components/__tests__/importWorkbenchFlow.test.jsx",
+          "locator": "keeps catalog source-refresh retry reachable after reload fails, then re-preflights the same batch"
+        },
+        {
           "path": "src/components/__tests__/importStudioPresentation.test.jsx",
           "locator": "renders uncertain customer imports and same-batch reconciliation without assuming success"
         },
         {
+          "path": "src/hooks/__tests__/useCatalogData.observation.test.jsx",
+          "locator": "reload stays pending until the successful read is committed to hook state"
+        },
+        {
+          "path": "src/lib/__tests__/catalogSetupDraftImport.test.js",
+          "locator": "stages only a matching preflight and forwards both revision fences"
+        },
+        {
+          "path": "src/lib/__tests__/catalogSetupDrafts.server.test.js",
+          "locator": "reconciles one exact save receipt as staged, then published after response loss and a later draft"
+        },
+        {
           "path": "src/lib/__tests__/customerImport.emulator.test.js",
           "locator": "server owns customer ids, normalized search fields, duplicate decisions, and receipts"
+        },
+        {
+          "path": "src/lib/__tests__/customerImport.emulator.test.js",
+          "locator": "preflight divides unique-email rows before Firestore's transaction write ceiling"
+        },
+        {
+          "path": "src/lib/__tests__/customerImport.emulator.test.js",
+          "locator": "an activated multi-chunk session resumes after preflight expiry and replays idempotently"
+        },
+        {
+          "path": "e2e/import-workbench-pdf.spec.js",
+          "locator": "searchable PDF is extracted by the pinned browser runtime into an exact, mobile-safe review"
         },
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
@@ -915,7 +993,7 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback)"
+          "locator": "Tenant Import Workbench: customer and catalog CSV plus searchable-PDF catalog extraction"
         },
         {
           "path": "docs/USER_MANUAL.md",
@@ -923,7 +1001,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Import Studio now presents initial submission, stable-batch uncertainty, reconciliation, server receipt, definitive error, and retry states without assuming writes or outbound delivery.",
+      "surfaceReviewNote": "Import Workbench makes every inferred record reachable, keeps exact values and provenance visible, activates a 24-hour customer continuation only after the first accepted child, preserves confirmed partial receipts for resume or undo, awaits catalog source reads before reporting refresh, and distinguishes a shared-draft receipt from a server-reconciled publication receipt without offering draft undo for published records.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -969,11 +1047,11 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Admins can reconcile the same import batch, see a server-owned receipt, and undo eligible records without treating browser state as proof of a completed mutation."
+      "safeOutcome": "Admins can review every inferred source record, preflight the exact customer or catalog plan, resume or undo only server-confirmed customer children, retry a failed catalog refresh under the same identity, and treat catalog data as staged or published only when the exact server receipt supports that state; source and local tests do not establish hosted, production, or human acceptance."
     },
     {
       "id": "quote-conversation-receipts",
-      "reviewRevision": 6,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -986,7 +1064,8 @@
         "firestore.rules",
         "functions/index.js",
         "src/lib/customerWorkspace.js",
-        "src/lib/portalConversationClient.js"
+        "src/lib/portalConversationClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#sendQuotePortalConversationMessage"
@@ -1101,7 +1180,10 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff or the exact token holder can reconcile one quote-scoped message request without turning a stored receipt into a delivery, read, payment, or acceptance claim."
+      "safeOutcome": "Staff or the exact token holder can reconcile one quote-scoped message request without turning a stored receipt into a delivery, read, payment, or acceptance claim.",
+      "affectedBackendExports": [
+        "functions/index.js#sendQuotePortalConversationMessage"
+      ]
     },
     {
       "id": "event-messaging-station-read",
@@ -1271,7 +1353,7 @@
     },
     {
       "id": "customer-linked-booking-conversion",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -1337,7 +1419,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Quote History now exposes live approval-ready, submission, uncertainty, same-request reconciliation, trusted receipt, definitive error, and canonical-history recovery states without inferring payment or confirmation.",
+      "surfaceReviewNote": "Quote History now exposes live approval-ready, submission, uncertainty, same-request reconciliation, trusted receipt, definitive error, and canonical-history recovery states without inferring payment or confirmation. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -1387,7 +1469,7 @@
     },
     {
       "id": "stable-customer-identity-projection",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -1458,7 +1540,7 @@
     },
     {
       "id": "private-customer-authority",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
@@ -2030,7 +2112,7 @@
     },
     {
       "id": "exact-version-rebook-and-delivery-gate",
-      "reviewRevision": 4,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2154,6 +2236,10 @@
         {
           "path": "src/lib/__tests__/quoteStore.writeSafety.test.js",
           "locator": "updateQuote delegates only quote presentation and exact commercial authority identities to the trusted edit callable"
+        },
+        {
+          "path": "src/lib/__tests__/customerRebookingRadar.test.js",
+          "locator": "closeout actuals references come only from the exact closeout projection"
         }
       ],
       "documentationPaths": [
@@ -2170,8 +2256,8 @@
           "locator": "## Customer Directory and Customer 360"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 4 preserves the bounded anniversary/rebook surface and strengthens its shared trusted update boundary: every edit carrying an expected revision is rejected transactionally before write-document construction when the active quote version has changed. The v0.16 Quick Updates host uses the same fence and cannot treat updatedAt as a version identity. Existing tenant-calendar cues, stable-client handoff, deterministic rebook identity, staff review banner, delivery gate, role authority, and evidence boundaries are unchanged.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "Revision 4 preserves the bounded anniversary/rebook surface and strengthens its shared trusted update boundary: every edit carrying an expected revision is rejected transactionally before write-document construction when the active quote version has changed. The v0.16 Quick Updates host uses the same fence and cannot treat updatedAt as a version identity. Existing tenant-calendar cues, stable-client handoff, deterministic rebook identity, staff review banner, delivery gate, role authority, and evidence boundaries are unchanged. Slice D preserves the safe accepted-version and acceptance-receipt identifiers already present on the authoritative closeout projection in the browser review action. Missing references remain empty and never use current-quote fallbacks; old closeout sources remain distinct. Rebook, directory, delivery and closeout mutation authority are unchanged. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2221,7 +2307,7 @@
     },
     {
       "id": "authoritative-post-event-closeout",
-      "reviewRevision": 3,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2237,7 +2323,12 @@
         "src/lib/customerRebookingRadar.js",
         "src/lib/postEventCloseoutClient.js",
         "src/lib/quoteWorkflow.js",
-        "src/lib/statusSemantics.js"
+        "src/lib/statusSemantics.js",
+        "functions/workflowDefinitions.js",
+        "functions/workflowExecution.js",
+        "functions/workflowPackAdapters.js",
+        "src/lib/workflowPackClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#recordPostEventCloseoutReview",
@@ -2246,7 +2337,10 @@
       "affectedBackendExports": [
         "functions/index.js#convertQuoteToContract",
         "functions/index.js#recordPostEventCloseoutReview",
-        "functions/index.js#refreshPostEventCloseoutConfiguration"
+        "functions/index.js#refreshPostEventCloseoutConfiguration",
+        "functions/index.js#getWorkflowPackSnapshot",
+        "functions/index.js#previewWorkflowPackMigration",
+        "functions/index.js#applyWorkflowPackCommand"
       ],
       "frontendPaths": [
         "src/App.jsx",
@@ -2256,7 +2350,8 @@
         "src/components/PostEventCloseoutReviewAction.jsx",
         "src/components/SalesWorkflowModal.jsx",
         "src/lib/workspaceRoutes.js",
-        "src/styles.css"
+        "src/styles.css",
+        "src/components/WorkflowPackPolicyPanel.jsx"
       ],
       "entryPointLocators": [
         {
@@ -2280,7 +2375,10 @@
         "src/lib/__tests__/postEventCloseoutClient.test.js",
         "src/lib/__tests__/quoteWorkflow.test.js",
         "src/lib/__tests__/workspaceRoutes.test.js",
-        "src/rules/__tests__/firestore.rules.test.js"
+        "src/rules/__tests__/firestore.rules.test.js",
+        "src/lib/__tests__/customerRebookingRadar.test.js",
+        "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+        "src/lib/__tests__/workflowPackAdapters.server.test.js"
       ],
       "testLocators": [
         {
@@ -2306,6 +2404,10 @@
         {
           "path": "src/lib/__tests__/workspaceRoutes.test.js",
           "locator": "round-trips every shipped workflow focus type without customer or quote contents"
+        },
+        {
+          "path": "src/lib/__tests__/customerRebookingRadar.test.js",
+          "locator": "closeout actuals references come only from the exact closeout projection"
         }
       ],
       "documentationPaths": [
@@ -2323,7 +2425,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Governed booking, exact source binding, tenant-calendar configuration blocking, private receipt authority, client-overview and Workflow entry points, responsive review controls, and all mutation/reconciliation states were reviewed together. Revision 3 changes the visible destination label only; callable authority and receipts are unchanged.",
+      "surfaceReviewNote": "Governed booking, exact source binding, tenant-calendar configuration blocking, private receipt authority, client-overview and Workflow entry points, responsive review controls, and all mutation/reconciliation states were reviewed together. Revision 3 changes the visible destination label only; callable authority and receipts are unchanged. Slice D preserves the safe accepted-version and acceptance-receipt identifiers already present on the authoritative closeout projection in the browser review action. Missing references remain empty and never use current-quote fallbacks; old closeout sources remain distinct. Rebook, directory, delivery and closeout mutation authority are unchanged. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2373,7 +2475,7 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -2383,10 +2485,26 @@
       "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, advisory REVIEW or STALE consequences, and one six-group source-labeled consequence review before any save.",
       "backendPaths": [
         "functions/commercialChangeImpactPreview.js",
+        "functions/commercialPlatformCore.cjs",
+        "functions/finalBalancePayment.js",
         "functions/index.js",
         "functions/pricingEngine.js",
+        "functions/pricingV2Core.cjs",
+        "functions/proposalAcceptance.js",
+        "functions/quoteCreation.js",
+        "functions/starterCatalogPacks.js",
+        "src/data/mockCatalog.js",
+        "src/hooks/useCatalogData.js",
+        "src/lib/ambientLibrary.js",
+        "src/lib/catalogWriteShapes.js",
         "src/lib/commerceOps.js",
+        "src/lib/commercialPlatform.js",
+        "src/lib/commercialPlatformCore.cjs",
         "src/lib/commercialChangeImpact.js",
+        "src/lib/pricingContracts.js",
+        "src/lib/pricingV2.js",
+        "src/lib/pricingV2Core.cjs",
+        "src/lib/quoteStore.js",
         "src/lib/unifiedCommercialConsequenceReview.js"
       ],
       "backendExports": [
@@ -2397,6 +2515,8 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/AmbientLibraryRoute.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/UnifiedCommercialConsequenceReview.jsx"
       ],
@@ -2420,6 +2540,17 @@
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/lib/__tests__/commercialChangeImpact.test.js",
         "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
+        "src/lib/__tests__/commercialPlatformCore.test.js",
+        "src/lib/__tests__/finalBalancePayment.server.test.js",
+        "src/lib/__tests__/pricingEngine.authoritative.test.js",
+        "src/lib/__tests__/pricingV1GoldenCorpus.test.js",
+        "src/lib/__tests__/pricingV2Core.test.js",
+        "src/lib/__tests__/pricingV2Differential.test.js",
+        "src/lib/__tests__/proposalAcceptance.server.test.js",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/starterCatalogPacks.server.test.js",
+        "src/lib/__tests__/ambientLibrary.test.js",
+        "src/components/__tests__/ambientLibraryRoute.test.jsx",
         "src/lib/__tests__/unifiedCommercialConsequenceReview.test.js",
         "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx"
       ],
@@ -2458,7 +2589,9 @@
         }
       ],
       "documentationPaths": [
+        "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
         "docs/FEATURE_MATRIX.md",
+        "docs/PRICING_CONSTITUTION.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
@@ -2604,7 +2737,7 @@
     },
     {
       "id": "commercial-change-authority",
-      "reviewRevision": 4,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2623,7 +2756,13 @@
         "src/lib/commercialChangePersistedEffectsDisabled.js",
         "src/lib/commercialChangePersistedEffectsEnabled.js",
         "src/lib/quickUpdatesState.js",
-        "src/lib/quoteStore.js"
+        "src/lib/quoteStore.js",
+        "functions/quoteCreation.js",
+        "functions/workflowDefinitions.js",
+        "functions/workflowExecution.js",
+        "functions/workflowPackAdapters.js",
+        "functions/quoteAttendance.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#simulateCommercialQuoteChange",
@@ -2640,7 +2779,13 @@
         "functions/index.js#reconcileCommercialQuoteChangeApplyOutcome",
         "functions/index.js#getCommercialDependencyState",
         "functions/index.js#reconcileCommercialDependencyState",
-        "functions/index.js#updateQuoteDraft"
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#getWorkflowPackSnapshot",
+        "functions/index.js#previewWorkflowPackMigration",
+        "functions/index.js#applyWorkflowPackCommand",
+        "functions/index.js#getQuoteAttendance",
+        "functions/index.js#applyQuoteAttendanceCommand",
+        "functions/index.js#submitQuoteAttendanceResponse"
       ],
       "frontendPaths": [
         "src/App.jsx",
@@ -2677,7 +2822,11 @@
         "src/lib/__tests__/quoteStore.writeSafety.test.js",
         "e2e/v16-calm-four-acceptance.spec.js",
         "src/rules/__tests__/firestore.rules.test.js",
-        "scripts/customer-centered-authority-emulator-acceptance.mjs"
+        "scripts/customer-centered-authority-emulator-acceptance.mjs",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/quoteAttendance.server.test.js",
+        "src/lib/__tests__/workflowPackAdapters.server.test.js",
+        "src/lib/__tests__/workflowPackCommercialIntegration.server.test.js"
       ],
       "testLocators": [
         {
@@ -2739,6 +2888,10 @@
         {
           "path": "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
           "locator": "binds Quick Updates review to Commercial Change receipts and delegates save calculations"
+        },
+        {
+          "path": "src/lib/__tests__/workflowPackCommercialIntegration.server.test.js",
+          "locator": "sealed attendance amendment applies atomically and preserves paid contract and old acceptance evidence"
         }
       ],
       "documentationPaths": [
@@ -2756,7 +2909,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 4 reviews contextual Quick Updates together with the existing trusted quote-edit and Commercial Change authority. The drawer/sheet is write-free on open, keeps one allowlisted service-style draft local and visible, guards every destructive dismissal path, and renders the server authority's enumerated material persisted-effects projection rather than claiming a whole-document preview across time-assigned fields. Firebase draft saves are single-flight and bound to the persisted simulation, active revision, catalog digest, and policy even while Commercial Change enforcement is dormant; local, sent, viewed, authorization-required, rejected, and uncertain cases retain explicit handoff or reconciliation boundaries. A saved result requires the write receipt, server-only quote verification, and refreshed opportunity-list state. Executable emulator evidence covers form mismatch, catalog drift, stale revision, zero-write failures, and one successful dormant save/readback. The panel exposes staffing, pricing, and Library as contextual handoffs rather than parallel rules or global destinations. The existing advisory guest-count counterfactual retains its distinct deterministic local-calculation and connected immutable-receipt sources.",
+      "surfaceReviewNote": "Revision 4 reviews contextual Quick Updates together with the existing trusted quote-edit and Commercial Change authority. The drawer/sheet is write-free on open, keeps one allowlisted service-style draft local and visible, guards every destructive dismissal path, and renders the server authority's enumerated material persisted-effects projection rather than claiming a whole-document preview across time-assigned fields. Firebase draft saves are single-flight and bound to the persisted simulation, active revision, catalog digest, and policy even while Commercial Change enforcement is dormant; local, sent, viewed, authorization-required, rejected, and uncertain cases retain explicit handoff or reconciliation boundaries. A saved result requires the write receipt, server-only quote verification, and refreshed opportunity-list state. Executable emulator evidence covers form mismatch, catalog drift, stale revision, zero-write failures, and one successful dormant save/readback. The panel exposes staffing, pricing, and Library as contextual handoffs rather than parallel rules or global destinations. The existing advisory guest-count counterfactual retains its distinct deterministic local-calculation and connected immutable-receipt sources. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2836,7 +2989,7 @@
     },
     {
       "id": "commercial-dependency-state-and-reconciliation",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -2871,7 +3024,8 @@
       ],
       "frontendPaths": [
         "src/components/QuoteHistoryModal.jsx",
-        "src/components/CommercialDependencyStatePanel.jsx"
+        "src/components/CommercialDependencyStatePanel.jsx",
+        "src/components/EventExecutionContextPanel.jsx"
       ],
       "entryPointLocators": [
         {
@@ -2886,7 +3040,8 @@
       "testPaths": [
         "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
         "src/components/__tests__/quoteHistoryCommercialDependencyIntegration.test.jsx",
-        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js"
+        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
+        "src/components/__tests__/EventExecutionContextPanel.test.jsx"
       ],
       "testLocators": [
         {
@@ -2913,7 +3068,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The staff quote record now distinguishes bounded loading, empty, ready, blocked, partial, stale, and failed reads from receipt-bound reconciliation, including exact request locking and safe recovery.",
+      "surfaceReviewNote": "The staff quote record now distinguishes bounded loading, empty, ready, blocked, partial, stale, and failed reads from receipt-bound reconciliation, including exact request locking and safe recovery. Slice D adds a read-only current execution context consumer of the existing trusted getter, with source revisions, observation time and independent failure handling. No mutation, authority, provider effect or historical execution claim is added.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -2993,7 +3148,7 @@
     },
     {
       "id": "trusted-kitchen-beo-authority",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -3020,7 +3175,8 @@
       ],
       "frontendPaths": [
         "src/components/QuoteHistoryModal.jsx",
-        "src/components/KitchenBeoArtifactPanel.jsx"
+        "src/components/KitchenBeoArtifactPanel.jsx",
+        "src/components/EventExecutionContextPanel.jsx"
       ],
       "entryPointLocators": [
         {
@@ -3042,7 +3198,8 @@
         "src/lib/__tests__/kitchenBeoAuthority.server.test.js",
         "src/lib/__tests__/kitchenBeoClient.test.js",
         "src/lib/__tests__/kitchenBeoIntegration.server.test.js",
-        "src/lib/__tests__/kitchenBeoPdf.server.test.js"
+        "src/lib/__tests__/kitchenBeoPdf.server.test.js",
+        "src/components/__tests__/EventExecutionContextPanel.test.jsx"
       ],
       "testLocators": [
         {
@@ -3072,8 +3229,8 @@
           "locator": "## Trusted Kitchen BEO generation and artifact freshness"
         }
       ],
-      "surfaceReview": "verified_existing",
-      "surfaceReviewNote": "The existing quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were verified unchanged. The server PDF renderer now loads only after the existing authorization and input-validation boundary; exports, role authority, UI states, receipt semantics, and recovery behavior are unchanged.",
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The existing quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were verified unchanged. The server PDF renderer now loads only after the existing authorization and input-validation boundary; exports, role authority, UI states, receipt semantics, and recovery behavior are unchanged. Slice D adds a read-only current execution context consumer of the existing trusted getter, with source revisions, observation time and independent failure handling. No mutation, authority, provider effect or historical execution claim is added.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -3326,7 +3483,7 @@
     },
     {
       "id": "revenue-autopilot-operations",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -3342,7 +3499,8 @@
         "functions/revenueAutopilotTemplates.js",
         "scripts/customer-centered-authority-emulator-acceptance.mjs",
         "src/lib/quoteWorkflow.js",
-        "src/lib/revenueAutopilotClient.js"
+        "src/lib/revenueAutopilotClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getRevenueAutopilotOperations",
@@ -3951,7 +4109,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 16,
+      "reviewRevision": 17,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -3993,7 +4151,10 @@
         "src/components/LiveBreakdown.jsx",
         "src/components/PackageWorkspace.jsx",
         "src/components/ProposalComposer.jsx",
-        "src/components/marginPresentation.js"
+        "src/components/marginPresentation.js",
+        "src/App.jsx",
+        "src/components/CreateIntake.jsx",
+        "src/components/AmbientLivingOpportunity.jsx"
       ],
       "entryPointLocators": [
         {
@@ -4050,7 +4211,7 @@
         },
         {
           "path": "src/components/PackageWorkspace.jsx",
-          "locator": "Package actions"
+          "locator": "Offer actions"
         }
       ],
       "testPaths": [
@@ -4076,7 +4237,8 @@
         "src/data/__tests__/mockCatalog.tenantSettings.test.js",
         "src/components/__tests__/marginPresentation.test.js",
         "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
-        "src/components/__tests__/catalogDraftStateBar.test.jsx"
+        "src/components/__tests__/catalogDraftStateBar.test.jsx",
+        "src/components/__tests__/attendanceState.test.js"
       ],
       "testLocators": [
         {
@@ -4220,11 +4382,11 @@
         },
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "QuotePilot Package Workspace in Catalog Admin"
+          "locator": "QuotePilot Offer presentation over the existing Package Workspace"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "In `Packages`, QuotePilot now opens one package workspace"
+          "locator": "In `Offers`, QuotePilot opens the existing Package Workspace"
         },
         {
           "path": "docs/PACKAGE_WORKSPACE.md",
@@ -4232,7 +4394,7 @@
         }
       ],
       "surfaceReview": "verified_existing",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. Revision 11 treats catalog read failures as recoverable for hosted admin flows while preserving the existing Firebase required-env gate outside local dev. Revision 12 adds catalog-owned proposal font scale, brand/logo readiness, guided-rule and cost/margin coverage summaries, trusted quoteMeta documentFontScale snapshots, Proposal Composer proposal-polish and staff-only margin/cost context, and PDF/client-preview font/letterhead projection. It uses the existing catalog save and margin gate, adds no pricing authority, and keeps costs/margin out of customer-facing proposal artifacts. Revision 13 adds the current-schema Package Workspace as the package editor on the existing Catalog Admin route. Stable-ID switching preserves the whole catalog draft; inclusion selectors stage only on Apply; activation fails closed on deterministic readiness; revert is package-scoped; delete requires an exact dependency review; and all persistence remains behind the existing catalog save states and revision fence. Revision 14 extends the same catalog-owned proposal seam with operator-authored intro/closing copy plus a saved commercial snapshot on trusted quote create/edit so later staff Quote Pulse reads can prefer exact saved cost evidence while customer preview, email, export, and portal artifacts still receive only brand/font/copy presentation. No callable, package schema, or quote-pricing authority changed. Revision 15 is backend-only and verifies the existing surfaces unchanged: local snapshot enrichment now attaches missing private commercial evidence without replacing the supplied normalized pricing totals or authority label. This is local source/test behavior only and does not establish hosted server authority.",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only \u2014 truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. Revision 11 treats catalog read failures as recoverable for hosted admin flows while preserving the existing Firebase required-env gate outside local dev. Revision 12 adds catalog-owned proposal font scale, brand/logo readiness, guided-rule and cost/margin coverage summaries, trusted quoteMeta documentFontScale snapshots, Proposal Composer proposal-polish and staff-only margin/cost context, and PDF/client-preview font/letterhead projection. It uses the existing catalog save and margin gate, adds no pricing authority, and keeps costs/margin out of customer-facing proposal artifacts. Revision 13 adds the current-schema Package Workspace as the package editor on the existing Catalog Admin route. Stable-ID switching preserves the whole catalog draft; inclusion selectors stage only on Apply; activation fails closed on deterministic readiness; revert is package-scoped; delete requires an exact dependency review; and all persistence remains behind the existing catalog save states and revision fence. Revision 14 extends the same catalog-owned proposal seam with operator-authored intro/closing copy plus a saved commercial snapshot on trusted quote create/edit so later staff Quote Pulse reads can prefer exact saved cost evidence while customer preview, email, export, and portal artifacts still receive only brand/font/copy presentation. No callable, package schema, or quote-pricing authority changed. Revision 15 is backend-only and verifies the existing surfaces unchanged: local snapshot enrichment now attaches missing private commercial evidence without replacing the supplied normalized pricing totals or authority label. This is local source/test behavior only and does not establish hosted server authority. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history. Current-main reconciliation retains its catalog draft and customer read contracts while composing the independently verified TOM evidence surface.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -4289,7 +4451,7 @@
       "audiences": [
         "staff"
       ],
-      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it — INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
+      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it \u2014 INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
       "backendPaths": [
         "functions/index.js",
         "functions/intentParserCore.cjs",
@@ -4515,7 +4677,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 19,
+      "reviewRevision": 23,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4523,7 +4685,7 @@
         "staff",
         "customers"
       ],
-      "summary": "Pure deterministic Ambient NOW, Opportunities, Library, exact-arrival, selection, Money, Proposal, Conversation, global Pilot, voice-preview, and customer decision-room contracts prepare source-only interaction and intelligent-object presentation without adding Firebase, provider, communication, pricing, role, or mutation authority. The default-off Opportunities stream projects the caller-owned, already tenant-scoped bounded quote read into identity and four separate proposal, commercial, customer, and operational momentum domains; only proposal completeness may use a percentage. It keeps quote lifecycle, booking confirmation, deposit, and final balance independent, chooses one recommended next step, preserves local-fallback truth and the legacy controls under Quote administration, and hands the exact opaque opportunity plus its arrival context to the canonical Living Opportunity. The administrator-only Library projects the existing organization-scoped catalog snapshot into Catalog and first-class Event Templates, presents source, observation, Catalog version, pricing-review, and incomplete-menu boundaries in calm task-centered language, shows contextual recovery for unavailable exact arrivals, retains dirty drafts across ordinary workspace navigation, keeps catalog-setting and managed-menu draft domains from advancing together, prevents fresher evidence from silently replacing work, and opens exact objects only through the existing guarded editor and save authority. Its development fallback cache and revision comparison are organization-scoped and remain explicitly non-authoritative. A portal-token provider remount occurs only after the App-level draft guard accepts the transition; direct initial portal precedence remains intact and each distinct token receives a distinct public scope. The default-off Ambient NOW briefing narrows the existing bounded staff snapshot to at most three already-ranked Workflow priorities, withholds caught-up language whenever reads or bounds are incomplete, and shows only timestamp-backed internal workflow receipts as quiet progress. The default-off staff shell's global Pilot trigger resolves only the exact context already in view: it relays a matching Living Opportunity into its populated evidence explanation, focuses the existing deterministic draft command field without executing it when that independent gate is enabled, or presents a nonempty choose-an-opportunity recovery instead of generic chat. In Ambient mode, supported browser speech uses pointer or keyboard hold-to-capture, immediate contextual state, release-to-preview, bounded transcript handling, and exact recovery; the transcript is not persisted or staged, explicit Apply remains required, and the flag-off Pilot retains its existing click-to-toggle behavior. Exact arrivals carry only allowlisted semantics and opaque identifiers and remain pending until a supported destination proves exact focus without substitution. Schedule supports only exact accepted/booked events and complete-current-conflict evidence while refusing to conflate its legacy staff-lead field with authoritative operational staffing. Reporting supports only exact opportunity, bounded pipeline, and Ambient interaction-health targets and keeps its targeted opportunity read outside aggregate denominators. Selection scenarios remain local, reversible, unpriced, and unsaved; Money preserves five payment evidence domains; Proposal separates saved revision, authoritative pricing, customer projection, portal issuance, and provider acceptance; Conversation keeps sent, provider-delivered, portal-viewed, replied, and inferred engagement independent; higher-authority Pilot classes remain blocked. The separately gated customer decision room composes the existing exact-token projection into calm Event, Menu and service, Pricing, Planning assumptions, Terms, Possible additions, Response, and Questions sections. Staff-marked additions stage only reversible ordinary change-request lines, and contextual questions reuse one existing conversation composer with explicit staged, preserved-draft, pending-attempt, read-only, and unavailable acknowledgements. The v0.16 Calm Four shell keeps Now, Opportunities, Clients, and role-safe Library as the only persistent destinations, preserves secondary utilities in a focus-contained mobile Workspace & tools sheet, derives opportunity ordering from current recorded state, and keeps standalone and contextual Library modes on the same catalog authority without making browsing a write. Its session-only Current task rail now preserves one exact staff follow-up task across those routes. Workflow completion reuses the existing quote-write authority and reaches Completed only after a matching server-only same-organization readback; browser-local, unavailable, stale, mismatched, and ambiguous outcomes stay proofless as Needs confirmation, and retry performs only the readback. Its staff-route return context keeps native history authoritative and restores an exact adjacent Opportunities, Clients, or Library view only within the same runtime, organization, and principal; URL-safe enums are separated from memory-only search, disclosure, focus, scroll, exact editor targets, and drafts, while invalid or reloaded context fails to the canonical route without record substitution.",
+      "summary": "Pure deterministic Ambient NOW, Opportunities, Library, exact-arrival, selection, Money, Proposal, Conversation, global Pilot, voice-preview, and customer decision-room contracts prepare source-only interaction and intelligent-object presentation without adding Firebase, provider, communication, pricing, role, or mutation authority. The default-off Opportunities stream projects the caller-owned, already tenant-scoped bounded quote read into identity and four separate proposal, commercial, customer, and operational momentum domains; only proposal completeness may use a percentage. It keeps quote lifecycle, booking confirmation, deposit, and final balance independent, chooses one recommended next step, preserves local-fallback truth and the legacy controls under Quote administration, and hands the exact opaque opportunity plus its arrival context to the canonical Living Opportunity. The administrator-only Library projects the existing organization-scoped catalog snapshot into Catalog and first-class Event Templates, presents source, observation, Catalog version, pricing-review, and incomplete-menu boundaries in calm task-centered language, shows contextual recovery for unavailable exact arrivals, retains dirty drafts across ordinary workspace navigation, keeps catalog-setting and managed-menu draft domains from advancing together, prevents fresher evidence from silently replacing work, and opens exact objects only through the existing guarded editor and save authority. Its development fallback cache and revision comparison are organization-scoped and remain explicitly non-authoritative. A portal-token provider remount occurs only after the App-level draft guard accepts the transition; direct initial portal precedence remains intact and each distinct token receives a distinct public scope. The default-off Ambient NOW briefing narrows the existing bounded staff snapshot to at most three already-ranked Workflow priorities, withholds caught-up language whenever reads or bounds are incomplete, and shows only timestamp-backed internal workflow receipts as quiet progress. The default-off staff shell's global Pilot trigger resolves only the exact context already in view: it relays a matching Living Opportunity into its populated evidence explanation, focuses the existing deterministic draft command field without executing it when that independent gate is enabled, or presents a nonempty choose-an-opportunity recovery instead of generic chat. In Ambient mode, supported browser speech uses pointer or keyboard hold-to-capture, immediate contextual state, release-to-preview, bounded transcript handling, and exact recovery; the transcript is not persisted or staged, explicit Apply remains required, and the flag-off Pilot retains its existing click-to-toggle behavior. Exact arrivals carry only allowlisted semantics and opaque identifiers and remain pending until a supported destination proves exact focus without substitution. Schedule supports only exact accepted/booked events and complete-current-conflict evidence while refusing to conflate its legacy staff-lead field with authoritative operational staffing. When the Calendar capability is disabled, Operations navigation, Calendar routes, and contextual handoffs fail closed; Reporting and People retain their independent capability and role gates. Reporting supports only exact opportunity, bounded pipeline, and Ambient interaction-health targets and keeps its targeted opportunity read outside aggregate denominators. Selection scenarios remain local, reversible, unpriced, and unsaved; Money preserves five payment evidence domains; Proposal separates saved revision, authoritative pricing, customer projection, portal issuance, and provider acceptance; Conversation keeps sent, provider-delivered, portal-viewed, replied, and inferred engagement independent; higher-authority Pilot classes remain blocked. The separately gated customer decision room composes the existing exact-token projection as the customer-facing Client 360 event story: one broad proposal canvas, one secondary decision rail, compact optional additions, and collapsed price, assumptions, and terms detail. The public route does not inherit staff navigation geometry. Staff-marked additions stage only reversible ordinary change-request lines, and contextual questions reuse one existing conversation composer with explicit staged, preserved-draft, pending-attempt, read-only, and unavailable acknowledgements. The historical v0.16 Calm Four shell kept Now, Opportunities, Clients, and role-safe Library as its persistent destinations. The later UX convergence presentation adds Calendar-first Operations as the fifth primary destination, removes the duplicate Ambient Operations header menu, and records the zero-consumer Operations switchboard as retired from the Ambient graph while preserving every live route and authority. Secondary Search, Workflow, Messages, Pilot, Clear the Deck, role-gated Staff, and progressive Administration remain in the focus-contained Workspace & tools sheet. Its session-only Current task rail preserves one exact staff follow-up task across those routes. Workflow completion reuses the existing quote-write authority and reaches Completed only after a matching server-only same-organization readback; browser-local, unavailable, stale, mismatched, and ambiguous outcomes stay proofless as Needs confirmation, and retry performs only the readback. Its staff-route return context keeps native history authoritative and restores an exact adjacent Opportunities, Clients, Operations, or Library view only within the same runtime, organization, and principal; URL-safe enums are separated from memory-only search, disclosure, focus, scroll, exact editor targets, and drafts, while invalid or reloaded context fails to the canonical route without record substitution.",
       "backendPaths": [
         "src/lib/ambientMoneyObject.js",
         "src/lib/ambientProposalObject.js",
@@ -4566,6 +4728,7 @@
         "src/components/QuoteHistoryModal.jsx",
         "src/components/ConfiguredQuoteActionRail.jsx",
         "src/components/CustomerPortalView.jsx",
+        "src/components/customerPortalView.css",
         "src/components/AmbientGlobalPilotSurface.jsx",
         "src/components/AmbientNowView.jsx",
         "src/components/AmbientOpportunitiesStream.jsx",
@@ -4643,7 +4806,7 @@
         },
         {
           "path": "src/components/CustomerPortalView.jsx",
-          "locator": "portal-decision-room-shell"
+          "locator": "data-portal-presentation={AMBIENT_DECISION_ROOM_ENABLED ? \"event-story\" : \"legacy\"}"
         },
         {
           "path": "src/components/AmbientLivingOpportunity.jsx",
@@ -4687,7 +4850,11 @@
         },
         {
           "path": "src/components/EventScheduleModal.jsx",
-          "locator": "data-schedule-event-id={item.id}"
+          "locator": "data-schedule-event-id={selectedEvent.id}"
+        },
+        {
+          "path": "src/components/EventScheduleModal.jsx",
+          "locator": "data-operations-mode={operationsMode ? \"calendar-first\" : undefined}"
         },
         {
           "path": "src/components/ReportingDashboardModal.jsx",
@@ -4705,6 +4872,8 @@
         "e2e/workspace-no-unintended-overlap.spec.js",
         "e2e/staff-app-cross-route-task-loop.spec.js",
         "e2e/staff-app-return-context.spec.js",
+        "e2e/ux-convergence-operations.spec.js",
+        "src/lib/__tests__/calendarCapabilityGate.test.js",
         "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
         "src/components/__tests__/ambientNowView.test.jsx",
         "src/components/__tests__/ambientOpportunitiesStream.test.jsx",
@@ -5211,6 +5380,10 @@
           "locator": "keeps arrival pending until the exact same-tenant event is selected and focused"
         },
         {
+          "path": "e2e/ux-convergence-operations.spec.js",
+          "locator": "preserves exact Now to Calendar and Calendar to Opportunity handoffs"
+        },
+        {
           "path": "src/components/__tests__/reportingDashboardArrival.test.jsx",
           "locator": "uses a targeted quote read, focuses its exact summary, and leaves the aggregate denominator unchanged"
         },
@@ -5333,7 +5506,7 @@
         },
         {
           "path": "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
-          "locator": "### 16. Preserve the operator's place — P1"
+          "locator": "### 16. Preserve the operator's place \u2014 P1"
         }
       ],
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
@@ -5471,11 +5644,11 @@
         },
         {
           "path": "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
-          "locator": "### 17. Use one durable action-feedback contract — P1"
+          "locator": "### 17. Use one durable action-feedback contract \u2014 P1"
         },
         {
           "path": "docs/design/staff-app-ui-cohesion-audit.md",
-          "locator": "### 17. P1 — Use one durable action-feedback contract"
+          "locator": "### 17. P1 \u2014 Use one durable action-feedback contract"
         }
       ],
       "surfaceReview": "changed",
@@ -6064,7 +6237,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 5,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -6087,7 +6260,8 @@
         "src/lib/proposalExport.js",
         "src/lib/staffBriefingSheet.js",
         "src/lib/staffDirectoryClient.js",
-        "src/lib/staffInvitationClient.js"
+        "src/lib/staffInvitationClient.js",
+        "functions/tenantWorkflowRuntime.js"
       ],
       "backendExports": [
         "functions/index.js#getOperationalStaffingSnapshot",
@@ -6119,7 +6293,8 @@
         "src/components/WorkspaceShell.jsx",
         "src/main.jsx",
         "src/lib/staffBriefingSheet.js",
-        "src/lib/staffInvitationClient.js"
+        "src/lib/staffInvitationClient.js",
+        "src/components/EventExecutionContextPanel.jsx"
       ],
       "entryPointLocators": [
         {
@@ -6167,7 +6342,8 @@
         "src/lib/__tests__/staffInvitationAuthority.server.test.js",
         "src/lib/__tests__/staffInvitationIntegration.server.test.js",
         "src/lib/__tests__/staffInvitationRoute.server.test.js",
-        "src/rules/__tests__/firestore.rules.test.js"
+        "src/rules/__tests__/firestore.rules.test.js",
+        "src/components/__tests__/EventExecutionContextPanel.test.jsx"
       ],
       "testLocators": [
         {
@@ -6262,7 +6438,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 5 preserves every revision 4 staffing, protected tenant-gate, WIF, role, and mutation boundary while moving Staff out of persistent primary navigation. Administrators reach the existing Staff workspace from desktop Operations or mobile Workspace & tools; eligible opportunity users reach the same staffing context through the task-specific Quick Updates handoff. The photo-rich local_fixture remains available only under explicit local authentication bypass and performs no Firebase or provider write. The independently gated Event Workspace context, administrator-only Staff route, public exact-token response route, and protected tenant-gate operator remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read/mutation states. The tenant-gate operator still accepts only a short-lived WIF Datastore token from its distinct service account and changes only the named tenant field with readback. No new role, profile field, assignment command, invitation path, provider evidence, or readiness claim is introduced.",
+      "surfaceReviewNote": "Revision 5 preserves every revision 4 staffing, protected tenant-gate, WIF, role, and mutation boundary while moving Staff out of persistent primary navigation. Administrators reach the existing Staff workspace from desktop Operations or mobile Workspace & tools; eligible opportunity users reach the same staffing context through the task-specific Quick Updates handoff. The photo-rich local_fixture remains available only under explicit local authentication bypass and performs no Firebase or provider write. The independently gated Event Workspace context, administrator-only Staff route, public exact-token response route, and protected tenant-gate operator remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read/mutation states. The tenant-gate operator still accepts only a short-lived WIF Datastore token from its distinct service account and changes only the named tenant field with readback. No new role, profile field, assignment command, invitation path, provider evidence, or readiness claim is introduced. Slice D adds a read-only current execution context consumer of the existing trusted getter, with source revisions, observation time and independent failure handling. No mutation, authority, provider effect or historical execution claim is added.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -6497,7 +6673,7 @@
     },
     {
       "id": "commercial-evidence-exporter",
-      "reviewRevision": 2,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "developer_infrastructure",
@@ -6519,7 +6695,12 @@
         "evidence/src/producers/feeScheduleProducer.mjs",
         "evidence/src/producers/consumptionProducer.mjs",
         "scripts/truthloop-export-emulator-acceptance.mjs",
-        "evidence/src/firestoreReader.mjs"
+        "evidence/src/firestoreReader.mjs",
+        "evidence/src/actualsProjection.mjs",
+        "truthloop/src/quotepilot_truthloop/model.py",
+        "truthloop/src/quotepilot_truthloop/loader.py",
+        "truthloop/src/quotepilot_truthloop/rules/operations.py",
+        "evidence/src/workflowPolicyProjection.mjs"
       ],
       "backendExports": [],
       "frontendPaths": [],
@@ -6527,7 +6708,14 @@
       "testPaths": [
         "src/lib/__tests__/commercialEvidenceExporter.test.js",
         "src/lib/__tests__/commercialEvidenceExporter.adversarial.test.js",
-        "src/lib/__tests__/commercialEvidenceReader.test.js"
+        "src/lib/__tests__/commercialEvidenceReader.test.js",
+        "src/lib/__tests__/commercialActualsEvidence.test.js",
+        "truthloop/tests/test_chain_rules.py",
+        "truthloop/tests/test_loader.py",
+        "truthloop/tests/test_engine.py",
+        "truthloop/tests/test_reason_codes.py",
+        "src/lib/__tests__/commercialWorkflowPolicyEvidence.test.js",
+        "truthloop/tests/support.py"
       ],
       "testLocators": [
         {
@@ -6561,6 +6749,22 @@
         {
           "path": "src/lib/__tests__/commercialEvidenceReader.test.js",
           "locator": "requires an explicit organization \u2014 there is no all-tenant read"
+        },
+        {
+          "path": "src/lib/__tests__/commercialActualsEvidence.test.js",
+          "locator": "rejects legacy quote-only aggregates and serialized or fabricated verification brands"
+        },
+        {
+          "path": "src/lib/__tests__/commercialActualsEvidence.test.js",
+          "locator": "reader verifies private records and emits only branded allowlisted aggregates"
+        },
+        {
+          "path": "src/lib/__tests__/commercialActualsEvidence.test.js",
+          "locator": "pure verification dependencies contain no credential network clock or persistence access"
+        },
+        {
+          "path": "src/lib/__tests__/commercialWorkflowPolicyEvidence.test.js",
+          "locator": "workflow policy exports only exact tenant-published pinned tolerances with actor and time"
         }
       ],
       "documentationPaths": [
@@ -6583,11 +6787,11 @@
         }
       ],
       "headlessReason": "The exporter and its Firestore reader are an explicitly invoked read-only operator tool that writes files, not application state. They own no callable export, expose no customer or staff surface, and grant no tenant, role, pricing, staffing, provider, or production authority. Reads are rooted at one named organization with no collectionGroup query.",
-      "safeOutcome": "Operators receive a tenant-scoped canonical evidence bundle and a coverage report naming every section the exporter could not produce and why, without creating quote, payment, booking, delivery, provider, or production evidence. The reader performs no writes, requires an explicit organization, refuses any cross-tenant document, and withholds portal keys, buyer tokens, and provider secrets through an explicit field allowlist."
+      "safeOutcome": "Operators receive a tenant-scoped canonical evidence bundle and a coverage report naming every section the exporter could not produce and why, without creating quote, payment, booking, delivery, provider, or production evidence. The reader performs no writes, requires an explicit organization, refuses any cross-tenant document, and withholds portal keys, buyer tokens, and provider secrets through an explicit field allowlist. Slice D verifies private exact-source operational receipts before emitting aggregate operator-declared costs with explicit category completeness. Dates never supply costs or delivery proof; partial categories never default to zero. Overrun comparisons require declared numeric policy with actor and timestamp. Coverage includes unavailable policy prerequisites. Raw actuals notes, actors, requests, and receipt bodies are excluded from the exported projection. E/F exports comparison tolerances only from a verified exact-source workflow instance and its immutable tenant publication; later publication or retirement never rebases the pin. Optional policy availability remains independent from actual costs, with matching top-level values and reason/provenance preserved in the Python reconciler. Seed, absent, contradictory and unsupported policies never create a tolerance."
     },
     {
       "id": "catalog-draft-publish-authority",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -6680,7 +6884,7 @@
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "## Business Setup Center and Menu Builder"
+          "locator": "## Library readiness and Menu Builder"
         }
       ],
       "surfaceReview": "changed",
@@ -7040,6 +7244,1666 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "A verified platform administrator can prove that the configured QuotePilot Resend sender accepted one controlled, non-customer test request. The exact request is persisted before provider contact and cannot be resent; ambiguous outcomes remain locked for manual evidence review. The acceptance receipt does not establish a delivered event, inbox receipt, customer email readiness, or human acceptance."
+    },
+    {
+      "id": "event-operating-spine",
+      "reviewRevision": 6,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Default-off exact-source event phase ledger. Same-tenant administrators initialize and advance prepared to in_progress to completed through server-owned compare-and-set commands and immutable replay-stable receipts. Sales read bounded snapshots. No phase proves readiness, attendance, actual labor or purchasing, post-event closeout review, provider communication, payment, or settlement. Full Replay remains unavailable.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/eventOperations.js",
+        "src/lib/eventOperationsClient.js",
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "src/lib/eventOperatingMutationGuard.js",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getEventOperatingSnapshot",
+        "functions/index.js#applyEventOperatingCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getEventOperatingSnapshot",
+        "functions/index.js#applyEventOperatingCommand",
+        "functions/index.js#getEventOperatingHistory",
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/EventOperationsPanel.jsx",
+        "src/components/LiveOperationsPlanningViews.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EventOperationsPanel.jsx",
+          "locator": "data-capability-id=\"event-operating-spine\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/eventOperations.server.test.js",
+        "src/lib/__tests__/eventOperationsClient.test.js",
+        "src/components/__tests__/EventOperationsPanel.test.jsx",
+        "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "src/lib/__tests__/eventOperatingMutationGuard.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventOperations.server.test.js",
+          "locator": "requires both environment and tenant gates"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperations.server.test.js",
+          "locator": "rejects cross-tenant actors and sales mutations"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperations.server.test.js",
+          "locator": "reconciles identical commands and rejects request or actor substitution"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperations.server.test.js",
+          "locator": "rejects tampered immutable receipts"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "event operating ledgers and receipts deny every browser operation"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "event operating spine cannot be promoted by a browser administrator"
+        },
+        {
+          "path": "scripts/event-operating-spine-emulator-acceptance.mjs",
+          "locator": "event emulator commits exactly one concurrent transition"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+          "locator": "uncertain phase and work locks survive remount and permit only original owner replay"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+          "locator": "phase work and actuals uncertainty exclude all sibling commands across remount"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Event Operating Spine \u2014 bounded first slice"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Event Operating Spine phase recording"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The exact event Control Room composes a default-off phase-recording panel. Administrator mutation and sales read are checked separately; browser activation and private ledger access remain denied. Missing Firebase, an offline connection, stale source, ambiguous transport, and definitive rejection retain explicit boundaries. The bounded latest receipt supports reconciliation and does not imply full Replay, actuals, readiness, commercial change, closeout, or hosted acceptance. The disposable emulator matrix is restricted to explicit demo projects and loopback Auth, Firestore, and Functions emulators. Its synthetic fixtures verify role and gate denial, concurrent compare-and-set behavior, receipt atomicity, replay, source isolation, and projection privacy; this is local evidence only. Revision 2 adds the shared phase/work request exclusion and the nested work-journal entry point. This reviews client coordination only: original phase policy, ledger shape, transitions, and immutable receipts remain unchanged. Both new commands and remounted surfaces honor an unresolved request from either command family. Revision 3 extends the existing client request exclusion to declared actuals and composes its separate panel. This changes no phase policy, command, ledger, receipt, or delivery authority. Slice D verifies retained phase, work, and actuals evidence before an absent parent may be initialized. Missing parents with retained evidence fail closed; exact immutable request reconciliation remains available under current authority. The original three pure policy modules and receipt formats are unchanged. Bounded operational Replay is a separate read projection. E/F retains original operational policy and receipt bytes while new phase initialization and transitions coordinate a separate pinned workflow instance atomically. Legacy phase ledgers remain explicitly unbound. Retained coordinator evidence joins orphan-parent checks, and the browser unresolved-request guard includes workflow tasks and migration as a fourth owner. No configured task role widens the original operational command authority.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read states retain exact evidence and bounded history",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read states retain exact evidence and bounded history",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read states retain exact evidence and bounded history",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read states retain exact evidence and bounded history",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read states retain exact evidence and bounded history",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read error and denied access preserve recovery",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read error and denied access preserve recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating read states retain exact evidence and bounded history",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating command states freeze uncertainty and reconcile the exact request",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating command states freeze uncertainty and reconcile the exact request",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating command states freeze uncertainty and reconcile the exact request",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "event operating command states freeze uncertainty and reconcile the exact request",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Same-tenant administrators deliberately record one exact accepted event phase and reconcile an uncertain attempt from a trusted receipt. Sales can read the bounded phase and latest receipt. Completing a phase changes no quote, accepted version, staffing, attendance, actuals, closeout review, provider, payment, or settlement authority; local fallback remains non-authoritative."
+    },
+    {
+      "id": "event-operating-work-journal",
+      "reviewRevision": 5,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "A default-off operator work journal beneath the exact initialized event phase ledger records four fixed checkpoints and at most 25 retained issues through independent work revisions and immutable receipts. Administrators record/reopen checkpoints and open/resolve/reopen issues; sales read bounded projections. Work notes are bounded and issue severity is fixed on creation. Work never changes the original phase policy, phase ledger, accepted source, staffing, actuals, readiness, closeout, delivery or financial authority.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/eventOperatingWork.js",
+        "src/lib/eventOperatingWorkClient.js",
+        "src/lib/eventOperatingMutationGuard.js",
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getEventOperatingWorkSnapshot",
+        "functions/index.js#applyEventOperatingWorkCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getEventOperatingWorkSnapshot",
+        "functions/index.js#applyEventOperatingWorkCommand",
+        "functions/index.js#getEventOperatingHistory",
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand"
+      ],
+      "frontendPaths": [
+        "src/components/EventOperationsPanel.jsx",
+        "src/components/EventOperatingWorkPanel.jsx",
+        "src/components/LiveOperationsPlanningViews.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EventOperatingWorkPanel.jsx",
+          "locator": "data-capability-id=\"event-operating-work-journal\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/eventOperatingWork.server.test.js",
+        "src/lib/__tests__/eventOperatingWorkClient.test.js",
+        "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+        "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+        "src/components/__tests__/EventOperationsPanel.test.jsx",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "scripts/event-operating-spine-emulator-acceptance.mjs"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+          "locator": "uncertain phase and work locks survive remount and permit only original owner replay"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "event operating work state and receipts deny every browser operation"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingWork.server.test.js",
+          "locator": "work commands preserve phase source and receipt bytes"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingWork.server.test.js",
+          "locator": "work receipts reconcile exact intent and reject actor payload or integrity changes"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingWork.server.test.js",
+          "locator": "resolved issues still count toward the retained lifetime limit"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingWork.server.test.js",
+          "locator": "work callables enforce current tenant role and rollout gates"
+        },
+        {
+          "path": "scripts/event-operating-spine-emulator-acceptance.mjs",
+          "locator": "event work emulator commits exactly one concurrent journal change"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingWork.server.test.js",
+          "locator": "retained work receipts prevent journal reset and preserve historical retry"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingWork.server.test.js",
+          "locator": "work handlers reject tampered accepted source and phase receipt evidence"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+          "locator": "phase work and actuals uncertainty exclude all sibling commands across remount"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Event Operating Work Journal \u2014 bounded checkpoints and issues"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Event Operating Work Journal"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The Control Room work panel is reviewed with administrator writes, sales reads, initialized exact-source eligibility, fixed checkpoint states, immutable issue severity, bounded notes and retained issue capacity. Phase and work transports share a principal/organization/quote request exclusion including uncertain outcomes and route remount. Historical receipt reconciliation refreshes current evidence before another action. Work changes remain allowed in every initialized phase without altering phase completion or claiming downstream outcomes. The disposable demo-only emulator matrix also checks actual concurrent journal transactions, retained issue bounds, historical receipt reconciliation, orphan-history rejection, and byte-preserved phase/commercial authority. Emulator validation is local evidence, not hosted or production acceptance. Revision 2 includes actuals in the shared unresolved-request exclusion. Work policy, checkpoint and issue semantics, and immutable work evidence remain unchanged. Slice D verifies retained phase, work, and actuals evidence before an absent parent may be initialized. Missing parents with retained evidence fail closed; exact immutable request reconciliation remains available under current authority. The original three pure policy modules and receipt formats are unchanged. Bounded operational Replay is a separate read projection. E/F retains original operational policy and receipt bytes while new phase initialization and transitions coordinate a separate pinned workflow instance atomically. Legacy phase ledgers remain explicitly unbound. Retained coordinator evidence joins orphan-parent checks, and the browser unresolved-request guard includes workflow tasks and migration as a fourth owner. No configured task role widens the original operational command authority.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read states preserve absent current stale and bounded history",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read states preserve absent current stale and bounded history",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read states preserve absent current stale and bounded history",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read states preserve absent current stale and bounded history",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read states preserve absent current stale and bounded history",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read failures and access denial stay recoverable",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read failures and access denial stay recoverable",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work read states preserve absent current stale and bounded history",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work commands retain uncertainty and reconcile original receipt",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work commands retain uncertainty and reconcile original receipt",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work commands retain uncertainty and reconcile original receipt",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/EventOperatingWorkPanel.test.jsx",
+          "locator": "event work commands retain uncertainty and reconcile original receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Same-tenant administrators record a bounded checkpoint or issue decision and reconcile its exact work receipt; sales can inspect the bounded journal. Empty work is not completion, resolved issues stay visible and count toward capacity, and corrections after a completed phase do not reopen the phase. Checkpoint and issue records establish no staffing, attendance, actuals, readiness, closeout, communication, payment, or settlement outcome."
+    },
+    {
+      "id": "event-operating-actuals",
+      "reviewRevision": 4,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Default-off operator-declared labor, purchasing, and other costs beneath an initialized exact-source event ledger. Administrators record, correct, void, and explicitly declare category completeness; sales read bounded projections. USD integer cents and labor duration minutes are supplied explicitly. Independent actuals policy, revision, and immutable receipts preserve phase, work, and commercial authority. Captured totals remain provisional until all three categories are explicitly complete or not applicable.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/eventOperatingActuals.js",
+        "src/lib/eventOperatingActualsClient.js",
+        "src/lib/eventOperatingMutationGuard.js",
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getEventOperatingActualsSnapshot",
+        "functions/index.js#applyEventOperatingActualsCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getEventOperatingActualsSnapshot",
+        "functions/index.js#applyEventOperatingActualsCommand",
+        "functions/index.js#getEventOperatingHistory",
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand"
+      ],
+      "frontendPaths": [
+        "src/components/EventOperationsPanel.jsx",
+        "src/components/EventOperatingActualsPanel.jsx",
+        "src/components/LiveOperationsPlanningViews.jsx",
+        "src/components/EventExecutionContextPanel.jsx",
+        "src/components/EventActualsCloseoutSummary.jsx",
+        "src/components/PostEventCloseoutReviewAction.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EventOperatingActualsPanel.jsx",
+          "locator": "data-capability-id=\"event-operating-actuals\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/eventOperatingActuals.server.test.js",
+        "src/lib/__tests__/eventOperatingActualsClient.test.js",
+        "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+        "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+        "src/components/__tests__/EventOperationsPanel.test.jsx",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "src/components/__tests__/EventExecutionContextPanel.test.jsx",
+        "src/components/__tests__/EventActualsCloseoutSummary.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals require explicit integer costs and bounded typed fields"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals mutations invalidate only affected category completeness"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals preserve category and entry identity through correction and void"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals retained history prevents reset and permits exact historical retry"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals callables enforce current role tenant and gates"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals callables preserve phase work and commercial authority bytes"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals reject rehashed malformed receipt and state evidence"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActuals.server.test.js",
+          "locator": "actuals reject stale completeness and hidden void history in a rehashed prior state"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "event operating actuals state and receipts deny every browser operation"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+          "locator": "phase work and actuals uncertainty exclude all sibling commands across remount"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingActualsClient.test.js",
+          "locator": "uncertain actuals freezes phase and work and preserves original replay after gate denial"
+        },
+        {
+          "path": "src/components/__tests__/EventOperationsPanel.test.jsx",
+          "locator": "actuals uncertainty blocks phase and work while work uncertainty blocks actuals"
+        },
+        {
+          "path": "scripts/event-operating-spine-emulator-acceptance.mjs",
+          "locator": "event actuals emulator commits exactly one concurrent cost record"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Event Operating Actuals \u2014 declared costs and completeness"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Event Operating Actuals"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The exact-event Control Room exposes bounded declared-cost capture with administrator commands and sales reads under the existing tenant and environment gates. Private current state and receipts have no browser access. Phase, work, and actuals share one unresolved-request exclusion, including remount and historical reconciliation. Every cost is explicitly recorded in USD cents, labor duration in whole minutes, and completeness is declared separately for labor, purchasing, and other. Record, correction, or void invalidates the affected declaration. Empty or partial categories are not silently zero. Actuals establish operator records only, without inferring wages, attendance, physical consumption, delivery, invoices, payment, settlement, or tolerances. Source and local validation do not establish hosted or human acceptance. The disposable demo-only, loopback emulator assertions cover concurrent actuals CAS, receipt atomicity, category completeness invalidation, retained void capacity, source isolation, and both rollout gates. This is local emulator evidence only. Slice D verifies retained phase, work, and actuals evidence before an absent parent may be initialized. Missing parents with retained evidence fail closed; exact immutable request reconciliation remains available under current authority. The original three pure policy modules and receipt formats are unchanged. Bounded operational Replay is a separate read projection. Read-only closeout summaries must match the closeout accepted version and receipt and show capture completeness and observation revision/time. Mismatched, missing and provisional evidence cannot complete closeout review. E/F retains original operational policy and receipt bytes while new phase initialization and transitions coordinate a separate pinned workflow instance atomically. Legacy phase ledgers remain explicitly unbound. Retained coordinator evidence joins orphan-parent checks, and the browser unresolved-request guard includes workflow tasks and migration as a fourth owner. No configured task role widens the original operational command authority.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals read states distinguish missing declarations from captured totals",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals read states distinguish missing declarations from captured totals",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals read states distinguish missing declarations from captured totals",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals read states distinguish missing declarations from captured totals",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals read states distinguish missing declarations from captured totals",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals access and read failures preserve recovery",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals access and read failures preserve recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals read states distinguish missing declarations from captured totals",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals commands preserve uncertainty and refresh historical receipts",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals commands preserve uncertainty and refresh historical receipts",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals commands preserve uncertainty and refresh historical receipts",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/EventOperatingActualsPanel.test.jsx",
+          "locator": "actuals commands preserve uncertainty and refresh historical receipts",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Administrators retain an exact-source cost record and immutable command receipt with explicit completeness; sales can inspect bounded captured totals. Corrections preserve entry identity, voids remain retained, and all 50 lifetime entry slots include voided records. Unknown cost categories remain missing or partial. These records neither infer policy nor prove attendance, consumed materials, delivery, provider, payment, or settlement outcomes."
+    },
+    {
+      "id": "event-operating-history",
+      "reviewRevision": 3,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Default-off exact accepted-source Replay merges bounded verified operational phase, work and actuals receipts with pinned channel anchors, typed before/after rows and explicit newer-evidence refresh. Current domain planning references retain their own meaning.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/eventOperatingHistory.js",
+        "src/lib/eventOperatingHistoryClient.js",
+        "scripts/event-operating-spine-emulator-acceptance.mjs",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getEventOperatingHistory"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getEventOperatingHistory",
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand"
+      ],
+      "frontendPaths": [
+        "src/components/LiveOperationsPlanningViews.jsx",
+        "src/components/EventOperatingHistoryPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EventOperatingHistoryPanel.jsx",
+          "locator": "data-capability-id=\"event-operating-history\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/eventOperatingHistory.server.test.js",
+        "src/lib/__tests__/eventOperatingHistoryClient.test.js",
+        "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+        "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
+        "scripts/event-operating-spine-emulator-acceptance.mjs"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventOperatingHistory.server.test.js",
+          "locator": "history paginates deterministic timestamp ties without gaps or duplicates"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingHistory.server.test.js",
+          "locator": "history keeps pinned heads while newer writes become available"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingHistory.server.test.js",
+          "locator": "history fails closed on missing duplicate or corrupt receipts"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingHistory.server.test.js",
+          "locator": "history callable respects current roles gates exact source and snapshot anchors"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperatingHistory.server.test.js",
+          "locator": "history projects typed before after targets without raw private envelopes"
+        },
+        {
+          "path": "scripts/event-operating-spine-emulator-acceptance.mjs",
+          "locator": "event history emulator pages anchored receipts without gaps or writes"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Event Operating Replay \u2014 anchored operational receipts"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Event Operating Replay"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Replay is independently read-only and requires current same-organization admin or sales authority and both existing rollout gates on every page. First-page anchors are retained across subsequent reads, source changes abort, newer writes require refresh, and gaps or inconsistent receipts fail closed. Pagination cursors do not grant authority or prove uninterrupted traversal. History reads never reconcile uncertain mutations. Local component and emulator proof is separate from hosted or human acceptance. E/F retains original operational policy and receipt bytes while new phase initialization and transitions coordinate a separate pinned workflow instance atomically. Legacy phase ledgers remain explicitly unbound. Retained coordinator evidence joins orphan-parent checks, and the browser unresolved-request guard includes workflow tasks and migration as a fourth owner. No configured task role widens the original operational command authority.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+          "locator": "operational history renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+          "locator": "operational history renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+          "locator": "operational history renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+          "locator": "operational history renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+          "locator": "operational history renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+          "locator": "operational history renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/EventOperatingHistoryPanel.test.jsx",
+          "locator": "operational history renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Same-tenant staff can inspect paginated operational records with bounded actor, time, target and before/after data, distinguish incomplete or newer evidence, and recover by refreshing. Private receipt bodies and emails remain hidden. Replay establishes recorded operational actions only, without changing financial, staffing, provider, delivery or closeout authority."
+    },
+    {
+      "id": "tenant-workflow-configuration",
+      "reviewRevision": 3,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "administrators"
+      ],
+      "summary": "Administrator-only Library Studio provides bounded draft, validation, exact preview, typed publication and reason-bound retirement of immutable tenant workflow versions. Publication affects future instances only.",
+      "backendPaths": [
+        "functions/index.js",
+        "src/lib/tenantWorkflowClient.js",
+        "firestore.rules",
+        "scripts/workflow-configuration-emulator-acceptance.mjs",
+        "functions/workflowDefinitions.js",
+        "functions/workflowPackAdapters.js",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getWorkflowConfiguration",
+        "functions/index.js#previewWorkflowDefinition",
+        "functions/index.js#applyWorkflowDefinitionCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getWorkflowConfiguration",
+        "functions/index.js#previewWorkflowDefinition",
+        "functions/index.js#applyWorkflowDefinitionCommand",
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand",
+        "functions/index.js#getWorkflowPackSnapshot",
+        "functions/index.js#previewWorkflowPackMigration",
+        "functions/index.js#applyWorkflowPackCommand",
+        "functions/index.js#getQuoteAttendance",
+        "functions/index.js#applyQuoteAttendanceCommand",
+        "functions/index.js#submitQuoteAttendanceResponse",
+        "functions/index.js#simulateCommercialQuoteChange",
+        "functions/index.js#requestCommercialQuoteChangeAuthorization",
+        "functions/index.js#getCommercialQuoteChangeAuthorizationState",
+        "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#reconcileCommercialQuoteChangeApplyOutcome",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#recordPostEventCloseoutReview",
+        "functions/index.js#refreshPostEventCloseoutConfiguration",
+        "functions/index.js#convertQuoteToContract",
+        "functions/index.js#applyEventOperatingCommand",
+        "functions/index.js#applyEventOperatingWorkCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/AmbientLibraryRoute.jsx",
+        "src/components/TenantWorkflowConfigurationStudio.jsx",
+        "src/components/WorkflowConfigurationComparison.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/TenantWorkflowConfigurationStudio.jsx",
+          "locator": "data-capability-id=\"tenant-workflow-configuration\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/workflowDefinitions.server.test.js",
+        "src/lib/__tests__/workflowConfiguration.server.test.js",
+        "src/lib/__tests__/tenantWorkflowClient.test.js",
+        "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+        "src/components/__tests__/ambientLibraryRoute.test.jsx",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "scripts/workflow-configuration-emulator-acceptance.mjs",
+        "src/lib/__tests__/workflowPackAdapters.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/workflowConfiguration.server.test.js",
+          "locator": "configuration callables require current admin tenant email and both gates"
+        },
+        {
+          "path": "src/lib/__tests__/workflowConfiguration.server.test.js",
+          "locator": "configuration draft publication requires exact actor preview and immutable version creation"
+        },
+        {
+          "path": "src/lib/__tests__/workflowConfiguration.server.test.js",
+          "locator": "configuration retirement preserves versions and historical replay ignores current head freshness"
+        },
+        {
+          "path": "src/lib/__tests__/workflowConfiguration.server.test.js",
+          "locator": "configuration rejects orphan versions corrupt receipts and unsupported runtime kinds"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Tenant Workflow Configuration Studio"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Tenant Workflow Configuration Studio"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "An administrator edits only allowed task roles, bounded task names/instructions, due and escalation offsets, fixed manual handoff references, and optional explicit cost review/comparison policy. Save and preview remain separate from typed publication. Immutable versions, exact-request receipts, conflict recovery and retirement preserve existing pins; native Library return/dirty guards preserve work. No arbitrary code, recipients, provider sends, role escalation, pricing or payment authority is granted. Default-off environment and tenant gates are rechecked with current same-organization role and email authority in every transaction. Publication does not enable those gates. Local source and tests do not establish hosted or human acceptance. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/TenantWorkflowConfigurationStudio.test.jsx",
+          "locator": "workflow Studio renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "An administrator edits only allowed task roles, bounded task names/instructions, due and escalation offsets, fixed manual handoff references, and optional explicit cost review/comparison policy. Save and preview remain separate from typed publication. Immutable versions, exact-request receipts, conflict recovery and retirement preserve existing pins; native Library return/dirty guards preserve work. No arbitrary code, recipients, provider sends, role escalation, pricing or payment authority is granted."
+    },
+    {
+      "id": "event-workflow-coordination",
+      "reviewRevision": 3,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "The Control Room exposes the exact pinned coordination policy, due/escalation projections, bounded task acknowledgements, exact-complete-cost review and separately previewed compatible migration. Original domain receipts remain authoritative.",
+      "backendPaths": [
+        "functions/index.js",
+        "src/lib/tenantWorkflowClient.js",
+        "firestore.rules",
+        "scripts/workflow-configuration-emulator-acceptance.mjs",
+        "functions/workflowExecution.js",
+        "functions/eventWorkflowAdapter.js",
+        "functions/workflowDefinitions.js",
+        "src/lib/eventOperatingMutationGuard.js",
+        "functions/workflowPackAdapters.js",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getWorkflowConfiguration",
+        "functions/index.js#previewWorkflowDefinition",
+        "functions/index.js#applyWorkflowDefinitionCommand",
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand",
+        "functions/index.js#applyEventOperatingCommand",
+        "functions/index.js#getWorkflowPackSnapshot",
+        "functions/index.js#previewWorkflowPackMigration",
+        "functions/index.js#applyWorkflowPackCommand",
+        "functions/index.js#getQuoteAttendance",
+        "functions/index.js#applyQuoteAttendanceCommand",
+        "functions/index.js#submitQuoteAttendanceResponse",
+        "functions/index.js#simulateCommercialQuoteChange",
+        "functions/index.js#requestCommercialQuoteChangeAuthorization",
+        "functions/index.js#getCommercialQuoteChangeAuthorizationState",
+        "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#reconcileCommercialQuoteChangeApplyOutcome",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#recordPostEventCloseoutReview",
+        "functions/index.js#refreshPostEventCloseoutConfiguration",
+        "functions/index.js#convertQuoteToContract",
+        "functions/index.js#applyEventOperatingWorkCommand"
+      ],
+      "frontendPaths": [
+        "src/components/EventOperationsPanel.jsx",
+        "src/components/EventWorkflowPolicyPanel.jsx",
+        "src/components/WorkflowConfigurationComparison.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EventWorkflowPolicyPanel.jsx",
+          "locator": "data-capability-id=\"event-workflow-coordination\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/workflowExecution.server.test.js",
+        "src/lib/__tests__/eventWorkflowAdapter.server.test.js",
+        "src/lib/__tests__/eventWorkflowIntegration.server.test.js",
+        "src/lib/__tests__/tenantWorkflowClient.test.js",
+        "src/lib/__tests__/eventOperatingMutationGuard.test.js",
+        "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+        "src/components/__tests__/EventOperationsPanel.test.jsx",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "scripts/workflow-configuration-emulator-acceptance.mjs",
+        "src/lib/__tests__/workflowPackAdapters.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventWorkflowIntegration.server.test.js",
+          "locator": "event initialization atomically binds exact seed and current phase while legacy remains unbound"
+        },
+        {
+          "path": "src/lib/__tests__/eventWorkflowIntegration.server.test.js",
+          "locator": "event bindings retain immutable publications through later publish and retirement"
+        },
+        {
+          "path": "src/lib/__tests__/eventWorkflowIntegration.server.test.js",
+          "locator": "event review requires complete captured costs and invalidates acknowledgement on every new revision"
+        },
+        {
+          "path": "src/lib/__tests__/eventWorkflowIntegration.server.test.js",
+          "locator": "event migration requires current active publication exact preview source and typed CAS"
+        },
+        {
+          "path": "src/lib/__tests__/eventWorkflowIntegration.server.test.js",
+          "locator": "event workflow rejects missing pinned publications corrupt pairs and orphan resets while preserving exact retry"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Event Workflow Coordination"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Event Workflow Coordination"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Eligible staff see the immutable instance definition and acknowledge only assigned enabled tasks or administrator tasks. Task acknowledgements are coordination records, not domain completion. Complete actual costs at or above an explicitly declared threshold require an administrator review bound to that exact cost revision and receipt; every later cost revision invalidates current acknowledgement. Separate typed migration preserves acknowledged task meaning and refuses policy changes. New instances bind explicit seed or tenant publication, legacy ledgers remain unbound, and retired definitions never silently become a seed. Four mutation channels retain independent immutable receipts under one unresolved-event-request exclusion. Default-off environment and tenant gates are rechecked with current same-organization role and email authority in every transaction. Publication does not enable those gates. Local source and tests do not establish hosted or human acceptance. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/EventWorkflowPolicyPanel.test.jsx",
+          "locator": "event coordination renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Eligible staff see the immutable instance definition and acknowledge only assigned enabled tasks or administrator tasks. Task acknowledgements are coordination records, not domain completion. Complete actual costs at or above an explicitly declared threshold require an administrator review bound to that exact cost revision and receipt; every later cost revision invalidates current acknowledgement. Separate typed migration preserves acknowledged task meaning and refuses policy changes. New instances bind explicit seed or tenant publication, legacy ledgers remain unbound, and retired definitions never silently become a seed. Four mutation channels retain independent immutable receipts under one unresolved-event-request exclusion."
+    },
+    {
+      "id": "final-guest-count",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Staff request and source-recorded responses preserve the exact accepted quote, immutable submission and tenant guest-count due policy; applying a response hands off to sealed Commercial Change.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/quoteAttendance.js",
+        "src/lib/quoteAttendanceClient.js",
+        "firestore.rules",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getQuoteAttendance",
+        "functions/index.js#applyQuoteAttendanceCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getQuoteAttendance",
+        "functions/index.js#applyQuoteAttendanceCommand",
+        "functions/index.js#submitQuoteAttendanceResponse",
+        "functions/index.js#simulateCommercialQuoteChange",
+        "functions/index.js#requestCommercialQuoteChangeAuthorization",
+        "functions/index.js#getCommercialQuoteChangeAuthorizationState",
+        "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#reconcileCommercialQuoteChangeApplyOutcome",
+        "functions/index.js#updateQuoteDraft"
+      ],
+      "frontendPaths": [
+        "src/components/QuoteAttendancePanel.jsx",
+        "src/components/AmbientLivingOpportunity.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteAttendancePanel.jsx",
+          "locator": "data-capability-id=\"final-guest-count\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+        "src/lib/__tests__/quoteAttendance.server.test.js",
+        "src/lib/__tests__/workflowPackAdapters.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "src/lib/__tests__/workflowPackCommercialIntegration.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states"
+        },
+        {
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical mutation states"
+        },
+        {
+          "path": "src/lib/__tests__/workflowPackCommercialIntegration.server.test.js",
+          "locator": "sealed attendance amendment applies atomically and preserves paid contract and old acceptance evidence"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Bounded Catering Workflow Packs"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catering Workflow Packs"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Staff request and source-recorded responses preserve the exact accepted quote, immutable submission and tenant guest-count due policy; applying a response hands off to sealed Commercial Change. Current tenant, exact source and role are rechecked by server commands. Missing evidence and uncertain outcomes remain explicit. Publication and task acknowledgement do not establish customer acceptance, provider delivery, payment or production readiness.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/QuoteAttendancePanel.test.jsx",
+          "locator": "staff attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff request and source-recorded responses preserve the exact accepted quote, immutable submission and tenant guest-count due policy; applying a response hands off to sealed Commercial Change. Current tenant, exact source and role are rechecked by server commands. Missing evidence and uncertain outcomes remain explicit. Publication and task acknowledgement do not establish customer acceptance, provider delivery, payment or production readiness."
+    },
+    {
+      "id": "portal-final-guest-count",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "customer_portal_users"
+      ],
+      "summary": "The exact current activated customer portal collects a bounded proposed guest-count response. A submitted response is not an applied price or verified personal identity.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/quoteAttendance.js",
+        "src/lib/quoteAttendanceClient.js",
+        "firestore.rules",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#submitQuoteAttendanceResponse"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getQuoteAttendance",
+        "functions/index.js#applyQuoteAttendanceCommand",
+        "functions/index.js#submitQuoteAttendanceResponse"
+      ],
+      "frontendPaths": [
+        "src/components/PortalAttendanceQuestionnaire.jsx",
+        "src/components/QuoteAttendancePanel.jsx",
+        "src/components/CustomerPortalView.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/PortalAttendanceQuestionnaire.jsx",
+          "locator": "data-capability-id=\"portal-final-guest-count\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+        "src/lib/__tests__/quoteAttendance.server.test.js",
+        "src/lib/__tests__/workflowPackAdapters.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states"
+        },
+        {
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical mutation states"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Bounded Catering Workflow Packs"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catering Workflow Packs"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The exact current activated customer portal collects a bounded proposed guest-count response. A submitted response is not an applied price or verified personal identity. Current tenant, exact source and role are rechecked by server commands. Missing evidence and uncertain outcomes remain explicit. Publication and task acknowledgement do not establish customer acceptance, provider delivery, payment or production readiness.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical read states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/PortalAttendanceQuestionnaire.test.jsx",
+          "locator": "portal attendance renders all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "The exact current activated customer portal collects a bounded proposed guest-count response. A submitted response is not an applied price or verified personal identity. Current tenant, exact source and role are rechecked by server commands. Missing evidence and uncertain outcomes remain explicit. Publication and task acknowledgement do not establish customer acceptance, provider delivery, payment or production readiness."
+    },
+    {
+      "id": "workflow-pack-coordination",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Quote review, final count and closeout display their immutable policy and native evidence, role-bound tasks and separately previewed compatible migration through one reusable coordinator.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/workflowDefinitions.js",
+        "functions/workflowExecution.js",
+        "functions/workflowPackAdapters.js",
+        "src/lib/workflowPackClient.js",
+        "firestore.rules",
+        "functions/tenantWorkflowRuntime.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getWorkflowPackSnapshot",
+        "functions/index.js#previewWorkflowPackMigration",
+        "functions/index.js#applyWorkflowPackCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getWorkflowPackSnapshot",
+        "functions/index.js#previewWorkflowPackMigration",
+        "functions/index.js#applyWorkflowPackCommand",
+        "functions/index.js#getQuoteAttendance",
+        "functions/index.js#applyQuoteAttendanceCommand",
+        "functions/index.js#submitQuoteAttendanceResponse",
+        "functions/index.js#simulateCommercialQuoteChange",
+        "functions/index.js#requestCommercialQuoteChangeAuthorization",
+        "functions/index.js#getCommercialQuoteChangeAuthorizationState",
+        "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#reconcileCommercialQuoteChangeApplyOutcome",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#recordPostEventCloseoutReview",
+        "functions/index.js#refreshPostEventCloseoutConfiguration",
+        "functions/index.js#convertQuoteToContract",
+        "functions/index.js#getEventWorkflowSnapshot",
+        "functions/index.js#previewEventWorkflowMigration",
+        "functions/index.js#applyEventWorkflowCommand",
+        "functions/index.js#applyEventOperatingCommand",
+        "functions/index.js#applyEventOperatingWorkCommand"
+      ],
+      "frontendPaths": [
+        "src/components/WorkflowPackPolicyPanel.jsx",
+        "src/components/CommercialChangeImpactPanel.jsx",
+        "src/components/QuoteAttendancePanel.jsx",
+        "src/components/PostEventCloseoutReviewAction.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/WorkflowPackPolicyPanel.jsx",
+          "locator": "data-capability-id=\"workflow-pack-coordination\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+        "src/lib/__tests__/quoteAttendance.server.test.js",
+        "src/lib/__tests__/workflowPackAdapters.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "src/lib/__tests__/workflowPackCommercialIntegration.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states"
+        },
+        {
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical mutation states"
+        },
+        {
+          "path": "src/lib/__tests__/workflowPackCommercialIntegration.server.test.js",
+          "locator": "sealed attendance amendment applies atomically and preserves paid contract and old acceptance evidence"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Bounded Catering Workflow Packs"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catering Workflow Packs"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Quote review, final count and closeout display their immutable policy and native evidence, role-bound tasks and separately previewed compatible migration through one reusable coordinator. Current tenant, exact source and role are rechecked by server commands. Missing evidence and uncertain outcomes remain explicit. Publication and task acknowledgement do not establish customer acceptance, provider delivery, payment or production readiness.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical read states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/WorkflowPackPolicyPanel.test.jsx",
+          "locator": "workflow packs render all canonical mutation states",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Quote review, final count and closeout display their immutable policy and native evidence, role-bound tasks and separately previewed compatible migration through one reusable coordinator. Current tenant, exact source and role are rechecked by server commands. Missing evidence and uncertain outcomes remain explicit. Publication and task acknowledgement do not establish customer acceptance, provider delivery, payment or production readiness."
+    },
+    {
+      "id": "tenant-workflow-migration-inventory",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "operator"
+      ],
+      "summary": "Offline exact-source inventory and isolated staging profile prepare local tenant workflow qualification without application writes or tenant activation.",
+      "backendPaths": [
+        "scripts/event-workflow-migration-inventory-core.cjs",
+        "scripts/event-workflow-migration-inventory.mjs",
+        "scripts/release-candidate-policy.mjs",
+        "scripts/deploy-release-candidate.mjs"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/eventWorkflowMigrationInventory.test.js",
+        "src/lib/__tests__/releaseCandidateDeployment.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventWorkflowMigrationInventory.test.js",
+          "locator": "all four packs form one explicit offline cohort and the CLI preserves the verified report"
+        },
+        {
+          "path": "src/lib/__tests__/releaseCandidateDeployment.test.js",
+          "locator": "event candidate profile binds explicit server browser and separate tenant gates without changing old profiles"
+        }
+      ],
+      "documentationPaths": [
+        "README.md",
+        "docs/FEATURE_MATRIX.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "README.md",
+          "locator": "## Tenant Workflow Migration Inventory"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Tenant Workflow Migration Inventory"
+        }
+      ],
+      "headlessReason": "The inventory is a strictly offline operator tool with no credential lookup, network, application write or apply mode. Candidate profile validation prepares configuration and does not activate a tenant or establish hosted acceptance.",
+      "safeOutcome": "Operators receive scoped classifications and explicit blocked reasons from verified native evidence. The report contains safe identifiers and digests and cannot replace current runtime authority or approve migration."
+    },
+    {
+      "id": "tenant-workflow-local-rehearsal",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "operator"
+      ],
+      "summary": "Disposable whole-app rehearsal uses real demo emulators, a coherent synthetic catalog, staff accounts, display records and native-planned synthetic acceptance/booking with ordinary authentication and native authority.",
+      "backendPaths": [
+        "scripts/seed-e2e-emulator-user.mjs",
+        "scripts/tenant-operating-model-local-rehearsal.mjs",
+        "scripts/tenant-operating-model-local-rehearsal-seed.mjs"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js",
+          "locator": "local rehearsal replaces hosted browser configuration and disables providers without bypassing auth"
+        },
+        {
+          "path": "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js",
+          "locator": "local rehearsal seeding rejects hosted projects and nonlocal or mismatched emulator endpoints"
+        },
+        {
+          "path": "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js",
+          "locator": "shared E2E auth seeding requires a demo project and loopback emulators"
+        }
+      ],
+      "documentationPaths": [
+        "README.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/acceptance/tenant-operating-model.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "README.md",
+          "locator": "## Local Tenant Workflow Rehearsal"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Local Tenant Workflow Rehearsal"
+        }
+      ],
+      "headlessReason": "Developer-only launchers and synthetic fixture seeders are restricted to disposable demo projects and loopback Auth/Firestore/Functions. Fresh local setup creates named taxonomy before native pricing confirmation, then staff sign-in/display fixtures and native-planned synthetic acceptance/booking after verifying current catalog authority and preserving version, pricing and payment. The shared Firebase browser seed separately requires a demo project plus loopback Auth and Firestore before creating its active portal fixture. There is no hosted seed or tenant activation mode.",
+      "safeOutcome": "Operators rehearse existing user surfaces locally with explicit synthetic evidence, normal role checks and providers disabled. Native acceptance and coordination fixtures are never customer or provider proof."
     }
   ]
 }

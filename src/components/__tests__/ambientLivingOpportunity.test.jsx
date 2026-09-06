@@ -2,6 +2,10 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+vi.hoisted(() => { vi.stubEnv("VITE_EVENT_OPERATING_SPINE_ENABLED", "true"); });
+vi.mock("../QuoteAttendancePanel", () => ({ default: function AttendancePanel(props) {
+  return <section data-testid="native-attendance" data-source-version={props.sourceVersionId} data-acceptance-receipt={props.acceptanceReceiptId}>Recorded final guest count</section>;
+} }));
 import AmbientLivingOpportunity from "../AmbientLivingOpportunity";
 import { AmbientContextProvider } from "../../context/AmbientContext";
 
@@ -207,6 +211,23 @@ afterEach(() => {
 });
 
 describe("AmbientLivingOpportunity", () => {
+  test("hands an accepted opportunity to the exact Calendar event without mutating it", () => {
+    const onOpenCalendar = vi.fn();
+    mount({
+      quote: { ...QUOTE, status: "booked" },
+      onOpenCalendar
+    });
+
+    const calendarAction = button("Open Calendar");
+    expect(calendarAction).toBeTruthy();
+    expect(calendarAction.dataset.exactEventId).toBe("quote-alpha");
+    act(() => calendarAction.click());
+
+    expect(onOpenCalendar).toHaveBeenCalledWith("quote-alpha", {
+      actionId: "open-opportunity-calendar:quote-alpha"
+    });
+  });
+
   test("resolves only an exact canonical Living Opportunity arrival after focusing its object", async () => {
     const onArrivalResolution = vi.fn();
     mount({
@@ -1261,6 +1282,86 @@ describe("AmbientLivingOpportunity", () => {
     expect(QUOTE).toEqual(beforeQuote);
   });
 
+  test("uses a real selector only when several saved menu items can be replacement sources", () => {
+    mount();
+
+    act(() => button("Review menu").click());
+
+    const field = container.querySelector('[data-adaptive-choice-mode="select"]');
+    const selector = field?.querySelector("select");
+    expect(field).not.toBeNull();
+    expect(selector?.value).toBe("salad");
+    expect([...selector.querySelectorAll("option")].map((option) => option.value)).toEqual([
+      "",
+      "salad",
+      "chicken"
+    ]);
+  });
+
+  test("presents one saved menu replacement source as confirmed read-only context", () => {
+    const singleMenuQuote = {
+      ...QUOTE,
+      selection: {
+        ...QUOTE.selection,
+        menuItems: ["salad"],
+        menuItemsSnapshot: [QUOTE.selection.menuItemsSnapshot[0]],
+        menuItemNames: ["Garden salad"],
+        menuItemQuantities: { salad: 2 }
+      }
+    };
+    mount({ quote: singleMenuQuote });
+
+    act(() => button("Review menu").click());
+
+    const field = container.querySelector('[data-adaptive-choice-mode="single"]');
+    expect(field).not.toBeNull();
+    expect(field.querySelector("select")).toBeNull();
+    expect(field.querySelector('[data-adaptive-choice-value="salad"]')?.textContent)
+      .toContain("Garden salad");
+    expect(field.textContent).toContain("only saved menu item");
+    expect(field.textContent).toContain("Read-only");
+  });
+
+  test("explains and recovers when no exact saved menu item can be a replacement source", async () => {
+    const onOpenLegacyWorkspace = vi.fn(async () => {
+      throw new Error("Quote workspace route failed.");
+    });
+    const emptyMenuQuote = {
+      ...QUOTE,
+      selection: {
+        ...QUOTE.selection,
+        menuItems: [],
+        menuItemsSnapshot: [],
+        menuItemNames: [],
+        menuItemQuantities: {}
+      }
+    };
+    mount({ quote: emptyMenuQuote, onOpenLegacyWorkspace });
+
+    act(() => container.querySelector('[data-intelligent-object="menu"] button').click());
+
+    const field = container.querySelector('[data-menu-replacement-source-state="unavailable"]');
+    expect(field).not.toBeNull();
+    expect(field.dataset.adaptiveChoiceMode).toBe("empty");
+    expect(field.querySelector("select")).toBeNull();
+    expect(field.textContent).toContain("Unavailable");
+    expect(field.textContent).toContain("does not record a menu selection");
+    const recovery = field.querySelector("button");
+    expect(recovery?.dataset.ambientActionId)
+      .toBe("open-full-opportunity-controls");
+
+    await act(async () => {
+      recovery.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-result-kind="recovery"]')?.textContent)
+      .toContain("Quote workspace route failed.");
+    expect(container.textContent).toContain("Full opportunity controls were not opened");
+  });
+
   test("offers visible keyboard-equivalent menu moves and hands the exact reorder intent to the editor", () => {
     const onEditQuote = vi.fn(() => ({ status: "opened" }));
     const beforeQuote = structuredClone(QUOTE);
@@ -1646,4 +1747,43 @@ describe("AmbientLivingOpportunity", () => {
       .toContain("Guest scenario remains at 120");
     expect(container.querySelector('[aria-label="Change Guest count scenario"]')).not.toBeNull();
   });
+});
+
+
+test.each(["accepted", "booked"])("eligible %s count review replaces no-action cue and returns focus to its exact trigger", async (status) => {
+  const onEditQuote = vi.fn();
+  mount({ quote: { ...QUOTE, status, acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "sales-alpha", onEditQuote, onOpenWorkflow: undefined });
+  const next = container.querySelector('.ambient-mobile-remote__next button');
+  expect(next.textContent).toContain("Review final guest count");
+  expect(container.querySelector('.ambient-mobile-remote__next').textContent).not.toContain("No role-safe action");
+  expect(next.dataset.ambientActionId).toBe("inspect-guest-count");
+  act(() => { next.focus(); next.click(); });
+  await settle();
+  const panel = container.querySelector('[data-testid="native-attendance"]');
+  expect(panel.dataset.sourceVersion).toBe("version-alpha");
+  expect(panel.dataset.acceptanceReceipt).toBe("accept-alpha");
+  expect(container.querySelector('.attendance-supporting-context').open).toBe(false);
+  expect(onEditQuote).not.toHaveBeenCalled();
+  expect(container.querySelector(".ambient-action-acknowledgement").textContent).toContain("The saved quote stays unchanged");
+  expect(container.querySelector(".ambient-action-acknowledgement").textContent).not.toContain("Try another guest count");
+  act(() => container.querySelector('[aria-label="Close context"]').click());
+  await settle();
+  expect(document.activeElement).toBe(next);
+});
+
+test.each([
+  ["disabled", { attendanceEnabled: false }],
+  ["local", { source: "local" }],
+  ["unaccepted", { quote: { ...QUOTE, status: "draft" } }],
+  ["missing source receipt", { quote: { ...QUOTE, status: "booked" } }],
+  ["foreign organization", { quote: { ...QUOTE, organizationId: "other-org", status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } } }]
+])("does not offer native final-count work for %s scope", (_name, overrides) => {
+  mount({ quote: { ...QUOTE, status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "sales-alpha", ...overrides });
+  expect([...container.querySelectorAll('button')].some(node => node.textContent.includes("Review final guest count"))).toBe(false);
+});
+
+
+test("keeps final-count work unavailable to non-staff roles", () => {
+  mount({ quote: { ...QUOTE, status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "finance-alpha" }, { ...CONTEXT, role: "finance" });
+  expect([...container.querySelectorAll('button')].some(node => node.textContent.includes("Review final guest count"))).toBe(false);
 });

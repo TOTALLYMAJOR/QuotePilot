@@ -8,6 +8,10 @@ const QUOTE_HISTORY_SOURCE = readFileSync(
   fileURLToPath(new URL("../QuoteHistoryModal.jsx", import.meta.url)),
   "utf8"
 );
+const LEGACY_QUOTE_HISTORY_SOURCE = readFileSync(
+  fileURLToPath(new URL("../LegacyQuoteHistoryModal.jsx", import.meta.url)),
+  "utf8"
+);
 
 describe("Quote History status semantics", () => {
   test("classifies lifecycle, booking confirmation, deposit, and final balance independently", () => {
@@ -80,7 +84,7 @@ describe("Quote History status semantics", () => {
     }
 
     expect(QUOTE_HISTORY_SOURCE).toContain(
-      "onChange={(e) => handleStatusUpdate(quote.id, e.target.value)}"
+      "onChange={(event) => handleStatusUpdate(quote.id, event.target.value)}"
     );
     expect(QUOTE_HISTORY_SOURCE).toContain(
       "onChange={(e) => handleConfirmationUpdate(quote.id, e.target.value)}"
@@ -91,5 +95,24 @@ describe("Quote History status semantics", () => {
     expect(QUOTE_HISTORY_SOURCE).toContain("Open edit and complete review");
     expect(QUOTE_HISTORY_SOURCE).not.toContain("<strong>{quote.status || \"draft\"}</strong>");
     expect(QUOTE_HISTORY_SOURCE).not.toContain("Deposit: {quote.payment?.depositStatus");
+  });
+
+  test("uses adaptive choices for filters, lifecycle transitions, and audited provider outcomes", () => {
+    for (const source of [QUOTE_HISTORY_SOURCE, LEGACY_QUOTE_HISTORY_SOURCE]) {
+      expect(source).toContain('import AdaptiveChoiceField from "./AdaptiveChoiceField"');
+      expect(source).toContain('label="Event type"');
+      expect(source).toContain('label="Quote status"');
+      expect(source).toContain('label="Change quote / proposal lifecycle"');
+      expect(source).toContain('label="Provider outcome"');
+      expect(source).toContain('singleChoiceDetail="Provider acceptance is already observed');
+      expect(source).toContain('evidence: "stale"');
+      expect(source).toContain("Retry event types");
+    }
+
+    expect(QUOTE_HISTORY_SOURCE).toContain("data-view-filter=\"event-type\"");
+    expect(QUOTE_HISTORY_SOURCE).toContain("updateQuoteFilterLocation(event.target.value, statusFilter)");
+    expect(LEGACY_QUOTE_HISTORY_SOURCE).toContain(
+      "onChange={(event) => handleStatusUpdate(quote.id, event.target.value)}"
+    );
   });
 });

@@ -2049,6 +2049,196 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
+  test("event operating ledgers and receipts deny every browser operation", async () => {
+    const paths = [
+      ["organizations", "org-a", "eventOperatingLedgers", "ledger-a"],
+      ["organizations", "org-a", "eventOperatingLedgers", "ledger-a", "receipts", "request-a"]
+    ];
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      for (const path of paths) {
+        await setDoc(doc(context.firestore(), ...path), {
+          organizationId: "org-a", phase: "prepared", serverOwned: true
+        });
+      }
+    });
+    const contexts = [
+      testEnv.unauthenticatedContext(),
+      ...[
+        ["customer-org-a", "org-a"],
+        ["sales-org-a", "org-a"],
+        ["admin-org-a", "org-a"],
+        ["sales-org-b", "org-b"],
+        ["admin-org-b", "org-b"]
+      ].map(([uid, organizationId]) => testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      })),
+      testEnv.authenticatedContext("platform-browser", {
+        email: "platform@example.com", email_verified: true, platformAdmin: true
+      })
+    ];
+    for (const context of contexts) {
+      const db = context.firestore();
+      for (const path of paths) {
+        const existingRef = doc(db, ...path);
+        const parentPath = path.slice(0, -1);
+        await assertFails(getDoc(existingRef));
+        await assertFails(getDocs(query(collection(db, ...parentPath), limit(5))));
+        await assertFails(setDoc(doc(db, ...parentPath, "browser-created"), {
+          organizationId: "org-a", phase: "completed"
+        }));
+        await assertFails(updateDoc(existingRef, { phase: "completed" }));
+        await assertFails(deleteDoc(existingRef));
+      }
+    }
+  }, 30_000);
+
+  test("event operating work state and receipts deny every browser operation", async () => {
+    const paths = [
+      ["organizations", "org-a", "eventOperatingLedgers", "ledger-a", "workState", "current"],
+      ["organizations", "org-a", "eventOperatingLedgers", "ledger-a", "workReceipts", "request-a"]
+    ];
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      for (const path of paths) {
+        await setDoc(doc(context.firestore(), ...path), {
+          organizationId: "org-a", phase: "prepared", serverOwned: true
+        });
+      }
+    });
+    const contexts = [
+      testEnv.unauthenticatedContext(),
+      ...[
+        ["customer-org-a", "org-a"],
+        ["sales-org-a", "org-a"],
+        ["admin-org-a", "org-a"],
+        ["sales-org-b", "org-b"],
+        ["admin-org-b", "org-b"]
+      ].map(([uid, organizationId]) => testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      })),
+      testEnv.authenticatedContext("platform-browser", {
+        email: "platform@example.com", email_verified: true, platformAdmin: true
+      })
+    ];
+    for (const context of contexts) {
+      const db = context.firestore();
+      for (const path of paths) {
+        const existingRef = doc(db, ...path);
+        const parentPath = path.slice(0, -1);
+        await assertFails(getDoc(existingRef));
+        await assertFails(getDocs(query(collection(db, ...parentPath), limit(5))));
+        await assertFails(setDoc(doc(db, ...parentPath, "browser-created"), {
+          organizationId: "org-a", phase: "completed"
+        }));
+        await assertFails(updateDoc(existingRef, { phase: "completed" }));
+        await assertFails(deleteDoc(existingRef));
+      }
+    }
+  }, 30_000);
+
+  test("event operating actuals state and receipts deny every browser operation", async () => {
+    const paths = [
+      ["organizations", "org-a", "eventOperatingLedgers", "ledger-a", "actualsState", "current"],
+      ["organizations", "org-a", "eventOperatingLedgers", "ledger-a", "actualsReceipts", "request-a"]
+    ];
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      for (const path of paths) {
+        await setDoc(doc(context.firestore(), ...path), {
+          organizationId: "org-a", currency: "USD", actualsRevision: 1, serverOwned: true
+        });
+      }
+    });
+    const contexts = [
+      testEnv.unauthenticatedContext(),
+      ...[
+        ["customer-org-a", "org-a"],
+        ["sales-org-a", "org-a"],
+        ["admin-org-a", "org-a"],
+        ["sales-org-b", "org-b"],
+        ["admin-org-b", "org-b"]
+      ].map(([uid, organizationId]) => testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      })),
+      testEnv.authenticatedContext("platform-browser", {
+        email: "platform@example.com", email_verified: true, platformAdmin: true
+      })
+    ];
+    for (const context of contexts) {
+      const db = context.firestore();
+      for (const path of paths) {
+        const existingRef = doc(db, ...path);
+        const parentPath = path.slice(0, -1);
+        await assertFails(getDoc(existingRef));
+        await assertFails(getDocs(query(collection(db, ...parentPath), limit(5))));
+        await assertFails(setDoc(doc(db, ...parentPath, "browser-created"), {
+          organizationId: "org-a", actualsRevision: 999
+        }));
+        await assertFails(updateDoc(existingRef, { actualsRevision: 999 }));
+        await assertFails(deleteDoc(existingRef));
+      }
+    }
+  }, 30_000);
+
+  test("workflow definitions instances and receipts deny every browser operation", async () => {
+    const paths = [
+      ["organizations", "org-a", "workflowDefinitions", "event_execution"],
+      ["organizations", "org-a", "workflowDefinitions", "event_execution", "versions", "event_execution_v1"],
+      ["organizations", "org-a", "workflowDefinitions", "event_execution", "lifecycleReceipts", "request-a"],
+      ["organizations", "org-a", "workflowInstances", "instance-a"],
+      ["organizations", "org-a", "workflowInstances", "instance-a", "receipts", "request-a"],
+      ["organizations", "org-a", "workflowInstances", "instance-a", "observations", "evidence-a"],
+      ["organizations", "org-a", "quoteAttendance", "attendance-a"],
+      ["organizations", "org-a", "quoteAttendance", "attendance-a", "receipts", "request-a"]
+    ];
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      for (const path of paths) {
+        await setDoc(doc(context.firestore(), ...path), {
+          organizationId: "org-a", currency: "USD", actualsRevision: 1, serverOwned: true
+        });
+      }
+    });
+    const contexts = [
+      testEnv.unauthenticatedContext(),
+      ...[
+        ["customer-org-a", "org-a"],
+        ["sales-org-a", "org-a"],
+        ["admin-org-a", "org-a"],
+        ["sales-org-b", "org-b"],
+        ["admin-org-b", "org-b"]
+      ].map(([uid, organizationId]) => testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      })),
+      testEnv.authenticatedContext("platform-browser", {
+        email: "platform@example.com", email_verified: true, platformAdmin: true
+      })
+    ];
+    for (const context of contexts) {
+      const db = context.firestore();
+      for (const path of paths) {
+        const existingRef = doc(db, ...path);
+        const parentPath = path.slice(0, -1);
+        await assertFails(getDoc(existingRef));
+        await assertFails(getDocs(query(collection(db, ...parentPath), limit(5))));
+        await assertFails(setDoc(doc(db, ...parentPath, "browser-created"), {
+          organizationId: "org-a", actualsRevision: 999
+        }));
+        await assertFails(updateDoc(existingRef, { actualsRevision: 999 }));
+        await assertFails(deleteDoc(existingRef));
+      }
+    }
+  }, 30_000);
+
+  test("event operating spine cannot be promoted by a browser administrator", async () => {
+    const db = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com", email_verified: true, organizationId: "org-a"
+    }).firestore();
+    const settingsRef = doc(db, "organizations", "org-a", "settings", "config");
+    await assertFails(updateDoc(settingsRef, { eventOperatingSpineEnabled: true }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await deleteDoc(doc(context.firestore(), "organizations", "org-a", "settings", "config"));
+    });
+    await assertFails(setDoc(settingsRef, { eventOperatingSpineEnabled: true }));
+  });
+
   test("post-event closeout records and action receipts are callable-only", async () => {
     const closeoutId = `closeout_${"a".repeat(48)}`;
     const receiptId = `closeout_action_${"b".repeat(48)}`;

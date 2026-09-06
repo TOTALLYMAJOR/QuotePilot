@@ -62,6 +62,13 @@ class ReconciliationStatusTest(unittest.TestCase):
     def test_a_complete_record_is_fully_reconciled(self):
         record = record_from(
             {
+                "overrunThresholds": {
+                    "laborBasisPoints": 1000,
+                    "purchasingBasisPoints": 1000,
+                    "minimumCents": 2500,
+                    "declaredBy": "synthetic-test-operator",
+                    "declaredAtISO": "2026-08-20T12:00:00.000Z",
+                },
                 "eventCompleted": True,
                 "payments": [
                     {

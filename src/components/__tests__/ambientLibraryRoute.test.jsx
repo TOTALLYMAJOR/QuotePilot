@@ -31,9 +31,15 @@ vi.mock("../AdminCatalogModal", async () => {
           data-testid="catalog-editor"
           data-section-id={props.focusRequest?.sectionId}
           data-record-id={props.focusRequest?.recordId}
+          data-surface-title={props.surfaceTitle}
         >
           Catalog editor
           <button type="button" onClick={props.onClose}>Back</button>
+          <button
+            type="button"
+            data-testid="mock-pricing-tab"
+            onClick={() => props.onActiveTabChange?.("pricing")}
+          >Pricing tab</button>
         </div>
       );
     }
@@ -111,23 +117,37 @@ function mount(props = {}) {
 }
 
 async function settleEditorOpen() {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 40));
-  });
+  await vi.waitFor(async () => {
+    // Arrival schedules a frame and a subsequent task; flush React and wait
+    // for the observable editor instead of assuming a frame fits in 40ms.
+    await act(async () => {});
+    expect(container.querySelector('[data-testid="catalog-editor"]')).not.toBeNull();
+  }, { timeout: 3000 });
 }
 
 describe("AmbientLibraryRoute", () => {
-  test("renders a purpose-bearing Library with Catalog and first-class Templates", () => {
+  test("renders the selected commercial hierarchy with Library dominant and readiness secondary", () => {
     mount();
 
     const library = container.querySelector(".ambient-library");
     expect(library.dataset.surfaceContractId).toBe("ambient-library");
     expect(library.dataset.libraryContext).toBe("standalone");
     expect(container.querySelector("#ambient-library-title").textContent).toBe("The choices behind every quote.");
-    expect(container.textContent).toContain("Packages, menus, services, rentals, templates, and pricing");
+    expect(container.textContent).toContain("Define what you sell, what it is made from, where you start, and how it is governed");
+    expect(container.querySelector('[data-library-workspace="commercial"]')).not.toBeNull();
+    expect(container.querySelector(".ambient-library__catalog-column")).not.toBeNull();
+    expect(container.querySelector("[data-library-readiness-rail]")).not.toBeNull();
+    expect(container.textContent).toContain("Offers");
+    expect(container.textContent).toContain("Components");
+    expect(container.textContent).toContain("Templates");
+    expect(container.textContent).toContain("Pricing & rules");
+    expect(container.querySelector('[data-library-record-id="rules"]')).not.toBeNull();
     expect(container.querySelector('[data-library-section="catalog"]')).not.toBeNull();
+    expect(container.querySelector('[data-library-section="components"]')).not.toBeNull();
     expect(container.querySelector('[data-library-section="templates"]')).not.toBeNull();
+    expect(container.querySelector('[data-library-section="policy"]')).not.toBeNull();
     expect(container.querySelector('[data-library-record-kind="event-template"][data-library-record-id="wedding"]')).not.toBeNull();
+    expect(container.textContent).toContain("Starts with Plated dinner");
     expect(container.querySelector("[data-library-return-context]")).toBeNull();
     expect(container.querySelector("#catalog-admin-title")).toBeNull();
   });
@@ -189,13 +209,29 @@ describe("AmbientLibraryRoute", () => {
     act(() => button.click());
 
     expect(container.querySelector("[data-library-acknowledgement]").dataset.resultKind).toBe("pending");
-    expect(container.querySelector("[data-library-acknowledgement]").textContent).toContain("Opening Packages");
+    expect(container.querySelector("[data-library-acknowledgement]").textContent).toContain("Opening Offers");
     expect(container.querySelector('[data-testid="catalog-editor"]')).toBeNull();
     await settleEditorOpen();
 
-    expect(container.querySelector("[data-library-acknowledgement]").textContent).toContain("ready to review");
+    expect(container.querySelector("[data-library-acknowledgement]").textContent).toContain("ready to use");
+    expect(container.querySelector('[data-testid="catalog-editor"]').dataset.surfaceTitle).toBe("Offers");
     expect(container.querySelector('[data-testid="catalog-editor"]').dataset.sectionId).toBe("packages");
     expect(container.querySelector('[data-testid="catalog-editor"]').dataset.recordId).toBe("");
+  });
+
+  test("keeps the outer editor identity synchronized with an internal section switch", async () => {
+    mount();
+    act(() => container.querySelector('[data-library-action-id="review-library-rules"]').click());
+    await settleEditorOpen();
+
+    expect(container.querySelector(".ambient-library__breadcrumb strong").textContent).toBe("Rules");
+    expect(container.querySelector(".ambient-library--editing").dataset.libraryEditorSection).toBe("rules");
+
+    act(() => container.querySelector('[data-testid="mock-pricing-tab"]').click());
+
+    expect(container.querySelector(".ambient-library__breadcrumb strong").textContent).toBe("Pricing");
+    expect(container.querySelector('[data-testid="catalog-editor"]').dataset.surfaceTitle).toBe("Pricing");
+    expect(container.querySelector(".ambient-library--editing").dataset.libraryEditorSection).toBe("pricing");
   });
 
   test("consumes an exact template arrival without substituting another record", async () => {
@@ -298,8 +334,24 @@ describe("AmbientLibraryRoute", () => {
   test("gives sales one read-only Library main without mounting an editor", () => {
     mount({ currentUserRole: "sales" });
     expect(container.querySelectorAll("main")).toHaveLength(1);
-    expect(container.textContent).toContain("Business Setup Center");
-    expect(container.querySelector('[data-library-action-id="review-library-menu"]').disabled).toBe(true);
+    expect(container.textContent).toContain("Before the next quote");
+    expect(container.textContent).toContain("An administrator manages changes and publishing");
+    expect(container.querySelector('[data-library-action-id="review-library-menu"]')).toBeNull();
+    expect(container.textContent).not.toContain("View only");
+    expect(container.querySelectorAll("[data-library-readonly]")).toHaveLength(1);
     expect(container.querySelector('[data-testid="catalog-editor"]')).toBeNull();
   });
+});
+
+test("workflow Studio Library entry requires enabled connected administrator scope", () => {
+  mount({ principalId: "admin-one", workflowStudioEnabled: true, workflowSource: "firebase" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).not.toBeNull();
+  expect(container.querySelector('[data-library-record-id="workflow"] h3').textContent).toBe("Business workflows");
+  expect(container.querySelector('[data-library-record-id="workflow"]').textContent).toContain("quote approval, final guest count, event execution, and closeout follow-up");
+  mount({ principalId: "admin-one", workflowStudioEnabled: true, workflowSource: "firebase", currentUserRole: "sales" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).toBeNull();
+  mount({ principalId: "admin-one", workflowStudioEnabled: false, workflowSource: "firebase" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).toBeNull();
+  mount({ principalId: "admin-one", workflowStudioEnabled: true, workflowSource: "local" });
+  expect(container.querySelector('[data-workflow-studio-entry="library"]')).toBeNull();
 });

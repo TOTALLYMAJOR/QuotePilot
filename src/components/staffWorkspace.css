@@ -403,6 +403,7 @@
   background: white;
   color: #9a8f7b;
   cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
 }
 
 .staff-role-icons > button.is-selected {
@@ -573,6 +574,7 @@
   align-items: center;
   color: var(--text-secondary);
   text-decoration: none;
+  transition: color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .staff-profile-tabs a:first-child {
@@ -1571,6 +1573,40 @@
   padding: 0;
   font-weight: 790;
   cursor: pointer;
+  border-radius: 4px;
+  transition: color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+@media (hover: hover) {
+  .staff-role-icons > button:hover {
+    border-color: rgba(128, 90, 25, 0.58);
+    background: #fff7e8;
+    color: #805a19;
+    transform: translateY(-1px);
+  }
+
+  .staff-profile-tabs a:hover {
+    color: var(--ink);
+    background: rgba(168, 114, 25, 0.08);
+    box-shadow: inset 0 -2px 0 rgba(168, 114, 25, 0.45);
+  }
+
+  .staff-text-action:hover {
+    color: #694711;
+    background: rgba(168, 114, 25, 0.09);
+  }
+}
+
+.staff-role-icons > button:focus-visible,
+.staff-profile-tabs a:focus-visible,
+.staff-text-action:focus-visible {
+  outline: 3px solid var(--gold-strong, #9a6817);
+  outline-offset: 3px;
+}
+
+.staff-role-icons > button:active,
+.staff-text-action:active {
+  transform: translateY(1px);
 }
 
 .staff-honest-empty {
@@ -1967,5 +2003,44 @@
 
   .staff-workspace__layout {
     display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-role-icons > button,
+  .staff-profile-tabs a,
+  .staff-text-action {
+    transition: none;
+  }
+
+  .staff-role-icons > button:hover,
+  .staff-role-icons > button:active,
+  .staff-text-action:active {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .staff-role-icons > button,
+  .staff-profile-tabs a,
+  .staff-text-action {
+    color: ButtonText;
+    forced-color-adjust: auto;
+  }
+
+  .staff-role-icons > button {
+    border-color: ButtonText;
+  }
+
+  .staff-role-icons > button.is-selected,
+  .staff-profile-tabs a:first-child {
+    color: Highlight;
+    border-color: Highlight;
+  }
+
+  .staff-role-icons > button:focus-visible,
+  .staff-profile-tabs a:focus-visible,
+  .staff-text-action:focus-visible {
+    outline-color: Highlight;
   }
 }

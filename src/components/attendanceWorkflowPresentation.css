@@ -1,0 +1,49 @@
+.attendance-workflow-panel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: grid;
+  gap: 0.85rem;
+  color: var(--text, #292a2d);
+}
+.attendance-workflow-panel + .attendance-workflow-panel { margin-top: 1.5rem; }
+.attendance-workflow-panel p,
+.attendance-workflow-panel h3 { margin: 0; }
+.attendance-workflow-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.attendance-workflow-panel__head h3 { font-size: 1.05rem; line-height: 1.4; }
+.attendance-workflow-panel__head > button { flex: 0 0 auto; font-size: 0.8rem; }
+.attendance-workflow-panel__count { padding-block: 0.3rem; font-size: 1rem; }
+.attendance-workflow-panel__count strong { font-size: 1.3rem; }
+.attendance-workflow-panel__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.attendance-workflow-panel form { display: grid; gap: 0.8rem; padding: 1rem; border: 1px solid var(--border, #d8d7d3); border-radius: 8px; }
+.attendance-workflow-panel__evidence,
+.attendance-workflow-panel__secondary,
+.attendance-supporting-context { border-top: 1px solid var(--border, #d8d7d3); padding-top: 0.8rem; font-size: 0.875rem; }
+.attendance-workflow-panel details > summary,
+.attendance-supporting-context > summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+.attendance-workflow-panel details[open] > :not(summary),
+.attendance-supporting-context[open] > :not(summary) { margin-top: 0.75rem; }
+.attendance-workflow-panel__outcome:empty { display: none; }
+.attendance-workflow-panel__outcome [role="alert"],
+.attendance-workflow-panel__outcome [role="status"] { padding: 0.75rem; border-left: 3px solid var(--accent, #916717); background: var(--surface, #f7f6f2); }
+.workflow-task-panel { border-top: 1px solid var(--border, #d8d7d3); padding-top: 1rem; }
+.workflow-task-panel__summary { font-size: 0.875rem; }
+.workflow-task-panel__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.workflow-task-panel__list > li { padding: 0.85rem 0; border-top: 1px solid var(--border, #d8d7d3); display: grid; gap: 0.5rem; }
+.workflow-task-panel__list > li > button { justify-self: start; }
+.workflow-task-panel__title { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
+.workflow-task-panel__title span { font-size: 0.8rem; color: var(--muted, #67696d); }
+.workflow-task-panel__detail { font-size: 0.875rem; }
+.attendance-commercial-review__changes { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
+.ambient-attendance-next { margin-block: 0.75rem; }
+@media (max-width: 600px) {
+  .attendance-workflow-panel__head { flex-direction: column; gap: 0.4rem; }
+  .attendance-workflow-panel__head > button { align-self: flex-start; }
+  .attendance-workflow-panel__actions > button { width: 100%; }
+  .workflow-task-panel__title { align-items: flex-start; }
+}
+
+.ambient-living-opportunity .ambient-action-acknowledgement > small {
+  color: #46514b;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}

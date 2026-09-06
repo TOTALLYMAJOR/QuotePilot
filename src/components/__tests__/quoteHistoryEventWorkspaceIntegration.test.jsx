@@ -5,12 +5,14 @@ import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  deleteQuote: vi.fn(),
   getEventTypes: vi.fn(),
   getQuoteHistory: vi.fn()
 }));
 
 vi.mock("../../lib/quoteStore", async () => ({
   ...(await vi.importActual("../../lib/quoteStore")),
+  deleteQuote: mocks.deleteQuote,
   getQuoteHistory: mocks.getQuoteHistory
 }));
 
@@ -76,6 +78,7 @@ beforeEach(() => {
     value: vi.fn()
   });
   mocks.getEventTypes.mockReset().mockResolvedValue([]);
+  mocks.deleteQuote.mockReset().mockResolvedValue({ ok: true });
   mocks.getQuoteHistory.mockReset().mockResolvedValue({ source: "local", quotes: [QUOTE] });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -89,6 +92,72 @@ afterEach(() => {
 });
 
 describe("QuoteHistoryView event workspace integration", () => {
+  test("keeps failed permanent-delete confirmation open with the exact failure", async () => {
+    mocks.deleteQuote.mockRejectedValueOnce(new Error("The approved delete could not be confirmed."));
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          currentUserRole="admin"
+          canDeleteQuotes
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    act(() => container.querySelector('[data-quote-action-id="delete"]').click());
+    expect(container.querySelector(".confirm-modal")).not.toBeNull();
+    await act(async () => {
+      byText("Confirm Delete").click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.deleteQuote).toHaveBeenCalledWith(QUOTE.id, {
+      organizationId: "",
+      approvalRequestId: ""
+    });
+    expect(container.querySelector(".confirm-modal")).not.toBeNull();
+    expect(container.querySelector(".error-note")?.textContent)
+      .toContain("approved delete could not be confirmed");
+    expect(byText("Confirm Delete").disabled).toBe(false);
+  });
+
+  test("explains an unavailable event-type filter and retries it in place", async () => {
+    mocks.getEventTypes
+      .mockRejectedValueOnce(new Error("catalog unavailable"))
+      .mockResolvedValueOnce([{ id: "wedding", name: "Wedding" }]);
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          currentUserRole="admin"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const eventType = container.querySelector('[data-view-filter="event-type"]');
+    const eventTypeChoice = eventType.querySelector('[data-adaptive-choice-mode="empty"]');
+    const recovery = container.querySelector("#quote-event-type-filter-error");
+    expect(recovery).not.toBeNull();
+    expect(recovery.textContent).toContain("current selection is preserved");
+    expect(eventTypeChoice.getAttribute("aria-describedby")).toBe(recovery.id);
+
+    await act(async () => {
+      byText("Retry event types").click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(mocks.getEventTypes).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("#quote-event-type-filter-error")).toBeNull();
+    expect(eventType.querySelector('option[value="wedding"]')?.textContent).toBe("Wedding");
+  });
+
   test("uses the quote detail route as an event record while preserving administration elsewhere", async () => {
     const onBackToQuotes = vi.fn();
     const onOpenSchedule = vi.fn();

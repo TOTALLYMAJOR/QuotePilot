@@ -93,7 +93,7 @@ describe("Commercial Change Authority callable integration", () => {
       "function commercialChangeActor"
     );
     expect(policy).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED");
-    expect(policy).toContain("COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED && tenantEnabled");
+    expect(policy).toContain("globalEnabled && tenantEnabled");
     expect(policy).toContain('authorityState:');
     expect(policy).toContain('"dormant"');
 

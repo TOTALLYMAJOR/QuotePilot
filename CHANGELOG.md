@@ -1,14 +1,516 @@
 # Changelog
 
-Last updated: 2026-09-04 10:46:13 CDT
+Last updated: 2026-09-05 20:17:12 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
+## Unreleased — combined production candidate
+
+- Bind the refreshed Firebase browser fixture to the local-rehearsal capability
+  contract and make its seeder fail closed unless a `demo-*` project is backed
+  by loopback Auth and Firestore emulators.
+
+- Align the general browser release gate with stable quote-row identity and
+  the configured lifecycle control, and keep the Firebase conversation fixture
+  inside its real 30-day portal-validity window instead of relying on a fixed
+  issuance date that can silently expire.
+
+- Extend the approved RagnaKoK runtime scope to staffing actions and Revenue
+  Autopilot preparation; retain explicit policy setup and disabled scheduling
+  and automated sends. Other organizations remain denied.
+
+- Add a tenant-scoped RagnaKoK runtime profile with global flags off, exact
+  organization isolation, environment validation and per-Function readback.
+- Anchor field-state accessibility announcements within their own field so
+  wide import review tables scroll locally without expanding the mobile page.
+
+- Split the shared action-feedback model from the workspace entry bundle so
+  the combined UI stays within the existing chunk-size limit. Update Studio
+  interaction tests for the current workflow buttons and visible state labels.
+
+- Integrate the tenant operating model with the UX Convergence release and
+  the current field-state, governed-import and workflow-usability refinements.
+- Bring final-count requests into the eligible quote action, expose exact
+  closeout navigation and durable outcomes, and simplify the workflow Studio
+  and mobile inspection presentation while preserving native authority.
+- Preserve both Calendar capability gating and the workflow Studio entry in
+  the converged Library; combine the 122 native callable export inventory.
+- Retain the current governance, portfolio and Golden Lattice planning artifacts
+  without treating documentation or screenshots as production acceptance.
+
+## Unreleased — QP-TOM review preparation
+
+- Generate a fresh local-emulator login password for each disposable rehearsal
+  session, retaining the fixed demo-project and localhost checks.
+
+## Unreleased — QP-TOM local whole-app rehearsal
+
+- Add a one-command disposable demo rehearsal using real Auth, Firestore,
+  Functions and the full application with ordinary admin/sales login.
+- Seed explicitly synthetic current-catalog acceptance/booking through native
+  planners for a usable amendment source; preserve pricing, version and payment.
+- Print canonical app links, isolate local credentials and provider configuration,
+  and stop the owned app/emulator process chain through Ctrl+C.
+- Keep automated local rehearsal separate from human acceptance and any future
+  push, hosted tenant activation or provider communication.
+
+## Unreleased — QP-TOM local current-main reconciliation
+
+- Reconstruct the completed tenant model on current main while retaining its
+  catalog drafts, configured quote actions and provider controls.
+- Preserve exact current-catalog review evidence through attendance amendment
+  rebuilds; legacy/changed-catalog terminal sources remain blocked without writes.
+- Make all four packs discoverable under Library's Business workflows entry.
+- Retain every existing release profile's allowed keys and deployment batch
+  quota while composing the 121-export candidate with its isolated TOM profile.
+- Replace a fixed-delay Library arrival assertion with an observable UI wait.
+
+## Unreleased — QP-TOM-020 Four domain packs and qualification
+
+- Extend bounded tenant definitions with schema 2 domain policies while
+  preserving schema 1 seeds, receipts and existing instance pins.
+- Seal tenant approval policy and exact attendance submission references in
+  Commercial Change simulation, authorization and apply receipts. Existing
+  administrator approval requirements remain in force.
+- Persist reviewed attendance planning with server-stamped source provenance;
+  preserve approximate counts without inventing bounds or customer confirmation.
+- Expose all four bounded packs in Configuration Studio and their role-safe
+  domain panels, with exact uncertain-request recovery across pack selection.
+- Apply reviewed attendance amendments through the original commercial owner,
+  preserving paid/booking history and requiring renewed customer acceptance.
+- Keep native policy origin separate from a later migrated coordinator pin;
+  verify both and preserve canonical receipt bytes.
+- Add offline migration inventory and an isolated EventSpine staging profile;
+  tenant activation, hosted proof and moderated acceptance remain separate.
+- Qualify all four native owner workflows with real disposable emulators, then
+  import populated evidence through global disable and restore with identical
+  source hashes and retained receipts. Add a bounded real-pilot walkthrough.
+- Restore the existing compatibility bundle budget by excluding unused optional
+  jsPDF renderers and splitting the legacy portal chunk; no budget was raised.
+
+## Unreleased — QP-TOM-020-E/F Versioned coordination and Configuration Studio
+
+- Add immutable tenant workflow definitions, explicit seed evidence, draft and
+  publication previews, typed confirmation, retirement and exact request receipts.
+- Bind new event instances atomically to a definition while preserving fixed
+  operational authority. Add bounded task acknowledgements, complete-cost review,
+  due/escalation projections and separately previewed compatible migration.
+- Add the administrator Library Studio and staff event-policy surface with
+  guarded navigation, source/pin evidence and uncertain-outcome recovery.
+- Export comparison policy only from an exact pinned tenant publication; keep
+  policy availability independent from declared-cost availability and preserve
+  its reasons in reconciliation. No automatic messaging or provider activation.
+
+## Unreleased — QP-TOM-020-D Operational Replay and actual-cost evidence
+
+- Add bounded, anchored operational history across phase, checkpoint/issue,
+  and actual-cost receipts, with current authority checks and explicit refresh
+  when newer records exist. Reject gaps and retained evidence without a parent.
+- Export exact-source operator-declared costs only after explicit category
+  completeness and private receipt verification. Preserve incomplete evidence
+  and require declared overrun tolerances with actor/time evidence.
+- Compose current operational references through their existing domain reads;
+  local verification remains separate from hosted or human acceptance.
+
+## Unreleased — QP-TOM-020-C Declared operational actuals
+
+- Add exact-source operator-recorded labor, purchasing and other costs with
+  independent correction/void receipts and explicit category completeness.
+  Missing costs remain undeclared/partial; captured zero is never inferred.
+- Preserve phase/work history, role/tenant/source authority, bounded private
+  storage, and shared uncertainty recovery across all three command channels.
+- Leave physical consumption, payroll, payment, delivery and trusted export
+  unavailable unless their own evidence is established.
+
+## Unreleased — QP-TOM-020-B Event checkpoints and issues
+
+- Add fixed operator checkpoints and a bounded issue journal to Control Room,
+  with record/reopen and open/resolve/reopen receipts. The work journal binds
+  the exact accepted event and has its own policy and revision; existing phase
+  and commercial records remain authoritative and unchanged.
+- Keep admin writes and sales reads, strict text/capacity bounds, browser
+  collection denial and independent current authorization checks. Coordinate
+  uncertain phase and work requests through a shared browser guard while
+  preserving server transaction authority.
+- No actuals, full Replay, tenant workflow publication, provider actions,
+  deployment or tenant activation is included.
+
+## Unreleased — QP-TOM-020-A Event Operating Spine
+
+- Add a default-off, tenant-gated operational ledger bound to an exact booked
+  quote, immutable accepted version, and private acceptance receipt. Admins can
+  initialize and record sequential operational phases; sales staff can read the
+  bounded snapshot. Immutable request receipts support exact retry and reject
+  stale revisions or changed payloads.
+- Connect the existing Event Focus route to a role-safe Control Room with
+  explicit submission, uncertain-outcome, reconciliation, receipt and recovery
+  states. Direct browser ledger/receipt access and tenant-gate edits are denied.
+- Update the explicit callable inventory test and preserve identical synthetic
+  secret-rejection fixtures using runtime construction, clearing the existing
+  scanner false positives without changing scanner policy.
+- Record the delegated Phase 0 decisions in the Tenant Operating Model ADR.
+  This is the first local source slice: checkpoints, issues, actuals, full
+  Replay, tenant policy publication and Truth Loop export remain subsequent
+  work. No tenant activation, deployment, provider or human proof is implied.
+
 ## [Unreleased]
 
 ### Changed
+- Repaired the branded customer-portal browser fixture after its fixed issue
+  timestamp crossed the product's authoritative 30-day portal-validity limit
+  during exact-head CI run `33971452740`. The active fixture now uses the test
+  execution time while its explicit expired sibling continues to prove the
+  terminal recovery path. The focused real-browser case passes locally; no
+  portal validity, persistence, customer output, or payment behavior changed.
+- Hardened governed Firebase candidate deployment so a complete Functions
+  production dependency tree is verified before receipt reservation or any
+  provider mutation. The first `v0.17.0` provider-profile attempt at
+  `bba03f05cbb582ba3084b95f3a7b79e91be963f5` reached the guarded local Firebase
+  CLI boundary without `functions/node_modules`, retained its immutable partial
+  receipt, and requires a fresh published and CI-qualified SHA. The bounded
+  recovery is `npm ci --prefix functions`; no payment result or provider
+  acceptance is inferred from the failed attempt.
+- Established `quote-pilot-field-state-v1` as the governing five-axis field
+  contract for availability, origin, editability, persistence, and evidence.
+  Shared `FieldStateIndicator` and 0/1/many `AdaptiveChoiceField` primitives now
+  distinguish absence, provenance, draft/save/publication authority, and
+  failure/recovery without color-only meaning. The registered adoption
+  replaces false one-option selectors across quote setup, event templates,
+  Package Workspace, staffing, catalog recovery, Ambient menu selection, and
+  the Import Workbench. High-confidence interaction repairs also add
+  hover/pressed/focus-visible/reduced-motion treatment and visible recovery to
+  the audited Quote History, customer portal, Pilot, role authority, Ambient
+  client, catalog, and workspace-handoff actions. The machine contract,
+  explicit surface registry, checker, and `lane:core` wiring make future
+  relevant field changes fail closed when registered semantics drift or a
+  shared-primitive adopter is not registered.
+- Rebuilt the admin-only Import Studio surface as a readiness-gated Import
+  Workbench for customer/catalog CSV and searchable-PDF catalog sources. It now
+  exposes eight source-to-publication stages; seven supported record types;
+  row/page/excerpt provenance; a scan-ready view of every mapped value, resolved
+  ID, default, and field state; explicit 50-row review pages that keep every
+  inferred record reachable while preflight covers the full included set;
+  explicit unsupported-column, mapping,
+  relationship, invalid-coercion, and row-exclusion resolution; and an
+  exact-current-plan gate before mutation. Customer
+  preflight scans the tenant destination, projects duplicates, and partitions
+  up to 1,500 reviewed rows under both the 350-record and Firestore 500-write
+  ceilings. Every child mutation is bound to a short-lived tenant/actor server
+  preflight receipt, the full normalized SHA-256 plan, and its child index;
+  the receipt has a 15-minute issue window and its first accepted child activates
+  a 24-hour exact-session continuation. Stable identities preserve
+  partial/uncertain recovery, accepted child receipts can be resumed or undone
+  as an exact subset, and only an exact accepted child receipt can aggregate as
+  completed. Catalog records now
+  stage into the existing revision-fenced shared setup draft under an exact
+  tenant/batch/row/patch/generation fingerprint and remain
+  explicitly Saved/Draft—not Published—until normal Library review and
+  publication. Success-shaped catalog responses are rejected unless their
+  organization, revision/generation projection, complete patch identities, and
+  payloads match the reviewed plan. Durable server-only mutation receipts bind
+  the exact request, tenant, actor, fences, and normalized patch hash; publication
+  lineage can reconcile a lost response as still Staged or already Published
+  only while the exact accepted fields remain staged or active. The Published
+  presentation links to the active catalog and never offers draft undo.
+  Recovery now awaits the actual catalog read, retains a retry after read
+  failure, and offers an explicit release only for a definitive no-write
+  transaction abort. PDF parsing is lazy-loaded,
+  searchable-text-only, and heuristic;
+  its same-origin runtime has a separate exact file/byte/SHA-256 budget;
+  source/local tests and visual inspection do not claim hosted Firebase,
+  production, assistive-technology, or human acceptance.
+- Synchronized final acceptance expectations with the selected Operations and
+  Clients compositions without changing runtime behavior or authority. The
+  exact Now-to-Calendar test now addresses the focused event by its accessible
+  name, and the legacy Calm Four Clients assertion now verifies the selected
+  relationship-led heading instead of superseded presentation copy. Five
+  compatibility browser cases now retain the **Catalog Admin** entry-point
+  contract while addressing the selected **Library settings** dialog, opening
+  the intentionally disclosed Advanced policy and customer-facing brand groups
+  before editing, and asserting the real **Changes waiting to save** state
+  rather than misclassifying an unsaved local edit as a synchronization
+  failure. The corrected five-case CI-shaped matrix passes locally without any
+  runtime, catalog, pricing, persistence, or role-authority change. A same-day
+  branch/worktree reconciliation confirms all 30 UX Convergence
+  commits are present on this candidate and no other same-day commit exists
+  outside it; unrelated integration-checkout planning work and older
+  experimental worktrees remain excluded. Whole-candidate local qualification
+  passes 4,548 unit tests, the 526-module production build, the aggregate
+  release/CWV lane, 127 Truth Loop tests, 78 Firestore-rule tests, the 4-case
+  Firebase browser smoke, the 3-case authoritative-pricing browser suite, and
+  the corrected 71-case responsive route/authority matrix. These are
+  source/local results only; exact-head CI, hosted, provider, production,
+  recipient, assistive-technology, and human evidence remain separate.
+- Converged the existing exact-token **Customer Proposal Decision Center** into
+  the selected customer-facing half of Client 360 without adding a portal,
+  quote, pricing, decision, signature, payment, conversation, or route
+  authority. The event story now owns the broad canvas while one secondary rail
+  keeps decision status, total, required deposit, expiry, response choices,
+  mutation feedback, and the authority-gated question continuation together.
+  Event facts, package/menu, and compact optional additions remain client-
+  readable; price detail, planning assumptions, and tenant terms begin
+  collapsed. The public portal no longer inherits the absent staff sidebar's
+  236px desktop offset. All contextual question, reversible addition, explicit
+  acceptance/signature, payment, recovery, and exact-token handlers are reused.
+  Focused component coverage passes 49/49; the 390/768/1440 plus exact-source
+  1487x1058 Chromium matrix passes 5/5 with quote selection/totals/revision
+  equality, 44px targets, no overflow/clipping/collision, and zero axe
+  violations. The exact 1487x1058 source and implementation were inspected
+  together at a local **9.5/10 - GO**. This is local source evidence only;
+  exact-head CI, connected portal behavior, deployment, production data,
+  provider outcomes, recipient use, and human acceptance remain unclaimed.
+- Converged the existing **Clients** directory and Internal Client 360 into the
+  selected relationship-led composition without adding a customer record,
+  activity feed, urgency model, route, or mutation authority. The populated
+  directory now leads with purpose, one relationship in context, and one exact
+  **Review client** continuation. Client 360 presents the recorded customer
+  request as the next decision, the existing Client → Opportunity → Proposal →
+  Event evidence as a four-stage spine, the living opportunity as the active
+  object, and exact lifecycle/request evidence as recent relationship history.
+  A same-quote, same-time customer request and conversation summary appears once
+  rather than as duplicate activity. Consequence copy states only that no state
+  changes until review; it does not invent operational impact or urgency.
+  Conversations, additional opportunities, source detail, and the existing
+  detailed record remain available under disclosure. Focused unit coverage
+  passes 16/16 and the 390/768/1440 Chromium-admin route matrix passes 3/3 with
+  exact arrival, persisted-state equality, 44px targets, layout containment,
+  no horizontal overflow, and zero scoped axe violations. The selected
+  reference and exact 1440px implementation were inspected together at a local
+  **9.5/10 — GO**. This is local source evidence; exact-head CI, hosted data,
+  deployment, production behavior, assistive-technology use, and human
+  acceptance remain unclaimed.
+- Converged **Now** to the approved decision-ledger composition without adding
+  another work queue, event projection, payment state, or completion authority.
+  The masthead now names the highest-pressure recorded condition; **Needs you**
+  preserves the existing deterministic Workflow order while distinguishing true
+  urgency from general waiting and replacing decorative `01/02/03` ranks with
+  accessible ordinal context. Each item pairs the recorded situation with an
+  evidence-bounded consequence and its existing exact Workflow or Customer
+  continuation. The secondary column projects a compact seven-day horizon and
+  accepted/booked events from the existing Calendar inputs, with exact Calendar
+  handoff. The adaptive **Quiet progress** band shows only supported internal
+  completion receipts under **Recently handled** and existing pending/provider
+  payment states under **Waiting on others**; unresolved operator-owned money
+  actions remain separate **Commercial steps**. Desktop, tablet, and phone retain
+  one semantic order and no horizontal overflow. Local Chromium coverage passes
+  2/2 including exact Workflow/Calendar round trips, responsive captures, and
+  zero serious/critical axe violations. The exact 1487×1058 implementation and
+  selected visual were inspected together at a local **9.5/10 — GO**. This is a
+  local, unpushed presentation change; no hosted, provider, production, or human
+  acceptance is claimed.
+- Converged the existing role-safe **Library** to the selected Option 2
+  composition with Option 3 restraint. Desktop gives the broad commercial
+  ledger approximately two-thirds of the canvas and keeps unresolved setup in
+  a quieter secondary rail; mobile preserves the same ledger-first semantic
+  order. Existing Packages appear as **Offers**, Menu/Services/Rentals as
+  **Components**, Event Templates as quote starting points, and existing
+  Pricing and Configuration Rules as one policy group. The Offer editor now
+  uses a compact navigator and broad selected-offer workspace without a
+  permanent health rail; its primary summary retains derived margin while
+  detailed economics move under disclosure, and recorded choice groups project
+  read-only without implying browser authoring. Add-on and Rental editors expose
+  visible derived Usage with stable IDs under Technical details. Event Templates
+  are independently collapsible across eight business groups. Readable Rules
+  and safe structured controls precede Advanced JSON recovery; Pricing separates
+  Base pricing, Adjustments & context, Fees, Tax, and Deposit before Advanced
+  policy. Unresolved readiness expands while healthy evidence compresses; and
+  recovery copy states what cannot happen, what remains active, and the next
+  safe action. Sales can inspect the same objects and readiness outcomes
+  without repeated disabled administrator controls. **Your bundle** remains a
+  derived composition of the one quote draft. The readiness rail uses
+  supplemental semantic icons while text remains authoritative, ordinary text
+  stays at least 12px, one save/retry action owns recovery, and switching an
+  embedded editor tab synchronizes its breadcrumb/title without remounting or
+  dropping staged work. Local Chromium evidence passes Ambient Library 17/17
+  and Calm Four 10/10 with `VITE_OPERATIONAL_STAFFING_ENABLED=true`; exact
+  390/768/1440 captures and combined comparisons received a local visual-review
+  verdict of **9.5/10 — GO**. The exact rendered implementation is local commit
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4`. No Bundle record, route,
+  lifecycle, save path, catalog authority, pricing authority, role authority,
+  or publication path was added. Exact-head CI measures 3,381,257 / 397,428
+  bytes for compatibility; exact-head CI measures 4,319,173 / 432,561 bytes
+  for Ambient. The active temporary exception is pinned to those larger
+  literal graphs with no future-growth headroom; the selected lazy Library
+  experience accounts for 45,724 and 61,440 aggregate bytes respectively. Full unit, build, focused
+  browser, capability/document governance, and local CWV checks pass. The
+  isolated checkout lacks the six Firebase web configuration values required
+  by `check:env`, so the aggregate release lane remains environment-blocked
+  rather than falsely green. This candidate is local and unpushed; no exact-head
+  CI, hosted result, deployment, production-data result, or human acceptance is
+  claimed.
+- Corrected Calendar-first Operations to the selected compositions on the
+  existing schedule authority. Month now gives the full horizontal canvas to
+  the month calendar and reveals the selected day, focused event, conflict
+  consequence, and collapsed operational domains beneath it. Week now renders
+  a seven-day time grid with a vertical time axis, event position and height
+  derived from start time and duration, visible collision lanes, and a
+  secondary contextual detail rail. Both presentations retain one selection,
+  event projection, and conflict model; phone widths retain the same-model
+  agenda rather than a third Calendar implementation. Operational detail begins
+  collapsed, comparison appears only inside the conflict workflow, and Tools
+  remains secondary. Derived conflicts have no manual resolved state; operators
+  correct authoritative date, time, duration, venue, guest-count, or lifecycle
+  inputs on the affected Opportunity and the existing conflict model recomputes
+  the result. The same slice fails Calendar closed when `eventSchedule` is disabled:
+  Operations leaves primary and secondary navigation, `/app/operations` and
+  `/app/schedule` do not render Calendar, and Now, Opportunity, Client, and Event
+  handoffs are withheld. Reporting remains independently gated by
+  `reportingDashboard`; People retains the existing administrator/staffing gate.
+  Local implementation commit `5dd97a20133b592f210d56e2454e699c17d45200`
+  passes the 12-case Operations browser matrix, including 390/768/1440 and
+  same-size 1487×1058 reference captures, serious/critical axe checks, exact
+  handoffs, capability gates, and authoritative staffing/checklist persistence.
+  Final local release qualification also passes 4,509 unit tests, both build
+  and bundle gates, documentation/capability governance, 127 Truth Loop tests,
+  and Lighthouse CWV. No deployment, hosted role result, provider outcome, or
+  human acceptance is claimed.
+- Promoted Calendar-first **Operations** into the Ambient primary orientation,
+  producing the intentionally bounded order **Now**, **Opportunities**,
+  **Operations**, **Clients**, and role-gated **Library**. Removed the duplicate
+  Ambient Operations header dropdown while retaining Operations, Clear the
+  Deck, and Staff in Workspace & tools; Frequent and progressive
+  Administration groups remain unchanged. Focused unit and local browser
+  coverage verifies the direct current route, desktop/mobile grouping,
+  responsive overflow and accessibility boundaries, compatibility navigation,
+  and admin/sales visibility. The existing compatibility bundle exception is
+  pinned to the exact 3,331,404-byte measured graph, an 860-byte aggregate
+  increase with no largest-chunk growth or percentage padding. Final local
+  qualification passes 4,499 unit tests, production build, project/env/secret/
+  workflow/capability/document governance, bundle, 127 Truth Loop tests,
+  Lighthouse CWV, 22 Workbench browser cases, 13 compatibility Proposal
+  Composer cases, and 9 Operations cases. The 238-criterion ledger resolves to
+  236 PASS, one NOT APPLICABLE, and exact-head CI UNVERIFIABLE. This local
+  source candidate has not been pushed, deployed, accepted in a hosted tenant,
+  or reviewed by a human.
+- Added a positive Workbench persistence golden path: a complete supported
+  draft saves into its Living Opportunity, reopens through Opportunities, edits
+  through the existing authority,
+  and saves again as the same quote, quote number, and portal identity while
+  advancing `v0001` to `v0002` with exactly two history records. Customer,
+  venue, guest, and Menu state survive the round trip. Together with the
+  already focused Guided, Pilot, scenario, blocker, long-Menu, margin, and
+  failure-recovery cases, this closes the local quote golden-path set without
+  adding another form, save, pricing, or persistence authority.
+- Certified contextual capability continuity across Workflow, Messages, Pilot,
+  Clear the Deck, Staff, Reporting, Administration, Library, Now, and exact
+  Opportunity/Calendar handoffs using 274 focused regressions plus bounded
+  Clear Deck interaction coverage. Removed the zero-consumer legacy Operations
+  switchboard and its dead CSS, and registered its Calendar-first replacement,
+  retirement condition, and route-preservation disposition. The canonical
+  feature inventory now classifies Workbench, Guided, compatibility quote
+  paths, Operations, Event Focus, Workflow, Messages, and Administration
+  explicitly. No business authority, live-event claim, route, or capability was
+  added or removed; this remains local and unpushed.
+- Consolidated the Ambient Operations menu into the Calendar-first daily
+  execution paths: **Operations**, **Clear the Deck**, and role-gated **Staff**.
+  Workflow, Messages, and Pilot remain Frequent tools; Reporting,
+  Integrations, Import, and Diagnostics remain progressive Administration;
+  exact Event Focus and Schedule compatibility remain directly reachable.
+  Focused shell tests and 9/9 real-route Operations cases now cover the
+  responsive Calendar, exact handoffs, conflict evidence, persisted staff and
+  checklist work, direct Event arrival, and Back/Forward continuity. This is a
+  local source candidate only; it has not been pushed, deployed, or accepted in
+  a hosted environment.
+- Certified the remaining Workbench behavioral boundaries without adding a
+  second authority: service style survives a Guided round-trip, explicit
+  staffing adoption reprices the canonical total, Pilot stays dormant until
+  relevant and previews before applying only to the dirty draft, and ordinary
+  save blockers still govern AI-assisted changes. A forced browser-local
+  persistence exception now has end-to-end evidence that no saved-success
+  claim or quote record is created while event, customer, and Menu work remain
+  intact and the exact failure promotes into save-readiness Attention. This is
+  focused local evidence only; no provider, hosted, or production claim is
+  made.
+- Refined the local-only Commercial Workbench presentation after rendered
+  desktop/mobile review: long Menus now use course-level disclosure with the
+  first and selected groups open, search reveals matching groups, Event starts
+  with a readable evidence-derived summary, semantic region/headings and 44px
+  controls are explicit, and healthy margin detail compresses while missing or
+  below-target evidence expands. Corrected the margin evidence boundary so
+  null/blank recorded costs remain missing rather than coercing to zero.
+  Focused model and real-browser coverage certifies first-viewport hierarchy,
+  blank/long states, keyboard focus, error association, reduced motion, and
+  phone-width Menu flow. No pricing, persistence, catalog, provider, or save
+  authority changed; this slice remains local and unpublished.
+- Certified the existing Compare Scenarios and common save-readiness paths
+  without widening runtime authority: scenario inspection remains isolated
+  until explicit application, focus returns to its invoker, both Workbench save
+  controls expose the same exact blockers, and quote-read, Pilot, intent,
+  impact-review, and authorization blockers remain fail-closed. This is a
+  focused local test/evidence slice only.
+- Continued the full 238-criterion UX convergence program as local-commit-only
+  work. Focused Workbench browser coverage now certifies unsaved Event/Menu
+  continuity across domains, canonical guest repricing and undo, retained
+  validation, explicit staffing recommendations, Rentals and Enhancements,
+  honest unsaved client preview with focus restoration, and collapsed-but-
+  retained advanced pricing. Publication, merge, deployment, and final
+  exact-head qualification remain outside this slice.
+- Completed the local commercial-platform source candidate: new authoritative
+  calculations use integer-minor-unit pricing-v2 with deterministic half-up
+  line, service-fee, tax, deposit, and balance reconciliation; exact price
+  waterfalls and applied policy evidence are retained on the pricing receipt.
+  Explicit invalid tax/season references, malformed/overlapping fee tiers, and
+  ambiguous seasonal rules fail closed. A fixed-seed 5,000-case browser/server
+  differential suite requires exact cent and waterfall parity. Historical
+  pricing-v1 derivation remains explicitly versioned and unchanged.
+- Hardened proposal, stored quote, payment-ledger, and final-balance amount
+  provenance to prefer and cross-check authoritative `totalCents` and
+  `depositCents`. Stripe identity, idempotency, settlement, and provider
+  authority are unchanged. Library now distinguishes Offers, Components,
+  Templates, Pricing, and Rules, and existing versioned catering starter packs
+  derive template/rule seeds while preserving manifest identity, customization
+  fences, and the required post-install pricing review.
+- Split commercial publication validation from the startup route graph. The
+  compatibility profile remains below its prior largest-chunk ceiling; its
+  temporary total-JavaScript exception is widened by exactly 19,424 bytes to
+  the measured 3,330,544-byte candidate for the shared commercial kernel.
+- Added one shared commercial-platform core used by the browser and deployable
+  Functions graph. Existing Packages now adapt to Configurable Offers with
+  optional bounded choice groups; server pricing validates every choice and
+  rejects browser-only selection claims. Existing Event Templates adapt to
+  Commercial Templates with explicit-field preservation and deterministic
+  shallow-module collision reporting. Bounded declarative Configuration Rules
+  accept only enumerated condition/effect operators, detect conflicting
+  mandatory outcomes, and never mutate quotes. Library catalog editing can
+  stage rule JSON, while the existing revision and pricing-confirmation path
+  remains the only publication boundary.
+- Began the reconciled Commercial Platform refinement on the existing UX
+  convergence branch. Added the accepted Kernel -> Vertical Pack -> Tenant
+  Configuration -> Contextual UX decision, the canonical Pricing Constitution,
+  an ordered compatibility-first delivery program, and an 80-case named
+  pricing-v1 Golden Corpus with a frozen output digest. This slice changes no
+  runtime pricing, catalog, payment, provider, or quote authority; it records
+  the current v1 behavior and known policy defects before pricing-v2 semantics.
+- Added the frozen QuotePilot UX Convergence Contract repository copy and an
+  AC-001–AC-238 execution-evidence ledger. The ledger records verdicts and
+  implementation classifications without changing any frozen claim.
+- Evolved the existing Proposal Composer into a presentation-only Commercial
+  Workbench with Event, Customer, Experience, Staffing, and Commercials
+  domains and a reordered Commercial Truth rail. The same App-owned form,
+  calculation, Menu/staffing editors, Guided mode, explicit save/version path,
+  and client-safe Preview remain authoritative. Replaced the `/app/operations`
+  switchboard presentation with the existing Calendar capability, added a
+  same-model mobile agenda, retained `/app/schedule`, and added exact
+  Now/Living Opportunity/Calendar handoffs. No Firebase, pricing, persistence,
+  lifecycle, staffing, catalog, provider, or live-telemetry authority changed.
+  Every existing contextual and secondary navigation entry remains reachable;
+  the later local convergence slice promotes Operations into the five-item
+  primary orientation after its focused local gate. Local and CI evidence do
+  not claim deployment, hosted behavior, production readiness, or human
+  acceptance. The compatibility bundle's
+  existing temporary exception is pinned to the exact CI measurement of
+  3,311,120 total JavaScript bytes (largest chunk 393,416 bytes), a 1,120-byte
+  increase for the new presentation and handoff surfaces with no percentage
+  headroom; the existing removal plan and expiry remain unchanged.
+  The correction is local-only by owner instruction. The draft PR remains at
+  pre-correction SHA `30b6fcd48aa881d83150149eeb942e2d07dd89f8`, whose
+  exact-head run `33902068474` failed that prior ceiling; consequently
+  that earlier Operations promotion was not authorized at that checkpoint.
+  The complete local `lane:release:cwv` passed against the corrected ceiling,
+  but local success did not substitute for that checkpoint's exact-head CI
+  gate.
 - Released annotated tag `v0.16.6` at exact commit
   `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
   `33889897821` passed every required job. Governed Vercel production run
@@ -406,6 +908,14 @@ This changelog is backfilled from git history and will be maintained going forwa
   so legacy payment records do not gain an empty `finalBalance` field and fail
   the existing exact payment-evidence rule. Payment, role, tenant, portal,
   version-authorship, and immutable-history protections remain unchanged.
+- Added an evidence-led, first-person portfolio case study and self-contained
+  seven-image package for QuotePilot. The narrative presents the product as a
+  demonstration of product strategy, state and authority modeling, UX,
+  full-stack systems work, human-led AI collaboration, and proof-boundary
+  release discipline. Two new editorial images are explicitly labeled as
+  generated metaphors; five repository product images retain source and
+  implementation status in a separate asset guide. This documentation-only
+  addition changes no application behavior or release claim.
 - Closed the final interaction and evidence-language drifts against the
   approved v0.16 contract:
   the standard workspace utility trigger now exposes the exact accessible name

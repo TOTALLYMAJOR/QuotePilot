@@ -71,6 +71,7 @@ case "$lane" in
   lane:core)
     echo "==> lane:core"
     npm run check:capability-surfaces
+    npm run check:field-states
     npm run test:unit
     npm run build
     npm run check:docs:governance

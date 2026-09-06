@@ -34,11 +34,56 @@ function routeUrl(role, path) {
 }
 
 function routeActions(role) {
-  return getAiui01EnabledShellActions({ role, flags: FLAGS })
+  const actions = getAiui01EnabledShellActions({ role, flags: FLAGS })
     .filter(({ classification }) => classification === "primary_route");
+  if (!FLAGS.effective.ambient) return actions;
+
+  const ambientSecondaryIds = new Set([
+    "messages",
+    "staff",
+    "workflow",
+    "reporting",
+    "integrations",
+    "imports",
+    "diagnostics"
+  ]);
+  const retained = actions
+    .filter(({ id, entry }) => entry === "header" || ambientSecondaryIds.has(id))
+    .map((action) => {
+      if (["messages", "workflow"].includes(action.id) || action.entry === "operations") {
+        return { ...action, entry: "workspace-tools" };
+      }
+      if (action.id === "customers") return { ...action, label: "Clients" };
+      if (action.id === "quotes") return { ...action, label: "Opportunities" };
+      return action;
+    });
+  return [
+    ...retained,
+    {
+      id: "operations-primary",
+      label: "Operations",
+      classification: "primary_route",
+      targetSurfaceId: "operations",
+      roles: ["admin", "sales"],
+      requiresWorkspace: true,
+      entry: "header"
+    },
+    {
+      id: "clear-deck",
+      label: "Clear the Deck",
+      classification: "primary_route",
+      targetSurfaceId: "clear-deck",
+      roles: ["admin", "sales"],
+      requiresWorkspace: true,
+      entry: "workspace-tools"
+    }
+  ];
 }
 
 function expectedSurfaceProbe(surfaceId, role) {
+  if (surfaceId === "operations" && FLAGS.effective.ambient) {
+    return { probe: '[data-testid="operations-calendar"][data-operations-mode="calendar-first"]' };
+  }
   return getAiui01SurfaceExpectation(surfaceId, { role, flags: FLAGS });
 }
 
@@ -255,8 +300,27 @@ async function openOperationsMenu(page) {
   return header.getByRole("menu", { name: "More" });
 }
 
+async function openWorkspaceTools(page) {
+  const trigger = page.locator(".site-header .workspace-tools-trigger");
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-label", "Workspace and tools");
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const dialog = page.getByRole("dialog", { name: "Workspace & tools" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 async function findActionControl(page, action) {
-  if (action.entry === "operations") {
+  if (action.entry === "workspace-tools") {
+    const tools = await openWorkspaceTools(page);
+    if (["reporting", "integrations", "imports", "diagnostics"].includes(action.id)) {
+      const disclosure = tools.getByRole("button", { name: "Show administration tools" });
+      if (await disclosure.isVisible()) await disclosure.click();
+    }
+    return tools.getByRole("button", { name: action.namePattern ? new RegExp(action.namePattern) : action.label });
+  }
+  if (action.entry === "operations" && !FLAGS.effective.ambient) {
     const menu = await openOperationsMenu(page);
     return menu.getByRole("menuitem", { name: action.label, exact: true });
   }
@@ -398,7 +462,9 @@ async function assertShellInventory(page, role) {
   const header = page.locator(".site-header");
   const knownLabels = AIUI01_SHELL_ACTIONS.flatMap(({ label, responsiveAlias }) => (
     responsiveAlias ? [label, responsiveAlias] : [label]
-  ));
+  )).concat(FLAGS.effective.ambient
+    ? ["Clients", "Opportunities", "Library", "Workspace and tools"]
+    : []);
   const topLevelLabels = await header.locator("button:visible:not(:disabled)").evaluateAll((buttons) => (
     buttons.map((button) => button.getAttribute("aria-label") || button.textContent.trim())
   ));
@@ -409,24 +475,46 @@ async function assertShellInventory(page, role) {
     ).toBe(true);
   }
 
-  const menu = await openOperationsMenu(page);
-  const menuLabels = await menu.getByRole("menuitem").allTextContents();
-  for (const label of menuLabels.map((value) => value.trim())) {
-    expect(
-      AIUI01_SHELL_ACTIONS.some((action) => label === action.label || label.startsWith(`${action.label}:`)),
-      `Unclassified enabled shell menu control: ${label}`
-    ).toBe(true);
-  }
+  if (FLAGS.effective.ambient) {
+    await expect(header.getByRole("button", { name: "Operations", exact: true })).toHaveCount(1);
+    await expect(header.locator(".header-menu-trigger").filter({ hasText: "Operations" })).toHaveCount(0);
+    await expect(header.getByRole("menu", { name: "Operations" })).toHaveCount(0);
+    const tools = await openWorkspaceTools(page);
+    const administrationDisclosure = tools.getByRole("button", { name: "Show administration tools" });
+    if (await administrationDisclosure.isVisible()) await administrationDisclosure.click();
+    const secondaryActions = routeActions(role)
+      .filter(({ entry }) => entry === "workspace-tools");
+    for (const action of secondaryActions) {
+      await expect(tools.getByRole("button", {
+        name: action.namePattern ? new RegExp(action.namePattern) : action.label,
+        exact: !action.namePattern
+      })).toBeVisible();
+    }
+    if (role === "sales") {
+      await expect(tools.getByRole("button", { name: "Staff", exact: true })).toHaveCount(0);
+      await expect(tools.getByRole("button", { name: "Import Studio", exact: true })).toHaveCount(0);
+    }
+    await page.keyboard.press("Escape");
+  } else {
+    const menu = await openOperationsMenu(page);
+    const menuLabels = await menu.getByRole("menuitem").allTextContents();
+    for (const label of menuLabels.map((value) => value.trim())) {
+      expect(
+        AIUI01_SHELL_ACTIONS.some((action) => label === action.label || label.startsWith(`${action.label}:`)),
+        `Unclassified enabled shell menu control: ${label}`
+      ).toBe(true);
+    }
 
-  const enabledPrimaryLabels = routeActions(role)
-    .filter(({ entry }) => entry === "operations")
-    .map(({ label }) => label);
-  for (const label of enabledPrimaryLabels) {
-    await expect(menu.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
-  }
-  if (role === "sales") {
-    await expect(menu.getByRole("menuitem", { name: "Catalog Admin", exact: true })).toHaveCount(0);
-    await expect(menu.getByRole("menuitem", { name: "Import Studio", exact: true })).toHaveCount(0);
+    const enabledPrimaryLabels = routeActions(role)
+      .filter(({ entry }) => entry === "operations")
+      .map(({ label }) => label);
+    for (const label of enabledPrimaryLabels) {
+      await expect(menu.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+    }
+    if (role === "sales") {
+      await expect(menu.getByRole("menuitem", { name: "Catalog Admin", exact: true })).toHaveCount(0);
+      await expect(menu.getByRole("menuitem", { name: "Import Studio", exact: true })).toHaveCount(0);
+    }
   }
 }
 
@@ -510,6 +598,55 @@ test.describe("AIUI-01 compatibility and dead-click baseline", () => {
       });
     });
   }
+
+  test("promotes Ambient Operations without removing the non-Ambient Operations menu", async ({ page }) => {
+    await page.setViewportSize(AIUI01_VIEWPORTS[0]);
+    for (const role of ["admin", "sales"]) {
+      await gotoRole(page, role, "/app");
+      const header = page.locator(".site-header");
+      if (FLAGS.effective.ambient) {
+        const operations = header.locator(
+          '.ambient-primary-navigation [data-ambient-orientation="operations"]'
+        );
+        await expect(operations).toHaveCount(1);
+        await expect(operations).toBeVisible();
+        await expect(header.locator(".header-menu-trigger").filter({ hasText: "Operations" })).toHaveCount(0);
+        await expect(header.getByRole("menu", { name: "Operations" })).toHaveCount(0);
+
+        const actionId = `ambient-operations-${role}`;
+        await beginRouteObservation(operations, actionId);
+        await operations.click();
+        const receipt = await readRouteReceipt(page, actionId);
+        expect(receipt).toMatchObject({ pathname: "/app/operations" });
+        await assertSurface(page, "operations", role);
+
+        await gotoRole(page, role, "/app");
+        const tools = await openWorkspaceTools(page);
+        await expect(tools.getByRole("button", { name: /^Workflow(?:,|$)/ })).toBeVisible();
+        await expect(tools.getByRole("button", { name: "Clear the Deck", exact: true })).toBeVisible();
+        if (role === "admin") {
+          await tools.getByRole("button", { name: "Show administration tools" }).click();
+          await expect(tools.getByRole("button", { name: "Reporting Dashboard", exact: true })).toBeVisible();
+          await expect(tools.getByRole("button", { name: "Import Studio", exact: true })).toBeVisible();
+        } else {
+          await expect(tools.getByRole("button", { name: "Import Studio", exact: true })).toHaveCount(0);
+        }
+        await page.keyboard.press("Escape");
+      } else {
+        await expect(header.locator('.ambient-primary-navigation [data-ambient-orientation="operations"]')).toHaveCount(0);
+        const menu = await openOperationsMenu(page);
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("menuitem", { name: "Event Schedule", exact: true })).toBeVisible();
+        await expect(menu.getByRole("menuitem", { name: "Reporting Dashboard", exact: true })).toBeVisible();
+        if (role === "admin") {
+          await expect(menu.getByRole("menuitem", { name: "Import Studio", exact: true })).toBeVisible();
+        } else {
+          await expect(menu.getByRole("menuitem", { name: "Import Studio", exact: true })).toHaveCount(0);
+        }
+        await page.keyboard.press("Escape");
+      }
+    }
+  });
 
   test("gives the local portal fixture precedence at 390, 768, and 1440 without claiming Firebase token authority", async ({ page }) => {
     expect(AIUI01_PORTAL_PRECEDENCE.firebaseTokenAuthorityQualifiedHere).toBe(false);

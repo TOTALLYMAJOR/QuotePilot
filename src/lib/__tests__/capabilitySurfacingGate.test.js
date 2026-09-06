@@ -298,9 +298,27 @@ describe("capability surfacing delivery gate", () => {
   });
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
-    // Keep the production entrypoint inventory exact so newly exported callables
-    // cannot be hidden by a parser that swallows a later declaration.
-    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(102);
+    const currentExports = parseFunctionExports(functionsEntrypointSource);
+    expect(currentExports).toHaveLength(122);
+    expect(currentExports).toContain("functions/index.js#getEventOperatingSnapshot");
+    expect(currentExports).toContain("functions/index.js#applyEventOperatingCommand");
+    expect(currentExports).toContain("functions/index.js#getEventOperatingWorkSnapshot");
+    expect(currentExports).toContain("functions/index.js#applyEventOperatingWorkCommand");
+    expect(currentExports).toContain("functions/index.js#getEventOperatingActualsSnapshot");
+    expect(currentExports).toContain("functions/index.js#applyEventOperatingActualsCommand");
+    expect(currentExports).toContain("functions/index.js#getEventOperatingHistory");
+    expect(currentExports).toContain("functions/index.js#getWorkflowConfiguration");
+    expect(currentExports).toContain("functions/index.js#previewWorkflowDefinition");
+    expect(currentExports).toContain("functions/index.js#applyWorkflowDefinitionCommand");
+    expect(currentExports).toContain("functions/index.js#getEventWorkflowSnapshot");
+    expect(currentExports).toContain("functions/index.js#previewEventWorkflowMigration");
+    expect(currentExports).toContain("functions/index.js#applyEventWorkflowCommand");
+    expect(currentExports).toContain("functions/index.js#getQuoteAttendance");
+    expect(currentExports).toContain("functions/index.js#applyQuoteAttendanceCommand");
+    expect(currentExports).toContain("functions/index.js#submitQuoteAttendanceResponse");
+    expect(currentExports).toContain("functions/index.js#getWorkflowPackSnapshot");
+    expect(currentExports).toContain("functions/index.js#previewWorkflowPackMigration");
+    expect(currentExports).toContain("functions/index.js#applyWorkflowPackCommand");
 
     const source = [
       "exports.first = onCall(async () => {",

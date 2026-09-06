@@ -4,7 +4,8 @@ const PRICING_MODES = new Set(["per_person", "per_item", "per_event"]);
 const STAFFING_CHARGE_MODES = new Set(["per_hour", "per_event_per_staff"]);
 const MAX_RATE_MIX_CSV_LENGTH = 300;
 
-export const PRICING_VERSION = "pricing-v1";
+export const PRICING_VERSION = "pricing-v2";
+export const LEGACY_PRICING_VERSION = "pricing-v1";
 export const CLIENT_PREVIEW_AUTHORITY = "client_preview";
 
 function nowISO() {
@@ -18,6 +19,12 @@ function toNumber(value, fallback = 0) {
 
 function toInt(value, fallback = 0) {
   return Math.max(0, Math.round(toNumber(value, fallback)));
+}
+
+function toMinor(value, fallbackMajor = 0) {
+  const candidate = Number(value);
+  if (Number.isSafeInteger(candidate) && candidate >= 0) return candidate;
+  return Math.round(toNumber(fallbackMajor, 0) * 100);
 }
 
 function toText(value, fallback = "") {
@@ -93,6 +100,12 @@ function normalizeLineItem(item, index = 0) {
     unitPrice,
     quantity,
     total,
+    unitPriceMinor: toMinor(source.unitPriceMinor, unitPrice),
+    lineTotalMinor: toMinor(source.lineTotalMinor ?? source.totalMinor, total),
+    totalMinor: toMinor(source.totalMinor ?? source.lineTotalMinor, total),
+    adjustments: Array.isArray(source.adjustments)
+      ? source.adjustments.map((adjustment) => ({ ...adjustment }))
+      : [],
     meta: source.meta && typeof source.meta === "object" ? { ...source.meta } : {}
   };
 }
@@ -287,24 +300,43 @@ export function normalizePricingOutput(payload = {}) {
       chefLabor: toNumber(rawFees.chefLabor, 0),
       travel: toNumber(rawFees.travel, 0),
       bartenderLabor: toNumber(rawFees.bartenderLabor, 0),
-      serviceFee: toNumber(rawFees.serviceFee, 0)
+      serviceFee: toNumber(rawFees.serviceFee, 0),
+      laborMinor: toMinor(rawFees.laborMinor, rawFees.labor),
+      travelMinor: toMinor(rawFees.travelMinor, rawFees.travel),
+      serviceFeeMinor: toMinor(rawFees.serviceFeeMinor, rawFees.serviceFee)
     },
     tax: {
       rate: toNumber(rawTax.rate ?? source.taxRate, 0),
       amount: toNumber(rawTax.amount ?? source.taxAmount, 0),
+      amountMinor: toMinor(rawTax.amountMinor, rawTax.amount ?? source.taxAmount),
       regionId: toText(rawTax.regionId || source.taxRegionId),
       regionName: toText(rawTax.regionName || source.taxRegionName)
     },
     discountTotal: toNumber(source.discountTotal, 0),
     deposit: {
       pct: toNumber(rawDeposit.pct, 0),
-      amount: toNumber(rawDeposit.amount, toNumber(source.depositAmount, 0))
+      amount: toNumber(rawDeposit.amount, toNumber(source.depositAmount, 0)),
+      amountMinor: toMinor(rawDeposit.amountMinor ?? source.depositMinor, rawDeposit.amount ?? source.depositAmount)
     },
     commercialSnapshot: source.commercialSnapshot && typeof source.commercialSnapshot === "object"
       ? { ...source.commercialSnapshot }
       : null,
     subtotal: toNumber(source.subtotal, 0),
+    subtotalMinor: toMinor(source.subtotalMinor, source.subtotal),
     grandTotal: toNumber(source.grandTotal, 0),
+    grandTotalMinor: toMinor(source.grandTotalMinor ?? source.totalMinor, source.grandTotal),
+    balance: source.balance && typeof source.balance === "object"
+      ? {
+          ...source.balance,
+          amount: toNumber(source.balance.amount, 0),
+          amountMinor: toMinor(source.balance.amountMinor, source.balance.amount)
+        }
+      : null,
+    priceWaterfall: Array.isArray(source.priceWaterfall)
+      ? source.priceWaterfall.map((entry) => ({ ...entry }))
+      : [],
+    roundingPolicy: toText(source.roundingPolicy),
+    policyId: toText(source.policyId),
     rulesSnapshot: source.rulesSnapshot && typeof source.rulesSnapshot === "object"
       ? { ...source.rulesSnapshot }
       : {}
@@ -527,7 +559,7 @@ export function deriveLegacyPricingSnapshot(quote = {}) {
   const inferredDepositPct = total > 0 ? deposit / total : 0;
 
   return normalizePricingOutput({
-    pricingVersion: toText(source.pricingVersion || totals.pricingVersion, PRICING_VERSION),
+    pricingVersion: toText(source.pricingVersion || totals.pricingVersion, LEGACY_PRICING_VERSION),
     calculatedAt: source.updatedAtISO || source.createdAtISO || source.createdAt || nowISO(),
     authority: "legacy_derived",
     inputs: normalizePricingInput({

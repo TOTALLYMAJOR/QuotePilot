@@ -142,6 +142,7 @@ const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
+const EVENT_OPERATING_SPINE_UI_ENABLED = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true";
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
@@ -174,10 +175,6 @@ const EventPlanningView = createRecoverableLazy(
 const ClearDeckView = createRecoverableLazy(
   () => import("./components/LiveOperationsPlanningViews").then((module) => ({ default: module.ClearDeckView })),
   "ClearDeckView"
-);
-const OperationsSwitchboardView = createRecoverableLazy(
-  () => import("./components/LiveOperationsPlanningViews").then((module) => ({ default: module.OperationsSwitchboardView })),
-  "OperationsSwitchboardView"
 );
 const CustomerDirectoryView = createRecoverableLazy(
   () => import("./components/AmbientCustomerDirectoryView"),
@@ -1383,6 +1380,20 @@ export default function App({
     );
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
     return navigateAmbientTaskHandoff(handoff, ambientTaskActionId({}, options));
+  }, [navigateAmbientTaskHandoff]);
+  const navigateAmbientCalendar = useCallback((quoteId, options = {}) => {
+    const normalizedQuoteId = String(quoteId || "").trim();
+    if (!AMBIENT_UI_ENABLED || !normalizedQuoteId) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "schedule",
+      object: { id: normalizedQuoteId, type: "opportunity" },
+      focus: { quoteId: normalizedQuoteId },
+      intentId: options.intentId === "review_schedule_conflict"
+        ? "review_schedule_conflict"
+        : "review_event_schedule"
+    });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    return navigateAmbientTaskHandoff(handoff, options.actionId || `open-calendar:${normalizedQuoteId}`);
   }, [navigateAmbientTaskHandoff]);
   const navigateAmbientOpportunity = useCallback((target = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
@@ -2776,6 +2787,7 @@ export default function App({
     (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF
       && authSession.isAdmin
       && OPERATIONAL_STAFFING_UI_ENABLED)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
@@ -2792,6 +2804,7 @@ export default function App({
       || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
       || ([
         WORKSPACE_ROUTE_IDS.STAFF,
+        WORKSPACE_ROUTE_IDS.OPERATIONS,
         WORKSPACE_ROUTE_IDS.SCHEDULE,
         WORKSPACE_ROUTE_IDS.REPORTING,
         WORKSPACE_ROUTE_IDS.CATALOG,
@@ -3166,10 +3179,16 @@ export default function App({
   // never reaches authoritative pricing; typing any different exact count
   // resolves it.
   const [guestBand, setGuestBand] = useState(null);
+  const [attendanceChange, setAttendanceChange] = useState(null);
   useEffect(() => {
     if (!guestBand) return;
     if (Number(form.guests) !== Number(guestBand.appliedValue)) setGuestBand(null);
   }, [form.guests, guestBand]);
+  useEffect(() => {
+    if (form.attendancePlanning && Number(form.guests) !== form.attendancePlanning.value) {
+      setForm(current => { const next = { ...current }; delete next.attendancePlanning; return next; });
+    }
+  }, [form.guests, form.attendancePlanning]);
 
   const applyIntentDraft = (draft = {}, meta = null) => {
     const { eventTypeId, ...rest } = draft || {};
@@ -3506,7 +3525,8 @@ export default function App({
         quoteId: editingQuote.id,
         expectedActiveVersionId: editingQuote.activeVersionId,
         requestId: simulationRequestId,
-        form: candidateForm
+        form: candidateForm,
+        ...(attendanceChange ? { attendanceSubmissionReceiptId: attendanceChange.submissionReceiptId } : {})
       });
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
@@ -3667,6 +3687,7 @@ export default function App({
     && changeImpactPreview.formKey
     && changeImpactPreview.formKey === JSON.stringify(form)
     && changeImpactPreview.simulationReceiptId
+    && (attendanceChange?.submissionReceiptId || "") === (changeImpactPreview.model?.attendanceBinding?.submissionReceiptId || "")
     && changeImpactPreview.model?.identity?.beforeRevisionId === editingQuote.activeVersionId
   );
 
@@ -3915,7 +3936,7 @@ export default function App({
   };
 
   const handleApplyCommercialChange = async () => {
-    if (!changeImpactScopeIsCurrent() || !changeImpactPreview.authorizationReceiptId) return;
+    if (!changeImpactScopeIsCurrent() || (changeImpactPreview.authorizationRequired && !changeImpactPreview.authorizationReceiptId)) return;
     if (changeImpactPreview.applyRequestId) {
       await handleReconcileCommercialChangeApplyOutcome();
       return;
@@ -3950,7 +3971,7 @@ export default function App({
         applyOutcome: null,
         mutationState: "receipt",
         mutationKind: "apply",
-        mutationMessage: result.commercialChange?.authorityState === "enforced"
+        mutationMessage: attendanceChange ? "Reviewed attendance was applied to a new draft revision. Prior payment and booking history remain preserved. Separate customer acceptance and administrator booking revalidation are required; no payment was charged." : result.commercialChange?.authorityState === "enforced"
           ? `The edit and ${result.commercialChange.totalInvalidationCount} dependency invalidation receipt(s) were committed atomically.`
           : "The quote edit was saved while commercial-change enforcement remained dormant."
       }));
@@ -4155,7 +4176,7 @@ export default function App({
       }
       if (
         changeImpactPreview.authorityState === "enforced"
-        && changeImpactPreview.authorizationRequired
+        && (changeImpactPreview.authorizationRequired || changeImpactPreview.model?.attendanceBinding)
       ) {
         setStep(5);
         setSubmitState((current) => ({
@@ -4371,10 +4392,9 @@ export default function App({
           });
           pushToast(`Quote ${result.quoteNumber} updated.`, "success");
         }
-        // Structured change-request version linking: this save already
-        // fully succeeded above, so linking is strictly best-effort — never
-        // block navigation or surface its own failure. Cleared either way
-        // so a later, unrelated save cannot attempt a stale link.
+        // The quote save and change-request linkage are separate outcomes.
+        // A linkage failure must not erase the confirmed quote receipt, but it
+        // must remain visible so the operator does not assume resolution.
         if (
           result.storage === "firebase"
           && manageEditorState
@@ -4391,6 +4411,10 @@ export default function App({
               surface: "change-request-record",
               action: "link-version"
             });
+            pushToast(
+              `Quote ${result.quoteNumber} was saved, but its change-request resolution was not confirmed. Reopen Change Requests and retry against the saved version.`,
+              "warning"
+            );
           });
           setPendingResolutionLink(null);
         }
@@ -5014,7 +5038,8 @@ export default function App({
       navigateToRoute = true,
       draftPatch = null,
       draftIntent = null,
-      ambientCatalogContext = null
+      ambientCatalogContext = null,
+      attendanceSubmission = null
     } = {},
     ambientArrival = null
   ) => {
@@ -5093,11 +5118,19 @@ export default function App({
         nextResolution: draftRuntime.nextResolution
       };
     }
-    const stagedDraftFields = draftRuntime.stagedFields;
+    if (attendanceSubmission && (
+      !EVENT_OPERATING_SPINE_UI_ENABLED || catalog.settings?.eventOperatingSpineEnabled !== true
+      || attendanceSubmission.organizationId !== authSession.organizationId || attendanceSubmission.quoteId !== quote.id
+      || attendanceSubmission.sourceVersionId !== (quote.activeVersionId || quote.versionMeta?.versionId)
+      || attendanceSubmission.acceptanceReceiptId !== quote.acceptanceReceipt?.receiptId
+      || !Number.isInteger(attendanceSubmission.count) || attendanceSubmission.count < 1 || attendanceSubmission.count > 400
+    )) return { status: "recovery", reason: "The submitted count no longer matches the selected accepted quote. Refresh attendance before review." };
+    const stagedDraftFields = attendanceSubmission ? [...new Set([...draftRuntime.stagedFields, "guests"])] : draftRuntime.stagedFields;
     resetChangeImpactPreview();
     clearPilotScenarioDraftReview();
     setGlobalEventTypeId(draftRuntime.eventTypeId);
-    setForm(draftRuntime.form);
+    setAttendanceChange(attendanceSubmission);
+    setForm(attendanceSubmission ? { ...draftRuntime.form, guests: attendanceSubmission.count } : draftRuntime.form);
     setEditingQuote(draftRuntime.editingQuote);
     const packageMenuDraftIntent = draftRuntime.ambientDraftIntent?.family === "package_menu"
       ? draftRuntime.ambientDraftIntent
@@ -5122,7 +5155,9 @@ export default function App({
     const rebookReviewRequired = quote.rebooking?.state === "draft_created_for_staff_review";
     setSubmitState({
       saving: false,
-      message: safeArrivalContext
+      message: attendanceSubmission
+        ? `Submitted count ${attendanceSubmission.count} is staged for commercial review. Preview and explicitly apply it; no attendance confirmation or price change has been saved.`
+        : safeArrivalContext
         ? `${quote.event?.name || quote.quoteNumber || quote.id}: ${safeArrivalContext.object.label || "Selected object"}. ${safeArrivalContext.reason} ${safeArrivalContext.consequence} Next step: ${safeArrivalContext.nextResolution}`
         : rebookReviewRequired
         ? `Rebook review required for ${quote.quoteNumber || quote.id}: choose a current-or-future event date, review the copied scope, then save. Delivery remains blocked until that trusted edit succeeds.`
@@ -5499,7 +5534,7 @@ export default function App({
 
   if (portalMode && customerPortalEnabled) {
     return (
-      <div className="app-shell" style={appThemeVars}>
+      <div className="app-shell portal-app-shell" style={appThemeVars}>
         <RecoverableErrorBoundary
           active
           surfaceName="Customer portal"
@@ -5648,6 +5683,7 @@ export default function App({
             canContinue={false}
             loading={catalog.loading}
             onRetry={catalog.reload}
+            technicalDetail={catalog.error}
             headingLevel={1}
             titleId="catalog-blocked-title"
           />
@@ -5777,6 +5813,9 @@ export default function App({
         selectedEventType: globalEventTypeId,
         onEventTypeChange: setGlobalEventTypeId,
         currentUserRole: authSession.role,
+        principalId: authSession.user?.uid || "",
+        workflowStudioEnabled: EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true,
+        workflowSource: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source,
         arrivalContext: workspaceArrivalContext?.surfaceId === "ambient-library"
           ? workspaceArrivalContext
           : null,
@@ -5828,10 +5867,38 @@ export default function App({
       currentUserUid,
       currentUserEmail,
       catalogRevision: Math.max(0, Number(catalog.settings?.catalogRevision || 0)),
+      catalogContext: {
+        eventTypeId: globalEventTypeId,
+        eventTypes: catalog.eventTypes || [],
+        packages: catalog.packages || [],
+        addons: catalog.addons || [],
+        rentals: catalog.rentals || [],
+        menuSections: effectiveMenuSections
+      },
       onReload: () => catalog.reload({ background: true }),
+      onReviewCatalog: (result) => {
+        const importType = String(result?.importType || "");
+        const reviewTab = ["eventTypes", "menuCategories", "menuItems"].includes(importType)
+          ? "menu"
+          : ["packages", "addons", "rentals"].includes(importType)
+            ? importType
+            : "starter";
+        setImportStudioOpen(false);
+        openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, {
+          beforeOpen: () => {
+            setLibraryContextualOrigin(null);
+            setAdminInitialTab(reviewTab);
+          }
+        });
+      },
       onImported: (result) => {
         catalog.reload({ background: true });
-        if (result?.status === "staged") {
+        if (result?.status === "published") {
+          pushToast(
+            `Import ${result.importBatchId} was already published in catalog revision ${result.catalogRevisionAfter ?? result.catalogRevision ?? "confirmed by the server"}.`,
+            "success"
+          );
+        } else if (result?.status === "staged") {
           pushToast(`Added ${result?.stagedCount || 0} record(s) to the catalog setup draft.`, "success");
         } else if (result?.status === "rolled_back") {
           pushToast(`Import ${result.importBatchId} was undone.`, "info");
@@ -6063,6 +6130,7 @@ export default function App({
       canContinue
       loading={catalog.loading}
       onRetry={catalog.reload}
+      technicalDetail={catalog.error}
       headingLevel={2}
       titleId="quote-builder-catalog-read-title"
     />
@@ -6120,6 +6188,8 @@ export default function App({
         >
           <Suspense fallback={<p className="source-note" role="status">Loading change-impact presentation…</p>}>
             <CommercialChangeImpactPanel
+              workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
+              principalId={authSession.user?.uid || ""}
               model={changeImpactPreview.model}
               loading={changeImpactPreview.loading}
               recovering={changeImpactPreview.recovering}
@@ -6293,15 +6363,19 @@ export default function App({
         },
         onEvents: () => navigateWorkspace(WORKSPACE_PATHS.events),
         onClearDeck: () => navigateWorkspace(WORKSPACE_PATHS.clearDeck),
-        onOperations: () => navigateWorkspace(WORKSPACE_PATHS.operations),
+        onOperations: eventScheduleEnabled
+          ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
+          : undefined,
         onMessages: () => navigateWorkspace(WORKSPACE_PATHS.messaging),
         onWorkflow: () => navigateWorkspace(WORKSPACE_PATHS.workflow),
         onStaff: () => navigateWorkspace(WORKSPACE_PATHS.staff),
-        onSchedule: (menuTriggerRef) => openRoutedWorkspaceTool(
-          WORKSPACE_PATHS.schedule,
-          setScheduleOpen,
-          { menuTriggerRef }
-        ),
+        onSchedule: eventScheduleEnabled
+          ? (menuTriggerRef) => openRoutedWorkspaceTool(
+              WORKSPACE_PATHS.schedule,
+              setScheduleOpen,
+              { menuTriggerRef }
+            )
+          : undefined,
         onReporting: (menuTriggerRef) => openRoutedWorkspaceTool(
           WORKSPACE_PATHS.reporting,
           setDashboardOpen,
@@ -6482,6 +6556,12 @@ export default function App({
                   tenantTimeZone={tenantTimeZone}
                   onRefresh={commercialSnapshot.refresh}
                   onOpenWorkflow={openAmbientWorkflow}
+                  onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+                  onOpenCalendar={eventScheduleEnabled
+                    ? (quoteId) => navigateAmbientCalendar(quoteId, {
+                        actionId: `open-now-calendar:${quoteId}`
+                      })
+                    : undefined}
                   onNewQuote={handleGetInstantQuote}
                 />
               ) : (
@@ -6551,6 +6631,9 @@ export default function App({
       ].includes(resolvedWorkspaceRouteId) && (
         <WorkspaceLazyRoute surfaceName="Events" component={EventPlanningView}>
           <EventPlanningView
+            principalId={authSession.user?.uid || ""}
+            role={authSession.role}
+            eventOperationsEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
             snapshot={commercialSnapshot}
             organizationName={organizationName}
             organizationId={authSession.organizationId}
@@ -6567,7 +6650,10 @@ export default function App({
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
-            onOpenOperations={() => navigateWorkspace(WORKSPACE_PATHS.operations)}
+            onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onOpenOperations={eventScheduleEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
+              : undefined}
             onOpenEvents={() => navigateWorkspace(WORKSPACE_PATHS.events)}
             onOpenOpportunities={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
             onStartOpportunity={handleGetInstantQuote}
@@ -6575,23 +6661,34 @@ export default function App({
         </WorkspaceLazyRoute>
       )}
 
-      {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && (
-        <WorkspaceLazyRoute surfaceName="Operations" component={OperationsSwitchboardView}>
-          <OperationsSwitchboardView
-            snapshot={commercialSnapshot}
-            organizationName={organizationName}
+      {CUSTOMER_CENTERED_WORKSPACE_ENABLED
+        && eventScheduleEnabled
+        && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && (
+        <WorkspaceLazyRoute surfaceName="Operations" component={EventScheduleView}>
+          <EventScheduleView
+            open
+            presentation="embedded"
+            surfaceTitle="Operations"
+            surfaceEyebrow="Calendar-first operations"
             organizationId={authSession.organizationId}
-            onRefresh={commercialSnapshot.refresh}
-            onOpenEvents={() => navigateWorkspace(WORKSPACE_PATHS.events)}
-            onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
-            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
-            onOpenReporting={() => navigateWorkspace(WORKSPACE_PATHS.reporting)}
-            onOpenCatalog={authSession.isAdmin ? () => {
-              setLibraryContextualOrigin(null);
-              setAdminInitialTab("");
-              navigateWorkspace(WORKSPACE_PATHS.catalog);
-            } : undefined}
-            onOpenDiagnostics={() => navigateWorkspace(WORKSPACE_PATHS.diagnostics)}
+            staffLeads={scheduleStaffLeads}
+            capacityLimit={scheduleCapacityLimit}
+            currentUserEmail={currentUserEmail}
+            arrivalContext={workspaceArrivalContext?.surfaceId === "schedule"
+              ? workspaceArrivalContext
+              : null}
+            onArrivalResolution={handleWorkspaceArrivalResolution}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            onOpenOpportunity={(quoteId) => navigateAmbientOpportunity({
+              quoteId,
+              actionId: `open-calendar-opportunity:${quoteId}`
+            })}
+            onOpenPeople={authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED
+              ? () => navigateWorkspace(WORKSPACE_PATHS.staff)
+              : undefined}
+            onOpenReporting={dashboardEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.reporting)
+              : undefined}
           />
         </WorkspaceLazyRoute>
       )}
@@ -6635,11 +6732,17 @@ export default function App({
             onOpenWorkflow={AMBIENT_UI_ENABLED
               ? openAmbientWorkflow
               : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
-            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
+            onOpenSchedule={eventScheduleEnabled
+              ? (quoteId) => quoteId
+                  ? navigateAmbientCalendar(quoteId)
+                  : navigateWorkspace(WORKSPACE_PATHS.operations)
+              : undefined}
             scheduleAvailable={eventScheduleEnabled}
             tenantTimeZone={tenantTimeZone}
             isAdmin={authSession.isAdmin}
             currentUserRole={authSession.role}
+            currentUserUid={authSession.user?.uid || ""}
+            workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
             ambientMode={AMBIENT_UI_ENABLED}
             arrivalContext={workspaceArrivalContext?.surfaceId === "client-overview"
               ? workspaceArrivalContext
@@ -6690,7 +6793,7 @@ export default function App({
         />
       )}
 
-      {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "schedule" && (
+      {AMBIENT_UI_ENABLED && eventScheduleEnabled && workspaceArrivalContext?.surfaceId === "schedule" && (
         <WorkspaceArrivalNotice
           context={workspaceArrivalContext}
           resolution={workspaceArrivalResolution}
@@ -7166,6 +7269,7 @@ export default function App({
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
+            attendanceEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
             tenantTimeZone={tenantTimeZone}
             serviceStyles={Object.keys(STAFF_RULES)}
             ambientPricingCatalog={AMBIENT_UI_ENABLED ? catalog : null}
@@ -7204,7 +7308,11 @@ export default function App({
               setHistoryTarget({ quoteId: "", reason: "" });
               returnToWorkspaceOrigin(WORKSPACE_PATHS.quotes);
             }}
-            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
+            onOpenSchedule={eventScheduleEnabled
+              ? (quoteId) => quoteId
+                  ? navigateAmbientCalendar(quoteId)
+                  : navigateWorkspace(WORKSPACE_PATHS.operations)
+              : undefined}
             scheduleAvailable={eventScheduleEnabled}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onOpenOpportunity={(target = {}) => {

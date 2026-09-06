@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-03 18:14:25 CDT
+Last updated: 2026-09-05 13:22:00 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -53,7 +53,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   the existing configuration and thresholds. Exact remote CI Quality run
   `33242537210` also passed the unchanged CWV gate under this graph.
 
-- Date: August 13, 2026 (supersedes the August 11 single-profile record)
+- Date: August 13, 2026 (supersedes the August 11 single-profile record;
+  Library profile recalibration reviewed September 4, 2026)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
   production-equivalent Ambient graphs. The Proposal Composer quote-builder
@@ -94,6 +95,36 @@ Use this log when a change intentionally departs from stable-first policy or req
   surfaces split and located the increase across the approved shared continuity,
   return-context, and feedback state plus their already-lazy route surfaces;
   reducing it safely remains explicit optimization debt.
+  The later commercial-platform candidate advanced the exact compatibility
+  ceiling to 3,330,544 bytes. The five-primary UX convergence presentation then
+  measures 3,331,404 aggregate bytes with a 394,674-byte largest chunk: an exact
+  860-byte aggregate increase for the shared Operations orientation, direct
+  current-state route, and preserved rollback classification. The compatibility
+  ceiling at that checkpoint was pinned to that literal local graph with no
+  percentage headroom; the Ambient ceiling remained unchanged because its
+  then-measured graph was within the existing absolute limit.
+  Reproducing the complete CI flag matrix after that checkpoint found the
+  pre-Library head at 3,333,438 / 397,090 bytes for compatibility and
+  4,240,261 / 431,619 bytes for Ambient, exposing that both full-profile
+  ceilings were stale before the Library refinement. The selected Library
+  nested-editor implementation at
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4` measures 3,379,162 /
+  397,409 bytes for compatibility and 4,301,701 / 432,490 bytes for Ambient.
+  Exact-head CI run `33951463058` on the completed convergence head
+  `3eecfa89d8bf843089bae9921a2bdf655b715b73` measured the compatibility graph
+  at 3,381,257 / 397,428 bytes after the full Playwright suite passed. The
+  compatibility ceiling is pinned to that larger literal CI artifact.
+  Follow-up run `33952106871` measured the completed Ambient graph at
+  4,319,173 / 432,561 bytes after compatibility passed. The Ambient ceiling is
+  pinned to that larger literal CI artifact. Neither profile adds percentage
+  or future-growth headroom.
+  The field-state, interaction-integrity, and Import Workbench candidate adds
+  the shared state primitive, exact-value review and recovery UI, client
+  preflight adapters, and lazy Import route behavior. Exact local CI-matrix
+  builds measure 3,476,619 / 399,646 bytes for compatibility and 4,427,364 /
+  435,494 bytes for Ambient. The new ceilings are 3,478,714 / 399,665 and
+  4,444,836 / 435,565 respectively: each preceding exact-CI ceiling plus only
+  the corresponding observed local source delta.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -105,7 +136,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   the measured compatibility graph. This is meaningful mobile download,
   parse, and execution risk even though most code is route-lazy. Passing this
   exception is not Core Web Vitals, hosted, production, or human-acceptance
-  evidence.
+  evidence. The Library increment is concentrated in existing lazy Catalog,
+  Event Template, and Library route boundaries and adds approximately 10.6 KB
+  transferred gzip to compatibility and 14.6 KB to Ambient, but it remains
+  explicit optimization debt rather than free growth capacity. The Workbench
+  also carries a separately pinned 1,667,684-byte PDF parser runtime when a user
+  begins searchable-PDF inspection. It is not an initial-route transfer, but it
+  is real on-demand download and execution cost and remains optimization debt.
 - Performance impact: Local production-equivalent builds measured compatibility
   at 2,769,824 aggregate / 391,596 largest bytes and Ambient at 3,700,202 /
   391,596 before the owner-authority recovery surface. That source-only safety
@@ -159,12 +196,21 @@ Use this log when a change intentionally departs from stable-first policy or req
   environments pass without discretionary growth headroom. The largest-chunk
   ceiling remains 391,901 bytes. This is a combined-candidate reconciliation,
   not a claim that any one capability caused the increase and not general
-  growth headroom.
+  growth headroom. The current field-state, interaction, and import candidate
+  measures 3,476,619 / 399,646 compatibility bytes and 4,427,364 / 435,494
+  Ambient bytes. Relative to the preceding local Library graphs, this is an
+  97,457 / 2,237-byte compatibility delta and a 125,663 / 3,004-byte Ambient delta.
+  The same-origin PDF.js runtime is deliberately outside `dist/assets` and is
+  constrained separately to exactly 1,667,684 runtime bytes, a 1,232,303-byte
+  largest asset, and three pinned files with exact SHA-256 digests.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
   CI matrix, prior compatibility ceiling, and clean-main baseline remain
-  recoverable and unchanged.
+  recoverable and unchanged. The Library presentation increment can be rolled
+  back by reverting `b593fe4`; that restores the prior editor presentation but
+  does not by itself repair the already-stale pre-Library full-profile ceilings,
+  which require their own measured reconciliation.
 - Exit criteria: Optimize Ambient to the standard clean-main budget or obtain an
   explicit reviewed clean-main recalibration after merge. Remove the exception,
   pass both production graphs without it, pass authenticated desktop/mobile CWV,
@@ -210,6 +256,26 @@ Use this log when a change intentionally departs from stable-first policy or req
   authority tests and both profile builds are local evidence; exact-SHA CI,
   hosted timing, provider acceptance, inbox receipt, and human acceptance
   remain separate gates.
+  The Library convergence was then built locally with the exact compatibility
+  and Ambient environment matrices from `ci-quality.yml`. Compatibility emits
+  3,379,162 / 397,409 bytes and Ambient emits 4,301,701 / 432,490 bytes. The
+  Library change itself accounts for 45,724 and 61,440 aggregate bytes
+  respectively, primarily in Catalog Admin; approximately 10.6 KB and 14.6 KB
+  are transferred gzip. Source attribution found no low-risk removal capable of
+  restoring the older ceilings without deleting selected nested-editor
+  behavior, and splitting chunks would not change the aggregate budget. Both
+  profile checks pass only against the literal ceilings recorded here.
+  Publication authority was later granted. Exact-head CI run `33951463058`
+  measured the completed compatibility graph at 3,381,257 / 397,428 bytes;
+  all browser behavior passed and only the stale literal ceiling rejected the
+  build. The exception now uses that exact CI measurement with no discretionary
+  margin. Follow-up exact-head run `33952106871` passed compatibility and
+  measured the Ambient graph at 4,319,173 / 432,561 bytes before its stale
+  prior literal ceiling rejected that build. The exception now pins both exact
+  CI artifacts with no discretionary margin, and a new exact-head CI run
+  remains the release gate. The current local candidate builds and optional-tool
+  manifest check pass against the new literal ceilings; exact-head CI, hosted
+  transfer timing, production use, and human acceptance remain open.
 
 ## Superseded Exceptions
 

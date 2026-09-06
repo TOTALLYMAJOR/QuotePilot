@@ -108,7 +108,12 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("ambientEnabled: true");
     expect(appSource).toContain("draftRuntime = hydrateSavedQuoteDraftBase(draftInput)");
     expect(appSource).toContain('consequence: "No editor route opened and the current work remains unchanged."');
-    expect(appSource).toContain("setForm(draftRuntime.form)");
+    expect(appSource).toContain("setForm(attendanceSubmission ? { ...draftRuntime.form, guests: attendanceSubmission.count } : draftRuntime.form)");
+    expect(appSource).toContain("attendanceSubmission.organizationId !== authSession.organizationId || attendanceSubmission.quoteId !== quote.id");
+    expect(appSource).toContain("attendanceSubmission.sourceVersionId !== (quote.activeVersionId || quote.versionMeta?.versionId)");
+    expect(appSource).toContain("attendanceSubmission.acceptanceReceiptId !== quote.acceptanceReceipt?.receiptId");
+    expect(appSource).toContain('const stagedDraftFields = attendanceSubmission ? [...new Set([...draftRuntime.stagedFields, "guests"])] : draftRuntime.stagedFields');
+    expect(appSource).toContain("setAttendanceChange(attendanceSubmission)");
     expect(appSource).toContain("draftRuntime.ambientDraftIntent?.focusField");
     expect(appSource).toContain("draftIntentFamily: draftRuntime.ambientDraftIntent?.family");
     expect(appSource).toContain("querySelector(`[data-ambient-field=");

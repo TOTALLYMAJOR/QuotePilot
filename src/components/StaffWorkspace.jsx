@@ -15,6 +15,8 @@ import {
   buildStaffBriefingEmail,
   exportStaffBriefingSheet
 } from "../lib/staffBriefingSheet";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import "./staffWorkspace.css";
 
 const STAFF_ICON_DRAWINGS = Object.freeze({
@@ -99,6 +101,19 @@ function clone(value) {
 
 function safeError(error, fallback) {
   return String(error?.message || fallback).replace(/^FirebaseError:\s*/iu, "").trim();
+}
+
+function isDefinitiveStaffMutationError(error) {
+  const code = String(error?.code || "").trim().toLowerCase().replace(/^functions\//u, "");
+  return new Set([
+    "already-exists",
+    "failed-precondition",
+    "invalid-argument",
+    "not-found",
+    "permission-denied",
+    "resource-exhausted",
+    "unauthenticated"
+  ]).has(code);
 }
 
 function currency(value, code = "USD") {
@@ -262,7 +277,15 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const load = async ({ recovery = false } = {}) => {
-    setState({ status: recovery ? "recovery" : "loading", message: recovery ? "Freshening up your team…" : "Bringing your team together…" });
+    const reconcilingInvitation = state.operation === "dispatch_invitation" && state.status === "uncertain";
+    setState(reconcilingInvitation
+      ? {
+          status: "recovery",
+          message: "Refreshing the invitation record without sending another provider request…",
+          operation: "dispatch_invitation",
+          recovery: "refresh_invitation"
+        }
+      : { status: recovery ? "recovery" : "loading", message: recovery ? "Freshening up your team…" : "Bringing your team together…", operation: "load" });
     try {
       const result = await getStaffDirectory({ organizationId });
       setDirectory(result);
@@ -271,13 +294,55 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       const selected = result.records.find((entry) => entry.profile.staffId === firstId) || null;
       setDraft(selected ? clone(selected) : null);
       setDirty(false);
+      if (reconcilingInvitation) {
+        const refreshedInvitation = (result.invitations || []).find((item) => (
+          item.invitationId === invitationPreview?.preview?.invitationId
+          || (
+            item.staffId === selectedStaffId
+            && item.assignmentId === invitationPreview?.payload?.assignmentId
+          )
+        ));
+        if (!refreshedInvitation || ["dispatching", "outcome_ambiguous"].includes(refreshedInvitation.state)) {
+          setState({
+            status: "uncertain",
+            message: "The refreshed staff record still does not establish the invitation provider outcome.",
+            operation: "dispatch_invitation",
+            recovery: "refresh_invitation",
+            support: "Do not send again. Contact support with the exact assignment and invitation reference for read-only reconciliation."
+          });
+          return;
+        }
+        setInvitationPreview(null);
+        setState(["provider_accepted", "delivered", "bounced", "complained"].includes(refreshedInvitation.state)
+          ? {
+              status: "receipt",
+              message: `The refreshed invitation record reports ${refreshedInvitation.state.replaceAll("_", " ")}. Delivery and staff acknowledgement remain separate.`,
+              operation: "dispatch_invitation"
+            }
+          : {
+              status: "error",
+              message: "The refreshed invitation record confirms that the provider did not accept this invitation.",
+              operation: "dispatch_rejected",
+              recovery: "retry_preview",
+              support: "Create a fresh preview before making another dispatch decision."
+            });
+        return;
+      }
       setState(result.storage === "firebase"
         ? { status: result.records.length ? "success" : "empty", message: result.records.length ? "Team profiles loaded." : "Ready to welcome your first teammate." }
         : result.storage === "local_fixture"
           ? { status: "context", message: "Your review roster is ready. Live Firebase staff data is unchanged." }
-          : { status: "unavailable", message: "Connect your organization to start bringing the team together." });
+          : { status: "unavailable", message: "Connect your organization to start bringing the team together.", operation: "load", recovery: "refresh_team" });
     } catch (error) {
-      setState({ status: "error", message: safeError(error, "Staff records could not be loaded.") });
+      setState(reconcilingInvitation
+        ? {
+            status: "uncertain",
+            message: safeError(error, "The invitation record could not be refreshed."),
+            operation: "dispatch_invitation",
+            recovery: "refresh_invitation",
+            support: "The provider outcome remains unresolved. Do not send again; contact support with the exact assignment."
+          }
+        : { status: "error", message: safeError(error, "Staff records could not be loaded."), operation: "load", recovery: "refresh_team" });
     }
   };
 
@@ -346,10 +411,10 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
 
   const save = async () => {
     if (!draft?.profile?.displayName?.trim()) {
-      setState({ status: "error", message: "Add a display name before saving this staff record." });
+      setState({ status: "error", message: "Add a display name before saving this staff record.", operation: "save_record", recovery: "review_record" });
       return;
     }
-    setState({ status: "saving", message: "Saving this teammate…" });
+    setState({ status: "saving", message: "Saving this teammate…", operation: "save_record" });
     try {
       const result = await saveStaffRecord(draft, { organizationId });
       const entry = clone(result.entry);
@@ -363,9 +428,18 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       });
       setDraft(entry);
       setDirty(false);
-      setState({ status: "receipt", message: `${entry.profile.displayName} is saved. Their profile and private details were recorded separately.` });
+      setState({ status: "receipt", message: `${entry.profile.displayName} is saved. Their profile and private details were recorded separately.`, operation: "save_record" });
     } catch (error) {
-      setState({ status: "error", message: safeError(error, "The staff record could not be saved.") });
+      const definitive = isDefinitiveStaffMutationError(error);
+      setState({
+        status: definitive ? "error" : "uncertain",
+        message: definitive
+          ? safeError(error, "The staff record could not be saved.")
+          : "QuotePilot could not confirm whether the staff record save finished. Refresh the team before attempting another save.",
+        operation: "save_record",
+        recovery: definitive ? "retry_save" : "refresh_team",
+        support: definitive ? "The unsaved staff draft remains available." : "Do not retry this save until the authoritative staff record has been refreshed or support has reconciled the request."
+      });
     }
   };
 
@@ -379,7 +453,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       const result = exportStaffBriefingSheet(briefing());
       setState({ status: "context", message: `Downloaded ${result.filename}. Attach it if you use the default email app.` });
     } catch (error) {
-      setState({ status: "error", message: safeError(error, "The staff briefing sheet could not be generated.") });
+      setState({ status: "error", message: safeError(error, "The staff briefing sheet could not be generated."), operation: "download_briefing", recovery: "retry_download" });
     }
   };
   const printSheet = () => {
@@ -387,7 +461,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       exportStaffBriefingSheet(briefing(), { output: "print" });
       setState({ status: "context", message: "Opened the current staff briefing in a printable PDF tab." });
     } catch (error) {
-      setState({ status: "error", message: safeError(error, "The staff briefing print preview could not be opened.") });
+      setState({ status: "error", message: safeError(error, "The staff briefing print preview could not be opened."), operation: "print_briefing", recovery: "retry_print" });
     }
   };
   const openEmail = () => {
@@ -399,7 +473,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
         message: "Opened your default email app with the current briefing. This does not prove the email was sent or delivered. Attach the downloaded sheet if needed."
       });
     } catch (error) {
-      setState({ status: "error", message: safeError(error, "The default email app could not be opened.") });
+      setState({ status: "error", message: safeError(error, "The default email app could not be opened."), operation: "open_email", recovery: "retry_email" });
     }
   };
 
@@ -411,17 +485,17 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
 
   const previewInvitation = async () => {
     if (dirty) {
-      setState({ status: "error", message: "Save the private staff record before previewing an invitation." });
+      setState({ status: "error", message: "Save the private staff record before previewing an invitation.", operation: "preview_invitation", recovery: "retry_save" });
       return;
     }
     setInvitationBusy(true);
-    setState({ status: "pending", message: "Building the invitation from the exact confirmed assignment…" });
+    setState({ status: "pending", message: "Building the invitation from the exact confirmed assignment…", operation: "preview_invitation" });
     try {
       const result = await previewStaffInvitation({ organizationId, entry: draft, assignment: selectedAssignment });
       setInvitationPreview(result);
-      setState({ status: "preview", message: "Invitation preview is ready. Nothing has been sent." });
+      setState({ status: "preview", message: "Invitation preview is ready. Nothing has been sent.", operation: "preview_invitation" });
     } catch (error) {
-      setState({ status: "error", message: safeError(error, "The staff invitation could not be previewed.") });
+      setState({ status: "error", message: safeError(error, "The staff invitation could not be previewed."), operation: "preview_invitation", recovery: "retry_preview" });
     } finally {
       setInvitationBusy(false);
     }
@@ -430,7 +504,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   const dispatchInvitation = async () => {
     if (!invitationPreview) return;
     setInvitationBusy(true);
-    setState({ status: "pending", message: "Sending this exact invitation to the private email on file…" });
+    setState({ status: "pending", message: "Sending this exact invitation to the private email on file…", operation: "dispatch_invitation" });
     try {
       const result = await dispatchStaffInvitation({ previewResult: invitationPreview });
       setDirectory((current) => {
@@ -443,12 +517,30 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       setInvitationPreview(null);
       const invitationState = result.invitation.state;
       setState(invitationState === "provider_accepted"
-        ? { status: "receipt", message: "The email provider accepted this invitation. Delivery and the staff response are still pending." }
+        ? { status: "receipt", message: "The email provider accepted this invitation. Delivery and the staff response are still pending.", operation: "dispatch_invitation" }
         : invitationState === "outcome_ambiguous"
-          ? { status: "recovery", message: "The provider outcome is uncertain. QuotePilot will not send another invitation automatically." }
-          : { status: "error", message: "The provider did not accept this invitation. No delivery or acknowledgement is claimed." });
+          ? {
+              status: "uncertain",
+              message: "The provider outcome is uncertain. QuotePilot will not send another invitation automatically.",
+              operation: "dispatch_invitation",
+              recovery: "refresh_invitation",
+              support: "Refresh the invitation record or contact support with the exact assignment before deciding whether another invitation is safe."
+            }
+          : {
+              status: "error",
+              message: "The provider did not accept this invitation. No delivery or acknowledgement is claimed.",
+              operation: "dispatch_rejected",
+              recovery: "retry_preview",
+              support: "Create a fresh preview before making another dispatch decision."
+            });
     } catch (error) {
-      setState({ status: "error", message: safeError(error, "The staff invitation could not be dispatched.") });
+      setState({
+        status: "uncertain",
+        message: safeError(error, "QuotePilot could not confirm whether the staff invitation was dispatched."),
+        operation: "dispatch_invitation",
+        recovery: "refresh_invitation",
+        support: "A provider request may have been dispatched. Do not send again; refresh the invitation record or contact support with the exact assignment."
+      });
     } finally {
       setInvitationBusy(false);
     }
@@ -550,6 +642,28 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
     if (editor) editor.open = true;
     editor?.scrollIntoView({ block: "start", behavior });
   };
+  const stateRecoveryAction = ({
+    refresh_team: { label: state.operation === "dispatch_invitation" ? "Refresh invitation status" : "Refresh the team", action: () => void load({ recovery: true }) },
+    refresh_invitation: { label: "Refresh invitation status", action: () => void load({ recovery: true }) },
+    retry_save: { label: "Retry staff save", action: () => void save() },
+    review_record: { label: "Review staff details", action: focusStaffDetails },
+    retry_preview: { label: "Retry invitation preview", action: () => void previewInvitation() },
+    retry_download: { label: "Retry briefing download", action: downloadSheet },
+    retry_print: { label: "Retry print preview", action: printSheet },
+    retry_email: { label: "Retry email handoff", action: openEmail }
+  })[state.recovery] || null;
+  const stateOperationLabel = ({
+    load: "Team directory",
+    save_record: "Staff record save",
+    preview_invitation: "Invitation preview",
+    dispatch_invitation: "Invitation dispatch",
+    dispatch_rejected: "Invitation dispatch",
+    download_briefing: "Briefing download",
+    print_briefing: "Briefing print preview",
+    open_email: "Email handoff"
+  })[state.operation] || "Staff workspace";
+  const invitationOutcomeUncertain = state.operation === "dispatch_invitation"
+    && ["uncertain", "recovery"].includes(state.status);
   const preferredContactLabel = ({
     email: "Email",
     phone: "Phone",
@@ -576,14 +690,29 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
         <strong>{organizationName || "Your catering team"}</strong>
         <div
           className={`staff-workspace__status is-${state.status}`}
-          role={state.status === "error" ? "alert" : "status"}
+          role={["error", "unavailable"].includes(state.status) ? "alert" : "status"}
           aria-live="polite"
           data-capability-state={state.status}
+          data-staff-operation={state.operation || "read"}
         >
-          <span>{state.status === "success" ? "Team profiles are here" : state.message}</span>
-          {["error", "unavailable"].includes(state.status) ? (
-            <button type="button" className="ghost compact" onClick={() => void load({ recovery: true })}>Refresh the team</button>
-          ) : null}
+          {["error", "unavailable", "uncertain"].includes(state.status) ? (
+            <FieldStateIndicator
+              state={state.status === "unavailable"
+                ? { availability: "unavailable" }
+                : state.status === "uncertain"
+                  ? { evidence: "pending" }
+                  : { evidence: "failed" }}
+              label={`${stateOperationLabel} state`}
+              reason={state.message}
+              supportingDetail={state.support || ""}
+              recoveryAction={stateRecoveryAction ? {
+                label: stateRecoveryAction.label,
+                onClick: stateRecoveryAction.action
+              } : undefined}
+            />
+          ) : (
+            <span>{state.status === "success" ? "Team profiles are here" : state.message}</span>
+          )}
         </div>
       </div>
 
@@ -959,11 +1088,24 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
               <Section icon={EnvelopeSimple} title="Staff briefing sheet" description="Pertinent event details for this person, ready to print, download or open in the default email app." open>
                 {assignments.length ? (
                   <div className="staff-briefing-actions">
-                    <Field label="Assigned event" wide>
-                      <select value={selectedAssignment?.assignmentId || ""} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
-                        {assignments.map((assignment) => <option value={assignment.assignmentId} key={assignment.assignmentId}>{assignmentLabel(assignment)}</option>)}
-                      </select>
-                    </Field>
+                    {assignments.length === 1 ? (
+                      <AdaptiveChoiceField
+                        className="staff-field is-wide"
+                        label="Assigned event"
+                        options={[{
+                          value: assignments[0].assignmentId,
+                          label: assignmentLabel(assignments[0])
+                        }]}
+                        value={selectedAssignment?.assignmentId || ""}
+                        singleChoiceDetail="This is this teammate's only current assignment."
+                      />
+                    ) : (
+                      <Field label="Assigned event" wide>
+                        <select value={selectedAssignment?.assignmentId || ""} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
+                          {assignments.map((assignment) => <option value={assignment.assignmentId} key={assignment.assignmentId}>{assignmentLabel(assignment)}</option>)}
+                        </select>
+                      </Field>
+                    )}
                     <div className="staff-briefing-preview">
                       <strong>{selectedAssignment?.event?.name || "Event"}</strong>
                       <span>{ROLE_LABELS[selectedAssignment?.role] || "Event team"} · {selectedAssignment?.event?.venue || "Venue pending"}</span>
@@ -992,10 +1134,22 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                           <p><strong>Subject:</strong> {invitationPreview.preview.subject}</p>
                           <pre>{invitationPreview.preview.textWithoutResponseLink}</pre>
                           <p className="source-note">{invitationPreview.preview.doNothing}</p>
-                          <div className="staff-briefing-buttons">
-                            <button type="button" className="cta" disabled={invitationBusy} onClick={() => void dispatchInvitation()}><EnvelopeSimple size={18} aria-hidden="true" /> {invitationBusy ? "Sending…" : "Send invitation"}</button>
-                            <button type="button" className="ghost" disabled={invitationBusy} onClick={() => setInvitationPreview(null)}>Keep unsent</button>
-                          </div>
+                          {invitationOutcomeUncertain ? (
+                            <FieldStateIndicator
+                              state={{ evidence: "pending", editability: "protected" }}
+                              label="Invitation dispatch state"
+                              reason={state.message}
+                              supportingDetail="This preview is retained only for comparison. It cannot be sent again until the prior provider request is reconciled."
+                              recoveryAction={state.status === "recovery"
+                                ? undefined
+                                : { label: "Refresh invitation status", onClick: () => void load({ recovery: true }) }}
+                            />
+                          ) : (
+                            <div className="staff-briefing-buttons">
+                              <button type="button" className="cta" disabled={invitationBusy} onClick={() => void dispatchInvitation()}><EnvelopeSimple size={18} aria-hidden="true" /> {invitationBusy ? "Sending…" : "Send invitation"}</button>
+                              <button type="button" className="ghost" disabled={invitationBusy} onClick={() => setInvitationPreview(null)}>Keep unsent</button>
+                            </div>
+                          )}
                         </div>
                       ) : !currentInvitation ? (
                         <button type="button" className="cta" disabled={invitationBusy || dirty || !selectedAssignment} onClick={() => void previewInvitation()}>

@@ -205,7 +205,7 @@
 .operational-staffing-panel select:focus-visible,
 .operational-staffing-panel input:focus-visible,
 .operational-staffing-panel button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--staffing-teal) 38%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--staffing-gold) 48%, transparent);
   outline-offset: 2px;
 }
 
@@ -217,12 +217,23 @@
   font-size: 0.78rem;
   font-weight: 720;
   cursor: pointer;
+  transition:
+    transform var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    box-shadow var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    color var(--motion-fast, 140ms) ease,
+    background-color var(--motion-fast, 140ms) ease,
+    border-color var(--motion-fast, 140ms) ease;
 }
 
 .operational-staffing-panel button:disabled,
 .operational-staffing-panel select:disabled {
+  color: var(--staffing-muted);
+  background: color-mix(in srgb, var(--staffing-ink) 5%, var(--color-surface, #fff));
+  border-color: var(--staffing-line);
   cursor: not-allowed;
-  opacity: 0.58;
+  opacity: 1;
+  transform: none;
+  box-shadow: none;
 }
 
 .operational-staffing-primary {
@@ -230,6 +241,13 @@
   border: 1px solid color-mix(in srgb, var(--staffing-gold) 70%, var(--staffing-ink));
   background: var(--staffing-gold);
   color: #fff;
+}
+
+.operational-staffing-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--staffing-gold) 86%, var(--staffing-ink));
+  border-color: color-mix(in srgb, var(--staffing-gold) 68%, var(--staffing-ink));
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--staffing-ink) 15%, transparent);
 }
 
 .operational-staffing-secondary,
@@ -245,6 +263,20 @@
   border-color: transparent;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.operational-staffing-secondary:hover:not(:disabled),
+.operational-staffing-tertiary:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--staffing-gold) 76%, var(--staffing-ink));
+  background: color-mix(in srgb, var(--staffing-gold) 7%, transparent);
+  border-color: color-mix(in srgb, var(--staffing-gold) 42%, var(--staffing-line));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--staffing-ink) 10%, transparent);
+}
+
+.operational-staffing-panel button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .operational-staffing-warning {
@@ -372,5 +404,37 @@
   .operational-staffing-panel *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .operational-staffing-panel button {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .operational-staffing-panel button,
+  .operational-staffing-panel select,
+  .operational-staffing-panel input:not([type="checkbox"]) {
+    color: ButtonText;
+    background: ButtonFace;
+    border: 1px solid ButtonText;
+  }
+
+  .operational-staffing-panel button:hover:not(:disabled) {
+    color: Highlight;
+    border-color: Highlight;
+  }
+
+  .operational-staffing-panel select:focus-visible,
+  .operational-staffing-panel input:focus-visible,
+  .operational-staffing-panel button:focus-visible {
+    outline: 2px solid Highlight;
+  }
+
+  .operational-staffing-panel button:disabled,
+  .operational-staffing-panel select:disabled {
+    color: GrayText;
+    border-color: GrayText;
   }
 }

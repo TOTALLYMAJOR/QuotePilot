@@ -181,6 +181,31 @@ describe("routed tool authorization and presentation", () => {
     }
   });
 
+  test("fails the Calendar-first Operations route closed with the shared schedule capability", () => {
+    const enabled = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.OPERATIONS),
+      customerCenteredWorkspaceEnabled: true,
+      featureFlags: { eventSchedule: true }
+    });
+    expect(enabled).toMatchObject({
+      routeAuthorized: true,
+      showNotFound: false,
+      primary: { id: "operations", presentation: "embedded" }
+    });
+
+    const disabled = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.OPERATIONS),
+      customerCenteredWorkspaceEnabled: true,
+      featureFlags: { eventSchedule: false }
+    });
+    expect(disabled).toMatchObject({
+      routeAuthorized: false,
+      showNotFound: true,
+      notFoundReason: "feature-disabled",
+      primary: { id: "workspace-not-found", presentation: "not-found" }
+    });
+  });
+
   test("makes the ambient Library readable by sales while retaining admin-only mutation authority", () => {
     const sales = buildWorkspaceShellModel({
       route: route(WORKSPACE_ROUTE_IDS.CATALOG),
