@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 19:05:50 CDT
+Last updated: 2026-09-05 19:10:07 CDT
 
 ## Combined production candidate
 
@@ -11,10 +11,10 @@ workflow/attendance/closeout usability refinements. Original worktrees remain
 intact. Duplicate ZIP archives were not treated as application source.
 
 Documentation, capability, field-state, secret and project-state checks pass;
-Python passes 136 tests. The latest complete JavaScript run passed 5,113 tests
-and found seven assertions in one harness that needed the new runtime dependency.
-The repaired event callable suite passes all 18 tests, and the new real-callable
-cross-tenant denial test passes. The Studio/bundle/interaction suite passes 27.
+Python passes 136 tests. The final combined JavaScript suite passes 5,121 tests
+across 444 files (89 tests in three files remain intentionally skipped).
+The Studio/bundle/interaction suite passes 27; actual-callable tenant isolation
+rejects another enabled organization without writes.
 Both CI build profiles pass the existing size limits after splitting the
 shared action-feedback model from the workspace entry chunk. The PDF runtime
 retains its separately pinned file, size and digest contract.
