@@ -51,10 +51,11 @@ async function ensureUser({ auth, email, password }) {
 async function seedPortalConversationFixture({ db, organizationId, uid, email }) {
   const quoteId = "conversation-e2e-quote";
   const portalKey = "conversation-e2e-portal-token-1234567890";
-  const portalIssuedAtISO = "2026-08-06T17:00:00.000Z";
-  const portalExpiresAtISO = "2099-12-31T23:59:59.000Z";
+  const fixtureClockMs = Date.now();
+  const portalIssuedAtISO = new Date(fixtureClockMs - 60_000).toISOString();
+  const portalExpiresAtISO = new Date(fixtureClockMs + (29 * 24 * 60 * 60 * 1000)).toISOString();
   const revisionId = `v0001@${portalIssuedAtISO}`;
-  const providerAcceptedAtISO = "2026-08-06T17:05:00.000Z";
+  const providerAcceptedAtISO = new Date(fixtureClockMs).toISOString();
   const deliveryEvidence = {
     revisionId,
     state: "provider_accepted",

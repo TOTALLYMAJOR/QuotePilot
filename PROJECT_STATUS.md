@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 19:17:44 CDT
+Last updated: 2026-09-05 20:05:50 CDT
 
 ## Combined production candidate
 
@@ -27,7 +27,17 @@ and integration tests pass. Exact-SHA CI, production deployment and tenant
 activation remain pending. The owner additionally requested maximum testable
 features; scoped staffing and Revenue Autopilot preparation are now included,
 with scheduling and automated sends off. The expanded full suite and capability
-surfacing checks pass; exact final CI remains required.
+surfacing checks pass. Exact-head CI run `34001025904` passed six of the eight
+required jobs and exposed two deterministic browser-fixture defects: general
+quote smoke still selected rows through a now-state-dependent Copy Email action
+and assumed the lifecycle select remained mounted after a terminal selection;
+the Firebase conversation fixture's fixed August 6 portal issuance had crossed
+the product's real 30-day validity boundary. The candidate now uses stable quote
+row identity and visible lifecycle evidence, and seeds a current portal issuance
+with a bounded 29-day expiry. Focused general smoke passes 3/3, the complete
+general browser lane passes 71 tests with 291 intentionally skipped, and the
+isolated Firebase browser file passes 4/4. A new exact-head CI run remains
+required before merge.
 Real tenant piloting and human acceptance are unperformed. The source checkpoints below apply
 only to their named revisions and are not combined-release acceptance.
 

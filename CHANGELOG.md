@@ -1,12 +1,17 @@
 # Changelog
 
-Last updated: 2026-09-05 19:17:44 CDT
+Last updated: 2026-09-05 20:05:50 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
 ## Unreleased — combined production candidate
+
+- Align the general browser release gate with stable quote-row identity and
+  the configured lifecycle control, and keep the Firebase conversation fixture
+  inside its real 30-day portal-validity window instead of relying on a fixed
+  issuance date that can silently expire.
 
 - Extend the approved RagnaKoK runtime scope to staffing actions and Revenue
   Autopilot preparation; retain explicit policy setup and disabled scheduling

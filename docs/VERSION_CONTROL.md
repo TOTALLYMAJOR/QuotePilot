@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-05 19:17:44 CDT
+Last updated: 2026-09-05 20:05:50 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -387,6 +387,15 @@ If a topic changes, only update the owning doc and cross-link from others.
 - Product truth decision: `docs/adr/ADR-0002-product-truth-observability.md`
 - Product truth design: `docs/design/product-truth-observability-design.md`
 - Product truth work plan: `docs/plans/20260828-feature-product-truth-observability.md`
+
+## Time-bound browser fixtures
+
+Release-gate fixtures that represent active portal or provider-bound access must
+derive their issuance and bounded expiry from the test execution clock. A fixed
+historical issuance can cross QuotePilot's authoritative validity window and
+silently turn an active-path test into an expired-path test. Explicit expiry
+fixtures remain fixed and separate so terminal recovery behavior is still
+deterministic. Changing fixture time does not change production validity policy.
 
 ## RagnaKoK workflow activation profile
 

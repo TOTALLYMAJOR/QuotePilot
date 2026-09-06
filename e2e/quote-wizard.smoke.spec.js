@@ -108,15 +108,26 @@ async function createQuoteToHistory(page, { guests = 72, eventName, venue, date 
 }
 
 function quoteRows(page) {
-  return page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
-  });
+  return page.locator(".history-table-wrap tbody tr[data-quote-id]");
+}
+
+function quoteLifecycleSelect(row) {
+  return row.getByRole("combobox", { name: "Change quote / proposal lifecycle" });
+}
+
+async function expectQuoteStatus(row, status) {
+  const labels = {
+    accepted: "Accepted",
+    booked: "Booked",
+    sent: "Sent"
+  };
+  await expect(row.locator("td").nth(7).locator(".status-chip")).toContainText(labels[status] || status);
 }
 
 async function setQuoteStatus(row, status) {
-  const statusSelect = row.locator("select").first();
+  const statusSelect = quoteLifecycleSelect(row);
   await statusSelect.selectOption(status);
-  await expect(statusSelect).toHaveValue(status);
+  await expectQuoteStatus(row, status);
 }
 
 async function openOperationsItem(page, name) {
@@ -1427,9 +1438,7 @@ test("accepted event production checklist persists completion", async ({ page })
 test("create then edit keeps one quote row and reflects updated fields", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 70 });
 
-  const quoteRows = page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
-  });
+  const quoteRows = page.locator(".history-table-wrap tbody tr[data-quote-id]");
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("70");
   const originalQuoteId = await quoteRows.first().getAttribute("data-quote-id");
@@ -1450,7 +1459,7 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await expect(quoteRows.first()).toContainText("95");
 
   await setQuoteStatus(quoteRows.first(), "sent");
-  await expect(quoteRows.first().locator("select").first()).toHaveValue("sent");
+  await expectQuoteStatus(quoteRows.first(), "sent");
 });
 
 test("Catalog Admin menu browsing never mutates the clean quote being edited", async ({ page }) => {
@@ -1514,7 +1523,7 @@ test("accepted quote can be converted and confirmation lifecycle is trackable", 
 
   await row.getByRole("button", { name: "Convert" }).click();
   await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
-  await expect(row.locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(row, "booked");
 
   const confirmationSelect = row.locator("td").nth(10).locator("select");
   await expect(confirmationSelect).toHaveValue("pending");
@@ -1543,7 +1552,7 @@ test("conversion is blocked when another quote is already booked for same venue/
   await setQuoteStatus(baselineRow, "accepted");
   await baselineRow.getByRole("button", { name: "Convert" }).click();
   await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
-  await expect(baselineRow.locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(baselineRow, "booked");
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "New Quote" }).click();
@@ -1564,5 +1573,5 @@ test("conversion is blocked when another quote is already booked for same venue/
 
   const conflictRows = quoteRows(page);
   await expect(conflictRows).toHaveCount(1);
-  await expect(conflictRows.first().locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(conflictRows.first(), "booked");
 });
