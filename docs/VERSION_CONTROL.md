@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-05 20:05:50 CDT
+Last updated: 2026-09-05 20:17:12 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -396,6 +396,13 @@ historical issuance can cross QuotePilot's authoritative validity window and
 silently turn an active-path test into an expired-path test. Explicit expiry
 fixtures remain fixed and separate so terminal recovery behavior is still
 deterministic. Changing fixture time does not change production validity policy.
+
+Shared emulator seeders that can create Auth or Firestore records must fail
+closed before Firebase Admin initialization unless the requested project uses
+the `demo-*` namespace and every required emulator endpoint is loopback. Runner
+configuration alone is not an adequate production-write boundary. These
+seeders belong to a headless developer-infrastructure capability contract even
+when their only functional change is test-fixture freshness.
 
 ## RagnaKoK workflow activation profile
 

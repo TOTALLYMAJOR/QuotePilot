@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-05 20:05:50 CDT
+Last updated: 2026-09-05 20:17:12 CDT
 
 ## Combined production candidate
 
@@ -37,7 +37,11 @@ row identity and visible lifecycle evidence, and seeds a current portal issuance
 with a bounded 29-day expiry. Focused general smoke passes 3/3, the complete
 general browser lane passes 71 tests with 291 intentionally skipped, and the
 isolated Firebase browser file passes 4/4. A new exact-head CI run remains
-required before merge.
+required before merge. Exact-head run `34003264925` then stopped in the core
+governance lane because the refreshed shared E2E seeder was not owned by a
+changed capability contract. The seeder is now bound to the developer-only
+local-rehearsal contract and independently rejects non-demo projects or
+non-loopback Auth/Firestore endpoints; a fresh exact-head run remains required.
 Real tenant piloting and human acceptance are unperformed. The source checkpoints below apply
 only to their named revisions and are not combined-release acceptance.
 

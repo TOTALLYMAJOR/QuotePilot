@@ -1,12 +1,16 @@
 # Changelog
 
-Last updated: 2026-09-05 20:05:50 CDT
+Last updated: 2026-09-05 20:17:12 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
 ## Unreleased — combined production candidate
+
+- Bind the refreshed Firebase browser fixture to the local-rehearsal capability
+  contract and make its seeder fail closed unless a `demo-*` project is backed
+  by loopback Auth and Firestore emulators.
 
 - Align the general browser release gate with stable quote-row identity and
   the configured lifecycle control, and keep the Firebase conversation fixture

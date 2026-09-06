@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { rehearsalEnvironment, assertRehearsalEmulators, assertNoLocalProviderFiles } from '../../../scripts/tenant-operating-model-local-rehearsal.mjs';
+import { assertE2EEmulatorSafety } from '../../../scripts/seed-e2e-emulator-user.mjs';
 
 describe('synthetic local operating model rehearsal', () => {
   test('local rehearsal replaces hosted browser configuration and disables providers without bypassing auth', () => {
@@ -27,5 +28,12 @@ describe('synthetic local operating model rehearsal', () => {
     const valid = { GCLOUD_PROJECT: 'demo-workflow-configuration', FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9399', FIRESTORE_EMULATOR_HOST: '127.0.0.1:8383', FIREBASE_EMULATOR_HUB: '127.0.0.1:4400' };
     expect(() => assertRehearsalEmulators(valid)).not.toThrow();
     for (const mutation of [{ GCLOUD_PROJECT: 'production' }, { FIREBASE_AUTH_EMULATOR_HOST: 'remote.test:9399' }, { FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080' }, { FIREBASE_EMULATOR_HUB: 'remote.test:4400' }]) expect(() => assertRehearsalEmulators({ ...valid, ...mutation })).toThrow();
+  });
+  test('shared E2E auth seeding requires a demo project and loopback emulators', () => {
+    const valid = { projectId: 'demo-e2e', authHost: '127.0.0.1:9399', firestoreHost: 'localhost:8383' };
+    expect(() => assertE2EEmulatorSafety(valid)).not.toThrow();
+    for (const mutation of [{ projectId: 'tonicatering' }, { authHost: 'remote.test:9399' }, { firestoreHost: '' }]) {
+      expect(() => assertE2EEmulatorSafety({ ...valid, ...mutation })).toThrow(/restricted to a demo-\* project/);
+    }
   });
 });

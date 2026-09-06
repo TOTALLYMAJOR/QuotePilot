@@ -1,9 +1,23 @@
 #!/usr/bin/env node
 
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 
-const admin = loadFirebaseAdmin();
+const LOOPBACK_EMULATOR_HOST = /^(?:127\.0\.0\.1|localhost|\[::1\]):\d+$/;
+let admin;
+
+export function assertE2EEmulatorSafety({ projectId, authHost, firestoreHost }) {
+  if (
+    !String(projectId || "").startsWith("demo-")
+    || !LOOPBACK_EMULATOR_HOST.test(String(authHost || "").trim())
+    || !LOOPBACK_EMULATOR_HOST.test(String(firestoreHost || "").trim())
+  ) {
+    throw new Error(
+      "E2E auth seeding is restricted to a demo-* project with loopback Auth and Firestore emulators."
+    );
+  }
+}
 
 function readArg(name, fallback = "") {
   const idx = process.argv.indexOf(name);
@@ -192,6 +206,14 @@ async function main() {
     throw new Error("email and password are required.");
   }
 
+  assertE2EEmulatorSafety({
+    projectId,
+    authHost: process.env.FIREBASE_AUTH_EMULATOR_HOST,
+    firestoreHost: process.env.FIRESTORE_EMULATOR_HOST
+  });
+
+  admin = loadFirebaseAdmin();
+
   if (!admin.getApps().length) {
     admin.initializeApp({ projectId });
   }
@@ -229,7 +251,9 @@ async function main() {
   console.log(`Seeded e2e auth user: ${email} (${uid}) in org ${organizationId}`);
 }
 
-main().catch((error) => {
-  console.error("E2E auth seed failed:", error?.message || error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  main().catch((error) => {
+    console.error("E2E auth seed failed:", error?.message || error);
+    process.exitCode = 1;
+  });
+}

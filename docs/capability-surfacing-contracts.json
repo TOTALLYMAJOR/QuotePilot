@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 74,
+  "catalogVersion": 75,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -8853,7 +8853,7 @@
     },
     {
       "id": "tenant-workflow-local-rehearsal",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "developer_infrastructure",
@@ -8862,6 +8862,7 @@
       ],
       "summary": "Disposable whole-app rehearsal uses real demo emulators, a coherent synthetic catalog, staff accounts, display records and native-planned synthetic acceptance/booking with ordinary authentication and native authority.",
       "backendPaths": [
+        "scripts/seed-e2e-emulator-user.mjs",
         "scripts/tenant-operating-model-local-rehearsal.mjs",
         "scripts/tenant-operating-model-local-rehearsal-seed.mjs"
       ],
@@ -8880,6 +8881,10 @@
         {
           "path": "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js",
           "locator": "local rehearsal seeding rejects hosted projects and nonlocal or mismatched emulator endpoints"
+        },
+        {
+          "path": "src/lib/__tests__/tenantOperatingModelLocalRehearsal.test.js",
+          "locator": "shared E2E auth seeding requires a demo project and loopback emulators"
         }
       ],
       "documentationPaths": [
@@ -8897,7 +8902,7 @@
           "locator": "## Local Tenant Workflow Rehearsal"
         }
       ],
-      "headlessReason": "Developer-only launcher and synthetic fixture seeder are restricted to a fixed disposable demo project and loopback Auth/Firestore/Functions. Fresh local setup creates named taxonomy before native pricing confirmation, then staff sign-in/display fixtures and native-planned synthetic acceptance/booking after verifying current catalog authority and preserving version, pricing and payment. There is no hosted seed or tenant activation mode.",
+      "headlessReason": "Developer-only launchers and synthetic fixture seeders are restricted to disposable demo projects and loopback Auth/Firestore/Functions. Fresh local setup creates named taxonomy before native pricing confirmation, then staff sign-in/display fixtures and native-planned synthetic acceptance/booking after verifying current catalog authority and preserving version, pricing and payment. The shared Firebase browser seed separately requires a demo project plus loopback Auth and Firestore before creating its active portal fixture. There is no hosted seed or tenant activation mode.",
       "safeOutcome": "Operators rehearse existing user surfaces locally with explicit synthetic evidence, normal role checks and providers disabled. Native acceptance and coordination fixtures are never customer or provider proof."
     }
   ]
