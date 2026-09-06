@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-05 19:17:44 CDT
+Last updated: 2026-09-05 21:23:56 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -3209,12 +3209,18 @@ silently applied to a different agreement.
 
 ## Workflow availability in the RagnaKoK workspace
 
-After deployment and tenant activation, a connected RagnaKoK administrator can
+In production `v0.17.0`, a connected RagnaKoK administrator can
 open Workflow Configuration Studio from Library. Save a draft, review it, and
 publish explicitly before relying on a customized policy for new workflow
 instances. Enabling the workspace does not itself publish drafts or change
 existing event bindings. Native quote approval, attendance, event execution and
 closeout actions continue to enforce their own permissions and source records.
+
+The production release and three-field RagnaKoK activation are complete for
+`mm05366-sandbox`. This establishes deployed runtime and configuration readback,
+not a completed authenticated pilot. Sign in with an authorized tenant account
+and confirm each intended entry point before using the workspace with a live
+event.
 
 
 RagnaKoK test access also admits operational staffing and Revenue Autopilot

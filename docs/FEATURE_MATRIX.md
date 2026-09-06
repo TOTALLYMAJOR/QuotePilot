@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-05 21:23:56 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -730,12 +730,16 @@ acceptance. Setup and stop instructions live in
 
 ## Tenant-scoped workflow runtime
 
-The production workflow profile can admit RagnaKoK Inc (`mm05366-sandbox`) while
+The exact `v0.17.0` production workflow profile admits RagnaKoK Inc
+(`mm05366-sandbox`) while
 global workflow and Commercial Change authority flags remain off. The connected
 admin Studio and native actions still require tenant settings and current role
 checks. Other organizations remain unavailable even if their settings are changed.
-Deployment, tenant activation, draft publication and event migration are separate
-operations; see [the runtime activation procedure](LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release).
+Backend/rules run `34005131796`, Firebase Hosting run `34005880426`, and Vercel
+run `34006160784` deployed exact tag `v0.17.0`; readback confirms the three
+approved RagnaKoK tenant settings are true. Draft publication, event migration,
+authenticated operator piloting, provider messaging, and human acceptance remain
+separate operations; see [the runtime activation procedure](LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release).
 
 
 RagnaKoK test access also admits operational staffing and Revenue Autopilot

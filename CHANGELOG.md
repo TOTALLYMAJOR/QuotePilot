@@ -1,12 +1,29 @@
 # Changelog
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-05 21:23:56 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
-## Unreleased — combined production candidate
+## v0.17.0 — combined production release (2026-09-05)
+
+- Released annotated tag `v0.17.0` at exact protected-main squash commit
+  `530f31e9a33e94a652bbd73b2c7ccbe627ab0bad` after all eight main-push CI
+  gates passed in run `34004519972`.
+- Deployed the exact tag through Firebase backend/rules run `34005131796` with
+  the tenant-bounded `ragnakok-workflows` profile, Firebase Hosting run
+  `34005880426` with `safe-off`, and Vercel production run `34006160784` with
+  `safe-off`. Provider inventory/runtime readback and public `/`, `/app`, and
+  `/system` health probes passed.
+- Activated only `eventOperatingSpineEnabled`,
+  `commercialChangeAuthorityEnabled`, and
+  `operationalStaffingAuthorityEnabled` for RagnaKoK Inc
+  (`mm05366-sandbox`) with an exact Firestore update-time precondition and
+  verified readback. Revenue Autopilot preparation is admitted by the same
+  exact-tenant runtime guard; its policy remains operator-declared, its global
+  scheduler has no tenant scope, and automated outbound sends remain off.
+  Authenticated tenant piloting and human acceptance remain unperformed.
 
 - Bind the refreshed Firebase browser fixture to the local-rehearsal capability
   contract and make its seeder fail closed unless a `demo-*` project is backed
