@@ -29,6 +29,7 @@ async function openWorkbenchDomain(page, domain) {
 test("presents the composer as the builder surface with Quote Pulse", async ({ page }) => {
   await expect(page.locator(".wizard-panel")).toHaveCount(0);
   await expect(page.getByText("Current draft", { exact: false }).first()).toBeVisible();
+  await expect(page.getByTestId("commercial-workbench-plan")).toBeVisible();
   await expect(page.getByTestId("pc-pulse")).toBeVisible();
   await expect(page.getByTestId("pc-pulse-total")).toBeVisible();
   await expect(page.getByTestId("pc-watching")).toBeVisible();
@@ -37,6 +38,32 @@ test("presents the composer as the builder surface with Quote Pulse", async ({ p
   await expect(saveAction).toHaveText(/Review \d+ blockers?/i);
   await saveAction.click();
   await expect(page.getByTestId("pc-save-readiness")).toBeFocused();
+});
+
+test("keeps quote-domain context attached across representative widths", async ({ page }) => {
+  const plan = page.getByTestId("commercial-workbench-plan");
+  const document = page.getByTestId("pc-document");
+
+  for (const width of [1440, 1008, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(plan).toBeVisible();
+    await expect(plan.getByRole("button")).toHaveCount(5);
+
+    const [planBox, documentBox] = await Promise.all([
+      plan.boundingBox(),
+      document.boundingBox()
+    ]);
+    expect(planBox, `quote plan should render at ${width}px`).not.toBeNull();
+    expect(documentBox, `proposal document should render at ${width}px`).not.toBeNull();
+
+    if (width > 820) {
+      expect(planBox.x + planBox.width).toBeLessThanOrEqual(documentBox.x);
+      await expect(plan).toHaveCSS("position", "sticky");
+    } else {
+      expect(planBox.y + planBox.height).toBeLessThanOrEqual(documentBox.y);
+      await expect(plan).toHaveCSS("position", "static");
+    }
+  }
 });
 
 test("inline guest edit shows consequences and staffing follows the house rule", async ({ page }) => {

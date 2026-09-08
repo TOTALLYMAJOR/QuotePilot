@@ -1611,33 +1611,8 @@
 /* -------------------------------------------------------------- responsive */
 
 @media (max-width: 1080px) {
-  .pc-columns { grid-template-columns: 1fr; }
-
-  .pc-quote-plan {
-    position: static;
-    padding-top: 0.4rem;
-  }
-
-  .pc-quote-plan ol {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .pc-quote-plan li,
-  .pc-quote-plan li:last-child {
-    border-bottom: 1px solid var(--pc-rule);
-  }
-
-  .pc-quote-plan button {
-    min-height: 4.25rem;
-    border-left: 0;
-    border-bottom: 3px solid transparent;
-  }
-
-  .pc-quote-plan button:hover,
-  .pc-quote-plan button[aria-current="step"] {
-    border-left-color: transparent;
-    border-bottom-color: var(--pc-brass);
+  .pc-columns {
+    grid-template-columns: minmax(200px, 228px) minmax(0, 1fr);
   }
 
   .pc-pulse {
@@ -1706,6 +1681,37 @@
     background: var(--pc-sheet);
     color: var(--pc-ink);
     border-color: var(--pc-sheet);
+  }
+}
+
+@media (max-width: 820px) {
+  .pc-columns { grid-template-columns: 1fr; }
+
+  .pc-quote-plan {
+    position: static;
+    padding-top: 0.4rem;
+  }
+
+  .pc-quote-plan ol {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .pc-quote-plan li,
+  .pc-quote-plan li:last-child {
+    border-bottom: 1px solid var(--pc-rule);
+  }
+
+  .pc-quote-plan button {
+    min-height: 4.25rem;
+    border-left: 0;
+    border-bottom: 3px solid transparent;
+  }
+
+  .pc-quote-plan button:hover,
+  .pc-quote-plan button[aria-current="step"] {
+    border-left-color: transparent;
+    border-bottom-color: var(--pc-brass);
   }
 }
 
