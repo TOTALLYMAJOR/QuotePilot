@@ -49,7 +49,189 @@ function quoteRoundTrip(store, overrides = {}) {
   return prepared;
 }
 
+function decisionRoundTrip(store, overrides = {}) {
+  store.setScope(scope);
+  return store.prepare({
+    entry: originEntry,
+    origin: {
+      routeId: "clear-deck",
+      pathname: "/app/clear-the-deck",
+      search: ""
+    },
+    destination: {
+      routeId: "workflow",
+      pathname: "/app/workflow",
+      search: "?quoteId=rivera-wedding&attentionType=approval&requestId=approval-rivera-4"
+    },
+    surfaceId: "decision-resolution",
+    view: {
+      routeId: "clear-deck",
+      disclosureIds: ["decision:approval-rivera-4"],
+      scrollY: 604,
+      focus: {
+        kind: "decision-action",
+        objectId: "approval-rivera-4",
+        actionId: "review-workflow:approval-rivera-4"
+      }
+    },
+    ...overrides
+  });
+}
+
 describe("workspace return context", () => {
+  test("returns from the exact Workflow request to its Clear the Deck decision action", () => {
+    const store = createWorkspaceReturnContextStore();
+    const prepared = decisionRoundTrip(store);
+
+    expect(prepared).toMatchObject({
+      ok: true,
+      token: {
+        origin: {
+          routeId: "clear-deck",
+          pathname: "/app/clear-the-deck",
+          search: ""
+        },
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?attentionType=approval&quoteId=rivera-wedding&requestId=approval-rivera-4"
+        },
+        surfaceId: "decision-resolution"
+      }
+    });
+    const state = withWorkspaceReturnContextState(null, prepared.token);
+    expect(readWorkspaceReturnContextToken(state)).toEqual(prepared.token);
+    expect(store.commit({ token: prepared.token, destinationEntry })).toEqual({ ok: true });
+    expect(store.resolveOrigin({
+      entry: destinationEntry,
+      state,
+      route: {
+        routeId: "workflow",
+        pathname: "/app/workflow",
+        search: "?requestId=approval-rivera-4&quoteId=rivera-wedding&attentionType=approval"
+      }
+    })).toMatchObject({
+      ok: true,
+      delta: -1,
+      routeId: "clear-deck",
+      view: {
+        disclosureIds: ["decision:approval-rivera-4"],
+        scrollY: 604,
+        focus: {
+          kind: "decision-action",
+          objectId: "approval-rivera-4",
+          actionId: "review-workflow:approval-rivera-4"
+        }
+      }
+    });
+    expect(store.readOriginView({ entry: originEntry, routeId: "clear-deck" }))
+      .toMatchObject({ ok: true, view: { focus: { objectId: "approval-rivera-4" } } });
+  });
+
+  test("rejects malformed, unsupported, nearby, or request-mismatched decision returns", () => {
+    const invalidInputs = [
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=follow_up&requestId=approval-rivera-4"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=approval-rivera-4&nearby=true"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=approval-rivera-4&requestId=approval-rivera-5"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=unsafe%2Frequest"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=bad%"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=&attentionType=approval&requestId=approval-rivera-4"
+        }
+      },
+      {
+        origin: {
+          routeId: "clear-deck",
+          pathname: "/app/clear-the-deck/nearby",
+          search: ""
+        }
+      },
+      {
+        view: {
+          routeId: "clear-deck",
+          focus: {
+            kind: "decision-action",
+            objectId: "approval-rivera-5",
+            actionId: "review-workflow:approval-rivera-5"
+          }
+        }
+      },
+      {
+        view: {
+          routeId: "clear-deck",
+          focus: {
+            kind: "decision-action",
+            objectId: "approval-rivera-4",
+            actionId: "review-workflow:approval-rivera-5"
+          }
+        }
+      }
+    ];
+
+    for (const invalid of invalidInputs) {
+      const store = createWorkspaceReturnContextStore();
+      expect(decisionRoundTrip(store, invalid)).toEqual({ ok: false, reason: "invalid_context" });
+    }
+  });
+
+  test("does not accept an altered Workflow request token after commit", () => {
+    const store = createWorkspaceReturnContextStore();
+    const prepared = decisionRoundTrip(store);
+    expect(store.commit({ token: prepared.token, destinationEntry })).toEqual({ ok: true });
+    const alteredToken = {
+      ...prepared.token,
+      destination: {
+        ...prepared.token.destination,
+        search: "?attentionType=approval&quoteId=rivera-wedding&requestId=approval-rivera-5"
+      }
+    };
+    expect(store.resolveOrigin({
+      entry: destinationEntry,
+      state: withWorkspaceReturnContextState(null, alteredToken),
+      route: alteredToken.destination
+    })).toEqual({ ok: false, reason: "origin_unavailable" });
+  });
+
   test("keeps view state runtime-only while native Back resolves the exact adjacent origin", () => {
     vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("11111111-2222-4333-8444-555555555555");
     const store = createWorkspaceReturnContextStore();

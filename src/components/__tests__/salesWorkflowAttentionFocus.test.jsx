@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getQuoteById: vi.fn(),
   getQuoteHistory: vi.fn(),
+  resolveQuoteApprovalRequest: vi.fn(),
   updateQuoteFollowUp: vi.fn(),
   getRevenueAutopilotOperations: vi.fn(),
   acknowledgeRevenueAutopilotReply: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock("../../lib/quoteStore", () => ({
   getQuoteById: mocks.getQuoteById,
   getQuoteHistory: mocks.getQuoteHistory,
   requestQuoteApproval: vi.fn(),
-  resolveQuoteApprovalRequest: vi.fn(),
+  resolveQuoteApprovalRequest: mocks.resolveQuoteApprovalRequest,
   updateQuoteChangeRequestHandling: vi.fn(),
   updateQuoteFollowUp: mocks.updateQuoteFollowUp
 }));
@@ -43,6 +44,7 @@ import {
   buildFollowUpCompletionChangedFacts,
   isCanonicalWorkflowDateOnly,
   SalesWorkflowView,
+  verifyApprovalResolutionReadback,
   verifyFollowUpCompletionReadback
 } from "../SalesWorkflowModal";
 import {
@@ -123,6 +125,52 @@ function followUpTaskJourney(
   };
 }
 
+function approvalQuote(state = "pending") {
+  return {
+    ...quote(),
+    workflow: {
+      ...quote().workflow,
+      approvalRequests: [{
+        id: "approval-42",
+        action: "rotate_portal_link",
+        state,
+        note: "Customer says the original link was forwarded.",
+        requestedAtISO: "2026-09-03T04:00:00.000Z",
+        requestedByEmail: "sales@example.test",
+        resolvedAtISO: state === "pending" ? "" : "2026-09-03T05:49:00.000Z",
+        resolvedByEmail: state === "pending" ? "" : "admin@example.test",
+        resolutionNote: state === "pending" ? "" : "Reviewed exact request.",
+        executionState: state === "approved" ? "awaiting_execution" : ""
+      }]
+    }
+  };
+}
+
+function approvalTaskJourney(phase = "in_progress") {
+  return {
+    organizationId: "org-one",
+    startedAtISO: "2026-09-03T05:42:00.000Z",
+    taskId: "review-workflow:approval-42",
+    phase,
+    destination: "approval",
+    object: { id: "approval-42", type: "approval" },
+    focus: { quoteId: "quote-reply", requestId: "approval-42" },
+    intentId: "review_approval",
+    origin: { routeId: "clear-deck", pathname: "/app/clear-the-deck" }
+  };
+}
+
+function approvalArrivalContext() {
+  return {
+    surfaceId: "workflow",
+    focus: {
+      quoteId: "quote-reply",
+      attentionType: "approval",
+      requestId: "approval-42"
+    }
+  };
+}
+
 test("claims task completion only when App reports persisted task closure", () => {
   expect(buildFollowUpCompletionChangedFacts({
     status: "resolved",
@@ -135,6 +183,59 @@ test("claims task completion only when App reports persisted task closure", () =
   expect(buildFollowUpCompletionChangedFacts({ status: "resolved" })).toEqual([
     "Internal follow-up marked complete"
   ]);
+});
+
+describe("verifyApprovalResolutionReadback", () => {
+  const resolvedQuote = (request = {}) => ({
+    ...quote(),
+    workflow: {
+      ...quote().workflow,
+      approvalRequests: [{
+        id: "approval-42",
+        action: "rotate_portal_link",
+        state: "approved",
+        resolvedAtISO: "2026-09-08T12:00:00.000Z",
+        resolvedByEmail: "admin@example.test",
+        ...request
+      }]
+    }
+  });
+
+  test("returns proof only for the exact organization, quote, request, state, actor, and time", () => {
+    expect(verifyApprovalResolutionReadback({
+      organizationId: "org-one",
+      quoteId: "quote-reply",
+      requestId: "approval-42",
+      requestedState: "approved",
+      quote: resolvedQuote(),
+      nowISO: "2026-09-08T12:01:00.000Z"
+    })).toMatchObject({
+      ok: true,
+      proof: {
+        verifierId: "quote-approval-server-readback",
+        proofId: "approval-resolved:approval-42:2026-09-08T12:00:00.000Z",
+        proofType: "approval-resolution-confirmation"
+      }
+    });
+  });
+
+  test.each([
+    { input: { organizationId: "org-two" }, code: "scope_mismatch" },
+    { input: { requestId: "approval-nearby" }, code: "request_missing" },
+    { input: { quote: resolvedQuote({ state: "pending", resolvedAtISO: "", resolvedByEmail: "" }) }, code: "still_pending" },
+    { input: { requestedState: "rejected" }, code: "resolved_differently" },
+    { input: { quote: resolvedQuote({ resolvedByEmail: "" }) }, code: "invalid_resolution_evidence" }
+  ])("fails closed with $code", ({ input, code }) => {
+    expect(verifyApprovalResolutionReadback({
+      organizationId: "org-one",
+      quoteId: "quote-reply",
+      requestId: "approval-42",
+      requestedState: "approved",
+      quote: resolvedQuote(),
+      nowISO: "2026-09-08T12:01:00.000Z",
+      ...input
+    })).toMatchObject({ ok: false, code });
+  });
 });
 
 function deferred() {
@@ -257,6 +358,7 @@ beforeEach(() => {
   });
   mocks.getQuoteById.mockRejectedValue(new Error("No server readback configured."));
   mocks.updateQuoteFollowUp.mockRejectedValue(new Error("No follow-up write configured."));
+  mocks.resolveQuoteApprovalRequest.mockRejectedValue(new Error("No approval write configured."));
   mocks.getRevenueAutopilotOperations.mockResolvedValue(operations());
   mocks.getDecisionDebtSnapshot.mockResolvedValue(emptyDebt());
   mocks.acknowledgeRevenueAutopilotReply.mockResolvedValue({
@@ -546,6 +648,12 @@ describe("Sales Workflow central Attention focus", () => {
   });
 
   test("selects and focuses the exact Decision Debt item instead of searching primary Attention", async () => {
+    const onArrivalResolution = vi.fn();
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [],
+      truncated: true
+    });
     mocks.getDecisionDebtSnapshot.mockResolvedValue({
       policyVersion: "policy-one",
       snapshot: {
@@ -582,6 +690,15 @@ describe("Sales Workflow central Attention focus", () => {
           focusQuoteId="quote-reply"
           focusAttentionType="decision_debt"
           focusRequestId="debt-guest-count"
+          arrivalContext={{
+            surfaceId: "workflow",
+            focus: {
+              quoteId: "quote-reply",
+              attentionType: "decision_debt",
+              requestId: "debt-guest-count"
+            }
+          }}
+          onArrivalResolution={onArrivalResolution}
           onOpenQuoteHistory={() => {}}
           onClose={() => {}}
         />
@@ -594,6 +711,14 @@ describe("Sales Workflow central Attention focus", () => {
     expect(row).toBeTruthy();
     expect(row.scrollIntoView).toHaveBeenCalled();
     expect(document.activeElement).toBe(row);
+    expect(onArrivalResolution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "resolved",
+      focus: {
+        quoteId: "quote-reply",
+        attentionType: "decision_debt",
+        requestId: "debt-guest-count"
+      }
+    }));
   });
 
   test("confirms the exact follow-up only after a matching server-only readback", async () => {
@@ -612,7 +737,10 @@ describe("Sales Workflow central Attention focus", () => {
       followUp: completedFollowUp
     });
     mocks.getQuoteById.mockReturnValue(pendingReadback.promise);
-    const onTaskOutcome = vi.fn(() => ({ status: "resolved", taskState: "persisted" }));
+    const onTaskOutcome = vi.fn((outcome) => ({
+      status: outcome.phase,
+      taskState: "persisted"
+    }));
     const onAttentionSummaryChange = vi.fn();
     const journey = followUpTaskJourney();
 
@@ -690,7 +818,10 @@ describe("Sales Workflow central Attention focus", () => {
     const initialQuote = followUpQuote();
     const completedQuote = followUpQuote({ completed: true });
     const completedFollowUp = completedQuote.workflow.followUp;
-    const onTaskOutcome = vi.fn(() => ({ status: "resolved", taskState: "persisted" }));
+    const onTaskOutcome = vi.fn((outcome) => ({
+      status: outcome.phase,
+      taskState: "persisted"
+    }));
     const onToast = vi.fn();
     const journey = followUpTaskJourney();
     mocks.getQuoteHistory.mockResolvedValue({
@@ -2033,5 +2164,486 @@ describe("Sales Workflow central Attention focus", () => {
     expect(review.disabled).toBe(false);
     act(() => review.click());
     expect(onOpenCustomer).toHaveBeenCalledWith("customer-henderson");
+  });
+
+  test("labels a direct exact Workflow arrival without claiming a Clear Deck origin", async () => {
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [approvalQuote("pending")],
+      truncated: false
+    });
+
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="admin"
+          currentUserEmail="admin@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="approval"
+          focusRequestId="approval-42"
+          arrivalContext={approvalArrivalContext()}
+          onArrivalResolution={vi.fn()}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const context = container.querySelector(".approval-decision-context");
+    expect(context?.textContent).toContain("Exact Workflow decision");
+    expect(context?.textContent).not.toContain("Decision opened from Clear the Deck");
+  });
+
+  test("fails closed on approval when the exact request no longer has eligible current evidence", async () => {
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [{ ...approvalQuote("pending"), status: "declined" }],
+      truncated: false
+    });
+
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="admin"
+          currentUserEmail="admin@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="approval"
+          focusRequestId="approval-42"
+          arrivalContext={approvalArrivalContext()}
+          onArrivalResolution={vi.fn()}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(".inline-alert")?.textContent)
+      .toContain("Current evidence does not support approval");
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Approve"
+    )).toBe(false);
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Reject"
+    )).toBe(true);
+  });
+
+  test("withdraws approval while exact evidence refreshes and after a retained-read failure", async () => {
+    const pendingRefresh = deferred();
+    mocks.getQuoteHistory
+      .mockResolvedValueOnce({
+        source: "firebase",
+        quotes: [approvalQuote("pending")],
+        truncated: false
+      })
+      .mockReturnValueOnce(pendingRefresh.promise);
+
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="admin"
+          currentUserEmail="admin@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="approval"
+          focusRequestId="approval-42"
+          arrivalContext={approvalArrivalContext()}
+          onArrivalResolution={vi.fn()}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Approve"
+    )).toBe(true);
+
+    act(() => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent === "Refresh")
+        ?.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Approve"
+    )).toBe(false);
+    expect(container.querySelector(".inline-alert")?.textContent)
+      .toContain("Current evidence does not support approval");
+
+    await act(async () => {
+      pendingRefresh.reject(new Error("Exact workflow read failed."));
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Approve"
+    )).toBe(false);
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Reject"
+    )).toBe(true);
+  });
+
+  test("withdraws approval when the exact workflow read is truncated", async () => {
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [approvalQuote("pending")],
+      truncated: true
+    });
+
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="admin"
+          currentUserEmail="admin@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="approval"
+          focusRequestId="approval-42"
+          arrivalContext={approvalArrivalContext()}
+          onArrivalResolution={vi.fn()}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Approve"
+    )).toBe(false);
+    expect(container.querySelector(".inline-alert")?.textContent)
+      .toContain("Current evidence does not support approval");
+  });
+
+  test("persists the uncertain duplicate-write fence before dispatching a tracked approval", async () => {
+    const pendingQuote = approvalQuote("pending");
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [pendingQuote],
+      truncated: false
+    });
+    mocks.resolveQuoteApprovalRequest.mockResolvedValue({
+      ok: true,
+      storage: "local",
+      request: pendingQuote.workflow.approvalRequests[0]
+    });
+    const onTaskOutcome = vi.fn((outcome) => ({
+      status: outcome.phase,
+      taskState: "persisted"
+    }));
+
+    await act(async () => {
+      root.render(
+        <FeedbackHarness
+          scope={{ organizationId: "org-one", principalId: "admin-one", role: "admin" }}
+        >
+          <SalesWorkflowView
+            open
+            presentation="embedded"
+            organizationId="org-one"
+            currentUserRole="admin"
+            currentUserEmail="admin@example.test"
+            tenantTimeZone="America/Chicago"
+            focusQuoteId="quote-reply"
+            focusAttentionType="approval"
+            focusRequestId="approval-42"
+            arrivalContext={approvalArrivalContext()}
+            activeTaskJourney={approvalTaskJourney()}
+            onTaskOutcome={onTaskOutcome}
+            onOpenQuoteHistory={() => {}}
+            onClose={() => {}}
+          />
+        </FeedbackHarness>
+      );
+    });
+    await settle();
+    const approve = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Approve"
+    );
+    await act(async () => {
+      approve.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(onTaskOutcome.mock.calls[0][0]).toMatchObject({
+      phase: "uncertain",
+      taskId: "review-workflow:approval-42"
+    });
+    expect(onTaskOutcome.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.resolveQuoteApprovalRequest.mock.invocationCallOrder[0]);
+    expect(document.activeElement).toBe(
+      container.querySelector(".approval-resolution-receipt.state-uncertain")
+    );
+  });
+
+  test("confirms an exact approval only after server readback and produces a governed outcome", async () => {
+    const pendingQuote = approvalQuote("pending");
+    const resolvedQuote = approvalQuote("approved");
+    const onTaskOutcome = vi.fn((outcome) => ({
+      status: outcome.phase,
+      taskState: "persisted"
+    }));
+    const onArrivalResolution = vi.fn();
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [pendingQuote],
+      truncated: false
+    });
+    mocks.resolveQuoteApprovalRequest.mockResolvedValue({
+      ok: true,
+      storage: "firebase",
+      request: resolvedQuote.workflow.approvalRequests[0]
+    });
+    mocks.getQuoteById.mockResolvedValue(resolvedQuote);
+
+    await act(async () => {
+      root.render(
+        <FeedbackHarness
+          idFactory={() => "attempt-approval-42"}
+          scope={{ organizationId: "org-one", principalId: "admin-one", role: "admin" }}
+        >
+          <SalesWorkflowView
+            open
+            presentation="embedded"
+            organizationId="org-one"
+            currentUserRole="admin"
+            currentUserEmail="admin@example.test"
+            tenantTimeZone="America/Chicago"
+            focusQuoteId="quote-reply"
+            focusAttentionType="approval"
+            focusRequestId="approval-42"
+            arrivalContext={approvalArrivalContext()}
+            activeTaskJourney={approvalTaskJourney()}
+            onTaskOutcome={onTaskOutcome}
+            onArrivalResolution={onArrivalResolution}
+            onOpenQuoteHistory={() => {}}
+            onClose={() => {}}
+          />
+        </FeedbackHarness>
+      );
+    });
+    await settle();
+    const approve = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Approve"
+    );
+    await act(async () => {
+      approve.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(mocks.resolveQuoteApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.getQuoteById).toHaveBeenCalledWith("quote-reply", { serverOnly: true });
+    expect(onTaskOutcome).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: "review-workflow:approval-42",
+      phase: "resolved",
+      proof: expect.objectContaining({
+        verifierId: "quote-approval-server-readback",
+        proofType: "approval-resolution-confirmation"
+      })
+    }));
+    expect(container.querySelector(".approval-resolution-receipt.state-confirmed")?.textContent)
+      .toContain("Approval request approved");
+    await settle();
+    expect(document.activeElement).toBe(
+      container.querySelector(".approval-resolution-receipt.state-confirmed")
+    );
+    expect(onArrivalResolution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "resolved",
+      focus: {
+        quoteId: "quote-reply",
+        attentionType: "approval",
+        requestId: "approval-42"
+      }
+    }));
+    expect(onArrivalResolution).not.toHaveBeenCalledWith(expect.objectContaining({
+      status: "recovery"
+    }));
+    const feedback = JSON.parse(
+      container.querySelector('[data-testid="workspace-action-feedback-probe"]').textContent
+    ).currentFeedback;
+    expect(feedback).toMatchObject({
+      actionId: "resolve-approval",
+      phase: "succeeded",
+      evidence: { kind: "authoritative_readback" }
+    });
+  });
+
+  test("reconciles an uncertain approval by readback without repeating the mutation", async () => {
+    const pendingQuote = approvalQuote("pending");
+    const resolvedQuote = approvalQuote("approved");
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [pendingQuote],
+      truncated: false
+    });
+    mocks.resolveQuoteApprovalRequest.mockRejectedValue(new Error("Connection closed after dispatch."));
+    mocks.getQuoteById
+      .mockResolvedValueOnce(pendingQuote)
+      .mockResolvedValueOnce(resolvedQuote);
+    const onTaskOutcome = vi.fn((outcome) => ({
+      status: outcome.phase === "resolved" ? "resolved" : "uncertain",
+      taskState: "persisted"
+    }));
+
+    await act(async () => {
+      root.render(
+        <FeedbackHarness
+          idFactory={() => "attempt-approval-uncertain"}
+          scope={{ organizationId: "org-one", principalId: "admin-one", role: "admin" }}
+        >
+          <SalesWorkflowView
+            open
+            presentation="embedded"
+            organizationId="org-one"
+            currentUserRole="admin"
+            currentUserEmail="admin@example.test"
+            tenantTimeZone="America/Chicago"
+            focusQuoteId="quote-reply"
+            focusAttentionType="approval"
+            focusRequestId="approval-42"
+            arrivalContext={approvalArrivalContext()}
+            activeTaskJourney={approvalTaskJourney()}
+            onTaskOutcome={onTaskOutcome}
+            onOpenQuoteHistory={() => {}}
+            onClose={() => {}}
+          />
+        </FeedbackHarness>
+      );
+    });
+    await settle();
+    const approve = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Approve"
+    );
+    await act(async () => {
+      approve.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(container.querySelector(".approval-resolution-receipt.state-uncertain")?.textContent)
+      .toContain("Do not submit this approval again");
+    const reconcile = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Check current approval state"
+    );
+    await act(async () => {
+      reconcile.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(mocks.resolveQuoteApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.getQuoteById).toHaveBeenCalledTimes(2);
+    expect(container.querySelector(".approval-resolution-receipt.state-confirmed")?.textContent)
+      .toContain("Approval request approved");
+  });
+
+  test("restores an uncertain approval task without exposing a blind duplicate decision", async () => {
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [approvalQuote("pending")],
+      truncated: false
+    });
+
+    await act(async () => {
+      root.render(
+        <FeedbackHarness
+          scope={{ organizationId: "org-one", principalId: "admin-one", role: "admin" }}
+        >
+          <SalesWorkflowView
+            open
+            presentation="embedded"
+            organizationId="org-one"
+            currentUserRole="admin"
+            currentUserEmail="admin@example.test"
+            tenantTimeZone="America/Chicago"
+            focusQuoteId="quote-reply"
+            focusAttentionType="approval"
+            focusRequestId="approval-42"
+            arrivalContext={approvalArrivalContext()}
+            activeTaskJourney={approvalTaskJourney("uncertain")}
+            onTaskOutcome={vi.fn()}
+            onOpenQuoteHistory={() => {}}
+            onClose={() => {}}
+          />
+        </FeedbackHarness>
+      );
+    });
+    await settle();
+
+    const restored = container.querySelector(".approval-resolution-receipt.state-uncertain");
+    expect(restored?.textContent).toContain("Uncertain operation restored");
+    expect(restored?.textContent).toContain("explicitly stop tracking the old attempt");
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Approve" || button.textContent === "Reject"
+    )).toBe(false);
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Refresh exact approval evidence"
+    )).toBe(true);
+    expect(mocks.resolveQuoteApprovalRequest).not.toHaveBeenCalled();
+  });
+
+  test("restores a resolved approval journey to current outcome history without false recovery", async () => {
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [approvalQuote("approved")],
+      truncated: false
+    });
+    const onArrivalResolution = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="admin"
+          currentUserEmail="admin@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="approval"
+          focusRequestId="approval-42"
+          arrivalContext={approvalArrivalContext()}
+          activeTaskJourney={approvalTaskJourney("resolved")}
+          onArrivalResolution={onArrivalResolution}
+          onTaskOutcome={vi.fn()}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(container.querySelector(".approval-resolution-summary")?.textContent)
+      .toContain("Approved, awaiting admin action");
+    expect(onArrivalResolution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "resolved",
+      itemId: "approval-42"
+    }));
+    expect(onArrivalResolution).not.toHaveBeenCalledWith(expect.objectContaining({
+      status: "recovery"
+    }));
   });
 });

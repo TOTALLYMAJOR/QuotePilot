@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import StatusChip from "./StatusChip";
 import { lazy, Suspense } from "react";
 const EventOperationsPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
@@ -11,6 +12,9 @@ import StaffEvidenceRail from "./StaffEvidenceRail";
 import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
+import { useWorkspaceReturnContextAdapter } from "../context/WorkspaceNavigationContext";
+import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
+import { buildClearDeckDecisionPresentations } from "../lib/decisionResolutionPresentation";
 import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
@@ -373,12 +377,130 @@ export function ClearDeckView({
   onOpenWorkflow
 }) {
   const headingRef = useWorkspaceRouteHeadingFocus(true);
-  const items = snapshot?.attentionSummary?.items || [];
-  const decisionItems = items.filter((item) => ["approval", "decision_debt"].includes(item.type)).slice(0, 3);
+  const restoreCancelRef = useRef(null);
+  const returnStateRef = useRef({ decisionItems: [], incompleteRead: true });
+  const projection = useMemo(() => {
+    try {
+      const loadedAt = snapshot?.loadedAt;
+      const parsed = typeof loadedAt === "number" ? new Date(loadedAt) : new Date(String(loadedAt || ""));
+      const quoteById = new Map(
+        (Array.isArray(snapshot?.quotes) ? snapshot.quotes : []).map((quote) => [
+          String(quote?.id || "").trim(),
+          quote
+        ])
+      );
+      const decisionDebtItems = (Array.isArray(snapshot?.decisionDebtItems)
+        ? snapshot.decisionDebtItems
+        : []).map((item) => ({
+          ...item,
+          type: "decision_debt",
+          quote: quoteById.get(String(item?.quoteId || "").trim()) || null
+        }));
+      const projectionSnapshot = decisionDebtItems.length
+        ? {
+            ...snapshot,
+            items: [
+              ...(Array.isArray(snapshot?.attentionSummary?.items)
+                ? snapshot.attentionSummary.items
+                : []),
+              ...decisionDebtItems
+            ]
+          }
+        : snapshot;
+      return {
+        decisions: buildClearDeckDecisionPresentations(projectionSnapshot, {
+          nowISO: Number.isFinite(parsed.getTime()) ? parsed.toISOString() : ""
+        }),
+        error: ""
+      };
+    } catch (error) {
+      return {
+        decisions: [],
+        error: error?.message || "Decision identity could not be verified."
+      };
+    }
+  }, [snapshot]);
+  const decisionItems = projection.decisions;
+  const incompleteRead = Boolean(
+    snapshot?.loading
+    || snapshot?.error
+    || snapshot?.partial
+    || snapshot?.stale
+    || snapshot?.truncated
+    || projection.error
+  );
+  returnStateRef.current = { decisionItems, incompleteRead };
+
+  const captureClearDeckReturnView = useCallback((hint = {}) => ({
+    routeId: "clear-deck",
+    structured: {},
+    disclosureIds: [],
+    scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+    focus: hint?.focus || { kind: "route-heading" }
+  }), []);
+  const restoreClearDeckReturnView = useCallback((view) => {
+    restoreCancelRef.current?.();
+    return new Promise((resolve) => {
+      let active = true;
+      let frameId = null;
+      let attempt = 0;
+      const finish = (status) => resolve({ status });
+      const restore = () => {
+        if (!active) return;
+        const focus = view?.focus || {};
+        const currentReturnState = returnStateRef.current;
+        const root = headingRef.current?.closest("main");
+        const target = focus.kind === "decision-action"
+          ? Array.from(root?.querySelectorAll("[data-decision-action-id]") || []).find((element) => (
+              element.dataset.decisionActionId === focus.actionId
+              && element.closest("[data-decision-request-id]")?.dataset.decisionRequestId === focus.objectId
+            ))
+          : headingRef.current;
+        const obligationReconciled = focus.kind === "decision-action"
+          && !currentReturnState.incompleteRead
+          && !currentReturnState.decisionItems.some((item) => item.requestId === focus.objectId);
+        const targetIsCurrent = Boolean(target && !currentReturnState.incompleteRead);
+        if (!targetIsCurrent && !obligationReconciled && attempt < 30) {
+          attempt += 1;
+          frameId = window.requestAnimationFrame(restore);
+          return;
+        }
+        restoreCancelRef.current = null;
+        restoreWorkspaceReturnViewport({
+          focusTarget: targetIsCurrent ? target : headingRef.current,
+          scrollY: view?.scrollY
+        });
+        finish(targetIsCurrent || obligationReconciled ? "restored" : "recovery");
+      };
+      restoreCancelRef.current = () => {
+        active = false;
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        finish("cancelled");
+      };
+      frameId = window.requestAnimationFrame(restore);
+    });
+  }, [headingRef]);
+  useWorkspaceReturnContextAdapter({
+    routeId: "clear-deck",
+    capture: captureClearDeckReturnView,
+    restore: restoreClearDeckReturnView
+  });
+  useEffect(() => () => restoreCancelRef.current?.(), []);
 
   return (
     <main className="container workspace-route-main live-ops-route">
-      <section className="panel live-ops-panel" aria-labelledby="clear-deck-heading">
+      <section
+        className="panel live-ops-panel"
+        aria-labelledby="clear-deck-heading"
+        data-capability-id="qp-uxr-002-decision-resolution"
+        data-capability-state={projection.error
+          ? "error"
+          : incompleteRead
+            ? "partial"
+            : decisionItems.length
+              ? "success"
+              : "empty"}
+      >
         <div className="command-center-head">
           <div>
             <p className="eyebrow">Clear the Deck</p>
@@ -391,24 +513,76 @@ export function ClearDeckView({
           </button>
         </div>
         <EvidenceRail snapshot={snapshot} organizationName={organizationName} organizationId={organizationId} />
-        <LiveAuthorityNotice />
-        {!decisionItems.length && !snapshot?.loading && !snapshot?.error && (
+        {projection.error && (
+          <div className="inline-alert" role="alert">
+            <strong>Decision context is not safe to present.</strong>
+            <span>{projection.error} Refresh before opening or resolving a request.</span>
+          </div>
+        )}
+        {!decisionItems.length && !incompleteRead && (
           <p className="source-note">
-            No decision items appear in this bounded snapshot. Clear the Deck will stay review-only until durable decision receipts ship.
+            No pending approval decisions appear in this complete bounded snapshot.
+          </p>
+        )}
+        {!decisionItems.length && incompleteRead && !projection.error && (
+          <p className="source-note" role="status">
+            No decisions are shown, but the bounded evidence is incomplete. Refresh before treating the deck as clear.
           </p>
         )}
         {decisionItems.map((item) => (
-          <article key={item.id} className="live-ops-decision">
-            <StatusChip family="warning" label={item.type === "approval" ? "Approval" : "Decision"} />
-            <h3>{formatWorkspaceText(item.quote?.quoteNumber || item.quoteId, { emptyLabel: "Quote decision" })}</h3>
-            <p className="source-note">
-              Review the current source evidence in Workflow. Skip/defer does not resolve this item in this slice.
-            </p>
-            <button type="button" className="cta" onClick={() => onOpenWorkflow?.({
-              quoteId: item.quoteId,
-              attentionType: item.type,
-              requestId: item.sourceRequestId || item.id
-            })}>
+          <article
+            key={item.stableId}
+            className="live-ops-decision clear-deck-decision"
+            data-decision-request-id={item.requestId}
+          >
+            <div className="clear-deck-decision__heading">
+              <div>
+                <StatusChip
+                  family={item.reviewable ? "warning" : "muted"}
+                  label={item.attentionType === "approval" ? "Approval" : "Decision"}
+                />
+                <h3>{item.title}</h3>
+                <p>{item.eventLabel} · {item.customerLabel}</p>
+              </div>
+              <p className="clear-deck-decision__quote">{item.quoteLabel} · {item.lifecycleLabel}</p>
+            </div>
+            <p className="clear-deck-decision__request">{item.requestSummary}</p>
+            <dl className="clear-deck-decision__facts">
+              <div><dt>{item.stakeLabel}</dt><dd>{item.stakeValue}</dd></div>
+              <div><dt>{item.timingLabel}</dt><dd>{item.timingValue}</dd></div>
+              <div><dt>{item.requestAgeLabel}</dt><dd>{item.requestAgeValue}</dd></div>
+              <div><dt>Requested by</dt><dd>{item.requesterLabel}</dd></div>
+              <div><dt>{item.sourceRevisionTitle}</dt><dd>{item.sourceRevisionLabel}</dd></div>
+              <div><dt>Evidence</dt><dd>{item.evidenceSourceLabel}</dd></div>
+            </dl>
+            <div className="clear-deck-decision__meaning">
+              <p><strong>Dependencies</strong><span>{item.dependencySummary}</span></p>
+              <p><strong>Authority</strong><span>{item.authoritySummary}</span></p>
+              <p><strong>Evidence boundary</strong><span>{item.evidenceSummary}</span></p>
+            </div>
+            <p className="source-note">{item.nextStepSummary}</p>
+            <button
+              type="button"
+              className="cta"
+              data-decision-action-id={`review-workflow:${item.requestId}`}
+              onClick={() => onOpenWorkflow?.({
+                quoteId: item.quoteId,
+                attentionType: item.attentionType,
+                requestId: item.requestId,
+                actionId: `review-workflow:${item.requestId}`
+              }, {
+                actionId: `review-workflow:${item.requestId}`,
+                preserveReturnContext: true,
+                returnContextSurfaceId: "decision-resolution",
+                returnContextHint: {
+                  focus: {
+                    kind: "decision-action",
+                    objectId: item.requestId,
+                    actionId: `review-workflow:${item.requestId}`
+                  }
+                }
+              })}
+            >
               Review in Workflow
             </button>
           </article>

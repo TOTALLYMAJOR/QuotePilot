@@ -164,6 +164,37 @@ describe("StaffEvidenceRail", () => {
     expect(partialMarkup).toContain('data-capability-state="partial"');
   });
 
+  test("includes the optional Decision Debt read in Clear the Deck completeness", () => {
+    const completeMarkup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        source="firebase"
+        loadedAt={1}
+        reads={{
+          attention: { status: "success" },
+          history: { status: "success" },
+          unreadReplies: { status: "success" },
+          decisionDebt: { status: "success" }
+        }}
+      />
+    );
+    const partialMarkup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        source="firebase"
+        partial
+        error="Decision Debt unavailable."
+        reads={{
+          attention: { status: "success" },
+          history: { status: "success" },
+          unreadReplies: { status: "success" },
+          decisionDebt: { status: "error" }
+        }}
+      />
+    );
+
+    expect(completeMarkup).toContain("All four tenant reads completed.");
+    expect(partialMarkup).toContain("Decision Debt did not complete.");
+  });
+
   test("keeps the standard presentation as the default", () => {
     const markup = renderToStaticMarkup(
       <StaffEvidenceRail

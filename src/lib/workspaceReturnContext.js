@@ -1,3 +1,5 @@
+import { buildWorkflowPath } from "./workspaceRoutes";
+
 export const WORKSPACE_RETURN_CONTEXT_MODEL_ID = "workspace-return-context-v1";
 export const WORKSPACE_RETURN_CONTEXT_STATE_KEY = "workspaceReturnContext";
 
@@ -7,9 +9,11 @@ const RETURNABLE_ROUTE_IDS = new Set([
   "quote-detail",
   "customer-list",
   "customer-detail",
-  "catalog"
+  "catalog",
+  "clear-deck"
 ]);
-const DESTINATION_ROUTE_IDS = new Set(["quote-detail", "customer-detail", "catalog"]);
+const DESTINATION_ROUTE_IDS = new Set(["quote-detail", "customer-detail", "catalog", "workflow"]);
+const CLEAR_DECK_ATTENTION_TYPES = new Set(["approval", "decision_debt"]);
 const CLIENT_DIRECTORY_FILTERS = new Set(["all", "linked", "upcoming", "contact_gap"]);
 const CLIENT_OVERVIEW_TABS = new Set(["overview", "quotes", "events", "money", "conversations"]);
 const QUOTE_STATUS_FILTERS = new Set(["all", "draft", "submitted", "archived"]);
@@ -24,26 +28,30 @@ const FOCUS_KINDS = new Set([
   "client-overview-tab",
   "library-action",
   "library-disclosure",
-  "quick-updates"
+  "quick-updates",
+  "decision-action"
 ]);
 const SURFACE_IDS = new Set([
   "living-opportunity",
   "client-overview",
   "ambient-library",
-  "library-editor"
+  "library-editor",
+  "decision-resolution"
 ]);
 const ALLOWED_ROUTE_PAIRS = new Set([
   "quote-list:quote-detail",
   "customer-list:customer-detail",
   "customer-detail:quote-detail",
   "quote-detail:catalog",
-  "catalog:catalog"
+  "catalog:catalog",
+  "clear-deck:workflow"
 ]);
 const SURFACE_ROUTE_PAIRS = Object.freeze({
   "living-opportunity": new Set(["quote-list:quote-detail", "customer-detail:quote-detail"]),
   "client-overview": new Set(["customer-list:customer-detail"]),
   "ambient-library": new Set(["quote-detail:catalog"]),
-  "library-editor": new Set(["catalog:catalog"])
+  "library-editor": new Set(["catalog:catalog"]),
+  "decision-resolution": new Set(["clear-deck:workflow"])
 });
 const runtimeStoreByWindow = new WeakMap();
 
@@ -206,6 +214,8 @@ function normalizePathname(routeId, value) {
   if (routeId === "quote-list") return pathname === "/app/quotes" ? pathname : "";
   if (routeId === "customer-list") return pathname === "/app/customers" ? pathname : "";
   if (routeId === "catalog") return pathname === "/app/catalog" ? pathname : "";
+  if (routeId === "clear-deck") return pathname === "/app/clear-the-deck" ? pathname : "";
+  if (routeId === "workflow") return pathname === "/app/workflow" ? pathname : "";
   if (routeId === "quote-detail") {
     return /^\/app\/quotes\/(?!new(?:\/|$))[^/]+$/u.test(pathname) ? pathname : "";
   }
@@ -217,13 +227,16 @@ function normalizePathname(routeId, value) {
 
 function normalizeSearch(routeId, value) {
   const raw = String(value || "");
-  if (!raw) return "";
+  if (!raw) return routeId === "workflow" ? null : "";
   if (!raw.startsWith("?") || raw.length > 1_024) return null;
+  if (routeId === "workflow" && /%(?![0-9a-f]{2})/iu.test(raw)) return null;
   const params = new URLSearchParams(raw.slice(1));
   const allowed = routeId === "quote-list"
     ? new Set(["eventType", "status"])
     : routeId === "customer-list"
       ? new Set(["view"])
+      : routeId === "workflow"
+        ? new Set(["quoteId", "attentionType", "requestId"])
       : new Set();
   if ([...params.keys()].some((key) => !allowed.has(key))) return null;
   if (routeId === "quote-list") {
@@ -237,6 +250,20 @@ function normalizeSearch(routeId, value) {
     if (params.getAll("view").length > 1) return null;
     const view = params.get("view");
     if (view && !CLIENT_DIRECTORY_FILTERS.has(view)) return null;
+  }
+  if (routeId === "workflow") {
+    if (["quoteId", "attentionType", "requestId"].some((key) => params.getAll(key).length !== 1)) {
+      return null;
+    }
+    const quoteId = params.get("quoteId");
+    const attentionType = params.get("attentionType");
+    const requestId = params.get("requestId");
+    if (!quoteId || !requestId || !CLEAR_DECK_ATTENTION_TYPES.has(attentionType)) return null;
+    try {
+      buildWorkflowPath({ quoteId, attentionType, requestId });
+    } catch {
+      return null;
+    }
   }
   params.sort();
   const normalized = params.toString();
@@ -318,6 +345,16 @@ function transitionMatchesView({ origin, destination, surfaceId, view, destinati
       && focus.kind === "library-action"
       && focus.objectId === expectedId
       && focus.actionId === destinationView.actionId
+    );
+  }
+  if (surfaceId === "decision-resolution") {
+    const params = new URLSearchParams(String(destination.search || "").replace(/^\?/u, ""));
+    const requestId = params.get("requestId") || "";
+    return Boolean(
+      requestId
+      && focus.kind === "decision-action"
+      && focus.objectId === requestId
+      && focus.actionId === `review-workflow:${requestId}`
     );
   }
   return false;

@@ -226,6 +226,70 @@ describe("buildCommercialSnapshotResult", () => {
     });
   });
 
+  test("retains the existing bounded Decision Debt projection for Clear the Deck composition", () => {
+    const debtItem = {
+      id: "decision-debt-42",
+      quoteId: "quote-1",
+      sourceRevisionId: "v0004",
+      decisionType: "final_guest_count",
+      label: "Confirm final guest count"
+    };
+    const result = buildCommercialSnapshotResult({
+      current: { loadedAt: 0, source: "", attentionSummary: null, quotes: [], truncated: false },
+      attentionResult,
+      historyResult: {
+        status: "fulfilled",
+        value: { source: "firebase", quotes: [{ id: "quote-1" }], truncated: false }
+      },
+      decisionDebtResult: {
+        status: "fulfilled",
+        value: {
+          source: "firebase_server_projection",
+          items: [debtItem],
+          bounds: { truncated: true, known: true }
+        }
+      },
+      includeDecisionDebt: true,
+      nowMs: 3456
+    });
+
+    expect(result).toMatchObject({
+      loadedAt: 3456,
+      source: "firebase",
+      partial: false,
+      stale: false,
+      truncated: true,
+      truncationKnown: true,
+      decisionDebtItems: [debtItem],
+      decisionDebtBounds: { truncated: true, known: true },
+      reads: {
+        decisionDebt: { status: "success", source: "firebase_server_projection" }
+      }
+    });
+  });
+
+  test("fails the Clear the Deck snapshot closed when Decision Debt cannot be read", () => {
+    const result = buildCommercialSnapshotResult({
+      current: { loadedAt: 0, source: "", attentionSummary: null, quotes: [], truncated: false },
+      attentionResult,
+      historyResult,
+      decisionDebtResult: {
+        status: "rejected",
+        reason: new Error("Decision Debt unavailable.")
+      },
+      includeDecisionDebt: true,
+      nowMs: 3456
+    });
+
+    expect(result).toMatchObject({
+      loadedAt: 0,
+      partial: true,
+      stale: false,
+      error: "Decision Debt unavailable.",
+      reads: { decisionDebt: { status: "error" } }
+    });
+  });
+
   test("derives a tenant-week anniversary cue from the same bounded quote-history read", () => {
     const result = buildCommercialSnapshotResult({
       current: { loadedAt: 0, source: "", attentionSummary: null, quotes: [], truncated: false },

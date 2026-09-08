@@ -37,10 +37,13 @@ function contractOutcome(reads = {}, { retained = false } = {}) {
     const definitions = [
       ["Workflow attention", attention],
       ["quote history", history],
-      ["unread customer-reply Attention", unreadReplies]
+      ["unread customer-reply Attention", unreadReplies],
+      ...(reads?.decisionDebt
+        ? [["Decision Debt", readStatus(reads, "decisionDebt")]]
+        : [])
     ];
     if (definitions.every(([, status]) => status === "success")) {
-      return "All three tenant reads completed.";
+      return `All ${definitions.length === 4 ? "four" : "three"} tenant reads completed.`;
     }
     const completed = definitions.filter(([, status]) => status === "success").map(([label]) => label);
     const failed = definitions.filter(([, status]) => status === "error").map(([label]) => label);
@@ -224,7 +227,7 @@ export default function StaffEvidenceRail({
   reads = {},
   historyLimit = 200,
   title = "Staff read context",
-  readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, plus the latest 200 staff quote records",
+  readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, optional Decision Debt projection, plus the latest 200 staff quote records",
   presentation = "standard"
 }) {
   const model = buildStaffEvidenceRailModel({
@@ -253,7 +256,7 @@ export default function StaffEvidenceRail({
       readContract={readContract}
       presentation={presentation}
       outcome={contractOutcome(reads, { retained: model.state === "stale" })}
-      boundsNote={`Quote history is capped at the latest ${historyLimit} records and unread customer-reply Attention at 50 records; open Quotes or Workflow for the authoritative records.`}
+      boundsNote={`Quote history is capped at the latest ${historyLimit} records, unread customer-reply Attention at 50 records, and any requested Decision Debt read at its server bound; open Quotes or Workflow for the authoritative records.`}
     />
   );
 }

@@ -42,11 +42,14 @@ function emptySnapshot({ loading = false } = {}) {
     reads: {
       attention: emptyReadState(),
       history: emptyReadState(),
-      unreadReplies: emptyReadState()
+      unreadReplies: emptyReadState(),
+      decisionDebt: emptyReadState()
     },
     partial: false,
     stale: false,
     attentionSummary: null,
+    decisionDebtItems: [],
+    decisionDebtBounds: { truncated: false, known: false },
     quotes: [],
     truncated: false,
     truncationKnown: false,
@@ -77,6 +80,14 @@ function emptyUnreadReplyRead({ boundsKnown = false } = {}) {
   };
 }
 
+function emptyDecisionDebtRead({ boundsKnown = false } = {}) {
+  return {
+    source: "",
+    items: [],
+    bounds: { truncated: false, known: boundsKnown }
+  };
+}
+
 function sourceFamily(value) {
   const source = String(value || "").trim().toLowerCase();
   if (source.startsWith("firebase")) return "firebase";
@@ -92,23 +103,51 @@ async function readUnreadReplyAttention(organizationId) {
   });
 }
 
+async function readDecisionDebtAttention(organizationId) {
+  const { getDecisionDebtSnapshot } = await import("../lib/decisionDebtClient");
+  const result = await getDecisionDebtSnapshot({ organizationId, limit: 100 });
+  return {
+    source: "firebase_server_projection",
+    items: result.snapshot.items,
+    bounds: { ...result.snapshot.bounds, known: true }
+  };
+}
+
 export function buildCommercialSnapshotResult({
   current = emptySnapshot(),
   attentionResult,
   historyResult,
   unreadReplyResult = { status: "fulfilled", value: emptyUnreadReplyRead() },
+  decisionDebtResult = { status: "fulfilled", value: emptyDecisionDebtRead() },
+  includeDecisionDebt = false,
   tenantTimeZone = "",
   nowMs = Date.now()
 } = {}) {
   const attentionRead = settledReadState(attentionResult);
   const historyRead = settledReadState(historyResult);
   const unreadRepliesRead = settledReadState(unreadReplyResult);
-  const readResults = [attentionResult, historyResult, unreadReplyResult];
-  const errors = [attentionRead.error, historyRead.error, unreadRepliesRead.error].filter(Boolean);
+  const decisionDebtRead = settledReadState(decisionDebtResult);
+  const readResults = [
+    attentionResult,
+    historyResult,
+    unreadReplyResult,
+    ...(includeDecisionDebt ? [decisionDebtResult] : [])
+  ];
+  const errors = [
+    attentionRead.error,
+    historyRead.error,
+    unreadRepliesRead.error,
+    ...(includeDecisionDebt ? [decisionDebtRead.error] : [])
+  ].filter(Boolean);
   const requestSucceeded = readResults.every((result) => result.status === "fulfilled");
   const partial = !requestSucceeded
     && readResults.some((result) => result.status === "fulfilled");
-  const successfulSources = [attentionRead.source, historyRead.source, unreadRepliesRead.source]
+  const successfulSources = [
+    attentionRead.source,
+    historyRead.source,
+    unreadRepliesRead.source,
+    ...(includeDecisionDebt ? [decisionDebtRead.source] : [])
+  ]
     .map(sourceFamily)
     .filter(Boolean);
   const sourceSet = new Set(successfulSources);
@@ -156,6 +195,14 @@ export function buildCommercialSnapshotResult({
     && freshUnreadReplyTotal > freshUnreadReplyCount;
   const freshUnreadReplyBoundsKnown = unreadReplyResult.status === "fulfilled"
     && unreadReplyResult.value?.bounds?.known !== false;
+  const freshDecisionDebtItems = decisionDebtResult.status === "fulfilled"
+    && Array.isArray(decisionDebtResult.value?.items)
+    ? decisionDebtResult.value.items
+    : [];
+  const freshDecisionDebtTruncated = decisionDebtResult.status === "fulfilled"
+    && decisionDebtResult.value?.bounds?.truncated === true;
+  const freshDecisionDebtBoundsKnown = decisionDebtResult.status === "fulfilled"
+    && decisionDebtResult.value?.bounds?.known === true;
 
   return {
     loading: false,
@@ -164,13 +211,23 @@ export function buildCommercialSnapshotResult({
     reads: {
       attention: attentionRead,
       history: historyRead,
-      unreadReplies: unreadRepliesRead
+      unreadReplies: unreadRepliesRead,
+      ...(includeDecisionDebt ? { decisionDebt: decisionDebtRead } : {})
     },
     partial,
     stale: !requestSucceeded && Number(current.loadedAt) > 0,
     attentionSummary: retainCompleteSnapshot
       ? current.attentionSummary
       : freshAttentionSummary,
+    decisionDebtItems: retainCompleteSnapshot
+      ? current.decisionDebtItems || []
+      : freshDecisionDebtItems,
+    decisionDebtBounds: retainCompleteSnapshot
+      ? current.decisionDebtBounds || { truncated: false, known: false }
+      : {
+          truncated: freshDecisionDebtTruncated,
+          known: freshDecisionDebtBoundsKnown
+        },
     quotes: retainCompleteSnapshot
       ? current.quotes
       : historyResult.status === "fulfilled"
@@ -178,11 +235,12 @@ export function buildCommercialSnapshotResult({
       : current.quotes,
     truncated: retainCompleteSnapshot
       ? current.truncated
-      : freshHistoryTruncated || freshUnreadRepliesTruncated,
+      : freshHistoryTruncated || freshUnreadRepliesTruncated || freshDecisionDebtTruncated,
     truncationKnown: retainCompleteSnapshot
       ? current.truncationKnown === true
       : historyResult.status === "fulfilled"
         || freshUnreadReplyBoundsKnown
+        || freshDecisionDebtBoundsKnown
         || current.truncationKnown === true,
     loadedAt
   };
@@ -192,6 +250,7 @@ export function useCommercialWorkspaceSnapshot({
   enabled = true,
   includeHistory = true,
   includeRevenueAttention = includeHistory,
+  includeDecisionDebt = false,
   tenantTimeZone = "",
   organizationId = ""
 } = {}) {
@@ -232,7 +291,8 @@ export function useCommercialWorkspaceSnapshot({
           reads: {
             attention: loadingReadState(),
             history: loadingReadState(),
-            unreadReplies: loadingReadState()
+            unreadReplies: loadingReadState(),
+            decisionDebt: includeDecisionDebt ? loadingReadState() : emptyReadState()
           },
           partial: false,
           stale: false
@@ -247,8 +307,11 @@ export function useCommercialWorkspaceSnapshot({
         : Promise.resolve({ source: "", quotes: [], truncated: false }),
       includeRevenueAttention
         ? readUnreadReplyAttention(normalizedOrganizationId)
-        : Promise.resolve(emptyUnreadReplyRead())
-    ]).then(([attentionResult, historyResult, unreadReplyResult]) => {
+        : Promise.resolve(emptyUnreadReplyRead()),
+      includeDecisionDebt
+        ? readDecisionDebtAttention(normalizedOrganizationId)
+        : Promise.resolve(emptyDecisionDebtRead())
+    ]).then(([attentionResult, historyResult, unreadReplyResult, decisionDebtResult]) => {
       if (!generationRef.current.isCurrent(generation)) return;
       const nowMs = Date.now();
       setState((current) => {
@@ -257,6 +320,8 @@ export function useCommercialWorkspaceSnapshot({
           attentionResult,
           historyResult,
           unreadReplyResult,
+          decisionDebtResult,
+          includeDecisionDebt,
           tenantTimeZone,
           nowMs
         });
@@ -272,6 +337,7 @@ export function useCommercialWorkspaceSnapshot({
     enabled,
     includeHistory,
     includeRevenueAttention,
+    includeDecisionDebt,
     normalizedOrganizationId,
     refreshToken,
     tenantTimeZone

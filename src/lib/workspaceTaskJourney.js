@@ -14,6 +14,8 @@ export const WORKSPACE_TASK_JOURNEY_PERSISTENCE = "session_only";
 export const WORKSPACE_TASK_JOURNEY_MAX_SERIALIZED_LENGTH = 4096;
 export const WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID = "quote-follow-up-server-readback";
 export const WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE = "follow-up-completion-confirmation";
+export const WORKSPACE_APPROVAL_TASK_VERIFIER_ID = "quote-approval-server-readback";
+export const WORKSPACE_APPROVAL_TASK_PROOF_TYPE = "approval-resolution-confirmation";
 
 export const WORKSPACE_TASK_JOURNEY_PHASES = /* @__PURE__ */ Object.freeze([
   "in_progress",

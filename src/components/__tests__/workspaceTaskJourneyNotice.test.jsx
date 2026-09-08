@@ -78,6 +78,28 @@ describe("WorkspaceTaskJourneyNotice", () => {
     expect(cancelled).toBe("");
   });
 
+  test("lets an operator explicitly escape uncertain approval tracking after a reload", () => {
+    const approvalJourney = {
+      ...JOURNEY,
+      taskId: "review-workflow:approval-42",
+      phase: "uncertain",
+      destination: "approval",
+      intentId: "review_approval"
+    };
+    const presentation = buildWorkspaceTaskJourneyPresentation(approvalJourney, "workflow");
+    const markup = renderToStaticMarkup(
+      <WorkspaceTaskJourneyNotice
+        journey={approvalJourney}
+        currentRouteId="workflow"
+        onStopTracking={vi.fn()}
+      />
+    );
+
+    expect(presentation.canStopTracking).toBe(true);
+    expect(markup).toContain("Outcome not confirmed");
+    expect(markup).toContain(">Stop tracking</button>");
+  });
+
   test("offers exact-context recovery at the destination without claiming completion", () => {
     const presentation = buildWorkspaceTaskJourneyPresentation({
       ...JOURNEY,

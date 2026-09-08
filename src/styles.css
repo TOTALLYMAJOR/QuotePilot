@@ -8848,6 +8848,64 @@ hr {
   font-size: 0.75rem;
 }
 
+.approval-decision-context,
+.approval-resolution-receipt {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+  border: 1px solid #ded7c9;
+  border-radius: 8px;
+  background: #fbfaf6;
+  padding: 0.8rem;
+}
+
+.approval-decision-context h4,
+.approval-resolution-receipt h4,
+.approval-resolution-receipt .eyebrow {
+  margin: 0;
+}
+
+.approval-decision-context dl,
+.approval-resolution-receipt dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.approval-decision-context dl div,
+.approval-resolution-receipt dl div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.approval-decision-context dt,
+.approval-resolution-receipt dt {
+  color: #6a6862;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.approval-decision-context dd,
+.approval-resolution-receipt dd {
+  margin: 0;
+  color: #2f3833;
+  font-size: 0.82rem;
+}
+
+.approval-resolution-receipt.state-confirmed {
+  border-color: #afcdbc;
+  background: #f5faf7;
+}
+
+.approval-resolution-receipt.state-uncertain,
+.approval-resolution-receipt.state-superseded {
+  border-color: #d8be88;
+  background: #fffaf0;
+}
+
 .approval-resolution-summary small {
   color: #74756f;
 }
@@ -16493,6 +16551,157 @@ hr {
 .live-ops-decision {
   display: grid;
   gap: 0.5rem;
+}
+
+.clear-deck-decision {
+  gap: 0.85rem;
+  margin-top: 0.8rem;
+}
+
+@media (min-width: 1100px) {
+  .live-ops-route .command-center-head {
+    padding-right: 15rem;
+  }
+}
+
+.clear-deck-decision__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.clear-deck-decision__heading h3,
+.clear-deck-decision__heading p,
+.clear-deck-decision__quote,
+.clear-deck-decision__request,
+.clear-deck-decision__meaning p {
+  margin: 0;
+}
+
+.clear-deck-decision__heading h3 {
+  margin-top: 0.35rem;
+}
+
+.clear-deck-decision__heading p,
+.clear-deck-decision__quote {
+  color: #625f58;
+  font-size: 0.84rem;
+}
+
+.clear-deck-decision__quote {
+  text-align: right;
+}
+
+.clear-deck-decision__request {
+  border-left: 3px solid #b47a2d;
+  color: #2d312f;
+  padding: 0.55rem 0.7rem;
+}
+
+.clear-deck-decision__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.clear-deck-decision__facts div {
+  display: grid;
+  gap: 0.15rem;
+  border: 1px solid #e7e1d6;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0.55rem;
+}
+
+.clear-deck-decision__facts dt {
+  color: #706c64;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.clear-deck-decision__facts dd {
+  margin: 0;
+  color: #242925;
+  font-size: 0.86rem;
+}
+
+.clear-deck-decision__meaning {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid #e7e1d6;
+  padding-top: 0.7rem;
+}
+
+.clear-deck-decision__meaning p {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.65rem;
+  color: #55534e;
+  font-size: 0.82rem;
+}
+
+.clear-deck-decision__meaning strong {
+  color: #30352f;
+}
+
+@media (max-width: 760px) {
+  .clear-deck-decision__heading {
+    flex-direction: column;
+  }
+
+  .clear-deck-decision__quote {
+    text-align: left;
+  }
+
+  .clear-deck-decision__facts,
+  .approval-decision-context dl,
+  .approval-resolution-receipt dl {
+    grid-template-columns: 1fr;
+  }
+
+  .clear-deck-decision__meaning p {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}
+
+.live-ops-switchboard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.live-ops-switchboard button {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 96px;
+  border: 1px solid #e3ded4;
+  border-radius: 8px;
+  background: #fbfaf6;
+  color: #171d1a;
+  padding: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.live-ops-switchboard button:hover,
+.live-ops-switchboard button:focus-visible {
+  border-color: #a7771c;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(167, 119, 28, 0.16);
+}
+
+.live-ops-switchboard button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.live-ops-switchboard span {
+  color: #6b6b65;
 }
 
 @media (max-width: 760px) {
