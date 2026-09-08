@@ -6761,6 +6761,7 @@ export default function App({
             organizationId={authSession.organizationId}
             tenantTimeZone={tenantTimeZone}
             scheduleAvailable={eventScheduleEnabled && AMBIENT_UI_ENABLED}
+            scheduleCapacityLimit={scheduleCapacityLimit}
             routeMode={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.EVENT_LIVE
               ? "live"
               : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.EVENT_REPLAY

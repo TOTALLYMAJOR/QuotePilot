@@ -18,6 +18,9 @@ import { buildClearDeckDecisionPresentations } from "../lib/decisionResolutionPr
 import { buildCommitmentExecutionPresentation } from "./eventWorkspacePresentation";
 import { getKitchenBeoArtifactStatus } from "../lib/kitchenBeoClient";
 import { getOperationalStaffingSnapshot } from "../lib/operationalStaffingClient";
+import EventPreflightPanel from "./EventPreflightPanel";
+import { buildEventPreflightPresentation } from "./eventPreflightPresentation";
+import { buildScheduleConflictAssessment, buildScheduledEvents } from "./EventScheduleModal";
 import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
@@ -183,6 +186,7 @@ export function EventPlanningView({
   eventOperationsEnabled = false,
   tenantTimeZone = "",
   scheduleAvailable = true,
+  scheduleCapacityLimit = 400,
   routeMode = "list",
   quoteId = "",
   onRefresh,
@@ -226,13 +230,15 @@ export function EventPlanningView({
         scheduleAvailable
       })
     : null;
+  const currentRevisionId = String(selected?.activeVersionId || selected?.versionMeta?.versionId || "").trim();
+  const authorityIdentity = `${organizationId}:${selected?.id || ""}:${currentRevisionId}:${state.loadedAt || ""}`;
   const [authorityReads, setAuthorityReads] = useState({
     identity: "",
     beo: { state: "idle", value: null },
     staffing: { state: "idle", value: null }
   });
   useEffect(() => {
-    const identity = `${organizationId}:${selected?.id || ""}`;
+    const identity = authorityIdentity;
     if (routeMode !== "live" || !selected?.id) {
       setAuthorityReads({ identity: "", beo: { state: "idle", value: null }, staffing: { state: "idle", value: null } });
       return undefined;
@@ -266,7 +272,24 @@ export function EventPlanningView({
         ? { ...prior, staffing: { state: "unavailable", value: null } }
         : prior));
     return () => { current = false; };
-  }, [organizationId, routeMode, selected?.id, state.loadedAt, state.source]);
+  }, [authorityIdentity, organizationId, routeMode, selected?.id, state.source]);
+  const scheduleAssessment = useMemo(() => {
+    if (!selected?.id) return { state: "unknown", reasons: [] };
+    const scheduled = buildScheduledEvents(state.quotes || [], { preserveUndated: true });
+    return buildScheduleConflictAssessment(scheduled, selected.id, scheduleCapacityLimit);
+  }, [scheduleCapacityLimit, selected?.id, state.quotes]);
+  const preflight = useMemo(() => selected && execution
+    ? buildEventPreflightPresentation({
+        quote: selected,
+        execution,
+        authorityReads,
+        authorityIdentity,
+        organizationId,
+        snapshot: state,
+        scheduleAssessment,
+        scheduleAvailable
+      })
+    : null, [authorityIdentity, authorityReads, execution, organizationId, scheduleAssessment, scheduleAvailable, selected, state]);
   const heading = routeMode === "live"
     ? "Control Room"
     : routeMode === "replay"
@@ -455,25 +478,20 @@ export function EventPlanningView({
               <StatusChip {...execution.workspace.status} />
             </section>
 
-            <section className="execution-attention-board" aria-labelledby="control-attention-title">
-              <div className="execution-section-heading">
-                <div><p className="eyebrow">Needs attention now</p><h2 id="control-attention-title">Known gaps before a readiness conclusion</h2></div>
-                <span>{execution.attention.length} tracked</span>
-              </div>
-              {execution.attention.length ? (
-                <ol>
-                  {execution.attention.map((item) => (
-                    <li key={item.id}>
-                      <span>{item.domain}</span>
-                      <strong>{item.title}</strong>
-                      <p>{item.detail}</p>
-                    </li>
-                  ))}
-                </ol>
+            <EventPreflightPanel model={preflight} />
+
+            <div className="execution-next" aria-label="Next valid action">
+              <div><p className="eyebrow">Next</p><strong>{preflight.nextAction.label}</strong><span>{preflight.nextReason}</span></div>
+              {preflight.nextAction.kind === "workflow" ? (
+                <button type="button" className="cta" onClick={() => onOpenWorkflow?.(preflight.nextAction.target)}>{preflight.nextAction.label}</button>
+              ) : preflight.nextAction.kind === "schedule" ? (
+                <button type="button" className="cta" onClick={() => onOpenSchedule?.(selected.id)}>{preflight.nextAction.label}</button>
+              ) : preflight.nextAction.kind === "refresh" ? (
+                <button type="button" className="cta" onClick={() => onRefresh?.({ force: true })} disabled={state.loading}>{state.loading ? "Refreshing…" : preflight.nextAction.label}</button>
               ) : (
-                <p>No gap is exposed by these bounded sources. This is not an operational-readiness claim.</p>
+                <button type="button" className="cta" onClick={() => onOpenQuote?.(selected.id)}>{preflight.nextAction.label}</button>
               )}
-            </section>
+            </div>
 
             <div className="execution-control-grid">
               <section className="execution-card" aria-labelledby="run-event-title">
@@ -507,46 +525,8 @@ export function EventPlanningView({
                 <h2 id="actuals-title">{execution.actuals.title}</h2>
                 <p>{execution.actuals.detail}</p>
               </section>
-              <section className="execution-card" aria-labelledby="evidence-title">
-                <p className="eyebrow">Evidence</p>
-                <h2 id="evidence-title">Preserved source truth</h2>
-                <ul className="execution-evidence-summary">
-                  <li>{execution.commercialEvidence.booking}</li>
-                  <li>{execution.commercialEvidence.deposit}</li>
-                  <li>{execution.commercialEvidence.finalBalance}</li>
-                  <li>{execution.commitment.acceptance}</li>
-                </ul>
-                <p className="source-note">{execution.commercialEvidence.boundary}</p>
-              </section>
-              <section className="execution-card" aria-labelledby="authority-coverage-title">
-                <p className="eyebrow">Authority coverage</p>
-                <h2 id="authority-coverage-title">Operational evidence stays separate</h2>
-                <ul className="execution-evidence-summary">
-                  <li><strong>Kitchen BEO:</strong> {authorityReads.beo.state === "current"
-                    ? `Authoritative freshness: ${formatWorkspaceText(authorityReads.beo.value?.state, { emptyLabel: "unknown" })}.`
-                    : authorityReads.beo.state === "loading" ? "Checking the exact governed record…" : "Current governed status is unavailable in this read."}</li>
-                  <li><strong>Operational staffing:</strong> {authorityReads.staffing.state === "current"
-                    ? `Authoritative coverage: ${formatWorkspaceText(authorityReads.staffing.value?.snapshot?.coverage?.state || authorityReads.staffing.value?.state, { emptyLabel: "unknown" })}.`
-                    : authorityReads.staffing.state === "loading"
-                      ? "Checking the exact governed record…"
-                      : ["stale", "partial", "empty"].includes(authorityReads.staffing.state)
-                        ? `Authoritative read is ${authorityReads.staffing.state}; coverage is withheld until a current read completes.`
-                        : "Current governed coverage is unavailable in this read."}</li>
-                  <li><strong>Dependencies:</strong> {execution.dependencyEvidence.summary}. {execution.dependencyEvidence.detail}</li>
-                </ul>
-              </section>
             </div>
 
-            <div className="execution-next" aria-label="Next valid action">
-              <div><p className="eyebrow">Next</p><strong>{execution.nextAction.label}</strong><span>Continue in the existing authority that owns this work.</span></div>
-              {execution.nextAction.kind === "workflow" ? (
-                <button type="button" className="cta" onClick={() => onOpenWorkflow?.(execution.nextAction.target)}>{execution.nextAction.label}</button>
-              ) : execution.nextAction.kind === "schedule" ? (
-                <button type="button" className="cta" onClick={() => onOpenSchedule?.(selected.id)}>{execution.nextAction.label}</button>
-              ) : (
-                <button type="button" className="cta" onClick={() => onOpenQuote?.(selected.id)}>{execution.nextAction.label}</button>
-              )}
-            </div>
           </div>
         )}
 

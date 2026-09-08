@@ -70,25 +70,31 @@ describe("EventPlanningView recovery journeys", () => {
     authorityMocks.getKitchenBeoArtifactStatus.mockReset().mockResolvedValue({ state: "UNKNOWN" });
     authorityMocks.getOperationalStaffingSnapshot.mockReset()
       .mockResolvedValueOnce({ state: "stale", snapshot: { coverage: { state: "coverage_confirmed" } } })
-      .mockResolvedValueOnce({ state: "current", snapshot: { coverage: { state: "coverage_confirmed" } } });
+      .mockResolvedValueOnce({
+        state: "current",
+        organizationId: "org-a",
+        quoteId: "event-a",
+        activeQuoteRevisionId: "revision-a",
+        snapshot: { coverage: { state: "coverage_confirmed" } }
+      });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
-    const quote = { id: "event-a", organizationId: "org-a", status: "accepted", event: { date: "2027-09-12" } };
+    const quote = { id: "event-a", organizationId: "org-a", status: "accepted", activeVersionId: "revision-a", event: { date: "2027-09-12" } };
 
     await act(async () => {
       root.render(<EventPlanningView snapshot={snapshot({ quotes: [quote], loadedAt: 1 })} organizationId="org-a" routeMode="live" quoteId="event-a" />);
       await Promise.resolve();
     });
     expect(container.textContent).toContain("Authoritative read is stale; coverage is withheld");
-    expect(container.textContent).not.toContain("Authoritative coverage: coverage_confirmed");
+    expect(container.textContent).not.toContain("Operational staffing coverage is confirmed");
 
     await act(async () => {
       root.render(<EventPlanningView snapshot={snapshot({ quotes: [quote], loadedAt: 2 })} organizationId="org-a" routeMode="live" quoteId="event-a" />);
       await Promise.resolve();
     });
     expect(authorityMocks.getOperationalStaffingSnapshot).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("Authoritative coverage: coverage_confirmed");
+    expect(container.textContent).toContain("Operational staffing coverage is confirmed");
     await act(async () => root.unmount());
     container.remove();
   });
@@ -235,7 +241,8 @@ describe("EventPlanningView recovery journeys", () => {
 
     expect(markup).toContain('data-execution-surface="control-room"');
     expect(markup).toContain("Planning view only");
-    expect(markup).toContain("Known gaps before a readiness conclusion");
+    expect(markup).toContain("Event Preflight");
+    expect(markup).toContain("Unknown / unavailable");
     expect(markup).toContain("Planned sequence");
     expect(markup).toContain("Recorded checklist");
     expect(markup).toContain("Live actuals are not recorded");
