@@ -10,12 +10,17 @@ import {
   getWorkflowAttentionSnapshot,
   requestQuoteApproval,
   resolveQuoteApprovalRequest,
+  updateQuoteStatus,
   updateQuoteChangeRequestHandling,
   updateQuoteFollowUp,
   updateQuoteProductionChecklist
 } from "../quoteStore";
+import { buildCommercialPriorityContext } from "../ambientOpportunityStream";
+import { buildMoneyRows } from "../commandCenterEvidence";
+import { readCommercialEvidencePresence } from "../commercialEvidencePresence";
 
 const LOCAL_QUOTES_KEY = "quoteWizard.quotes";
+const LOCAL_QUOTE_HISTORY_KEY = "quoteWizard.quoteHistory";
 
 function createStorageMock() {
   const store = {};
@@ -106,6 +111,159 @@ describe("quoteStore workflow persistence", () => {
     expect(sameTenant.quotes.map((quote) => quote.id)).toEqual(["workflow-quote"]);
     expect(otherTenant.quotes).toEqual([]);
     await expect(getWorkflowAttentionSnapshot()).rejects.toThrow(/organizationId is required/i);
+  });
+
+  test("keeps compatibility defaults from becoming payment or booking evidence after a real read", async () => {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    existing[0].status = "accepted";
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+
+    const hydrated = await readQuote();
+    expect(hydrated.payment.depositStatus).toBe("unpaid");
+    expect(hydrated.payment.finalBalance.status).toBe("unpaid");
+    expect(hydrated.booking.confirmationStatus).toBe("pending");
+    expect(readCommercialEvidencePresence(hydrated)).toEqual({
+      quote: true,
+      deposit: false,
+      depositStatus: false,
+      depositStatusValue: "",
+      finalBalance: false,
+      finalBalanceStatus: false,
+      finalBalanceStatusValue: "",
+      finalBalanceCheckoutStateValue: "",
+      booking: false,
+      bookingStatus: false,
+      bookingStatusValue: ""
+    });
+    expect(buildCommercialPriorityContext(hydrated).position).toMatchObject({
+      booking: { available: false },
+      deposit: { available: false },
+      finalBalance: { available: false }
+    });
+    expect(buildMoneyRows([hydrated])).toEqual([]);
+  });
+
+  test("does not persist hydration defaults through automatic expiry or status writes", async () => {
+    const expiring = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    expiring[0].expiresAtISO = "2026-05-01T11:00:00.000Z";
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(expiring));
+
+    const expired = await readQuote();
+    expect(expired.status).toBe("expired");
+    let persisted = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY))[0];
+    expect(persisted.payment).toEqual({});
+    expect(persisted.booking).toEqual({});
+
+    await updateQuoteStatus("workflow-quote", "draft");
+    persisted = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY))[0];
+    expect(persisted.payment).toEqual({});
+    expect(persisted.booking).toEqual({});
+
+    const reread = await readQuote();
+    expect(readCommercialEvidencePresence(reread)).toMatchObject({
+      deposit: false,
+      finalBalance: false,
+      booking: false
+    });
+  });
+
+  test("keeps timestamp-only payment and contract rails status-unknown through write and reread", async () => {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    existing[0].payment = {
+      depositConfirmedAtISO: "2026-05-02T09:00:00.000Z",
+      finalBalance: { confirmedAtISO: "2026-05-02T10:00:00.000Z" }
+    };
+    existing[0].booking = { contractNumber: "CT-STATUS-UNKNOWN" };
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+
+    const hydrated = await readQuote();
+    expect(readCommercialEvidencePresence(hydrated)).toMatchObject({
+      deposit: true,
+      depositStatus: false,
+      finalBalance: true,
+      finalBalanceStatus: false,
+      booking: true,
+      bookingStatus: false
+    });
+    expect(buildCommercialPriorityContext(hydrated).position).toMatchObject({
+      booking: { available: false },
+      deposit: { available: false },
+      finalBalance: { available: false }
+    });
+    expect(buildMoneyRows([hydrated])).toEqual([]);
+
+    await updateQuoteStatus("workflow-quote", "draft");
+    const persisted = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY))[0];
+    expect(persisted.payment.depositStatus).toBeUndefined();
+    expect(persisted.payment.finalBalance.status).toBeUndefined();
+    expect(persisted.booking.confirmationStatus).toBeUndefined();
+    const reread = await readQuote();
+    expect(readCommercialEvidencePresence(reread)).toMatchObject({
+      depositStatus: false,
+      finalBalanceStatus: false,
+      bookingStatus: false
+    });
+  });
+
+  test("preserves malformed recorded statuses as unavailable through write and reread", async () => {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    existing[0].payment = {
+      depositStatus: "provider_mystery",
+      finalBalance: { status: "provider_mystery" }
+    };
+    existing[0].booking = { confirmationStatus: "provider_mystery" };
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+
+    let hydrated = await readQuote();
+    expect(hydrated.payment.depositStatus).toBe("unpaid");
+    expect(hydrated.payment.finalBalance.status).toBe("unpaid");
+    expect(hydrated.booking.confirmationStatus).toBe("pending");
+    expect(readCommercialEvidencePresence(hydrated)).toMatchObject({
+      depositStatusValue: "provider_mystery",
+      finalBalanceStatusValue: "provider_mystery",
+      bookingStatusValue: "provider_mystery"
+    });
+    expect(buildCommercialPriorityContext(hydrated).position).toMatchObject({
+      booking: { available: false, raw: "provider_mystery" },
+      deposit: { available: false, raw: "provider_mystery" },
+      finalBalance: { available: false, raw: "provider_mystery" }
+    });
+    expect(buildMoneyRows([hydrated])).toEqual([]);
+
+    await updateQuoteStatus("workflow-quote", "draft");
+    const snapshot = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY))[0].snapshot;
+    expect(snapshot.payment.depositStatus).toBe("provider_mystery");
+    expect(snapshot.payment.finalBalance.status).toBe("provider_mystery");
+    expect(snapshot.booking.confirmationStatus).toBe("provider_mystery");
+
+    await updateQuoteProductionChecklist({
+      quoteId: "workflow-quote",
+      checklist: [{ id: "final-count", label: "Final count", completed: false }],
+      actorEmail: "ops@example.com"
+    });
+    const checklistPersisted = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY))[0];
+    expect(checklistPersisted.booking.confirmationStatus).toBe("provider_mystery");
+    const checklistSnapshot = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY))[0].snapshot;
+    expect(checklistSnapshot.booking.confirmationStatus).toBe("provider_mystery");
+
+    await updateQuoteStatus("workflow-quote", "booked");
+    const bookedPersisted = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY))[0];
+    expect(bookedPersisted.booking).toMatchObject({
+      confirmationStatus: "provider_mystery",
+      bookedAtISO: "2026-05-02T12:00:00.000Z"
+    });
+    const bookedSnapshot = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY))[0].snapshot;
+    expect(bookedSnapshot.booking.confirmationStatus).toBe("provider_mystery");
+
+    hydrated = await readQuote();
+    expect(hydrated.payment.depositStatus).toBe("unpaid");
+    expect(hydrated.payment.finalBalance.status).toBe("unpaid");
+    expect(hydrated.booking.confirmationStatus).toBe("pending");
+    expect(readCommercialEvidencePresence(hydrated)).toMatchObject({
+      depositStatusValue: "provider_mystery",
+      finalBalanceStatusValue: "provider_mystery",
+      bookingStatusValue: "provider_mystery"
+    });
   });
 
   test("binds internal change-request handling to the current customer request", async () => {
@@ -331,17 +489,10 @@ describe("quoteStore workflow persistence", () => {
     localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
 
     const quote = await readQuote();
-    expect(quote.payment.finalBalance).toEqual({
-      amountCents: 112334,
-      currency: "usd",
-      status: "unpaid",
-      paymentLink: "",
-      confirmedAtISO: "",
-      stripeSessionId: "",
-      stripeCheckoutState: "",
-      checkoutGeneration: 0,
-      knownStripeSessionIds: []
-    });
+    expect(quote.payment.finalBalance.amountCents).toBe(112334);
+    expect(quote.payment.finalBalance.status).toBe("unpaid");
+    expect(quote.payment.finalBalance.currency).toBe("usd");
+    expect(Object.keys(quote.payment.finalBalance)).toEqual([]);
     expect(quote.workflow.approvalRequests[0]).toMatchObject({
       action: "send_final_balance_request",
       actionScope,

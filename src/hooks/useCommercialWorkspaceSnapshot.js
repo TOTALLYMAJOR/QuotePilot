@@ -154,7 +154,13 @@ export function buildCommercialSnapshotResult({
   const source = sourceSet.size > 1
     ? "mixed"
     : successfulSources[0] || current.source;
-  const loadedAt = requestSucceeded ? nowMs : current.loadedAt;
+  const currentLoadedAt = Number.isFinite(Number(current.loadedAt))
+    ? Math.max(0, Number(current.loadedAt))
+    : 0;
+  const observedAt = Number.isFinite(Number(nowMs)) ? Math.max(0, Number(nowMs)) : 0;
+  const loadedAt = requestSucceeded
+    ? Math.max(observedAt, currentLoadedAt + 1)
+    : currentLoadedAt;
   const hasPriorCompleteRead = Number(current.loadedAt) > 0;
   const retainCompleteSnapshot = !requestSucceeded && hasPriorCompleteRead;
   const freshQuotes = historyResult.status === "fulfilled"

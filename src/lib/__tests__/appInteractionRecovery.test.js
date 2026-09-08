@@ -243,8 +243,17 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("persistTaskJourney(transitioned.journey)");
     expect(appSource).toContain("requestAttentionRefresh({ force: true })");
     expect(appSource).toContain(
-      "activeTaskJourney={feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney}"
+      "const workflowTaskJourney = feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney;"
     );
+    expect(appSource).toContain("activeTaskJourney={workflowTaskJourney}");
+    expect(appSource).toContain(
+      "workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.QUOTE_LIST"
+    );
+    expect(appSource).toContain("? WORKSPACE_PATHS.quotes");
+    expect(appSource).toContain(
+      "workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.CLEAR_DECK"
+    );
+    expect(appSource).toContain("onReturnToOrigin={() => returnToWorkspaceOrigin(workflowReturnFallback)}");
     expect(appSource).toContain("resolveWorkspaceActionFeedbackFollowUpAction({");
     expect(appSource).toContain('resolution.strategy === "continue"');
     expect(appSource).toContain("onTaskOutcome={handleWorkspaceTaskOutcome}");

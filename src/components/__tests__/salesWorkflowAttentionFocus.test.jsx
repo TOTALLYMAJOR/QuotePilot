@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getQuoteById: vi.fn(),
   getQuoteHistory: vi.fn(),
+  requestQuoteApproval: vi.fn(),
   resolveQuoteApprovalRequest: vi.fn(),
   updateQuoteFollowUp: vi.fn(),
   getRevenueAutopilotOperations: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../lib/quoteStore", () => ({
   getQuoteById: mocks.getQuoteById,
   getQuoteHistory: mocks.getQuoteHistory,
-  requestQuoteApproval: vi.fn(),
+  requestQuoteApproval: mocks.requestQuoteApproval,
   resolveQuoteApprovalRequest: mocks.resolveQuoteApprovalRequest,
   updateQuoteChangeRequestHandling: vi.fn(),
   updateQuoteFollowUp: mocks.updateQuoteFollowUp
@@ -358,6 +359,7 @@ beforeEach(() => {
   });
   mocks.getQuoteById.mockRejectedValue(new Error("No server readback configured."));
   mocks.updateQuoteFollowUp.mockRejectedValue(new Error("No follow-up write configured."));
+  mocks.requestQuoteApproval.mockRejectedValue(new Error("No approval request write configured."));
   mocks.resolveQuoteApprovalRequest.mockRejectedValue(new Error("No approval write configured."));
   mocks.getRevenueAutopilotOperations.mockResolvedValue(operations());
   mocks.getDecisionDebtSnapshot.mockResolvedValue(emptyDebt());
@@ -379,6 +381,126 @@ async function settle() {
 }
 
 describe("Sales Workflow central Attention focus", () => {
+  test("returns an active commercial priority to its recorded origin", async () => {
+    const onReturnToOrigin = vi.fn();
+    const journey = {
+      ...followUpTaskJourney(),
+      origin: { routeId: "home", pathname: "/app", search: "" }
+    };
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="sales"
+          currentUserEmail="sales@example.test"
+          tenantTimeZone="America/Chicago"
+          activeTaskJourney={journey}
+          onReturnToOrigin={onReturnToOrigin}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const back = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Back to Now"
+    );
+    expect(back).toBeTruthy();
+    act(() => back.click());
+    expect(onReturnToOrigin).toHaveBeenCalledTimes(1);
+  });
+
+  test("withdraws retained follow-up mutations after the current Workflow read fails", async () => {
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [followUpQuote()],
+      truncated: false
+    });
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="sales"
+          currentUserEmail="sales@example.test"
+          tenantTimeZone="America/Chicago"
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    act(() => container.querySelector("#workflow-tab-followups").click());
+    let save = container.querySelector('[data-follow-up-save-action="true"]');
+    expect(save.disabled).toBe(false);
+
+    mocks.getQuoteHistory.mockRejectedValueOnce(new Error("Exact workflow read failed."));
+    act(() => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent === "Refresh")
+        ?.click();
+    });
+    await settle();
+
+    save = container.querySelector('[data-follow-up-save-action="true"]');
+    expect(save).toBeTruthy();
+    expect(save.disabled).toBe(true);
+    act(() => save.click());
+    expect(mocks.updateQuoteFollowUp).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Exact workflow read failed.");
+  });
+
+  test("withdraws approval requests after the current Workflow read fails", async () => {
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [quote()],
+      truncated: false
+    });
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="sales"
+          currentUserEmail="sales@example.test"
+          tenantTimeZone="America/Chicago"
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    act(() => container.querySelector("#workflow-tab-followups").click());
+    let request = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Request"
+    );
+    expect(request).toBeTruthy();
+    expect(request.disabled).toBe(false);
+
+    mocks.getQuoteHistory.mockRejectedValueOnce(new Error("Exact workflow read failed."));
+    act(() => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent === "Refresh")
+        ?.click();
+    });
+    await settle();
+
+    request = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Request"
+    );
+    expect(request).toBeTruthy();
+    expect(request.disabled).toBe(true);
+    act(() => request.click());
+    expect(mocks.requestQuoteApproval).not.toHaveBeenCalled();
+  });
+
   test("focuses the exact unread reply in primary Attention and keeps conversation and acknowledgement actions distinct", async () => {
     const onOpenQuoteHistory = vi.fn();
     await act(async () => {

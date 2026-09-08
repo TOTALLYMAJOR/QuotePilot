@@ -278,6 +278,25 @@ describe("quoteStore portal token policy", () => {
     });
   });
 
+  test("keeps malformed stored payment statuses out of the customer portal projection", async () => {
+    seedQuotes([makeQuote({
+      payment: {
+        depositStatus: "provider_mystery",
+        finalBalance: {
+          status: "provider_mystery",
+          stripeCheckoutState: "provider_mystery"
+        }
+      }
+    })]);
+
+    const quote = await getPortalQuote("portal-key-12345678901234567890");
+    expect(quote.payment.depositStatus).toBe("unpaid");
+    expect(quote.payment.finalBalance).toMatchObject({
+      status: "unpaid",
+      stripeCheckoutState: ""
+    });
+  });
+
   test("stores a customer change request without accepting or booking the quote", async () => {
     seedQuotes([makeQuote()]);
 

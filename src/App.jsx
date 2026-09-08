@@ -2202,6 +2202,12 @@ export default function App({
     workspaceActionFeedbackReturnIdentity,
     workspaceActionFeedbackReturnOwnsCurrentArrival
   ]);
+  const workflowTaskJourney = feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney;
+  const workflowReturnFallback = workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.QUOTE_LIST
+    ? WORKSPACE_PATHS.quotes
+    : workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.CLEAR_DECK
+      ? WORKSPACE_PATHS.clearDeck
+      : WORKSPACE_PATHS.home;
 
   useEffect(() => {
     if (
@@ -7498,9 +7504,9 @@ export default function App({
               ? workspaceArrivalContext
               : null}
             onArrivalResolution={handleWorkspaceArrivalResolution}
-            activeTaskJourney={feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney}
+            activeTaskJourney={workflowTaskJourney}
             onTaskOutcome={handleWorkspaceTaskOutcome}
-            onReturnToOrigin={() => returnToWorkspaceOrigin(WORKSPACE_PATHS.clearDeck)}
+            onReturnToOrigin={() => returnToWorkspaceOrigin(workflowReturnFallback)}
             onEditQuote={(quote) => {
               handleEditQuote(quote);
             }}

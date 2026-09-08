@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StaffEvidenceRail from "./StaffEvidenceRail";
 import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { useWorkspaceReturnContextAdapter } from "../context/WorkspaceNavigationContext";
 import {
   buildMoneyRows,
   selectUpcomingEvents
@@ -28,6 +29,7 @@ import {
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
 import { CheckCircle, Clock, User, UsersThree, WarningCircle } from "./ProductIcons";
+import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import "./ambientNowView.css";
 
 const AMBIENT_NOW_SURFACE = createSurfacePurposeContract({
@@ -166,6 +168,9 @@ function PriorityRow({ priority, card, index, count, role, onResolve, targetAvai
       data-evidence-state={evidenceState}
       data-attention-position={index + 1}
       data-attention-urgency={card.urgent ? "urgent" : "waiting"}
+      data-now-priority-quote-id={card.quoteId}
+      data-attention-type={priority.item.type}
+      data-request-id={getWorkflowAttentionFocusId(priority.item)}
     >
       <div className="ambient-now-priority__body">
         <div className="ambient-now-priority__copy">
@@ -173,13 +178,31 @@ function PriorityRow({ priority, card, index, count, role, onResolve, targetAvai
           <p className="ambient-now-priority__type">{card.typeLabel}</p>
           <h4>{card.title}</h4>
           <p className="ambient-now-priority__context">{card.context}</p>
+          <dl className="ambient-now-priority__commercial" aria-label={`Commercial context for ${card.title}`}>
+            <div>
+              <dt>{card.commercialPriority.value.label}</dt>
+              <dd data-value-available={card.commercialPriority.value.available ? "true" : "false"}>
+                {card.commercialPriority.value.display}
+              </dd>
+            </div>
+            <div>
+              <dt>Current stage</dt>
+              <dd>{card.commercialPriority.position.lifecycle.available
+                ? card.commercialPriority.position.lifecycle.value
+                : "Lifecycle unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Event</dt>
+              <dd>{card.commercialPriority.event.date} · {card.commercialPriority.event.venue}</dd>
+            </div>
+          </dl>
           <p className="ambient-now-priority__sentence">
             <Clock size={17} aria-hidden="true" />
             <span>{card.sentence}</span>
           </p>
           <p className="ambient-now-priority__consequence" data-attention-consequence>
             <WarningCircle size={17} aria-hidden="true" />
-            <span>{card.consequence}</span>
+            <span><strong>Why it matters</strong> {card.consequence}</span>
           </p>
           {card.whyNow && (
             <p className="ambient-now-priority__why">Why now: {card.whyNow}.</p>
@@ -415,8 +438,13 @@ export default function AmbientNowView({
     truncated: false,
     truncationKnown: false
   };
+  const surfaceRef = useRef(null);
   const headingRef = useWorkspaceRouteHeadingFocus(true);
   const acknowledgementRef = useRef(null);
+  const conversationTriggerRef = useRef(null);
+  const returnRestoreCancelRef = useRef(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const [nowISO] = useState(() => (
     nowDate instanceof Date && !Number.isNaN(nowDate.getTime())
       ? nowDate.toISOString()
@@ -446,6 +474,140 @@ export default function AmbientNowView({
       }
     };
   }), [briefing.priorities, state.quotes]);
+  const priorityRowsRef = useRef(priorityRows);
+  priorityRowsRef.current = priorityRows;
+
+  const captureNowReturnView = useCallback((hint = {}) => {
+    const root = surfaceRef.current;
+    const activeElement = typeof document !== "undefined" ? document.activeElement : null;
+    let focus = hint?.focus && typeof hint.focus === "object" ? hint.focus : null;
+    if (!focus && activeElement && root?.contains(activeElement)) {
+      const row = activeElement.closest?.("[data-now-priority-quote-id]");
+      const actionId = activeElement.dataset?.ambientActionId || "";
+      if (row?.dataset.nowPriorityQuoteId && actionId) {
+        focus = {
+          kind: "priority-action",
+          objectId: row.dataset.nowPriorityQuoteId,
+          actionId,
+          controlId: row.dataset.requestId || "",
+          attentionType: row.dataset.attentionType || ""
+        };
+      }
+    }
+    return {
+      routeId: "home",
+      transient: { sourceLoadedAt: Number(stateRef.current.loadedAt) || 0 },
+      scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+      focus: focus || { kind: "route-heading" }
+    };
+  }, []);
+
+  const restoreNowReturnView = useCallback((view) => {
+    returnRestoreCancelRef.current?.();
+    const requiredLoadedAt = Number(view?.transient?.sourceLoadedAt) || 0;
+    if (typeof onRefresh !== "function") {
+      return Promise.resolve({ status: "recovery" });
+    }
+    onRefresh({ force: true });
+    return new Promise((resolve) => {
+      let active = true;
+      let frameId = null;
+      let cancelViewport = null;
+      let attempts = 0;
+      let freshFrames = 0;
+      const finish = (status) => {
+        if (!active) return;
+        active = false;
+        resolve({ status });
+      };
+      const cancel = () => {
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        cancelViewport?.();
+        finish("cancelled");
+      };
+      returnRestoreCancelRef.current = cancel;
+      const restore = () => {
+        if (!active) return;
+        const snapshot = stateRef.current;
+        const root = surfaceRef.current;
+        if (!root) {
+          finish("recovery");
+          return;
+        }
+        if (!snapshot.loading && (snapshot.error || snapshot.partial || snapshot.stale)) {
+          cancelViewport = restoreWorkspaceReturnViewport({
+            focusTarget: headingRef.current,
+            scrollY: 0
+          });
+          finish("recovery");
+          return;
+        }
+        if (
+          snapshot.loading
+          || !snapshot.loadedAt
+          || Number(snapshot.loadedAt) <= requiredLoadedAt
+        ) {
+          freshFrames = 0;
+          attempts += 1;
+          if (attempts > 90) {
+            finish("recovery");
+            return;
+          }
+          frameId = window.requestAnimationFrame(restore);
+          return;
+        }
+        freshFrames += 1;
+        if (freshFrames < 3) {
+          frameId = window.requestAnimationFrame(restore);
+          return;
+        }
+        const focus = view?.focus || {};
+        const exactAction = Array.from(root.querySelectorAll("[data-ambient-action-id]")).find((element) => (
+          element.dataset.ambientActionId === focus.actionId
+          && element.closest("[data-now-priority-quote-id]")?.dataset.nowPriorityQuoteId === focus.objectId
+        ));
+        const currentObjectRow = Array.from(root.querySelectorAll("[data-now-priority-quote-id]")).find((element) => (
+          element.dataset.nowPriorityQuoteId === focus.objectId
+        ));
+        const currentObjectAction = currentObjectRow?.querySelector("[data-ambient-action-id]");
+        const currentObjectPriority = priorityRowsRef.current.find(({ card }) => (
+          card.quoteId === focus.objectId
+        ));
+        if (currentObjectPriority && !currentObjectAction) {
+          attempts += 1;
+          if (attempts > 90) {
+            finish("recovery");
+            return;
+          }
+          frameId = window.requestAnimationFrame(restore);
+          return;
+        }
+        const quoteStillInCurrentRead = snapshot.quotes.some((quote) => String(quote?.id || "") === focus.objectId);
+        const resolvedFromCurrentRead = focus.kind === "priority-action"
+          && quoteStillInCurrentRead
+          && !currentObjectPriority;
+        const target = exactAction || currentObjectAction || (resolvedFromCurrentRead
+          ? root.querySelector("#ambient-now-priorities-title")
+          : null);
+        cancelViewport = restoreWorkspaceReturnViewport({
+          focusTarget: target || headingRef.current,
+          scrollY: target ? view?.scrollY : 0
+        });
+        finish(target ? "restored" : "recovery");
+      };
+      frameId = window.requestAnimationFrame(restore);
+    });
+  }, [headingRef, onRefresh]);
+
+  useWorkspaceReturnContextAdapter({
+    routeId: "home",
+    capture: captureNowReturnView,
+    restore: restoreNowReturnView
+  });
+
+  useEffect(() => () => {
+    returnRestoreCancelRef.current?.();
+  }, []);
   const upcomingEvents = useMemo(
     () => selectUpcomingEvents(state.quotes, { nowDate: new Date(nowISO) }),
     [nowISO, state.quotes]
@@ -502,7 +664,20 @@ export default function AmbientNowView({
           attentionType: item.type,
           requestId: getWorkflowAttentionFocusId(item),
           actionId: action.id
-        });
+        }, {
+          preserveReturnContext: true,
+          returnContextSurfaceId: "commercial-priority",
+          returnContextHint: {
+            focus: {
+              kind: "priority-action",
+              objectId: String(item.quoteId || "").trim(),
+              actionId: action.id,
+              controlId: getWorkflowAttentionFocusId(item),
+              attentionType: item.type
+            }
+          }
+        }
+      );
     if (result?.status === "recovery") {
       announce(resultFor(action, "recovery", {
         reason: result.reason || "The exact Workflow arrival could not be prepared.",
@@ -579,6 +754,7 @@ export default function AmbientNowView({
 
   return (
     <section
+      ref={surfaceRef}
       className="now-surface ambient-now ambient-purpose-surface"
       aria-labelledby="now-heading"
       data-surface-contract-id={AMBIENT_NOW_SURFACE.id}
@@ -661,9 +837,16 @@ export default function AmbientNowView({
             )}
             <h3
               id="ambient-now-priorities-title"
-              className={priorityRows.length > 0 ? "sr-only" : undefined}
+              className={priorityRows.length > 0
+                ? "sr-only ambient-now__return-anchor"
+                : "ambient-now__return-anchor"}
+              tabIndex={-1}
             >
-              {trulyCaughtUp ? "A quieter moment" : "This view needs a little more context"}
+              {priorityRows.length > 0
+                ? "Priority updated. Review what needs your attention now."
+                : trulyCaughtUp
+                  ? "A quieter moment"
+                  : "This view needs a little more context"}
             </h3>
             {briefing.overflowCount > 0 && (
               <p className="ambient-now__overflow">

@@ -55,6 +55,25 @@ describe("buildCommercialSnapshotResult", () => {
     });
   });
 
+  test("advances a successful source generation across same-clock and clock-rollback reads", () => {
+    for (const nowMs of [900, 800]) {
+      const result = buildCommercialSnapshotResult({
+        current: {
+          loadedAt: 900,
+          source: "firebase",
+          attentionSummary: null,
+          quotes: [],
+          truncated: false
+        },
+        attentionResult,
+        historyResult,
+        nowMs
+      });
+
+      expect(result.loadedAt).toBe(901);
+    }
+  });
+
   test("marks a first incomplete read as partial without inventing a complete refresh", () => {
     const result = buildCommercialSnapshotResult({
       current: { loadedAt: 0, source: "", attentionSummary: null, quotes: [], truncated: false },

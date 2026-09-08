@@ -713,6 +713,19 @@ export function SalesWorkflowView({
   });
   const [followUpValidationField, setFollowUpValidationField] = useState("");
   const [workflowReadError, setWorkflowReadError] = useState("");
+  const workflowMutationReviewable = Boolean(
+    !state.loading
+    && !workflowReadError
+    && state.snapshotAtISO
+  );
+  const returnOriginLabel = activeTaskJourney?.origin?.routeId === "home"
+    ? "Now"
+    : activeTaskJourney?.origin?.routeId === "quote-list"
+      ? "Opportunities"
+      : activeTaskJourney?.origin?.routeId === "clear-deck"
+        ? "Clear the Deck"
+        : "";
+  const returnFromWorkflow = Boolean(returnOriginLabel && typeof onReturnToOrigin === "function");
   const [autopilotOperations, setAutopilotOperations] = useState({
     loading: false,
     error: "",
@@ -2120,6 +2133,14 @@ export function SalesWorkflowView({
 
   const handleSaveFollowUp = async () => {
     if (!selectedQuote?.id || !isStaff || followUpSaveOperationRef.current) return;
+    if (!workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before saving this follow-up.",
+        feedback: ""
+      }));
+      return;
+    }
     const normalizedFollowUpDueDate = String(followUpDraft.dueDate || "").trim();
     const preflightField = !FOLLOW_UP_STAGES.some((stage) => stage.id === followUpDraft.stage)
       ? "stage"
@@ -2340,6 +2361,14 @@ export function SalesWorkflowView({
 
   const handleRequestApproval = async () => {
     if (!selectedQuote?.id || !isStaff || !resolvedApprovalAction) return;
+    if (!workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before requesting approval.",
+        feedback: ""
+      }));
+      return;
+    }
     if (state.source !== "firebase" && PROVIDER_APPROVAL_ACTIONS.has(resolvedApprovalAction)) {
       setState((prev) => ({
         ...prev,
@@ -2550,6 +2579,14 @@ export function SalesWorkflowView({
 
   const handleResolveApproval = async (quoteId, requestId, nextState) => {
     if (!isAdmin || approvalResolutionOperationsRef.current.has(requestId)) return;
+    if (nextState === "approved" && !workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before approving this request.",
+        feedback: ""
+      }));
+      return;
+    }
     const quote = state.quotes.find((item) => item.id === quoteId);
     const request = quote?.workflow?.approvalRequests?.find((item) => item.id === requestId);
     if (!quote || !request || request.state !== "pending") return;
@@ -3063,6 +3100,14 @@ export function SalesWorkflowView({
 
   const handleChangeRequestAction = async (item, action) => {
     if (!isStaff || !item?.quoteId || item.unhandleable) return;
+    if (!workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before changing this exact request.",
+        feedback: ""
+      }));
+      return;
+    }
     const actionScope = workflowScopeRef.current;
     const note = handlingNotes[item.id] || "";
     const busyId = `change-request:${item.quoteId}:${action}`;
@@ -3179,8 +3224,12 @@ export function SalesWorkflowView({
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
             </button>
-            <button type="button" className="ghost" onClick={onClose}>
-              {embedded ? "Back to Home" : "Close"}
+            <button
+              type="button"
+              className="ghost"
+              onClick={returnFromWorkflow ? onReturnToOrigin : onClose}
+            >
+              {embedded ? returnFromWorkflow ? `Back to ${returnOriginLabel}` : "Back to Home" : "Close"}
             </button>
           </div>
         </div>
@@ -3400,7 +3449,7 @@ export function SalesWorkflowView({
                                 type="button"
                                 className="ghost compact"
                                 onClick={() => handleChangeRequestAction(item, "acknowledge")}
-                                disabled={itemBusy}
+                                disabled={itemBusy || !workflowMutationReviewable}
                                 aria-label={acknowledging
                                   ? `Saving... acknowledgment — ${quoteLabel}`
                                   : `Acknowledge internally — ${quoteLabel}`}
@@ -3414,7 +3463,7 @@ export function SalesWorkflowView({
                                 type="button"
                                 className="cta compact"
                                 onClick={() => handleChangeRequestAction(item, "mark_handled")}
-                                disabled={itemBusy || !handlingNote.trim()}
+                                disabled={itemBusy || !handlingNote.trim() || !workflowMutationReviewable}
                                 aria-label={markingHandled
                                   ? `Saving... handled state — ${quoteLabel}`
                                   : `Mark handled internally — ${quoteLabel}`}
@@ -3796,6 +3845,7 @@ export function SalesWorkflowView({
                         data-follow-up-save-action="true"
                         onClick={handleSaveFollowUp}
                         disabled={Boolean(busyKey)
+                          || !workflowMutationReviewable
                           || selectedFollowUpTaskJourney?.phase === "uncertain"
                           || (
                             followUpConfirmation.quoteId === selectedQuote.id
@@ -3840,7 +3890,9 @@ export function SalesWorkflowView({
                               type="button"
                               className="ghost compact"
                               onClick={handleRequestApproval}
-                              disabled={!resolvedApprovalAction || busyKey === `request:${selectedQuote.id}`}
+                              disabled={!resolvedApprovalAction
+                                || !workflowMutationReviewable
+                                || busyKey === `request:${selectedQuote.id}`}
                             >
                               {busyKey === `request:${selectedQuote.id}` ? "Requesting..." : "Request"}
                             </button>
@@ -4222,8 +4274,8 @@ export function SalesWorkflowView({
                   requireActivePortal: state.source === "firebase"
                 })
                 : null;
-              const approvalEvidenceReviewable = !exactApprovalArrival
-                || decisionPresentation?.reviewable === true;
+              const approvalEvidenceReviewable = workflowMutationReviewable
+                && (!exactApprovalArrival || decisionPresentation?.reviewable === true);
               const receiptNext = approvalOutcome?.requestedState === "approved"
                 ? executionEligibility?.eligible
                   ? "Continue to the exact quote and execute the separately governed action."
@@ -4269,11 +4321,11 @@ export function SalesWorkflowView({
                   </section>
                 )}
                 {request.note && !exactApprovalArrival && <p className="approval-note">{request.note}</p>}
-                {request.state === "pending" && exactApprovalArrival && !approvalEvidenceReviewable && (
+                {request.state === "pending" && !approvalEvidenceReviewable && (
                   <div className="inline-alert" role="alert">
                     <strong>Current evidence does not support approval.</strong>
                     <span>
-                      Refresh this exact request before approving. You may reject the stale request without executing it.
+                      Refresh current Workflow evidence before approving. You may reject the stale request without executing it.
                     </span>
                   </div>
                 )}
@@ -4379,9 +4431,9 @@ export function SalesWorkflowView({
                         Continue to execute in Quotes
                       </button>
                     )}
-                    {activeTaskJourney?.origin?.routeId === "clear-deck" && typeof onReturnToOrigin === "function" && (
+                    {returnFromWorkflow && (
                       <button type="button" className="ghost compact" onClick={onReturnToOrigin}>
-                        Return to Clear the Deck
+                        Return to {returnOriginLabel}
                       </button>
                     )}
                   </section>

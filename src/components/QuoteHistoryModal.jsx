@@ -1249,6 +1249,11 @@ export function QuoteHistoryView({
         targetLoadPendingRef.current = false;
         loadedFocusQuoteIdRef.current = targetFound ? requestedFocusQuoteId : "";
       }
+      const priorLoadedAt = Date.parse(stateRef.current.loadedAtISO || "");
+      const nextLoadedAt = Math.max(
+        Date.now(),
+        Number.isFinite(priorLoadedAt) ? priorLoadedAt + 1 : 0
+      );
       setState({
         loading: false,
         error: targetingSavedQuote && !targetFound
@@ -1262,7 +1267,7 @@ export function QuoteHistoryView({
         quotes: result.quotes,
         truncated: result.truncated === true,
         readComplete: true,
-        loadedAtISO: new Date().toISOString(),
+        loadedAtISO: new Date(nextLoadedAt).toISOString(),
         organizationId: requestedOrganizationId,
         readKey: requestedReadKey
       });
@@ -1541,7 +1546,9 @@ export function QuoteHistoryView({
         focus = {
           kind: "opportunity-action",
           objectId: row.dataset.opportunityId,
-          actionId
+          actionId,
+          controlId: row.dataset.requestId || "",
+          attentionType: row.dataset.attentionType || ""
         };
       } else if (activeElement.matches?.('[data-opportunity-disclosure="details"] > summary')) {
         focus = {
@@ -1553,7 +1560,7 @@ export function QuoteHistoryView({
     return {
       routeId: "quote-list",
       structured: { eventTypeFilter, statusFilter, order: "priority" },
-      transient: { query },
+      transient: { query, sourceLoadedAtISO: stateRef.current.loadedAtISO },
       disclosureIds,
       scrollY: typeof window !== "undefined" ? window.scrollY : 0,
       focus: focus || { kind: "route-heading" }
@@ -1571,11 +1578,13 @@ export function QuoteHistoryView({
 
   const restoreQuoteReturnView = useCallback((view) => {
     returnRestoreCancelRef.current?.();
+    const requiredLoadedAtISO = String(view?.transient?.sourceLoadedAtISO || "");
     if (view?.routeId === "quote-list") {
       setQuery(String(view.transient?.query || ""));
       setEventTypeFilter(String(view.structured?.eventTypeFilter || "all"));
       setStatusFilter(String(view.structured?.statusFilter || "all"));
       setAdministrationOpen(view.disclosureIds?.includes("quote-administration") || false);
+      void load();
     }
     const expectedReadKey = quoteHistoryReadKey({
       organizationId,
@@ -1623,6 +1632,12 @@ export function QuoteHistoryView({
             element.dataset.ambientActionId === focus.actionId
             && element.closest("[data-opportunity-id]")?.dataset.opportunityId === focus.objectId
           ));
+          if (!target) {
+            const sameOpportunity = Array.from(root.querySelectorAll("[data-opportunity-id]")).find((element) => (
+              element.dataset.opportunityId === focus.objectId
+            ));
+            target = sameOpportunity?.querySelector("[data-ambient-action-id]") || null;
+          }
         } else if (focus.kind === "opportunity-disclosure") {
           target = Array.from(root.querySelectorAll('[data-opportunity-disclosure="details"]')).find((element) => (
             element.closest("[data-opportunity-id]")?.dataset.opportunityId === focus.objectId
@@ -1637,20 +1652,31 @@ export function QuoteHistoryView({
         } else {
           target = root.querySelector(".workspace-route-heading");
         }
-        const readSettled = stateRef.current.organizationId === String(organizationId || "").trim()
+        const baseReadSettled = stateRef.current.organizationId === String(organizationId || "").trim()
           && stateRef.current.readKey === expectedReadKey
           && stateRef.current.readComplete === true
           && stateRef.current.loading === false;
-        if (!readSettled) {
-          frameId = window.requestAnimationFrame(restoreRenderedView);
-          return;
-        }
-        if (stateRef.current.readError) {
+        if (baseReadSettled && stateRef.current.readError) {
           cancelViewport = restoreWorkspaceReturnViewport({
             focusTarget: root.querySelector(".workspace-route-heading"),
             scrollY: 0
           });
           finish("recovery");
+          return;
+        }
+        const readSettled = baseReadSettled
+          && (!requiredLoadedAtISO || stateRef.current.loadedAtISO !== requiredLoadedAtISO);
+        if (!readSettled) {
+          attempt += 1;
+          if (attempt > 90) {
+            cancelViewport = restoreWorkspaceReturnViewport({
+              focusTarget: root.querySelector(".workspace-route-heading"),
+              scrollY: 0
+            });
+            finish("recovery");
+            return;
+          }
+          frameId = window.requestAnimationFrame(restoreRenderedView);
           return;
         }
         if (!target && attempt < 30) {
@@ -1672,7 +1698,7 @@ export function QuoteHistoryView({
         finish("recovery");
       }
     });
-  }, [focusAction, focusQuoteId, organizationId]);
+  }, [focusAction, focusQuoteId, load, organizationId]);
 
   useEffect(() => {
     if (open) return undefined;

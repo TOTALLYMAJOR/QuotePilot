@@ -78,7 +78,133 @@ function decisionRoundTrip(store, overrides = {}) {
   });
 }
 
+function commercialPriorityRoundTrip(store, { originRouteId = "home", ...overrides } = {}) {
+  const fromNow = originRouteId === "home";
+  const quoteId = "rivera-wedding";
+  const requestId = "follow-up:rivera-wedding";
+  store.setScope(scope);
+  return store.prepare({
+    entry: originEntry,
+    origin: {
+      routeId: originRouteId,
+      pathname: fromNow ? "/app" : "/app/quotes",
+      search: ""
+    },
+    destination: {
+      routeId: "workflow",
+      pathname: "/app/workflow",
+      search: `?quoteId=${quoteId}&attentionType=follow_up&requestId=${encodeURIComponent(requestId)}`
+    },
+    surfaceId: "commercial-priority",
+    view: {
+      routeId: originRouteId,
+      structured: fromNow ? {} : { eventTypeFilter: "all", statusFilter: "all" },
+      scrollY: 428,
+      focus: {
+        kind: fromNow ? "priority-action" : "opportunity-action",
+        objectId: quoteId,
+        actionId: fromNow
+          ? `review-now-priority:${requestId}`
+          : `review-opportunity-workflow:${quoteId}:${requestId}`,
+        controlId: requestId,
+        attentionType: "follow_up"
+      }
+    },
+    ...overrides
+  });
+}
+
 describe("workspace return context", () => {
+  test.each([
+    ["home", "priority-action"],
+    ["quote-list", "opportunity-action"]
+  ])("returns an exact commercial priority from %s after Workflow", (originRouteId, focusKind) => {
+    const store = createWorkspaceReturnContextStore();
+    const prepared = commercialPriorityRoundTrip(store, { originRouteId });
+
+    expect(prepared).toMatchObject({
+      ok: true,
+      token: {
+        origin: { routeId: originRouteId },
+        destination: { routeId: "workflow" },
+        surfaceId: "commercial-priority"
+      }
+    });
+    expect(store.commit({ token: prepared.token, destinationEntry })).toEqual({ ok: true });
+    expect(store.resolveOrigin({
+      entry: destinationEntry,
+      state: withWorkspaceReturnContextState(null, prepared.token),
+      route: prepared.token.destination
+    })).toMatchObject({
+      ok: true,
+      routeId: originRouteId,
+      view: {
+        scrollY: 428,
+        focus: {
+          kind: focusKind,
+          objectId: "rivera-wedding",
+          controlId: "follow-up:rivera-wedding",
+          attentionType: "follow_up"
+        }
+      }
+    });
+  });
+
+  test("rejects mismatched commercial priority quote, request, action, and surface pairs", () => {
+    const invalidInputs = [
+      {
+        view: {
+          routeId: "home",
+          focus: {
+            kind: "priority-action",
+            objectId: "another-quote",
+            actionId: "review-now-priority:follow-up:rivera-wedding",
+            controlId: "follow-up:rivera-wedding",
+            attentionType: "follow_up"
+          }
+        }
+      },
+      {
+        view: {
+          routeId: "home",
+          focus: {
+            kind: "priority-action",
+            objectId: "rivera-wedding",
+            actionId: "review-now-priority:follow-up:rivera-wedding",
+            controlId: "follow-up:rivera-wedding",
+            attentionType: "approval"
+          }
+        }
+      },
+      {
+        view: {
+          routeId: "home",
+          focus: {
+            kind: "priority-action",
+            objectId: "rivera-wedding",
+            actionId: "review-now-priority:follow-up:rivera-wedding",
+            controlId: "another-request",
+            attentionType: "follow_up"
+          }
+        }
+      },
+      {
+        origin: { routeId: "clear-deck", pathname: "/app/clear-the-deck", search: "" }
+      },
+      {
+        surfaceId: "decision-resolution"
+      }
+    ];
+
+    invalidInputs.forEach((invalid) => {
+      const store = createWorkspaceReturnContextStore();
+      expect(commercialPriorityRoundTrip(store, invalid)).toEqual({
+        ok: false,
+        reason: "invalid_context"
+      });
+    });
+  });
+
   test("returns from the exact Workflow request to its Clear the Deck decision action", () => {
     const store = createWorkspaceReturnContextStore();
     const prepared = decisionRoundTrip(store);
@@ -350,6 +476,46 @@ describe("workspace return context", () => {
       disclosureIds: ["about"],
       scrollY: 0,
       focus: null
+    });
+  });
+
+  test("retains only bounded commercial source generations and allowlisted attention types", () => {
+    expect(sanitizeWorkspaceReturnView({
+      routeId: "home",
+      transient: { sourceLoadedAt: 1_786_000_000_000, extra: "private" },
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    })).toMatchObject({
+      transient: { sourceLoadedAt: 1_786_000_000_000 },
+      focus: { attentionType: "follow_up" }
+    });
+    expect(sanitizeWorkspaceReturnView({
+      routeId: "quote-list",
+      transient: {
+        query: "Autumn",
+        sourceLoadedAtISO: "2026-09-08T10:00:00-05:00"
+      },
+      focus: {
+        kind: "opportunity-action",
+        objectId: "quote-1",
+        actionId: "review-opportunity-workflow:quote-1:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "forged"
+      }
+    })).toMatchObject({
+      transient: {
+        query: "Autumn",
+        sourceLoadedAtISO: "2026-09-08T15:00:00.000Z"
+      },
+      focus: {
+        kind: "opportunity-action",
+        objectId: "quote-1"
+      }
     });
   });
 

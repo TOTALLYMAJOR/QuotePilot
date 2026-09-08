@@ -5,6 +5,7 @@ export const WORKSPACE_RETURN_CONTEXT_STATE_KEY = "workspaceReturnContext";
 
 const DEFAULT_CONTEXT_LIMIT = 24;
 const RETURNABLE_ROUTE_IDS = new Set([
+  "home",
   "quote-list",
   "quote-detail",
   "customer-list",
@@ -13,12 +14,21 @@ const RETURNABLE_ROUTE_IDS = new Set([
   "clear-deck"
 ]);
 const DESTINATION_ROUTE_IDS = new Set(["quote-detail", "customer-detail", "catalog", "workflow"]);
-const CLEAR_DECK_ATTENTION_TYPES = new Set(["approval", "decision_debt"]);
+const WORKFLOW_ATTENTION_TYPES = new Set([
+  "approval",
+  "change_request",
+  "decision_debt",
+  "follow_up",
+  "post_event_closeout",
+  "unread_customer_reply",
+  "anniversary_rebooking"
+]);
 const CLIENT_DIRECTORY_FILTERS = new Set(["all", "linked", "upcoming", "contact_gap"]);
 const CLIENT_OVERVIEW_TABS = new Set(["overview", "quotes", "events", "money", "conversations"]);
 const QUOTE_STATUS_FILTERS = new Set(["all", "draft", "submitted", "archived"]);
 const FOCUS_KINDS = new Set([
   "route-heading",
+  "priority-action",
   "opportunity-action",
   "opportunity-disclosure",
   "client-action",
@@ -36,9 +46,12 @@ const SURFACE_IDS = new Set([
   "client-overview",
   "ambient-library",
   "library-editor",
-  "decision-resolution"
+  "decision-resolution",
+  "commercial-priority"
 ]);
 const ALLOWED_ROUTE_PAIRS = new Set([
+  "home:workflow",
+  "quote-list:workflow",
   "quote-list:quote-detail",
   "customer-list:customer-detail",
   "customer-detail:quote-detail",
@@ -51,7 +64,8 @@ const SURFACE_ROUTE_PAIRS = Object.freeze({
   "client-overview": new Set(["customer-list:customer-detail"]),
   "ambient-library": new Set(["quote-detail:catalog"]),
   "library-editor": new Set(["catalog:catalog"]),
-  "decision-resolution": new Set(["clear-deck:workflow"])
+  "decision-resolution": new Set(["clear-deck:workflow"]),
+  "commercial-priority": new Set(["home:workflow", "quote-list:workflow"])
 });
 const runtimeStoreByWindow = new WeakMap();
 
@@ -117,12 +131,17 @@ function normalizeFocus(value) {
   const objectId = boundedText(value.objectId, 240);
   const actionId = boundedText(value.actionId, 240);
   const controlId = boundedText(value.controlId, 160);
+  const requestedAttentionType = boundedText(value.attentionType, 80).toLowerCase();
+  const attentionType = WORKFLOW_ATTENTION_TYPES.has(requestedAttentionType)
+    ? requestedAttentionType
+    : "";
   if (kind !== "route-heading" && !objectId && !actionId && !controlId) return null;
   return Object.freeze({
     kind,
     ...(objectId ? { objectId } : {}),
     ...(actionId ? { actionId } : {}),
-    ...(controlId ? { controlId } : {})
+    ...(controlId ? { controlId } : {}),
+    ...(attentionType ? { attentionType } : {})
   });
 }
 
@@ -165,7 +184,21 @@ function normalizeStructured(routeId, value) {
 function normalizeTransient(routeId, value) {
   const transient = record(value) ? value : {};
   if (routeId === "quote-list") {
-    return Object.freeze({ query: boundedText(transient.query, 240) });
+    const loadedAtISO = boundedText(transient.sourceLoadedAtISO, 80);
+    return Object.freeze({
+      query: boundedText(transient.query, 240),
+      ...(loadedAtISO && Number.isFinite(Date.parse(loadedAtISO))
+        ? { sourceLoadedAtISO: new Date(Date.parse(loadedAtISO)).toISOString() }
+        : {})
+    });
+  }
+  if (routeId === "home") {
+    const sourceLoadedAt = Number(transient.sourceLoadedAt);
+    return Object.freeze({
+      ...(Number.isSafeInteger(sourceLoadedAt) && sourceLoadedAt > 0
+        ? { sourceLoadedAt }
+        : {})
+    });
   }
   if (routeId === "customer-list") {
     const cursorHistory = Array.isArray(transient.cursorHistory)
@@ -212,6 +245,7 @@ function normalizePathname(routeId, value) {
     || /(?:@|%40)/iu.test(pathname)
   ) return "";
   if (routeId === "quote-list") return pathname === "/app/quotes" ? pathname : "";
+  if (routeId === "home") return pathname === "/app" ? pathname : "";
   if (routeId === "customer-list") return pathname === "/app/customers" ? pathname : "";
   if (routeId === "catalog") return pathname === "/app/catalog" ? pathname : "";
   if (routeId === "clear-deck") return pathname === "/app/clear-the-deck" ? pathname : "";
@@ -258,7 +292,7 @@ function normalizeSearch(routeId, value) {
     const quoteId = params.get("quoteId");
     const attentionType = params.get("attentionType");
     const requestId = params.get("requestId");
-    if (!quoteId || !requestId || !CLEAR_DECK_ATTENTION_TYPES.has(attentionType)) return null;
+    if (!quoteId || !requestId || !WORKFLOW_ATTENTION_TYPES.has(attentionType)) return null;
     try {
       buildWorkflowPath({ quoteId, attentionType, requestId });
     } catch {
@@ -350,12 +384,34 @@ function transitionMatchesView({ origin, destination, surfaceId, view, destinati
   if (surfaceId === "decision-resolution") {
     const params = new URLSearchParams(String(destination.search || "").replace(/^\?/u, ""));
     const requestId = params.get("requestId") || "";
+    const attentionType = params.get("attentionType") || "";
     return Boolean(
       requestId
+      && ["approval", "decision_debt"].includes(attentionType)
       && focus.kind === "decision-action"
       && focus.objectId === requestId
       && focus.actionId === `review-workflow:${requestId}`
     );
+  }
+  if (surfaceId === "commercial-priority") {
+    const params = new URLSearchParams(String(destination.search || "").replace(/^\?/u, ""));
+    const quoteId = params.get("quoteId") || "";
+    const requestId = params.get("requestId") || "";
+    const attentionType = params.get("attentionType") || "";
+    if (
+      !quoteId
+      || !requestId
+      || !WORKFLOW_ATTENTION_TYPES.has(attentionType)
+      || focus.objectId !== quoteId
+      || focus.controlId !== requestId
+      || focus.attentionType !== attentionType
+      || !focus.actionId
+    ) return false;
+    if (origin.routeId === "home") {
+      return focus.kind === "priority-action" && focus.actionId.startsWith("review-now-priority:");
+    }
+    return focus.kind === "opportunity-action"
+      && focus.actionId === `review-opportunity-workflow:${quoteId}:${requestId}`;
   }
   return false;
 }
