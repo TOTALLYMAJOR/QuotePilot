@@ -1287,6 +1287,28 @@ function hydrateBooking(booking) {
   }), evidencePresence);
 }
 
+function materializeBooking(booking) {
+  const hydrated = hydrateBooking(booking);
+  return {
+    ...hydrated,
+    bookedAtISO: hydrated.bookedAtISO,
+    bookedByEmail: hydrated.bookedByEmail,
+    staffLead: hydrated.staffLead,
+    staffAssignedAtISO: hydrated.staffAssignedAtISO,
+    contractNumber: hydrated.contractNumber,
+    contractConvertedAtISO: hydrated.contractConvertedAtISO,
+    contractConvertedByEmail: hydrated.contractConvertedByEmail,
+    confirmationStatus: hydrated.confirmationStatus,
+    confirmationSentAtISO: hydrated.confirmationSentAtISO,
+    confirmedAtISO: hydrated.confirmedAtISO,
+    confirmationUpdatedByEmail: hydrated.confirmationUpdatedByEmail,
+    availabilityCheckedAtISO: hydrated.availabilityCheckedAtISO,
+    availabilitySummary: hydrated.availabilitySummary,
+    kitchenCheckpoints: hydrated.kitchenCheckpoints,
+    productionChecklist: hydrated.productionChecklist
+  };
+}
+
 function materializePortalPayment(payment, totals = {}) {
   const hydrated = hydratePayment(payment, totals);
   const finalBalance = hydrated.finalBalance;
@@ -3941,8 +3963,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),
     status: "draft",
     deletedAtISO: "",
-    payment: hydratePayment({}, source.totals || {}),
-    booking: hydrateBooking({}),
+    payment: materializePortalPayment({}, source.totals || {}),
+    booking: materializeBooking({}),
     workflow: {
       followUp: normalizeFollowUp({ stage: "new" }),
       approvalRequests: []

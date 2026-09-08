@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-08 10:01:36 CDT
+Last updated: 2026-09-08 10:11:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -46,6 +46,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Keep the capability-surfacing gate deterministic as the governed Functions
   entrypoint grows beyond Node's default child-process output buffer; the gate
   still compares the full source and preserves every existing ownership check.
+- Preserve an enumerable safe-empty payment presentation when an alternate
+  draft is duplicated, while continuing to clear every source provider link,
+  confirmation, session identifier, and settlement artifact.
 - These changes are implemented on the governed `v0.18.0` release candidate.
   Production deployment, connected production-data behavior, provider outcomes,
   assistive-technology review, and human acceptance remain separate until their
