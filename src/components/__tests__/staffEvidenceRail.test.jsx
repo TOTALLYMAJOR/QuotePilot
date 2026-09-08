@@ -16,6 +16,14 @@ describe("buildStaffEvidenceRailModel", () => {
 });
 
 describe("StaffEvidenceRail", () => {
+  test("supports a route-level h2 without changing the reusable default hierarchy", () => {
+    const routeMarkup = renderToStaticMarkup(<StaffEvidenceRail headingLevel={2} />);
+    const nestedMarkup = renderToStaticMarkup(<StaffEvidenceRail />);
+
+    expect(routeMarkup).toContain('<h2 id="staff-evidence-rail-title">Staff read context</h2>');
+    expect(nestedMarkup).toContain('<h3 id="staff-evidence-rail-title">Staff read context</h3>');
+  });
+
   test("binds scope, contract, source, timestamp, truncation, and proof caveat to the Home snapshot", () => {
     const markup = renderToStaticMarkup(
       <StaffEvidenceRail

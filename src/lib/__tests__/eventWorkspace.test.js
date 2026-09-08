@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildCommitmentExecutionPresentation,
   buildEventWorkspacePresentation,
   deriveEventIntelligence
 } from "../../components/eventWorkspacePresentation";
@@ -49,6 +50,133 @@ const quote = {
 };
 
 describe("event workspace presentation", () => {
+  test("composes a committed event into planning, consequence, evidence, and one next action", () => {
+    const model = buildCommitmentExecutionPresentation({
+      ...quote,
+      payment: { depositStatus: "paid" },
+      booking: {
+        staffLead: "Jordan Lee",
+        productionChecklist: [{
+          id: "event-brief",
+          completed: true,
+          completedAtISO: "2026-09-01T15:00:00.000Z",
+          completedByEmail: "ops@example.test"
+        }]
+      }
+    }, {
+      source: "firebase",
+      now: new Date("2026-09-08T12:00:00.000Z"),
+      tenantTimeZone: "UTC"
+    });
+
+    expect(model.timingLabel).toBe("11 days away");
+    expect(model.commercialEvidence.deposit).toBe("Deposit paid");
+    expect(model.runOfShow.operationalReadiness.state).toBe("not_established");
+    expect(model.runOfShow.timeline).toHaveLength(7);
+    expect(model.attention[0]).toMatchObject({
+      id: "workflow",
+      action: { kind: "workflow", label: "Open in Workflow" }
+    });
+    expect(model.evidence.find((item) => item.id === "checklist-event-brief")).toMatchObject({
+      actor: "ops@example.test",
+      transition: "Checklist item → Completed"
+    });
+    expect(model.actuals.state).toBe("unavailable");
+    expect(model.replay).toMatchObject({
+      state: "unavailable",
+      title: "Execution replay is not established"
+    });
+  });
+
+  test("fails closed when execution facts, provider evidence, and replay authority are absent", () => {
+    const model = buildCommitmentExecutionPresentation({
+      id: "bounded-event",
+      quoteNumber: "QP-BOUNDARY",
+      status: "accepted",
+      event: { name: "Bounded event", date: "2026-09-08" }
+    }, {
+      source: "local",
+      now: new Date("2026-09-08T12:00:00.000Z"),
+      tenantTimeZone: "UTC"
+    });
+
+    expect(model.timingLabel).toBe("Today");
+    expect(model.commercialEvidence.deposit).toBe("Deposit status not recorded");
+    expect(model.missingFacts.map((item) => item.label)).toEqual(expect.arrayContaining([
+      "Event start time",
+      "Event duration",
+      "Venue",
+      "Staff lead"
+    ]));
+    expect(model.nextAction).toEqual({ kind: "quote", label: "Open quote record" });
+    expect(model.actuals.detail).toContain("does not infer");
+    expect(model.replay.detail).toContain("not an immutable event-session ledger");
+    expect(JSON.stringify(model)).not.toMatch(/operationally ready|live issue resolved|staff checked in/i);
+  });
+
+  test("uses allowlisted payment semantics and gives paid status precedence over failed checkout state", () => {
+    const model = buildCommitmentExecutionPresentation({
+      ...quote,
+      payment: {
+        depositStatus: "mystery",
+        finalBalance: { status: "paid", stripeCheckoutState: "failed" }
+      }
+    }, { todayISO: "2026-09-08" });
+
+    expect(model.commercialEvidence.deposit).toBe("Deposit status not recorded");
+    expect(model.commercialEvidence.finalBalance).toBe("Final balance paid");
+  });
+
+  test("binds acceptance history only to its exact receipt revision", () => {
+    const model = buildCommitmentExecutionPresentation({
+      ...quote,
+      activeVersionId: "revision-v5",
+      latestVersionNumber: 5,
+      acceptanceReceipt: {
+        receiptId: "acceptance-1",
+        quoteRevisionId: "revision-v4",
+        acceptedAtISO: quote.lifecycle.acceptedAtISO
+      }
+    }, { todayISO: "2026-09-08" });
+
+    expect(model.commitment.revision).toBe("Version 5");
+    expect(model.commitment.acceptance).toBe("Acceptance receipt for revision revision-v4");
+    expect(model.evidence.find((item) => item.id === "proposal-accepted")?.revision)
+      .toBe("Accepted revision revision-v4");
+  });
+
+  test("preserves missing, partial, and explicit-zero staffing as distinct states", () => {
+    const missing = buildCommitmentExecutionPresentation({
+      id: "missing-staff", status: "accepted", event: { date: "2026-09-08" }
+    }, { todayISO: "2026-09-08" });
+    const partial = buildCommitmentExecutionPresentation({
+      id: "partial-staff", status: "accepted", event: { date: "2026-09-08", servers: 2 }
+    }, { todayISO: "2026-09-08" });
+    const zero = buildCommitmentExecutionPresentation({
+      id: "zero-staff", status: "accepted", event: { date: "2026-09-08", servers: 0, chefs: 0, bartenders: 0 }
+    }, { todayISO: "2026-09-08" });
+
+    expect(missing.staffingSummary).toBe("Quoted staff counts not recorded");
+    expect(partial.staffingSummary).toContain("2 quoted staff across 1 of 3 recorded roles");
+    expect(zero.staffingSummary).toBe("0 quoted staff");
+  });
+
+  test("uses tenant-local calendar boundaries and never offers unavailable Schedule", () => {
+    const model = buildCommitmentExecutionPresentation({
+      ...quote,
+      workflow: {},
+      event: { ...quote.event, date: "2026-09-08" },
+      booking: { productionChecklist: [] }
+    }, {
+      now: new Date("2026-09-09T04:30:00.000Z"),
+      tenantTimeZone: "America/Chicago",
+      scheduleAvailable: false
+    });
+
+    expect(model.timingLabel).toBe("Today");
+    expect(model.nextAction).toEqual({ kind: "quote", label: "Open quote record" });
+  });
+
   test("repurposes existing deterministic intelligence without inventing unsupported scores", () => {
     const first = deriveEventIntelligence(quote, {
       source: "firebase",

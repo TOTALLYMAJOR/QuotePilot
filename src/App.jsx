@@ -2716,6 +2716,31 @@ export default function App({
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
+  const navigateEventSchedule = useCallback((quoteId) => {
+    const normalizedQuoteId = String(quoteId || "").trim();
+    if (!eventScheduleEnabled || !normalizedQuoteId) {
+      return { status: "recovery", reason: "The exact event Schedule destination is unavailable." };
+    }
+    if (!AMBIENT_UI_ENABLED) return navigateWorkspace(WORKSPACE_PATHS.schedule);
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "schedule",
+      object: { id: normalizedQuoteId, type: "opportunity" },
+      focus: { quoteId: normalizedQuoteId },
+      intentId: "review_event_schedule"
+    });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    return navigateAmbientTaskHandoff(handoff, "review-event-schedule", {
+      preserveReturnContext: true,
+      returnContextSurfaceId: "schedule",
+      returnContextHint: {
+        focus: {
+          kind: "event-control-room-action",
+          objectId: normalizedQuoteId,
+          actionId: "review-event-schedule"
+        }
+      }
+    });
+  }, [eventScheduleEnabled, navigateAmbientTaskHandoff, navigateWorkspace]);
   useEffect(() => {
     setStepValidation(buildStepValidation(form));
   }, [form]);
@@ -6734,6 +6759,8 @@ export default function App({
             snapshot={commercialSnapshot}
             organizationName={organizationName}
             organizationId={authSession.organizationId}
+            tenantTimeZone={tenantTimeZone}
+            scheduleAvailable={eventScheduleEnabled && AMBIENT_UI_ENABLED}
             routeMode={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.EVENT_LIVE
               ? "live"
               : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.EVENT_REPLAY
@@ -6748,6 +6775,10 @@ export default function App({
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onOpenWorkflow={AMBIENT_UI_ENABLED
+              ? openAmbientWorkflow
+              : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenSchedule={eventScheduleEnabled ? navigateEventSchedule : undefined}
             onOpenOperations={eventScheduleEnabled
               ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
               : undefined}

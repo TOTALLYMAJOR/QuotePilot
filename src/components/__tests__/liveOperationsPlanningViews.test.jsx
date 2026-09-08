@@ -7,6 +7,18 @@ import { ClearDeckView, EventPlanningView } from "../LiveOperationsPlanningViews
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+const authorityMocks = vi.hoisted(() => ({
+  getKitchenBeoArtifactStatus: vi.fn(),
+  getOperationalStaffingSnapshot: vi.fn()
+}));
+
+vi.mock("../../lib/kitchenBeoClient", () => ({
+  getKitchenBeoArtifactStatus: authorityMocks.getKitchenBeoArtifactStatus
+}));
+vi.mock("../../lib/operationalStaffingClient", () => ({
+  getOperationalStaffingSnapshot: authorityMocks.getOperationalStaffingSnapshot
+}));
+
 function snapshot(overrides = {}) {
   return {
     loading: false,
@@ -52,6 +64,33 @@ describe("EventPlanningView recovery journeys", () => {
 
     expect(withoutOperations).not.toContain(">Operations</button>");
     expect(withOperations).toContain(">Operations</button>");
+  });
+
+  test("withholds stale staffing coverage and retries authority reads after snapshot refresh", async () => {
+    authorityMocks.getKitchenBeoArtifactStatus.mockReset().mockResolvedValue({ state: "UNKNOWN" });
+    authorityMocks.getOperationalStaffingSnapshot.mockReset()
+      .mockResolvedValueOnce({ state: "stale", snapshot: { coverage: { state: "coverage_confirmed" } } })
+      .mockResolvedValueOnce({ state: "current", snapshot: { coverage: { state: "coverage_confirmed" } } });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const quote = { id: "event-a", organizationId: "org-a", status: "accepted", event: { date: "2027-09-12" } };
+
+    await act(async () => {
+      root.render(<EventPlanningView snapshot={snapshot({ quotes: [quote], loadedAt: 1 })} organizationId="org-a" routeMode="live" quoteId="event-a" />);
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain("Authoritative read is stale; coverage is withheld");
+    expect(container.textContent).not.toContain("Authoritative coverage: coverage_confirmed");
+
+    await act(async () => {
+      root.render(<EventPlanningView snapshot={snapshot({ quotes: [quote], loadedAt: 2 })} organizationId="org-a" routeMode="live" quoteId="event-a" />);
+      await Promise.resolve();
+    });
+    expect(authorityMocks.getOperationalStaffingSnapshot).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Authoritative coverage: coverage_confirmed");
+    await act(async () => root.unmount());
+    container.remove();
   });
 
   test("replaces raw provider errors with one safe productive recovery", () => {
@@ -108,7 +147,7 @@ describe("EventPlanningView recovery journeys", () => {
     expect(markup).not.toContain("Available event");
   });
 
-  test("leads Event Focus with event facts and states the live boundary once", () => {
+  test("turns Event Focus into a commitment briefing with one primary operational continuation", () => {
     const markup = renderToStaticMarkup(
       <EventPlanningView
         snapshot={snapshot({
@@ -120,9 +159,16 @@ describe("EventPlanningView recovery journeys", () => {
             event: {
               name: "Bennett Garden Wedding",
               date: "2027-09-12",
+              hours: 5,
               venue: "Magnolia House",
+              venueAddress: "12 Garden Lane",
+              style: "Buffet",
               guests: 96
-            }
+            },
+            selection: { packageName: "Garden Classic" },
+            activeVersionId: "revision-4",
+            latestVersionNumber: 4,
+            acceptanceReceipt: { receiptId: "acceptance-4", quoteRevisionId: "revision-4" }
           }]
         })}
         routeMode="detail"
@@ -130,15 +176,21 @@ describe("EventPlanningView recovery journeys", () => {
       />
     );
 
-    expect(markup.indexOf('aria-label="Event basics"')).toBeLessThan(
-      markup.indexOf('aria-label="Planning status"')
-    );
-    expect(markup).toContain("Accepted is the recorded opportunity state");
-    expect(markup.match(/Planning view only/g)).toHaveLength(1);
-    expect(markup).not.toContain("server-owned event authority gate");
-    expect(markup).not.toContain("Planning signal");
-    expect(markup).not.toContain(">Control Room</button>");
+    expect(markup).toContain('data-execution-surface="event-focus"');
+    expect(markup).toContain('aria-label="Current commitment"');
+    expect(markup).toContain("Event plan");
+    expect(markup).toContain("Saved total");
+    expect(markup).toContain("Payment context");
+    expect(markup).toContain("Version 4");
+    expect(markup).toContain("12 Garden Lane");
+    expect(markup).toContain("Garden Classic");
+    expect(markup).toContain("Final balance status not recorded");
+    expect(markup).toContain("Acceptance receipt for revision revision-4");
+    expect(markup.match(/>Enter Control Room</g)).toHaveLength(1);
+    expect(markup).toContain("Open commercial truth");
+    expect(markup).not.toContain("Operationally ready");
     expect(markup).not.toContain(">Replay</button>");
+    expect(markup).not.toContain("<h3");
   });
 
   test("keeps partial-read diagnostics collapsed after available event records", () => {
@@ -165,7 +217,7 @@ describe("EventPlanningView recovery journeys", () => {
     expect(markup).not.toContain("Unread reply query did not complete");
   });
 
-  test("keeps unavailable live routes recoverable without offering another unavailable destination", () => {
+  test("uses Control Room as a bounded coordination board and keeps live actuals unavailable", () => {
     const markup = renderToStaticMarkup(
       <EventPlanningView
         snapshot={snapshot({
@@ -181,10 +233,49 @@ describe("EventPlanningView recovery journeys", () => {
       />
     );
 
-    expect(markup).toContain("Control Room is unavailable");
+    expect(markup).toContain('data-execution-surface="control-room"');
+    expect(markup).toContain("Planning view only");
+    expect(markup).toContain("Known gaps before a readiness conclusion");
+    expect(markup).toContain("Planned sequence");
+    expect(markup).toContain("Recorded checklist");
+    expect(markup).toContain("Live actuals are not recorded");
+    expect(markup).toContain('aria-label="Next valid action"');
     expect(markup).toContain("Back to Event Focus");
     expect(markup).toContain("Open quote record");
     expect(markup).not.toContain(">Replay</button>");
+  });
+
+  test("keeps Replay unavailable while disclosing current-record support without relabeling it", () => {
+    const markup = renderToStaticMarkup(
+      <EventPlanningView
+        snapshot={snapshot({
+          quotes: [{
+            id: "event-a",
+            status: "booked",
+            quoteNumber: "QP-1001",
+            lifecycle: { bookedAtISO: "2026-09-01T14:00:00.000Z" },
+            booking: {
+              contractNumber: "C-1001",
+              productionChecklist: [{
+                id: "event-brief",
+                completed: true,
+                completedAtISO: "2026-09-02T15:00:00.000Z",
+                completedByEmail: "ops@example.test"
+              }]
+            },
+            event: { name: "Available event", date: "2027-09-12" }
+          }]
+        })}
+        routeMode="replay"
+        quoteId="event-a"
+      />
+    );
+
+    expect(markup).toContain('data-execution-surface="replay"');
+    expect(markup).toContain("Execution replay is not established");
+    expect(markup).toContain("Supporting record evidence");
+    expect(markup).toContain("not a complete or immutable execution chronology");
+    expect(markup).toContain("Back to Event Focus");
   });
 
 });
@@ -192,9 +283,9 @@ describe("EventPlanningView recovery journeys", () => {
 describe("ClearDeckView bounded decision review", () => {
   test("limits the review queue and exposes no invented decision authority", () => {
     const items = [
-      { id: "approval-a", type: "approval", quoteId: "quote-a", quote: { quoteNumber: "QP-1001" } },
+      { id: "approval-a", type: "approval", quoteId: "quote-a", quote: { quoteNumber: "QP-1001" }, pendingRequests: [{ id: "approval-a", action: "rotate_portal_link", state: "pending" }] },
       { id: "decision-b", type: "decision_debt", quoteId: "quote-b", quote: { quoteNumber: "QP-1002" } },
-      { id: "approval-c", type: "approval", quoteId: "quote-c", quote: { quoteNumber: "QP-1003" } },
+      { id: "approval-c", type: "approval", quoteId: "quote-c", quote: { quoteNumber: "QP-1003" }, pendingRequests: [{ id: "approval-c", action: "rotate_portal_link", state: "pending" }] },
       { id: "decision-d", type: "decision_debt", quoteId: "quote-d", quote: { quoteNumber: "QP-1004" } },
       { id: "follow-up-e", type: "follow_up", quoteId: "quote-e", quote: { quoteNumber: "QP-1005" } }
     ];
@@ -211,15 +302,18 @@ describe("ClearDeckView bounded decision review", () => {
     });
 
     const decisions = Array.from(container.querySelectorAll(".live-ops-decision"));
-    expect(decisions).toHaveLength(3);
+    expect(decisions).toHaveLength(4);
     expect(decisions.map((item) => item.querySelector("h3").textContent))
-      .toEqual(["QP-1001", "QP-1002", "QP-1003"]);
-    expect(container.textContent).toContain("Review the current source evidence in Workflow.");
-    expect(container.textContent).toContain("Skip/defer does not resolve this item in this slice.");
-    expect(container.textContent).toContain("Planning view only");
+      .toEqual([
+        "Decide rotate portal link",
+        "Review unresolved commercial decision",
+        "Decide rotate portal link",
+        "Review unresolved commercial decision"
+      ]);
+    expect(container.textContent).toContain("Workflow owns");
+    expect(container.textContent).toContain("does not acknowledge or resolve");
     expect(Array.from(container.querySelectorAll("button")).map((button) => button.textContent.trim()))
-      .toEqual(["Refresh", "Review in Workflow", "Review in Workflow", "Review in Workflow"]);
-    expect(container.textContent).not.toContain("QP-1004");
+      .toEqual(["Refresh", "Review in Workflow", "Review in Workflow", "Review in Workflow", "Review in Workflow"]);
     expect(container.textContent).not.toContain("QP-1005");
   });
 
@@ -235,8 +329,8 @@ describe("ClearDeckView bounded decision review", () => {
               id: "approval:quote-a",
               type: "approval",
               quoteId: "quote-a",
-              sourceRequestId: "approval-request-a",
-              quote: { quoteNumber: "QP-1001" }
+              quote: { quoteNumber: "QP-1001" },
+              pendingRequests: [{ id: "approval-request-a", action: "rotate_portal_link", state: "pending" }]
             },
             {
               id: "decision:quote-b",
@@ -256,13 +350,23 @@ describe("ClearDeckView bounded decision review", () => {
     expect(onOpenWorkflow).toHaveBeenNthCalledWith(1, {
       quoteId: "quote-a",
       attentionType: "approval",
-      requestId: "approval-request-a"
-    });
+      requestId: "approval-request-a",
+      actionId: "review-workflow:approval-request-a"
+    }, expect.objectContaining({
+      actionId: "review-workflow:approval-request-a",
+      preserveReturnContext: true,
+      returnContextSurfaceId: "decision-resolution"
+    }));
     expect(onOpenWorkflow).toHaveBeenNthCalledWith(2, {
       quoteId: "quote-b",
       attentionType: "decision_debt",
-      requestId: "decision:quote-b"
-    });
+      requestId: "decision:quote-b",
+      actionId: "review-workflow:decision:quote-b"
+    }, expect.objectContaining({
+      actionId: "review-workflow:decision:quote-b",
+      preserveReturnContext: true,
+      returnContextSurfaceId: "decision-resolution"
+    }));
   });
 
   test("keeps refresh on the existing force-refresh callback", () => {
@@ -287,8 +391,7 @@ describe("ClearDeckView bounded decision review", () => {
       />
     );
 
-    expect(emptyMarkup).toContain("No decision items appear in this bounded snapshot.");
-    expect(emptyMarkup).toContain("stay review-only until durable decision receipts ship");
+    expect(emptyMarkup).toContain("No pending approval decisions appear in this complete bounded snapshot.");
     expect(emptyMarkup).toContain('data-capability-state="unavailable"');
     expect(emptyMarkup).toContain("No complete staff snapshot is available yet.");
     expect(emptyMarkup).toContain("does not prove provider delivery, customer acceptance, booking, payment, or operational completion");

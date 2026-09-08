@@ -1170,7 +1170,7 @@ export function EventScheduleView({
     const target = Array.from(
       dialogRef.current?.querySelectorAll("[data-schedule-event-id]") || []
     ).find((element) => element.dataset.scheduleEventId === quoteId);
-    target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    target?.scrollIntoView?.({ behavior: "smooth", block: "start" });
     target?.focus({ preventScroll: true });
     if (target && document.activeElement === target) {
       reportArrivalResolution({

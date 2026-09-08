@@ -7739,6 +7739,7 @@ hr {
 }
 
 .schedule-event-card {
+  scroll-margin-block: 7rem;
   border: 1px solid #bfb9b0;
   border-radius: 11px;
   background: #fcfcfb;
@@ -16432,8 +16433,8 @@ hr {
   margin: 2px 0 0;
 }
 
-/* Live Briefing + Control Room planning slice. These surfaces intentionally
-   show planning evidence only until server-owned live authority ships. */
+/* Commitment-to-execution workspace. Current commercial and planning evidence
+   is composed here; live state remains explicitly outside this read model. */
 .live-ops-route {
   padding-bottom: clamp(2rem, 4vw, 4rem);
 }
@@ -16546,6 +16547,279 @@ hr {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+}
+
+.live-ops-intro {
+  max-width: 62rem;
+  margin: 0;
+  color: var(--tone-ink-2);
+  font-size: 0.95rem;
+}
+
+.live-ops-event-commercial {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  color: var(--tone-ink-2);
+  font-size: 0.82rem;
+}
+
+.commitment-execution {
+  display: grid;
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.execution-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  overflow: hidden;
+  border: 1px solid #dcd4c4;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(167, 119, 28, 0.12), transparent 36%),
+    #fbfaf6;
+  padding: clamp(1rem, 3vw, 1.6rem);
+}
+
+.execution-hero h3,
+.execution-card h3,
+.execution-attention-board h3,
+.execution-replay h3 {
+  margin: 0;
+  color: #171d1a;
+}
+
+.execution-hero p:not(.eyebrow),
+.execution-card > p,
+.execution-replay > p {
+  margin: 0.35rem 0 0;
+  color: #5f5b53;
+}
+
+.execution-hero-compact {
+  align-items: center;
+  padding-block: 1rem;
+}
+
+.execution-fact-strip {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0.35rem 0 0;
+  border-top: 1px solid #ded7ca;
+}
+
+.execution-fact-strip div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.9rem 0.8rem 0 0;
+}
+
+.execution-fact-strip div + div {
+  border-left: 1px solid #e4ddd1;
+  padding-left: 0.9rem;
+}
+
+.execution-fact-strip dt,
+.execution-section-heading span,
+.execution-attention-board li > span {
+  color: #706b62;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.execution-fact-strip dd {
+  min-width: 0;
+  margin: 0;
+  color: #222824;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.execution-briefing-grid,
+.execution-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.execution-card,
+.execution-attention-board,
+.execution-replay,
+.execution-next {
+  border: 1px solid #e1dbcf;
+  border-radius: 10px;
+  background: #fbfaf6;
+  padding: 1rem;
+}
+
+.execution-attention {
+  border-left: 4px solid #a7771c;
+}
+
+.execution-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.execution-attention-board ol,
+.execution-timeline,
+.execution-replay ol {
+  display: grid;
+  gap: 0;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.execution-attention-board li {
+  display: grid;
+  gap: 0.25rem;
+  border-top: 1px solid #e5ded2;
+  padding: 0.75rem 0;
+}
+
+.execution-attention-board li p,
+.execution-replay li p {
+  margin: 0;
+  color: #5f5b53;
+}
+
+.execution-timeline li {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 0.8rem;
+  border-top: 1px solid #e5ded2;
+  padding: 0.65rem 0;
+}
+
+.execution-timeline time {
+  color: #0f6b61;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.execution-timeline li[data-timing-state="unknown"] time {
+  color: #866229;
+}
+
+.execution-timeline span,
+.execution-timeline small {
+  display: block;
+}
+
+.execution-timeline small,
+.execution-replay small {
+  margin-top: 0.15rem;
+  color: #716d65;
+}
+
+.execution-checklist-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.8rem 0;
+}
+
+.execution-checklist-summary strong {
+  color: #0f6b61;
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+}
+
+.execution-checklist-group {
+  border-top: 1px solid #e5ded2;
+}
+
+.execution-checklist-group summary,
+.execution-supporting-evidence summary {
+  min-height: 44px;
+  padding: 0.7rem 0;
+  color: #242925;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.execution-checklist-group ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.execution-checklist-group li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #424741;
+  font-size: 0.85rem;
+}
+
+.execution-checklist-group li span {
+  flex: 0 0 auto;
+  color: #716d65;
+}
+
+.execution-unavailable {
+  border-style: dashed;
+  background: #f5f2eb;
+}
+
+.execution-evidence-summary {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+  padding-left: 1.1rem;
+  color: #424741;
+}
+
+.execution-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-color: #bca066;
+  background: #f5efe1;
+}
+
+.execution-next div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.execution-next span {
+  color: #5f5b53;
+  font-size: 0.88rem;
+}
+
+.execution-replay > ol,
+.execution-supporting-evidence ol {
+  border-left: 2px solid #d6c9ae;
+  margin-left: 0.4rem;
+  padding-left: 1rem;
+}
+
+.execution-replay li {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.7rem 0;
+}
+
+.execution-replay time {
+  color: #6d675d;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
 }
 
 .live-ops-decision {
@@ -16705,8 +16979,34 @@ hr {
 }
 
 @media (max-width: 760px) {
-  .live-ops-focus-grid {
+  .live-ops-focus-grid,
+  .live-ops-switchboard,
+  .execution-briefing-grid,
+  .execution-control-grid {
     grid-template-columns: 1fr;
+  }
+
+  .execution-fact-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .execution-fact-strip div + div {
+    border-left: 0;
+  }
+
+  .execution-fact-strip div:nth-child(even) {
+    border-left: 1px solid #e4ddd1;
+    padding-left: 0.9rem;
+  }
+
+  .execution-next {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .execution-replay li {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
   }
 
   .live-ops-facts div {
@@ -16871,5 +17171,25 @@ hr {
   .configured-quote-action-group .compact {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .execution-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .execution-fact-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .execution-fact-strip div:nth-child(even) {
+    border-left: 0;
+    padding-left: 0.8rem;
+  }
+
+  .execution-timeline li {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
 import { lazy, Suspense } from "react";
 const EventOperationsPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
@@ -15,9 +15,13 @@ import { classifyQuoteStatus } from "../lib/statusSemantics";
 import { useWorkspaceReturnContextAdapter } from "../context/WorkspaceNavigationContext";
 import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
 import { buildClearDeckDecisionPresentations } from "../lib/decisionResolutionPresentation";
+import { buildCommitmentExecutionPresentation } from "./eventWorkspacePresentation";
+import { getKitchenBeoArtifactStatus } from "../lib/kitchenBeoClient";
+import { getOperationalStaffingSnapshot } from "../lib/operationalStaffingClient";
 import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
+  formatWorkspaceMoney,
   formatWorkspaceText,
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
@@ -37,6 +41,17 @@ function findEvent(quotes = [], quoteId = "") {
   return acceptedEvents(quotes).find((quote) => String(quote?.id || "") === id) || null;
 }
 
+function formatEvidenceTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Time not recorded";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "Time not recorded";
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(parsed);
+}
+
 function EvidenceRail({ snapshot, organizationName, organizationId, presentation = "standard" }) {
   return (
     <StaffEvidenceRail
@@ -52,6 +67,7 @@ function EvidenceRail({ snapshot, organizationName, organizationId, presentation
       truncationKnown={snapshot?.truncationKnown}
       reads={snapshot?.reads}
       presentation={presentation}
+      headingLevel={2}
     />
   );
 }
@@ -89,8 +105,8 @@ function LiveAuthorityNotice({ compact = false }) {
     <div className={compact ? "live-ops-authority live-ops-authority-compact" : "live-ops-authority"}>
       <strong>Planning view only</strong>
       <span>
-        Event details are available. Live phase, issues, labor actuals, and replay stay
-        unavailable until live operations are enabled.
+        Event details and the saved plan are available. Live phase, issues, labor actuals,
+        and execution replay remain unavailable without server-owned event-session evidence.
       </span>
     </div>
   );
@@ -165,6 +181,8 @@ export function EventPlanningView({
   principalId = "",
   role = "customer",
   eventOperationsEnabled = false,
+  tenantTimeZone = "",
+  scheduleAvailable = true,
   routeMode = "list",
   quoteId = "",
   onRefresh,
@@ -173,12 +191,17 @@ export function EventPlanningView({
   onOpenLive,
   onOpenReplay,
   onOpenCustomer,
+  onOpenWorkflow,
+  onOpenSchedule,
   onOpenOperations,
   onOpenEvents,
   onOpenOpportunities,
   onStartOpportunity
 }) {
   const headingRef = useWorkspaceRouteHeadingFocus(true);
+  useEffect(() => {
+    headingRef.current?.focus({ preventScroll: true });
+  }, [headingRef, quoteId, routeMode]);
   const state = snapshot || { loading: true, error: "", quotes: [] };
   const events = acceptedEvents(state.quotes);
   const selected = routeMode === "list" ? null : findEvent(state.quotes, quoteId);
@@ -195,6 +218,55 @@ export function EventPlanningView({
   );
   const eventOperationsAvailable = eventOperationsEnabled && state.source === "firebase" && ["admin", "sales"].includes(role) && selected?.status === "booked" && Boolean(principalId);
   const unavailableMode = routeMode === "live" || routeMode === "replay";
+  const execution = selected
+    ? buildCommitmentExecutionPresentation(selected, {
+        source: state.source,
+        now: new Date(),
+        tenantTimeZone,
+        scheduleAvailable
+      })
+    : null;
+  const [authorityReads, setAuthorityReads] = useState({
+    identity: "",
+    beo: { state: "idle", value: null },
+    staffing: { state: "idle", value: null }
+  });
+  useEffect(() => {
+    const identity = `${organizationId}:${selected?.id || ""}`;
+    if (routeMode !== "live" || !selected?.id) {
+      setAuthorityReads({ identity: "", beo: { state: "idle", value: null }, staffing: { state: "idle", value: null } });
+      return undefined;
+    }
+    if (state.source !== "firebase" || !organizationId) {
+      setAuthorityReads({
+        identity,
+        beo: { state: "unavailable", value: null },
+        staffing: { state: "unavailable", value: null }
+      });
+      return undefined;
+    }
+    let current = true;
+    setAuthorityReads({
+      identity,
+      beo: { state: "loading", value: null },
+      staffing: { state: "loading", value: null }
+    });
+    getKitchenBeoArtifactStatus({ organizationId, quoteId: selected.id })
+      .then((value) => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, beo: { state: "current", value } }
+        : prior))
+      .catch(() => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, beo: { state: "unavailable", value: null } }
+        : prior));
+    getOperationalStaffingSnapshot({ organizationId, quoteId: selected.id })
+      .then((value) => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, staffing: { state: String(value?.state || "unavailable"), value } }
+        : prior))
+      .catch(() => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, staffing: { state: "unavailable", value: null } }
+        : prior));
+    return () => { current = false; };
+  }, [organizationId, routeMode, selected?.id, state.loadedAt, state.source]);
   const heading = routeMode === "live"
     ? "Control Room"
     : routeMode === "replay"
@@ -209,14 +281,14 @@ export function EventPlanningView({
         <div className="command-center-head">
           <div>
             <p className="eyebrow">{heading}</p>
-            <h2
+            <h1
               ref={headingRef}
               id="live-ops-heading"
               className="workspace-route-heading"
               tabIndex={-1}
             >
               {selected ? eventTitle(selected) : "Accepted and booked events"}
-            </h2>
+            </h1>
           </div>
           <div className="right-actions">
             {!showUnavailableRecovery && (
@@ -286,41 +358,224 @@ export function EventPlanningView({
           />
         )}
 
-        {!selected && !expectsSelection && hasEvents && (eventOperationsEnabled && state.source === "firebase" && ["admin", "sales"].includes(role)
-          ? <p className="source-note">Open a booked event to review its recorded phase, checkpoints, issues, and actuals. Replay reads operational receipts for the current accepted source.</p>
-          : <LiveAuthorityNotice />)}
-
         {selected && routeMode === "live" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading event operations...</p>}><EventOperationsPanel organizationId={organizationId} quoteId={selected.id} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} quoteStatus={selected.status} sourceVersionId={selected.activeVersionId || selected.versionMeta?.versionId || ""} acceptanceReceiptId={selected.acceptanceReceipt?.receiptId || ""} /></Suspense>}
 
         {selected && routeMode === "replay" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading Replay...</p>}><EventOperatingHistoryPanel organizationId={organizationId} quoteId={selected.id} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} sourceVersionId={selected.activeVersionId || selected.versionMeta?.versionId || ""} acceptanceReceiptId={selected.acceptanceReceipt?.receiptId || ""} /></Suspense>}
         {selected && routeMode === "live" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading execution context...</p>}><EventExecutionContextPanel organizationId={organizationId} quote={selected} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} onOpenQuote={onOpenQuote} onOpenCustomer={onOpenCustomer} /></Suspense>}
-        {selected && (
-          <div className="live-ops-focus-grid">
-            <section className="live-ops-focus-card" aria-label="Event basics">
-              <h3>Event basics</h3>
-              <dl className="live-ops-facts">
-                <div><dt>Date</dt><dd>{formatWorkspaceDate(selected.event?.date)}</dd></div>
-                <div><dt>Guests</dt><dd>{formatWorkspaceInteger(selected.event?.guests, { emptyLabel: "Guest count not set" })}</dd></div>
-                <div><dt>Venue</dt><dd>{formatWorkspaceText(selected.event?.venue, { emptyLabel: "Venue not set" })}</dd></div>
-                <div><dt>Customer</dt><dd>{formatWorkspaceText(selected.customer?.name || selected.customer?.email, { emptyLabel: "Customer not set" })}</dd></div>
+        {!selected && !expectsSelection && hasEvents && (
+          <p className="live-ops-intro">
+            Commercial commitments ready for operational planning. Open one event to carry its accepted scope into a bounded briefing.
+          </p>
+        )}
+
+        {selected && execution && routeMode === "detail" && (
+          <div className="commitment-execution" data-execution-surface="event-focus">
+            <section className="execution-hero" aria-label="Current commitment">
+              <div>
+                <p className="eyebrow">Current commitment · {execution.timingLabel}</p>
+                <h2>{execution.workspace.customerName}</h2>
+                <p>{execution.workspace.eventDate} at {execution.workspace.eventTime} · {execution.workspace.venue}</p>
+              </div>
+              <StatusChip {...execution.workspace.status} />
+              <dl className="execution-fact-strip">
+                <div><dt>Guests</dt><dd>{execution.workspace.guests}</dd></div>
+                <div><dt>Saved total</dt><dd>{execution.workspace.total}</dd></div>
+                <div><dt>Commitment</dt><dd>{execution.runOfShow.quoteStatus === "booked" ? "Booked" : "Accepted"}</dd></div>
+                <div><dt>Payment context</dt><dd>{execution.commercialEvidence.deposit}</dd></div>
               </dl>
             </section>
-            <section className="live-ops-focus-card" aria-label="Planning status">
-              <h3>Planning status</h3>
-              <p className="source-note">
-                {classifyQuoteStatus(selected.status).label} is the recorded opportunity state. The scheduled date does not by itself confirm operational readiness.
-              </p>
-              {eventOperationsAvailable
-                ? <p className="source-note">Control Room records event phases, checkpoints, issues, and actuals against the accepted source. Replay reads operational receipts for the current accepted source.</p>
-                : <LiveAuthorityNotice compact />}
-              {unavailableMode && !eventOperationsAvailable && (
-                <p className="error-note" role="status">
-                  {routeMode === "live"
-                    ? "Control Room is unavailable until live operations authority is enabled."
-                    : "Replay is unavailable until immutable event ledger evidence exists."}
-                </p>
+
+            <div className="execution-briefing-grid">
+              <section className="execution-card" aria-labelledby="event-plan-title">
+                <p className="eyebrow">Event plan</p>
+                <h2 id="event-plan-title">The day as currently recorded</h2>
+                <dl className="live-ops-facts">
+                  <div><dt>Quote</dt><dd>{execution.workspace.quoteNumber}</dd></div>
+                  <div><dt>Revision</dt><dd>{execution.commitment.revision}</dd></div>
+                  <div><dt>Duration</dt><dd>{execution.commitment.duration}</dd></div>
+                  <div><dt>Address</dt><dd>{execution.commitment.address}</dd></div>
+                  <div><dt>Package</dt><dd>{execution.commitment.package}</dd></div>
+                  <div><dt>Service</dt><dd>{execution.commitment.serviceStyle}</dd></div>
+                  <div><dt>Staff lead</dt><dd>{formatWorkspaceText(execution.runOfShow.staffing.staffLead, { emptyLabel: "Not recorded" })}</dd></div>
+                  <div><dt>Team</dt><dd>{execution.staffingSummary}</dd></div>
+                  <div><dt>Run of show</dt><dd>{execution.runOfShow.timeline.length - execution.timingUnknownCount} of {execution.runOfShow.timeline.length} checkpoint times known</dd></div>
+                  <div><dt>Production</dt><dd>{execution.runOfShow.productionChecklist.completedCount} of {execution.runOfShow.productionChecklist.totalCount} checklist items recorded complete</dd></div>
+                  <div><dt>Final balance</dt><dd>{execution.commercialEvidence.finalBalance}</dd></div>
+                  <div><dt>Acceptance</dt><dd>{execution.commitment.acceptance}</dd></div>
+                </dl>
+              </section>
+              <section className="execution-card execution-attention" aria-labelledby="handoff-title">
+                <p className="eyebrow">Handoff</p>
+                <h2 id="handoff-title">{execution.attention.length ? "What needs attention" : "Continue into coordination"}</h2>
+                <p>{execution.attention[0]?.title || "The accepted plan is ready to coordinate from its current evidence."}</p>
+                <p className="source-note">{execution.proofBoundary}</p>
+              </section>
+            </div>
+
+            <div className="live-ops-actions" aria-label="Event Focus actions">
+              {eventOperationsAvailable && (
+                <button
+                  type="button"
+                  className="cta"
+                  data-event-operations-entry="control-room"
+                  onClick={() => onOpenLive?.(selected.id)}
+                >
+                  Open Control Room
+                </button>
+              )}
+              {!eventOperationsAvailable && (
+                <button type="button" className="cta" onClick={() => onOpenLive?.(selected.id)}>
+                  Enter Control Room
+                </button>
+              )}
+              {eventOperationsAvailable && (
+                <button
+                  type="button"
+                  className="ghost"
+                  data-event-operations-entry="replay"
+                  onClick={() => onOpenReplay?.(selected.id)}
+                >
+                  Open Replay
+                </button>
+              )}
+              <button type="button" className="ghost" onClick={() => onOpenQuote?.(selected.id)}>Open commercial truth</button>
+            </div>
+          </div>
+        )}
+
+        {selected && execution && routeMode === "live" && (
+          <div className="commitment-execution" data-execution-surface="control-room">
+            {!eventOperationsAvailable && <LiveAuthorityNotice compact />}
+            <section className="execution-hero execution-hero-compact" aria-label="Control Room event identity">
+              <div>
+                <p className="eyebrow">Coordinate · {execution.timingLabel}</p>
+                <h2>{execution.workspace.eventName}</h2>
+                <p>{execution.workspace.eventDate} at {execution.workspace.eventTime} · {execution.workspace.venue}</p>
+              </div>
+              <StatusChip {...execution.workspace.status} />
+            </section>
+
+            <section className="execution-attention-board" aria-labelledby="control-attention-title">
+              <div className="execution-section-heading">
+                <div><p className="eyebrow">Needs attention now</p><h2 id="control-attention-title">Known gaps before a readiness conclusion</h2></div>
+                <span>{execution.attention.length} tracked</span>
+              </div>
+              {execution.attention.length ? (
+                <ol>
+                  {execution.attention.map((item) => (
+                    <li key={item.id}>
+                      <span>{item.domain}</span>
+                      <strong>{item.title}</strong>
+                      <p>{item.detail}</p>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p>No gap is exposed by these bounded sources. This is not an operational-readiness claim.</p>
               )}
             </section>
+
+            <div className="execution-control-grid">
+              <section className="execution-card" aria-labelledby="run-event-title">
+                <p className="eyebrow">Run event</p>
+                <h2 id="run-event-title">Planned sequence</h2>
+                <ol className="execution-timeline">
+                  {execution.runOfShow.timeline.map((item) => (
+                    <li key={item.id} data-timing-state={item.timingState}>
+                      <time>{item.timeLabel || "Time unknown"}</time>
+                      <span><strong>{item.label}</strong><small>{item.timingBasis === "booking_override" ? "Saved booking time" : "Generated from event plan"}</small></span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+              <section className="execution-card" aria-labelledby="production-title">
+                <p className="eyebrow">Production</p>
+                <h2 id="production-title">Recorded checklist</h2>
+                <div className="execution-checklist-summary">
+                  <strong>{execution.runOfShow.productionChecklist.completedCount}/{execution.runOfShow.productionChecklist.totalCount}</strong>
+                  <span>items recorded complete</span>
+                </div>
+                {execution.runOfShow.productionChecklist.groups.map((group) => (
+                  <details key={group.group} className="execution-checklist-group">
+                    <summary>{group.group}</summary>
+                    <ul>{group.items.map((item) => <li key={item.id} data-check-state={item.state}>{item.label}<span>{item.state === "completed" ? "Complete" : item.state === "not_completed" ? "Not complete" : "Not recorded"}</span></li>)}</ul>
+                  </details>
+                ))}
+              </section>
+              <section className="execution-card execution-unavailable" aria-labelledby="actuals-title">
+                <p className="eyebrow">Actuals</p>
+                <h2 id="actuals-title">{execution.actuals.title}</h2>
+                <p>{execution.actuals.detail}</p>
+              </section>
+              <section className="execution-card" aria-labelledby="evidence-title">
+                <p className="eyebrow">Evidence</p>
+                <h2 id="evidence-title">Preserved source truth</h2>
+                <ul className="execution-evidence-summary">
+                  <li>{execution.commercialEvidence.booking}</li>
+                  <li>{execution.commercialEvidence.deposit}</li>
+                  <li>{execution.commercialEvidence.finalBalance}</li>
+                  <li>{execution.commitment.acceptance}</li>
+                </ul>
+                <p className="source-note">{execution.commercialEvidence.boundary}</p>
+              </section>
+              <section className="execution-card" aria-labelledby="authority-coverage-title">
+                <p className="eyebrow">Authority coverage</p>
+                <h2 id="authority-coverage-title">Operational evidence stays separate</h2>
+                <ul className="execution-evidence-summary">
+                  <li><strong>Kitchen BEO:</strong> {authorityReads.beo.state === "current"
+                    ? `Authoritative freshness: ${formatWorkspaceText(authorityReads.beo.value?.state, { emptyLabel: "unknown" })}.`
+                    : authorityReads.beo.state === "loading" ? "Checking the exact governed record…" : "Current governed status is unavailable in this read."}</li>
+                  <li><strong>Operational staffing:</strong> {authorityReads.staffing.state === "current"
+                    ? `Authoritative coverage: ${formatWorkspaceText(authorityReads.staffing.value?.snapshot?.coverage?.state || authorityReads.staffing.value?.state, { emptyLabel: "unknown" })}.`
+                    : authorityReads.staffing.state === "loading"
+                      ? "Checking the exact governed record…"
+                      : ["stale", "partial", "empty"].includes(authorityReads.staffing.state)
+                        ? `Authoritative read is ${authorityReads.staffing.state}; coverage is withheld until a current read completes.`
+                        : "Current governed coverage is unavailable in this read."}</li>
+                  <li><strong>Dependencies:</strong> {execution.dependencyEvidence.summary}. {execution.dependencyEvidence.detail}</li>
+                </ul>
+              </section>
+            </div>
+
+            <div className="execution-next" aria-label="Next valid action">
+              <div><p className="eyebrow">Next</p><strong>{execution.nextAction.label}</strong><span>Continue in the existing authority that owns this work.</span></div>
+              {execution.nextAction.kind === "workflow" ? (
+                <button type="button" className="cta" onClick={() => onOpenWorkflow?.(execution.nextAction.target)}>{execution.nextAction.label}</button>
+              ) : execution.nextAction.kind === "schedule" ? (
+                <button type="button" className="cta" onClick={() => onOpenSchedule?.(selected.id)}>{execution.nextAction.label}</button>
+              ) : (
+                <button type="button" className="cta" onClick={() => onOpenQuote?.(selected.id)}>{execution.nextAction.label}</button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {selected && execution && routeMode === "replay" && (
+          <div className="commitment-execution" data-execution-surface="replay">
+            <section className="execution-hero execution-hero-compact" aria-label="Replay event identity">
+              <div><p className="eyebrow">Evidence review</p><h2>{execution.workspace.eventName}</h2><p>{execution.workspace.eventDate} · {execution.workspace.quoteNumber}</p></div>
+              <StatusChip {...execution.workspace.status} />
+            </section>
+            <section className="execution-replay execution-unavailable" aria-labelledby="replay-evidence-title">
+              <p className="eyebrow">Replay boundary</p>
+              <h2 id="replay-evidence-title">{execution.replay.title}</h2>
+              <p>{execution.replay.detail}</p>
+              {execution.evidence.length > 0 && (
+                <details className="execution-supporting-evidence">
+                  <summary>Supporting record evidence</summary>
+                  <p className="source-note">These current-record facts may support investigation. They are not a complete or immutable execution chronology.</p>
+                  <ol>
+                    {execution.evidence.map((item) => (
+                      <li key={item.id}>
+                        <time>{formatEvidenceTime(item.atISO)}</time>
+                        <div><strong>{item.action}</strong><p>{item.transition}</p><small>{item.actor} · {item.channel} · {item.revision}</small></div>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
+            </section>
+            <LiveAuthorityNotice compact />
           </div>
         )}
 
@@ -328,20 +583,32 @@ export function EventPlanningView({
           <ul className="command-center-list live-ops-event-list" aria-label="Accepted and booked events">
             {events.map((quote) => {
               const { family, label } = classifyQuoteStatus(quote.status);
+              const item = buildCommitmentExecutionPresentation(quote, {
+                source: state.source,
+                now: new Date(),
+                tenantTimeZone,
+                scheduleAvailable
+              });
               return (
                 <li key={quote.id} className="command-center-row">
                   <div className="command-center-row-main">
                     <p className="command-center-row-detail">
                       <strong>{eventTitle(quote)}</strong>
+                      {" · "}{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number not recorded" })}
                       {" · "}{formatWorkspaceDate(quote.event?.date)}
                     </p>
                     <p className="command-center-row-meta">
-                      {formatWorkspaceText(quote.customer?.name || quote.customer?.email, { emptyLabel: "Customer not set" })}
+                      {item?.timingLabel || formatWorkspaceDate(quote.event?.date)}
+                      {" · "}{formatWorkspaceText(quote.customer?.name || quote.customer?.email, { emptyLabel: "Customer not set" })}
                       {" · "}{formatWorkspaceText(quote.event?.venue, { emptyLabel: "Venue not set" })}
                       {" · "}{formatWorkspaceInteger(quote.event?.guests, { emptyLabel: "Guest count not set" })}
                       {hasWorkspaceNumber(quote.event?.guests) ? " guests" : ""}
                     </p>
-                    <StatusChip family={family} label={label} />
+                    <div className="live-ops-event-commercial">
+                      <StatusChip family={family} label={label} />
+                      <span>{formatWorkspaceMoney(quote.totals?.total, { emptyLabel: "Total not recorded" })}</span>
+                      <span>{item?.commercialEvidence.deposit}</span>
+                    </div>
                   </div>
                   <div className="right-actions">
                     <button type="button" className="ghost" onClick={() => onOpenQuote?.(quote.id)}>Quote</button>
@@ -353,15 +620,13 @@ export function EventPlanningView({
           </ul>
         )}
 
-        {selected && (
+        {selected && unavailableMode && (
           <div className="live-ops-actions">
             {routeMode === "detail" && eventOperationsAvailable && <button type="button" className="cta" data-event-operations-entry="control-room" onClick={() => onOpenLive?.(selected.id)}>Open Control Room</button>}
             {routeMode !== "replay" && eventOperationsAvailable && <button type="button" className="ghost" data-event-operations-entry="replay" onClick={() => onOpenReplay?.(selected.id)}>Open Replay</button>}
             {routeMode === "replay" && eventOperationsAvailable && <button type="button" className="ghost" onClick={() => onOpenLive?.(selected.id)}>Open Control Room</button>}
             <button type="button" className="ghost" onClick={() => onOpenQuote?.(selected.id)}>Open quote record</button>
-            {unavailableMode && (
-              <button type="button" className="ghost" onClick={() => onOpenEvent?.(selected.id)}>Back to Event Focus</button>
-            )}
+            <button type="button" className="ghost" onClick={() => onOpenEvent?.(selected.id)}>Back to Event Focus</button>
           </div>
         )}
       </section>

@@ -132,6 +132,7 @@ export function StaffReadContextRail({
   caveat = "Freshness describes this staff read only. It does not prove provider delivery, customer acceptance, booking, payment, or operational completion.",
   title = "Staff read context",
   titleId = "staff-evidence-rail-title",
+  headingLevel = 3,
   presentation = "standard"
 }) {
   const model = buildStaffEvidenceRailModel({
@@ -146,6 +147,7 @@ export function StaffReadContextRail({
   const scopeName = formatWorkspaceText(organizationName, { emptyLabel: "Current organization" });
   const tenantKey = formatWorkspaceText(organizationId, { emptyLabel: "Not available" });
   const presentationMode = presentation === "compact" ? "compact" : "standard";
+  const Heading = headingLevel === 2 ? "h2" : "h3";
 
   return (
     <aside
@@ -158,7 +160,7 @@ export function StaffReadContextRail({
       <div className="staff-evidence-head">
         <div>
           <p className="eyebrow">Data freshness</p>
-          <h3 id={titleId}>{title}</h3>
+          <Heading id={titleId}>{title}</Heading>
         </div>
         <StatusChip
           {...model.presentation}
@@ -227,6 +229,7 @@ export default function StaffEvidenceRail({
   reads = {},
   historyLimit = 200,
   title = "Staff read context",
+  headingLevel = 3,
   readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, optional Decision Debt projection, plus the latest 200 staff quote records",
   presentation = "standard"
 }) {
@@ -253,6 +256,7 @@ export default function StaffEvidenceRail({
       truncationKnown={truncationKnown}
       historyLimit={historyLimit}
       title={title}
+      headingLevel={headingLevel}
       readContract={readContract}
       presentation={presentation}
       outcome={contractOutcome(reads, { retained: model.state === "stale" })}
