@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-05 19:17:44 CDT
+Last updated: 2026-09-08 09:45:47 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -98,7 +98,7 @@ make and publish catalog changes.
    click, is delivery evidence.
 7. Return to **Opportunities** to track the next recorded action.
 
-### Commercial Workbench (source candidate)
+### Commercial Workbench (`v0.18.0` candidate)
 
 When Proposal Composer is enabled, use **Quote plan** to move among Event,
 Customer, Experience, Staffing, and Commercials. These are views of one draft,
@@ -107,7 +107,10 @@ Menu, rentals, and enhancements editors. **Commercial truth** keeps the current
 total, deposit, blockers, consequences, available margin evidence, scenarios,
 client Preview, and save state together. Switching a domain does not save or
 change pricing; use the explicit save action when the draft is ready. Guided
-mode edits the same draft and uses the same save authority.
+mode edits the same draft and uses the same save authority. Quote plan remains a
+sticky left rail at desktop and compact-desktop widths, including 1008px. At
+tablet and phone widths it becomes a horizontal navigator above the same
+proposal document so domain context is adapted, never omitted.
 
 ### Calendar-first Operations (source candidate)
 
@@ -1216,7 +1219,62 @@ assistive-technology, or human acceptance.
   approval-array, contract-evidence, and execution-audit writes; source changes
   still require a coordinated release before they alter production behavior.
 
+### Clear the Deck decision resolution (QP-UXR-002)
+
+- Open **Clear the Deck** for an explicit commercial or operational judgment.
+  Each exact pending approval presents its event/customer, lifecycle, material
+  stake, timing, requester, revision, dependency consequence, evidence
+  boundary, and required authority. Exact retained Decision Debt uses the same
+  judgment surface but remains owned by Workflow.
+- **Review in Workflow** carries and focuses that exact request. Workflow repeats
+  the material context beside the existing role-gated controls; it never
+  substitutes the first or a similar item.
+- Approval and execution remain separate. A confirmed resolution receipt names
+  **Changed**, **Preserved**, and **Next**. When still eligible, continue to the
+  existing Quotes execution surface; the approval itself does not charge,
+  contract, rotate a portal, send, or delete anything.
+- If the outcome may have been sent but exact readback is unavailable, do not
+  choose again. **Check current approval state** reads the original operation
+  only. Current incomplete, stale, failed, contradictory, or truncated evidence
+  withdraws approval; authorized rejection remains non-executing.
+- Returning refreshes Clear the Deck and restores the same decision, or its
+  heading when complete current evidence correctly proves that decision is no
+  longer pending. Local or responsive evidence does not substitute for a
+  connected approval write, provider outcome, or human acceptance.
+
 ## Commercial Change Authority
+
+### Governed Commercial Amendment Experience (QP-UXR-001)
+
+- For an eligible draft, sent, or viewed quote, Quote Edit keeps one continuous
+  decision path: **current commitment → proposed change → semantic difference →
+  authoritative simulation → consequence → required authority → atomic
+  application → preserved truth → invalidated truth → receipt → next valid
+  action**. It composes the existing Commercial Change Authority and is not a
+  second editor, calculator, consequence engine, or payment authority.
+- **Preview consequences** is read-only. The primary presentation groups exact
+  returned graph evidence into commercial/payment, staffing,
+  production/rentals, event operations, customer/documents, and related
+  workflow meaning. Exact graph, revision, authority, and before/after evidence
+  remains available under disclosure.
+- **Preserved truth** includes only recorded acceptance, provider-confirmed
+  deposit, booking/contract, or provider-accepted delivery evidence. Missing
+  evidence remains missing; provider session IDs, portal keys, and customer
+  contact data are not copied into this projection.
+- Every connected save requires a current simulation. Dormant or enforced
+  no-impact review uses **Apply reviewed change**; an authorization-required
+  change uses the existing request/authorization and **Apply authorized
+  change**. Dormant application creates the governed revision but does not claim
+  that dependency invalidations were persisted.
+- Success remains on the amendment surface and focuses a receipt with
+  **Changed**, **Preserved**, **Needs attention**, and **Next**. **Review updated
+  quote** opens the authoritative record. An uncertain apply retains its
+  original request identity and offers exact reconciliation; it never silently
+  repeats the mutation.
+- Accepted, booked, paid, declined, refunded, expired, and deleted commitments
+  remain outside ordinary Quote Edit. A copied direct-edit URL stops before an
+  editable form is hydrated. QP-UXR-001 does not weaken that lock or rewrite
+  historical customer, payment, booking, or provider evidence.
 
 ### Living Opportunity attendance evidence (source only)
 
@@ -2482,6 +2540,21 @@ receipts for those actions and evidence.
   pricing and margin, customer state, and event planning. Only proposal
   completeness may appear as a percentage; QuotePilot does not blend the four
   views into an event-readiness score.
+- With QP-UXR-003, read each primary Opportunities row as **what**, **saved
+  value and position**, **why it matters**, then **next action**. The saved total
+  is the amount already recorded on the quote; the stream never reprices it.
+  **Value unavailable** means no safe amount was present, while `$0.00` means
+  zero was actually recorded. Lifecycle, proposal, booking, deposit, and final
+  balance remain separate. Missing payment evidence is **not recorded**, not
+  **unpaid**; timestamp-only or unrecognized status evidence is not promoted.
+  Expand **Details** for the supporting momentum and provenance.
+- Now priorities use the same saved-value and commercial-position projection
+  without changing existing Workflow order. An exact Workflow continuation
+  carries the quote and obligation. After a newly completed source read, return
+  restores that action, the same quote's current action, or the source heading
+  when the obligation is gone; it never substitutes another record. If the
+  retained Workflow read fails to refresh, context remains readable but
+  consequential controls stay unavailable.
 - Required proposal completeness and recommended contact quality remain
   separate. A quote with every required proposal field can show **100%** while
   also naming **1 recommended contact detail**. A missing customer phone does
@@ -2503,15 +2576,36 @@ receipts for those actions and evidence.
   **Opportunities** or **Start a quote**. An unknown event link never opens a
   different event in its place.
 - When an accepted or booked event remains available during a partial, stale,
-  truncated, or otherwise bounded read, Events keeps the event usable and
-  collapses source diagnostics under **Some data may be out of date**. In
-  **Event Focus**, event basics appear before planning status. The recorded
-  accepted/booked state does not by itself establish operational readiness;
-  unavailable live phase, issue, labor-actual, and replay evidence is named once
-  as **Planning view only**. Until that authority is enabled, Events does not
-  present Control Room or Replay as active actions. A direct link to either
-  unavailable view keeps the exact event visible and offers **Back to Event
-  Focus** or **Open quote record**.
+  truncated, or otherwise bounded read, Events keeps it usable and collapses
+  source diagnostics under **Some data may be out of date**. **Event Focus**
+  presents the current commitment before the saved plan: customer, date/time,
+  venue/address, duration, quote/revision, package/service, guests, saved total,
+  acceptance/booking, acceptance receipt, deposit, and final balance remain
+  distinct. **Enter Control Room** carries that exact event into bounded
+  coordination; **Open commercial truth** returns to the existing quote owner.
+- **Control Room** is a planning composition, not a live event console. Read
+  **Needs attention now**, **Planned sequence**, **Recorded checklist**,
+  **Actuals**, **Evidence**, then **Next**. Exact BEO freshness and operational
+  staffing coverage come from their existing governed reads and remain
+  separate. Neither checklist state nor those reads establishes live phase,
+  staff attendance, operational readiness, actual labor, or completion. The
+  single next action continues to the exact Workflow, Schedule event, or quote
+  record that owns the work.
+- QP-UXR-005 **Event Preflight** appears inside selected Control Room and keeps
+  **Ready / satisfied facts**, **Needs attention**, and **Unknown /
+  unavailable** separate. It may confirm only narrow facts from the current
+  commercial record, acceptance receipt, payment projection, final-count
+  checklist, BEO, staffing, Workflow, and complete bounded Schedule evidence.
+  It never calculates a readiness score. Missing or stale reads never pass;
+  inventory, actual attendance, live phase, and live issues remain unavailable.
+  Its one **Next** follows the first supported attention or resolvable unknown
+  into the exact existing authority; otherwise it opens the exact event in
+  Schedule.
+- **Replay** remains unavailable as execution history until QuotePilot owns an
+  immutable event-session ledger. Current commercial milestones or checklist
+  timestamps may appear only as incomplete, non-immutable supporting evidence.
+  Direct Control Room or Replay links keep the exact event visible and offer
+  **Back to Event Focus** or **Open quote record**.
 - Quote lifecycle, booking confirmation, deposit, and final balance remain
   separate recorded details in each row. Select the single primary action to
   open that exact opportunity or its existing role-safe Workflow item. An

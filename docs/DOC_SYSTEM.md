@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-05 18:51:02 CDT
+Last updated: 2026-09-08 10:01:36 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -173,7 +173,9 @@ reviewed presentation-only files remain excluded unless their source introduces
 direct provider, Firebase, or network authority signals. Mutation inspection
 includes chained Admin/Firestore writes and modular client writes. These are
 explicit review contracts, not claims that the checker can infer a complete
-semantic call graph.
+semantic call graph. The checker provisions a bounded multi-megabyte Git output
+buffer so the governed Functions entrypoint is compared in full rather than
+failing before contract validation.
 
 Headless work may use only the narrow `headless_operational`,
 `security_private`, or `developer_infrastructure` classifications. Operational

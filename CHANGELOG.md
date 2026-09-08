@@ -1,10 +1,55 @@
 # Changelog
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-08 10:01:36 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — v0.18.0 capability-realization candidate
+
+- Add QP-UXR-001 Governed Commercial Amendment to eligible Quote Edit records:
+  the exact current commitment, reversible proposal, semantic differences,
+  authoritative consequence simulation, required authority, governed apply,
+  preserved historical truth, named invalidation, uncertain-outcome
+  reconciliation, focused amendment receipt, and next valid action now read as
+  one workflow. Existing pricing, revision, Commercial Change, payment,
+  acceptance, booking, BEO, staffing, and dependency authorities remain owners;
+  terminal commitments remain locked.
+- Add QP-UXR-002 Clear the Deck decision resolution. Exact pending approvals
+  and retained Decision Debt become business-readable decisions, retain their
+  context through the existing Workflow authority, confirm only after exact
+  same-organization readback, and fail closed against duplicate resolution when
+  an outcome is uncertain.
+- Add QP-UXR-003 Commercial Priority across Now and Opportunities. One shared
+  projection presents exact identity, recorded saved value, independent
+  lifecycle/proposal/booking/payment facts, supported consequence, and one
+  current action without repricing lists, inventing a score, or turning missing
+  evidence into zero or unpaid.
+- Add QP-UXR-004 Commitment-to-Execution across Events, Event Focus, Control
+  Room, exact Schedule continuation, and an explicit Replay boundary. It
+  composes the saved commitment, run of show, checklist, Workflow, BEO, and
+  staffing evidence without creating live-event, attendance, actuals,
+  completion, or event-wide readiness authority.
+- Add QP-UXR-005 Event Preflight inside the selected Control Room. It separates
+  satisfied facts, known attention, and unavailable truth from existing
+  authorities, provides one valid continuation, and never calculates a
+  readiness score or treats stale, partial, malformed, or missing evidence as a
+  pass.
+- Record QP-UXR-006 as **undefined / owner decision required**. No product
+  behavior is implemented or claimed; the bounded recommendation remains
+  unapproved in `docs/QP_UXR_002_006_OWNER_REVIEW.md`.
+- Preserve Quote Edit's existing Quote plan as a sticky left rail at 1440 and
+  compact-desktop 1008 widths, then adapt it to a horizontal domain navigator
+  at tablet and phone widths. A four-width browser contract now prevents the
+  domain context from disappearing while the proposal document is edited.
+- Keep the capability-surfacing gate deterministic as the governed Functions
+  entrypoint grows beyond Node's default child-process output buffer; the gate
+  still compares the full source and preserves every existing ownership check.
+- These changes are implemented on the governed `v0.18.0` release candidate.
+  Production deployment, connected production-data behavior, provider outcomes,
+  assistive-technology review, and human acceptance remain separate until their
+  exact release evidence is recorded.
 
 ## Unreleased — combined production candidate
 

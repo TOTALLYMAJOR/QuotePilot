@@ -1,6 +1,36 @@
 # Project Status
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-08 09:45:47 CDT
+
+## v0.18.0 Capability Realization Release Candidate
+
+The release branch starts from exact tagged `v0.17.0` main commit `530f31e9`
+and contains one isolated commit for each implemented QP-UXR capability:
+QP-UXR-001 Governed Commercial Amendment, QP-UXR-002 decision resolution,
+QP-UXR-003 commercial priority, QP-UXR-004 commitment-to-execution, and
+QP-UXR-005 Event Preflight. QP-UXR-006 is a documentation-only owner decision
+because no approved feature definition exists. A separate acceptance repair
+keeps Quote Edit's domain plan in the left rail at 1008px compact-desktop width
+and in a horizontal navigator at 768px and 390px.
+
+This is a reconstructed release candidate, not a promotion of the stale
+integration branch. Each feature commit was replayed onto current main with
+conflicts resolved in favor of the newer pricing, workflow-pack, attendance,
+tenant, catalog, field-state, and release safeguards. QP-UXR-001 reuses the
+existing server-authoritative pricing and Commercial Change apply/reconciliation
+chain; QP-UXR-002 reuses Workflow approval and readback; QP-UXR-003 reuses the
+bounded commercial snapshot and arrival/return contracts; QP-UXR-004 and 005
+reuse the existing run-of-show, Schedule, BEO, staffing, dependency, and
+Workflow reads. No second business authority or generalized Event aggregate is
+introduced.
+
+Focused feature coverage passed during reconstruction, including 53 QP-UXR-001,
+143 QP-UXR-002, 150 QP-UXR-003, 39 QP-UXR-004, and 53 QP-UXR-005 tests. The
+responsive Quote Edit rail contract passes at 1440, 1008, 768, and 390 pixels.
+Full unit, build, governance, capability, bundle, release-lane, exact-SHA CI,
+candidate deployment, production deployment, provider readback, and hosted
+acceptance evidence are still being established and must not be inferred from
+these focused results.
 
 ## Combined production candidate
 

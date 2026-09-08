@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 75,
+  "catalogVersion": 76,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -236,7 +236,7 @@
     },
     {
       "id": "steward-private-validation-foundation",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -2475,14 +2475,14 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, advisory REVIEW or STALE consequences, and one six-group source-labeled consequence review before any save.",
+      "summary": "The trusted Quote Edit flow assembles the exact current commitment, lifecycle requirement, server-authoritative current and proposed pricing snapshots, semantic fact differences, six source-labeled business consequence groups, supported preserved evidence, and advisory REVIEW or STALE dependency effects before any save.",
       "backendPaths": [
         "functions/commercialChangeImpactPreview.js",
         "functions/commercialPlatformCore.cjs",
@@ -2500,6 +2500,7 @@
         "src/lib/commerceOps.js",
         "src/lib/commercialPlatform.js",
         "src/lib/commercialPlatformCore.cjs",
+        "src/lib/commercialAmendmentContext.js",
         "src/lib/commercialChangeImpact.js",
         "src/lib/pricingContracts.js",
         "src/lib/pricingV2.js",
@@ -2515,8 +2516,10 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
+        "src/LegacyApp.jsx",
         "src/components/AdminCatalogModal.jsx",
         "src/components/AmbientLibraryRoute.jsx",
+        "src/components/CommercialAmendmentWorkspace.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/UnifiedCommercialConsequenceReview.jsx"
       ],
@@ -2526,8 +2529,16 @@
           "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-preview\""
         },
         {
+          "path": "src/LegacyApp.jsx",
+          "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-preview\""
+        },
+        {
           "path": "src/components/CommercialChangeImpactPanel.jsx",
           "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-presentation\""
+        },
+        {
+          "path": "src/components/CommercialAmendmentWorkspace.jsx",
+          "locator": "data-capability-id=\"qp-uxr-001-governed-commercial-amendment\""
         },
         {
           "path": "src/components/UnifiedCommercialConsequenceReview.jsx",
@@ -2538,6 +2549,8 @@
         "e2e/customer-centered-workspace.spec.js",
         "e2e/firebase-authoritative-pricing.smoke.spec.js",
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/components/__tests__/governedCommercialAmendment.test.jsx",
+        "src/lib/__tests__/commercialAmendmentContext.test.js",
         "src/lib/__tests__/commercialChangeImpact.test.js",
         "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
         "src/lib/__tests__/commercialPlatformCore.test.js",
@@ -2570,6 +2583,10 @@
         {
           "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
           "locator": "is mechanically bound to the trusted quote edit and authoritative pricing path"
+        },
+        {
+          "path": "src/components/__tests__/governedCommercialAmendment.test.jsx",
+          "locator": "assembles current commitment, lifecycle consequence, and preview into one decision surface"
         },
         {
           "path": "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
@@ -2605,7 +2622,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 4 binds the existing authoritative simulation to one six-group consequence review. Apply all/selected only rebuild the exact proposed form and rerun simulation; Keep restores the loaded form without writing. Quote, catalog, and proposed-form fences fail closed. No second pricing or version authority was introduced.",
+      "surfaceReviewNote": "Revision 6 composes the current quote revision, trusted pricing preview, semantic differences, existing six-group consequence review, lifecycle requirement, dependency graph, and bounded protected-evidence projection into QP-UXR-001. Technical evidence remains disclosed while business consequences lead. Browser-local mode remains explicitly unavailable and creates no calculated substitute. Quote, catalog, proposed-form, role, and tenant fences remain authoritative; no second pricing or version authority was introduced.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -2651,7 +2668,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can simulate the exact blast radius of an unsaved quote edit, review six separately sourced consequence groups, and stage all, selected, or no recommendations without exposing customer-safe internal evidence or implying that any save, authorization, invalidation, regeneration, reconciliation, or publication occurred."
+      "safeOutcome": "Staff can understand the exact current commitment, proposed difference, six separately sourced consequence groups, lifecycle requirement, and preserved-evidence boundary before acting, without exposing customer/provider secrets or implying that preview performed a save, authorization, invalidation, regeneration, reconciliation, publication, delivery, acceptance, booking, or payment."
     },
     {
       "id": "commercial-dependency-graph-beo-provenance",
@@ -2737,7 +2754,7 @@
     },
     {
       "id": "commercial-change-authority",
-      "reviewRevision": 6,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2745,7 +2762,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, atomic application, and exact transport-ambiguous outcome reconciliation remain exposed inside the trusted quote-edit path. The v0.16 Living Opportunity adds contextual Quick Updates for one allowlisted service-style delta: opening is write-free, the draft stays local, and a Firebase draft review projects the requested change plus enumerated material pricing, staffing, version, proposal, portal, lifecycle, and dependency effects through the existing server authority. Save is single-flight and bound to that simulation, active revision, catalog digest, and policy; browser-local, sent, and viewed records hand off to the full editor. Success requires the trusted write receipt, a server-only same-tenant quote reread, and refreshed opportunity-list state. The panel duplicates no commercial rule. Living Opportunity also retains its role-gated advisory guest-count simulation: local mode produces a deterministic ImpactPreview without a receipt, while the connected path may return an immutable simulation receipt; neither path saves, authorizes, or applies that scenario.",
+      "summary": "QP-UXR-001 composes receipt-bound commercial change simulation, approval handoff, authorization, atomic application, preserved historical evidence, named invalidation, exact transport-ambiguous outcome reconciliation, and the next valid action into trusted Quote Edit. Dormant review, enforced no-impact review, and authorized changes all carry the exact simulation envelope through the existing write authority; success remains on the amendment surface long enough to present Changed, Preserved, Needs attention, and Next. Living Opportunity Quick Updates and guest-count simulation retain their narrower contracts and create no second commercial rule.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -2755,6 +2772,7 @@
         "src/lib/commercialChangeAuthorityClient.js",
         "src/lib/commercialChangePersistedEffectsDisabled.js",
         "src/lib/commercialChangePersistedEffectsEnabled.js",
+        "src/lib/commercialAmendmentContext.js",
         "src/lib/quickUpdatesState.js",
         "src/lib/quoteStore.js",
         "functions/quoteCreation.js",
@@ -2789,6 +2807,8 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/CommercialAmendmentWorkspace.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/AmbientLivingOpportunityRoute.jsx",
         "src/components/AmbientLivingOpportunity.jsx",
@@ -2797,8 +2817,24 @@
       ],
       "entryPointLocators": [
         {
+          "path": "src/App.jsx",
+          "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-preview\""
+        },
+        {
+          "path": "src/LegacyApp.jsx",
+          "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-preview\""
+        },
+        {
           "path": "src/components/CommercialChangeImpactPanel.jsx",
           "locator": "data-capability-id=\"cwf-15c-commercial-change-authority\""
+        },
+        {
+          "path": "src/components/CommercialAmendmentWorkspace.jsx",
+          "locator": "data-capability-id=\"qp-uxr-001-governed-commercial-amendment\""
+        },
+        {
+          "path": "src/components/CommercialChangeImpactPanel.jsx",
+          "locator": "data-capability-id=\"qp-uxr-001-amendment-receipt\""
         },
         {
           "path": "src/components/AmbientLivingOpportunity.jsx",
@@ -2811,6 +2847,8 @@
       ],
       "testPaths": [
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/components/__tests__/governedCommercialAmendment.test.jsx",
+        "src/lib/__tests__/commercialAmendmentContext.test.js",
         "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
         "src/components/__tests__/ambientPricingRouteHost.test.jsx",
         "src/components/__tests__/QuickUpdatesPanel.test.jsx",
@@ -2836,6 +2874,14 @@
         {
           "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
           "locator": "is mechanically bound to the trusted quote edit and authoritative pricing path"
+        },
+        {
+          "path": "src/components/__tests__/governedCommercialAmendment.test.jsx",
+          "locator": "renders and focuses a complete outcome receipt while preserving an explicit next action"
+        },
+        {
+          "path": "src/lib/__tests__/commercialAmendmentContext.test.js",
+          "locator": "projects the exact saved commitment and bounded preserved evidence without provider secrets"
         },
         {
           "path": "src/lib/__tests__/commercialChangeAuthority.server.test.js",
@@ -2909,7 +2955,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 4 reviews contextual Quick Updates together with the existing trusted quote-edit and Commercial Change authority. The drawer/sheet is write-free on open, keeps one allowlisted service-style draft local and visible, guards every destructive dismissal path, and renders the server authority's enumerated material persisted-effects projection rather than claiming a whole-document preview across time-assigned fields. Firebase draft saves are single-flight and bound to the persisted simulation, active revision, catalog digest, and policy even while Commercial Change enforcement is dormant; local, sent, viewed, authorization-required, rejected, and uncertain cases retain explicit handoff or reconciliation boundaries. A saved result requires the write receipt, server-only quote verification, and refreshed opportunity-list state. Executable emulator evidence covers form mismatch, catalog drift, stale revision, zero-write failures, and one successful dormant save/readback. The panel exposes staffing, pricing, and Library as contextual handoffs rather than parallel rules or global destinations. The existing advisory guest-count counterfactual retains its distinct deterministic local-calculation and connected immutable-receipt sources. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
+      "surfaceReviewNote": "Revision 7 establishes QP-UXR-001 as Quote Edit's reference behavior without changing pricing, payment, provider, dependency, workflow-pack, or attendance authority. The exact saved commitment and supported historical evidence are projected from the loaded quote, server graph nodes are grouped into operator-facing consequence domains, every connected save requires a current simulation, and dormant/no-impact reviews use the same exact envelope as authorized changes. Successful apply and committed reconciliation no longer navigate away before the focused Changed, Preserved, Needs attention, and Next receipt. Uncertain apply retains the original request identity. Accepted/booked/paid and other terminal commitments remain outside trusted edit. Existing workflow-pack review continues to preserve paid contract and prior acceptance evidence while requiring renewed acceptance for an applied attendance amendment.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2985,7 +3031,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can use contextual Quick Updates for one exact service-style draft without changing the underlying opportunity until explicit review and save. Every destructive exit protects that draft. A Firebase draft save delegates to existing calculation and persistence authority and is fenced to the reviewed simulation, revision, catalog, and policy; only its exact write receipt, server-only same-tenant quote verification, and refreshed list state may produce the saved outcome. Browser-local, sent, viewed, authorization-required, and uncertain states hand off or reconcile without an implicit retry or write. Staffing, pricing, tax, margin, proposal, client, catalog, and dependency rules remain owned by their existing governed workflows. Existing Commercial Change authorization, apply, and reconciliation boundaries remain intact. Eligible staff may still compare a staged guest-count scenario with the saved quote through either a local deterministic ImpactPreview or a connected immutable simulation receipt; that advisory surface cannot save, authorize, or apply the change, and uncertain connected requests retain exact identity for reconciliation."
+      "safeOutcome": "Eligible staff can carry one exact draft, sent, or viewed amendment from current commitment through semantic difference, supported consequence, required authority, atomic application, preserved historical evidence, named invalidation, receipt, and next valid action. Dormant review never claims persisted invalidations, enforced work never bypasses authorization, uncertain apply never dispatches a blind retry, and terminal customer/booking/payment commitments remain locked. Existing Quick Updates, guest-count preview, attendance, and workflow-pack paths remain narrower projections with no added authority."
     },
     {
       "id": "commercial-dependency-state-and-reconciliation",
@@ -4677,7 +4723,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 23,
+      "reviewRevision": 24,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4695,6 +4741,9 @@
         "src/lib/ambientGlobalPilotTarget.js",
         "src/lib/ambientNowBriefing.js",
         "src/lib/ambientOpportunityStream.js",
+        "src/lib/commercialEvidencePresence.js",
+        "src/lib/commandCenterEvidence.js",
+        "src/lib/decisionResolutionPresentation.js",
         "src/lib/ambientLibrary.js",
         "src/lib/customerDecisionRoom.js",
         "src/lib/quoteStore.js",
@@ -4723,6 +4772,7 @@
       "affectedBackendExports": [],
       "frontendPaths": [
         "src/App.jsx",
+        "src/hooks/useCommercialWorkspaceSnapshot.js",
         "src/components/WorkspaceRoute.jsx",
         "src/components/WorkspaceShell.jsx",
         "src/components/QuoteHistoryModal.jsx",
@@ -4731,6 +4781,8 @@
         "src/components/customerPortalView.css",
         "src/components/AmbientGlobalPilotSurface.jsx",
         "src/components/AmbientNowView.jsx",
+        "src/components/ambientNowView.css",
+        "src/components/nowPresentation.js",
         "src/components/AmbientOpportunitiesStream.jsx",
         "src/components/ambientOpportunitiesStream.css",
         "src/components/AmbientCustomerDirectoryView.jsx",
@@ -4739,6 +4791,9 @@
         "src/components/AmbientLibraryRoute.jsx",
         "src/components/EventTemplatesEditor.jsx",
         "src/components/AdminCatalogModal.jsx",
+        "src/components/LiveOperationsPlanningViews.jsx",
+        "src/components/eventWorkspacePresentation.js",
+        "src/components/EventPreflightPanel.jsx",
         "src/components/StaffEvidenceRail.jsx",
         "src/components/AmbientLivingOpportunity.jsx",
         "src/components/AmbientOperationalReceipts.jsx",
@@ -4751,11 +4806,24 @@
         "src/components/MessagingStation.jsx",
         "src/components/QuoteConversationPanel.jsx",
         "src/components/SalesWorkflowModal.jsx",
+        "src/components/WorkspaceActionFeedbackNotice.jsx",
         "src/components/WorkspaceTaskJourneyNotice.jsx",
         "src/components/EventScheduleModal.jsx",
         "src/components/ReportingDashboardModal.jsx"
       ],
       "entryPointLocators": [
+        {
+          "path": "src/components/LiveOperationsPlanningViews.jsx",
+          "locator": "data-capability-id=\"qp-uxr-002-decision-resolution\""
+        },
+        {
+          "path": "src/components/LiveOperationsPlanningViews.jsx",
+          "locator": "data-execution-surface=\"control-room\""
+        },
+        {
+          "path": "src/components/EventPreflightPanel.jsx",
+          "locator": "data-event-preflight={model.state}"
+        },
         {
           "path": "src/App.jsx",
           "locator": "data-workspace-return-state={returnContextStatus.state}"
@@ -4862,6 +4930,8 @@
         }
       ],
       "testPaths": [
+        "e2e/commitment-to-execution-loop.spec.js",
+        "e2e/event-preflight.spec.js",
         "e2e/ambient-intelligence-accessibility.spec.js",
         "e2e/ambient-opportunities-stream.spec.js",
         "e2e/ambient-library.spec.js",
@@ -4882,6 +4952,8 @@
         "src/components/__tests__/customerWorkspaceStates.test.jsx",
         "src/components/__tests__/workspaceRoutePresentation.test.jsx",
         "src/components/__tests__/ambientLibraryRoute.test.jsx",
+        "src/components/__tests__/clearDeckView.test.jsx",
+        "src/components/__tests__/eventPreflightPanel.test.jsx",
         "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
         "src/components/__tests__/eventTemplatesEditor.test.jsx",
         "src/components/__tests__/eventTemplatesEditorModel.test.js",
@@ -4910,13 +4982,20 @@
         "src/components/__tests__/workspaceShell.test.jsx",
         "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
         "src/hooks/__tests__/useBrowserLocation.test.js",
+        "src/hooks/__tests__/useCommercialWorkspaceSnapshot.test.js",
         "src/lib/__tests__/ambientGlobalPilot.test.js",
         "src/lib/__tests__/ambientNowBriefing.test.js",
         "src/lib/__tests__/ambientOpportunityStream.test.js",
+        "src/lib/__tests__/commercialEvidencePresence.test.js",
+        "src/lib/__tests__/decisionResolutionPresentation.test.js",
+        "src/lib/__tests__/eventPreflightPresentation.test.js",
+        "src/lib/__tests__/eventWorkspace.test.js",
         "src/lib/__tests__/ambientOpportunityStreamIntegration.test.js",
         "src/lib/__tests__/ambientLibrary.test.js",
         "src/lib/__tests__/customerDecisionRoom.test.js",
         "src/lib/__tests__/quoteStore.portal.test.js",
+        "src/lib/__tests__/quoteStore.workflow.test.js",
+        "src/components/__tests__/nowPresentation.test.js",
         "src/hooks/__tests__/useCatalogData.savePlan.test.js",
         "src/lib/__tests__/menuService.test.js",
         "src/lib/__tests__/menuService.writeFallback.test.js",
@@ -4947,6 +5026,42 @@
         "src/lib/__tests__/ambientLegacyRetirement.test.js"
       ],
       "testLocators": [
+        {
+          "path": "src/components/__tests__/clearDeckView.test.jsx",
+          "locator": "renders every exact approval as decision-complete business context"
+        },
+        {
+          "path": "src/lib/__tests__/decisionResolutionPresentation.test.js",
+          "locator": "expands two pending requests on one quote into exact stable decision records"
+        },
+        {
+          "path": "src/components/__tests__/ambientNowView.test.jsx",
+          "locator": "acknowledges a priority immediately and carries its exact Workflow focus"
+        },
+        {
+          "path": "src/lib/__tests__/ambientOpportunityStream.test.js",
+          "locator": "projects saved commercial value without repricing and distinguishes zero from missing"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidencePresence.test.js",
+          "locator": "keeps absent source evidence missing after hydration supplies compatibility defaults"
+        },
+        {
+          "path": "e2e/commitment-to-execution-loop.spec.js",
+          "locator": "preserves commitment, coordination, evidence boundary, and focus"
+        },
+        {
+          "path": "src/lib/__tests__/eventWorkspace.test.js",
+          "locator": "composes a committed event into planning, consequence, evidence, and one next action"
+        },
+        {
+          "path": "e2e/event-preflight.spec.js",
+          "locator": "separates satisfied, attention, and unavailable truth"
+        },
+        {
+          "path": "src/lib/__tests__/eventPreflightPresentation.test.js",
+          "locator": "never converts stale, partial, truncated, malformed, or absent evidence into a pass"
+        },
         {
           "path": "e2e/customer-decision-room.spec.js",
           "locator": "is calm, complete, and overlap-safe at"
@@ -5505,10 +5620,48 @@
           "locator": "### Returning without losing your place"
         },
         {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Clear the Deck decision resolution (QP-UXR-002)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-002 Clear the Deck decision resolution"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Clear the Deck decision resolution (QP-UXR-002)"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Commercial-priority composition (QP-UXR-003)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-003 Commercial Priority Loop"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Commitment-to-execution composition (QP-UXR-004)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-004 Commitment-to-Execution Loop"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Event Preflight synthesis (QP-UXR-005)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-005 Event Preflight"
+        },
+        {
           "path": "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
           "locator": "### 16. Preserve the operator's place \u2014 P1"
         }
       ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Revision 24 composes QP-UXR-002 through QP-UXR-005 over current v0.17 authorities. Clear the Deck retains exact Workflow decision identity and readback; Now and Opportunities share one evidence-preserving commercial-priority projection; Events, Event Focus, Control Room, Schedule, and Replay preserve the commitment-to-execution boundary; Event Preflight separates satisfied, attention, and unavailable evidence without a score. Current retained-data failures withdraw consequential controls, exact same-object return requires a completed fresh read, selected Control Room alone requests operational authorities, and missing or malformed payment, BEO, staffing, conflict, live-event, attendance, actuals, and issue evidence remains unavailable. No pricing, approval, payment, booking, staffing, BEO, Schedule, Workflow, or event-session authority is added.",
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
       "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, truthful local fallback, and one exact session-only task thread without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Follow-up completion uses the existing guarded quote mutation, confirms only an exact same-tenant server readback, and otherwise remains visibly uncertain without repeating the write. Staff-route Back/Forward may restore only an exact adjacent same-runtime, same-organization, same-principal view; private view and draft state stays memory-only, accepted discard cannot reappear on Forward, and invalid context falls back without selecting another record. The return-context layer adds no write authority and ordinary non-expiry fixtures retain byte-equivalent business state; the existing admin quote-history read may still persist automatic expiry under its unchanged lifecycle authority, including local-fallback normalization and versioning. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, blocked, or Needs confirmation with a safe next resolution."
     },

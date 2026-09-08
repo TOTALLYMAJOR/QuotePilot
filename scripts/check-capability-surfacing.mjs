@@ -74,6 +74,7 @@ const ALLOWED_CONTRACT_FIELDS = new Set([
   "safeOutcome"
 ]);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const GIT_OUTPUT_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 const FUNCTIONS_ENTRYPOINT_PATH = "functions/index.js";
 const FUNCTION_EXPORT_DECLARATION_PATTERN = /^[\t ]*exports\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=(?!=|>)/gm;
 const MUTATION_EXPORT_NAME_PATTERN = /^(?:accept|activate|apply|approve|archive|book|cancel|charge|claim|close|confirm|convert|create|deactivate|decline|delete|dispatch|duplicate|ensure|expire|finalize|hardDelete|invite|link|mark|mutate|notify|pay|persist|provision|publish|purge|reconcile|record|refund|reopen|repair|request|reschedule|rollback|rotate|save|schedule|send|set|sign|submit|sync|update|upsert|void|write)/i;
@@ -1010,7 +1011,8 @@ function runGit(args, { allowFailure = false } = {}) {
     return execFileSync("git", args, {
       cwd: ROOT,
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: GIT_OUTPUT_MAX_BUFFER_BYTES
     }).trim();
   } catch (error) {
     if (allowFailure) return "";

@@ -1,10 +1,34 @@
 # Dev Tasks
 
-Last updated: 2026-09-05 18:51:02 CDT
+Last updated: 2026-09-08 09:45:47 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
+
+## v0.18.0 capability campaign promotion
+
+- Qualify the reconstructed QP-UXR-001 through QP-UXR-005 release branch with
+  full unit, environment, project-state, documentation, capability-surfacing,
+  secret, workflow, build, bundle, release-lane, and responsive browser gates.
+- Publish the exact release branch, require its protected PR checks, deploy the
+  immutable candidate, complete the tracked UAT boundary, merge without
+  collapsing the capability-level commit history, require all exact-main CI
+  lanes, and create the same-SHA `v0.18.0` tag.
+- Deploy only through the tracked target-specific production workflows with
+  exact `v0.17.0` rollback identity and provider readback. Keep Vercel public
+  edge and Firebase origin/backend evidence separate; do not infer one from the
+  other.
+- Verify authenticated staff role/tenant behavior for the governed amendment,
+  decision resolution, commercial priority, event planning, and Preflight
+  routes. Provider outcomes, production-data correctness, assistive-technology
+  review, and human acceptance remain separate evidence classes.
+- Keep both Commercial Change enforcement gates, automated customer
+  communication, automatic staffing/BEO mutations, Revenue Autopilot scheduler,
+  and payment rails unchanged unless a separately authorized release item
+  explicitly owns them.
+- QP-UXR-006 remains an owner decision. Do not implement or market the bounded
+  recommendation until the owner defines, rejects, or defers it.
 
 ## Commercial platform proof remaining after source qualification
 
