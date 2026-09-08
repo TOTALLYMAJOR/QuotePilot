@@ -1230,6 +1230,39 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("button", { name: /Save (?:draft|Changes)/i })).toHaveCount(0);
   });
 
+  test("a direct edit route keeps an accepted commitment outside ordinary editing", async ({ page }) => {
+    const quoteId = "accepted-direct-edit-quote";
+    await page.addInitScript((canonicalQuoteId) => {
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify([{
+        id: canonicalQuoteId,
+        organizationId: "e2e-org",
+        quoteNumber: "Q-ACCEPTED-1001",
+        status: "accepted",
+        activeVersionId: "v0004",
+        latestVersionNumber: 4,
+        event: { name: "Accepted Commitment Dinner", guests: 80 },
+        totals: { total: 6400, deposit: 1600 },
+        acceptanceReceipt: {
+          receiptId: "acceptance-receipt-1001",
+          quoteRevisionId: "v0004",
+          acceptedAtISO: "2026-08-08T16:30:00.000Z"
+        }
+      }]));
+    }, quoteId);
+
+    await gotoWorkspace(page, `/app/quotes/${quoteId}/edit`);
+
+    await expect(page.getByRole("heading", { name: "Quote edit unavailable" })).toBeVisible();
+    await expect(page.getByRole("alert")).toContainText("Committed record locked");
+    await expect(page.getByRole("alert")).toContainText(
+      "does not mutate accepted, booked, paid, declined, refunded, expired, or deleted commitment evidence"
+    );
+    const hiddenBuilder = page.locator("main.wizard-grid");
+    await expect(hiddenBuilder).toHaveAttribute("hidden", "");
+    await expect(hiddenBuilder.getByLabel("Event name")).toBeHidden();
+    await expect(page.getByRole("button", { name: /Save (?:draft|Changes)/i })).toHaveCount(0);
+  });
+
   test("history navigation from a direct edit route detaches the mounted form into create mode", async ({ page }) => {
     const quoteId = "direct-edit-history-quote";
     const eventName = "Direct Route Edit Dinner";
@@ -1328,12 +1361,23 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
     const changeImpactPreview = page.locator('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
-    await expect(changeImpactPreview).toBeVisible();
-    await expect(changeImpactPreview).toContainText("What will this change affect?");
-    await expect(changeImpactPreview).toContainText(
-      "Authoritative change impact is unavailable in browser-local mode"
+    await expect(changeImpactPreview).toHaveCount(1);
+    const amendmentWorkspace = page.locator('[data-capability-id="qp-uxr-001-governed-commercial-amendment"]');
+    await expect(amendmentWorkspace).toBeVisible();
+    await expect(amendmentWorkspace).toContainText("Governed commercial amendment");
+    await expect(amendmentWorkspace).toContainText("Q-DIRECT-EDIT-1001 · Version 1");
+    await expect(amendmentWorkspace).toContainText("$2,500.00");
+    await expect(amendmentWorkspace).toContainText("Draft revision");
+    await expect(amendmentWorkspace).toContainText(
+      "Authoritative consequence preview is unavailable in browser-local mode"
     );
-    await expect(changeImpactPreview.getByRole("button", { name: "Preview change impact" })).toBeDisabled();
+    await expect(amendmentWorkspace.getByRole("button", { name: "Preview consequences" })).toBeDisabled();
+
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(amendmentWorkspace).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
 
     await page.evaluate(({ currentEditPath }) => {
       const currentState = window.history.state;

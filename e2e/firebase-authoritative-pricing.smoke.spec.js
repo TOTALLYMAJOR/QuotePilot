@@ -211,7 +211,7 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
     '[data-capability-id="cwf-15b-commercial-change-impact-preview"]'
   );
   const previewButton = changeImpactEntry.getByRole("button", {
-    name: "Preview change impact",
+    name: "Preview consequences",
     exact: true
   });
   await expect(previewButton).toBeEnabled();

@@ -184,6 +184,29 @@ function dependencyLabel(nodeId) {
   });
 }
 
+const CONSEQUENCE_DOMAINS = Object.freeze([
+  { id: "commercial", label: "Commercial & payment", patterns: ["pricing", "payment", "deposit", "balance"] },
+  { id: "staffing", label: "Staffing", patterns: ["staff", "labor", "crew"] },
+  { id: "production", label: "Production & rentals", patterns: ["production", "kitchen", "food", "rental", "beo"] },
+  { id: "operations", label: "Event operations", patterns: ["operations", "delivery_window", "checkpoint", "venue_setup"] },
+  { id: "customer", label: "Customer & documents", patterns: ["customer", "contract", "proposal", "decision"] }
+]);
+
+export function groupCommercialConsequences(nodes = []) {
+  const groups = new Map(CONSEQUENCE_DOMAINS.map((domain) => [domain.id, { ...domain, items: [] }]));
+  const other = { id: "other", label: "Related workflow", items: [] };
+  (Array.isArray(nodes) ? nodes : []).forEach((node) => {
+    const id = text(node?.id || node?.nodeId).toLowerCase();
+    const domain = CONSEQUENCE_DOMAINS.find((candidate) => (
+      candidate.patterns.some((pattern) => id.includes(pattern))
+    ));
+    (domain ? groups.get(domain.id) : other).items.push(node);
+  });
+  return [...groups.values(), other]
+    .filter((group) => group.items.length > 0)
+    .map(({ patterns: _patterns, ...group }) => group);
+}
+
 function sourceLabel(source) {
   return humanizeWorkspaceValue(source?.label, { emptyLabel: "Source unavailable" });
 }
@@ -329,6 +352,62 @@ function DependencyList({ title, titleId, advisoryClass, items }) {
   );
 }
 
+function ConsequenceSummary({ model }) {
+  const groups = groupCommercialConsequences(model.impact?.dependentNodes);
+  return (
+    <section className="workflow-form-section" aria-labelledby="commercial-change-consequence-summary-title">
+      <p className="eyebrow">Business consequence</p>
+      <h4 id="commercial-change-consequence-summary-title">Where this proposal changes the work</h4>
+      {groups.length === 0 ? (
+        <p className="muted">The server found no related decision or artifact affected by this proposal.</p>
+      ) : (
+        <div className="commercial-consequence-groups">
+          {groups.map((group) => (
+            <article key={group.id} data-consequence-domain={group.id}>
+              <strong>{group.label}</strong>
+              <p>
+                {group.items.map((node) => dependencyLabel(node.id || node.nodeId)).join(", ")}
+              </p>
+              <span>
+                {group.items.filter((node) => (node.advisoryClass || node.classification) === "STALE").length} become out of date · {group.items.filter((node) => (node.advisoryClass || node.classification) === "REVIEW").length} need review
+              </span>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PreservedTruth({ commitment }) {
+  const evidence = Array.isArray(commitment?.preservedEvidence)
+    ? commitment.preservedEvidence
+    : [];
+  return (
+    <section className="workflow-form-section" aria-labelledby="commercial-change-preserved-title">
+      <p className="eyebrow">Preserved truth</p>
+      <h4 id="commercial-change-preserved-title">What this amendment will not rewrite</h4>
+      {evidence.length === 0 ? (
+        <p className="source-note">
+          No acceptance, provider-confirmed payment, booking, or provider-delivery evidence is present in the loaded quote. Missing evidence is not treated as success.
+        </p>
+      ) : (
+        <ul className="commercial-preserved-truth">
+          {evidence.map((item) => (
+            <li key={`${item.kind}:${item.recordedAtISO}:${item.revisionId}`}>
+              <strong>{item.label}</strong>
+              <span>{item.detail}</span>
+              {(item.recordedAtISO || item.revisionId) && (
+                <small>{item.recordedAtISO || "Time unavailable"}{item.revisionId ? ` · revision ${item.revisionId}` : ""}</small>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function SimulationEvidence({ model }) {
   const factDiffs = Array.isArray(model.factDiffs) ? model.factDiffs : [];
   const dependents = Array.isArray(model.impact?.dependentNodes)
@@ -347,6 +426,7 @@ function SimulationEvidence({ model }) {
     <>
       <CommercialDelta model={model} />
       <FactDiffs factDiffs={factDiffs} />
+      <ConsequenceSummary model={model} />
 
       <section className="workflow-form-section" aria-labelledby="commercial-change-impact-dependents-title">
         <h4 id="commercial-change-impact-dependents-title">What this touches after apply</h4>
@@ -398,8 +478,107 @@ function SimulationEvidence({ model }) {
   );
 }
 
-function CommercialChangeAuthorityControls({
+function AmendmentReceipt({
   model,
+  commitment,
+  authorityState,
+  applyResult,
+  applyOutcome,
+  appliedQuote,
+  onOpenAppliedQuote
+}) {
+  const receiptRef = useRef(null);
+  const focusedReceiptRef = useRef("");
+  const receiptIdentity = text(
+    applyResult?.applyReceiptId
+    || applyOutcome?.outcomeReceiptId
+    || appliedQuote?.activeVersionId
+  );
+  const committed = Boolean(appliedQuote)
+    || Boolean(applyResult)
+    || applyOutcome?.state === "committed";
+  const dependents = Array.isArray(model?.impact?.dependentNodes)
+    ? model.impact.dependentNodes
+    : [];
+
+  useEffect(() => {
+    if (!committed || !receiptIdentity || focusedReceiptRef.current === receiptIdentity) return;
+    focusedReceiptRef.current = receiptIdentity;
+    receiptRef.current?.focus({ preventScroll: true });
+  }, [committed, receiptIdentity]);
+
+  if (!committed) return null;
+  const enforced = text(authorityState).toLowerCase() === "enforced";
+  const changedCount = Array.isArray(model?.factDiffs) ? model.factDiffs.length : 0;
+  const newRevisionId = text(appliedQuote?.activeVersionId || applyOutcome?.newRevisionId);
+
+  return (
+    <article
+      ref={receiptRef}
+      tabIndex={-1}
+      className="commercial-amendment-receipt"
+      data-capability-id="qp-uxr-001-amendment-receipt"
+      data-capability-state="receipt"
+      data-commercial-change-apply-receipt={applyResult?.applyReceiptId || "dormant"}
+      aria-labelledby="commercial-amendment-receipt-title"
+    >
+      <header>
+        <div>
+          <p className="eyebrow">Governed outcome</p>
+          <h4 id="commercial-amendment-receipt-title">Amendment receipt</h4>
+        </div>
+        <StatusChip family="confirmed" label="New revision recorded" />
+      </header>
+      <div className="commercial-amendment-receipt-grid">
+        <section>
+          <h5>Changed</h5>
+          <p>{changedCount} tracked input{changedCount === 1 ? "" : "s"} committed to {newRevisionId ? `revision ${newRevisionId}` : "a new quote revision"}.</p>
+          <p>
+            Total {model?.commercialValues?.authoritativeTotal?.changed === true ? "changed" : "unchanged"}; deposit requirement {model?.commercialValues?.depositRequirement?.changed === true ? "changed" : "unchanged"}.
+          </p>
+        </section>
+        <section>
+          <h5>Preserved</h5>
+          {commitment?.preservedEvidence?.length ? (
+            <ul>{commitment.preservedEvidence.map((item) => <li key={item.kind}>{item.label}</li>)}</ul>
+          ) : (
+            <p>No protected acceptance, payment, booking, or provider-delivery evidence was present in the loaded source.</p>
+          )}
+        </section>
+        <section>
+          <h5>Needs attention</h5>
+          {enforced ? (
+            dependents.length > 0
+              ? <ul>{dependents.map((node) => <li key={node.id || node.nodeId}>{dependencyLabel(node.id || node.nodeId)}</li>)}</ul>
+              : <p>No named dependent item requires review or regeneration.</p>
+          ) : (
+            <p>Enforcement was dormant, so this is review evidence only: no dependency invalidation was persisted or implied.</p>
+          )}
+        </section>
+        <section>
+          <h5>Next</h5>
+          <p>{commitment?.protocol?.nextAction || "Review the new quote revision before continuing."}</p>
+          {typeof onOpenAppliedQuote === "function" && (
+            <button type="button" className="cta compact" onClick={onOpenAppliedQuote}>
+              Review updated quote
+            </button>
+          )}
+        </section>
+      </div>
+      <details>
+        <summary>Exact receipt evidence</summary>
+        <p>
+          Apply receipt: <code>{formatWorkspaceText(applyResult?.applyReceiptId, { emptyLabel: "Dormant review — no apply receipt issued" })}</code>
+        </p>
+        {applyOutcome?.outcomeReceiptId && <p>Outcome receipt: <code>{applyOutcome.outcomeReceiptId}</code></p>}
+      </details>
+    </article>
+  );
+}
+
+function CommercialChangeAuthorityControls({
+  model = null,
+  commitment = null,
   authorityState = "",
   authorizationRequired = false,
   staffRole = "sales",
@@ -410,13 +589,15 @@ function CommercialChangeAuthorityControls({
   mutationMessage = "",
   applyResult = null,
   applyOutcome = null,
+  appliedQuote = null,
   scopeCurrent = false,
   onRequestAuthorization,
   onRefreshAuthorization,
   onAuthorize,
   onApply,
   onReconcileApplyOutcome,
-  onRecoverApply
+  onRecoverApply,
+  onOpenAppliedQuote
 }) {
   const normalizedAuthority = text(authorityState).toLowerCase();
   const normalizedMutation = text(mutationState).toLowerCase();
@@ -434,7 +615,9 @@ function CommercialChangeAuthorityControls({
   const authorized = Boolean(authorizationReceiptId) || approvalState === "authorized";
   const policyRoleAllowed = !model?.workflowPolicy || model.workflowPolicy.approvalPolicy.allowedRoles.includes(staffRole);
   const attendanceApply = Boolean(model?.attendanceBinding);
-  const canMutate = normalizedAuthority === "enforced" && scopeCurrent && !busy && policyRoleAllowed;
+  const requiresAuthorization = normalizedAuthority === "enforced" && authorizationRequired;
+  const canMutate = scopeCurrent && !busy && policyRoleAllowed;
+  const canApply = canMutate && (!requiresAuthorization || authorized);
 
   useEffect(() => {
     const receiptId = text(applyOutcome?.outcomeReceiptId);
@@ -465,24 +648,30 @@ function CommercialChangeAuthorityControls({
         <StatusChip {...mutationPresentation} />
       </div>
 
-      {normalizedAuthority !== "enforced" ? (
-        <p className="source-note" role="status">
-          Commercial-change enforcement is dormant for this workspace. This trusted receipt is review evidence only; ordinary quote saving remains on the existing edit path until both server and tenant gates are promoted.
-        </p>
-      ) : !authorizationRequired && !attendanceApply ? (
-        <p className="source-note" role="status">
-          The server found no governed dependency impact. No administrator authorization receipt is required; use the normal Save Changes action.
-        </p>
-      ) : (
-        <>
-          <p className={scopeCurrent ? "source-note" : "warning-note"} role={scopeCurrent ? "status" : "alert"}>
-            {scopeCurrent
-              ? "The simulation still matches the unsaved form and saved base revision. Authorization is scoped to this exact evidence."
-              : "The unsaved form or saved revision changed after simulation. Authorization and apply are disabled until you re-simulate."}
-          </p>
+      <p className={scopeCurrent ? "source-note" : "warning-note"} role={scopeCurrent ? "status" : "alert"}>
+        {scopeCurrent
+          ? requiresAuthorization
+            ? "The simulation still matches the unsaved form and saved base revision. Authorization is scoped to this exact evidence."
+            : "The simulation still matches the unsaved form and saved base revision. It can continue without an administrator authorization receipt."
+          : "The unsaved form or saved revision changed after simulation. Authorization and apply are disabled until you re-simulate."}
+      </p>
 
-          {!policyRoleAllowed && <p className="warning-note" role="alert">The published quote review policy excludes your role from this change.</p>}
-          {attendanceApply && !authorizationRequired && <p className="source-note">No administrator approval is required for this preview. Apply explicitly to record the submitted count against a new quote version.</p>}
+      {normalizedAuthority !== "enforced" && (
+        <p className="source-note" role="status">
+          Commercial-change enforcement is dormant for this workspace. The reviewed simulation will travel with the save, but no dependency invalidation or production authority is created.
+        </p>
+      )}
+      {normalizedAuthority === "enforced" && !authorizationRequired && (
+        <p className="source-note" role="status">
+          The server found no governed dependency impact. No administrator authorization receipt is required; the reviewed change can be applied through this exact simulation.
+        </p>
+      )}
+
+      {!policyRoleAllowed && <p className="warning-note" role="alert">The published quote review policy excludes your role from this change.</p>}
+      {attendanceApply && !authorizationRequired && <p className="source-note">No administrator approval is required for this preview. Apply explicitly to record the submitted count against a new quote version.</p>}
+
+      {requiresAuthorization && (
+        <>
           <dl className="staff-evidence-details">
             <div>
               <dt>Approval state</dt>
@@ -494,17 +683,8 @@ function CommercialChangeAuthorityControls({
             </div>
           </dl>
 
-          {mutationMessage && (
-            <p
-              className={["uncertain", "error"].includes(normalizedMutation) ? "warning-note" : "source-note"}
-              role={["uncertain", "error"].includes(normalizedMutation) ? "alert" : "status"}
-            >
-              {mutationMessage}
-            </p>
-          )}
-
-          <div className="right-actions">
-            {authorizationRequired && !authorized && isAdmin && typeof onAuthorize === "function" && (
+          <div className="right-actions commercial-change-authorization-actions">
+            {!authorized && isAdmin && typeof onAuthorize === "function" && (
               <button
                 type="button"
                 className="cta compact"
@@ -537,87 +717,105 @@ function CommercialChangeAuthorityControls({
                 Refresh approval state
               </button>
             )}
-            {(authorized || !authorizationRequired) && typeof onApply === "function" && (
-              <button
-                type="button"
-                className="cta compact"
-                onClick={onApply}
-                disabled={!canMutate || applyOutcomeUncertain || Boolean(applyResult)}
-                title={applyOutcomeUncertain
-                  ? "The prior outcome is unresolved. Reconcile this exact request; this screen will not submit the edit again."
-                  : scopeCurrent
-                    ? "Apply this authorized edit and create named invalidations atomically."
-                    : "Re-simulate before applying."}
-              >
-                {normalizedMutation === "applying"
-                  ? "Applying authorized change…"
-                  : applyOutcomeUncertain
-                    ? "Apply outcome unresolved"
-                    : applyResult
-                      ? "Authorized change applied"
-                      : attendanceApply && !authorizationRequired ? "Apply reviewed guest count" : "Apply authorized change"}
-              </button>
-            )}
-            {applyOutcomeUncertain && typeof onReconcileApplyOutcome === "function" && (
-              <button
-                type="button"
-                className="ghost compact"
-                data-capability-action="reconcile-apply-outcome"
-                onClick={onReconcileApplyOutcome}
-              >
-                Reconcile exact outcome
-              </button>
-            )}
-            {applyOutcomeRecoverable && typeof onRecoverApply === "function" && (
-              <button
-                type="button"
-                className="cta compact"
-                data-capability-action="recover-not-committed-apply"
-                onClick={onRecoverApply}
-              >
-                {applyOutcome.sourceChanged
-                  ? "Open authoritative quote"
-                  : "Start fresh simulation"}
-              </button>
-            )}
           </div>
-
-          {applyOutcome && (
-            <article
-              ref={outcomeReceiptRef}
-              tabIndex={-1}
-              className="staff-evidence-outcome"
-              data-commercial-change-outcome-receipt={applyOutcome.outcomeReceiptId}
-            >
-              <strong>
-                {applyOutcome.state === "committed"
-                  ? "Exact apply proven committed"
-                  : "Exact apply proven not committed"}
-              </strong>
-              <p>
-                {applyOutcome.state === "committed"
-                  ? applyOutcome.appliedRevisionIsActive
-                    ? "The immutable applied revision is the active quote source."
-                    : "The apply committed, but a later quote revision is now active."
-                  : applyOutcome.sourceChanged
-                    ? "The request is fenced from late commit and the saved quote source has changed."
-                    : "The request is fenced from late commit; a fresh simulation may now begin."}
-              </p>
-              <code>{applyOutcome.outcomeReceiptId}</code>
-            </article>
-          )}
-
-          {applyResult && (
-            <article className="staff-evidence-outcome" data-commercial-change-apply-receipt={applyResult.applyReceiptId || "dormant"}>
-              <strong>{applyResult.state === "BLOCKED" ? "Applied; reconciliation required" : "Apply receipt recorded"}</strong>
-              <p>
-                {formatWorkspaceInteger(applyResult.openInvalidationCount)} open of {formatWorkspaceInteger(applyResult.totalInvalidationCount)} named invalidations. Safe to publish: {applyResult.safeToPublish === true ? "YES" : "NO"}.
-              </p>
-              {applyResult.applyReceiptId && <code>{applyResult.applyReceiptId}</code>}
-            </article>
-          )}
         </>
       )}
+
+      {mutationMessage && (
+        <p
+          className={["uncertain", "error"].includes(normalizedMutation) ? "warning-note" : "source-note"}
+          role={["uncertain", "error"].includes(normalizedMutation) ? "alert" : "status"}
+        >
+          {mutationMessage}
+        </p>
+      )}
+
+      <div className="right-actions commercial-change-apply-actions">
+        {typeof onApply === "function" && !applyOutcomeRecoverable && (
+          <button
+            type="button"
+            className="cta compact"
+            onClick={onApply}
+            disabled={!canApply || applyOutcomeUncertain || Boolean(applyResult) || applyOutcome?.state === "committed"}
+            title={applyOutcomeUncertain
+              ? "The prior outcome is unresolved. Reconcile this exact request; this screen will not submit the edit again."
+              : !scopeCurrent
+                ? "Re-simulate before applying."
+                : requiresAuthorization && !authorized
+                  ? "Obtain administrator authorization for this exact simulation before applying."
+                  : "Apply this reviewed edit through the existing trusted quote authority."}
+          >
+            {normalizedMutation === "applying"
+              ? "Applying reviewed change…"
+              : applyOutcomeUncertain
+                ? "Apply outcome unresolved"
+                : applyResult || applyOutcome?.state === "committed"
+                  ? "Reviewed change applied"
+                  : requiresAuthorization
+                    ? "Apply authorized change"
+                    : attendanceApply
+                      ? "Apply reviewed guest count"
+                      : "Apply reviewed change"}
+          </button>
+        )}
+        {applyOutcomeUncertain && typeof onReconcileApplyOutcome === "function" && (
+          <button
+            type="button"
+            className="ghost compact"
+            data-capability-action="reconcile-apply-outcome"
+            onClick={onReconcileApplyOutcome}
+          >
+            Reconcile exact outcome
+          </button>
+        )}
+        {applyOutcomeRecoverable && typeof onRecoverApply === "function" && (
+          <button
+            type="button"
+            className="cta compact"
+            data-capability-action="recover-not-committed-apply"
+            onClick={onRecoverApply}
+          >
+            {applyOutcome.sourceChanged
+              ? "Open authoritative quote"
+              : "Start fresh simulation"}
+          </button>
+        )}
+      </div>
+
+      {applyOutcome && (
+        <article
+          ref={outcomeReceiptRef}
+          tabIndex={-1}
+          className="staff-evidence-outcome commercial-change-outcome-proof"
+          data-commercial-change-outcome-receipt={applyOutcome.outcomeReceiptId}
+        >
+          <strong>
+            {applyOutcome.state === "committed"
+              ? "Exact apply proven committed"
+              : "Exact apply proven not committed"}
+          </strong>
+          <p>
+            {applyOutcome.state === "committed"
+              ? applyOutcome.appliedRevisionIsActive
+                ? "The immutable applied revision is the active quote source."
+                : "The apply committed, but a later quote revision is now active."
+              : applyOutcome.sourceChanged
+                ? "The request is fenced from late commit and the saved quote source has changed."
+                : "The request is fenced from late commit; a fresh simulation may now begin."}
+          </p>
+          <code>{applyOutcome.outcomeReceiptId}</code>
+        </article>
+      )}
+
+      <AmendmentReceipt
+        model={model}
+        commitment={commitment}
+        authorityState={normalizedAuthority}
+        applyResult={applyResult}
+        applyOutcome={applyOutcome}
+        appliedQuote={appliedQuote}
+        onOpenAppliedQuote={onOpenAppliedQuote}
+      />
 
       <p className="workflow-attention-boundary" role="note">
         Apply commits the quote version and named dependency invalidations together. It does not regenerate, reconcile, publish, deliver, accept, book, or collect payment.
@@ -651,6 +849,7 @@ export default function CommercialChangeImpactPanel({
   workflowEnabled = false,
   principalId = "",
   model = null,
+  commitment = null,
   loading = false,
   recovering = false,
   error = "",
@@ -665,6 +864,7 @@ export default function CommercialChangeImpactPanel({
   mutationMessage = "",
   applyResult = null,
   applyOutcome = null,
+  appliedQuote = null,
   scopeCurrent = false,
   onRetry,
   onReturnToEdit,
@@ -678,6 +878,7 @@ export default function CommercialChangeImpactPanel({
   onApplyAllConsequences,
   onApplySelectedConsequences,
   onKeepQuotedPlan,
+  onOpenAppliedQuote,
   titleId = "commercial-change-impact-title"
 }) {
   const view = buildCommercialChangeImpactPanelState({ model, loading, recovering, error, partial });
@@ -741,6 +942,7 @@ export default function CommercialChangeImpactPanel({
       </p>
 
       {view.snapshotAvailable && <SimulationEvidence model={model} />}
+      {view.snapshotAvailable && <PreservedTruth commitment={commitment} />}
       {view.snapshotAvailable && unifiedReview && (
         <UnifiedCommercialConsequenceReview
           review={unifiedReview}
@@ -756,6 +958,7 @@ export default function CommercialChangeImpactPanel({
       {view.snapshotAvailable && (
         <CommercialChangeAuthorityControls
           model={model}
+          commitment={commitment}
           authorityState={authorityState}
           authorizationRequired={authorizationRequired}
           staffRole={staffRole}
@@ -766,6 +969,7 @@ export default function CommercialChangeImpactPanel({
           mutationMessage={mutationMessage}
           applyResult={applyResult}
           applyOutcome={applyOutcome}
+          appliedQuote={appliedQuote}
           scopeCurrent={scopeCurrent && !partial && !error}
           onRequestAuthorization={onRequestAuthorization}
           onRefreshAuthorization={onRefreshAuthorization}
@@ -773,6 +977,7 @@ export default function CommercialChangeImpactPanel({
           onApply={onApply}
           onReconcileApplyOutcome={onReconcileApplyOutcome}
           onRecoverApply={onRecoverApply}
+          onOpenAppliedQuote={onOpenAppliedQuote}
         />
       )}
     </section>

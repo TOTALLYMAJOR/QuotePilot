@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 import CommercialChangeImpactPanel, {
-  buildCommercialChangeImpactPanelState
+  buildCommercialChangeImpactPanelState,
+  groupCommercialConsequences
 } from "../CommercialChangeImpactPanel";
 import { COMMERCIAL_CHANGE_IMPACT_BOUNDARY } from "../../lib/commercialChangeImpact";
 import { buildUnifiedCommercialConsequenceReview } from "../../lib/unifiedCommercialConsequenceReview";
@@ -13,12 +14,20 @@ const APP_SOURCE = readFileSync(
   fileURLToPath(new URL("../../App.jsx", import.meta.url)),
   "utf8"
 );
+const LEGACY_APP_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../LegacyApp.jsx", import.meta.url)),
+  "utf8"
+);
 const QUOTE_DRAFT_RUNTIME_SOURCE = readFileSync(
   fileURLToPath(new URL("../../lib/quoteDraftRuntime.js", import.meta.url)),
   "utf8"
 );
 const QUOTE_DRAFT_RUNTIME_BASE_SOURCE = readFileSync(
   fileURLToPath(new URL("../../lib/quoteDraftRuntimeBase.js", import.meta.url)),
+  "utf8"
+);
+const AMENDMENT_WORKSPACE_SOURCE = readFileSync(
+  fileURLToPath(new URL("../CommercialAmendmentWorkspace.jsx", import.meta.url)),
   "utf8"
 );
 const FUNCTIONS_SOURCE = readFileSync(
@@ -195,6 +204,25 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain("Because this changed: Guest count, Venue");
   });
 
+  test("groups graph evidence into operator-facing consequence domains without inventing new truth", () => {
+    expect(groupCommercialConsequences(simulation().impact.dependentNodes)).toEqual([
+      {
+        id: "staffing",
+        label: "Staffing",
+        items: [expect.objectContaining({ id: "output.staffing_requirement" })]
+      },
+      {
+        id: "production",
+        label: "Production & rentals",
+        items: [expect.objectContaining({ id: "artifact.beo" })]
+      }
+    ]);
+    const markup = renderPanel({ model: simulation() });
+    expect(markup).toContain('data-consequence-domain="staffing"');
+    expect(markup).toContain('data-consequence-domain="production"');
+    expect(markup).toContain("Where this proposal changes the work");
+  });
+
   test("exposes exact source, graph, revision, authority, and bound provenance", () => {
     const markup = renderPanel({ model: simulation() });
 
@@ -293,6 +321,27 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain("enforcement is dormant");
     expect(markup).not.toContain("Authorize exact change");
     expect(markup).not.toContain("Apply authorized change");
+  });
+
+  test("lets dormant and enforced no-impact reviews continue through the same exact simulation envelope", () => {
+    const dormant = renderPanel({
+      model: simulation(),
+      authorityState: "dormant",
+      authorizationRequired: true,
+      scopeCurrent: true,
+      onApply: vi.fn()
+    });
+    const noImpact = renderPanel({
+      model: emptySimulation(),
+      authorityState: "enforced",
+      authorizationRequired: false,
+      scopeCurrent: true,
+      onApply: vi.fn()
+    });
+    expect(dormant).toContain("Apply reviewed change");
+    expect(dormant).toContain("no dependency invalidation or production authority is created");
+    expect(noImpact).toContain("Apply reviewed change");
+    expect(noImpact).toContain("No administrator authorization receipt is required");
   });
 
   test("renders every literal canonical Commercial Change Authority mutation marker", () => {
@@ -459,9 +508,13 @@ describe("CommercialChangeImpactPanel", () => {
     expect(APP_SOURCE).toContain("authorizeCommercialQuoteChange({");
     expect(APP_SOURCE).toContain("commercialChangeAuthority: {");
     expect(APP_SOURCE).toContain("applyRequestId");
-    expect(APP_SOURCE).toContain("Preview change impact");
+    expect(APP_SOURCE).toContain('import("./components/CommercialAmendmentWorkspace")');
+    expect(LEGACY_APP_SOURCE).toContain('import("./components/CommercialAmendmentWorkspace")');
+    expect(LEGACY_APP_SOURCE).toContain("expectedActiveVersionId: editingQuote.activeVersionId");
+    expect(LEGACY_APP_SOURCE).toContain("navigateAfterSave: false");
+    expect(AMENDMENT_WORKSPACE_SOURCE).toContain("Preview consequences");
     expect(APP_SOURCE).toContain("onRetry={() => handlePreviewChangeImpact({ recovery: true })}");
-    expect(APP_SOURCE).toContain("No client-calculated substitute is shown");
+    expect(AMENDMENT_WORKSPACE_SOURCE).toContain("No client-calculated substitute is shown");
     expect(FUNCTIONS_SOURCE).toContain("exports.simulateCommercialQuoteChange =");
     expect(FUNCTIONS_SOURCE).toContain("exports.requestCommercialQuoteChangeAuthorization =");
     expect(FUNCTIONS_SOURCE).toContain("exports.authorizeCommercialQuoteChange =");

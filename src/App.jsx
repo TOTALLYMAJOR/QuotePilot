@@ -168,6 +168,10 @@ const CommercialChangeImpactPanel = createRecoverableLazy(
   () => import("./components/CommercialChangeImpactPanel"),
   "CommercialChangeImpactPanel"
 );
+const CommercialAmendmentWorkspace = createRecoverableLazy(
+  () => import("./components/CommercialAmendmentWorkspace"),
+  "CommercialAmendmentWorkspace"
+);
 const EventPlanningView = createRecoverableLazy(
   () => import("./components/LiveOperationsPlanningViews").then((module) => ({ default: module.EventPlanningView })),
   "EventPlanningView"
@@ -394,7 +398,8 @@ const EMPTY_EDITING_QUOTE = Object.freeze({
   catalogRevisionReview: null,
   selection: {},
   baseForm: null,
-  rebooking: null
+  rebooking: null,
+  commercialAmendment: null
 });
 
 const EMPTY_CATALOG_REVISION_REVIEW = Object.freeze({
@@ -425,7 +430,8 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   mutationMessage: "",
   applyResult: null,
   applyOutcome: null,
-  catalogRevision: null
+  catalogRevision: null,
+  appliedQuote: null
 });
 const EMPTY_LIBRARY_INTERACTION = Object.freeze({ dirty: false, busy: false });
 
@@ -3550,7 +3556,8 @@ export default function App({
           : "The exact simulation receipt is ready; enforcement remains dormant for this workspace.",
         applyResult: null,
         applyOutcome: null,
-        catalogRevision: Number(catalog.settings?.catalogRevision)
+        catalogRevision: Number(catalog.settings?.catalogRevision),
+        appliedQuote: null
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -3870,6 +3877,14 @@ export default function App({
           error: "",
           applyOutcome: result.outcomeReceipt,
           applyResult: result.commercialChange,
+          appliedQuote: {
+            quoteId: editingQuote.id,
+            quoteNumber: editingQuote.quoteNumber || editingQuote.id,
+            previousRevisionId: changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId,
+            activeVersionId: result.outcomeReceipt.newRevisionId || "",
+            latestVersionNumber: Number(editingQuote.commercialAmendment?.versionNumber || 0) + 1,
+            status: "draft"
+          },
           mutationState: "receipt",
           mutationKind: "apply",
           mutationMessage: result.outcomeReceipt.appliedRevisionIsActive
@@ -3879,7 +3894,6 @@ export default function App({
         pushToast("Authorized quote change reconciled as committed.", "success");
         requestWorkflowAttentionRefresh({ force: true });
         setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
-        navigateWorkspace(buildQuotePath(editingQuote.id));
         return;
       }
       setChangeImpactPreview((current) => ({
@@ -3887,6 +3901,7 @@ export default function App({
         error: "",
         applyOutcome: result.outcomeReceipt,
         applyResult: null,
+        appliedQuote: null,
         mutationState: "recovery",
         mutationKind: "apply",
         mutationMessage: result.outcomeReceipt.sourceChanged
@@ -3928,6 +3943,7 @@ export default function App({
       applyRequestId: "",
       applyResult: null,
       applyOutcome: null,
+      appliedQuote: null,
       mutationState: "recovery",
       mutationKind: "simulation",
       mutationMessage: "Starting a fresh simulation after the prior apply request was safely fenced."
@@ -3936,7 +3952,12 @@ export default function App({
   };
 
   const handleApplyCommercialChange = async () => {
-    if (!changeImpactScopeIsCurrent() || (changeImpactPreview.authorizationRequired && !changeImpactPreview.authorizationReceiptId)) return;
+    const requiresAuthorization = changeImpactPreview.authorityState === "enforced"
+      && changeImpactPreview.authorizationRequired;
+    if (
+      !changeImpactScopeIsCurrent()
+      || (requiresAuthorization && !changeImpactPreview.authorizationReceiptId)
+    ) return;
     if (changeImpactPreview.applyRequestId) {
       await handleReconcileCommercialChangeApplyOutcome();
       return;
@@ -3953,22 +3974,35 @@ export default function App({
       error: "",
       mutationState: "applying",
       mutationKind: "apply",
-      mutationMessage: "Applying the authorized edit atomically with its immutable invalidation receipts."
+      mutationMessage: requiresAuthorization
+        ? "Applying the authorized edit atomically with its immutable invalidation receipts."
+        : "Applying the reviewed edit through the existing quote authority."
     }));
     try {
       const result = await handleSubmitQuote({
         commercialChangeAuthority: {
           simulationReceiptId: changeImpactPreview.simulationReceiptId,
-          authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
+          authorizationReceiptId: requiresAuthorization
+            ? changeImpactPreview.authorizationReceiptId
+            : "",
           applyRequestId
         },
-        propagateError: true
+        propagateError: true,
+        navigateAfterSave: false
       });
       if (!result) return;
       setChangeImpactPreview((current) => ({
         ...current,
         applyResult: result.commercialChange,
         applyOutcome: null,
+        appliedQuote: {
+          quoteId: result.id,
+          quoteNumber: result.quoteNumber,
+          previousRevisionId: changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId,
+          activeVersionId: result.activeVersionId,
+          latestVersionNumber: result.latestVersionNumber,
+          status: result.status || "draft"
+        },
         mutationState: "receipt",
         mutationKind: "apply",
         mutationMessage: attendanceChange ? "Reviewed attendance was applied to a new draft revision. Prior payment and booking history remain preserved. Separate customer acceptance and administrator booking revalidation are required; no payment was charged." : result.commercialChange?.authorityState === "enforced"
@@ -3980,6 +4014,7 @@ export default function App({
       setChangeImpactPreview((current) => ({
         ...current,
         applyOutcome: null,
+        appliedQuote: null,
         error: error?.message || "The commercial change apply did not return a receipt.",
         mutationState: definitive ? "error" : "uncertain",
         mutationKind: "apply",
@@ -4176,7 +4211,13 @@ export default function App({
       }
       if (
         changeImpactPreview.authorityState === "enforced"
-        && (changeImpactPreview.authorizationRequired || changeImpactPreview.model?.attendanceBinding)
+        && (
+          changeImpactPreview.model?.attendanceBinding
+          || (
+            changeImpactPreview.authorizationRequired
+            && !changeImpactPreview.authorizationReceiptId
+          )
+        )
       ) {
         setStep(5);
         setSubmitState((current) => ({
@@ -4186,6 +4227,16 @@ export default function App({
         }));
         return null;
       }
+      if (changeImpactPreview.applyResult || changeImpactPreview.applyOutcome?.state === "committed") {
+        setStep(5);
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "This governed amendment already produced a new revision. Review that exact quote before making another change."
+        }));
+        return null;
+      }
+      return handleApplyCommercialChange();
     }
     if (submissionMenuItemCount < 1) {
       const message = "Choose at least one menu item before saving this quote.";
@@ -6140,43 +6191,20 @@ export default function App({
   // saved quote being edited. Shared so it renders identically in the
   // Proposal Composer document and the Guided-mode wizard's save step.
   const changeImpactSurface = isEditingQuote ? (
-    <section
-      className="quote-change-impact-preview"
-      data-capability-id="cwf-15b-commercial-change-impact-preview"
-    >
-      <div className="quote-change-impact-preview-head">
-        <div>
-          <p className="eyebrow">Saved quote</p>
-          <h3>What will this change affect?</h3>
-          <p className="source-note">
-            A server-checked comparison of the saved quote against your current edits. Previewing changes nothing; when a governed item is affected, applying asks for an exact authorization first.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="ghost compact"
-          onClick={() => handlePreviewChangeImpact({
+    <div data-capability-id="cwf-15b-commercial-change-impact-preview">
+      <Suspense fallback={<p className="source-note" role="status">Loading governed amendment context…</p>}>
+        <CommercialAmendmentWorkspace
+          commitment={editingQuote.commercialAmendment}
+          dirty={quoteDirty}
+          previewAvailable={changeImpactPreviewAvailable}
+          previewRequested={changeImpactPreview.requested}
+          previewLoading={changeImpactPreview.loading}
+          previewRecovering={changeImpactPreview.recovering}
+          previewError={changeImpactPresentationError}
+          onPreview={() => handlePreviewChangeImpact({
             recovery: Boolean(changeImpactPresentationError)
           })}
-          disabled={!changeImpactPreviewAvailable || changeImpactPreview.loading}
-          title={changeImpactPreviewAvailable
-            ? "Create an immutable server simulation receipt for the current form and saved revision."
-            : "Change impact requires a Firebase-backed canonical quote and trusted pricing."}
         >
-          {changeImpactPreview.recovering
-            ? "Retrying preview…"
-            : changeImpactPreview.loading
-              ? "Building preview…"
-            : changeImpactPreview.model
-              ? "Refresh impact preview"
-              : "Preview change impact"}
-        </button>
-      </div>
-      {!changeImpactPreviewAvailable && (
-        <p className="warning-note">
-          Authoritative change impact is unavailable in browser-local mode. No client-calculated substitute is shown.
-        </p>
-      )}
       {changeImpactPreview.requested && (
         <RecoverableErrorBoundary
           active
@@ -6191,6 +6219,7 @@ export default function App({
               workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
               principalId={authSession.user?.uid || ""}
               model={changeImpactPreview.model}
+              commitment={editingQuote.commercialAmendment}
               loading={changeImpactPreview.loading}
               recovering={changeImpactPreview.recovering}
               error={changeImpactPresentationError}
@@ -6205,6 +6234,7 @@ export default function App({
               mutationMessage={changeImpactPreview.mutationMessage}
               applyResult={changeImpactPreview.applyResult}
               applyOutcome={changeImpactPreview.applyOutcome}
+              appliedQuote={changeImpactPreview.appliedQuote}
               scopeCurrent={!changeImpactPresentationError}
               onRetry={() => handlePreviewChangeImpact({ recovery: true })}
               onRequestAuthorization={handleRequestChangeAuthorization}
@@ -6217,6 +6247,11 @@ export default function App({
               onApplyAllConsequences={handleApplyUnifiedConsequences}
               onApplySelectedConsequences={handleApplyUnifiedConsequences}
               onKeepQuotedPlan={handleKeepUnifiedQuotedPlan}
+              onOpenAppliedQuote={() => {
+                const quoteId = changeImpactPreview.appliedQuote?.quoteId || editingQuote.id;
+                setHistoryTarget({ quoteId, reason: "updated" });
+                navigateWorkspace(buildQuotePath(quoteId));
+              }}
               onReturnToEdit={() => {
                 if (!proposalComposerActive) setStep(1);
                 window.requestAnimationFrame(() => {
@@ -6227,7 +6262,9 @@ export default function App({
           </Suspense>
         </RecoverableErrorBoundary>
       )}
-    </section>
+        </CommercialAmendmentWorkspace>
+      </Suspense>
+    </div>
   ) : null;
 
   const proposalComposerChangeImpactScopeCurrent = !(
