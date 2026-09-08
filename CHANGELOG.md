@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-08 10:36:30 CDT
+Last updated: 2026-09-08 11:26:20 CDT
 
 All notable project changes are documented in this file.
 
@@ -55,6 +55,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   complete final-balance evidence only where the committed-event test intends
   Schedule to remain the next valid action, and target exact disclosure copy
   when multiple governed evidence sections are present.
+- Fence the Catalog Admin isolation browser check on completed saved-quote
+  hydration so slower CI runners verify the quote's actual event type rather
+  than the builder's transient pre-edit default.
 - These changes are implemented on the governed `v0.18.0` release candidate.
   Production deployment, connected production-data behavior, provider outcomes,
   assistive-technology review, and human acceptance remain separate until their

@@ -1467,6 +1467,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
 
   const row = quoteRows(page).first();
   await row.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByText(/Editing quote/i)).toBeVisible();
   const quoteEventType = page.getByLabel(/Event type/i);
   const originalEventType = await quoteEventType.inputValue();
   expect(originalEventType).toBeTruthy();
