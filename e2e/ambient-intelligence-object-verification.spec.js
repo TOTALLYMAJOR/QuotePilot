@@ -504,7 +504,7 @@ test.describe("Ambient intelligent-object browser verification", () => {
       let dialog = page.getByRole("dialog", { name: "Guest count connections" });
       await expect(dialog).toBeVisible();
       await expect(page.getByRole("dialog")).toHaveCount(1);
-      await expect(dialog.locator("summary")).toHaveText("Why this view");
+      await expect(dialog.getByText("Why this view", { exact: true })).toBeVisible();
       await expect(dialog.getByText("Saved priced count", { exact: true })).toBeVisible();
       await expect(dialog).toContainText("Exact commercial basis on this quote");
       await expect(dialog).toContainText("Planning estimate: about 120 guests (100–140)");

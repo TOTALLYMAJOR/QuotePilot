@@ -20,7 +20,7 @@ const AMBIENT_UI_ENABLED = ["1", "true", "yes", "on"].includes(
 const LOCAL_REVIEW_FIXTURES_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_E2E_LOCAL_REVIEW_FIXTURES || "").trim().toLowerCase()
 );
-const HOME_HEADING = /What (?:needs|deserves) your attention/;
+const HOME_HEADING = /What (?:needs|deserves) your attention|You're caught up on the work tracked here/;
 
 async function gotoWorkspace(page, path) {
   await page.goto(path);

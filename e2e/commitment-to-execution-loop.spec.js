@@ -49,7 +49,15 @@ async function seedCommittedEvent(page) {
         rentalQuantities: { chairs: 96 }
       },
       totals: { total: 12840, deposit: 3852 },
-      payment: { depositStatus: "paid", depositConfirmedAtISO: "2026-08-26T17:00:00.000Z" },
+      payment: {
+        depositStatus: "paid",
+        depositConfirmedAtISO: "2026-08-26T17:00:00.000Z",
+        finalBalance: {
+          amountCents: 898800,
+          status: "paid",
+          confirmedAtISO: "2026-09-01T16:00:00.000Z"
+        }
+      },
       acceptanceReceipt: {
         receiptId: "acceptance-uxr004",
         quoteRevisionId: "version-uxr004-3",
@@ -156,8 +164,8 @@ test.describe("QP-UXR-004 commitment-to-execution loop", () => {
       await expect(control).toContainText("Recorded checklist");
       await expect(control).toContainText("Live actuals are not recorded");
       await expect(control.getByLabel("Next valid action")).toContainText("Open exact event in Schedule");
-      await expect(control).toContainText("Current governed status is unavailable in this read");
-      await expect(control).toContainText("Current governed coverage is unavailable in this read");
+      await expect(control).toContainText("Operational staffing coverage is unavailable");
+      await expect(control).toContainText("Kitchen BEO freshness is unavailable");
       await expectResponsiveContract(page);
 
       results = await new AxeBuilder({ page }).include("main").analyze();
@@ -168,7 +176,7 @@ test.describe("QP-UXR-004 commitment-to-execution loop", () => {
       });
 
       await control.getByRole("button", { name: "Open exact event in Schedule" }).click();
-      await expect(page).toHaveURL(/\/app\/schedule$/);
+      await expect(page).toHaveURL(/\/app\/operations$/);
       const exactScheduleEvent = page.locator('[data-schedule-event-id="uxr004-event"]');
       await expect(exactScheduleEvent).toBeFocused();
       await expect.poll(async () => exactScheduleEvent.evaluate((element) => {

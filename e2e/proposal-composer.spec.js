@@ -224,7 +224,7 @@ test("editing a saved quote surfaces the change-impact preview in the composer",
 
   const impact = page.locator('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
   await expect(impact).toBeVisible();
-  await expect(impact).toContainText("What will this change affect?");
+  await expect(impact).toContainText("What will this proposal change elsewhere?");
   await expect(impact).toContainText("browser-local mode");
 
   const watching = page.getByTestId("pc-watching");

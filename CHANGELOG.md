@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-08 10:11:30 CDT
+Last updated: 2026-09-08 10:36:30 CDT
 
 All notable project changes are documented in this file.
 
@@ -49,6 +49,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Preserve an enumerable safe-empty payment presentation when an alternate
   draft is duplicated, while continuing to clear every source provider link,
   confirmation, session identifier, and settlement artifact.
+- Align the Quote Composer browser contract with the governed amendment
+  workspace's proposal-and-consequence language.
+- Reconcile cross-feature browser fixtures with Event Preflight by recording
+  complete final-balance evidence only where the committed-event test intends
+  Schedule to remain the next valid action, and target exact disclosure copy
+  when multiple governed evidence sections are present.
 - These changes are implemented on the governed `v0.18.0` release candidate.
   Production deployment, connected production-data behavior, provider outcomes,
   assistive-technology review, and human acceptance remain separate until their
