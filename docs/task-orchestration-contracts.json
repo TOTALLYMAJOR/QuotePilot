@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "switchAuthority": "external_runner",
   "timestampFormat": "iso8601_utc",
   "lifecyclePhases": [
@@ -22,6 +22,371 @@
       "defaultModel": "gpt-5.6-sol",
       "reasoningEffort": "high",
       "purpose": "Authority, payment, security, migration, and production-sensitive work"
+    }
+  },
+  "domainRouting": {
+    "skill": "catering-domain-intelligence",
+    "noneContext": "none",
+    "contextOrder": [
+      "commercial",
+      "pricing",
+      "proposal_revision",
+      "payments",
+      "customer_experience",
+      "catalog_menu",
+      "event_operations",
+      "staffing",
+      "beo_document_truth",
+      "readiness",
+      "reporting"
+    ],
+    "mechanicalTaskKeywords": [
+      "format only",
+      "formatting only",
+      "reformat",
+      "without behavioral changes",
+      "without behavior changes",
+      "dependency housekeeping",
+      "dependency update only",
+      "deterministic build repair",
+      "rename only",
+      "spelling only",
+      "typo only"
+    ],
+    "excludedExactPaths": [
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "DEV_TASKS.md",
+      "PROJECT_STATE.md",
+      "PROJECT_STATUS.md",
+      "README.md",
+      "docs/AGENT_GOVERNANCE.md",
+      "docs/DOC_SYSTEM.md",
+      "docs/ORCHESTRATION_BLUEPRINT.md",
+      "docs/ORCHESTRATION_RUNBOOK.md",
+      "docs/PORTABLE_CODEX_GOVERNANCE_PROMPT_SERIES.md",
+      "docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md",
+      "docs/SKILLS.md",
+      "docs/VERSION_CONTROL.md",
+      "docs/task-orchestration-contracts.json",
+      "package-lock.json",
+      "package.json",
+      "scripts/check-doc-governance.mjs",
+      "scripts/task-orchestration-plan.mjs",
+      "src/lib/__tests__/taskOrchestrationPlan.test.js"
+    ],
+    "excludedPathPrefixes": [
+      ".codex/skills/catering-domain-intelligence/",
+      ".github/",
+      ".project/"
+    ],
+    "excludedPathFragments": [
+      "/fixtures/",
+      "fixture"
+    ],
+    "agentBehaviorExactPaths": [
+      "AGENTS.md",
+      "docs/AGENT_GOVERNANCE.md",
+      "docs/task-orchestration-contracts.json",
+      "scripts/task-orchestration-plan.mjs"
+    ],
+    "agentBehaviorPathPrefixes": [
+      ".codex/skills/"
+    ],
+    "baseReferenceSlices": [
+      ".codex/skills/catering-domain-intelligence/references/domain-model.md"
+    ],
+    "failureReferenceRule": {
+      "taskKeywords": [
+        "ambiguous",
+        "error",
+        "fail",
+        "failure",
+        "recover",
+        "recovery",
+        "risk",
+        "stale",
+        "timeout",
+        "validation"
+      ],
+      "referenceSlices": [
+        ".codex/skills/catering-domain-intelligence/references/failure-patterns.md"
+      ]
+    },
+    "contexts": {
+      "commercial": {
+        "taskKeywords": [
+          "acceptance",
+          "accepted",
+          "balance",
+          "commercial",
+          "commercial contract",
+          "customer contract",
+          "deposit",
+          "margin",
+          "opportunity",
+          "payment",
+          "proposal",
+          "quote",
+          "rebook"
+        ],
+        "pathFragments": [
+          "commercial",
+          "opportunity",
+          "payment",
+          "proposal",
+          "quote",
+          "rebook",
+          "stripe"
+        ],
+        "authorityReads": [
+          "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
+          "docs/COMMERCIAL_TRUTH_LOOP_ADR.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/commercial.md"
+        ]
+      },
+      "pricing": {
+        "taskKeywords": [
+          "cost",
+          "discount",
+          "fee",
+          "guest count",
+          "margin",
+          "price",
+          "pricing",
+          "service charge",
+          "tax"
+        ],
+        "pathFragments": [
+          "calculator",
+          "catalogpricing",
+          "cost",
+          "pricing"
+        ],
+        "authorityReads": [
+          "docs/PRICING_CONSTITUTION.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/commercial.md"
+        ]
+      },
+      "proposal_revision": {
+        "taskKeywords": [
+          "after acceptance",
+          "customer approval",
+          "proposal",
+          "revision",
+          "revise",
+          "version"
+        ],
+        "pathFragments": [
+          "proposal",
+          "quotehistory",
+          "quoterevision",
+          "quoteversion",
+          "revision"
+        ],
+        "authorityReads": [
+          "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
+          "docs/field-state-contract.json"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/commercial.md"
+        ]
+      },
+      "payments": {
+        "taskKeywords": [
+          "final balance",
+          "paid",
+          "payment",
+          "provider timeout",
+          "refund",
+          "settlement",
+          "stripe"
+        ],
+        "pathFragments": [
+          "finalbalance",
+          "payment",
+          "stripe"
+        ],
+        "authorityReads": [
+          "docs/COMMERCIAL_TRUTH_LOOP_ADR.md",
+          "docs/PRICING_CONSTITUTION.md",
+          "docs/STRIPE_CONNECT_PROGRAM.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/payment-reconciliation.md"
+        ]
+      },
+      "customer_experience": {
+        "taskKeywords": [
+          "client decision",
+          "customer experience",
+          "customer portal",
+          "customer-facing",
+          "guest portal",
+          "navigation",
+          "primary navigation",
+          "role projection"
+        ],
+        "pathFragments": [
+          "buyeraccess",
+          "customer",
+          "portal"
+        ],
+        "authorityReads": [
+          "docs/DESIGN_PRINCIPLES.md",
+          "docs/DESIGN_SYSTEM.md",
+          "docs/field-state-contract.json"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/ux-customer-experience.md"
+        ]
+      },
+      "catalog_menu": {
+        "taskKeywords": [
+          "allergen",
+          "catalog",
+          "entree",
+          "entrée",
+          "menu",
+          "catering package",
+          "recipe"
+        ],
+        "pathFragments": [
+          "catalog",
+          "menu",
+          "canonicalmenu",
+          "packagemenu",
+          "startercatalog"
+        ],
+        "authorityReads": [
+          "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
+          "docs/PRICING_CONSTITUTION.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/menu-production.md"
+        ]
+      },
+      "event_operations": {
+        "taskKeywords": [
+          "beo",
+          "event operations",
+          "event workspace",
+          "guest count",
+          "logistics",
+          "operations",
+          "event production",
+          "kitchen production",
+          "run of show",
+          "event schedule",
+          "staffing"
+        ],
+        "pathFragments": [
+          "beo",
+          "eventoperating",
+          "eventoperations",
+          "eventrunofshow",
+          "eventschedule",
+          "eventworkspace"
+        ],
+        "authorityReads": [
+          "docs/ATTENDANCE_STATE_ADR.md",
+          "docs/EVENT_WORKSPACE_ADR.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/event-operations.md"
+        ]
+      },
+      "staffing": {
+        "taskKeywords": [
+          "bartender",
+          "captain",
+          "shift",
+          "staff",
+          "staffing",
+          "workforce"
+        ],
+        "pathFragments": [
+          "operationalstaffing",
+          "staff"
+        ],
+        "authorityReads": [
+          "docs/ATTENDANCE_STATE_ADR.md",
+          "docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/staffing.md"
+        ]
+      },
+      "beo_document_truth": {
+        "taskKeywords": [
+          "beo",
+          "current document",
+          "document currentness",
+          "kitchen copy",
+          "stale document"
+        ],
+        "pathFragments": [
+          "beo",
+          "kitchendocument",
+          "kitchenprint"
+        ],
+        "authorityReads": [
+          "docs/ATTENDANCE_STATE_ADR.md",
+          "docs/EVENT_WORKSPACE_ADR.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/beo-document-truth.md"
+        ]
+      },
+      "readiness": {
+        "taskKeywords": [
+          "blocker",
+          "preflight",
+          "readiness",
+          "event blocker"
+        ],
+        "pathFragments": [
+          "businessreadiness",
+          "decisiondebt",
+          "evidence/",
+          "preflight",
+          "readiness"
+        ],
+        "authorityReads": [
+          "docs/EVENT_WORKSPACE_ADR.md",
+          "docs/field-state-contract.json"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/event-operations.md"
+        ]
+      },
+      "reporting": {
+        "taskKeywords": [
+          "analytics",
+          "dashboard",
+          "metric",
+          "reporting"
+        ],
+        "pathFragments": [
+          "commandcenterevidence",
+          "dashboard",
+          "evidence/",
+          "measures",
+          "reporting"
+        ],
+        "authorityReads": [
+          "docs/COMMERCIAL_TRUTH_LOOP_ADR.md",
+          "docs/DESIGN_PRINCIPLES.md"
+        ],
+        "referenceSlices": [
+          ".codex/skills/catering-domain-intelligence/references/ux-customer-experience.md"
+        ]
+      }
     }
   },
   "profiles": {

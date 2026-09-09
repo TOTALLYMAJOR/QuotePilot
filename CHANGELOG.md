@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-08 11:26:20 CDT
+Last updated: 2026-09-08 15:16:08 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add schema-v2 task planning and the repository-local
+  `catering-domain-intelligence` skill. Domain-relevant agent work now preserves
+  its existing execution profile while selecting current QuotePilot authorities
+  and the smallest advisory catering reference slices, then reconsiders a
+  provisional action before implementation. Deterministic routing proof,
+  fresh-agent expertise evaluation, and human acceptance remain separate.
 - Add QP-UXR-001 Governed Commercial Amendment to eligible Quote Edit records:
   the exact current commitment, reversible proposal, semantic differences,
   authoritative consequence simulation, required authority, governed apply,

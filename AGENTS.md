@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: 2026-08-20 16:39:56 CDT
+Last updated: 2026-09-08 15:16:08 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -25,6 +25,12 @@ Ship safe changes with validation evidence and canonical documentation sync.
    claiming an in-process model switch. Load every emitted `requiredSkills`
    entry completely before acting. UI work must load `design-language` and use
    `docs/DESIGN_SYSTEM.md` plus `docs/DESIGN_PRINCIPLES.md` as its local truth.
+   When `domainClassification.applicable` is true, load
+   `catering-domain-intelligence`, form a provisional action from current
+   repository authority and implementation, then read only the emitted domain
+   reference slices and reconsider that action before implementation. Domain
+   commentary is optional; a changed decision or validation is the evidence
+   that the expertise affected the work.
 3. Use the smallest safe implementation scope.
 4. Run required checks:
    - `npm run check:env`

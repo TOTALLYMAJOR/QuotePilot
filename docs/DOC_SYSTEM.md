@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-08 10:01:36 CDT
+Last updated: 2026-09-08 15:16:08 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -119,7 +119,8 @@ as separate claims.
 | Product truth observability and drift policy | `docs/adr/ADR-0002-product-truth-observability.md`, `docs/design/product-truth-observability-design.md` | Accepted decision and implementation contract for the read-only owner digest and advisory drift gate. `PROJECT_STATUS.md`, the Feature Matrix, release receipts, and other named inputs retain authority; generated digests are projections only. |
 | Commercial kernel, vertical packs, offers, templates, rules, and compatibility migration | `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and `docs/adr/ADR-0003-commercial-platform-vertical-pack.md` | Catering remains the reference vertical and natural UX; shared contracts cannot replace quote, catalog, server-pricing, or payment authority. |
 | Pricing policy, v1/v2 semantics, exact money, waterfalls, and payment amount provenance | `docs/PRICING_CONSTITUTION.md` | Historical v1 receipts stay immutable; v2 behavior changes require Golden Corpus and differential evidence. |
-| Task classification, model tier, dependency reads, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. The external runner owns actual model switching. |
+| Execution/domain classification, model tier, dependency reads, domain-reference routing, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. Domain references remain advisory, and the external runner owns actual model switching. |
+| Catering-domain agent reconsideration | `.codex/skills/catering-domain-intelligence/SKILL.md` | The skill owns the provisional-action reconsideration workflow and progressively disclosed expertise references. It does not own QuotePilot runtime, product policy, or human acceptance. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
 | Workspace visual system and interaction contracts | `docs/DESIGN_SYSTEM.md` | The canonical staff-workspace visual grammar, motion, hierarchy, and scoped Ambient/customer extensions. UI agents load `design-language` first, then preserve this repository-specific authority. |

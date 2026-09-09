@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-09-08 15:16:08 CDT
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -20,9 +20,9 @@ Accelerate delivery while preserving production safety by using:
 3. Cloud Runner Handoff
 - Hosted agents and external runners start from a machine-readable
   `plan:task --json` packet, consume the selected model/reasoning effort,
-  read-first files, required skills, documentation obligations, validations,
-  and task graph before implementation, then close with a `--phase complete`
-  packet.
+  execution and domain classifications, read-first files, required skills,
+  documentation obligations, validations, and task graph before
+  implementation, then close with a `--phase complete` packet.
 - The runner may use injected environment values, ignored local `.env.local`,
   and cached `.cache` artifacts for speed, but it must never write provider
   secrets into tracked files or treat missing credentials as permission to
@@ -72,17 +72,32 @@ graph. The external runner—not repository code—owns the actual model switch.
 Every plan also carries an exact UTC lifecycle timestamp. The `complete` phase
 is the authoritative time included in the final task report.
 
+Schema-v2 packets preserve the execution profile and add an orthogonal
+`domainClassification`. When applicable, the packet names the smallest
+relevant catering contexts, current QuotePilot authority reads, and advisory
+reference slices. References remain separate from `readFirst` so the runner can
+form a provisional action from current authority and code before domain
+reconsideration. Existing packet fields remain available to runners.
+
 ## Token-Efficient Task Planning
 - Pass explicit paths in a dirty worktree so unrelated changes do not raise the
   risk/model tier or widen dependency reads.
 - Read the emitted `dependencies.readFirst` set before task-owned source.
 - Load every emitted `dependencies.requiredSkills` entry before acting; UI work
   requires `design-language` plus both canonical QuotePilot design documents.
-- Implement in `taskGraph` order: discover, implement, governance, verify.
+- When domain classification applies, load `catering-domain-intelligence`, form
+  the provisional action before opening its emitted reference slices, and use
+  the resulting `RETAIN`, `REFINE`, `REPLACE`, `EXPAND`, `BOUND`, or
+  `NO_MATERIAL_EFFECT` decision to govern implementation and validation.
+- Implement in `taskGraph` order: discover, form provisional action, domain
+  reconsideration, implement, governance, verify, then expertise evaluation
+  when agent behavior changed.
 - Run focused checks before full build/release lanes; do not omit required
   global gates from the emitted validation list.
 - Treat `frontier` selection as a safety escalation for authorization,
   payments, providers, migrations, security, and production work.
+- Keep deterministic routing proof, fresh-agent expertise evaluation, and human
+  acceptance as separate evidence classes.
 
 ## Lane Taxonomy
 - `lane:quick`

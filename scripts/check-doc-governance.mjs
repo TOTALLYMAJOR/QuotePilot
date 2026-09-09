@@ -259,8 +259,8 @@ function checkTaskOrchestrationContract(errors) {
     return;
   }
 
-  if (contract.schemaVersion !== 1) {
-    errors.push("Task orchestration contract schemaVersion must be 1.");
+  if (contract.schemaVersion !== 2) {
+    errors.push("Task orchestration contract schemaVersion must be 2.");
   }
   if (contract.switchAuthority !== "external_runner") {
     errors.push("Task orchestration model switching must remain external-runner authoritative.");
@@ -291,10 +291,61 @@ function checkTaskOrchestrationContract(errors) {
     errors.push("The UI task profile must require design-language and both canonical design documents.");
   }
 
+  const domainRouting = contract.domainRouting;
+  const requiredDomainContexts = [
+    "commercial",
+    "pricing",
+    "proposal_revision",
+    "payments",
+    "customer_experience",
+    "catalog_menu",
+    "event_operations",
+    "staffing",
+    "beo_document_truth",
+    "readiness",
+    "reporting"
+  ];
+  if (domainRouting?.skill !== "catering-domain-intelligence"
+    || domainRouting?.noneContext !== "none"
+    || JSON.stringify(domainRouting?.contextOrder) !== JSON.stringify(requiredDomainContexts)) {
+    errors.push("Task orchestration domain routing must retain the governed catering context order.");
+  }
+  for (const contextName of requiredDomainContexts) {
+    const context = domainRouting?.contexts?.[contextName];
+    if (!Array.isArray(context?.taskKeywords)
+      || !Array.isArray(context?.pathFragments)
+      || !Array.isArray(context?.authorityReads)
+      || !Array.isArray(context?.referenceSlices)) {
+      errors.push(`Task orchestration domain context ${contextName} is incomplete.`);
+    }
+  }
+
+  const routedFiles = new Set([
+    ".codex/skills/catering-domain-intelligence/SKILL.md",
+    ...(domainRouting?.baseReferenceSlices || []),
+    ...(domainRouting?.failureReferenceRule?.referenceSlices || []),
+    ...requiredDomainContexts.flatMap((contextName) => {
+      const context = domainRouting?.contexts?.[contextName];
+      return [...(context?.authorityReads || []), ...(context?.referenceSlices || [])];
+    })
+  ]);
+  for (const file of routedFiles) {
+    if (!fs.existsSync(path.join(ROOT, file))) {
+      errors.push(`Task orchestration domain routing references a missing file: ${file}`);
+    }
+  }
+
   const governedText = TASK_ORCHESTRATION_GOVERNANCE_DOCS
     .map((file) => fs.readFileSync(path.join(ROOT, file), "utf8"))
     .join("\n");
-  for (const marker of ["npm run plan:task", "external runner", "task-orchestration-contracts.json", "design-language"]) {
+  for (const marker of [
+    "npm run plan:task",
+    "external runner",
+    "task-orchestration-contracts.json",
+    "design-language",
+    "domainClassification",
+    "catering-domain-intelligence"
+  ]) {
     if (!governedText.toLowerCase().includes(marker.toLowerCase())) {
       errors.push(`Task orchestration governance docs are missing required marker: ${marker}`);
     }

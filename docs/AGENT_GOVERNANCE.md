@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-09-08 15:16:08 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -8,6 +8,8 @@ This document defines governance for repository-managed agent and skill assets u
 ## Approved Skills
 - `quote-wizard-maintainer`: implementation, fixes, safe refactors, and required documentation updates.
 - `quote-wizard-release-manager`: release readiness, changelog curation, and operational handoff quality.
+- `catering-domain-intelligence`: task-specific domain retrieval and
+  reconsideration of a provisional QuotePilot action before implementation.
 
 ## Canonical Locations
 - Skill definitions: `.codex/skills/*/SKILL.md`
@@ -20,6 +22,12 @@ This document defines governance for repository-managed agent and skill assets u
   - `bash .codex/skills/quote-wizard-maintainer/scripts/run-maintainer-checks.sh`
 - Release manager checks:
   - `bash .codex/skills/quote-wizard-release-manager/scripts/release-readiness.sh`
+- Catering intelligence structure:
+  - `python3 /home/administrator/.codex/skills/.system/skill-creator/scripts/quick_validate.py .codex/skills/catering-domain-intelligence`
+- Catering intelligence behavior changes:
+  - run the versioned fresh-agent rubric under
+    `.codex/skills/catering-domain-intelligence/evals/` after deterministic
+    verification; report human acceptance separately.
 - Orchestration lane entrypoints:
   - `npm run lane:quick`
   - `npm run lane:core`
@@ -69,6 +77,26 @@ read-first set. Agents must load that skill before UI analysis or edits, then
 preserve QuotePilot's canonical visual, interaction, copy, accessibility, and
 proof-boundary rules rather than introducing a parallel design language.
 
+The planner also performs an orthogonal catering-domain classification from
+task semantics, owned paths, affected product surfaces, and explicit
+exclusions. Schema-v2 packets expose `domainClassification.applicable`,
+`contexts`, `matchedSignals`, `authorityReads`, and `referenceSlices`.
+This classification does not replace the execution profile. It conditionally
+adds `catering-domain-intelligence` to `dependencies.requiredSkills`, adds
+current QuotePilot authorities to `readFirst`, and keeps advisory domain
+references separate so the agent can form a provisional action before reading
+them.
+
+For applicable work, the required reasoning order is: reconstruct the user
+objective, inspect repository authority and implementation, form a provisional
+action, retrieve the smallest domain slice, reconcile it, then classify the
+effect as `RETAIN`, `REFINE`, `REPLACE`, `EXPAND`, `BOUND`, or
+`NO_MATERIAL_EFFECT`. Domain expertise may improve the implementation method;
+it cannot silently override current executable evidence, canonical QuotePilot
+authority, accepted contracts, or the user's governing objective. Visible
+domain commentary is optional and is not evidence that reconsideration changed
+the work.
+
 The planner recommends `economy`, `balanced`, or `frontier` work and resolves
 those tiers to runner model defaults. `TASK_MODEL_ECONOMY`,
 `TASK_MODEL_BALANCED`, and `TASK_MODEL_FRONTIER` may override those defaults at
@@ -87,6 +115,12 @@ execute `taskGraph` in dependency order, and run the narrowest relevant check
 before global checks. Changes to the planner or its contract fail documentation
 governance unless this policy, the orchestration blueprint and runbook, and the
 documentation ownership map move together.
+
+When agent instructions, skill behavior, or routing changes, `taskGraph` adds
+an `expertise_eval` node after deterministic verification. Unit tests establish
+routing and packet structure only. A genuinely fresh agent run and separate
+human acceptance are required before claiming that domain reconsideration
+improves decisions.
 
 ## Task Evidence Loop
 For meaningful implementation, process, release, or architecture work, agents
