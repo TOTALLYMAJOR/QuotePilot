@@ -1,8 +1,8 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 06:19:39 CDT
+Last updated: 2026-09-09 06:49:55 CDT
 
-Status: Accepted scope correction; corrected Phases 2 through 6 complete as default-off local source candidates
+Status: Accepted scope correction; corrected Phases 2 through 7 complete as default-off local source candidates
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -92,6 +92,8 @@ normal reads:
 | `eventIngredientPlans/{quoteId}` | Current server-authoritative consumable allocation state; immutable snapshots live under `revisions/{planRevisionId}`. |
 | `inventoryAllocationFences/{ingredientId_locationId}` | Shared, date-independent contention record for cumulative active ingredient commitments. |
 | `eventIngredientProjections/{quoteId}` | Client-safe event demand, costing completeness, availability, shortage, and freshness. |
+| `eventIngredientExecutions/{quoteId}` | Current physical-use settlement authority; immutable full-replacement evidence revisions live under `revisions/{executionRevisionId}`. |
+| `eventIngredientExecutionProjections/{quoteId}` | Client-safe exact-event consumption, waste, quantity variance, planned-basis cost comparison, receipt, and freshness read model. |
 | `inventoryIngredientProjections/{ingredientId}` | Client-safe current stock and cost axes for the operator workspace. |
 | `inventoryWorkspaceProjections/current` | Bounded client-safe location/setup projection; it never contains the item ledger. |
 
@@ -281,6 +283,23 @@ allocation only. Consumption changes physical stock and settles the related
 allocation without subtracting the same quantity twice. Every command is
 expected-revision fenced and retry safe.
 
+Event usage is recorded as one bounded full-total statement covering every
+ingredient in the pinned plan. Initial settlement atomically removes the
+event's whole active hold and decrements on-hand by `consumed + waste`. Usage
+above the event's own hold is accepted only when the resulting on-hand balance
+still covers every other active commitment. The plan becomes `settled`, not
+`released`, and retains the exact settlement execution revision. A correction
+submits full replacement totals; the server derives the physical delta,
+restores or depletes only that delta, and never recreates the settled hold.
+Consumption-to-waste reclassification with an unchanged total creates an
+immutable execution revision without inventing a zero-quantity movement.
+
+Each closeout transaction is capped at 75 ingredients so movement, stock,
+ingredient provenance, fence, projection, plan, execution, and receipt writes
+remain below Firestore's 500-write ceiling. Current stock is still a
+materialized projection, and opening, receiving, depletion, and restoration
+movements replay to that projection exactly.
+
 ## Realtime projections and evidence state
 
 Canonical inventory, recipe, allocation, and receipt writes are server only.
@@ -299,6 +318,14 @@ Clients subscribe only to bounded safe projections. Listeners use
 failure may retain the last confirmed projection as stale but cannot silently
 promote it. Organization, principal, role, or feature-gate changes unsubscribe
 and invalidate late callbacks.
+
+The event Control Room listens to two exact documents: the commercial event
+ingredient projection supplies the pinned plan before closeout, and the
+separate execution projection confirms recorded usage. Separating them keeps
+physical actuals from manufacturing current commercial cost or demand
+freshness. A callable receipt is not shown as committed until the execution
+listener observes the same receipt, execution revision, immutable revision ID,
+and movement identities.
 
 Phase 4's saved event projection is deliberately labeled `as_recorded`, not
 equivalent to a claim that every upstream source is still current. Phase 6
@@ -373,7 +400,7 @@ corrected slices and final qualification complete.
    Edit, Preflight, Operations, and reporting projections plus deterministic
    utilization, shortage, and due-supply insights.
 
-Corrected Phases 2 through 6 are now complete as default-off local source
+Corrected Phases 2 through 7 are now complete as default-off local source
 candidates. Phase 3 adds same-dimension conversions, immutable declared
 purchase-pack revisions, versioned recipes attached to exact existing menu
 items, pure exact costing, bounded reverse dependencies, and materialized menu
@@ -394,8 +421,14 @@ up without release; every allocation revision is preserved, and exact event and
 ingredient projections update atomically. Phase 6 adds bounded reverse event
 dependencies, source-fenced invalidation, independent freshness axes, explicit
 retained-hold reconciliation, and non-governing Commercial Change ingredient-
-cost and availability intelligence. The next independently committed target is
-Phase 7: consumption, waste, and planned-versus-actual evidence.
+cost and availability intelligence. Phase 7 records full replacement
+consumption and waste totals against the pinned immutable plan, settles the
+active hold without double subtraction, preserves corrections as immutable
+evidence, and publishes a separate exact realtime execution projection in the
+event Control Room. It provides quantity variance and a clearly labeled
+saved-planning-basis cost comparison only when every pinned ingredient cost is
+complete. The next independently committed target is Phase 8: deeper realtime
+Preflight, Operations, and deterministic reporting integration.
 
 ## Acceptance anchor
 
@@ -417,7 +450,8 @@ deltas, preserved historical estimates, recipe invalidation without history
 rewrite, explicit missing cost/conversion, concurrent no-overallocation,
 idempotent receive/allocate/consume, release without stock mutation,
 consumption without double subtraction, tenant and role denials, and distinct
-pending/committed/uncertain UI evidence.
+pending/committed/uncertain UI evidence. Phase 7 proves those consumption and
+correction cases with a 50-portion closeout after the owner fixture.
 
 ## Evidence boundary and unresolved policy
 
@@ -449,6 +483,14 @@ preservation, and cost-only reverse-index invalidation. Focused pure/runtime,
 client, hook, and component tests separately prove delayed-source no-ops,
 strict revision substitution rejection, independent freshness, stale-hold
 release without top-up, and non-governing Commercial Change consequences.
+
+Phase 7 extends the same real callable transaction path through allocation,
+physical consumption and waste, settlement, retry replay, a downward
+correction that restores only the delta, a zero-net classification correction
+that creates no movement, exact execution projection readback, and preserved
+unknown actual COGS. Pure reducer tests separately prove other-event hold
+protection, invalid transitions, stale revisions, bounded row counts, exact
+ledger replay, and rational planned-basis comparison.
 
 The genuinely unresolved product/accounting decision is the valuation policy
 for multiple cost observations and actual consumption. Corrected Phase 2

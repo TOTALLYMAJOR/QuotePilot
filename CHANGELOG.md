@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 06:19:39 CDT
+Last updated: 2026-09-09 06:49:55 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add Ingredient Inventory Phase 7: the accepted/booked event Control Room now
+  records complete fractional consumption and waste totals against the pinned
+  immutable ingredient plan. One Firestore transaction settles the event hold,
+  preserves every other commitment, changes on-hand stock exactly once, writes
+  immutable execution and movement evidence, and publishes a separate exact
+  metadata-aware execution projection. Full-replacement corrections apply only
+  their physical delta; zero-net consumed/waste reclassification creates
+  evidence without a stock movement. Quantity variance and saved-planning-basis
+  cost comparison remain separate from explicitly unavailable authoritative
+  actual COGS while multi-observation valuation policy is unresolved.
 - Add Ingredient Inventory Phase 6: exact quote, recipe, and menu-cost source
   transitions now invalidate only bounded dependent event projections while
   preserving immutable requirements, historical estimates, and active holds.

@@ -1277,6 +1277,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Event ingredient execution heads and immutable revisions are physical-use
+    // authority. Browsers consume only the bounded, exact-event projection
+    // below; direct reads and every mutation stay server-owned.
+    match /organizations/{orgId}/eventIngredientExecutions/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientExecutions/{quoteId}/revisions/{executionRevisionId} {
+      allow read, write: if false;
+    }
+
     // Location/setup data stays in one exact, server-owned projection. The
     // first Phase-2 route is administrator-only and has no browser write path.
     match /organizations/{orgId}/inventoryWorkspaceProjections/{projectionId} {
@@ -1316,6 +1327,16 @@ service cloud.firestore {
     // quote projection. Collection scans and every browser mutation remain
     // forbidden; canonical requirements and heads stay private above.
     match /organizations/{orgId}/eventIngredientProjections/{quoteId} {
+      allow get: if isOrgStaff(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Physical-use settlement is intentionally projected separately from
+    // commercial demand/cost intelligence so one authority cannot manufacture
+    // freshness for the other. Only exact event reads are allowed.
+    match /organizations/{orgId}/eventIngredientExecutionProjections/{quoteId} {
       allow get: if isOrgStaff(orgId)
         && inventoryAuthorityEnabled(orgId);
       allow list: if false;

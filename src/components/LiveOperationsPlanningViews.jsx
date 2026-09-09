@@ -20,6 +20,8 @@ import { getKitchenBeoArtifactStatus } from "../lib/kitchenBeoClient";
 import { getOperationalStaffingSnapshot } from "../lib/operationalStaffingClient";
 import EventPreflightPanel from "./EventPreflightPanel";
 import { buildEventPreflightPresentation } from "./eventPreflightPresentation";
+import EventIngredientUsagePanel from "./EventIngredientUsagePanel";
+import { useEventIngredientExecutionProjection } from "../hooks/useEventIngredientExecutionProjection";
 import { buildScheduleConflictAssessment, buildScheduledEvents } from "./EventScheduleModal";
 import {
   formatWorkspaceDate,
@@ -184,6 +186,8 @@ export function EventPlanningView({
   principalId = "",
   role = "customer",
   eventOperationsEnabled = false,
+  inventoryAuthorityEnabled = false,
+  inventoryTenantEnabled = false,
   tenantTimeZone = "",
   scheduleAvailable = true,
   scheduleCapacityLimit = 400,
@@ -221,6 +225,15 @@ export function EventPlanningView({
     || state.truncationKnown === false
   );
   const eventOperationsAvailable = eventOperationsEnabled && state.source === "firebase" && ["admin", "sales"].includes(role) && selected?.status === "booked" && Boolean(principalId);
+  const ingredientExecution = useEventIngredientExecutionProjection({
+    active: routeMode === "live" && state.source === "firebase" && Boolean(selected?.id),
+    organizationId,
+    role,
+    browserEnabled: inventoryAuthorityEnabled,
+    tenantEnabled: inventoryTenantEnabled,
+    quoteId: selected?.id || "",
+    quoteStatus: selected?.status || ""
+  });
   const unavailableMode = routeMode === "live" || routeMode === "replay";
   const execution = selected
     ? buildCommitmentExecutionPresentation(selected, {
@@ -525,6 +538,20 @@ export function EventPlanningView({
                 <h2 id="actuals-title">{execution.actuals.title}</h2>
                 <p>{execution.actuals.detail}</p>
               </section>
+              {ingredientExecution.access.readEnabled && (
+                <EventIngredientUsagePanel
+                  planRead={ingredientExecution.planRead}
+                  read={ingredientExecution.read}
+                  operation={ingredientExecution.operation}
+                  access={ingredientExecution.access}
+                  controlsLocked={ingredientExecution.controlsLocked}
+                  blockedReason={ingredientExecution.blockedReason}
+                  onRecord={ingredientExecution.canRecord ? ingredientExecution.record : undefined}
+                  onCorrect={ingredientExecution.canCorrect ? ingredientExecution.correct : undefined}
+                  onReconcile={ingredientExecution.reconcile}
+                  onReset={ingredientExecution.reset}
+                />
+              )}
             </div>
 
           </div>

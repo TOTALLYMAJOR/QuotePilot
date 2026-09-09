@@ -173,7 +173,7 @@ export function buildEventPreflightPresentation({
 
   unknown.push(
     fact("phase-issues", "Live execution", "Live phase and unresolved issues are unavailable", "QuotePilot has no server-owned live event session for this event.", "No current authority"),
-    fact("inventory", "Inventory", "Inventory and equipment availability are not governed here", "A checklist does not prove that equipment exists, is reserved, loaded, returned, or undamaged.", "New authority required"),
+    fact("inventory", "Ingredient inventory", "Ingredient availability and usage are governed separately", "Event Preflight does not infer stock, allocation, consumption, waste, or food cost from a checklist. Use the exact ingredient projections where that authority is enabled.", "Ingredient inventory authority"),
     fact("attendance", "Attendance", "Actual attendance is not governed here", "Quoted guests and final-count confirmation are not actual attendance.", "New authority required")
   );
 

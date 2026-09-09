@@ -71,7 +71,7 @@ function planEventReconciliation({
   nowISO
 }) {
   const normalized = normalizeReconcileRequest(request);
-  if (!currentPlan || currentPlan.state === "released") {
+  if (!currentPlan || !["reserved", "shortage"].includes(currentPlan.state)) {
     fail("failed-precondition", "Only an active ingredient allocation can be reconciled.");
   }
   allocation.verifyPlan(currentPlan, {

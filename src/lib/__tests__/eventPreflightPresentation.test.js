@@ -65,6 +65,10 @@ describe("event preflight presentation", () => {
     expect(model).not.toHaveProperty("readinessPercent");
     expect(model.nextAction.kind).toBe("schedule");
     expect(model.nextReason).toContain("No conflict appears");
+    const inventory = model.unknown.find((item) => item.id === "inventory");
+    expect(inventory.title).toBe("Ingredient availability and usage are governed separately");
+    expect(inventory.detail).toContain("exact ingredient projections");
+    expect(inventory.detail).not.toContain("equipment");
   });
 
   test("turns revision drift, payment gaps, stale BEO, staffing gaps, workflow, and schedule conflicts into attention", () => {

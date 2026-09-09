@@ -128,6 +128,7 @@ function IngredientTable({ projection }) {
 function allocationCapabilityState(state) {
   if (state === "reserved") return "success";
   if (state === "shortage") return "partial";
+  if (state === "settled") return "success";
   if (state === "released" || !state) return "empty";
   return "error";
 }
@@ -142,10 +143,11 @@ function AllocationSummary({ allocation, evidenceCurrent }) {
       </p>
     );
   }
-  const state = railState(allocation.state, ["reserved", "shortage", "released"]);
+  const state = railState(allocation.state, ["reserved", "shortage", "released", "settled"]);
   const headline = state === "reserved" ? "Fully allocated"
     : state === "shortage" ? "Partially allocated"
-      : state === "released" ? "Allocation released" : "Allocation evidence unavailable";
+      : state === "released" ? "Allocation released"
+        : state === "settled" ? "Allocation settled through recorded usage" : "Allocation evidence unavailable";
   return (
     <div className="event-ingredient-panel__allocation-summary" data-ingredient-allocation-state={state} data-allocation-capacity-state={allocationCapabilityState(state)} data-capability-state={evidenceCurrent ? allocationCapabilityState(state) : "stale"}>
       <div>

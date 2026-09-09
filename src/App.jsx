@@ -6884,6 +6884,8 @@ export default function App({
             principalId={authSession.user?.uid || ""}
             role={authSession.role}
             eventOperationsEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
+            inventoryAuthorityEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
+            inventoryTenantEnabled={inventoryTenantEnabled}
             snapshot={commercialSnapshot}
             organizationName={organizationName}
             organizationId={authSession.organizationId}

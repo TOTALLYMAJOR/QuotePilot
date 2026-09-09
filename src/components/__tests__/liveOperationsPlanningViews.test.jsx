@@ -9,7 +9,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const authorityMocks = vi.hoisted(() => ({
   getKitchenBeoArtifactStatus: vi.fn(),
-  getOperationalStaffingSnapshot: vi.fn()
+  getOperationalStaffingSnapshot: vi.fn(),
+  ingredientExecution: vi.fn()
 }));
 
 vi.mock("../../lib/kitchenBeoClient", () => ({
@@ -17,6 +18,9 @@ vi.mock("../../lib/kitchenBeoClient", () => ({
 }));
 vi.mock("../../lib/operationalStaffingClient", () => ({
   getOperationalStaffingSnapshot: authorityMocks.getOperationalStaffingSnapshot
+}));
+vi.mock("../../hooks/useEventIngredientExecutionProjection", () => ({
+  useEventIngredientExecutionProjection: authorityMocks.ingredientExecution
 }));
 
 function snapshot(overrides = {}) {
@@ -37,6 +41,14 @@ let container;
 let root;
 
 beforeEach(() => {
+  authorityMocks.ingredientExecution.mockReset().mockReturnValue({
+    access: { readEnabled: false, mutationEnabled: false, reason: "Disabled" },
+    planRead: { state: "not_evaluated", sourceState: "not_evaluated", projection: null },
+    read: { state: "not_recorded", sourceState: "not_recorded", projection: null },
+    operation: { state: "idle" },
+    controlsLocked: true,
+    blockedReason: "Disabled"
+  });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -250,6 +262,38 @@ describe("EventPlanningView recovery journeys", () => {
     expect(markup).toContain("Back to Event Focus");
     expect(markup).toContain("Open quote record");
     expect(markup).not.toContain(">Replay</button>");
+  });
+
+  test("mounts ingredient usage from its independent inventory gate without requiring Event Operating Spine", () => {
+    authorityMocks.ingredientExecution.mockReturnValue({
+      access: { readEnabled: true, mutationEnabled: false, role: "sales" },
+      planRead: { state: "current", sourceState: "current", projection: null },
+      read: { state: "not_recorded", sourceState: "current", projection: null },
+      operation: { state: "idle" },
+      controlsLocked: true,
+      blockedReason: "Administrator required"
+    });
+    const markup = renderToStaticMarkup(
+      <EventPlanningView
+        snapshot={snapshot({ quotes: [{ id: "event-a", status: "accepted", event: { date: "2027-09-12" } }] })}
+        organizationId="org-a"
+        role="sales"
+        routeMode="live"
+        quoteId="event-a"
+        eventOperationsEnabled={false}
+        inventoryAuthorityEnabled
+        inventoryTenantEnabled
+      />
+    );
+    expect(authorityMocks.ingredientExecution).toHaveBeenCalledWith(expect.objectContaining({
+      active: true,
+      browserEnabled: true,
+      tenantEnabled: true,
+      quoteId: "event-a"
+    }));
+    expect(markup).toContain("Ingredient actuals");
+    expect(markup).toContain("administrator must record or correct");
+    expect(markup).not.toContain("data-event-operations-entry=\"control-room\"");
   });
 
   test("keeps Replay unavailable while disclosing current-record support without relabeling it", () => {

@@ -633,6 +633,39 @@ test.each(["draft", "sent", "declined", "cancelled"])("withholds allocation chan
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
+test("treats usage-settled allocation as terminal for every allocation command", () => {
+  const registrations = [];
+  mocks.subscribe.mockImplementation((input) => { registrations.push(input); return vi.fn(); });
+  render();
+  act(() => registrations[0].onData({
+    quoteId: "quote-1",
+    exists: true,
+    projection: {
+      quoteId: "quote-1",
+      quoteRevisionId: "quote-revision-2",
+      requirementRevision: 1,
+      eventRequirementRevisionId: `eir_${"d".repeat(48)}`,
+      freshness: "as_recorded",
+      demandState: "complete",
+      allocation: { state: "settled", allocationRevision: 2 },
+      freshnessState: {
+        demand: { state: "current", reason: "" },
+        cost: { state: "current", reason: "" },
+        availability: { state: "current", reason: "" },
+        allocation: { state: "settled", reason: "" }
+      }
+    },
+    freshness: "current",
+    source: { state: "current" }
+  }));
+  expect(latest).toMatchObject({
+    canManageAllocation: false,
+    canAllocate: false,
+    canRelease: false,
+    canReconcilePlan: false
+  });
+});
+
 test("keeps sales read-only and ignores late allocation callbacks after teardown", async () => {
   render({ ...BASE, role: "sales" });
   await expect(latest.allocate({ locationId: "main-kitchen" })).rejects.toThrow(/administrator/i);

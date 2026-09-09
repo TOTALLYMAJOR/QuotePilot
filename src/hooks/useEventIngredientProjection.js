@@ -533,6 +533,7 @@ export function useEventIngredientProjection({
     && allocationCommerciallyEligible && requirementCurrent && read.projection?.demandState === "complete"
     && allocationFreshness !== "stale"
     && allocationState !== "reserved"
+    && allocationState !== "settled"
     && !controlsLocked && !allocationControlsLocked;
   const canRelease = access.role === "admin" && access.mutationEnabled && !draftDirty
     && allocationCommerciallyEligible && serverCurrentAllocationEvidence
@@ -559,7 +560,7 @@ export function useEventIngredientProjection({
     allocationControlsLocked,
     canPreview: access.readEnabled && !draftDirty && !controlsLocked && !allocationControlsLocked,
     canRecord,
-    canManageAllocation: access.role === "admin" && access.mutationEnabled,
+    canManageAllocation: access.role === "admin" && access.mutationEnabled && allocationState !== "settled",
     canAllocate,
     canRelease,
     canReconcilePlan,

@@ -23,7 +23,9 @@ export const INVENTORY_COMMAND_KINDS = Object.freeze([
   "compile_event_ingredient_demand",
   "allocate_event_ingredients",
   "release_event_ingredients",
-  "reconcile_event_ingredients"
+  "reconcile_event_ingredients",
+  "record_event_ingredient_execution",
+  "correct_event_ingredient_execution"
 ]);
 export const INVENTORY_COST_AVAILABILITY = Object.freeze([
   "available",
@@ -62,6 +64,7 @@ const RECIPE_REVISION_ID_PATTERN = /^irr_[a-f0-9]{48}$/u;
 const PACK_CONVERSION_REVISION_ID_PATTERN = /^ipc_[a-f0-9]{48}$/u;
 const EVENT_REQUIREMENT_REVISION_ID_PATTERN = /^eir_[a-f0-9]{48}$/u;
 const EVENT_PLAN_ID_PATTERN = /^eip_[a-f0-9]{48}$/u;
+const EVENT_EXECUTION_REVISION_ID_PATTERN = /^eiex_[a-f0-9]{48}$/u;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const DECIMAL_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/u;
 const MONEY_INPUT_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/u;
@@ -718,6 +721,70 @@ function normalizeReconcileEventIngredientsCommand(value) {
   };
 }
 
+function normalizeEventExecutionIngredient(value, index) {
+  exactKeys(value, [
+    "ingredientId", "locationId", "baseUnitId", "consumedQuantity", "wasteQuantity",
+    "expectedStockRevision"
+  ], `Event execution ingredient ${index + 1}`);
+  parseQuantityMicros(value.consumedQuantity, `event execution ingredient ${index + 1} consumed quantity`, { allowZero: true });
+  parseQuantityMicros(value.wasteQuantity, `event execution ingredient ${index + 1} waste quantity`, { allowZero: true });
+  return {
+    ingredientId: identifier(value.ingredientId, `event execution ingredient ${index + 1}`),
+    locationId: identifier(value.locationId, `event execution ingredient ${index + 1} location`),
+    baseUnitId: baseUnit(value.baseUnitId, `event execution ingredient ${index + 1} base unit`),
+    consumedQuantity: value.consumedQuantity,
+    wasteQuantity: value.wasteQuantity,
+    expectedStockRevision: exactRevision(
+      value.expectedStockRevision,
+      `event execution ingredient ${index + 1} expected stock revision`,
+      { allowZero: false }
+    )
+  };
+}
+
+function normalizeEventExecutionCommand(value) {
+  exactKeys(value, [
+    "kind", "quoteId", "eventRequirementRevisionId", "expectedExecutionRevision",
+    "expectedAllocationRevision", "occurredAtISO", "reason", "ingredients"
+  ], "Event ingredient execution command");
+  if (!["record_event_ingredient_execution", "correct_event_ingredient_execution"].includes(value.kind)
+    || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId)
+    || !Array.isArray(value.ingredients)
+    || value.ingredients.length === 0
+    || value.ingredients.length > 75) {
+    throw clientError("invalid-argument", "Event ingredient execution command is invalid.");
+  }
+  const correction = value.kind === "correct_event_ingredient_execution";
+  const expectedExecutionRevision = exactRevision(
+    value.expectedExecutionRevision,
+    "event execution expected revision",
+    { allowZero: !correction }
+  );
+  if ((!correction && expectedExecutionRevision !== 0) || (correction && expectedExecutionRevision < 1)) {
+    throw clientError("invalid-argument", "Event execution revision does not match the command kind.");
+  }
+  const ingredients = value.ingredients.map(normalizeEventExecutionIngredient);
+  if (new Set(ingredients.map(({ ingredientId }) => ingredientId)).size !== ingredients.length
+    || ingredients.some((entry, index) => index > 0
+      && compareCodePoints(ingredients[index - 1].ingredientId, entry.ingredientId) >= 0)) {
+    throw clientError("invalid-argument", "Event execution ingredients must be a sorted unique set.");
+  }
+  return {
+    kind: value.kind,
+    quoteId: identifier(value.quoteId, "event execution quoteId"),
+    eventRequirementRevisionId: value.eventRequirementRevisionId,
+    expectedExecutionRevision,
+    expectedAllocationRevision: exactRevision(
+      value.expectedAllocationRevision,
+      "event execution expected allocation revision",
+      { allowZero: false }
+    ),
+    occurredAtISO: exactIso(value.occurredAtISO, "event execution occurrence time", "invalid-argument"),
+    reason: exactText(value.reason, "event execution reason", 240),
+    ingredients
+  };
+}
+
 function normalizeEventRequiredByBasis(value) {
   exactKeys(value, ["kind"], "Event ingredient required-by basis");
   if (value.kind !== "quote_event_start") {
@@ -740,6 +807,9 @@ function normalizeCommand(value) {
   if (value.kind === "compile_event_ingredient_demand") return deepFreeze(normalizeCompileEventIngredientCommand(value));
   if (value.kind === "allocate_event_ingredients") return deepFreeze(normalizeAllocateEventIngredientsCommand(value));
   if (value.kind === "reconcile_event_ingredients") return deepFreeze(normalizeReconcileEventIngredientsCommand(value));
+  if (["record_event_ingredient_execution", "correct_event_ingredient_execution"].includes(value.kind)) {
+    return deepFreeze(normalizeEventExecutionCommand(value));
+  }
   return deepFreeze(normalizeReleaseEventIngredientsCommand(value));
 }
 
@@ -753,6 +823,7 @@ export function inventoryCommandAxis(kind) {
   if (kind === "publish_menu_recipe") return "recipe";
   if (kind === "compile_event_ingredient_demand") return "event_requirement";
   if (["allocate_event_ingredients", "release_event_ingredients", "reconcile_event_ingredients"].includes(kind)) return "allocation";
+  if (["record_event_ingredient_execution", "correct_event_ingredient_execution"].includes(kind)) return "execution";
   return "";
 }
 
@@ -1007,6 +1078,25 @@ function normalizeMutationResult(value, attempt, receipt) {
       throw clientError("data-loss", `Event ingredient ${release ? "release" : reconcile ? "reconciliation" : "allocation"} result counts contradict its state.`);
     }
     return { ...value };
+  }
+  if (["record_event_ingredient_execution", "correct_event_ingredient_execution"].includes(command.kind)) {
+    exactKeys(value, [
+      "schemaVersion", "quoteId", "eventPlanId", "eventRequirementRevisionId",
+      "executionRevision", "eventExecutionRevisionId", "state", "movementIds"
+    ], "Event ingredient execution result", "data-loss");
+    if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+      || value.quoteId !== command.quoteId
+      || !EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
+      || value.eventRequirementRevisionId !== command.eventRequirementRevisionId
+      || value.executionRevision !== command.expectedExecutionRevision + 1
+      || !EVENT_EXECUTION_REVISION_ID_PATTERN.test(value.eventExecutionRevisionId)
+      || value.state !== "settled"
+      || !Array.isArray(value.movementIds)
+      || value.movementIds.length > command.ingredients.length
+      || value.movementIds.some((entry) => !MOVEMENT_ID_PATTERN.test(entry))) {
+      throw clientError("data-loss", "Event ingredient execution result differs from the exact request.");
+    }
+    return { ...value, movementIds: [...value.movementIds] };
   }
   exactKeys(value, [
     "schemaVersion", "ingredientId", "costEvidenceId", "costRevision", "availability", "affectedMenuItemIds"
@@ -1707,7 +1797,7 @@ function normalizeEventAllocationSummary(value, projection, labelsById, allocati
     "state", "eventPlanId", "allocationRevision", "eventRequirementRevisionId", "ingredientCount",
     "fullyAllocatedIngredientCount", "shortageIngredientCount", "ingredients"
   ], "Event ingredient allocation summary", "data-loss");
-  if (!new Set(["reserved", "shortage", "released"]).has(value.state)
+  if (!new Set(["reserved", "shortage", "released", "settled"]).has(value.state)
     || !EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
     || !Array.isArray(value.ingredients) || value.ingredients.length > 100) {
     throw clientError("data-loss", "Event ingredient allocation summary identity is invalid.");
@@ -1725,7 +1815,7 @@ function normalizeEventAllocationSummary(value, projection, labelsById, allocati
   const ingredients = value.ingredients.map((entry, index) => {
     exactKeys(entry, [
       "ingredientId", "locationId", "baseUnitId", "requiredQuantityMicros",
-      "allocatedQuantityMicros", "shortageQuantityMicros"
+      "allocatedQuantityMicros", "shortageQuantityMicros", "stockRevision", "fenceRevision"
     ], `Allocated event ingredient ${index + 1}`, "data-loss");
     const requiredQuantityMicros = exactSafeInteger(entry.requiredQuantityMicros, "allocated ingredient required micros");
     const allocatedQuantityMicros = exactSafeInteger(entry.allocatedQuantityMicros, "allocated ingredient quantity micros");
@@ -1739,6 +1829,8 @@ function normalizeEventAllocationSummary(value, projection, labelsById, allocati
       ingredientName: labelsById.get(entry.ingredientId) || "",
       locationId: identifier(entry.locationId, `allocated ingredient ${index + 1} location`, "data-loss"),
       baseUnitId: baseUnit(entry.baseUnitId, `allocated ingredient ${index + 1} base unit`, "data-loss"),
+      stockRevision: exactRevision(entry.stockRevision, `allocated ingredient ${index + 1} stock revision`, { allowZero: false, code: "data-loss" }),
+      fenceRevision: exactRevision(entry.fenceRevision, `allocated ingredient ${index + 1} fence revision`, { allowZero: false, code: "data-loss" }),
       requiredQuantityMicros,
       allocatedQuantityMicros,
       shortageQuantityMicros
@@ -1916,7 +2008,7 @@ function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId
     for (const key of ["demand", "cost", "availability", "allocation"]) {
       exactKeys(value.freshnessState[key], ["state", "reason"], `Event ingredient ${key} freshness`, "data-loss");
       const allowed = key === "allocation"
-        ? ["not_allocated", "current", "stale", "released"]
+        ? ["not_allocated", "current", "stale", "released", "settled"]
         : ["current", "stale"];
       const state = value.freshnessState[key].state;
       const rawReason = value.freshnessState[key].reason;
@@ -1937,8 +2029,9 @@ function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId
       ? normalizeEventAllocationSummary(value.allocation, projection, labelsById, freshnessState.allocation.state)
       : null;
     if ((projection.allocation && freshnessState.allocation.state === "not_allocated")
-      || (!projection.allocation && !["not_allocated", "released"].includes(freshnessState.allocation.state))
-      || (projection.allocation?.state === "released") !== (freshnessState.allocation.state === "released")) {
+      || (!projection.allocation && !["not_allocated", "released", "settled"].includes(freshnessState.allocation.state))
+      || (projection.allocation?.state === "released") !== (freshnessState.allocation.state === "released")
+      || (projection.allocation?.state === "settled") !== (freshnessState.allocation.state === "settled")) {
       throw clientError("data-loss", "Event ingredient allocation freshness contradicts its projection.");
     }
   } else {
@@ -1954,6 +2047,178 @@ function textValue(value) {
 
 export function normalizeEventIngredientProjection(value, expectedOrganizationId, expectedQuoteId) {
   return normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId, { persisted: true });
+}
+
+function normalizeExactRational(value, label) {
+  exactKeys(value, ["numerator", "denominator"], label, "data-loss");
+  if (typeof value.numerator !== "string" || !/^(0|[1-9]\d*)$/u.test(value.numerator)
+    || typeof value.denominator !== "string" || !/^[1-9]\d*$/u.test(value.denominator)) {
+    throw clientError("data-loss", `${label} is not an exact non-negative rational.`);
+  }
+  const numerator = BigInt(value.numerator);
+  const denominator = BigInt(value.denominator);
+  let left = numerator;
+  let right = denominator;
+  while (right !== 0n) [left, right] = [right, left % right];
+  if ((numerator === 0n && denominator !== 1n) || (numerator !== 0n && left !== 1n)) {
+    throw clientError("data-loss", `${label} is not canonical.`);
+  }
+  return { numerator: value.numerator, denominator: value.denominator };
+}
+
+function normalizeExecutionCostSummary(value, ingredientCount, costedIngredientCount) {
+  const required = [
+    "actualCogsState", "actualCogsReason", "plannedBasisState", "expectedIngredientCount",
+    "costedIngredientCount"
+  ];
+  const optional = [
+    "currency", "exactKnownUsageCostMinor", "knownUsageCostMinor", "plannedProjectedCostMinor",
+    "plannedBasisVarianceMinor"
+  ];
+  assertAllowedKeys(value, required, [...required, ...optional], "Event ingredient execution cost summary");
+  if (value.actualCogsState !== "unavailable"
+    || value.actualCogsReason !== "valuation_policy_unresolved"
+    || !["complete", "partial", "unavailable", "invalid"].includes(value.plannedBasisState)
+    || value.expectedIngredientCount !== ingredientCount
+    || value.costedIngredientCount !== costedIngredientCount) {
+    throw clientError("data-loss", "Event ingredient execution cost boundary is inconsistent.");
+  }
+  const hasKnownCost = Object.hasOwn(value, "knownUsageCostMinor");
+  if (hasKnownCost !== Object.hasOwn(value, "currency")
+    || hasKnownCost !== Object.hasOwn(value, "exactKnownUsageCostMinor")
+    || (value.plannedBasisState === "complete") !== Object.hasOwn(value, "plannedProjectedCostMinor")
+    || (value.plannedBasisState === "complete") !== Object.hasOwn(value, "plannedBasisVarianceMinor")) {
+    throw clientError("data-loss", "Event ingredient execution cost summary completeness is inconsistent.");
+  }
+  if (hasKnownCost) {
+    if (typeof value.currency !== "string" || !CURRENCY_PATTERN.test(value.currency)) {
+      throw clientError("data-loss", "Event ingredient execution currency is invalid.");
+    }
+    normalizeExactRational(value.exactKnownUsageCostMinor, "Event ingredient exact known usage cost");
+    exactSafeInteger(value.knownUsageCostMinor, "event ingredient known usage cost");
+  }
+  if (value.plannedBasisState === "complete") {
+    exactSafeInteger(value.plannedProjectedCostMinor, "event ingredient planned projected cost");
+    if (!Number.isSafeInteger(value.plannedBasisVarianceMinor)
+      || value.plannedBasisVarianceMinor !== value.knownUsageCostMinor - value.plannedProjectedCostMinor) {
+      throw clientError("data-loss", "Event ingredient execution cost summary variance is invalid.");
+    }
+  }
+  return canonicalClone(value, "Event ingredient execution cost summary");
+}
+
+export function normalizeEventIngredientExecutionProjection(value, expectedOrganizationId, expectedQuoteId) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "quoteId", "eventPlanId",
+    "eventRequirementRevisionId", "allocationRevision", "state", "executionRevision",
+    "eventExecutionRevisionId", "settlementExecutionRevisionId", "occurredAtISO", "recordedAtISO",
+    "reason", "ingredients", "costSummary", "lastReceiptId", "movementIds", "freshness",
+    "updatedAtISO", "projectionDigest"
+  ], "Event ingredient execution projection", "data-loss");
+  const organizationId = identifier(expectedOrganizationId, "expected organizationId");
+  const quoteId = identifier(expectedQuoteId, "expected quoteId");
+  if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+    || value.model !== "event-ingredient-execution-projection-v1"
+    || value.organizationId !== organizationId
+    || value.quoteId !== quoteId
+    || !EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
+    || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId)
+    || !EVENT_EXECUTION_REVISION_ID_PATTERN.test(value.eventExecutionRevisionId)
+    || !EVENT_EXECUTION_REVISION_ID_PATTERN.test(value.settlementExecutionRevisionId)
+    || value.state !== "settled"
+    || !RECEIPT_ID_PATTERN.test(value.lastReceiptId)
+    || !Array.isArray(value.movementIds)
+    || value.movementIds.length > 75
+    || value.movementIds.some((entry) => !MOVEMENT_ID_PATTERN.test(entry))
+    || value.movementIds.some((entry, index) => index > 0
+      && compareCodePoints(value.movementIds[index - 1], entry) >= 0)
+    || !SHA256_PATTERN.test(value.projectionDigest)
+    || !Array.isArray(value.ingredients)
+    || value.ingredients.length === 0
+    || value.ingredients.length > 75) {
+    throw clientError("data-loss", "Event ingredient execution projection crossed its authority boundary.");
+  }
+  const executionRevision = exactRevision(value.executionRevision, "event execution revision", { allowZero: false, code: "data-loss" });
+  const allocationRevision = exactRevision(value.allocationRevision, "event execution allocation revision", { allowZero: false, code: "data-loss" });
+  exactKeys(value.freshness, ["state", "reason"], "Event ingredient execution freshness", "data-loss");
+  if (value.freshness.state !== "current" || value.freshness.reason !== "") {
+    throw clientError("data-loss", "Event ingredient execution projection freshness is invalid.");
+  }
+  const ingredients = value.ingredients.map((entry, index) => {
+    const common = [
+      "ingredientId", "locationId", "baseUnitId", "plannedQuantityMicros", "allocatedQuantityMicros",
+      "consumedQuantity", "consumedQuantityMicros", "wasteQuantity", "wasteQuantityMicros",
+      "depletedQuantityMicros", "priorDepletedQuantityMicros", "stockEffectDirection",
+      "stockEffectQuantityMicros", "allocationReleasedQuantityMicros", "priorStockRevision",
+      "resultStockRevision", "priorOnHandMicros", "resultOnHandMicros", "plannedBasisCostState", "name"
+    ];
+    const money = [
+      "currency", "exactPlannedBasisUsageCostMinor", "plannedBasisUsageCostMinor",
+      "plannedProjectedCostMinor", "plannedBasisVarianceMinor"
+    ];
+    assertAllowedKeys(entry, common, [...common, ...money], `Event ingredient execution row ${index + 1}`);
+    const row = canonicalClone(entry, `Event ingredient execution row ${index + 1}`);
+    row.ingredientId = identifier(entry.ingredientId, `event execution ingredient ${index + 1}`, "data-loss");
+    row.locationId = identifier(entry.locationId, `event execution ingredient ${index + 1} location`, "data-loss");
+    row.baseUnitId = baseUnit(entry.baseUnitId, `event execution ingredient ${index + 1} base unit`, "data-loss");
+    row.name = exactText(entry.name, `event execution ingredient ${index + 1} name`, 100, { code: "data-loss" });
+    for (const key of [
+      "plannedQuantityMicros", "allocatedQuantityMicros", "consumedQuantityMicros", "wasteQuantityMicros",
+      "depletedQuantityMicros", "priorDepletedQuantityMicros", "stockEffectQuantityMicros",
+      "allocationReleasedQuantityMicros", "priorOnHandMicros", "resultOnHandMicros"
+    ]) exactSafeInteger(entry[key], `event execution row ${index + 1} ${key}`);
+    parseQuantityMicros(entry.consumedQuantity, `event execution row ${index + 1} consumed`, { allowZero: true, code: "data-loss" });
+    parseQuantityMicros(entry.wasteQuantity, `event execution row ${index + 1} waste`, { allowZero: true, code: "data-loss" });
+    row.priorStockRevision = exactRevision(entry.priorStockRevision, `event execution row ${index + 1} prior stock revision`, { allowZero: false, code: "data-loss" });
+    row.resultStockRevision = exactRevision(entry.resultStockRevision, `event execution row ${index + 1} result stock revision`, { allowZero: false, code: "data-loss" });
+    const expectedDirection = entry.depletedQuantityMicros > entry.priorDepletedQuantityMicros ? "decrease"
+      : entry.depletedQuantityMicros < entry.priorDepletedQuantityMicros ? "increase" : "unchanged";
+    if (entry.consumedQuantityMicros + entry.wasteQuantityMicros !== entry.depletedQuantityMicros
+      || entry.stockEffectDirection !== expectedDirection
+      || entry.stockEffectQuantityMicros !== Math.abs(entry.depletedQuantityMicros - entry.priorDepletedQuantityMicros)
+      || entry.resultStockRevision !== entry.priorStockRevision + (expectedDirection === "unchanged" ? 0 : 1)
+      || entry.resultOnHandMicros !== entry.priorOnHandMicros
+        + (expectedDirection === "increase" ? entry.stockEffectQuantityMicros
+          : expectedDirection === "decrease" ? -entry.stockEffectQuantityMicros : 0)) {
+      throw clientError("data-loss", "Event ingredient execution quantities are inconsistent.");
+    }
+    if (entry.plannedBasisCostState === "complete") {
+      if (!money.every((key) => Object.hasOwn(entry, key))
+        || typeof entry.currency !== "string" || !CURRENCY_PATTERN.test(entry.currency)
+        || !Number.isSafeInteger(entry.plannedBasisUsageCostMinor) || entry.plannedBasisUsageCostMinor < 0
+        || !Number.isSafeInteger(entry.plannedProjectedCostMinor) || entry.plannedProjectedCostMinor < 0
+        || !Number.isSafeInteger(entry.plannedBasisVarianceMinor)
+        || entry.plannedBasisVarianceMinor !== entry.plannedBasisUsageCostMinor - entry.plannedProjectedCostMinor) {
+        throw clientError("data-loss", "Complete planned-basis execution cost is inconsistent.");
+      }
+      normalizeExactRational(entry.exactPlannedBasisUsageCostMinor, `Event execution row ${index + 1} exact planned-basis cost`);
+    } else if (entry.plannedBasisCostState !== "unavailable"
+      || money.some((key) => Object.hasOwn(entry, key))) {
+      throw clientError("data-loss", "Unavailable planned-basis execution cost contains invented money.");
+    }
+    return row;
+  });
+  if (new Set(ingredients.map(({ ingredientId }) => ingredientId)).size !== ingredients.length
+    || ingredients.some((entry, index) => index > 0
+      && compareCodePoints(ingredients[index - 1].ingredientId, entry.ingredientId) >= 0)) {
+    throw clientError("data-loss", "Event ingredient execution rows are not a sorted unique set.");
+  }
+  const costedIngredientCount = ingredients.filter((entry) => entry.plannedBasisCostState === "complete").length;
+  const costSummary = normalizeExecutionCostSummary(value.costSummary, ingredients.length, costedIngredientCount);
+  return deepFreeze({
+    ...canonicalClone(value, "Event ingredient execution projection"),
+    organizationId,
+    quoteId,
+    executionRevision,
+    allocationRevision,
+    occurredAtISO: exactIso(value.occurredAtISO, "event execution occurrence time"),
+    recordedAtISO: exactIso(value.recordedAtISO, "event execution record time"),
+    updatedAtISO: exactIso(value.updatedAtISO, "event execution projection update time"),
+    reason: exactText(value.reason, "event execution reason", 240, { code: "data-loss" }),
+    ingredients,
+    costSummary
+  });
 }
 
 function normalizeEventPreviewInput(input) {
@@ -2100,6 +2365,75 @@ export function subscribeToEventIngredientProjection(input = {}) {
       try {
         const exists = snapshot.exists();
         retained = exists ? normalizeEventIngredientProjection(snapshot.data(), access.organizationId, quoteId) : null;
+        const metadata = snapshot?.metadata || {};
+        emit({
+          state: sourceState(metadata),
+          fromCache: metadata.fromCache === true,
+          hasPendingWrites: metadata.hasPendingWrites === true
+        }, exists);
+      } catch {
+        unavailable();
+      }
+    }, unavailable);
+  } catch (error) {
+    active = false;
+    throw error;
+  }
+  return () => {
+    if (!active) return;
+    active = false;
+    if (typeof unsubscribe === "function") unsubscribe();
+  };
+}
+
+export function subscribeToEventIngredientExecutionProjection(input = {}) {
+  const access = requireMenuCostReadAccess(input);
+  const quoteId = identifier(input.quoteId, "quoteId");
+  if (typeof input.onData !== "function") {
+    throw clientError("invalid-argument", "Event ingredient execution listener requires onData.");
+  }
+  let active = true;
+  let retained = null;
+  const emit = (source, exists) => {
+    if (!active) return;
+    input.onData(deepFreeze({
+      schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+      organizationId: access.organizationId,
+      quoteId,
+      exists,
+      projection: retained,
+      retained: source.state === "unavailable" && retained !== null,
+      source,
+      freshness: source.state
+    }));
+  };
+  const unavailable = () => {
+    if (!active) return;
+    const source = { state: "unavailable", fromCache: false, hasPendingWrites: false };
+    emit(source, retained !== null);
+    input.onError?.(Object.freeze({
+      code: "event-ingredient-execution-projection-unavailable",
+      message: "The event ingredient execution projection is unavailable. Retained evidence is explicitly stale.",
+      quoteId,
+      source
+    }));
+  };
+  const projectionRef = doc(
+    db,
+    "organizations",
+    access.organizationId,
+    "eventIngredientExecutionProjections",
+    quoteId
+  );
+  let unsubscribe;
+  try {
+    unsubscribe = onSnapshot(projectionRef, { includeMetadataChanges: true }, (snapshot) => {
+      if (!active) return;
+      try {
+        const exists = snapshot.exists();
+        retained = exists
+          ? normalizeEventIngredientExecutionProjection(snapshot.data(), access.organizationId, quoteId)
+          : null;
         const metadata = snapshot?.metadata || {};
         emit({
           state: sourceState(metadata),

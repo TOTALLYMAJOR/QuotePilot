@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 06:19:39 CDT
+Last updated: 2026-09-09 06:49:55 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1359,6 +1359,37 @@ quote price, required commercial authority, apply action, or publish state.
 Changing the draft invalidates the prior scenario preview, and a late response
 for an older draft is not shown as current.
 
+After an accepted or booked event, open its **Control Room** and find
+**Ingredient actuals**. This surface is separate from Quote Edit because it
+records physical execution rather than commercial intent. An administrator
+must enter an explicit consumed quantity and waste quantity for every planned
+ingredient; blanks are never treated as zero. Enter the evidence time and
+reason, acknowledge that every row is complete, then choose **Finish usage
+capture**. Sales staff may review the resulting projection but cannot record or
+correct it.
+
+The server settles the event's active ingredient hold and reduces physical
+on-hand by the recorded consumed-plus-waste total in one transaction. It does
+not subtract the allocation again. A valid over-plan quantity is accepted only
+when enough uncommitted stock remains to protect every other event. The plan is
+shown as **Settled**, which is distinct from a cancellation release.
+
+To correct a confirmed closeout, enter complete replacement totals and an
+explicit correction reason. The prior revision remains immutable. QuotePilot
+applies only the resulting physical difference; changing consumed to waste
+without changing the total records a correction but does not invent a stock
+movement. A receipt remains pending until the separate exact execution
+projection confirms the same revision, receipt, and movement identities.
+Cached, pending, unavailable, or uncertain reads disable further mutation and
+retain the exact-request recovery action.
+
+The Control Room may show **Usage at saved planned basis** and its difference
+from the saved projected ingredient cost when every pinned ingredient cost is
+complete. This is planning-basis comparison, not authoritative actual COGS.
+Unknown or partial costs remain incomplete, and QuotePilot does not invent
+FIFO, LIFO, weighted-average, lot attribution, or any other undeclared
+valuation policy.
+
 This source-candidate slice supports at most 200 location definitions and 200
 ingredient definitions per organization. The shared server transaction fence
 rejects record 201, and a projection at its bound is labeled **Partial**. That
@@ -1370,11 +1401,12 @@ The source candidate now supports current recipe/menu-item cost, immutable
 event ingredient demand and projected cost, durable receiving, cumulative
 consumable-stock shortage, concurrency-safe allocation/release, historical
 change invalidation, explicit retained-hold reconciliation, and read-only
-Commercial Change consequences. It does not
-yet claim consumption, waste, inventory value, authoritative COGS, deployment,
-or human acceptance. The next slice adds consumption, waste, corrections, and
-planned-versus-actual evidence without inventing a multi-receipt valuation
-policy.
+Commercial Change consequences. It also records event consumption, waste,
+allocation settlement, immutable correction evidence, quantity variance, and
+saved-planning-basis cost comparison in the exact event Control Room. It does
+not claim inventory value, authoritative COGS, deployment, or human
+acceptance. The next slice composes bounded inventory state more deeply into
+Preflight, Operations, and deterministic reporting.
 
 ## Commercial Change Authority
 

@@ -44,6 +44,7 @@ import {
   normalizeInventoryIngredientProjection,
   normalizeInventoryMenuCostProjection,
   normalizeEventIngredientProjection,
+  normalizeEventIngredientExecutionProjection,
   normalizeInventoryWorkspaceProjection,
   readPendingInventoryCommands,
   reconcileInventoryCommand,
@@ -53,7 +54,8 @@ import {
   subscribeToInventoryMenuCostProjection,
   subscribeToInventoryMenuCostProjections,
   subscribeToInventoryRecipeIngredients,
-  subscribeToEventIngredientProjection
+  subscribeToEventIngredientProjection,
+  subscribeToEventIngredientExecutionProjection
 } from "../inventoryAuthorityClient";
 
 const ORGANIZATION_ID = "org-inventory-client";
@@ -63,6 +65,7 @@ const PACK_CONVERSION_REVISION_ID = `ipc_${"e".repeat(48)}`;
 const RECIPE_REVISION_ID = `irr_${"f".repeat(48)}`;
 const EVENT_REQUIREMENT_REVISION_ID = `eir_${"e".repeat(48)}`;
 const EVENT_PLAN_ID = `eip_${"9".repeat(48)}`;
+const EVENT_EXECUTION_REVISION_ID = `eiex_${"6".repeat(48)}`;
 const NOW = "2026-09-09T05:00:00.000Z";
 const ADMIN_SCOPE = Object.freeze({
   organizationId: ORGANIZATION_ID,
@@ -226,6 +229,92 @@ function reconcileEventCommand() {
     expectedRequirementRevision: 2,
     expectedAllocationRevision: 3,
     reason: "Guest count changed"
+  };
+}
+
+function executionCommand(kind = "record_event_ingredient_execution", overrides = {}) {
+  return {
+    kind,
+    quoteId: "quote-event-1",
+    eventRequirementRevisionId: EVENT_REQUIREMENT_REVISION_ID,
+    expectedExecutionRevision: kind === "record_event_ingredient_execution" ? 0 : 1,
+    expectedAllocationRevision: kind === "record_event_ingredient_execution" ? 1 : 2,
+    occurredAtISO: NOW,
+    reason: kind === "record_event_ingredient_execution" ? "Event closeout count" : "Corrected prep count",
+    ingredients: [{
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      consumedQuantity: "18.5",
+      wasteQuantity: "1.5",
+      expectedStockRevision: 1
+    }],
+    ...overrides
+  };
+}
+
+function eventIngredientExecutionProjection(overrides = {}) {
+  return {
+    authorityVersion: "inventory-ingredient-authority-v2",
+    schemaVersion: 2,
+    model: "event-ingredient-execution-projection-v1",
+    organizationId: ORGANIZATION_ID,
+    quoteId: "quote-event-1",
+    eventPlanId: EVENT_PLAN_ID,
+    eventRequirementRevisionId: EVENT_REQUIREMENT_REVISION_ID,
+    allocationRevision: 2,
+    state: "settled",
+    executionRevision: 1,
+    eventExecutionRevisionId: EVENT_EXECUTION_REVISION_ID,
+    settlementExecutionRevisionId: EVENT_EXECUTION_REVISION_ID,
+    occurredAtISO: NOW,
+    recordedAtISO: NOW,
+    reason: "Event closeout count",
+    ingredients: [{
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      plannedQuantityMicros: 20_000_000,
+      allocatedQuantityMicros: 15_000_000,
+      consumedQuantity: "18.5",
+      consumedQuantityMicros: 18_500_000,
+      wasteQuantity: "1.5",
+      wasteQuantityMicros: 1_500_000,
+      depletedQuantityMicros: 20_000_000,
+      priorDepletedQuantityMicros: 0,
+      stockEffectDirection: "decrease",
+      stockEffectQuantityMicros: 20_000_000,
+      allocationReleasedQuantityMicros: 15_000_000,
+      priorStockRevision: 1,
+      resultStockRevision: 2,
+      priorOnHandMicros: 40_000_000,
+      resultOnHandMicros: 20_000_000,
+      plannedBasisCostState: "complete",
+      currency: "USD",
+      exactPlannedBasisUsageCostMinor: { numerator: "6000", denominator: "1" },
+      plannedBasisUsageCostMinor: 6000,
+      plannedProjectedCostMinor: 6000,
+      plannedBasisVarianceMinor: 0,
+      name: "Chicken"
+    }],
+    costSummary: {
+      actualCogsState: "unavailable",
+      actualCogsReason: "valuation_policy_unresolved",
+      plannedBasisState: "complete",
+      expectedIngredientCount: 1,
+      costedIngredientCount: 1,
+      currency: "USD",
+      exactKnownUsageCostMinor: { numerator: "6000", denominator: "1" },
+      knownUsageCostMinor: 6000,
+      plannedProjectedCostMinor: 6000,
+      plannedBasisVarianceMinor: 0
+    },
+    lastReceiptId: RECEIPT_ID,
+    movementIds: [`imv_${"7".repeat(48)}`],
+    freshness: { state: "current", reason: "" },
+    updatedAtISO: NOW,
+    projectionDigest: "a".repeat(64),
+    ...overrides
   };
 }
 
@@ -557,6 +646,17 @@ function responseFor(payload, resultOverrides = {}) {
         fullyAllocatedIngredientCount: 1,
         shortageIngredientCount: 1,
         reconciledFromAllocationRevision: payload.command.expectedAllocationRevision
+      };
+    } else if (["record_event_ingredient_execution", "correct_event_ingredient_execution"].includes(payload.command.kind)) {
+      result = {
+        schemaVersion: 2,
+        quoteId: payload.command.quoteId,
+        eventPlanId: EVENT_PLAN_ID,
+        eventRequirementRevisionId: payload.command.eventRequirementRevisionId,
+        executionRevision: payload.command.expectedExecutionRevision + 1,
+        eventExecutionRevisionId: EVENT_EXECUTION_REVISION_ID,
+        state: "settled",
+        movementIds: [`imv_${"7".repeat(48)}`]
       };
     } else {
       result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, costEvidenceId: `ice_${"d".repeat(48)}`, costRevision: payload.command.expectedCostRevision + 1, availability: payload.command.availability, affectedMenuItemIds: [] };
@@ -1360,7 +1460,9 @@ describe("event ingredient preview, immutable requirements, and exact realtime r
         baseUnitId: "lb",
         requiredQuantityMicros: 20_000_000,
         allocatedQuantityMicros: 15_000_000,
-        shortageQuantityMicros: 5_000_000
+        shortageQuantityMicros: 5_000_000,
+        stockRevision: 1,
+        fenceRevision: 1
       }]
     };
     const normalized = normalizeEventIngredientProjection(
@@ -1408,7 +1510,9 @@ describe("event ingredient preview, immutable requirements, and exact realtime r
         baseUnitId: "lb",
         requiredQuantityMicros: 10_000_000,
         allocatedQuantityMicros: 10_000_000,
-        shortageQuantityMicros: 0
+        shortageQuantityMicros: 0,
+        stockRevision: 1,
+        fenceRevision: 1
       }]
     };
     const staleFreshness = {
@@ -1432,6 +1536,35 @@ describe("event ingredient preview, immutable requirements, and exact realtime r
       allocation: retainedAllocation,
       freshnessState: { ...staleFreshness, allocation: { state: "current", reason: "" } }
     }), ORGANIZATION_ID, "quote-event-1")).toThrow(/saved requirement projection/i);
+  });
+
+  test("accepts settled allocation evidence as terminal and distinct from a released cancellation", () => {
+    const settled = {
+      state: "settled",
+      eventPlanId: EVENT_PLAN_ID,
+      allocationRevision: 2,
+      eventRequirementRevisionId: EVENT_REQUIREMENT_REVISION_ID,
+      ingredientCount: 1,
+      fullyAllocatedIngredientCount: 1,
+      shortageIngredientCount: 0,
+      ingredients: [{
+        ingredientId: "chicken", locationId: "main-kitchen", baseUnitId: "lb",
+        requiredQuantityMicros: 20_000_000, allocatedQuantityMicros: 20_000_000,
+        shortageQuantityMicros: 0, stockRevision: 2, fenceRevision: 2
+      }]
+    };
+    expect(normalizeEventIngredientProjection(eventIngredientProjection({
+      allocation: settled,
+      freshnessState: {
+        demand: { state: "current", reason: "" },
+        cost: { state: "current", reason: "" },
+        availability: { state: "current", reason: "" },
+        allocation: { state: "settled", reason: "" }
+      }
+    }), ORGANIZATION_ID, "quote-event-1")).toMatchObject({
+      allocation: { state: "settled", allocationRevision: 2 },
+      freshnessState: { allocation: { state: "settled", reason: "" } }
+    });
   });
 
   test("uses exact document metadata, retains prior evidence as stale on failure, and ignores callbacks after teardown", () => {
@@ -1477,5 +1610,98 @@ describe("event ingredient preview, immutable requirements, and exact realtime r
     expect(unsubscribeSnapshot).toHaveBeenCalledOnce();
     registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: false }));
     expect(onData).toHaveBeenCalledTimes(emitted);
+  });
+
+  test("validates the bounded execution projection without inventing actual COGS", () => {
+    const normalized = normalizeEventIngredientExecutionProjection(
+      eventIngredientExecutionProjection(), ORGANIZATION_ID, "quote-event-1"
+    );
+    expect(normalized).toMatchObject({
+      state: "settled",
+      executionRevision: 1,
+      ingredients: [{ name: "Chicken", consumedQuantity: "18.5", wasteQuantity: "1.5" }],
+      costSummary: {
+        actualCogsState: "unavailable",
+        actualCogsReason: "valuation_policy_unresolved",
+        plannedBasisState: "complete"
+      }
+    });
+    expect(() => normalizeEventIngredientExecutionProjection(eventIngredientExecutionProjection({
+      costSummary: {
+        ...eventIngredientExecutionProjection().costSummary,
+        actualCogsState: "complete"
+      }
+    }), ORGANIZATION_ID, "quote-event-1")).toThrow(/cost boundary/i);
+    expect(() => normalizeEventIngredientExecutionProjection(eventIngredientExecutionProjection({
+      ingredients: [{ ...eventIngredientExecutionProjection().ingredients[0], resultOnHandMicros: 39_000_000 }]
+    }), ORGANIZATION_ID, "quote-event-1")).toThrow(/quantities are inconsistent/i);
+  });
+
+  test("records and corrects exact full-total execution commands through retry-safe authority", async () => {
+    mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      requestId: `inventory_request_${"8".repeat(32)}`,
+      command: executionCommand()
+    })).resolves.toMatchObject({
+      commandKind: "record_event_ingredient_execution",
+      confirmation: { state: "settled", executionRevision: 1 }
+    });
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      requestId: `inventory_request_${"9".repeat(32)}`,
+      command: executionCommand("correct_event_ingredient_execution", {
+        ingredients: [{ ...executionCommand().ingredients[0], expectedStockRevision: 2 }]
+      })
+    })).resolves.toMatchObject({
+      commandKind: "correct_event_ingredient_execution",
+      confirmation: { executionRevision: 2 }
+    });
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      requestId: `inventory_request_${"1".repeat(32)}`,
+      command: executionCommand("record_event_ingredient_execution", {
+        ingredients: [{ ...executionCommand().ingredients[0], wasteQuantity: "" }]
+      })
+    })).rejects.toThrow(/canonical decimal/i);
+  });
+
+  test("subscribes to the exact execution document with metadata states and retained failure evidence", () => {
+    const registrations = [];
+    const unsubscribeSnapshot = vi.fn();
+    mocks.onSnapshot.mockImplementation((reference, options, onNext, onError) => {
+      registrations.push({ reference, options, onNext, onError });
+      return unsubscribeSnapshot;
+    });
+    const onData = vi.fn();
+    const onError = vi.fn();
+    const unsubscribe = subscribeToEventIngredientExecutionProjection({
+      ...ADMIN_SCOPE,
+      role: "sales",
+      quoteId: "quote-event-1",
+      onData,
+      onError
+    });
+    expect(mocks.doc).toHaveBeenCalledWith(
+      mocks.db, "organizations", ORGANIZATION_ID, "eventIngredientExecutionProjections", "quote-event-1"
+    );
+    const snapshot = (metadata) => ({
+      exists: () => true,
+      data: () => eventIngredientExecutionProjection(),
+      metadata
+    });
+    registrations[0].onNext(snapshot({ fromCache: true, hasPendingWrites: false }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({ freshness: "cached", projection: { executionRevision: 1 } });
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: true }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({ freshness: "pending" });
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: false }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({ freshness: "current" });
+    registrations[0].onError(new Error("disconnected"));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({ freshness: "unavailable", retained: true });
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      code: "event-ingredient-execution-projection-unavailable"
+    }));
+    unsubscribe();
+    expect(unsubscribeSnapshot).toHaveBeenCalledOnce();
   });
 });

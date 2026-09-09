@@ -351,7 +351,8 @@ await Promise.all([
     }),
   seedQuote("quote-other-day", { date: "2026-10-11", guests: 125 }),
   seedQuote("quote-race-a", { date: "2026-10-18", guests: 150 }),
-  seedQuote("quote-race-b", { date: "2026-10-25", guests: 150 })
+  seedQuote("quote-race-b", { date: "2026-10-25", guests: 150 }),
+  seedQuote("quote-execution", { date: "2026-11-01", guests: 50 })
 ]);
 const principal = await createAdminPrincipal();
 
@@ -915,6 +916,99 @@ assert.equal((await orgRef.collection("inventoryRecipePolicies").get()).size, 1,
   "An ingredient cost change must not rewrite immutable recipe history.");
 assert.equal((await orgRef.collection("menuItems").doc("chicken-alfredo").get()).data()?.costMinor, null,
   "Derived ingredient cost must not overwrite the manual catalog cost field.");
+
+const executionRequirement = await compileRequirement(
+  "quote-execution", "50", "event-demand-execution-create-0001"
+);
+const executionAllocation = await callInventory(principal, "allocate-execution-create-0001", {
+  kind: "allocate_event_ingredients",
+  quoteId: "quote-execution",
+  eventRequirementRevisionId: executionRequirement.result.result.eventRequirementRevisionId,
+  locationId: "main-kitchen",
+  expectedRequirementRevision: 1,
+  expectedAllocationRevision: 0
+});
+assert.equal(executionAllocation.result.state, "reserved");
+const executionPlanProjection = (await orgRef.collection("eventIngredientProjections")
+  .doc("quote-execution").get()).data();
+const executionLinesById = new Map(
+  executionPlanProjection.allocation.ingredients.map((row) => [row.ingredientId, row])
+);
+const executionCommand = {
+  kind: "record_event_ingredient_execution",
+  quoteId: "quote-execution",
+  eventRequirementRevisionId: executionRequirement.result.result.eventRequirementRevisionId,
+  expectedExecutionRevision: 0,
+  expectedAllocationRevision: 1,
+  occurredAtISO: "2026-09-09T06:00:00.000Z",
+  reason: "Verified post-event kitchen count",
+  ingredients: [
+    {
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      consumedQuantity: "9",
+      wasteQuantity: "1",
+      expectedStockRevision: executionLinesById.get("chicken").stockRevision
+    },
+    {
+      ingredientId: "pasta",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      consumedQuantity: "5",
+      wasteQuantity: "0",
+      expectedStockRevision: executionLinesById.get("pasta").stockRevision
+    }
+  ]
+};
+const executionRequestId = "record-execution-create-0001";
+const executionResult = await callInventory(principal, executionRequestId, executionCommand);
+assert.equal(executionResult.result.state, "settled");
+assert.equal(executionResult.result.executionRevision, 1);
+assert.equal((await orgRef.collection("inventoryStockStates")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.onHandMicros, 40_000_000);
+assert.equal((await orgRef.collection("inventoryAllocationFences")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.committedMicros, 0,
+"Consumption must release the event hold while reducing physical stock exactly once.");
+const executionReplay = await callInventory(principal, executionRequestId, executionCommand);
+assert.equal(executionReplay.idempotent, true);
+assert.equal(executionReplay.receipt.receiptId, executionResult.receipt.receiptId);
+
+const correctedExecution = await callInventory(principal, "correct-execution-create-0002", {
+  ...executionCommand,
+  kind: "correct_event_ingredient_execution",
+  expectedExecutionRevision: 1,
+  expectedAllocationRevision: 2,
+  reason: "Corrected chicken waste classification and count",
+  ingredients: [
+    {
+      ...executionCommand.ingredients[0],
+      consumedQuantity: "9",
+      wasteQuantity: "0",
+      expectedStockRevision: executionCommand.ingredients[0].expectedStockRevision + 1
+    },
+    {
+      ...executionCommand.ingredients[1],
+      consumedQuantity: "4",
+      wasteQuantity: "1",
+      expectedStockRevision: executionCommand.ingredients[1].expectedStockRevision + 1
+    }
+  ]
+});
+assert.equal(correctedExecution.result.executionRevision, 2);
+assert.equal(correctedExecution.result.movementIds.length, 1,
+  "A zero-net consumed-to-waste reclassification must not invent a stock movement.");
+assert.equal((await orgRef.collection("inventoryStockStates")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.onHandMicros, 41_000_000,
+"A downward correction must restore only the physical delta.");
+const executionProjection = (await orgRef.collection("eventIngredientExecutionProjections")
+  .doc("quote-execution").get()).data();
+assert.equal(executionProjection?.executionRevision, 2);
+assert.equal(executionProjection?.lastReceiptId, correctedExecution.receipt.receiptId);
+assert.equal(executionProjection?.costSummary?.actualCogsState, "unavailable");
+assert.equal(executionProjection?.costSummary?.actualCogsReason, "valuation_policy_unresolved");
+assert.equal((await orgRef.collection("eventIngredientExecutions").doc("quote-execution")
+  .collection("revisions").get()).size, 2);
 
 console.log("Authoritative ingredient inventory emulator acceptance passed.");
 console.log("- demo-only loopback safety, global gate, tenant gate, verified admin claims, and role authority were required");

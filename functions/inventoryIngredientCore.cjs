@@ -180,6 +180,15 @@ function movementIdFor(organizationId, retryId) {
   return `imv_${digest({ organizationId: opaqueId(organizationId), requestId: requestId(retryId) }).slice(0, 48)}`;
 }
 
+function eventMovementIdFor(organizationId, retryId, ingredientId, locationId) {
+  return `imv_${digest({
+    organizationId: opaqueId(organizationId, "organizationId"),
+    requestId: requestId(retryId),
+    ingredientId: opaqueId(ingredientId, "ingredientId"),
+    locationId: opaqueId(locationId, "locationId")
+  }, "event ingredient movement identity").slice(0, 48)}`;
+}
+
 function costStateId(ingredientId) {
   return `ics_${digest({ ingredientId: opaqueId(ingredientId) }).slice(0, 48)}`;
 }
@@ -621,12 +630,19 @@ function verifyMovement(value) {
     "priorOnHandMicros", "resultOnHandMicros", "occurredAtISO", "recordedAtISO", "note",
     "actor", "movementDigest"
   ];
+  const eventKeys = [
+    "direction", "quoteId", "eventPlanId", "eventRequirementRevisionId",
+    "eventExecutionRevisionId", "executionRevision", "priorDepletedQuantityMicros",
+    "resultDepletedQuantityMicros", "consumedQuantityMicros", "wasteQuantityMicros"
+  ];
   exact(value, value?.kind === "receive_stock"
     ? [...commonKeys, "sourceLabel", "costEvidenceId"]
-    : commonKeys, "ingredient movement", "data-loss");
+    : ["event_depletion", "event_depletion_correction"].includes(value?.kind)
+      ? [...commonKeys, ...eventKeys]
+      : commonKeys, "ingredient movement", "data-loss");
   if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION || value.schemaVersion !== INVENTORY_SCHEMA_VERSION
     || value.movementVersion !== INVENTORY_MOVEMENT_VERSION
-    || !["opening_balance", "receive_stock"].includes(value.kind)) {
+    || !["opening_balance", "receive_stock", "event_depletion", "event_depletion_correction"].includes(value.kind)) {
     fail("data-loss", "Ingredient movement uses an unsupported schema.");
   }
   const { movementDigest, ...body } = value;
@@ -635,10 +651,15 @@ function verifyMovement(value) {
   const retryId = requestId(value.requestId);
   normalizeActor(value.actor, orgId);
   exactISO(value.recordedAtISO, "movement recordedAtISO");
-  const commonValid = value.movementId === movementIdFor(orgId, retryId)
+  formatQuantityMicros(value.priorOnHandMicros, "movement priorOnHandMicros");
+  formatQuantityMicros(value.resultOnHandMicros, "movement resultOnHandMicros");
+  const eventMovement = ["event_depletion", "event_depletion_correction"].includes(value.kind);
+  const commonValid = value.movementId === (eventMovement
+    ? eventMovementIdFor(orgId, retryId, value.ingredientId, value.locationId)
+    : movementIdFor(orgId, retryId))
     && parseQuantityMicros(value.quantity) === value.quantityMicros
     && value.resultStockRevision === value.priorStockRevision + 1
-    && value.resultOnHandMicros === value.priorOnHandMicros + value.quantityMicros;
+    && (eventMovement || value.resultOnHandMicros === value.priorOnHandMicros + value.quantityMicros);
   if (!commonValid) {
     fail("data-loss", "Ingredient stock movement is internally inconsistent.");
   }
@@ -658,7 +679,7 @@ function verifyMovement(value) {
       || value.priorOnHandMicros !== 0) {
       fail("data-loss", "Ingredient opening movement is internally inconsistent.");
     }
-  } else if (!COST_EVIDENCE_ID_PATTERN.test(value.costEvidenceId)
+  } else if (value.kind === "receive_stock" && (!COST_EVIDENCE_ID_PATTERN.test(value.costEvidenceId)
     || cleanText(value.sourceLabel, "receiving source", 120) !== value.sourceLabel
     || value.priorStockRevision < 1
     || value.requestDigest !== digest({
@@ -672,8 +693,53 @@ function verifyMovement(value) {
       note: value.note,
       expectedStockRevision: value.priorStockRevision,
       costEvidenceId: value.costEvidenceId
-    }, "receiving movement request")) {
+    }, "receiving movement request"))) {
     fail("data-loss", "Ingredient receiving movement is internally inconsistent.");
+  } else if (eventMovement) {
+    const quantities = [
+      value.priorDepletedQuantityMicros,
+      value.resultDepletedQuantityMicros,
+      value.consumedQuantityMicros,
+      value.wasteQuantityMicros
+    ];
+    quantities.forEach((quantity, index) => formatQuantityMicros(quantity, `event movement quantity ${index}`));
+    const depletedTotal = value.consumedQuantityMicros + value.wasteQuantityMicros;
+    const expectedPlanId = `eip_${digest({
+      organizationId: orgId,
+      quoteId: opaqueId(value.quoteId, "movement quoteId")
+    }, "event ingredient plan identity").slice(0, 48)}`;
+    const expectedExecutionRevisionId = `eiex_${digest({
+      organizationId: orgId,
+      quoteId: value.quoteId,
+      executionRevision: revision(value.executionRevision, "executionRevision", { allowZero: false })
+    }, "event ingredient execution identity").slice(0, 48)}`;
+    revision(value.executionRevision, "executionRevision", { allowZero: false });
+    opaqueId(value.eventPlanId, "movement eventPlanId");
+    opaqueId(value.eventRequirementRevisionId, "movement eventRequirementRevisionId");
+    opaqueId(value.eventExecutionRevisionId, "movement eventExecutionRevisionId");
+    exactISO(value.occurredAtISO, "movement occurredAtISO");
+    cleanText(value.note, "movement note", 240);
+    if (!/^[a-f0-9]{64}$/u.test(value.requestDigest)
+      || value.priorStockRevision < 1
+      || !Number.isSafeInteger(depletedTotal)
+      || value.resultDepletedQuantityMicros !== depletedTotal
+      || value.eventPlanId !== expectedPlanId
+      || value.eventExecutionRevisionId !== expectedExecutionRevisionId
+      || !["decrease", "increase"].includes(value.direction)) {
+      fail("data-loss", "Event ingredient movement evidence is inconsistent.");
+    }
+    const delta = value.resultDepletedQuantityMicros - value.priorDepletedQuantityMicros;
+    const expectedDirection = delta > 0 ? "decrease" : delta < 0 ? "increase" : "unchanged";
+    if (expectedDirection === "unchanged"
+      || value.direction !== expectedDirection
+      || value.quantityMicros !== Math.abs(delta)
+      || value.resultOnHandMicros !== value.priorOnHandMicros
+        + (value.direction === "increase" ? value.quantityMicros : -value.quantityMicros)
+      || (value.kind === "event_depletion"
+        && (value.priorDepletedQuantityMicros !== 0 || value.direction !== "decrease"))
+      || (value.kind === "event_depletion_correction" && value.executionRevision < 2)) {
+      fail("data-loss", "Event ingredient stock effect is internally inconsistent.");
+    }
   }
   return value;
 }
@@ -991,6 +1057,7 @@ module.exports = {
   createEmptyStockState,
   digest,
   exactISO,
+  eventMovementIdFor,
   formatQuantityMicros,
   locationIdFor,
   movementIdFor,

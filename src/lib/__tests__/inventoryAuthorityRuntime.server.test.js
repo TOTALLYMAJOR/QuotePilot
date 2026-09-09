@@ -351,6 +351,35 @@ const reconcileCommand = (eventRequirementRevisionId, overrides = {}) => ({
   ...overrides
 });
 
+const executionCommand = (eventRequirementRevisionId, overrides = {}) => ({
+  kind: "record_event_ingredient_execution",
+  quoteId: "quote-alfredo",
+  eventRequirementRevisionId,
+  expectedExecutionRevision: 0,
+  expectedAllocationRevision: 1,
+  occurredAtISO: EVIDENCE_TIME,
+  reason: "Event kitchen closeout",
+  ingredients: [
+    {
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      consumedQuantity: "18",
+      wasteQuantity: "1",
+      expectedStockRevision: 1
+    },
+    {
+      ingredientId: "pasta",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      consumedQuantity: "9",
+      wasteQuantity: "0",
+      expectedStockRevision: 1
+    }
+  ],
+  ...overrides
+});
+
 function installQuoteRevision(harness, { versionId = "v0002", guests = 150 } = {}) {
   const quotePath = `organizations/${ORGANIZATION_ID}/quotes/quote-alfredo`;
   const priorQuote = harness.db.store.get(quotePath);
@@ -1297,6 +1326,99 @@ describe("ingredient inventory authority runtime", () => {
     }), "release-alfredo-new-request-0002"), adminContext)).rejects.toMatchObject({
       code: "failed-precondition"
     });
+  });
+
+  test("settles ingredient use atomically and applies correction deltas without double subtraction", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    const compiled = await compileEventDemandFixture(harness);
+    await harness.runtime.applyInventoryCommand(envelope(
+      allocateCommand(compiled.eventRequirementRevisionId),
+      "allocate-execution-fixture-0001"
+    ), adminContext);
+
+    const request = envelope(
+      executionCommand(compiled.eventRequirementRevisionId),
+      "record-execution-fixture-0001"
+    );
+    const recorded = await harness.runtime.applyInventoryCommand(request, adminContext);
+    expect(recorded).toMatchObject({
+      ok: true,
+      idempotent: false,
+      commandKind: "record_event_ingredient_execution",
+      result: {
+        quoteId: "quote-alfredo",
+        executionRevision: 1,
+        state: "settled"
+      }
+    });
+    await expect(harness.runtime.applyInventoryCommand(request, adminContext))
+      .resolves.toEqual({ ...recorded, idempotent: true });
+
+    const planPath = `organizations/${ORGANIZATION_ID}/eventIngredientPlans/quote-alfredo`;
+    expect(harness.db.store.get(planPath)).toMatchObject({
+      state: "settled",
+      allocationRevision: 2,
+      settlementExecutionRevisionId: recorded.result.eventExecutionRevisionId
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryStockStates/${inventory.stockStateId("chicken", "main-kitchen")}`
+    )).toMatchObject({ onHandMicros: 21000000, revision: 2 });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryStockStates/${inventory.stockStateId("pasta", "main-kitchen")}`
+    )).toMatchObject({ onHandMicros: 21000000, revision: 2 });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryAllocationFences/${allocation.allocationFenceId(
+        ORGANIZATION_ID, "chicken", "main-kitchen"
+      )}`
+    )).toMatchObject({ committedMicros: 0 });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/eventIngredientExecutionProjections/quote-alfredo`
+    )).toMatchObject({
+      model: "event-ingredient-execution-projection-v1",
+      executionRevision: 1,
+      lastReceiptId: recorded.receipt.receiptId,
+      costSummary: {
+        actualCogsState: "unavailable",
+        actualCogsReason: "valuation_policy_unresolved",
+        plannedBasisState: "complete"
+      }
+    });
+
+    const corrected = await harness.runtime.applyInventoryCommand(envelope(executionCommand(
+      compiled.eventRequirementRevisionId,
+      {
+        kind: "correct_event_ingredient_execution",
+        expectedExecutionRevision: 1,
+        expectedAllocationRevision: 2,
+        reason: "Corrected final kitchen count",
+        ingredients: [
+          {
+            ingredientId: "chicken", locationId: "main-kitchen", baseUnitId: "lb",
+            consumedQuantity: "17", wasteQuantity: "1", expectedStockRevision: 2
+          },
+          {
+            ingredientId: "pasta", locationId: "main-kitchen", baseUnitId: "lb",
+            consumedQuantity: "8", wasteQuantity: "1", expectedStockRevision: 2
+          }
+        ]
+      }
+    ), "correct-execution-fixture-0002"), adminContext);
+    expect(corrected.result).toMatchObject({ executionRevision: 2, state: "settled" });
+    expect(corrected.result.movementIds).toHaveLength(1);
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryStockStates/${inventory.stockStateId("chicken", "main-kitchen")}`
+    )).toMatchObject({ onHandMicros: 22000000, revision: 3 });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryStockStates/${inventory.stockStateId("pasta", "main-kitchen")}`
+    )).toMatchObject({ onHandMicros: 21000000, revision: 2 });
+    const immutablePath = `organizations/${ORGANIZATION_ID}/eventIngredientExecutions/quote-alfredo/revisions/${corrected.result.eventExecutionRevisionId}`;
+    expect(harness.db.store.has(immutablePath)).toBe(true);
   });
 
   test("fails allocation closed when commercial, recipe, or projection authority drifts", async () => {

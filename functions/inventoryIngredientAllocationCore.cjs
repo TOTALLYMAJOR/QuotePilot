@@ -177,7 +177,7 @@ function verifyPlan(value, { organizationId, quoteId, documentId } = {}) {
     "eventPlanId", "planRevisionId", "allocationRevision", "state", "eventRequirementRevisionId",
     "requirementRevision", "requirementDigest", "requiredByISO", "locationId", "ingredients",
     "ingredientCount", "fullyAllocatedIngredientCount", "shortageIngredientCount", "releaseReason",
-    "updatedAtISO"
+    "settlementExecutionRevisionId", "updatedAtISO"
   ], "event ingredient plan", "data-loss");
   if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
     || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
@@ -186,7 +186,7 @@ function verifyPlan(value, { organizationId, quoteId, documentId } = {}) {
     || value.eventPlanId !== eventPlanIdFor(organizationId, quoteId)
     || value.planRevisionId !== planRevisionIdFor(value.eventPlanId, value.allocationRevision)
     || (documentId && documentId !== quoteId)
-    || !["reserved", "shortage", "released"].includes(value.state)) {
+    || !["reserved", "shortage", "released", "settled"].includes(value.state)) {
     fail("data-loss", "Event ingredient plan identity or state is invalid.");
   }
   inventory.revision(value.allocationRevision, "allocationRevision", { allowZero: false });
@@ -233,8 +233,19 @@ function verifyPlan(value, { organizationId, quoteId, documentId } = {}) {
   if (full !== value.fullyAllocatedIngredientCount || short !== value.shortageIngredientCount
     || (value.state === "reserved" && short !== 0)
     || (value.state === "shortage" && short === 0)
-    || (value.state === "released") !== Boolean(value.releaseReason)) {
+    || (value.state === "released") !== Boolean(value.releaseReason)
+    || (value.state === "settled") !== Boolean(value.settlementExecutionRevisionId)
+    || (value.state !== "settled" && value.settlementExecutionRevisionId !== "")) {
     fail("data-loss", "Event ingredient plan summary is inconsistent.");
+  }
+  if (value.settlementExecutionRevisionId) {
+    if (!/^eiex_[a-f0-9]{48}$/u.test(value.settlementExecutionRevisionId)) {
+      fail("data-loss", "Settled event ingredient plan has invalid execution provenance.");
+    }
+  }
+  if (value.releaseReason && (typeof value.releaseReason !== "string"
+    || value.releaseReason !== value.releaseReason.trim() || value.releaseReason.length > 160)) {
+    fail("data-loss", "Released event ingredient plan has invalid release evidence.");
   }
   return boundedPlan(value);
 }
@@ -286,6 +297,9 @@ function planEventAllocation({ request, organizationId, requirementHead, require
   const topsUpShortage = currentPlan?.state === "shortage";
   if (currentPlan?.state === "reserved") {
     fail("failed-precondition", "The event ingredient requirement is already fully allocated.");
+  }
+  if (currentPlan?.state === "settled") {
+    fail("failed-precondition", "A settled event ingredient plan cannot be allocated again.");
   }
   if (topsUpShortage && (currentPlan.eventRequirementRevisionId !== normalized.eventRequirementRevisionId
     || currentPlan.requirementRevision !== normalized.expectedRequirementRevision
@@ -413,6 +427,7 @@ function planEventAllocation({ request, organizationId, requirementHead, require
     fullyAllocatedIngredientCount: ingredients.length - shortageIngredientCount,
     shortageIngredientCount,
     releaseReason: "",
+    settlementExecutionRevisionId: "",
     updatedAtISO: recordedAtISO
   });
   verifyPlan(plan, { organizationId: orgId, quoteId: normalized.quoteId });
@@ -427,6 +442,7 @@ function planEventRelease({ request, organizationId, currentPlan, fences, nowISO
   verifyPlan(currentPlan, { organizationId: orgId, quoteId: normalized.quoteId });
   if (currentPlan.allocationRevision !== normalized.expectedAllocationRevision) fail("aborted", "The event ingredient allocation changed.");
   if (currentPlan.state === "released") fail("failed-precondition", "The event ingredient allocation is already released.");
+  if (currentPlan.state === "settled") fail("failed-precondition", "A settled event ingredient allocation cannot be released.");
   const fenceById = new Map(fences.map((fence) => [fence.fenceId, fence]));
   const nextFences = currentPlan.ingredients.map((row) => {
     const fence = fenceById.get(row.fenceId);
@@ -468,6 +484,47 @@ function planEventRelease({ request, organizationId, currentPlan, fences, nowISO
   return Object.freeze({ request: normalized, plan, fences: Object.freeze(nextFences) });
 }
 
+function planEventSettlement({
+  organizationId,
+  currentPlan,
+  fences,
+  expectedAllocationRevision,
+  settlementExecutionRevisionId,
+  nowISO
+}) {
+  if (!currentPlan) fail("not-found", "The event has no ingredient allocation to settle.");
+  const executionRevisionId = inventory.opaqueId(
+    settlementExecutionRevisionId,
+    "settlementExecutionRevisionId"
+  );
+  const released = planEventRelease({
+    request: {
+      kind: "release_event_ingredients",
+      quoteId: currentPlan.quoteId,
+      expectedAllocationRevision,
+      reason: "Execution settlement transition"
+    },
+    organizationId,
+    currentPlan,
+    fences,
+    nowISO
+  });
+  const plan = Object.freeze({
+    ...released.plan,
+    state: "settled",
+    releaseReason: "",
+    settlementExecutionRevisionId: executionRevisionId
+  });
+  verifyPlan(plan, { organizationId, quoteId: currentPlan.quoteId });
+  return Object.freeze({ plan, fences: released.fences });
+}
+
+function isExecutionSettledPlan(value, settlementExecutionRevisionId = "") {
+  return Boolean(value && value.state === "settled" && value.settlementExecutionRevisionId
+    && (!settlementExecutionRevisionId
+      || value.settlementExecutionRevisionId === settlementExecutionRevisionId));
+}
+
 module.exports = {
   ALLOCATION_VERSION,
   InventoryAllocationError,
@@ -478,10 +535,12 @@ module.exports = {
   allocationIdFor,
   emptyFence,
   eventPlanIdFor,
+  isExecutionSettledPlan,
   normalizeAllocateRequest,
   normalizeReleaseRequest,
   planEventAllocation,
   planEventRelease,
+  planEventSettlement,
   planRevisionIdFor,
   verifyFence,
   verifyPlan

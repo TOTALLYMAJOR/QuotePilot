@@ -507,6 +507,32 @@ test("keeps allocation evidence visible to sales without rendering mutation cont
   expect(container.querySelector(".event-ingredient-panel__allocation-controls")).toBeNull();
 });
 
+test("presents usage-settled allocation as terminal without allocation controls", () => {
+  const allocation = {
+    state: "settled",
+    allocationRevision: 2,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 1,
+    shortageIngredientCount: 0,
+    ingredients: []
+  };
+  render({
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }],
+    read: { state: "recorded", projection: projection({ allocation }) },
+    canManageAllocation: false,
+    canAllocate: false,
+    canRelease: false,
+    canReconcilePlan: false,
+    onAllocate: vi.fn(),
+    onRelease: vi.fn(),
+    onReconcilePlan: vi.fn()
+  });
+  expect(container.textContent).toContain("Allocation settled through recorded usage");
+  expect(container.querySelector(".event-ingredient-panel__allocation-controls")).toBeNull();
+  expect(button("Allocate ingredients")).toBeUndefined();
+  expect(button("Release allocation")).toBeUndefined();
+});
+
 test("locks allocation targets during uncertainty and exposes exact-request recovery", () => {
   const onReconcileAllocation = vi.fn();
   render({
