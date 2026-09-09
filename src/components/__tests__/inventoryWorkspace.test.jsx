@@ -395,7 +395,7 @@ describe("InventoryWorkspace operator commands", () => {
       locationId: "main-kitchen",
       quantity: "10",
       baseUnitId: "lb",
-      occurredAtISO: "2026-09-09T10:00:00.000Z",
+      occurredAtISO: new Date("2026-09-09T05:00").toISOString(),
       sourceLabel: "Vendor receipt 1842",
       note: "",
       expectedStockRevision: 1,
