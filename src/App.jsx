@@ -54,6 +54,11 @@ import { useCatalogData } from "./hooks/useCatalogData";
 import { useCommercialWorkspaceSnapshot } from "./hooks/useCommercialWorkspaceSnapshot";
 import { useInventoryRecipeExtension } from "./hooks/useInventoryRecipeExtension";
 import {
+  buildEventIngredientSelectionInputs,
+  useEventIngredientProjection
+} from "./hooks/useEventIngredientProjection";
+import EventIngredientProjectionPanel from "./components/EventIngredientProjectionPanel";
+import {
   calculateQuotePricing,
   notifyOwnerNewQuote
 } from "./lib/commerceOps";
@@ -2727,13 +2732,6 @@ export default function App({
     && inventoryTenantEnabled
     && firebaseReady
     && authSession.isAdmin;
-  const inventoryRecipeExtension = useInventoryRecipeExtension({
-    active: adminOpen || catalogRouteOpen || catalogModalOpen,
-    organizationId: authSession.organizationId,
-    role: authSession.role,
-    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
-    tenantEnabled: inventoryTenantEnabled
-  });
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
@@ -2837,6 +2835,30 @@ export default function App({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const inventoryRecipeExtension = useInventoryRecipeExtension({
+    active: adminOpen || catalogRouteOpen || catalogModalOpen || isEditingQuote,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled
+  });
+  const eventIngredientSelections = useMemo(() => buildEventIngredientSelectionInputs({
+    quote: editingQuote,
+    recipeProjectionsByMenuItemId: inventoryRecipeExtension.menuCostProjectionsByMenuItemId
+  }), [editingQuote, inventoryRecipeExtension.menuCostProjectionsByMenuItemId]);
+  const eventIngredientProjection = useEventIngredientProjection({
+    active: isEditingQuote && firebaseReady,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled,
+    quoteId: editingQuote.id,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim(),
+    selections: eventIngredientSelections,
+    draftDirty: quoteDirty
+  });
   const currentChangeImpactFormKey = JSON.stringify(form);
   const changeImpactPresentationError = changeImpactPreview.error || (
     changeImpactPreview.model
@@ -6319,6 +6341,26 @@ export default function App({
   // saved quote being edited. Shared so it renders identically in the
   // Proposal Composer document and the Guided-mode wizard's save step.
   const changeImpactSurface = isEditingQuote ? (
+    <>
+      {eventIngredientProjection.access.readEnabled && (
+        <div data-capability-id="inventory-event-ingredient-consequence">
+          <EventIngredientProjectionPanel
+            selectedMenuItems={eventIngredientSelections}
+            read={eventIngredientProjection.read}
+            preview={eventIngredientProjection.preview}
+            operation={eventIngredientProjection.operation}
+            quoteDirty={quoteDirty}
+            canPreview={eventIngredientProjection.canPreview}
+            canRecord={eventIngredientProjection.canRecord}
+            controlsLocked={eventIngredientProjection.controlsLocked}
+            recordBlockedReason={eventIngredientProjection.recordBlockedReason}
+            onPreview={eventIngredientProjection.previewCurrent}
+            onRecord={authSession.isAdmin ? eventIngredientProjection.recordCurrentPreview : undefined}
+            onReconcile={eventIngredientProjection.reconcile}
+            onReset={eventIngredientProjection.reset}
+          />
+        </div>
+      )}
     <div data-capability-id="cwf-15b-commercial-change-impact-preview">
       <Suspense fallback={<p className="source-note" role="status">Loading governed amendment context…</p>}>
         <CommercialAmendmentWorkspace
@@ -6393,6 +6435,7 @@ export default function App({
         </CommercialAmendmentWorkspace>
       </Suspense>
     </div>
+    </>
   ) : null;
 
   const proposalComposerChangeImpactScopeCurrent = !(

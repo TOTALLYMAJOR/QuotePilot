@@ -1250,6 +1250,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /organizations/{orgId}/eventIngredientRequirementHeads/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientRequirements/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientRequirements/{quoteId}/revisions/{requirementRevisionId} {
+      allow read, write: if false;
+    }
+
     // Location/setup data stays in one exact, server-owned projection. The
     // first Phase-2 route is administrator-only and has no browser write path.
     match /organizations/{orgId}/inventoryWorkspaceProjections/{projectionId} {
@@ -1282,6 +1294,16 @@ service cloud.firestore {
         && inventoryAuthorityEnabled(orgId)
         && request.query.limit != null
         && request.query.limit <= 200;
+      allow create, update, delete: if false;
+    }
+
+    // Event ingredient consequence intelligence is consumed from one exact
+    // quote projection. Collection scans and every browser mutation remain
+    // forbidden; canonical requirements and heads stay private above.
+    match /organizations/{orgId}/eventIngredientProjections/{quoteId} {
+      allow get: if isOrgStaff(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if false;
       allow create, update, delete: if false;
     }
 

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: 2026-09-09 03:14:29 CDT
+Last updated: 2026-09-09 04:12:00 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -8,18 +8,15 @@ Only open work belongs here. Current operational truth lives in
 
 ## Ingredient inventory and menu-costing march
 
-1. Compile immutable event ingredient demand from exact portions and recipe
-   revisions, then project food cost and consumable stock shortage as
-   independent sibling outcomes.
-2. Add simple receiving and cumulative concurrency-safe allocation/release.
+1. Add simple receiving and cumulative concurrency-safe allocation/release.
    Different event dates must still contend for the same consumable stock.
-3. Preserve historical estimates and reconcile commercial/recipe changes; add
+2. Preserve historical estimates and reconcile commercial/recipe changes; add
    separate recipe-cost and ingredient-availability consequence nodes to the
    existing Commercial Change intelligence without mutating selling price.
-4. Add consumption, waste, corrections, allocation settlement, and
+3. Add consumption, waste, corrections, allocation settlement, and
    planned-versus-actual quantity/cost evidence after an owner-declared
    multi-receipt valuation policy exists.
-5. Deepen bounded realtime Library, Quote Edit, Preflight, Operations, and
+4. Deepen bounded realtime Library, Quote Edit, Preflight, Operations, and
    reporting projections. Keep cached, pending, stale, unavailable, and
    uncertain evidence distinct.
 

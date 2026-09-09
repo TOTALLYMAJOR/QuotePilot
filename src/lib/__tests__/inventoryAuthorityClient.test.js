@@ -32,6 +32,7 @@ vi.mock("../firebase", () => ({
 
 import {
   INVENTORY_AUTHORITY_CALLABLES,
+  INVENTORY_EVENT_SELECTION_LIMIT,
   INVENTORY_INGREDIENT_PROJECTION_LIMIT,
   INVENTORY_MENU_COST_PROJECTION_LIMIT,
   applyInventoryCommand,
@@ -42,14 +43,17 @@ import {
   inventoryProjectionConfirmsReceipt,
   normalizeInventoryIngredientProjection,
   normalizeInventoryMenuCostProjection,
+  normalizeEventIngredientProjection,
   normalizeInventoryWorkspaceProjection,
   readPendingInventoryCommands,
   reconcileInventoryCommand,
+  previewEventInventory,
   resetDefinitiveInventoryCommand,
   subscribeToInventoryIngredientProjections,
   subscribeToInventoryMenuCostProjection,
   subscribeToInventoryMenuCostProjections,
-  subscribeToInventoryRecipeIngredients
+  subscribeToInventoryRecipeIngredients,
+  subscribeToEventIngredientProjection
 } from "../inventoryAuthorityClient";
 
 const ORGANIZATION_ID = "org-inventory-client";
@@ -142,6 +146,156 @@ function recipeCommand() {
       { lineId: "chicken", ingredientId: "chicken", quantity: "2", unitKind: "standard", quantityBasis: "as_purchased", usableYield: null, unitId: "lb" },
       { lineId: "pasta", ingredientId: "pasta", quantity: "1", unitKind: "standard", quantityBasis: "as_purchased", usableYield: null, unitId: "lb" }
     ]
+  };
+}
+
+function eventSelection(overrides = {}) {
+  return {
+    selectionId: "selection-chicken-pasta",
+    menuItemId: "chicken-pasta",
+    recipeRevisionId: RECIPE_REVISION_ID,
+    requiredOutputQuantity: "100",
+    outputUnitId: "portion",
+    portionBasis: { kind: "explicit_output_quantity", evidenceId: "chicken-pasta" },
+    commercialProvenance: { kind: "direct", sourceId: "chicken-pasta" },
+    ...overrides
+  };
+}
+
+function compileEventCommand(requestId = `inventory_request_${"2".repeat(32)}`) {
+  return {
+    kind: "compile_event_ingredient_demand",
+    quoteId: "quote-event-1",
+    quoteRevisionId: "quote-revision-17",
+    requiredByBasis: { kind: "quote_event_start" },
+    selections: [eventSelection()],
+    expectedRequirementRevision: 0,
+    expectedPreviewProjectionDigest: "a".repeat(64)
+  };
+}
+
+function eventIngredientProjection(overrides = {}) {
+  const digest = "a".repeat(64);
+  const contribution = {
+    ...eventSelection(),
+    recipeDigest: digest,
+    exactRequiredQuantityMicros: { numerator: "20000000", denominator: "1" },
+    costAvailability: "available",
+    currency: "USD",
+    costRevision: 1,
+    costEvidenceId: `ice_${"d".repeat(48)}`,
+    exactCostMinor: { numerator: "6000", denominator: "1" }
+  };
+  return {
+    authorityVersion: "inventory-ingredient-authority-v2",
+    schemaVersion: 1,
+    projectionVersion: "ingredient-event-projection-v1",
+    organizationId: ORGANIZATION_ID,
+    quoteId: "quote-event-1",
+    quoteRevisionId: "quote-revision-17",
+    eventRequirementRevisionId: `eir_${"e".repeat(48)}`,
+    requirementDigest: digest,
+    requiredByISO: "2026-10-11T16:00:00.000Z",
+    demandState: "complete",
+    costState: "complete",
+    availabilityState: "shortage",
+    selections: [{
+      ...eventSelection(),
+      recipeDigest: digest,
+      recipeOutputYield: "10",
+      demandState: "complete",
+      costState: "complete",
+      recipeCostResultDigest: digest,
+      currency: "USD",
+      exactKnownCostMinor: { numerator: "8000", denominator: "1" },
+      knownCostMinor: 8000,
+      projectedCostMinor: 8000
+    }],
+    ingredients: [{
+      ingredientId: "chicken",
+      baseUnitId: "lb",
+      exactRequiredQuantityMicros: { numerator: "20000000", denominator: "1" },
+      requiredQuantityMicros: 20_000_000,
+      contributions: [contribution],
+      costState: "complete",
+      exactKnownCostMinor: { numerator: "6000", denominator: "1" },
+      knownCostMinor: 6000,
+      currency: "USD",
+      projectedCostMinor: 6000,
+      onHandQuantityMicros: 40_000_000,
+      committedQuantityMicros: 25_000_000,
+      availableToAllocateQuantityMicros: 15_000_000,
+      shortageQuantityMicros: 5_000_000,
+      availabilityState: "shortage"
+    }],
+    coverage: {
+      selectedMenuItemCount: 1,
+      compiledMenuItemCount: 1,
+      ingredientCount: 1,
+      costedIngredientCount: 1,
+      knownCostIngredientCount: 1,
+      stockKnownIngredientCount: 1,
+      availableIngredientCount: 0,
+      shortageIngredientCount: 1
+    },
+    sourceRevisions: {
+      recipeRevisionIds: [RECIPE_REVISION_ID],
+      recipeCostResultDigests: [digest],
+      stockRevisions: [{ stockStateId: "chicken_main", ingredientId: "chicken", locationId: "main-kitchen", revision: 1 }],
+      allocationRevisions: [{ allocationId: "allocation-other", eventPlanId: "event-other", ingredientId: "chicken", revision: 1, sourceRequirementRevisionId: "prior-requirement" }]
+    },
+    issues: [{ code: "shortage", ingredientId: "chicken" }],
+    currency: "USD",
+    exactKnownCostMinor: { numerator: "8000", denominator: "1" },
+    knownCostMinor: 8000,
+    projectedCostMinor: 8000,
+    projectionDigest: digest,
+    model: "event-ingredient-projection-v1",
+    requirementRevision: 1,
+    ingredientLabels: [{ ingredientId: "chicken", name: "Chicken" }],
+    freshness: "as_recorded",
+    staleReason: "",
+    updatedAtISO: NOW,
+    ...overrides
+  };
+}
+
+function eventIngredientRequirement() {
+  const source = eventIngredientProjection();
+  return {
+    authorityVersion: source.authorityVersion,
+    schemaVersion: source.schemaVersion,
+    requirementVersion: "ingredient-event-requirement-v1",
+    organizationId: source.organizationId,
+    quoteId: source.quoteId,
+    quoteRevisionId: source.quoteRevisionId,
+    requiredByISO: source.requiredByISO,
+    demandState: source.demandState,
+    costState: source.costState,
+    selections: source.selections,
+    ingredients: source.ingredients.map((row) => {
+      const clean = { ...row };
+      delete clean.availabilityState;
+      delete clean.onHandQuantityMicros;
+      delete clean.committedQuantityMicros;
+      delete clean.availableToAllocateQuantityMicros;
+      delete clean.shortageQuantityMicros;
+      return clean;
+    }),
+    coverage: {
+      selectedMenuItemCount: source.coverage.selectedMenuItemCount,
+      compiledMenuItemCount: source.coverage.compiledMenuItemCount,
+      ingredientCount: source.coverage.ingredientCount,
+      costedIngredientCount: source.coverage.costedIngredientCount,
+      knownCostIngredientCount: source.coverage.knownCostIngredientCount
+    },
+    issues: [],
+    currency: source.currency,
+    exactKnownCostMinor: source.exactKnownCostMinor,
+    knownCostMinor: source.knownCostMinor,
+    projectedCostMinor: source.projectedCostMinor,
+    eventRequirementRevisionId: source.eventRequirementRevisionId,
+    requirementDigest: source.requirementDigest
   };
 }
 
@@ -278,6 +432,19 @@ function responseFor(payload, resultOverrides = {}) {
       result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, packUnitId: payload.command.packUnitId, packConversionRevisionId: PACK_CONVERSION_REVISION_ID, revision: payload.command.expectedRevision + 1, affectedMenuItemIds: [] };
     } else if (payload.command.kind === "publish_menu_recipe") {
       result = { schemaVersion: 2, menuItemId: payload.command.menuItemId, recipeRevisionId: RECIPE_REVISION_ID, recipeRevision: payload.command.expectedRecipeRevision + 1, projectionSourceDigest: "projection-source-digest", status: "complete" };
+    } else if (payload.command.kind === "compile_event_ingredient_demand") {
+      result = {
+        schemaVersion: 2,
+        quoteId: payload.command.quoteId,
+        quoteRevisionId: payload.command.quoteRevisionId,
+        requirementRevision: payload.command.expectedRequirementRevision + 1,
+        eventRequirementRevisionId: `eir_${"e".repeat(48)}`,
+        requirementDigest: "a".repeat(64),
+        projectionDigest: "a".repeat(64),
+        demandState: "complete",
+        costState: "complete",
+        availabilityState: "shortage"
+      };
     } else {
       result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, costEvidenceId: `ice_${"d".repeat(48)}`, costRevision: payload.command.expectedCostRevision + 1, availability: payload.command.availability, affectedMenuItemIds: [] };
     }
@@ -814,5 +981,177 @@ describe("menu costing projection access and realtime evidence", () => {
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({
       code: "inventory-recipe-ingredients-unavailable"
     }));
+  });
+});
+
+describe("event ingredient preview, immutable requirements, and exact realtime reads", () => {
+  test("previews for authorized sales without granting mutation authority and sends only explicit output evidence", async () => {
+    const salesScope = { ...ADMIN_SCOPE, role: "sales" };
+    mocks.callable.mockImplementation(async (payload) => ({
+      data: {
+        ok: true,
+        schemaVersion: 2,
+        organizationId: ORGANIZATION_ID,
+        quoteId: payload.quoteId,
+        quoteRevisionId: payload.quoteRevisionId,
+        preview: true,
+        requirementRevision: eventIngredientRequirement(),
+        ingredientLabels: [{ ingredientId: "chicken", name: "Chicken" }],
+        projection: (() => {
+          const { model, requirementRevision, ingredientLabels, freshness, staleReason, updatedAtISO, ...core } = eventIngredientProjection();
+          return core;
+        })()
+      }
+    }));
+
+    const result = await previewEventInventory({
+      ...salesScope,
+      quoteId: "quote-event-1",
+      quoteRevisionId: "quote-revision-17",
+      requiredByBasis: { kind: "quote_event_start" },
+      selections: [eventSelection()]
+    });
+
+    expect(mocks.httpsCallable).toHaveBeenCalledWith(mocks.cloudFunctions, INVENTORY_AUTHORITY_CALLABLES.previewEvent);
+    expect(mocks.callable).toHaveBeenCalledWith({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: "quote-event-1",
+      quoteRevisionId: "quote-revision-17",
+      requiredByBasis: { kind: "quote_event_start" },
+      selections: [eventSelection()]
+    });
+    expect(result).toMatchObject({
+      preview: true,
+      requirementRevision: { eventRequirementRevisionId: `eir_${"e".repeat(48)}` },
+      projection: { costState: "complete", availabilityState: "shortage" }
+    });
+    await expect(previewEventInventory({
+      ...ADMIN_SCOPE,
+      role: "customer",
+      quoteId: "quote-event-1",
+      quoteRevisionId: "quote-revision-17",
+      requiredByBasis: { kind: "quote_event_start" },
+      selections: [eventSelection()]
+    })).rejects.toThrow(/authorized staff/i);
+  });
+
+  test("accepts explicit missing recipe evidence while rejecting guessed and over-bounded selections", async () => {
+    mocks.callable.mockImplementation(async () => { throw new Error("should not reach callable"); });
+    const base = {
+      ...ADMIN_SCOPE,
+      quoteId: "quote-event-1",
+      quoteRevisionId: "quote-revision-17",
+      requiredByBasis: { kind: "quote_event_start" }
+    };
+    await expect(previewEventInventory({
+      ...base,
+      selections: [eventSelection({ recipeRevisionId: null, outputUnitId: null })]
+    }))
+      .rejects.toThrow(/should not reach callable/i);
+    await expect(previewEventInventory({ ...base, selections: [{ ...eventSelection(), guestCount: 100 }] }))
+      .rejects.toThrow(/unsupported fields/i);
+    await expect(previewEventInventory({
+      ...base,
+      selections: Array.from({ length: INVENTORY_EVENT_SELECTION_LIMIT + 1 }, (_, index) => eventSelection({ selectionId: `selection-${index}` }))
+    })).rejects.toThrow(/at most/i);
+  });
+
+  test("records an exact event requirement through the existing retry-safe command authority", async () => {
+    const requestId = `inventory_request_${"2".repeat(32)}`;
+    const command = compileEventCommand(requestId);
+    mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
+
+    await expect(applyInventoryCommand({ ...ADMIN_SCOPE, requestId, command })).resolves.toMatchObject({
+      commandKind: "compile_event_ingredient_demand",
+      confirmation: {
+        quoteId: "quote-event-1",
+        quoteRevisionId: "quote-revision-17",
+        requirementRevision: 1,
+        demandState: "complete",
+        costState: "complete",
+        availabilityState: "shortage"
+      }
+    });
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      requestId: `inventory_request_${"3".repeat(32)}`,
+      command: { ...compileEventCommand(requestId), requestId }
+    })).rejects.toThrow(/unsupported fields/i);
+  });
+
+  test("accepts a deterministic recompile that preserves the existing requirement head revision", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-event-same-requirement" };
+    const requestId = `inventory_request_${"4".repeat(32)}`;
+    const command = { ...compileEventCommand(), expectedRequirementRevision: 4 };
+    mocks.callable.mockImplementation(async (payload) => ({
+      data: responseFor(payload, { requirementRevision: 4 })
+    }));
+    await expect(applyInventoryCommand({ ...scope, requestId, command })).resolves.toMatchObject({
+      confirmation: { requirementRevision: 4 }
+    });
+  });
+
+  test("validates persisted wrapper identity while retaining independent demand, cost, and stock rails", () => {
+    const normalized = normalizeEventIngredientProjection(eventIngredientProjection(), ORGANIZATION_ID, "quote-event-1");
+    expect(normalized).toMatchObject({
+      quoteRevisionId: "quote-revision-17",
+      requirementRevision: 1,
+      demandState: "complete",
+      costState: "complete",
+      availabilityState: "shortage",
+      ingredients: [{ requiredQuantityMicros: 20_000_000, shortageQuantityMicros: 5_000_000 }]
+    });
+    expect(() => normalizeEventIngredientProjection(
+      eventIngredientProjection({ organizationId: "other-org" }), ORGANIZATION_ID, "quote-event-1"
+    )).toThrow(/authority boundary/i);
+    expect(() => normalizeEventIngredientProjection(
+      eventIngredientProjection({ model: "other-model" }), ORGANIZATION_ID, "quote-event-1"
+    )).toThrow(/model/i);
+  });
+
+  test("uses exact document metadata, retains prior evidence as stale on failure, and ignores callbacks after teardown", () => {
+    const registrations = [];
+    const unsubscribeSnapshot = vi.fn();
+    mocks.onSnapshot.mockImplementation((reference, options, onNext, onError) => {
+      registrations.push({ reference, options, onNext, onError });
+      return unsubscribeSnapshot;
+    });
+    const onData = vi.fn();
+    const onError = vi.fn();
+    const unsubscribe = subscribeToEventIngredientProjection({
+      ...ADMIN_SCOPE,
+      role: "sales",
+      quoteId: "quote-event-1",
+      onData,
+      onError
+    });
+
+    expect(mocks.doc).toHaveBeenCalledWith(
+      mocks.db, "organizations", ORGANIZATION_ID, "eventIngredientProjections", "quote-event-1"
+    );
+    expect(registrations[0].options).toEqual({ includeMetadataChanges: true });
+    const snapshot = (metadata) => ({
+      exists: () => true,
+      data: () => eventIngredientProjection(),
+      metadata
+    });
+    registrations[0].onNext(snapshot({ fromCache: true, hasPendingWrites: false }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({ freshness: "cached", projection: { quoteId: "quote-event-1" } });
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: true }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({ freshness: "pending" });
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: false }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({ freshness: "current" });
+    registrations[0].onError(new Error("disconnected"));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "unavailable", retained: true, projection: { quoteId: "quote-event-1" }
+    });
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "event-ingredient-projection-unavailable" }));
+
+    const emitted = onData.mock.calls.length;
+    unsubscribe();
+    expect(unsubscribeSnapshot).toHaveBeenCalledOnce();
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: false }));
+    expect(onData).toHaveBeenCalledTimes(emitted);
   });
 });

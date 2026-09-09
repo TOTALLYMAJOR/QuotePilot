@@ -1,8 +1,8 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 03:14:29 CDT
+Last updated: 2026-09-09 04:12:00 CDT
 
-Status: Accepted scope correction; corrected Phases 2 and 3 complete as default-off local source candidates
+Status: Accepted scope correction; corrected Phases 2 through 4 complete as default-off local source candidates
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -87,6 +87,7 @@ normal reads:
 | `inventoryRecipeDependencyIndex/{ingredientId}` | Bounded reverse index of menu items whose current recipes use an ingredient. |
 | `inventoryMenuCostProjections/{menuItemId}` | Bounded current recipe quantity/cost projection with coverage and missing evidence. |
 | `eventIngredientRequirements/{quoteId}/revisions/{requirementRevisionId}` | Immutable compiled ingredient demand and projected cost bound to exact inputs. |
+| `eventIngredientRequirementHeads/{quoteId}` | Current numeric requirement revision and immutable requirement pointer used for optimistic concurrency. |
 | `eventIngredientPlans/{quoteId}` | Current server-authoritative consumable allocation state. |
 | `inventoryAllocationFences/{ingredientId_locationId}` | Shared contention record for cumulative available-to-promise stock. |
 | `eventIngredientProjections/{quoteId}` | Client-safe event demand, costing completeness, availability, shortage, and freshness. |
@@ -204,6 +205,14 @@ recipe revisions, required-by time, and conversion assumptions. It emits a
 deterministically sorted immutable ingredient-demand revision, aggregated by
 ingredient while preserving each menu item’s contribution.
 
+The browser submits only `requiredByBasis: quote_event_start`. The server derives
+the exact required-by instant from the immutable quote event date and time plus
+the organization’s declared IANA business timezone. A browser timezone, local
+clock, or daylight-saving guess can never become canonical demand provenance.
+The saved quote's selected menu IDs and snapshots are also checked exactly;
+package inclusion is retained as provenance on that single selection and is
+never compiled as an additional menu line.
+
 It must respect explicit portions and established package/menu semantics. It
 must not assume every dish serves every guest or double-count a package
 inclusion that is also represented as an explicit selection. An unavailable
@@ -267,6 +276,13 @@ failure may retain the last confirmed projection as stale but cannot silently
 promote it. Organization, principal, role, or feature-gate changes unsubscribe
 and invalidate late callbacks.
 
+Phase 4's saved event projection is deliberately labeled `as_recorded`, not
+current, because reverse event-dependency refresh authority does not exist yet.
+It preserves the evidence recorded with the immutable requirement. The exact
+listener updates immediately when that saved record changes, while a fresh
+read-only preview is required to evaluate current cost and stock. Recording
+fails if either source changes between preview and transaction commit.
+
 The first operator surface is `/app/inventory` under Operations. It lets an
 authorized administrator create an ingredient, record opening stock,
 independently record cost evidence, and publish explicit purchase-pack
@@ -313,7 +329,7 @@ corrected slices and final qualification complete.
    Edit, Preflight, Operations, and reporting projections plus deterministic
    utilization, shortage, and due-supply insights.
 
-Corrected Phase 2 and Phase 3 are now complete as default-off local source
+Corrected Phases 2 through 4 are now complete as default-off local source
 candidates. Phase 3 adds same-dimension conversions, immutable declared
 purchase-pack revisions, versioned recipes attached to exact existing menu
 items, pure exact costing, bounded reverse dependencies, and materialized menu
@@ -321,9 +337,15 @@ cost projections. Library uses bounded summary listeners and an exact active
 menu-item listener instead of replaying ingredient evidence; cached or pending snapshots never authorize recipe
 publication. Recorded menu cost remains independent of physical stock, never
 overwrites catalog selling or manual cost fields, and carries explicit partial,
-unavailable, invalid, stale, and current evidence. The next independently
-committed target is Phase 4: exact event demand plus separate projected-cost and
-consumable-shortage outcomes over one immutable requirement revision.
+unavailable, invalid, stale, and current evidence. Phase 4 compiles explicit
+saved menu-output quantities against exact current recipe revisions, preserves
+per-menu contribution while aggregating shared ingredients, and publishes one
+immutable requirement plus an exact event projection. The projection keeps
+demand, projected cost, and consumable availability as independent result
+states and is read with an exact metadata-aware `onSnapshot()` subscription.
+Preview is read-only; only an administrator may record a requirement. The next
+independently committed target is Phase 5: receiving and concurrency-safe
+consumable allocation and release.
 
 ## Acceptance anchor
 
@@ -360,7 +382,11 @@ Firestore transaction path. It proves that competing configuration writes
 preserve the shared fence and projection, identical opening requests produce
 one movement and receipt, substituted request input fails closed, competing
 revision-zero openings have one winner, and cost evidence does not mutate stock.
-It does not prove later receiving, allocation, or consumption behavior.
+Phase 4 extends that lane through the owner fixture: the callable derives the
+event instant in the tenant timezone, previews `20 lb` chicken, `10 lb` pasta,
+and `$80` without writing, then concurrent identical recording requests create
+one immutable requirement and one exact projection. It does not prove later
+receiving, allocation, or consumption behavior.
 
 The genuinely unresolved product/accounting decision is the valuation policy
 for multiple cost observations and actual consumption. Corrected Phase 2

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-09 03:14:29 CDT
+Last updated: 2026-09-09 04:12:00 CDT
 
 ## Ingredient inventory scope correction
 
@@ -12,7 +12,7 @@ superseded that interpretation: ingredient stock, recorded purchase cost,
 versioned recipes, menu/event demand, projected food cost, consumable
 availability, allocation, and consumption evidence now govern the program.
 
-Corrected Phase 2 and Phase 3 are complete as default-off local source
+Corrected Phases 2 through 4 are complete as default-off local source
 candidates. Phase 2 lets
 administrators create ingredient identities and locations, record fractional
 opening stock, independently record exact purchase-cost evidence, and read
@@ -37,6 +37,20 @@ to the bounded Library summary,
 and derived ingredient cost never overwrites `menuItems.priceMinor` or the
 operator-declared `menuItems.costMinor`.
 
+Phase 4 adds a pure exact-rational event-demand compiler and server-owned
+preview/recording path. It requires explicit recipe-output quantities for each
+saved menu selection, verifies the current immutable quote and recipe inputs,
+derives the required-by instant from the quote event start and tenant business
+timezone, and preserves package inclusion only as provenance. The resulting
+immutable requirement aggregates shared ingredients while retaining per-menu
+contributions. Its exact event projection exposes physical demand, projected
+ingredient cost, and consumable availability as independent evidence rails, so
+missing cost cannot hide a shortage and a shortage cannot invalidate a valid
+cost estimate. Quote Edit subscribes to that exact document with snapshot
+metadata, retains stale evidence visibly, and provides a read-only preview to
+sales plus receipt-producing recording and recovery to administrators. No
+Phase 4 action allocates or consumes stock.
+
 Phase 2's full-march checkpoint included 5,342 passing unit tests with 94
 intentional skips and 88 passing Firestore-rules tests. Phase 3 qualification
 passes 5,414 unit tests with 96 intentional skips, 90 Firestore-rules tests, the
@@ -46,6 +60,15 @@ The capability-surfacing check reaches only the pre-existing unrelated
 `steward-private-validation-foundation` branch-base drift; its Phase 3
 inventory contract has no remaining finding. All results are source or local
 emulator evidence, not CI, hosted, production, or human-acceptance proof.
+
+Phase 4 qualification passes 5,458 unit tests with 98 intentional skips, 92
+Firestore-rules tests, the real demo-emulator owner fixture, both supported
+production builds, environment validation, documentation governance, and
+project-state checks. The capability-surfacing check reaches only the
+pre-existing unrelated `steward-private-validation-foundation` branch-base
+drift; its Phase 4 inventory contracts have no remaining finding. These local
+results do not establish CI, deployment, activation, production behavior, or
+human acceptance.
 
 The corrected architecture keeps menu costing and stock promise as independent
 siblings over one immutable ingredient-demand revision. Missing cost cannot

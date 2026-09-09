@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 03:14:29 CDT
+Last updated: 2026-09-09 04:30:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1301,6 +1301,26 @@ read stock details or publish recipes. When an administrator opens a menu item,
 the editor also listens to that item’s exact projection document; a menu item
 outside the bounded summary can never be mistaken for one with no recipe.
 
+To evaluate an event, open the saved quote in **Quote Edit** and find
+**Ingredient impact**. For each selected menu item, enter the exact required
+recipe output quantity and confirm its recipe output unit. Use the actual
+portion, menu-choice, tray, or batch requirement: QuotePilot does not copy the
+guest count or the billing quantity into this field. **Preview ingredient
+impact** is read-only and may be used by administrators or sales. It shows
+physical demand, projected ingredient cost, and stock availability as separate
+results. A valid projected cost remains visible during a shortage; a valid
+shortage remains visible when cost evidence is incomplete.
+
+An administrator may record only a current preview for the unchanged saved
+quote revision. Recording creates an immutable requirement and advances its
+exact event projection; it does not reserve or consume stock. A dirty quote is
+explicitly **Draft not evaluated** and retains any prior saved projection as
+stale context. Cached or pending snapshots are not current. If recording has an
+uncertain outcome, use **Reconcile request** with the same request identity;
+do not submit a replacement command. The event required-by instant is derived
+on the server from the saved event date/time and organization business timezone,
+not from the browser clock.
+
 This source-candidate slice supports at most 200 location definitions and 200
 ingredient definitions per organization. The shared server transaction fence
 rejects record 201, and a projection at its bound is labeled **Partial**. That
@@ -1308,11 +1328,12 @@ temporary limit must be replaced by cursor-based navigation before larger
 catalogs are activated; the browser never silently treats a truncated list as
 complete.
 
-This slice now supports current recipe and menu-item ingredient cost. It does
-not yet claim quote/event food cost, event ingredient demand, shortage,
-allocation, consumption, inventory value, or COGS. The next slice compiles an
-exact event requirement revision and derives menu cost and stock availability
-as independent outcomes, so one remains useful when the other is incomplete.
+The source candidate now supports current recipe/menu-item cost plus immutable
+event ingredient demand, projected event ingredient cost, and consumable-stock
+shortage previews. It does not yet claim allocation, receiving, consumption,
+inventory value, or COGS. The next slice adds simple receiving and
+concurrency-safe consumable allocation/release without turning event dates into
+equipment-style availability windows.
 
 ## Commercial Change Authority
 

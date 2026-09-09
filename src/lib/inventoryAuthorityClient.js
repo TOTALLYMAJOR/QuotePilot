@@ -8,15 +8,18 @@ export const INVENTORY_INGREDIENT_PROJECTION_LIMIT = 200;
 export const INVENTORY_MENU_COST_PROJECTION_LIMIT = 200;
 export const INVENTORY_MAX_PUBLISHED_RECIPE_LINES = 50;
 export const INVENTORY_AUTHORITY_CALLABLES = Object.freeze({
-  applyCommand: "applyInventoryCommand"
+  applyCommand: "applyInventoryCommand",
+  previewEvent: "previewEventInventory"
 });
+export const INVENTORY_EVENT_SELECTION_LIMIT = 100;
 export const INVENTORY_COMMAND_KINDS = Object.freeze([
   "upsert_location",
   "upsert_ingredient",
   "opening_balance",
   "record_ingredient_cost",
   "publish_pack_conversion",
-  "publish_menu_recipe"
+  "publish_menu_recipe",
+  "compile_event_ingredient_demand"
 ]);
 export const INVENTORY_COST_AVAILABILITY = Object.freeze([
   "available",
@@ -53,6 +56,8 @@ const MOVEMENT_ID_PATTERN = /^imv_[a-f0-9]{48}$/u;
 const COST_EVIDENCE_ID_PATTERN = /^ice_[a-f0-9]{48}$/u;
 const RECIPE_REVISION_ID_PATTERN = /^irr_[a-f0-9]{48}$/u;
 const PACK_CONVERSION_REVISION_ID_PATTERN = /^ipc_[a-f0-9]{48}$/u;
+const EVENT_REQUIREMENT_REVISION_ID_PATTERN = /^eir_[a-f0-9]{48}$/u;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const DECIMAL_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/u;
 const MONEY_INPUT_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/u;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/u;
@@ -318,6 +323,21 @@ function requireMutationAccess(input) {
   return { access, uid: identifier(uid.trim(), "signed-in administrator", "unauthenticated") };
 }
 
+function requirePreviewAccess(input) {
+  const access = getInventoryMenuCostBrowserAccess(input);
+  if (!access.readEnabled) {
+    throw clientError("permission-denied", access.reason || "Event ingredient preview is unavailable.");
+  }
+  if (!firebaseReady || !cloudFunctions) {
+    throw clientError("failed-precondition", "Event ingredient preview requires a connected QuotePilot workspace.");
+  }
+  const uid = auth?.currentUser?.uid;
+  if (typeof uid !== "string" || !uid.trim()) {
+    throw clientError("unauthenticated", "Restore the signed-in staff session before previewing event ingredients.");
+  }
+  return { access, uid: identifier(uid.trim(), "signed-in staff member", "unauthenticated") };
+}
+
 function normalizeRequestId(value) {
   if (typeof value !== "string" || value !== value.trim() || !REQUEST_ID_PATTERN.test(value)) {
     throw clientError("invalid-argument", "requestId must be an exact cryptographic inventory request identifier.");
@@ -499,6 +519,108 @@ function normalizeRecipeCommand(value) {
   };
 }
 
+function normalizePortionBasis(value, index) {
+  exactKeys(value, ["kind", "evidenceId"], `Event menu selection ${index + 1} portion basis`);
+  if (value.kind !== "explicit_output_quantity") {
+    throw clientError("invalid-argument", `Event menu selection ${index + 1} requires an explicit operator-entered output quantity.`);
+  }
+  return {
+    kind: value.kind,
+    evidenceId: identifier(value.evidenceId, `event menu selection ${index + 1} portion evidence`)
+  };
+}
+
+function normalizeCommercialProvenance(value, index) {
+  if (!isRecord(value) || !new Set(["direct", "package_inclusion"]).has(value.kind)) {
+    throw clientError("invalid-argument", `Event menu selection ${index + 1} commercial provenance is invalid.`);
+  }
+  exactKeys(value, value.kind === "direct"
+    ? ["kind", "sourceId"]
+    : ["kind", "sourceId", "packageId", "inclusionId"],
+  `Event menu selection ${index + 1} commercial provenance`);
+  const result = {
+    kind: value.kind,
+    sourceId: identifier(value.sourceId, `event menu selection ${index + 1} commercial source`)
+  };
+  if (value.kind === "package_inclusion") {
+    result.packageId = identifier(value.packageId, `event menu selection ${index + 1} package`);
+    result.inclusionId = identifier(value.inclusionId, `event menu selection ${index + 1} package inclusion`);
+  }
+  return result;
+}
+
+function normalizeEventMenuSelection(value, index, code = "invalid-argument") {
+  try {
+    exactKeys(value, [
+      "selectionId", "menuItemId", "recipeRevisionId", "requiredOutputQuantity",
+      "outputUnitId", "portionBasis", "commercialProvenance"
+    ], `Event menu selection ${index + 1}`, code);
+    parseQuantityMicros(value.requiredOutputQuantity, `event menu selection ${index + 1} output quantity`, { code });
+    if (value.recipeRevisionId !== null && !RECIPE_REVISION_ID_PATTERN.test(value.recipeRevisionId)) {
+      throw clientError(code, `Event menu selection ${index + 1} recipe revision identity is invalid.`);
+    }
+    if (value.recipeRevisionId === null && value.outputUnitId !== null) {
+      throw clientError(code, `Event menu selection ${index + 1} cannot claim an output unit without a recipe.`);
+    }
+    return {
+      selectionId: identifier(value.selectionId, `event menu selection ${index + 1} identity`, code),
+      menuItemId: identifier(value.menuItemId, `event menu selection ${index + 1} menu item`, code),
+      recipeRevisionId: value.recipeRevisionId,
+      requiredOutputQuantity: value.requiredOutputQuantity,
+      outputUnitId: value.recipeRevisionId === null && value.outputUnitId === null
+        ? null
+        : identifier(value.outputUnitId, `event menu selection ${index + 1} output unit`, code),
+      portionBasis: normalizePortionBasis(value.portionBasis, index),
+      commercialProvenance: normalizeCommercialProvenance(value.commercialProvenance, index)
+    };
+  } catch (error) {
+    if (code === "data-loss") throw clientError("data-loss", error?.message || `Event menu selection ${index + 1} is invalid.`);
+    throw error;
+  }
+}
+
+function normalizeEventSelections(value, code = "invalid-argument") {
+  if (!Array.isArray(value) || value.length === 0 || value.length > INVENTORY_EVENT_SELECTION_LIMIT) {
+    throw clientError(code, `Event ingredient demand supports at most ${INVENTORY_EVENT_SELECTION_LIMIT} menu selections.`);
+  }
+  const selections = value.map((entry, index) => normalizeEventMenuSelection(entry, index, code));
+  if (new Set(selections.map((entry) => entry.selectionId)).size !== selections.length
+    || new Set(selections.map((entry) => entry.menuItemId)).size !== selections.length) {
+    throw clientError(code, "Event menu and selection identities must each be unique.");
+  }
+  return selections;
+}
+
+function normalizeCompileEventIngredientCommand(value) {
+  exactKeys(value, [
+    "kind", "quoteId", "quoteRevisionId", "requiredByBasis", "selections", "expectedRequirementRevision",
+    "expectedPreviewProjectionDigest"
+  ], "Event ingredient requirement command");
+  if (value.kind !== "compile_event_ingredient_demand") {
+    throw clientError("invalid-argument", "Event ingredient requirement command is invalid.");
+  }
+  return {
+    kind: value.kind,
+    quoteId: identifier(value.quoteId, "quoteId"),
+    quoteRevisionId: identifier(value.quoteRevisionId, "quote revision identity"),
+    requiredByBasis: normalizeEventRequiredByBasis(value.requiredByBasis),
+    selections: normalizeEventSelections(value.selections),
+    expectedRequirementRevision: exactRevision(value.expectedRequirementRevision, "event requirement expected revision"),
+    expectedPreviewProjectionDigest: eventDigest(
+      value.expectedPreviewProjectionDigest,
+      "event ingredient preview projection digest"
+    )
+  };
+}
+
+function normalizeEventRequiredByBasis(value) {
+  exactKeys(value, ["kind"], "Event ingredient required-by basis");
+  if (value.kind !== "quote_event_start") {
+    throw clientError("invalid-argument", "Ingredient demand must use the immutable quote event start.");
+  }
+  return { kind: value.kind };
+}
+
 function normalizeCommand(value) {
   if (!isRecord(value) || typeof value.kind !== "string" || !COMMAND_KINDS.has(value.kind)) {
     throw clientError("invalid-argument", "A supported schema-v2 inventory command is required.");
@@ -508,7 +630,8 @@ function normalizeCommand(value) {
   if (value.kind === "opening_balance") return deepFreeze(normalizeOpeningBalanceCommand(value));
   if (value.kind === "record_ingredient_cost") return deepFreeze(normalizeCostCommand(value));
   if (value.kind === "publish_pack_conversion") return deepFreeze(normalizePackConversionCommand(value));
-  return deepFreeze(normalizeRecipeCommand(value));
+  if (value.kind === "publish_menu_recipe") return deepFreeze(normalizeRecipeCommand(value));
+  return deepFreeze(normalizeCompileEventIngredientCommand(value));
 }
 
 export function inventoryCommandAxis(kind) {
@@ -518,22 +641,24 @@ export function inventoryCommandAxis(kind) {
   if (kind === "record_ingredient_cost") return "cost";
   if (kind === "publish_pack_conversion") return "conversion";
   if (kind === "publish_menu_recipe") return "recipe";
+  if (kind === "compile_event_ingredient_demand") return "event_requirement";
   return "";
 }
 
 function targetIdentity(command) {
-  return command.locationId || command.ingredientId || command.menuItemId || "authority";
+  return command.locationId || command.ingredientId || command.menuItemId || command.quoteId || "authority";
 }
 
 function normalizeEnvelope(input) {
   const { access, uid } = requireMutationAccess(input);
   const command = normalizeCommand(input.command);
+  const requestId = normalizeRequestId(input.requestId || buildInventoryRequestId());
   return {
     uid,
     payload: deepFreeze({
       schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
       organizationId: access.organizationId,
-      requestId: normalizeRequestId(input.requestId || buildInventoryRequestId()),
+      requestId,
       command
     })
   };
@@ -692,6 +817,30 @@ function normalizeMutationResult(value, attempt, receipt) {
       || typeof value.projectionSourceDigest !== "string"
       || !["complete", "partial", "invalid", "unavailable"].includes(value.status)) {
       throw clientError("data-loss", "Menu recipe publication result differs from the exact request.");
+    }
+    return { ...value };
+  }
+  if (command.kind === "compile_event_ingredient_demand") {
+    exactKeys(value, [
+      "schemaVersion", "quoteId", "quoteRevisionId", "eventRequirementRevisionId",
+      "requirementRevision", "requirementDigest", "projectionDigest", "demandState",
+      "costState", "availabilityState"
+    ], "Event ingredient requirement result", "data-loss");
+    if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+      || value.quoteId !== command.quoteId
+      || value.quoteRevisionId !== command.quoteRevisionId
+      || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId)
+      || !Number.isSafeInteger(value.requirementRevision)
+      || value.requirementRevision < 1
+      || value.requirementRevision > MAX_REVISION
+      || value.requirementRevision > command.expectedRequirementRevision + 1
+      || value.requirementRevision < command.expectedRequirementRevision
+      || !SHA256_PATTERN.test(value.requirementDigest)
+      || !SHA256_PATTERN.test(value.projectionDigest)
+      || !["complete", "incomplete", "invalid"].includes(value.demandState)
+      || !["complete", "partial", "unavailable", "invalid"].includes(value.costState)
+      || !["available", "shortage", "unavailable", "invalid"].includes(value.availabilityState)) {
+      throw clientError("data-loss", "Event ingredient requirement result differs from the exact request.");
     }
     return { ...value };
   }
@@ -1196,6 +1345,495 @@ export function normalizeInventoryMenuCostProjection(value, expectedOrganization
   return deepFreeze(projection);
 }
 
+function assertAllowedKeys(value, required, allowed, label, code = "data-loss") {
+  if (!isRecord(value)
+    || required.some((key) => !Object.hasOwn(value, key))
+    || Object.keys(value).some((key) => !allowed.includes(key) || POISON_KEYS.has(key))) {
+    throw clientError(code, `${label} contains missing or unsupported fields.`);
+  }
+}
+
+function eventDigest(value, label) {
+  if (typeof value !== "string" || !SHA256_PATTERN.test(value)) {
+    throw clientError("data-loss", `${label} is invalid.`);
+  }
+  return value;
+}
+
+function normalizeCompiledEventSelection(value, index) {
+  const baseKeys = [
+    "selectionId", "menuItemId", "recipeRevisionId", "requiredOutputQuantity", "outputUnitId",
+    "portionBasis", "commercialProvenance", "demandState", "costState"
+  ];
+  const optionalKeys = [
+    "recipeDigest", "recipeOutputYield", "recipeCostResultDigest", "currency",
+    "exactKnownCostMinor", "knownCostMinor", "projectedCostMinor"
+  ];
+  assertAllowedKeys(value, baseKeys, [...baseKeys, ...optionalKeys], `Compiled event menu selection ${index + 1}`);
+  const normalized = normalizeEventMenuSelection(Object.fromEntries([
+    "selectionId", "menuItemId", "recipeRevisionId", "requiredOutputQuantity", "outputUnitId",
+    "portionBasis", "commercialProvenance"
+  ].map((key) => [key, value[key]])), index, "data-loss");
+  if (!["complete", "incomplete", "invalid"].includes(value.demandState)
+    || !["complete", "partial", "unavailable", "invalid"].includes(value.costState)) {
+    throw clientError("data-loss", `Compiled event menu selection ${index + 1} has invalid rail states.`);
+  }
+  const result = { ...normalized, demandState: value.demandState, costState: value.costState };
+  if (Object.hasOwn(value, "recipeDigest")) result.recipeDigest = eventDigest(value.recipeDigest, "recipe digest");
+  if (Object.hasOwn(value, "recipeOutputYield")) {
+    parseQuantityMicros(value.recipeOutputYield, `compiled event menu selection ${index + 1} recipe yield`, { code: "data-loss" });
+    result.recipeOutputYield = value.recipeOutputYield;
+  }
+  if (Object.hasOwn(value, "recipeCostResultDigest")) {
+    result.recipeCostResultDigest = eventDigest(value.recipeCostResultDigest, "recipe cost result digest");
+  }
+  if (Object.hasOwn(value, "currency")) {
+    if (typeof value.currency !== "string" || !CURRENCY_PATTERN.test(value.currency)) {
+      throw clientError("data-loss", `Compiled event menu selection ${index + 1} currency is invalid.`);
+    }
+    result.currency = value.currency;
+  }
+  if (Object.hasOwn(value, "exactKnownCostMinor")) result.exactKnownCostMinor = exactRational(value.exactKnownCostMinor, "selection exact known cost");
+  for (const key of ["knownCostMinor", "projectedCostMinor"]) {
+    if (Object.hasOwn(value, key)) result[key] = exactSafeInteger(value[key], `selection ${key}`);
+  }
+  return result;
+}
+
+function normalizeEventContribution(value, index, selectionIds) {
+  const baseKeys = [
+    "selectionId", "menuItemId", "recipeRevisionId", "recipeDigest", "requiredOutputQuantity",
+    "outputUnitId", "portionBasis", "commercialProvenance", "exactRequiredQuantityMicros", "costAvailability"
+  ];
+  const optionalKeys = ["currency", "costRevision", "costEvidenceId", "exactCostMinor"];
+  assertAllowedKeys(value, baseKeys, [...baseKeys, ...optionalKeys], `Event ingredient contribution ${index + 1}`);
+  if (!selectionIds.has(value.selectionId)) {
+    throw clientError("data-loss", `Event ingredient contribution ${index + 1} references an unknown selection.`);
+  }
+  const normalizedSelection = normalizeEventMenuSelection({
+    selectionId: value.selectionId,
+    menuItemId: value.menuItemId,
+    recipeRevisionId: value.recipeRevisionId,
+    requiredOutputQuantity: value.requiredOutputQuantity,
+    outputUnitId: value.outputUnitId,
+    portionBasis: value.portionBasis,
+    commercialProvenance: value.commercialProvenance
+  }, index, "data-loss");
+  const result = {
+    ...normalizedSelection,
+    recipeDigest: eventDigest(value.recipeDigest, "contribution recipe digest"),
+    exactRequiredQuantityMicros: exactRational(value.exactRequiredQuantityMicros, "contribution exact quantity"),
+    costAvailability: COST_AVAILABILITY.has(value.costAvailability)
+      ? value.costAvailability
+      : (() => { throw clientError("data-loss", "Contribution cost availability is invalid."); })()
+  };
+  if (Object.hasOwn(value, "currency")) {
+    if (typeof value.currency !== "string" || !CURRENCY_PATTERN.test(value.currency)) {
+      throw clientError("data-loss", "Contribution currency is invalid.");
+    }
+    result.currency = value.currency;
+  }
+  if (Object.hasOwn(value, "costRevision")) result.costRevision = exactRevision(value.costRevision, "contribution cost revision", { allowZero: false, code: "data-loss" });
+  if (Object.hasOwn(value, "costEvidenceId")) {
+    if (!COST_EVIDENCE_ID_PATTERN.test(value.costEvidenceId)) throw clientError("data-loss", "Contribution cost evidence identity is invalid.");
+    result.costEvidenceId = value.costEvidenceId;
+  }
+  if (Object.hasOwn(value, "exactCostMinor")) result.exactCostMinor = exactRational(value.exactCostMinor, "contribution exact cost");
+  const hasCostEvidence = ["currency", "costRevision", "costEvidenceId", "exactCostMinor"]
+    .filter((key) => Object.hasOwn(value, key)).length;
+  if ((result.costAvailability === "available" && hasCostEvidence !== 4)
+    || (result.costAvailability !== "available" && hasCostEvidence !== 0)) {
+    throw clientError("data-loss", "Contribution cost evidence contradicts its availability state.");
+  }
+  return result;
+}
+
+function normalizeEventIngredientRow(value, index, selectionIds) {
+  const baseKeys = [
+    "ingredientId", "baseUnitId", "exactRequiredQuantityMicros", "requiredQuantityMicros",
+    "contributions", "costState", "availabilityState"
+  ];
+  const optionalKeys = [
+    "exactKnownCostMinor", "knownCostMinor", "currency", "projectedCostMinor", "onHandQuantityMicros",
+    "committedQuantityMicros", "availableToAllocateQuantityMicros", "shortageQuantityMicros"
+  ];
+  assertAllowedKeys(value, baseKeys, [...baseKeys, ...optionalKeys], `Event ingredient row ${index + 1}`);
+  if (!Array.isArray(value.contributions) || value.contributions.length > 1_000) {
+    throw clientError("data-loss", `Event ingredient row ${index + 1} contributions exceed the bounded contract.`);
+  }
+  const row = {
+    ingredientId: identifier(value.ingredientId, `event ingredient ${index + 1}`, "data-loss"),
+    baseUnitId: baseUnit(value.baseUnitId, `event ingredient ${index + 1} base unit`, "data-loss"),
+    exactRequiredQuantityMicros: exactRational(value.exactRequiredQuantityMicros, "event exact required quantity"),
+    requiredQuantityMicros: exactSafeInteger(value.requiredQuantityMicros, "event required quantity micros"),
+    contributions: value.contributions.map((entry, contributionIndex) => normalizeEventContribution(entry, contributionIndex, selectionIds)),
+    costState: value.costState,
+    availabilityState: value.availabilityState
+  };
+  if (!["complete", "partial", "unavailable", "invalid"].includes(row.costState)
+    || !["available", "shortage", "unavailable", "invalid"].includes(row.availabilityState)) {
+    throw clientError("data-loss", `Event ingredient row ${index + 1} has invalid rail states.`);
+  }
+  if (Object.hasOwn(value, "exactKnownCostMinor")) row.exactKnownCostMinor = exactRational(value.exactKnownCostMinor, "ingredient exact known cost");
+  if (Object.hasOwn(value, "currency")) {
+    if (typeof value.currency !== "string" || !CURRENCY_PATTERN.test(value.currency)) throw clientError("data-loss", "Ingredient currency is invalid.");
+    row.currency = value.currency;
+  }
+  for (const key of [
+    "knownCostMinor", "projectedCostMinor", "onHandQuantityMicros", "committedQuantityMicros",
+    "availableToAllocateQuantityMicros", "shortageQuantityMicros"
+  ]) {
+    if (Object.hasOwn(value, key)) row[key] = exactSafeInteger(value[key], `ingredient ${key}`);
+  }
+  const hasStockEvidence = [
+    "onHandQuantityMicros", "committedQuantityMicros", "availableToAllocateQuantityMicros", "shortageQuantityMicros"
+  ].filter((key) => Object.hasOwn(row, key)).length;
+  if (new Set(["available", "shortage"]).has(row.availabilityState)) {
+    if (hasStockEvidence !== 4) throw clientError("data-loss", "Ingredient availability lacks complete stock evidence.");
+    const expectedAvailable = Math.max(0, row.onHandQuantityMicros - row.committedQuantityMicros);
+    const expectedShortage = Math.max(0, row.requiredQuantityMicros - expectedAvailable);
+    if (row.availableToAllocateQuantityMicros !== expectedAvailable
+      || row.shortageQuantityMicros !== expectedShortage
+      || (row.availabilityState === "shortage") !== (expectedShortage > 0)) {
+      throw clientError("data-loss", "Ingredient availability quantities contradict their state.");
+    }
+  }
+  return row;
+}
+
+function normalizeIngredientLabels(value) {
+  if (!Array.isArray(value) || value.length > 500) {
+    throw clientError("data-loss", "Event ingredient labels exceed the bounded read model.");
+  }
+  const labels = value.map((entry, index) => {
+    exactKeys(entry, ["ingredientId", "name"], `Event ingredient label ${index + 1}`, "data-loss");
+    return {
+      ingredientId: identifier(entry.ingredientId, `event ingredient label ${index + 1} identity`, "data-loss"),
+      name: exactText(entry.name, `event ingredient label ${index + 1} name`, 100, { code: "data-loss" })
+    };
+  });
+  if (new Set(labels.map(({ ingredientId }) => ingredientId)).size !== labels.length
+    || labels.some((entry, index) => index > 0 && compareCodePoints(labels[index - 1].ingredientId, entry.ingredientId) >= 0)) {
+    throw clientError("data-loss", "Event ingredient labels are not a sorted unique set.");
+  }
+  return labels;
+}
+
+function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId, { persisted, ingredientLabels = [] }) {
+  const baseKeys = [
+    "authorityVersion", "schemaVersion", "projectionVersion", "organizationId", "quoteId", "quoteRevisionId",
+    "eventRequirementRevisionId", "requirementDigest", "requiredByISO", "demandState", "costState",
+    "availabilityState", "selections", "ingredients", "coverage", "sourceRevisions", "issues", "projectionDigest"
+  ];
+  const optionalKeys = ["currency", "exactKnownCostMinor", "knownCostMinor", "projectedCostMinor"];
+  const persistedKeys = ["model", "requirementRevision", "ingredientLabels", "freshness", "staleReason", "updatedAtISO"];
+  assertAllowedKeys(value, persisted ? [...baseKeys, ...persistedKeys] : baseKeys,
+    [...baseKeys, ...optionalKeys, ...(persisted ? persistedKeys : [])], "Event ingredient projection");
+  const organizationId = identifier(expectedOrganizationId, "expected organizationId");
+  const quoteId = identifier(expectedQuoteId, "expected quoteId");
+  if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== 1
+    || value.projectionVersion !== "ingredient-event-projection-v1"
+    || value.organizationId !== organizationId
+    || value.quoteId !== quoteId
+    || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId)) {
+    throw clientError("data-loss", "Event ingredient projection crossed its authority boundary.");
+  }
+  if (!Array.isArray(value.selections)) {
+    throw clientError("data-loss", "Event ingredient projection selections are invalid.");
+  }
+  const selections = value.selections.map(normalizeCompiledEventSelection);
+  if (selections.length > INVENTORY_EVENT_SELECTION_LIMIT
+    || new Set(selections.map(({ selectionId }) => selectionId)).size !== selections.length) {
+    throw clientError("data-loss", "Event ingredient projection selections are not a bounded unique set.");
+  }
+  if (selections.some((entry, index) => index > 0
+    && (compareCodePoints(selections[index - 1].menuItemId, entry.menuItemId) > 0
+      || (selections[index - 1].menuItemId === entry.menuItemId
+        && compareCodePoints(selections[index - 1].selectionId, entry.selectionId) >= 0)))) {
+    throw clientError("data-loss", "Event ingredient projection selections are not deterministically sorted.");
+  }
+  const selectionIds = new Set(selections.map(({ selectionId }) => selectionId));
+  if (!Array.isArray(value.ingredients) || value.ingredients.length > 500 || !Array.isArray(value.issues) || value.issues.length > 1_100) {
+    throw clientError("data-loss", "Event ingredient projection exceeds its bounded read model.");
+  }
+  const normalizedLabels = normalizeIngredientLabels(persisted ? value.ingredientLabels : ingredientLabels);
+  const labelsById = new Map(normalizedLabels.map((entry) => [entry.ingredientId, entry.name]));
+  const ingredients = value.ingredients.map((entry, index) => {
+    const row = normalizeEventIngredientRow(entry, index, selectionIds);
+    return { ...row, ingredientName: labelsById.get(row.ingredientId) || "" };
+  });
+  if (new Set(ingredients.map(({ ingredientId }) => ingredientId)).size !== ingredients.length) {
+    throw clientError("data-loss", "Event ingredient projection ingredients are not unique.");
+  }
+  if (ingredients.some((entry, index) => index > 0
+    && compareCodePoints(ingredients[index - 1].ingredientId, entry.ingredientId) >= 0)) {
+    throw clientError("data-loss", "Event ingredient projection ingredients are not deterministically sorted.");
+  }
+  if (ingredients.some((row) => row.contributions.some((entry, index) => index > 0
+    && (compareCodePoints(row.contributions[index - 1].menuItemId, entry.menuItemId) > 0
+      || (row.contributions[index - 1].menuItemId === entry.menuItemId
+        && compareCodePoints(row.contributions[index - 1].selectionId, entry.selectionId) >= 0))))) {
+    throw clientError("data-loss", "Event ingredient contributions are not deterministically sorted.");
+  }
+  if (!["complete", "incomplete", "invalid"].includes(value.demandState)
+    || !["complete", "partial", "unavailable", "invalid"].includes(value.costState)
+    || !["available", "shortage", "unavailable", "invalid"].includes(value.availabilityState)) {
+    throw clientError("data-loss", "Event ingredient projection rail state is invalid.");
+  }
+  const projection = {
+    ...canonicalClone(value, "Event ingredient projection"),
+    organizationId,
+    quoteId,
+    quoteRevisionId: identifier(value.quoteRevisionId, "event source quote revision", "data-loss"),
+    eventRequirementRevisionId: value.eventRequirementRevisionId,
+    requirementDigest: eventDigest(value.requirementDigest, "event requirement digest"),
+    requiredByISO: exactIso(value.requiredByISO, "event ingredient required-by time"),
+    demandState: value.demandState,
+    costState: value.costState,
+    availabilityState: value.availabilityState,
+    selections,
+    ingredients,
+    ingredientLabels: normalizedLabels,
+    issues: canonicalClone(value.issues, "Event ingredient projection issues"),
+    projectionDigest: eventDigest(value.projectionDigest, "event projection digest")
+  };
+  exactKeys(value.coverage, [
+    "selectedMenuItemCount", "compiledMenuItemCount", "ingredientCount", "costedIngredientCount",
+    "knownCostIngredientCount", "stockKnownIngredientCount", "availableIngredientCount", "shortageIngredientCount"
+  ], "Event ingredient projection coverage", "data-loss");
+  Object.values(value.coverage).forEach((entry) => exactSafeInteger(entry, "event ingredient coverage count"));
+  exactKeys(value.sourceRevisions, [
+    "recipeRevisionIds", "recipeCostResultDigests", "stockRevisions", "allocationRevisions"
+  ], "Event ingredient projection source revisions", "data-loss");
+  if (!Array.isArray(value.sourceRevisions.recipeRevisionIds)
+    || !Array.isArray(value.sourceRevisions.recipeCostResultDigests)
+    || !Array.isArray(value.sourceRevisions.stockRevisions)
+    || !Array.isArray(value.sourceRevisions.allocationRevisions)) {
+    throw clientError("data-loss", "Event ingredient source revisions are invalid.");
+  }
+  if (value.sourceRevisions.recipeRevisionIds.length > INVENTORY_EVENT_SELECTION_LIMIT
+    || value.sourceRevisions.recipeRevisionIds.some((entry) => !RECIPE_REVISION_ID_PATTERN.test(entry))
+    || value.sourceRevisions.recipeCostResultDigests.length > INVENTORY_EVENT_SELECTION_LIMIT
+    || value.sourceRevisions.recipeCostResultDigests.some((entry) => !SHA256_PATTERN.test(entry))
+    || value.sourceRevisions.stockRevisions.length > 5_000
+    || value.sourceRevisions.allocationRevisions.length > 1_000) {
+    throw clientError("data-loss", "Event ingredient source revisions exceed their bounded contracts.");
+  }
+  value.sourceRevisions.stockRevisions.forEach((entry, index) => {
+    exactKeys(entry, ["stockStateId", "ingredientId", "locationId", "revision"], `Event stock revision ${index + 1}`, "data-loss");
+    identifier(entry.stockStateId, `event stock revision ${index + 1} identity`, "data-loss");
+    identifier(entry.ingredientId, `event stock revision ${index + 1} ingredient`, "data-loss");
+    identifier(entry.locationId, `event stock revision ${index + 1} location`, "data-loss");
+    exactRevision(entry.revision, `event stock revision ${index + 1}`, { allowZero: false, code: "data-loss" });
+  });
+  value.sourceRevisions.allocationRevisions.forEach((entry, index) => {
+    exactKeys(entry, [
+      "allocationId", "eventPlanId", "ingredientId", "revision", "sourceRequirementRevisionId"
+    ], `Event allocation revision ${index + 1}`, "data-loss");
+    identifier(entry.allocationId, `event allocation revision ${index + 1} identity`, "data-loss");
+    identifier(entry.eventPlanId, `event allocation revision ${index + 1} plan`, "data-loss");
+    identifier(entry.ingredientId, `event allocation revision ${index + 1} ingredient`, "data-loss");
+    identifier(entry.sourceRequirementRevisionId, `event allocation revision ${index + 1} requirement`, "data-loss");
+    exactRevision(entry.revision, `event allocation revision ${index + 1}`, { allowZero: false, code: "data-loss" });
+  });
+  if (normalizedLabels.length !== ingredients.length
+    || ingredients.some((row, index) => normalizedLabels[index]?.ingredientId !== row.ingredientId)) {
+    throw clientError("data-loss", "Event ingredient labels do not cover the projected ingredient set.");
+  }
+  if (persisted) {
+    if (value.model !== "event-ingredient-projection-v1") {
+      throw clientError("data-loss", "Event ingredient projection model is invalid.");
+    }
+    projection.requirementRevision = exactRevision(value.requirementRevision, "event requirement revision", { allowZero: false, code: "data-loss" });
+    if (!new Set(["as_recorded", "stale"]).has(value.freshness)
+      || (value.freshness === "as_recorded" && value.staleReason !== "")
+      || (value.freshness === "stale" && !textValue(value.staleReason))) {
+      throw clientError("data-loss", "Event ingredient projection freshness is inconsistent.");
+    }
+    projection.freshness = value.freshness;
+    projection.staleReason = value.staleReason;
+    projection.updatedAtISO = exactIso(value.updatedAtISO, "event ingredient projection update time");
+  } else {
+    projection.freshness = "preview";
+    projection.staleReason = "";
+  }
+  return deepFreeze(projection);
+}
+
+function textValue(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function normalizeEventIngredientProjection(value, expectedOrganizationId, expectedQuoteId) {
+  return normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId, { persisted: true });
+}
+
+function normalizeEventPreviewInput(input) {
+  const { access } = requirePreviewAccess(input);
+  const normalized = {
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId: access.organizationId,
+    quoteId: identifier(input.quoteId, "quoteId"),
+    quoteRevisionId: identifier(input.quoteRevisionId, "quote revision identity"),
+    requiredByBasis: normalizeEventRequiredByBasis(input.requiredByBasis),
+    selections: normalizeEventSelections(input.selections)
+  };
+  return deepFreeze(normalized);
+}
+
+function normalizePreviewRequirement(value, projection) {
+  const baseKeys = [
+    "authorityVersion", "schemaVersion", "requirementVersion", "organizationId", "quoteId", "quoteRevisionId",
+    "requiredByISO", "demandState", "costState", "selections", "ingredients", "coverage", "issues",
+    "eventRequirementRevisionId", "requirementDigest"
+  ];
+  const optionalKeys = ["currency", "exactKnownCostMinor", "knownCostMinor", "projectedCostMinor"];
+  assertAllowedKeys(value, baseKeys, [...baseKeys, ...optionalKeys], "Event ingredient preview requirement");
+  if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== 1
+    || value.requirementVersion !== "ingredient-event-requirement-v1"
+    || value.organizationId !== projection.organizationId
+    || value.quoteId !== projection.quoteId
+    || value.quoteRevisionId !== projection.quoteRevisionId
+    || value.requiredByISO !== projection.requiredByISO
+    || value.demandState !== projection.demandState
+    || value.costState !== projection.costState
+    || value.eventRequirementRevisionId !== projection.eventRequirementRevisionId
+    || value.requirementDigest !== projection.requirementDigest
+    || !Array.isArray(value.selections) || !Array.isArray(value.ingredients) || !Array.isArray(value.issues)) {
+    throw clientError("data-loss", "Event ingredient preview requirement contradicts its projection.");
+  }
+  exactKeys(value.coverage, [
+    "selectedMenuItemCount", "compiledMenuItemCount", "ingredientCount", "costedIngredientCount",
+    "knownCostIngredientCount"
+  ], "Event ingredient preview coverage", "data-loss");
+  Object.values(value.coverage).forEach((entry) => exactSafeInteger(entry, "event ingredient preview coverage count"));
+  if (canonical(value.selections, "Preview requirement selections")
+      !== canonical(projection.selections.map((selection) => {
+        const { ingredientName, ...clean } = selection;
+        return clean;
+      }), "Preview projection selections")) {
+    throw clientError("data-loss", "Event ingredient preview selection evidence differs from its projection.");
+  }
+  const projectionRequirementRows = projection.ingredients.map((row) => {
+    const clean = { ...row };
+    delete clean.ingredientName;
+    delete clean.availabilityState;
+    delete clean.onHandQuantityMicros;
+    delete clean.committedQuantityMicros;
+    delete clean.availableToAllocateQuantityMicros;
+    delete clean.shortageQuantityMicros;
+    return clean;
+  });
+  if (canonical(value.ingredients, "Preview requirement ingredients")
+      !== canonical(projectionRequirementRows, "Preview projection ingredients")) {
+    throw clientError("data-loss", "Event ingredient preview requirement rows differ from its projection.");
+  }
+  for (const key of optionalKeys) {
+    if (Object.hasOwn(value, key) !== Object.hasOwn(projection, key)
+      || (Object.hasOwn(value, key) && canonical(value[key], `Preview ${key}`) !== canonical(projection[key], `Projection ${key}`))) {
+      throw clientError("data-loss", "Event ingredient preview cost evidence differs from its projection.");
+    }
+  }
+  return deepFreeze(canonicalClone(value, "Event ingredient preview requirement"));
+}
+
+export async function previewEventInventory(input = {}) {
+  const payload = normalizeEventPreviewInput(input);
+  const call = httpsCallable(cloudFunctions, INVENTORY_AUTHORITY_CALLABLES.previewEvent);
+  const response = await call(canonicalClone(payload, "Event ingredient preview request"));
+  const value = response?.data;
+  exactKeys(value, [
+    "ok", "schemaVersion", "organizationId", "quoteId", "quoteRevisionId", "preview",
+    "requirementRevision", "ingredientLabels", "projection"
+  ], "Event ingredient preview result", "data-loss");
+  if (value.ok !== true || value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+    || value.organizationId !== payload.organizationId || value.quoteId !== payload.quoteId
+    || value.quoteRevisionId !== payload.quoteRevisionId || value.preview !== true) {
+    throw clientError("data-loss", "Event ingredient preview crossed its authority boundary.");
+  }
+  const projection = normalizeEventProjection(value.projection, payload.organizationId, payload.quoteId, {
+    persisted: false,
+    ingredientLabels: value.ingredientLabels
+  });
+  if (projection.quoteRevisionId !== payload.quoteRevisionId) {
+    throw clientError("data-loss", "Event ingredient preview returned a different quote revision.");
+  }
+  const requirementRevision = normalizePreviewRequirement(value.requirementRevision, projection);
+  return deepFreeze({
+    ok: true,
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId: payload.organizationId,
+    quoteId: payload.quoteId,
+    quoteRevisionId: payload.quoteRevisionId,
+    preview: true,
+    requirementRevision,
+    projection
+  });
+}
+
+export function subscribeToEventIngredientProjection(input = {}) {
+  const access = requireMenuCostReadAccess(input);
+  const quoteId = identifier(input.quoteId, "quoteId");
+  if (typeof input.onData !== "function") {
+    throw clientError("invalid-argument", "Event ingredient projection listener requires onData.");
+  }
+  let active = true;
+  let retained = null;
+  const emit = (source, exists) => {
+    if (!active) return;
+    input.onData(deepFreeze({
+      schemaVersion: 1,
+      organizationId: access.organizationId,
+      quoteId,
+      exists,
+      projection: retained,
+      retained: source.state === "unavailable" && retained !== null,
+      source,
+      freshness: source.state
+    }));
+  };
+  const unavailable = () => {
+    if (!active) return;
+    const source = { state: "unavailable", fromCache: false, hasPendingWrites: false };
+    emit(source, retained !== null);
+    input.onError?.(Object.freeze({
+      code: "event-ingredient-projection-unavailable",
+      message: "The event ingredient projection is unavailable. Retained evidence is explicitly stale.",
+      quoteId,
+      source
+    }));
+  };
+  const projectionRef = doc(db, "organizations", access.organizationId, "eventIngredientProjections", quoteId);
+  let unsubscribe;
+  try {
+    unsubscribe = onSnapshot(projectionRef, { includeMetadataChanges: true }, (snapshot) => {
+      if (!active) return;
+      try {
+        const exists = snapshot.exists();
+        retained = exists ? normalizeEventIngredientProjection(snapshot.data(), access.organizationId, quoteId) : null;
+        const metadata = snapshot?.metadata || {};
+        emit({
+          state: sourceState(metadata),
+          fromCache: metadata.fromCache === true,
+          hasPendingWrites: metadata.hasPendingWrites === true
+        }, exists);
+      } catch {
+        unavailable();
+      }
+    }, unavailable);
+  } catch (error) {
+    active = false;
+    throw error;
+  }
+  return () => {
+    if (!active) return;
+    active = false;
+    if (typeof unsubscribe === "function") unsubscribe();
+  };
+}
+
 function combinedFreshness(sources) {
   const states = [sources.workspace.state, sources.ingredients.state];
   if (states.includes("pending")) return "pending";
@@ -1543,6 +2181,16 @@ export function inventoryProjectionConfirmsReceipt(model, attempt) {
     return projection?.freshness === "current"
       && projection.recipeRevisionId === result.recipeRevisionId
       && projection.sourceDigest === result.projectionSourceDigest;
+  }
+  if (commandKind === "compile_event_ingredient_demand") {
+    const projection = model.projection || model;
+    return projection?.freshness === "as_recorded"
+      && projection.quoteId === result.quoteId
+      && projection.quoteRevisionId === result.quoteRevisionId
+      && projection.requirementRevision === result.requirementRevision
+      && projection.eventRequirementRevisionId === result.eventRequirementRevisionId
+      && projection.requirementDigest === result.requirementDigest
+      && projection.projectionDigest === result.projectionDigest;
   }
   const ingredient = Array.isArray(model.ingredients)
     ? model.ingredients.find((entry) => entry.ingredientId === result.ingredientId) : null;

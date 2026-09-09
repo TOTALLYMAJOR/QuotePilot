@@ -2,6 +2,8 @@
 
 const inventory = require("./inventoryIngredientCore.cjs");
 const recipe = require("./inventoryRecipeCore.cjs");
+const eventDemand = require("./inventoryEventDemandCore.cjs");
+const { wallTimeToExactISO } = require("./operationalStaffingRuntime.js");
 
 const COLLECTIONS = Object.freeze({
   locations: "inventoryLocations",
@@ -19,14 +21,17 @@ const COLLECTIONS = Object.freeze({
   recipeDependencies: "inventoryRecipeDependencyIndex",
   packConversionRevisions: "inventoryPackConversionRevisions",
   packConversionHeads: "inventoryPackConversionHeads",
-  menuCostProjections: "inventoryMenuCostProjections"
+  menuCostProjections: "inventoryMenuCostProjections",
+  eventRequirementHeads: "eventIngredientRequirementHeads",
+  eventRequirements: "eventIngredientRequirements",
+  eventProjections: "eventIngredientProjections"
 });
 const WORKSPACE_LIMIT = 200;
 const MENU_COST_PROJECTION_LIMIT = 200;
 const MAX_PUBLISHED_RECIPE_LINES = 50;
 const COMMAND_KINDS = new Set([
   "upsert_location", "upsert_ingredient", "opening_balance", "record_ingredient_cost",
-  "publish_pack_conversion", "publish_menu_recipe"
+  "publish_pack_conversion", "publish_menu_recipe", "compile_event_ingredient_demand"
 ]);
 
 function isRecord(value) {
@@ -99,6 +104,90 @@ function normalizeRecipeCommand(value) {
   });
 }
 
+function normalizedDemandSelections({ organizationId, quoteId, quoteRevisionId, selections }) {
+  if (!Array.isArray(selections) || selections.length === 0) {
+    throw new inventory.InventoryIngredientError(
+      "invalid-argument",
+      "Event ingredient demand requires at least one exact menu selection."
+    );
+  }
+  try {
+    const dryRun = eventDemand.compileEventIngredientDemand({
+      organizationId,
+      quoteId,
+      quoteRevisionId,
+      requiredByISO: "2000-01-01T00:00:00.000Z",
+      selections,
+      recipeRevisions: [],
+      recipeCostResults: [],
+      stockStates: [],
+      activeAllocations: []
+    });
+    return dryRun.requirementRevision.selections.map((selection) => Object.freeze({
+      selectionId: selection.selectionId,
+      menuItemId: selection.menuItemId,
+      recipeRevisionId: selection.recipeRevisionId,
+      requiredOutputQuantity: selection.requiredOutputQuantity,
+      outputUnitId: selection.outputUnitId,
+      portionBasis: selection.portionBasis,
+      commercialProvenance: selection.commercialProvenance
+    }));
+  } catch (error) {
+    if (error instanceof eventDemand.InventoryEventDemandError) {
+      throw new inventory.InventoryIngredientError(error.code, error.message);
+    }
+    throw error;
+  }
+}
+
+function normalizeEventDemandInput(value, { includeExpectedRevision }) {
+  const keys = ["quoteId", "quoteRevisionId", "requiredByBasis", "selections"];
+  if (includeExpectedRevision) keys.unshift("kind", "expectedRequirementRevision", "expectedPreviewProjectionDigest");
+  exactKeys(value, keys, includeExpectedRevision
+    ? "Event ingredient demand command"
+    : "Event ingredient demand preview");
+  if (includeExpectedRevision && value.kind !== "compile_event_ingredient_demand") {
+    throw new inventory.InventoryIngredientError("invalid-argument", "Event ingredient demand command kind is invalid.");
+  }
+  const normalized = {
+    ...(includeExpectedRevision ? {
+      kind: value.kind,
+      expectedRequirementRevision: inventory.revision(
+        value.expectedRequirementRevision,
+        "event requirement expected revision"
+      ),
+      expectedPreviewProjectionDigest: (() => {
+        if (!/^[a-f0-9]{64}$/u.test(value.expectedPreviewProjectionDigest)) {
+          throw new inventory.InventoryIngredientError(
+            "invalid-argument",
+            "Event ingredient recording requires the exact preview projection digest."
+          );
+        }
+        return value.expectedPreviewProjectionDigest;
+      })()
+    } : {}),
+    quoteId: inventory.opaqueId(value.quoteId, "quoteId"),
+    quoteRevisionId: inventory.opaqueId(value.quoteRevisionId, "quoteRevisionId"),
+    requiredByBasis: (() => {
+      exactKeys(value.requiredByBasis, ["kind"], "Event ingredient required-by basis");
+      if (value.requiredByBasis.kind !== "quote_event_start") {
+        throw new inventory.InventoryIngredientError(
+          "invalid-argument",
+          "Event ingredient required-by basis must use the immutable quote event start."
+        );
+      }
+      return Object.freeze({ kind: "quote_event_start" });
+    })()
+  };
+  normalized.selections = Object.freeze(normalizedDemandSelections({
+    organizationId: "validation-org",
+    quoteId: normalized.quoteId,
+    quoteRevisionId: normalized.quoteRevisionId,
+    selections: value.selections
+  }));
+  return Object.freeze(normalized);
+}
+
 function normalizeCommand(value) {
   if (!isRecord(value) || !COMMAND_KINDS.has(value.kind)) {
     throw new inventory.InventoryIngredientError("invalid-argument", "A supported ingredient inventory command is required.");
@@ -108,7 +197,8 @@ function normalizeCommand(value) {
   else if (value.kind === "opening_balance") inventory.normalizeOpeningBalanceRequest(value);
   else if (value.kind === "record_ingredient_cost") inventory.normalizeCostEvidenceRequest(value);
   else if (value.kind === "publish_pack_conversion") normalizePackConversionCommand(value);
-  else normalizeRecipeCommand(value);
+  else if (value.kind === "publish_menu_recipe") normalizeRecipeCommand(value);
+  else normalizeEventDemandInput(value, { includeExpectedRevision: true });
   return inventory.canonicalClone(value, "ingredient inventory command");
 }
 
@@ -133,6 +223,25 @@ function normalizeWorkspaceEnvelope(data) {
   return Object.freeze({
     schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
     organizationId: inventory.opaqueId(data.organizationId, "organizationId")
+  });
+}
+
+function normalizeEventDemandPreviewEnvelope(data) {
+  exactKeys(data, [
+    "schemaVersion", "organizationId", "quoteId", "quoteRevisionId", "requiredByBasis", "selections"
+  ], "Event ingredient demand preview envelope");
+  if (data.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION) {
+    throw new inventory.InventoryIngredientError("invalid-argument", "Event ingredient demand preview schemaVersion is unsupported.");
+  }
+  return Object.freeze({
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    organizationId: inventory.opaqueId(data.organizationId, "organizationId"),
+    ...normalizeEventDemandInput({
+      quoteId: data.quoteId,
+      quoteRevisionId: data.quoteRevisionId,
+      requiredByBasis: data.requiredByBasis,
+      selections: data.selections
+    }, { includeExpectedRevision: false })
   });
 }
 
@@ -560,6 +669,233 @@ function verifyMenuCostProjection(value, { organizationId, menuItemId, documentI
   return value;
 }
 
+function exactOpaqueList(value, label) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > eventDemand.MAX_EVENT_SELECTIONS) {
+    throw new inventory.InventoryIngredientError("failed-precondition", `${label} must be a bounded non-empty list.`);
+  }
+  const normalized = value.map((entry) => inventory.opaqueId(entry, label)).sort();
+  if (new Set(normalized).size !== normalized.length) {
+    throw new inventory.InventoryIngredientError("failed-precondition", `${label} contains duplicate identities.`);
+  }
+  return normalized;
+}
+
+function validateQuoteDemandScope({ organizationId, quoteId, quoteRevisionId, quote, version, selections }) {
+  if (!isRecord(quote) || !isRecord(version) || !isRecord(version.snapshot)) {
+    throw new inventory.InventoryIngredientError("failed-precondition", "The exact immutable quote revision is unavailable.");
+  }
+  if (inventory.opaqueId(quote.organizationId, "quote organizationId") !== organizationId
+    || inventory.opaqueId(version.organizationId, "quote version organizationId") !== organizationId
+    || inventory.opaqueId(version.quoteId, "quote version quoteId") !== quoteId
+    || inventory.opaqueId(version.versionId, "quote versionId") !== quoteRevisionId
+    || version.legacySynthetic === true) {
+    throw new inventory.InventoryIngredientError("failed-precondition", "The immutable quote revision does not match the event ingredient scope.");
+  }
+  const activeRevisionId = inventory.opaqueId(
+    quote.activeVersionId || quote.versionMeta?.versionId,
+    "active quote revisionId"
+  );
+  if (activeRevisionId !== quoteRevisionId) {
+    throw new inventory.InventoryIngredientError("aborted", "The quote revision changed. Preview or compile from the current saved revision.");
+  }
+  const snapshot = version.snapshot;
+  if ((snapshot.organizationId && snapshot.organizationId !== organizationId)
+    || (snapshot.id && snapshot.id !== quoteId)
+    || (snapshot.activeVersionId && snapshot.activeVersionId !== quoteRevisionId)
+    || !isRecord(snapshot.selection)) {
+    throw new inventory.InventoryIngredientError("data-loss", "The immutable quote snapshot identity or selection evidence is inconsistent.");
+  }
+  const selectedIds = exactOpaqueList(snapshot.selection.menuItems, "quote menu item selection");
+  const snapshotIds = exactOpaqueList(
+    snapshot.selection.menuItemsSnapshot?.map((entry) => entry?.id),
+    "quote menu item snapshot"
+  );
+  if (inventory.canonicalSerialize(selectedIds) !== inventory.canonicalSerialize(snapshotIds)) {
+    throw new inventory.InventoryIngredientError("data-loss", "The immutable quote menu identities disagree with their commercial snapshots.");
+  }
+  const requestedIds = selections.map(({ menuItemId }) => menuItemId).sort();
+  if (inventory.canonicalSerialize(selectedIds) !== inventory.canonicalSerialize(requestedIds)) {
+    throw new inventory.InventoryIngredientError(
+      "failed-precondition",
+      "Event ingredient demand must account for every selected menu item exactly once."
+    );
+  }
+  const packageId = snapshot.selection.packageId
+    ? inventory.opaqueId(snapshot.selection.packageId, "quote packageId") : "";
+  const includedIds = new Set((snapshot.selection.packageInclusions?.menuItems || [])
+    .map((entry) => inventory.opaqueId(entry?.id, "package included menuItemId")));
+  for (const selection of selections) {
+    if (selection.portionBasis.kind !== "explicit_output_quantity"
+      || selection.portionBasis.evidenceId !== selection.menuItemId) {
+      throw new inventory.InventoryIngredientError(
+        "failed-precondition",
+        "Phase 4 event demand accepts only an explicit operator-entered output quantity bound to the selected menu item."
+      );
+    }
+    const provenance = selection.commercialProvenance;
+    if (provenance.sourceId !== selection.menuItemId) {
+      throw new inventory.InventoryIngredientError("failed-precondition", "Menu demand provenance must name its exact selected menu item.");
+    }
+    if (provenance.kind === "package_inclusion"
+      && (provenance.packageId !== packageId
+        || provenance.inclusionId !== selection.menuItemId
+        || !includedIds.has(selection.menuItemId))) {
+      throw new inventory.InventoryIngredientError("failed-precondition", "Package-inclusion provenance is not present in the immutable quote revision.");
+    }
+    if (provenance.kind === "direct" && includedIds.has(selection.menuItemId)) {
+      throw new inventory.InventoryIngredientError("failed-precondition", "Package-included menu demand must retain its package provenance.");
+    }
+  }
+  return Object.freeze({ selectedMenuItemIds: Object.freeze(selectedIds) });
+}
+
+function eventRequirementHead({ organizationId, quoteId, current, compiled, nowISO }) {
+  const priorRevision = current?.revision || 0;
+  const unchanged = current?.eventRequirementRevisionId === compiled.eventRequirementRevisionId
+    && current?.requirementDigest === compiled.requirementDigest
+    && current?.quoteRevisionId === compiled.quoteRevisionId;
+  return Object.freeze({
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "event-ingredient-requirement-head-v1",
+    organizationId,
+    quoteId,
+    quoteRevisionId: compiled.quoteRevisionId,
+    revision: unchanged ? priorRevision : priorRevision + 1,
+    eventRequirementRevisionId: compiled.eventRequirementRevisionId,
+    requirementDigest: compiled.requirementDigest,
+    updatedAtISO: nowISO
+  });
+}
+
+function verifyEventRequirementHead(value, { organizationId, quoteId, documentId } = {}) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "quoteId", "quoteRevisionId",
+    "revision", "eventRequirementRevisionId", "requirementDigest", "updatedAtISO"
+  ], "Event ingredient requirement head");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "event-ingredient-requirement-head-v1"
+    || value.organizationId !== organizationId || value.quoteId !== quoteId
+    || (documentId && documentId !== quoteId)
+    || !/^eir_[a-f0-9]{48}$/u.test(value.eventRequirementRevisionId)
+    || !/^[a-f0-9]{64}$/u.test(value.requirementDigest)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient requirement head identity is invalid.");
+  }
+  inventory.opaqueId(value.quoteRevisionId, "event requirement quoteRevisionId");
+  inventory.revision(value.revision, "event requirement revision", { allowZero: false });
+  inventory.exactISO(value.updatedAtISO, "event requirement head updatedAtISO");
+  return value;
+}
+
+function persistedEventProjection({ projection, requirementRevision, ingredientLabels, nowISO }) {
+  const value = Object.freeze({
+    ...projection,
+    model: "event-ingredient-projection-v1",
+    requirementRevision,
+    ingredientLabels: Object.freeze(ingredientLabels),
+    freshness: "as_recorded",
+    staleReason: "",
+    updatedAtISO: nowISO
+  });
+  eventDemand.assertFirestoreDocumentSize(value, "persisted event ingredient projection");
+  return value;
+}
+
+function eventRequirementRecord({ requirement, actor, nowISO }) {
+  eventDemand.verifyEventIngredientRequirement(requirement);
+  return Object.freeze({
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "event-ingredient-requirement-record-v1",
+    organizationId: requirement.organizationId,
+    quoteId: requirement.quoteId,
+    eventRequirementRevisionId: requirement.eventRequirementRevisionId,
+    requirementDigest: requirement.requirementDigest,
+    requirement,
+    recordedAtISO: nowISO,
+    recordedBy: actor
+  });
+}
+
+function verifyEventRequirementRecord(value, {
+  organizationId, quoteId, eventRequirementRevisionId, documentId
+} = {}) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "quoteId",
+    "eventRequirementRevisionId", "requirementDigest", "requirement", "recordedAtISO", "recordedBy"
+  ], "Event ingredient requirement record");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "event-ingredient-requirement-record-v1"
+    || value.organizationId !== organizationId || value.quoteId !== quoteId
+    || value.eventRequirementRevisionId !== eventRequirementRevisionId
+    || (documentId && documentId !== eventRequirementRevisionId)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient requirement record identity is invalid.");
+  }
+  eventDemand.verifyEventIngredientRequirement(value.requirement);
+  if (value.requirement.organizationId !== organizationId
+    || value.requirement.quoteId !== quoteId
+    || value.requirement.eventRequirementRevisionId !== eventRequirementRevisionId
+    || value.requirement.requirementDigest !== value.requirementDigest) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient requirement record provenance is invalid.");
+  }
+  inventory.exactISO(value.recordedAtISO, "event requirement recordedAtISO");
+  inventory.normalizeActor(value.recordedBy, organizationId);
+  return value;
+}
+
+function verifyPersistedEventProjection(value, { organizationId, quoteId, documentId } = {}) {
+  if (!isRecord(value)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient projection is unavailable.");
+  }
+  const {
+    model, requirementRevision, ingredientLabels, freshness, staleReason, updatedAtISO, ...coreProjection
+  } = value;
+  if (model !== "event-ingredient-projection-v1"
+    || value.organizationId !== organizationId || value.quoteId !== quoteId
+    || (documentId && documentId !== quoteId)
+    || !["as_recorded", "stale"].includes(freshness)
+    || typeof staleReason !== "string"
+    || (freshness === "as_recorded" && staleReason)
+    || (freshness === "stale" && !staleReason)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient projection metadata is invalid.");
+  }
+  inventory.revision(requirementRevision, "event projection requirement revision", { allowZero: false });
+  inventory.exactISO(updatedAtISO, "event projection updatedAtISO");
+  if (!Array.isArray(ingredientLabels)
+    || ingredientLabels.length > eventDemand.MAX_EVENT_INGREDIENTS
+    || ingredientLabels.some((entry) => !isRecord(entry)
+      || Object.keys(entry).length !== 2
+      || typeof entry.ingredientId !== "string"
+      || typeof entry.name !== "string")) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient projection labels are invalid.");
+  }
+  ingredientLabels.forEach((entry) => {
+    inventory.opaqueId(entry.ingredientId, "event projection label ingredientId");
+    boundedText(entry.name, "event projection ingredient name", 100);
+  });
+  if (new Set(ingredientLabels.map(({ ingredientId }) => ingredientId)).size !== ingredientLabels.length
+    || ingredientLabels.some((entry, index) => index > 0
+      && ingredientLabels[index - 1].ingredientId.localeCompare(entry.ingredientId) >= 0)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient projection labels are not unique and sorted.");
+  }
+  try {
+    eventDemand.verifyEventIngredientProjection(coreProjection);
+  } catch (error) {
+    if (error instanceof eventDemand.InventoryEventDemandError) {
+      throw new inventory.InventoryIngredientError("data-loss", error.message);
+    }
+    throw error;
+  }
+  const projectedIds = coreProjection.ingredients.map(({ ingredientId }) => ingredientId);
+  if (inventory.canonicalSerialize(projectedIds)
+    !== inventory.canonicalSerialize(ingredientLabels.map(({ ingredientId }) => ingredientId))) {
+    throw new inventory.InventoryIngredientError("data-loss", "Event ingredient projection labels do not cover its ingredient rows.");
+  }
+  return value;
+}
+
 function publicReceipt(receipt) {
   return Object.freeze({
     schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
@@ -782,7 +1118,11 @@ function createInventoryAuthorityRuntime({
       packConversionRevisions: organizationRef.collection(COLLECTIONS.packConversionRevisions),
       packConversionHeads: organizationRef.collection(COLLECTIONS.packConversionHeads),
       menuCostProjections: organizationRef.collection(COLLECTIONS.menuCostProjections),
-      menuItems: organizationRef.collection("menuItems")
+      eventRequirementHeads: organizationRef.collection(COLLECTIONS.eventRequirementHeads),
+      eventRequirements: organizationRef.collection(COLLECTIONS.eventRequirements),
+      eventProjections: organizationRef.collection(COLLECTIONS.eventProjections),
+      menuItems: organizationRef.collection("menuItems"),
+      quotes: organizationRef.collection("quotes")
     };
   }
 
@@ -795,15 +1135,37 @@ function createInventoryAuthorityRuntime({
     }, organizationId);
   }
 
-  function assertStoredAuthority({ organizationId, actor, roleSnap, organizationSnap, tombstoneSnap, settingsSnap }) {
+  function readerFor(staff, organizationId) {
+    const principal = Object.freeze({
+      uid: inventory.opaqueId(staff?.uid, "reader uid"),
+      email: boundedText(staff?.email, "reader email", 254),
+      role: boundedText(String(staff?.role || "").trim().toLowerCase(), "reader role", 24),
+      organizationId: inventory.opaqueId(
+        normalizeOrganizationId(staff?.principalOrganizationId || staff?.organizationId),
+        "reader organizationId"
+      )
+    });
+    if (principal.organizationId !== organizationId || !["admin", "sales"].includes(principal.role)) {
+      throw new inventory.InventoryIngredientError(
+        "permission-denied",
+        "Event ingredient previews require same-tenant admin or sales access."
+      );
+    }
+    return principal;
+  }
+
+  function assertStoredAuthority({
+    organizationId, actor, roleSnap, organizationSnap, tombstoneSnap, settingsSnap,
+    allowedRoles = ["admin"]
+  }) {
     if (!roleSnap.exists || !organizationSnap.exists || tombstoneSnap.exists || !settingsSnap.exists) {
       throw new inventory.InventoryIngredientError("failed-precondition", "Current ingredient inventory authority is unavailable.");
     }
     const role = roleSnap.data() || {};
     const storedEmail = String(role.email || "").trim().toLowerCase();
     if (normalizeOrganizationId(role.organizationId) !== organizationId
-      || String(role.role || "").trim().toLowerCase() !== "admin"
-      || actor.role !== "admin"
+      || !allowedRoles.includes(String(role.role || "").trim().toLowerCase())
+      || !allowedRoles.includes(actor.role)
       || (storedEmail && storedEmail !== actor.email.toLowerCase())
       || !isOrganizationRecordActive(organizationSnap.data() || {})) {
       throw new inventory.InventoryIngredientError("permission-denied", "Ingredient inventory authority changed. Refresh access before continuing.");
@@ -813,12 +1175,13 @@ function createInventoryAuthorityRuntime({
     }
   }
 
-  async function readAuthorityEnvelope(tx, refs, actor) {
+  async function readAuthorityEnvelope(tx, refs, actor, { allowedRoles = ["admin"] } = {}) {
     const [roleSnap, organizationSnap, tombstoneSnap, settingsSnap] = await tx.getAll(
       refs.roleRef(actor.uid), refs.organizationRef, refs.tombstoneRef, refs.settingsRef
     );
     assertStoredAuthority({
-      organizationId: actor.organizationId, actor, roleSnap, organizationSnap, tombstoneSnap, settingsSnap
+      organizationId: actor.organizationId, actor, roleSnap, organizationSnap, tombstoneSnap, settingsSnap,
+      allowedRoles
     });
     return { roleSnap, organizationSnap, tombstoneSnap, settingsSnap };
   }
@@ -980,6 +1343,150 @@ function createInventoryAuthorityRuntime({
     return { ingredients, costStates, packConversions };
   }
 
+  async function readEventDemandInputs(tx, refs, envelope, settings) {
+    const quoteRef = refs.quotes.doc(envelope.quoteId);
+    const versionRef = quoteRef.collection("versions").doc(envelope.quoteRevisionId);
+    const selectionMenuItemIds = envelope.selections.map(({ menuItemId }) => menuItemId);
+    const recipeHeadRefs = selectionMenuItemIds.map((menuItemId) => refs.recipeHeads.doc(menuItemId));
+    const [quoteSnap, versionSnap, ...recipeHeadSnaps] = await tx.getAll(
+      quoteRef,
+      versionRef,
+      ...recipeHeadRefs
+    );
+    if (!quoteSnap.exists || !versionSnap.exists) {
+      throw new inventory.InventoryIngredientError("not-found", "The exact immutable quote revision is unavailable.");
+    }
+    validateQuoteDemandScope({
+      organizationId: envelope.organizationId,
+      quoteId: envelope.quoteId,
+      quoteRevisionId: envelope.quoteRevisionId,
+      quote: quoteSnap.data() || {},
+      version: versionSnap.data() || {},
+      selections: envelope.selections
+    });
+    let canonicalRequiredByISO;
+    try {
+      canonicalRequiredByISO = wallTimeToExactISO({
+        date: versionSnap.data()?.snapshot?.event?.date,
+        time: versionSnap.data()?.snapshot?.event?.time,
+        timeZone: settings?.businessTimeZone
+      });
+    } catch (error) {
+      throw new inventory.InventoryIngredientError(
+        error?.code || "failed-precondition",
+        error?.message || "The immutable quote event time cannot establish ingredient demand."
+      );
+    }
+
+    const heads = recipeHeadSnaps.map((snapshot, index) => snapshot.exists
+      ? verifyRecipeHead(snapshot.data() || {}, {
+        organizationId: envelope.organizationId,
+        menuItemId: selectionMenuItemIds[index],
+        documentId: snapshot.id
+      })
+      : null);
+    heads.forEach((head, index) => {
+      const selectedRecipeRevisionId = envelope.selections[index].recipeRevisionId;
+      if ((!head && selectedRecipeRevisionId !== null)
+        || (head && selectedRecipeRevisionId !== head.recipeRevisionId)) {
+        throw new inventory.InventoryIngredientError(
+          "aborted",
+          "A selected menu recipe changed. Refresh the saved quote before evaluating ingredient demand."
+        );
+      }
+    });
+
+    const policyRefs = heads.filter(Boolean).map((head) => refs.recipePolicies.doc(head.recipeRevisionId));
+    const policySnaps = policyRefs.length ? await tx.getAll(...policyRefs) : [];
+    const policies = policySnaps.map((snapshot, index) => {
+      const head = heads.filter(Boolean)[index];
+      if (!snapshot.exists) {
+        throw new inventory.InventoryIngredientError("data-loss", "A current menu recipe is missing its immutable policy.");
+      }
+      const policy = verifyRecipePolicy(snapshot.data() || {}, {
+        organizationId: envelope.organizationId,
+        recipeRevisionId: head.recipeRevisionId,
+        documentId: snapshot.id
+      });
+      if (policy.recipeRevision.recipeDigest !== head.recipeDigest
+        || policy.catalogRevision !== head.catalogRevision
+        || policy.menuIdentity.identityDigest !== head.menuIdentity.identityDigest) {
+        throw new inventory.InventoryIngredientError("data-loss", "A current menu recipe head disagrees with its immutable policy.");
+      }
+      return policy;
+    });
+
+    const recipeRevisions = [];
+    const recipeCostResults = [];
+    const ingredientsById = new Map();
+    for (const policy of policies) {
+      const costInputs = await readRecipeCostInputs(tx, refs, policy);
+      costInputs.ingredients.forEach((ingredient) => ingredientsById.set(ingredient.ingredientId, ingredient));
+      recipeRevisions.push(policy.recipeRevision);
+      recipeCostResults.push(recipe.calculateRecipeCost({
+        recipeRevision: policy.recipeRevision,
+        ingredients: costInputs.ingredients,
+        costStates: costInputs.costStates,
+        packConversions: costInputs.packConversions
+      }));
+    }
+
+    const normalizedIngredientIds = [...new Set(recipeCostResults.flatMap((result) =>
+      result.ingredients.map(({ ingredientId }) => ingredientId)))].sort();
+    if (normalizedIngredientIds.length > eventDemand.MAX_EVENT_INGREDIENTS) {
+      throw new inventory.InventoryIngredientError("resource-exhausted", "Event ingredient demand exceeds its bounded ingredient limit.");
+    }
+    const stockQueries = normalizedIngredientIds.map((ingredientId) =>
+      refs.stockStates.where("ingredientId", "==", ingredientId).limit(WORKSPACE_LIMIT + 1));
+    const stockSnapshots = await Promise.all(stockQueries.map((query) => tx.get(query)));
+    const stockStates = stockSnapshots.flatMap((snapshot, index) => {
+      if (snapshot.size > WORKSPACE_LIMIT) {
+        throw new inventory.InventoryIngredientError("resource-exhausted", "Ingredient stock states exceed the bounded event-demand limit.");
+      }
+      return snapshot.docs.map((doc) => storedCanonical(doc.data() || {}, "stock state", {
+        organizationId: envelope.organizationId,
+        ingredientId: normalizedIngredientIds[index],
+        documentId: doc.id
+      }));
+    });
+    const ingredientLabels = [...ingredientsById.values()]
+      .filter((ingredient) => normalizedIngredientIds.includes(ingredient.ingredientId))
+      .map((ingredient) => ({ ingredientId: ingredient.ingredientId, name: ingredient.name }))
+      .sort((left, right) => left.ingredientId.localeCompare(right.ingredientId));
+    return {
+      quote: quoteSnap.data() || {},
+      version: versionSnap.data() || {},
+      recipeRevisions,
+      recipeCostResults,
+      stockStates,
+      ingredientLabels,
+      canonicalRequiredByISO
+    };
+  }
+
+  async function compileCurrentEventDemand(tx, refs, envelope, settings) {
+    const inputs = await readEventDemandInputs(tx, refs, envelope, settings);
+    try {
+      const compiled = eventDemand.compileEventIngredientDemand({
+        organizationId: envelope.organizationId,
+        quoteId: envelope.quoteId,
+        quoteRevisionId: envelope.quoteRevisionId,
+        requiredByISO: inputs.canonicalRequiredByISO,
+        selections: envelope.selections,
+        recipeRevisions: inputs.recipeRevisions,
+        recipeCostResults: inputs.recipeCostResults,
+        stockStates: inputs.stockStates,
+        activeAllocations: []
+      });
+      return { ...compiled, ingredientLabels: inputs.ingredientLabels };
+    } catch (error) {
+      if (error instanceof eventDemand.InventoryEventDemandError) {
+        throw new inventory.InventoryIngredientError(error.code, error.message);
+      }
+      throw error;
+    }
+  }
+
   async function calculateCurrentMenuProjection(tx, refs, { organizationId, menuItemId, nowISO }) {
     const headRef = refs.recipeHeads.doc(menuItemId);
     const projectionRef = refs.menuCostProjections.doc(menuItemId);
@@ -1071,6 +1578,18 @@ function createInventoryAuthorityRuntime({
       recipeRevision: planned.recipeRevision.revision,
       projectionSourceDigest: planned.menuCostProjection.sourceDigest,
       status: planned.menuCostProjection.status
+    });
+    if (commandKind === "compile_event_ingredient_demand") return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      quoteId: planned.requirementRevision.quoteId,
+      quoteRevisionId: planned.requirementRevision.quoteRevisionId,
+      requirementRevision: planned.head.revision,
+      eventRequirementRevisionId: planned.requirementRevision.eventRequirementRevisionId,
+      requirementDigest: planned.requirementRevision.requirementDigest,
+      projectionDigest: planned.projection.projectionDigest,
+      demandState: planned.projection.demandState,
+      costState: planned.projection.costState,
+      availabilityState: planned.projection.availabilityState
     });
     return Object.freeze({
       schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
@@ -1174,6 +1693,96 @@ function createInventoryAuthorityRuntime({
             locations,
             updatedAtISO: nowISO
           } });
+        } else if (commandKind === "compile_event_ingredient_demand") {
+          const normalizedCommand = normalizeEventDemandInput(envelope.command, { includeExpectedRevision: true });
+          const eventEnvelope = Object.freeze({
+            organizationId: envelope.organizationId,
+            ...normalizedCommand
+          });
+          const headRef = refs.eventRequirementHeads.doc(eventEnvelope.quoteId);
+          const projectionRef = refs.eventProjections.doc(eventEnvelope.quoteId);
+          const [headSnap, projectionSnap] = await Promise.all([
+            tx.get(headRef),
+            tx.get(projectionRef)
+          ]);
+          const currentHead = headSnap.exists ? verifyEventRequirementHead(headSnap.data() || {}, {
+            organizationId: envelope.organizationId,
+            quoteId: eventEnvelope.quoteId,
+            documentId: headSnap.id
+          }) : null;
+          if ((currentHead?.revision || 0) !== eventEnvelope.expectedRequirementRevision) {
+            throw new inventory.InventoryIngredientError(
+              "aborted",
+              "The saved event ingredient requirement changed. Reload it before recording another revision."
+            );
+          }
+          if (projectionSnap.exists) verifyPersistedEventProjection(projectionSnap.data() || {}, {
+            organizationId: envelope.organizationId,
+            quoteId: eventEnvelope.quoteId,
+            documentId: projectionSnap.id
+          });
+          const compiled = await compileCurrentEventDemand(
+            tx,
+            refs,
+            eventEnvelope,
+            authority.settingsSnap.data() || {}
+          );
+          if (compiled.projection.projectionDigest !== eventEnvelope.expectedPreviewProjectionDigest) {
+            throw new inventory.InventoryIngredientError(
+              "aborted",
+              "Ingredient cost or stock evidence changed after preview. Preview again before recording."
+            );
+          }
+          const head = eventRequirementHead({
+            organizationId: envelope.organizationId,
+            quoteId: eventEnvelope.quoteId,
+            current: currentHead,
+            compiled: compiled.requirementRevision,
+            nowISO
+          });
+          const requirementDocumentRef = refs.eventRequirements.doc(eventEnvelope.quoteId)
+            .collection("revisions")
+            .doc(compiled.requirementRevision.eventRequirementRevisionId);
+          const requirementDocumentSnap = await tx.get(requirementDocumentRef);
+          const requirementDocument = eventRequirementRecord({
+            requirement: compiled.requirementRevision,
+            actor,
+            nowISO
+          });
+          if (requirementDocumentSnap.exists) {
+            const currentRecord = verifyEventRequirementRecord(requirementDocumentSnap.data() || {}, {
+              organizationId: envelope.organizationId,
+              quoteId: eventEnvelope.quoteId,
+              eventRequirementRevisionId: compiled.requirementRevision.eventRequirementRevisionId,
+              documentId: requirementDocumentSnap.id
+            });
+            if (inventory.canonicalSerialize(currentRecord.requirement)
+              !== inventory.canonicalSerialize(compiled.requirementRevision)) {
+              throw new inventory.InventoryIngredientError("data-loss", "An immutable event requirement identity collided.");
+            }
+          }
+          const projection = persistedEventProjection({
+            projection: compiled.projection,
+            requirementRevision: head.revision,
+            ingredientLabels: compiled.ingredientLabels,
+            nowISO
+          });
+          planned = {
+            requirementRevision: compiled.requirementRevision,
+            projection,
+            head,
+            requirementDocument
+          };
+          priorRevision = currentHead?.revision || 0;
+          if (!requirementDocumentSnap.exists) writes.push({
+            operation: "create",
+            ref: requirementDocumentRef,
+            value: requirementDocument
+          });
+          writes.push(
+            { operation: currentHead ? "set" : "create", ref: headRef, value: head },
+            { operation: "set", ref: projectionRef, value: projection }
+          );
         } else if (commandKind === "publish_menu_recipe") {
           const menuItemId = envelope.command.menuItemId;
           const headRef = refs.recipeHeads.doc(menuItemId);
@@ -1421,6 +2030,7 @@ function createInventoryAuthorityRuntime({
             : commandKind === "opening_balance" ? planned.nextStockState.revision
               : commandKind === "publish_pack_conversion" ? planned.packConversion.revision
                 : commandKind === "publish_menu_recipe" ? planned.recipeRevision.revision
+                  : commandKind === "compile_event_ingredient_demand" ? planned.head.revision
                   : planned.nextCostState.revision;
         const body = {
           authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
@@ -1490,6 +2100,37 @@ function createInventoryAuthorityRuntime({
     }
   }
 
+  async function previewEventInventory(data = {}, context = {}) {
+    try {
+      const envelope = normalizeEventDemandPreviewEnvelope(data);
+      const staff = await assertStaff(context, { expectedOrganizationId: envelope.organizationId });
+      const reader = readerFor(staff, envelope.organizationId);
+      const refs = refsFor(envelope.organizationId);
+      return await db.runTransaction(async (tx) => {
+        const authority = await readAuthorityEnvelope(tx, refs, reader, { allowedRoles: ["admin", "sales"] });
+        const compiled = await compileCurrentEventDemand(
+          tx,
+          refs,
+          envelope,
+          authority.settingsSnap.data() || {}
+        );
+        return Object.freeze({
+          ok: true,
+          schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+          organizationId: envelope.organizationId,
+          quoteId: envelope.quoteId,
+          quoteRevisionId: envelope.quoteRevisionId,
+          preview: true,
+          requirementRevision: compiled.requirementRevision,
+          projection: compiled.projection,
+          ingredientLabels: Object.freeze(compiled.ingredientLabels)
+        });
+      });
+    } catch (error) {
+      return throwFailure(error, "previewEventInventory");
+    }
+  }
+
   function throwFailure(error, operation) {
     if (error instanceof HttpsError) throw error;
     if (error instanceof inventory.InventoryIngredientError) throw new HttpsError(error.code, error.message);
@@ -1502,7 +2143,7 @@ function createInventoryAuthorityRuntime({
     throw new HttpsError("internal", "Ingredient inventory authority failed without a confirmed outcome. Retry the same request identity.");
   }
 
-  return Object.freeze({ applyInventoryCommand, getInventoryWorkspace });
+  return Object.freeze({ applyInventoryCommand, getInventoryWorkspace, previewEventInventory });
 }
 
 module.exports = {
@@ -1514,10 +2155,14 @@ module.exports = {
   ingredientProjection,
   menuCostProjection,
   normalizeApplyEnvelope,
+  normalizeEventDemandPreviewEnvelope,
   normalizeWorkspaceEnvelope,
   packHeadId,
   receiptIdFor,
   verifyMenuCostProjection,
+  verifyEventRequirementHead,
+  verifyEventRequirementRecord,
+  verifyPersistedEventProjection,
   verifyPackHead,
   verifyRecipeDependency,
   verifyRecipeHead,

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 03:14:29 CDT
+Last updated: 2026-09-09 04:12:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add Ingredient Inventory Phase 4: a pure deterministic compiler turns exact
+  saved menu selections, explicit recipe-output quantities, pinned recipe and
+  cost observations, and server-derived event timing into immutable event
+  ingredient requirements. Quote Edit presents independent physical-demand,
+  projected-cost, and consumable-availability rails, previews without writing,
+  records only through the administrator callable, and listens to the exact
+  projection document with metadata-aware stale/cached/pending recovery. Shared
+  ingredients aggregate without losing menu provenance; package inclusions are
+  not double-counted; guest count and billing quantities are never guessed into
+  portions; no allocation, stock movement, selling-price change, or COGS claim
+  occurs in this slice.
 - Add Ingredient Inventory Phase 3: exact same-dimension units, immutable
   operator-declared purchase-pack conversions, catalog-revision-fenced menu
   recipes, pure rational recipe costing, bounded reverse dependencies, and

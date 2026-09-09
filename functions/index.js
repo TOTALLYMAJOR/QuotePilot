@@ -418,6 +418,10 @@ exports.applyInventoryCommand = functions
   .runWith({ enforceAppCheck: true })
   .region(REGION)
   .https.onCall((data, context) => inventoryAuthorityRuntime.applyInventoryCommand(data, context));
+exports.previewEventInventory = functions
+  .runWith({ enforceAppCheck: true })
+  .region(REGION)
+  .https.onCall((data, context) => inventoryAuthorityRuntime.previewEventInventory(data, context));
 const ROLES_COLLECTION = "userRoles";
 const ORGANIZATIONS_COLLECTION = "organizations";
 const TENANT_DOMAINS_COLLECTION = "tenantDomains";

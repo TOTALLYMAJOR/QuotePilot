@@ -284,6 +284,28 @@ const recipeCommand = (overrides = {}) => ({
   ...overrides
 });
 
+const eventDemandCommand = ({ recipeRevisionId, overrides = {} } = {}) => ({
+  kind: "compile_event_ingredient_demand",
+  quoteId: "quote-alfredo",
+  quoteRevisionId: "v0001",
+  requiredByBasis: { kind: "quote_event_start" },
+  expectedRequirementRevision: 0,
+  expectedPreviewProjectionDigest: "a".repeat(64),
+  selections: [{
+    selectionId: "quote-alfredo-menu-chicken-alfredo",
+    menuItemId: "chicken-alfredo",
+    recipeRevisionId,
+    requiredOutputQuantity: "100",
+    outputUnitId: "portion",
+    portionBasis: { kind: "explicit_output_quantity", evidenceId: "chicken-alfredo" },
+    commercialProvenance: {
+      kind: "direct",
+      sourceId: "chicken-alfredo"
+    }
+  }],
+  ...overrides
+});
+
 function menuItem(overrides = {}) {
   return {
     eventTypeId: "event-dinner",
@@ -297,6 +319,58 @@ function menuItem(overrides = {}) {
     createdAtISO: EVIDENCE_TIME,
     ...overrides
   };
+}
+
+function quoteDemandEntries() {
+  const snapshot = {
+    id: "quote-alfredo",
+    organizationId: ORGANIZATION_ID,
+    activeVersionId: "v0001",
+    event: {
+      name: "Alfredo dinner",
+      date: "2026-10-04",
+      time: "17:00",
+      guests: 100
+    },
+    selection: {
+      packageId: "dinner-package",
+      packageInclusions: { menuItems: [] },
+      menuItems: ["chicken-alfredo"],
+      menuItemsSnapshot: [{ id: "chicken-alfredo", name: "Chicken Alfredo" }]
+    }
+  };
+  return [
+    [`organizations/${ORGANIZATION_ID}/quotes/quote-alfredo`, {
+      id: "quote-alfredo",
+      organizationId: ORGANIZATION_ID,
+      activeVersionId: "v0001",
+      versionMeta: { versionId: "v0001" }
+    }],
+    [`organizations/${ORGANIZATION_ID}/quotes/quote-alfredo/versions/v0001`, {
+      versionId: "v0001",
+      quoteId: "quote-alfredo",
+      organizationId: ORGANIZATION_ID,
+      versionNumber: 1,
+      snapshot
+    }]
+  ];
+}
+
+async function configureEventDemandFixture(harness) {
+  await configureRecipeFixture(harness);
+  await harness.runtime.applyInventoryCommand(
+    envelope(openingCommand(), "opening-event-chicken-0001"),
+    adminContext
+  );
+  await harness.runtime.applyInventoryCommand(envelope(openingCommand({
+    ingredientId: "pasta",
+    quantity: "30"
+  }), "opening-event-pasta-0001"), adminContext);
+  const published = await harness.runtime.applyInventoryCommand(
+    envelope(recipeCommand(), "recipe-event-alfredo-0001"),
+    adminContext
+  );
+  return published.result.recipeRevisionId;
 }
 
 async function configureRecipeFixture(harness, { pastaCost = true } = {}) {
@@ -689,6 +763,221 @@ describe("ingredient inventory authority runtime", () => {
     }), "ingredient-pack-integrity-0001"), adminContext)).rejects.toMatchObject({
       code: "data-loss"
     });
+  });
+
+  test("previews exact event ingredient demand and cost without writing or inferring billing quantities", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    const recipeRevisionId = await configureEventDemandFixture(harness);
+    const before = clone([...harness.db.store.entries()]);
+    const command = eventDemandCommand({ recipeRevisionId });
+    const preview = await harness.runtime.previewEventInventory({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: command.quoteId,
+      quoteRevisionId: command.quoteRevisionId,
+      requiredByBasis: command.requiredByBasis,
+      selections: command.selections
+    }, adminContext);
+
+    expect(preview).toMatchObject({
+      ok: true,
+      preview: true,
+      quoteId: "quote-alfredo",
+      quoteRevisionId: "v0001",
+      projection: {
+        demandState: "complete",
+        costState: "complete",
+        availabilityState: "available",
+        projectedCostMinor: 8000,
+        currency: "USD"
+      },
+      ingredientLabels: [
+        { ingredientId: "chicken", name: "Chicken breast" },
+        { ingredientId: "pasta", name: "Pasta" }
+      ]
+    });
+    expect(preview.projection.ingredients).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        ingredientId: "chicken",
+        requiredQuantityMicros: 20000000,
+        onHandQuantityMicros: 40000000,
+        shortageQuantityMicros: 0,
+        projectedCostMinor: 6000
+      }),
+      expect.objectContaining({
+        ingredientId: "pasta",
+        requiredQuantityMicros: 10000000,
+        onHandQuantityMicros: 30000000,
+        shortageQuantityMicros: 0,
+        projectedCostMinor: 2000
+      })
+    ]));
+    expect([...harness.db.store.entries()]).toEqual(before);
+  });
+
+  test("records immutable event demand and an as-recorded exact-document projection with receipt replay", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    const recipeRevisionId = await configureEventDemandFixture(harness);
+    const draft = eventDemandCommand({ recipeRevisionId });
+    const preview = await harness.runtime.previewEventInventory({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: draft.quoteId,
+      quoteRevisionId: draft.quoteRevisionId,
+      requiredByBasis: draft.requiredByBasis,
+      selections: draft.selections
+    }, adminContext);
+    const request = envelope(eventDemandCommand({ recipeRevisionId, overrides: {
+      expectedPreviewProjectionDigest: preview.projection.projectionDigest
+    } }), "compile-event-demand-0001");
+    const first = await harness.runtime.applyInventoryCommand(request, adminContext);
+    const replay = await harness.runtime.applyInventoryCommand(request, adminContext);
+
+    expect(first).toMatchObject({
+      ok: true,
+      idempotent: false,
+      commandKind: "compile_event_ingredient_demand",
+      result: {
+        quoteId: "quote-alfredo",
+        quoteRevisionId: "v0001",
+        requirementRevision: 1,
+        demandState: "complete",
+        costState: "complete",
+        availabilityState: "available"
+      }
+    });
+    expect(replay).toEqual({ ...first, idempotent: true });
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/eventIngredientProjections/quote-alfredo`
+    );
+    expect(projection).toMatchObject({
+      model: "event-ingredient-projection-v1",
+      requirementRevision: 1,
+      eventRequirementRevisionId: first.result.eventRequirementRevisionId,
+      requirementDigest: first.result.requirementDigest,
+      freshness: "as_recorded",
+      staleReason: "",
+      projectedCostMinor: 8000
+    });
+    const immutable = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/eventIngredientRequirements/quote-alfredo/revisions/${first.result.eventRequirementRevisionId}`
+    );
+    expect(immutable).toMatchObject({
+      model: "event-ingredient-requirement-record-v1",
+      requirement: {
+        eventRequirementRevisionId: first.result.eventRequirementRevisionId,
+        projectedCostMinor: 8000
+      }
+    });
+  });
+
+  test("rejects recording when cost or stock evidence changes after preview", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    const recipeRevisionId = await configureEventDemandFixture(harness);
+    const draft = eventDemandCommand({ recipeRevisionId });
+    const preview = await harness.runtime.previewEventInventory({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: draft.quoteId,
+      quoteRevisionId: draft.quoteRevisionId,
+      requiredByBasis: draft.requiredByBasis,
+      selections: draft.selections
+    }, adminContext);
+
+    await harness.runtime.applyInventoryCommand(envelope(costCommand({
+      expectedCostRevision: 1,
+      totalCostMinor: 16000,
+      observedAtISO: "2026-09-09T09:00:00.000Z"
+    }), "cost-after-event-preview-0001"), adminContext);
+
+    await expect(harness.runtime.applyInventoryCommand(envelope(eventDemandCommand({
+      recipeRevisionId,
+      overrides: { expectedPreviewProjectionDigest: preview.projection.projectionDigest }
+    }), "compile-stale-event-preview-0001"), adminContext)).rejects.toMatchObject({ code: "aborted" });
+    expect(harness.db.store.has(
+      `organizations/${ORGANIZATION_ID}/eventIngredientRequirementHeads/quote-alfredo`
+    )).toBe(false);
+  });
+
+  test("allows same-tenant sales preview but denies compile and rejects stale commercial or recipe evidence", async () => {
+    const salesUid = "inventory-sales";
+    const salesContext = {
+      staff: {
+        uid: salesUid,
+        role: "sales",
+        email: "sales@example.com",
+        organizationId: ORGANIZATION_ID,
+        principalOrganizationId: ORGANIZATION_ID
+      }
+    };
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`userRoles/${salesUid}`, {
+        organizationId: ORGANIZATION_ID, role: "sales", email: "sales@example.com"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    const recipeRevisionId = await configureEventDemandFixture(harness);
+    const command = eventDemandCommand({ recipeRevisionId });
+    await expect(harness.runtime.previewEventInventory({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: command.quoteId,
+      quoteRevisionId: command.quoteRevisionId,
+      requiredByBasis: command.requiredByBasis,
+      selections: command.selections
+    }, salesContext)).resolves.toMatchObject({ ok: true, preview: true });
+    await expect(harness.runtime.applyInventoryCommand(
+      envelope(command, "sales-compile-denied-0001"),
+      salesContext
+    )).rejects.toMatchObject({ code: "permission-denied" });
+
+    const badSelection = eventDemandCommand({ recipeRevisionId, overrides: {
+      selections: [{
+        ...command.selections[0],
+        menuItemId: "unselected-dish",
+        commercialProvenance: { kind: "direct", sourceId: "unselected-dish" }
+      }]
+    } });
+    await expect(harness.runtime.previewEventInventory({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: badSelection.quoteId,
+      quoteRevisionId: badSelection.quoteRevisionId,
+      requiredByBasis: badSelection.requiredByBasis,
+      selections: badSelection.selections
+    }, adminContext)).rejects.toMatchObject({ code: "failed-precondition" });
+
+    const staleRecipe = eventDemandCommand({ recipeRevisionId: "irr_stale_recipe_revision" });
+    await expect(harness.runtime.previewEventInventory({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: staleRecipe.quoteId,
+      quoteRevisionId: staleRecipe.quoteRevisionId,
+      requiredByBasis: staleRecipe.requiredByBasis,
+      selections: staleRecipe.selections
+    }, adminContext)).rejects.toMatchObject({ code: "aborted" });
   });
 
   test("publishes a catalog-fenced recipe and materializes exact $0.80 per-portion costing without stock", async () => {

@@ -9126,7 +9126,7 @@
         },
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
-          "locator": "ingredient projections require the tenant inventory authority setting"
+          "locator": "base ingredient stock projections require the tenant inventory authority setting"
         },
         {
           "path": "src/lib/__tests__/inventoryProductionRoute.test.js",
@@ -9404,6 +9404,176 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "With all inventory gates enabled, administrators can publish immutable recipes and explicit pack conversions without changing menu selling price or manual declared catalog cost. Administrators and sales can read safe cost projections; only administrators can read ingredient stock or mutate recipes. Missing costs and conversions remain incomplete evidence, cached or pending snapshots cannot authorize writes, and recipe costing remains independent from stock availability, quote demand, allocation, COGS, deployment, production behavior, and human acceptance."
+    },
+    {
+      "id": "event-ingredient-demand-consequence",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "organization_admins",
+        "organization_sales"
+      ],
+      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability as independent server-derived evidence rails.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/inventoryAuthority.js",
+        "functions/inventoryEventDemandCore.cjs",
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/hooks/useEventIngredientProjection.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#previewEventInventory"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/EventIngredientProjectionPanel.jsx",
+        "src/components/eventIngredientProjectionPanel.css",
+        "src/hooks/useEventIngredientProjection.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/App.jsx",
+          "locator": "data-capability-id=\"inventory-event-ingredient-consequence\""
+        },
+        {
+          "path": "src/LegacyApp.jsx",
+          "locator": "data-capability-id=\"inventory-event-ingredient-consequence\""
+        }
+      ],
+      "testPaths": [
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+        "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+        "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+        "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
+        "src/lib/__tests__/inventoryProductionRoute.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
+          "locator": "compiles the 100-portion owner fixture to 20 lb chicken, 10 lb pasta, and $80"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
+          "locator": "unknown pasta cost preserves valid physical shortage evidence"
+        },
+        {
+          "path": "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+          "locator": "builds exact saved menu evidence without inferring portions from guests or billing quantities"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "event ingredient projections are exact-document staff reads and server-owned"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Ingredient Inventory Phase 4"
+        },
+        {
+          "path": "docs/INVENTORY_AUTHORITY_ADR.md",
+          "locator": "## Shared event demand with independent result rails"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "To evaluate an event, open the saved quote in **Quote Edit**"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The consequence card is composed into existing Quote Edit in both supported production graphs. It requires explicit output evidence, never infers portions from guest or billing quantity, previews without writing, records only for administrators, and subscribes to the exact event projection with snapshot metadata and retained stale recovery.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "requires explicit per-menu recipe output quantity and unit without guessing from guests or billing",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "shows a read-only preview without treating it as a recorded requirement",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "requires explicit per-menu recipe output quantity and unit without guessing from guests or billing",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "labels a dirty quote as draft-not-evaluated while retaining the saved projection separately",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "locks target inputs in uncertain recovery and exposes one reconcile action",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "locks target inputs in uncertain recovery and exposes one reconcile action",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "locks target inputs in uncertain recovery and exposes one reconcile action",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "requires explicit per-menu recipe output quantity and unit without guessing from guests or billing",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote ingredient demand, projected ingredient cost, and consumable availability without writing. Only administrators can record an immutable requirement. Missing cost cannot hide a shortage, shortage cannot invalidate valid cost, cached or pending reads are not current, and this phase does not allocate or consume stock, mutate selling price, claim COGS, or establish deployment or human acceptance."
     }
   ]
 }
