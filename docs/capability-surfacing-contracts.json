@@ -9411,7 +9411,7 @@
     },
     {
       "id": "event-ingredient-demand-consequence",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -9484,6 +9484,7 @@
         }
       ],
       "testPaths": [
+        "e2e/event-preflight.spec.js",
         "scripts/inventory-ingredient-emulator-acceptance.mjs",
         "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
@@ -9505,6 +9506,10 @@
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
+        {
+          "path": "e2e/event-preflight.spec.js",
+          "locator": "separates satisfied, attention, and unavailable truth"
+        },
         {
           "path": "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
           "locator": "compiles the 100-portion owner fixture to 20 lb chicken, 10 lb pasta, and $80"

@@ -62,7 +62,10 @@ test.describe("QP-UXR-005 Event Preflight", () => {
       await expect(panel.getByRole("heading", { name: "Unknown / unavailable" })).toBeVisible();
       await expect(panel).toContainText("Current revision is not the accepted revision");
       await expect(panel).toContainText("A schedule conflict is recorded");
-      await expect(panel).toContainText("Inventory and equipment availability are not governed here");
+      await expect(panel).toContainText("Ingredient allocation is not current");
+      await expect(panel).toContainText("Projected ingredient cost is not current");
+      await expect(panel).toContainText("Ingredient usage cannot be confirmed");
+      await expect(panel).not.toContainText("equipment");
       await expect(panel).toContainText("Actual attendance is not governed here");
       await expect(panel).toContainText("Kitchen BEO freshness is unavailable");
       await expect(panel).not.toContainText(/\d+%/);

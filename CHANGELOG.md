@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 07:41:06 CDT
+Last updated: 2026-09-09 07:56:43 CDT
 
 All notable project changes are documented in this file.
 
@@ -20,7 +20,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   cost incompleteness does not invalidate physical allocation, and actual COGS
   remains unavailable without a declared valuation policy. Calendar rows do
   not each create listeners, and no tenant-wide or inbound-supply insight is
-  invented from absent authority.
+  invented from absent authority. The feature-enabled Preflight browser lane
+  now verifies the ingredient-only unknown states, accessibility, and viewport
+  containment at 390, 768, and 1440 pixels without retaining equipment scope.
 - Add Ingredient Inventory Phase 7: the accepted/booked event Control Room now
   records complete fractional consumption and waste totals against the pinned
   immutable ingredient plan. One Firestore transaction settles the event hold,
