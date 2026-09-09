@@ -4,7 +4,7 @@
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
-      "reviewRevision": 3,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -236,7 +236,7 @@
     },
     {
       "id": "steward-private-validation-foundation",
-      "reviewRevision": 6,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",

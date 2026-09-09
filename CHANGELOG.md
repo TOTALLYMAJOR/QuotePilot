@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 07:13:08 CDT
+Last updated: 2026-09-09 07:41:06 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Correct two unchanged capability review revisions that were advanced without
+  corresponding surface changes. This restores truthful branch-diff governance
+  without changing either the Operations Audit or Steward capability.
 - Add Ingredient Inventory Phase 8: Event Preflight and the currently selected
   Operations event now compose the same two exact metadata-aware ingredient
   projection listeners into three independent physical-allocation, menu-cost,
