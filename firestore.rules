@@ -732,6 +732,7 @@ service cloud.firestore {
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
+        "inventoryAuthorityEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -754,6 +755,7 @@ service cloud.firestore {
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
+        "inventoryAuthorityEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -1174,6 +1176,71 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/staffingScheduleFences/{fenceId} {
+      allow read, write: if false;
+    }
+
+    // Physical inventory definitions, immutable movements, rebuildable stock
+    // state, requirement policies, event plans, allocation fences, receipts,
+    // and deterministic insights are trusted-server authority. Browser staff
+    // use bounded callables for workspace reads and commands.
+    match /organizations/{orgId}/inventoryLocations/{locationId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryItems/{itemId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryMovements/{movementId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryStockStates/{stockStateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryAuthorityState/{stateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryAuthorityReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryRequirementPolicies/{policyRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventInventoryRequirements/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventInventoryRequirements/{quoteId}/revisions/{requirementRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventInventoryPlans/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryAllocationFences/{fenceId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryReservationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Realtime consumers may observe one exact, client-safe event projection.
+    // Listing would turn this bounded read into an inventory scan, and every
+    // write remains callable-owned.
+    match /organizations/{orgId}/eventInventoryProjections/{quoteId} {
+      allow get: if isOrgStaff(orgId);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /organizations/{orgId}/inventoryInsights/{periodKey} {
       allow read, write: if false;
     }
 

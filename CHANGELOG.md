@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-08 15:16:08 CDT
+Last updated: 2026-09-08 21:49:12 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Establish Phase 1 of the default-off Inventory Authority: stable locations
+  and resource definitions, immutable reasoned physical movements, rebuildable
+  item/location bucket projections, unified idempotent command receipts,
+  transaction-fenced unit immutability, App Check protected callables, and
+  browser-denied canonical Firestore records. This is local source evidence;
+  no tenant, deployment, or production inventory authority is activated.
 - Add schema-v2 task planning and the repository-local
   `catering-domain-intelligence` skill. Domain-relevant agent work now preserves
   its existing execution profile while selecting current QuotePilot authorities

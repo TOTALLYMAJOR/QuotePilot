@@ -269,6 +269,7 @@ const {
   deriveCanonicalOperationalStaffingEvidence,
   emptyScheduleFence
 } = require("./operationalStaffingRuntime");
+const { createInventoryAuthorityRuntime } = require("./inventoryAuthority");
 const {
   STAFF_DIRECTORY_AUTHORITY_VERSION,
   StaffDirectoryAuthorityError,
@@ -399,6 +400,24 @@ initializeApp();
 const auth = getAuth();
 const db = getFirestore();
 const REGION = "us-central1";
+const inventoryAuthorityRuntime = createInventoryAuthorityRuntime({
+  db,
+  FieldValue,
+  HttpsError: functions.https.HttpsError,
+  assertStaff,
+  normalizeOrganizationId,
+  isOrganizationRecordActive,
+  globalEnabled: () => normalizeText(process.env.INVENTORY_AUTHORITY_ENABLED).toLowerCase() === "true",
+  logger: functions.logger
+});
+exports.getInventoryWorkspace = functions
+  .runWith({ enforceAppCheck: true })
+  .region(REGION)
+  .https.onCall((data, context) => inventoryAuthorityRuntime.getInventoryWorkspace(data, context));
+exports.applyInventoryCommand = functions
+  .runWith({ enforceAppCheck: true })
+  .region(REGION)
+  .https.onCall((data, context) => inventoryAuthorityRuntime.applyInventoryCommand(data, context));
 const ROLES_COLLECTION = "userRoles";
 const ORGANIZATIONS_COLLECTION = "organizations";
 const TENANT_DOMAINS_COLLECTION = "tenantDomains";

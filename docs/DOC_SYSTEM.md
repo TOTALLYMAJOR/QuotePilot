@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-08 15:16:08 CDT
+Last updated: 2026-09-08 21:49:12 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -19,6 +19,8 @@ Each major topic has one source of truth. Other docs should link to that source 
   tenant-configuration, contextual-UX, migration, and delivery-slice authority.
 - `docs/PRICING_CONSTITUTION.md`: pricing policy, version, exact-money,
   waterfall, historical-compatibility, and payment-provenance authority.
+- `docs/INVENTORY_AUTHORITY_ADR.md`: physical movement, requirement,
+  availability, reservation, execution, and inventory-projection authority.
 - `docs/field-state-contract.json`: canonical multi-axis field-state vocabulary,
   semantics, priority, accessibility, provenance, and 0/1/many choice contract.
 - `docs/field-state-surface-contracts.json`: explicit registry of product
@@ -36,6 +38,9 @@ Each major topic has one source of truth. Other docs should link to that source 
   update `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and its accepted ADR.
 - Pricing policy, arithmetic, rounding, receipt, waterfall, or payment amount
   provenance changes: update `docs/PRICING_CONSTITUTION.md`.
+- Inventory definitions, physical movements, requirement mappings,
+  availability, reservations, execution, or inventory projections: update
+  `docs/INVENTORY_AUTHORITY_ADR.md`.
 - Field, selector, imported/defaulted/suggested value, edit authority,
   save/publish state, or field-level failure/recovery changes: update the field-
   state surface registry and its exact tests; change the field-state contract
@@ -119,6 +124,7 @@ as separate claims.
 | Product truth observability and drift policy | `docs/adr/ADR-0002-product-truth-observability.md`, `docs/design/product-truth-observability-design.md` | Accepted decision and implementation contract for the read-only owner digest and advisory drift gate. `PROJECT_STATUS.md`, the Feature Matrix, release receipts, and other named inputs retain authority; generated digests are projections only. |
 | Commercial kernel, vertical packs, offers, templates, rules, and compatibility migration | `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and `docs/adr/ADR-0003-commercial-platform-vertical-pack.md` | Catering remains the reference vertical and natural UX; shared contracts cannot replace quote, catalog, server-pricing, or payment authority. |
 | Pricing policy, v1/v2 semantics, exact money, waterfalls, and payment amount provenance | `docs/PRICING_CONSTITUTION.md` | Historical v1 receipts stay immutable; v2 behavior changes require Golden Corpus and differential evidence. |
+| Physical inventory, commercial-to-physical requirements, availability, allocation, execution, and inventory projections | `docs/INVENTORY_AUTHORITY_ADR.md` | Inventory owns physical evidence and bounded inventory readiness only; Library owns mappings, commercial revisions remain historical authority, and overall event readiness remains separate. |
 | Execution/domain classification, model tier, dependency reads, domain-reference routing, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. Domain references remain advisory, and the external runner owns actual model switching. |
 | Catering-domain agent reconsideration | `.codex/skills/catering-domain-intelligence/SKILL.md` | The skill owns the provisional-action reconsideration workflow and progressively disclosed expertise references. It does not own QuotePilot runtime, product policy, or human acceptance. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
