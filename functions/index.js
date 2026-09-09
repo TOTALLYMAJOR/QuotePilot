@@ -400,8 +400,8 @@ initializeApp();
 const auth = getAuth();
 const db = getFirestore();
 const REGION = "us-central1";
-const inventoryAuthorityGlobalEnabled = () =>
-  normalizeText(process.env.INVENTORY_AUTHORITY_ENABLED).toLowerCase() === "true";
+const inventoryAuthorityGlobalEnabled = (organizationId) =>
+  tenantWorkflowRuntimeEnabled("INVENTORY_AUTHORITY_ENABLED", organizationId);
 const inventoryAuthorityRuntime = createInventoryAuthorityRuntime({
   db,
   FieldValue,
@@ -429,7 +429,7 @@ exports.invalidateEventIngredientsOnQuoteChange = functions
   .region(REGION)
   .firestore.document("organizations/{organizationId}/quotes/{quoteId}")
   .onUpdate((change, context) => {
-    if (!inventoryAuthorityGlobalEnabled()) return null;
+    if (!inventoryAuthorityGlobalEnabled(context.params.organizationId)) return null;
     return inventoryAuthorityRuntime.invalidateEventIngredientsForQuoteChange({
       organizationId: context.params.organizationId,
       quoteId: context.params.quoteId,
@@ -442,7 +442,7 @@ exports.invalidateEventIngredientsOnRecipeChange = functions
   .region(REGION)
   .firestore.document("organizations/{organizationId}/inventoryRecipeHeads/{menuItemId}")
   .onWrite((change, context) => {
-    if (!inventoryAuthorityGlobalEnabled()) return null;
+    if (!inventoryAuthorityGlobalEnabled(context.params.organizationId)) return null;
     const before = change.before.exists ? change.before.data() : null;
     const after = change.after.exists ? change.after.data() : null;
     if (!after || before?.recipeRevisionId === after.recipeRevisionId) return null;
@@ -459,7 +459,7 @@ exports.invalidateEventIngredientsOnMenuCostChange = functions
   .region(REGION)
   .firestore.document("organizations/{organizationId}/inventoryMenuCostProjections/{menuItemId}")
   .onWrite((change, context) => {
-    if (!inventoryAuthorityGlobalEnabled()) return null;
+    if (!inventoryAuthorityGlobalEnabled(context.params.organizationId)) return null;
     const before = change.before.exists ? change.before.data() : null;
     const after = change.after.exists ? change.after.data() : null;
     const beforeCostResultDigest = before?.cost?.resultDigest;

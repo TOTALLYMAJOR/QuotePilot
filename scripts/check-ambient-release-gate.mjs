@@ -166,6 +166,12 @@ export function assertAmbientReleaseGate({
       "VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"",
       "the Ambient UI gate must exercise the promoted staffing presentation"
     );
+    requireText(
+      errors,
+      gateStep,
+      "VITE_INVENTORY_AUTHORITY_ENABLED: \"true\"",
+      "the Ambient UI gate must exercise the promoted inventory presentation"
+    );
   }
 
   const compatibilityBundleStep = stepBlock(ciWorkflow, "Build compatibility production bundle");
@@ -213,6 +219,12 @@ export function assertAmbientReleaseGate({
       ambientBundleStep,
       "VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"",
       "the Ambient bundle step must include the promoted staffing presentation"
+    );
+    requireText(
+      errors,
+      ambientBundleStep,
+      "VITE_INVENTORY_AUTHORITY_ENABLED: \"true\"",
+      "the Ambient bundle step must include the promoted inventory presentation"
     );
     requireText(
       errors,
@@ -266,6 +278,12 @@ export function assertAmbientReleaseGate({
       workflow,
       "VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"",
       `${relativePath} must retain the owner-approved staffing presentation flag`
+    );
+    requireText(
+      errors,
+      workflow,
+      "VITE_INVENTORY_AUTHORITY_ENABLED: \"true\"",
+      `${relativePath} must retain the owner-approved inventory presentation flag`
     );
   });
 

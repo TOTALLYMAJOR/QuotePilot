@@ -390,7 +390,7 @@ describe("OperationalStaffingPanel role and fallback boundaries", () => {
     await flush();
     expect(container.textContent).toContain("Save staffing assignments");
     expect(container.textContent).not.toContain("Add team member");
-    expect(container.textContent).toContain("Recorded availability covers this event");
+    expect(container.textContent).toContain("Schedulable for this event");
   });
 
   test("lets admin add a bounded profile and sends the exact nested DTO", async () => {
@@ -418,10 +418,13 @@ describe("OperationalStaffingPanel role and fallback boundaries", () => {
     await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add team member"));
     const name = container.querySelector('input[aria-label="Display name"]');
     act(() => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Morgan Lead");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Taylor Smith");
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member"));
+    expect(container.querySelector(".operational-staffing-availability-disclosure").hasAttribute("open")).toBe(false);
+    expect(container.querySelectorAll(".operational-staffing-window")).toHaveLength(0);
+    expect(container.querySelector(".operational-staffing-active-toggle")).toBeNull();
+    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person"));
 
     expect(client.configureOperationalStaffProfile).toHaveBeenCalledTimes(1);
     const command = client.configureOperationalStaffProfile.mock.calls[0][0];
@@ -431,31 +434,30 @@ describe("OperationalStaffingPanel role and fallback boundaries", () => {
       staffId: expect.stringMatching(/^staff_/),
       expectedRevision: 0,
       profile: {
-        displayName: "Morgan Lead",
+        displayName: "Taylor Smith",
         active: true,
         capabilities: ["server"],
-        availabilityWindows: [{
-          availabilityId: expect.stringMatching(/^availability_/),
-          source: "operator_recorded",
-          state: "available",
-          ...EVENT_WINDOW
-        }]
+        availabilityWindows: []
       }
     });
+    expect(stateMarker("receipt")).not.toBeNull();
+    expect(container.textContent).toContain("Team member rostered");
+    expect(container.textContent).toContain("Taylor Smith is Active and Rostered");
   });
 
   test("keeps an added availability window blank and blocks overlapping or incomplete evidence", async () => {
     mount({ role: "admin" });
     await flush();
     await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add team member"));
+    await click(container.querySelector(".operational-staffing-availability-disclosure > summary"));
     await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add availability window"));
 
     const windows = container.querySelectorAll(".operational-staffing-window");
-    const addedInputs = windows[1].querySelectorAll('input[type="datetime-local"]');
+    const addedInputs = windows[0].querySelectorAll('input[type="datetime-local"]');
     expect(addedInputs[0].value).toBe("");
     expect(addedInputs[1].value).toBe("");
     expect(container.textContent).toContain("windows may not overlap");
-    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member").disabled).toBe(true);
+    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person").disabled).toBe(true);
   });
 });
 
@@ -657,7 +659,7 @@ describe("OperationalStaffingPanel mutation authority", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Casey Crew");
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member"));
+    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person"));
     expect(stateMarker("uncertain")).not.toBeNull();
     const original = client.configureOperationalStaffProfile.mock.calls[0][0];
 
@@ -685,7 +687,7 @@ describe("OperationalStaffingPanel mutation authority", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Casey Crew");
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member"));
+    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person"));
     expect(stateMarker("uncertain")).not.toBeNull();
 
     act(() => root.unmount());

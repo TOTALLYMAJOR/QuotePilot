@@ -32,6 +32,7 @@ export default function CommercialAmendmentWorkspace({
   previewLoading = false,
   previewRecovering = false,
   previewError = "",
+  previewActionVisible = true,
   onPreview,
   children
 }) {
@@ -101,23 +102,25 @@ export default function CommercialAmendmentWorkspace({
         </ol>
       </div>
 
-      <div className="commercial-amendment-preview-action">
-        <div>
-          <strong>What will this proposal change elsewhere?</strong>
-          <p>Previewing is read-only. No quote, artifact, payment, delivery, acceptance, or booking evidence changes here.</p>
+      {previewActionVisible && (
+        <div className="commercial-amendment-preview-action">
+          <div>
+            <strong>What will this proposal change elsewhere?</strong>
+            <p>Previewing is read-only. No quote, artifact, payment, delivery, acceptance, or booking evidence changes here.</p>
+          </div>
+          <button
+            type="button"
+            className="cta compact"
+            onClick={onPreview}
+            disabled={!previewAvailable || previewLoading}
+            title={previewAvailable
+              ? "Compare the current form with the exact saved revision using server-authoritative pricing and dependency evidence."
+              : "Consequence preview requires a Firebase-backed canonical quote and trusted pricing."}
+          >
+            {previewLabel}
+          </button>
         </div>
-        <button
-          type="button"
-          className="cta compact"
-          onClick={onPreview}
-          disabled={!previewAvailable || previewLoading}
-          title={previewAvailable
-            ? "Compare the current form with the exact saved revision using server-authoritative pricing and dependency evidence."
-            : "Consequence preview requires a Firebase-backed canonical quote and trusted pricing."}
-        >
-          {previewLabel}
-        </button>
-      </div>
+      )}
 
       {!previewAvailable && (
         <p className="warning-note" role="note">

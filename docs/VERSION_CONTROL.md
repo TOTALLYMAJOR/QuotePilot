@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-09 18:17:25 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -45,6 +45,15 @@ explicit owner promotion after real-run review.
   Commercial Change, Revenue Autopilot, and the server staffing authority off.
   It preserves `STRIPE_MODE=live` solely for the established quote-payment
   rail; the separate buyer-invoice rail remains disabled with test mode bound.
+- The `ragnakok-operations` profile is the only production profile that may
+  enable both `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` and
+  `INVENTORY_AUTHORITY_ENABLED`. It is restricted to a Functions-bearing
+  Firebase deployment and binds `TENANT_WORKFLOW_ORGANIZATION_ID` to the exact
+  founder-pilot organization. After the successful tagged all-surface deploy,
+  the Staffing, Inventory, and coupled Event/Commercial tenant workflows must
+  each verify that deploy receipt, update only their declared setting fields,
+  and prove provider readback. Do not substitute a console edit or direct
+  Firestore write.
 - Firebase Functions production mutation is quota-aware and fail-closed. The
   deployer derives the exact tracked export inventory, submits no more than 35
   function writes per batch, waits a complete provider quota window between

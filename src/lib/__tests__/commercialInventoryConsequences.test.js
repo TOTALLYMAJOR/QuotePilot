@@ -4,6 +4,17 @@ import { buildCommercialInventoryConsequences } from "../commercialInventoryCons
 const DIGEST_A = "a".repeat(64);
 const DIGEST_B = "b".repeat(64);
 
+function contribution(menuItemId = "chicken-alfredo", quantityMicros = 20_000_000) {
+  return {
+    selectionId: menuItemId,
+    menuItemId,
+    recipeRevisionId: `recipe-${menuItemId}`,
+    recipeDigest: "e".repeat(64),
+    exactRequiredQuantityMicros: { numerator: String(quantityMicros), denominator: "1" },
+    commercialProvenance: { kind: "direct", sourceId: menuItemId }
+  };
+}
+
 function projection(overrides = {}) {
   return {
     organizationId: "org-1",
@@ -101,6 +112,54 @@ describe("buildCommercialInventoryConsequences", () => {
     ]);
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.availability.ingredients[0])).toBe(true);
+  });
+
+  test("retains exact menu contribution identity so a shortage can explain its causal menu source", () => {
+    const before = projection({
+      ingredients: [{
+        ...projection().ingredients[0],
+        contributions: [contribution()]
+      }]
+    });
+    const proposedAfter = projection({
+      eventRequirementRevisionId: "requirement-preview",
+      requirementDigest: "c".repeat(64),
+      projectionDigest: "d".repeat(64),
+      availabilityState: "shortage",
+      ingredients: [{
+        ...projection().ingredients[0],
+        requiredQuantityMicros: 46_000_000,
+        availabilityState: "shortage",
+        shortageQuantityMicros: 6_000_000,
+        contributions: [contribution("chicken-alfredo", 46_000_000)]
+      }]
+    });
+
+    const result = buildCommercialInventoryConsequences(input(before, proposedAfter));
+
+    expect(result.availability.ingredients[0].proposedAfter.contributions).toEqual([{
+      selectionId: "chicken-alfredo",
+      menuItemId: "chicken-alfredo",
+      recipeRevisionId: "recipe-chicken-alfredo",
+      recipeDigest: "e".repeat(64),
+      exactRequiredQuantityMicros: { numerator: "46000000", denominator: "1" },
+      commercialProvenance: { kind: "direct", sourceId: "chicken-alfredo" }
+    }]);
+    expect(Object.isFrozen(result.availability.ingredients[0].proposedAfter.contributions[0])).toBe(true);
+  });
+
+  test("fails the availability comparison closed when contribution provenance is malformed", () => {
+    const malformed = projection({
+      ingredients: [{
+        ...projection().ingredients[0],
+        contributions: [{ ...contribution(), recipeDigest: "not-a-digest" }]
+      }]
+    });
+
+    expect(buildCommercialInventoryConsequences(input(projection(), malformed)).availability).toEqual({
+      state: "invalid",
+      ingredients: []
+    });
   });
 
   test("keeps cost unknown without blocking known availability", () => {

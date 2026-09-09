@@ -1,6 +1,8 @@
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+const INTEGER_STRING_PATTERN = /^(?:0|[1-9]\d*)$/u;
 const COST_STATES = new Set(["complete", "partial", "unavailable", "invalid"]);
 const AVAILABILITY_STATES = new Set(["available", "shortage", "unavailable", "invalid"]);
+const MAX_INGREDIENT_CONTRIBUTIONS = 128;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -18,6 +20,55 @@ function deepFreeze(value) {
 
 function exactSafeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
+}
+
+function exactRational(value) {
+  if (!isRecord(value)) return null;
+  const numerator = text(value.numerator);
+  const denominator = text(value.denominator);
+  if (!INTEGER_STRING_PATTERN.test(numerator) || !/^[1-9]\d*$/u.test(denominator)
+    || numerator.length > 32 || denominator.length > 32) return null;
+  return { numerator, denominator };
+}
+
+function causalCommercialProvenance(value) {
+  if (!isRecord(value)) return null;
+  const kind = text(value.kind);
+  const sourceId = text(value.sourceId);
+  if (!sourceId || !["direct", "package_inclusion"].includes(kind)) return null;
+  if (kind === "direct") return { kind, sourceId };
+  const packageId = text(value.packageId);
+  const inclusionId = text(value.inclusionId);
+  return packageId && inclusionId ? { kind, sourceId, packageId, inclusionId } : null;
+}
+
+function causalContributions(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_INGREDIENT_CONTRIBUTIONS) return null;
+  const rows = [];
+  const identities = new Set();
+  for (const contribution of value) {
+    const selectionId = text(contribution?.selectionId);
+    const menuItemId = text(contribution?.menuItemId);
+    const recipeRevisionId = text(contribution?.recipeRevisionId);
+    const recipeDigest = text(contribution?.recipeDigest);
+    const exactRequiredQuantityMicros = exactRational(contribution?.exactRequiredQuantityMicros);
+    const commercialProvenance = causalCommercialProvenance(contribution?.commercialProvenance);
+    const identity = `${selectionId}\u0000${menuItemId}`;
+    if (!selectionId || !menuItemId || !recipeRevisionId || !SHA256_PATTERN.test(recipeDigest)
+      || !exactRequiredQuantityMicros || !commercialProvenance || identities.has(identity)) return null;
+    identities.add(identity);
+    rows.push({
+      selectionId,
+      menuItemId,
+      recipeRevisionId,
+      recipeDigest,
+      exactRequiredQuantityMicros,
+      commercialProvenance
+    });
+  }
+  return rows.sort((left, right) => left.menuItemId.localeCompare(right.menuItemId)
+    || left.selectionId.localeCompare(right.selectionId));
 }
 
 function digest(value) {
@@ -77,6 +128,8 @@ function projectionRows(projection) {
       || !exactSafeInteger(value?.requiredQuantityMicros)
       || !AVAILABILITY_STATES.has(value?.availabilityState)) return null;
     const hasQuantities = ["available", "shortage"].includes(value.availabilityState);
+    const contributions = causalContributions(value.contributions);
+    if (contributions === null) return null;
     const quantities = {};
     for (const field of [
       "onHandQuantityMicros", "committedQuantityMicros",
@@ -93,6 +146,7 @@ function projectionRows(projection) {
       requiredQuantityMicros: value.requiredQuantityMicros,
       availabilityState: value.availabilityState,
       ingredientName: text(value.ingredientName),
+      contributions,
       ...quantities
     });
   }

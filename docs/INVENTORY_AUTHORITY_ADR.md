@@ -1,6 +1,6 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 07:13:08 CDT
+Last updated: 2026-09-09 18:17:25 CDT
 
 Status: Accepted scope correction; corrected Phases 2 through 8 complete as default-off local source candidates
 Date: September 8, 2026
@@ -353,6 +353,132 @@ outside the Commercial Dependency Graph's authorization/apply dependents, so
 missing or stale ingredient evidence cannot silently block a valid commercial
 amendment. The browser never reconstructs these consequences from movements,
 receipts, recipes, or raw cost evidence.
+
+The first-slice Commercial Scenario Workbench replaces the Living Commercial
+Twin's static report while preserving that comparator and the existing
+server-authoritative Commercial Change simulation. The saved **Current**
+commitment is immutable. Editing its guest count creates temporary **Scenario
+A**; an operator may duplicate it once as **Scenario B**, switch Current/A/B in
+place, and discard either working alternative. A working scenario accepts only
+a whole guest count from 1 through 400 and carries a unique `scenarioId`, exact
+`baseQuoteRevisionId`, monotonic `generation`, deterministic `inputDigest`, and
+creation time. These objects and their bounded cached projections live only in
+the current browser session. They are not quote revisions, inventory plans, or
+Firestore records.
+
+The workbench session model owns no I/O, provider call, persistence, or
+mutation. Its host may request the existing read-only Commercial and eligible
+Inventory previews for the exact working input. Switching to a scenario reuses
+its accepted cache immediately when the base revision still matches. When a
+newer generation is recomputing, the prior accepted projection may remain
+visible only as explicitly retained evidence; the scenario ID, generation,
+input digest, base revision, and guest count must all match before a result can
+be cached as current. An older response cannot overwrite a newer edit or a
+different scenario.
+
+The host supplies a bounded scenario-context key derived from the exact tenant,
+quote, saved revision, every non-guest commercial draft input, and the explicit
+ingredient selections. Changing any of those inputs remounts the session model,
+clears Scenario A/B and their caches, and rejects queued preview work from the
+prior context. A changed non-guest Current draft may still request the existing
+Commercial preview through the same five-field envelope; Inventory remains
+explicitly outside the guest-count-only slice. A failed consequence read is not
+auto-replayed. Explicit retry reuses the Commercial simulation request identity
+only after a transport-uncertain outcome; definitive rejection or stale success
+starts a new request.
+
+Commercial, Inventory, and Staffing remain separate authorities. Staffing and
+Inventory fulfillment evidence first meet in the pure, rebuildable
+`fulfillmentProjection-v1` read model; Commercial and Kitchen BEO evidence join
+only in the higher-order presentation projection described below. There is no
+merged universal `event` record, Firestore projection document,
+collection scan, polling loop, capacity rule, staffing formula, or BEO
+authority. Staffing loads once per exact organization, quote, and saved quote
+revision instead of once per guest-count edit. Every domain retains independent
+missing, not-applicable, not-yet-available, pending, current, stale,
+blocked-integration, contradictory, schema-drift, or failed evidence.
+
+`FulfillmentIntelligence` is the single Layer-3 presenter for that read model.
+It selects and formats the immutable projection supplied by the Workbench and
+owns no fetch, recomputation, policy, persistence, staffing, inventory, BEO, or
+commercial mutation. Keeping the presenter separate from both authority and
+projection prevents a second browser interpretation from becoming competing
+truth.
+
+The higher-order `fulfillment-decision-answer-v1` sits above, rather than
+inside, `fulfillmentProjection-v1`. It may compose an exact proposed guest count,
+the first exact Supply shortage, proposed quote total, Staffing effect, and
+Kitchen BEO effect into one presentation-only answer while preserving each
+source's evidence state and revision boundary. Proposed quote total is not
+earned revenue, booked value, payment, or a guaranteed counterfactual amount
+preserved. A “conditionally supportable” headline is not customer acceptance,
+booking, event readiness, or permission to apply. A zero proposed Staffing
+gap may be described as current assignments covering the proposed requirement
+only when People evidence is current and
+complete; otherwise that conclusion remains unavailable. A BEO review statement
+comes only from the exact projected BEO effect. The decision state is
+`supported` or `conditional` only while both People and Supply evidence are
+current and complete; otherwise it is `unverifiable`, independently of any
+still-current Commercial preview. When an older projection is retained during
+recomputation, the presenter withholds its supplier, Staffing, value, BEO, and
+related decision actions until the exact active-scenario result returns.
+
+The ingredient comparator now retains exact per-menu contribution references
+when the Inventory projection supplied valid selection, menu, recipe revision,
+recipe digest, exact rational quantity, and bounded commercial provenance. The
+decision answer may name a causative menu item only when that identity maps to
+the explicit selected-menu input. Missing or malformed contribution provenance
+fails closed; it never becomes label-based causal inference.
+
+An optional `inventory-sourcing-preview-v1` is a consumer boundary for a future
+Inventory sourcing read model, not a producer added by this slice. The normal
+application currently supplies none. A supplier may be presented only from
+current evidence fenced to the exact organization, quote, saved revision, and
+scenario. Its basis must also equal the proposed Inventory
+`eventRequirementRevisionId`, `projectionDigest`, `scenarioFingerprint`, and
+exact `shortageQuantityMicros` carried by the displayed Supply constraint. Only
+then can a unique explicit-policy and exact-offer revision name an option that
+covers the shortage. Ties, missing policy, no eligible offer, stale scope or
+basis, schema drift, and absent evidence cannot name Supplier B or any other
+“best” resolution. `purchaseQuantityMicros` is the purchasable pack quantity;
+`coverageQuantityMicros` is the amount covering the displayed shortfall. They
+remain distinct when the available pack is larger. Even a valid policy-selected
+option is not stock, a reservation, a purchase order, supplier confirmation,
+procurement, or apply permission, and it cannot change Supply from constrained
+to covered. Only the existing Inventory authorities and a refreshed projection
+can establish that physical outcome.
+
+Inventory joins this composition only when the operator has supplied complete
+explicit recipe-output quantities and portion/output units. A dirty commercial
+draft may use those inputs for a read-only server scenario against the exact
+saved base revision. That exception does not relax mutation authority:
+recording a requirement, allocating stock, releasing or reconciling a hold,
+and recording execution remain fenced to their existing current saved quote
+and projection checks. Guest count still never becomes a portion default, and
+inventory availability alone never becomes guest-count headroom. The
+Fulfillment model may carry a separately supplied, exact, current,
+revision-bound inventory boundary. That boundary must match the exact
+organization, quote, saved revision, scenario fingerprint, Supply projection
+digest, and source fingerprint it qualifies; it does not derive that boundary
+from raw stock, movements, recipes, allocations, or the current shortage table.
+Overall headroom is withheld unless both that Supply boundary and an equally exact
+Staffing boundary are present. This Workbench slice evaluates inventory only for a
+guest-count-only proposal. A mixed proposal or non-guest edit is labeled
+outside the slice rather than treated as evidence of no effect.
+
+When a working scenario has an exact Supply shortage and the independently
+bound inventory evidence supplies a valid inclusive `safeThroughGuestCount`,
+the workbench may explain the declared demand and shortfall and offer **Try N
+guests** for that exact safe-through value. It must state the first failing
+boundary separately, so an off-by-one transition cannot be presented as safe.
+Selecting the action changes only the temporary scenario, advances its
+generation and input digest, and requests a new read-only comparison. Without
+the exact boundary, the explanation remains available but no corrective guest
+count is invented. The workbench performs no procurement, substitution,
+reservation, purchase-order, allocation, or consumption. It may render the
+optional policy-selected sourcing evidence described above, but never derives
+one from a shortage or receipt label and never supplies algorithmic “best
+scenario” behavior.
 
 The first operator surface is `/app/inventory` under Operations. It lets an
 authorized administrator create an ingredient, record opening stock,

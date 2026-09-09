@@ -152,7 +152,8 @@ export const RELEASE_ACCEPTANCE_CANDIDATE_PROFILE = "staging-provider-acceptance
 export const PRODUCTION_RELEASE_PROFILES = Object.freeze([
   "safe-off",
   "email-active",
-  "ragnakok-workflows"
+  "ragnakok-workflows",
+  "ragnakok-operations"
 ]);
 
 function evidenceError(message) {
@@ -181,7 +182,7 @@ export function validateProductionReleaseProfileTarget(profileValue, targetValue
   const profile = parseProductionReleaseProfile(profileValue);
   const target = String(targetValue || "").trim();
   if (
-    ["email-active", "ragnakok-workflows"].includes(profile)
+    ["email-active", "ragnakok-workflows", "ragnakok-operations"].includes(profile)
     && !new Set(["firebase-backend", "firebase-all"]).has(target)
   ) {
     throw evidenceError(

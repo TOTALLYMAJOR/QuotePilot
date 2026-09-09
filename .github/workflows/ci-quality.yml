@@ -228,6 +228,7 @@ jobs:
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+          VITE_INVENTORY_AUTHORITY_ENABLED: "true"
           VITE_EVENT_OPERATING_SPINE_ENABLED: "true"
 
       - name: Build compatibility production bundle
@@ -244,6 +245,7 @@ jobs:
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "false"
           VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+          VITE_INVENTORY_AUTHORITY_ENABLED: "false"
           VITE_EVENT_OPERATING_SPINE_ENABLED: "false"
           BUNDLE_BUDGET_PROFILE: compatibility
 
@@ -261,6 +263,7 @@ jobs:
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+          VITE_INVENTORY_AUTHORITY_ENABLED: "true"
           VITE_EVENT_OPERATING_SPINE_ENABLED: "true"
           BUNDLE_BUDGET_PROFILE: ambient-production
 

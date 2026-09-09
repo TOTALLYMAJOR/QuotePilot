@@ -11,6 +11,14 @@ const AMBIENT_APP_SOURCE = readFileSync(
   fileURLToPath(new URL("../../App.jsx", import.meta.url)),
   "utf8"
 );
+const FUNCTIONS_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../../functions/index.js", import.meta.url)),
+  "utf8"
+);
+const INVENTORY_RUNTIME_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../../functions/inventoryAuthority.js", import.meta.url)),
+  "utf8"
+);
 
 function selectedActiveApp(ambientValue) {
   const original = process.env.VITE_AMBIENT_UI_ENABLED;
@@ -27,6 +35,17 @@ function selectedActiveApp(ambientValue) {
 }
 
 describe("ingredient inventory production-route coverage", () => {
+  test("uses the exact deployment-scoped organization fence for callables and invalidation triggers", () => {
+    expect(FUNCTIONS_SOURCE).toContain(
+      'tenantWorkflowRuntimeEnabled("INVENTORY_AUTHORITY_ENABLED", organizationId)'
+    );
+    expect(FUNCTIONS_SOURCE.match(
+      /inventoryAuthorityGlobalEnabled\(context\.params\.organizationId\)/gu
+    )).toHaveLength(3);
+    expect(INVENTORY_RUNTIME_SOURCE.match(/globalEnabled\(orgId\)/gu)).toHaveLength(2);
+    expect(INVENTORY_RUNTIME_SOURCE).toContain("globalEnabled(organizationId) !== true");
+  });
+
   test("wires the triple-gated inventory route into the default production graph", () => {
     expect(selectedActiveApp("false")).toMatch(/\/src\/LegacyApp\.jsx$/);
     expect(LEGACY_APP_SOURCE).toContain('import.meta.env.VITE_INVENTORY_AUTHORITY_ENABLED === "true"');

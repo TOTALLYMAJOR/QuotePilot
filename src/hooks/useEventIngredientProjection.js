@@ -137,11 +137,16 @@ export function useEventIngredientProjection({
   const allocationCommerciallyEligible = new Set(["accepted", "booked"]).has(text(quoteStatus).toLowerCase());
   const [read, setRead] = useState(() => initialRead(quoteId));
   const [preview, setPreview] = useState({
-    state: "not_evaluated", projection: null, error: "", scenarioFingerprint: exactScenarioFingerprint
+    state: "not_evaluated",
+    projection: null,
+    error: "",
+    scenarioFingerprint: exactScenarioFingerprint,
+    inputFingerprint: ""
   });
   const [operation, setOperation] = useState(initialOperation);
   const [allocationOperation, setAllocationOperation] = useState(initialOperation);
   const lifecycleRef = useRef(0);
+  const previewGenerationRef = useRef(0);
   const scenarioFingerprintRef = useRef(exactScenarioFingerprint);
   scenarioFingerprintRef.current = exactScenarioFingerprint;
 
@@ -190,8 +195,13 @@ export function useEventIngredientProjection({
   }, [access.readEnabled, active, draftDirty, injected, quoteId, savedQuoteRevisionId, scope]);
 
   useEffect(() => {
+    previewGenerationRef.current += 1;
     setPreview({
-      state: "not_evaluated", projection: null, error: "", scenarioFingerprint: exactScenarioFingerprint
+      state: "not_evaluated",
+      projection: null,
+      error: "",
+      scenarioFingerprint: exactScenarioFingerprint,
+      inputFingerprint: ""
     });
   }, [draftDirty, exactScenarioFingerprint, inputFingerprint, quoteId, savedQuoteRevisionId]);
 
@@ -234,9 +244,19 @@ export function useEventIngredientProjection({
 
   const previewCurrent = useCallback(async (overrides = {}) => {
     const lifecycle = lifecycleRef.current;
+    const previewGeneration = previewGenerationRef.current + 1;
+    previewGenerationRef.current = previewGeneration;
     const requestedScenarioFingerprint = scenarioFingerprintRef.current;
+    const requestedSelections = Array.isArray(overrides.selections)
+      ? overrides.selections
+      : selections;
+    const requestedInputFingerprint = JSON.stringify(requestedSelections);
     setPreview((current) => ({
-      ...current, state: "pending", error: "", scenarioFingerprint: requestedScenarioFingerprint
+      ...current,
+      state: "pending",
+      error: "",
+      scenarioFingerprint: requestedScenarioFingerprint,
+      inputFingerprint: requestedInputFingerprint
     }));
     try {
       const result = await previewEventInventory({
@@ -244,21 +264,24 @@ export function useEventIngredientProjection({
         quoteId,
         quoteRevisionId: savedQuoteRevisionId,
         requiredByBasis: { kind: "quote_event_start" },
-        selections,
+        selections: requestedSelections,
         ...overrides
       });
       if (lifecycleRef.current === lifecycle
+        && previewGenerationRef.current === previewGeneration
         && scenarioFingerprintRef.current === requestedScenarioFingerprint) {
         setPreview({
           state: "current",
           projection: result.projection,
           error: "",
-          scenarioFingerprint: requestedScenarioFingerprint
+          scenarioFingerprint: requestedScenarioFingerprint,
+          inputFingerprint: requestedInputFingerprint
         });
       }
       return result;
     } catch (error) {
       if (lifecycleRef.current === lifecycle
+        && previewGenerationRef.current === previewGeneration
         && scenarioFingerprintRef.current === requestedScenarioFingerprint) {
         setPreview((current) => ({
           ...current,
@@ -558,7 +581,10 @@ export function useEventIngredientProjection({
     allocationOperation,
     controlsLocked,
     allocationControlsLocked,
-    canPreview: access.readEnabled && !draftDirty && !controlsLocked && !allocationControlsLocked,
+    // Scenario preview is read-only and may evaluate explicit output evidence
+    // against the saved revision while a commercial draft is dirty. Recording,
+    // allocation, and reconciliation remain fenced to an unchanged saved quote.
+    canPreview: access.readEnabled && !controlsLocked && !allocationControlsLocked,
     canRecord,
     canManageAllocation: access.role === "admin" && access.mutationEnabled && allocationState !== "settled",
     canAllocate,

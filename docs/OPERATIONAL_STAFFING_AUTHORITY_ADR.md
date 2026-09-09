@@ -1,12 +1,17 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: 2026-08-29 19:47:18 CDT
+Last updated: 2026-09-09 18:17:25 CDT
 
 Status: deployed in exact `v0.15.0` behind independent presentation, server,
 and tenant gates. The first two gates are deployed on; protected workflow run
 `33282940451` verified the selected founder-pilot tenant false-to-true change
 with readback. Deployment and tenant readback do not establish hosted behavior,
 provider outcomes, or human acceptance.
+
+The September 9 staffing refoundation and Fulfillment composition are a
+source/local candidate on top of that deployed authority. They do not establish
+a new deployment, tenant activation, hosted authenticated journey, provider
+outcome, or human acceptance.
 
 ## Decision
 
@@ -35,6 +40,21 @@ trusted operator records. They remain distinct from the safe profile consumed
 by operational planning and from member acknowledgement, payroll, attendance,
 provider delivery or event-readiness evidence.
 
+A valid roster identity is intentionally smaller than that private record. An
+administrator may create an active safe profile with a display name and at
+least one role capability. The command sends `availabilityWindows: []` and
+uses the existing replay-stable `configureOperationalStaffProfile` receipt;
+it does not synthesize a private record. Contact, availability, rates,
+qualifications, photos, and other HR enrichment can be recorded later when a
+workflow actually needs them.
+
+Recovery preserves the mutation boundary. A transport-uncertain roster save
+keeps the exact command locked and reconciles with the same request identity.
+A definitive rejection, including `aborted` or `data-loss`, keeps the entered
+draft locked until an explicit local clear resets that matching attempt. Clear
+performs no replay and preserves the draft; a later deliberate submit receives
+a fresh request identity.
+
 The first outbound communication slice is deliberately manual. An
 administrator previews a message generated from one exact quote revision,
 staffing-plan revision, operator-confirmed assignment, private-record revision,
@@ -54,6 +74,93 @@ concurrency, or an immutable operational assignment receipt.
 The new authority copies exact quoted role counts only for comparison. It does
 not change pricing or replace authoritative quote creation, repricing, or
 version writes.
+
+## Progressive Staff Maturity
+
+Staff profile maturity is a derived presentation, not another authority or a
+universal completeness score. QuotePilot evaluates independent facts:
+
+- **Rostered**: active safe profile with a display name and at least one role;
+- **Contactable**: a usable recorded email or phone with communications not
+  disabled;
+- **Schedulable**: at least one valid operator-recorded available window;
+- **Cost-aware**: a positive recorded hourly or event rate;
+- **Credential-aware**: at least one current recorded qualification; and
+- **Enriched**: optional private operational context is present.
+
+An absent optional fact is neutral: `Contact not recorded`, `Availability not
+recorded`, `Rate not recorded`, or `Qualifications not recorded`. It becomes
+attention only in the workflow that requires it—for example, an email before
+invitation preview, availability before availability-backed scheduling, a rate
+before individual labor-cost calculation, or a named qualification for a role.
+None of these derived states grants permission or proves acknowledgement,
+attendance, payroll, booking, or readiness.
+
+## Fulfillment Projection Boundary
+
+Staffing and Inventory compose only in the Commercial Scenario Workbench's
+`fulfillmentProjection-v1` read model. They are not merged into a universal
+`event` document or a shared mutation authority:
+
+- Commercial continues to own quote/version, guest count, selected menu,
+  price, and acceptance state.
+- Staffing continues to own safe staff identity, capabilities, availability,
+  assignments, and schedule fences.
+- Inventory continues to own ingredient identity, stock movements, cost
+  evidence, recipes, allocations, consumption, and waste.
+
+The projection is deterministic, privacy-safe, deeply immutable, and
+rebuildable from exact source revisions. It may compare the active quote
+revision's operator-confirmed assignments with proposed commercial role counts,
+but that comparison does not confirm a proposed staffing plan. Independent
+People and Supply evidence retain their own `missing`, `not_applicable`,
+`not_yet_available`, `stale`, `blocked_by_integration`, `contradictory`,
+`schema_drift`, and current states. Only `available` and `not_applicable` can
+support a verdict; one failed domain cannot erase a current result from the
+other.
+
+The saved **Current** commitment and its Staffing source remain immutable in
+the workbench. Temporary **Scenario A** and **Scenario B** are session-only
+commercial experiments bound to the same exact base quote revision; switching,
+duplicating, editing, or discarding them performs no Staffing write. The
+operational Staffing snapshot loads once for the exact organization, quote, and
+saved revision and is reused across those scenario views rather than reread for
+each guest-count edit. A new Staffing scope generation rejects a late result.
+Scenario projection caching does not promote that read into a plan, assignment,
+availability confirmation, or new Staffing revision.
+
+An exact current Staffing response with no plan is affirmative zero-assignment
+evidence for that saved revision, not `not_yet_available`. Fulfillment composes
+it with `assignments: []`, so People reports `0 / required` and the exact gap,
+or `not_required` when all role requirements are zero. It keeps the absent plan
+and receipt absent; a stale, mismatched, truncated, blocked, or failed read
+remains unknown and must never be converted into zero assignments.
+
+People may show current authoritative role requirements, current
+operator-confirmed assignments, explicit coverage gaps, and evidence-backed
+eligible backups or zero-backup fragility. Proposed role counts remain explicit
+commercial inputs; guest count alone does not derive them. A retained prior
+scenario projection stays visibly retained while exact consequences recompute
+and cannot be called current until its scenario ID, generation, input digest,
+and base revision match. No workbench comparison labels a scenario best or
+chooses a staffing option automatically.
+
+Numeric staffing headroom requires a complete, current, versioned
+`staffing-requirement-policy-v1` that is explicitly operator-declared with
+tenant, source, revision, actor, and timestamp provenance and agrees with the
+current authoritative role requirements. Existing mock-catalog `STAFF_RULES`
+remain advisory UI data and are not eligible. Without that policy, staffing
+headroom is **Not verified**. Exact backup capacity additionally requires
+complete availability plus conflict-clear schedule evidence; the current
+operational snapshot does not expose that combined evidence, so the browser
+fails closed rather than counting apparently available people.
+
+Overall headroom is available only when both People and Supply provide exact,
+current guest-count boundaries. It is the smaller safe increase. `Safe through
+167` from a current count of `125` means `+42 safe guests`; the first changed
+requirement occurs at `168`, which is `43 guests away`. These values must not be
+collapsed into one ambiguous number. A partial projection is an operator
+instruction to complete or refresh evidence, never a zero-capacity conclusion.
 
 ## Release Gates
 

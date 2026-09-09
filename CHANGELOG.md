@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 07:56:43 CDT
+Last updated: 2026-09-09 18:17:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,97 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add the explicit `ragnakok-operations` Firebase production profile and
+  protected tenant operators needed to promote the complete operating model
+  without granting unrelated tenants access. The profile binds the exact
+  `mm05366-sandbox` workflow scope, enables the Staffing and Inventory server
+  gates, and applies that same exact-organization runtime fence to Inventory
+  callables and invalidation triggers. It leaves buyer access, Revenue Autopilot sends, SMS, and Stripe
+  Connect unchanged. Separate update-only operators verify the exact tagged
+  all-surface deployment before changing the Staffing, Inventory, or coupled
+  Commercial Change and Event Spine tenant fields, then require provider
+  readback. Source alone is not deployment or tenant-activation evidence.
+- Isolate the new Commercial Scenario, Inventory, and fulfillment modules in a
+  dedicated production chunk. The compatibility build's largest JavaScript
+  chunk falls from 559,531 to 385,181 bytes without increasing its 399,665-byte
+  ceiling. The temporary convergence exception records the resulting
+  3,497,562-byte total, an 18,848-byte (0.54%) measured increase for the new
+  capability rather than an unbounded allowance. The Ambient profile records
+  its corresponding exact 4,596,639-byte total while retaining the existing
+  435,565-byte largest-chunk ceiling; its measured largest chunk is 391,912
+  bytes.
+
+- Evolve the static Living Commercial Twin into the first-slice **Commercial
+  Scenario Workbench**. The saved **Current** commitment is immutable while an
+  operator may edit a whole guest count from 1–400, which creates **Scenario
+  A**, duplicate it once as **Scenario B**, switch among the three session-only
+  views without page navigation, and discard either temporary alternative.
+  Each working scenario is bound to a unique `scenarioId`, exact
+  `baseQuoteRevisionId`, monotonic `generation`, deterministic `inputDigest`,
+  exact whole `guestCount`, and creation time. Cached projections restore
+  instantly on scenario switch;
+  while a newer generation recomputes, the last accepted result may remain
+  visible only as explicitly retained evidence. Exact scope matching prevents
+  a late Commercial or Inventory response from painting a newer scenario.
+  Changing a non-guest draft or ingredient-selection input rotates the bounded
+  scenario context, clears A/B and their caches, and rejects queued work from
+  the prior context. Current non-guest drafts use the same exact five-field
+  preview envelope. A failed consequence read waits for an explicit retry;
+  only a transport-uncertain recovery reuses its simulation request identity,
+  while definitive rejection or stale success starts a new request. The
+  full-width, container-responsive three-zone interface reacts in place with
+  current/working quoted value,
+  deposit, ingredient cost, People, Supply, and Kitchen BEO consequences.
+  Healthy evidence recedes, while the first exact inventory constraint can
+  expand its demand/shortfall explanation and offer the exact safe-through
+  guest count only when revision-bound boundary evidence supports it. The
+  existing deeply frozen `fulfillmentProjection-v1` still composes People and
+  Supply without merging Commercial, Staffing, or Inventory authority. One
+  restored Layer-3 `FulfillmentIntelligence` presenter now owns that projection's
+  user-facing rendering; the Workbench no longer carries a competing inline
+  Fulfillment presenter. Above the People/Supply read model,
+  `fulfillment-decision-answer-v1` may compose an exact guest-count preview,
+  exact ingredient shortage and menu contribution, proposed quote total,
+  Staffing effect, Kitchen BEO effect, and an optional current revision-bound
+  `inventory-sourcing-preview-v1`. The normal application currently supplies
+  no sourcing preview, so no supplier or “best resolution” is invented. Even
+  when a unique declared-policy match is supplied, it is advice rather than
+  stock, reservation, purchase order, supplier confirmation, or procurement,
+  and it cannot turn Supply coverage current. The preview must also match the
+  proposed Inventory event-requirement revision, projection digest, scenario
+  fingerprint, and exact shortage quantity. Its purchasable pack quantity stays
+  distinct from the quantity that covers the shortfall. Proposed quote total
+  is labeled quoted value rather than earned or preserved revenue. “Current
+  assignments cover” appears only from complete current People evidence; BEO
+  review appears only from its exact projected effect. The answer remains **Unverifiable**
+  unless both People and Supply evidence are current and complete. While an old
+  projection is retained during recomputation, supplier, staffing, value, BEO,
+  and related decision actions are withheld until the exact active scenario
+  returns.
+  Staffing may show current coverage and evidence-backed resilience, and an
+  exact empty plan is current zero-assignment evidence without a fabricated
+  plan or receipt; unsupported future headroom remains **Not verified**. The
+  People rail hands off to the exact quote record for staffing detail.
+  Exploration owns no
+  persistence, provider, network, pricing, staffing, inventory, BEO, or apply
+  authority; **Review for commitment** is a separate handoff to the governed
+  amendment path, and no scenario is called best without an explicit objective.
+  Screenshots and focused browser behavior are local deterministic fixture
+  evidence only, not deployment, production-data, provider, UAT, or human
+  acceptance.
+- Refound staff creation around the real minimum operational identity. An admin
+  can add a display name plus one or more roles through the existing safe-profile
+  command with `active:true` and empty availability, receive the immutable
+  profile receipt, and reconcile an ambiguous response using the identical
+  request. A definitive rejection instead locks the retained draft until the
+  operator explicitly clears that local attempt without replay; a later
+  deliberate submit receives a fresh request identity. The flow no longer
+  fabricates event-wide availability or a private
+  record. Rostered, Contactable, Schedulable, Cost-aware, Credential-aware, and
+  Enriched are derived independently, so missing optional contact, availability,
+  rate, or qualification data is neutral until a specific workflow requires it.
+  These additions are source/local evidence only; they do not prove deployment,
+  hosted behavior, provider outcomes, production data, or human acceptance.
 - Correct two unchanged capability review revisions that were advanced without
   corresponding surface changes. This restores truthful branch-diff governance
   without changing either the Operations Audit or Steward capability.

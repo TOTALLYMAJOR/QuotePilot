@@ -330,6 +330,69 @@
   font-weight: 720;
 }
 
+.operational-staffing-profile-intro,
+.operational-staffing-roster-boundary {
+  margin: 0;
+  color: var(--staffing-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.operational-staffing-roster-boundary {
+  padding: 10px 12px;
+  border-left: 2px solid var(--staffing-mint);
+  background: color-mix(in srgb, var(--staffing-mint) 5%, transparent);
+}
+
+.operational-staffing-availability-disclosure {
+  overflow: clip;
+  border: 1px solid var(--staffing-line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--staffing-ink) 2%, transparent);
+}
+
+.operational-staffing-availability-disclosure > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  color: var(--staffing-ink);
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.operational-staffing-availability-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.operational-staffing-availability-disclosure > summary::after {
+  content: "+";
+  flex: none;
+  color: var(--staffing-gold);
+  font-size: 1rem;
+}
+
+.operational-staffing-availability-disclosure[open] > summary::after {
+  content: "−";
+}
+
+.operational-staffing-availability-disclosure > summary small {
+  margin-left: auto;
+  color: var(--staffing-muted);
+  font-size: 0.7rem;
+  font-weight: 550;
+}
+
+.operational-staffing-availability-disclosure > fieldset {
+  padding: 12px;
+  border-top: 1px solid var(--staffing-line);
+  background: var(--color-surface, #fff);
+}
+
 .operational-staffing-capabilities {
   display: flex;
   flex-wrap: wrap;

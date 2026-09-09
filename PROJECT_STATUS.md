@@ -1,6 +1,25 @@
 # Project Status
 
-Last updated: 2026-09-09 06:19:39 CDT
+Last updated: 2026-09-09 18:17:25 CDT
+
+## Complete operations production candidate
+
+The current `v0.18.0` candidate now includes a governed production path for the
+RagnaKoK founder-pilot organization (`mm05366-sandbox`). The explicit
+`ragnakok-operations` profile keeps the existing deployment-scoped tenant
+boundary, enables the Staffing and Inventory runtime gates, applies that exact
+organization fence to Inventory callables and invalidation triggers, and compiles both
+browser surfaces. Commercial Change and Event Spine retain their independent
+tenant settings and receipt chains; their settings are activated together
+because workflow-bound operational changes are invalid until Commercial Change
+enforcement is present. Inventory and Staffing retain their own tenant fields.
+
+Three protected, update-only tenant workflows verify the exact tagged
+all-surface Firebase deployment before changing the named settings and then
+read them back from Firestore. Buyer access, Revenue Autopilot sends, SMS, and
+Stripe Connect are outside this activation. At this checkpoint the controls
+are source candidates: CI, deployment, provider readback, tenant activation,
+hosted production behavior, and human acceptance remain separate evidence.
 
 ## Ingredient inventory scope correction
 

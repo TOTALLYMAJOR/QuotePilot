@@ -1,6 +1,26 @@
 # Launch Runbook
 
-Last updated: 2026-09-05 19:17:44 CDT
+Last updated: 2026-09-09 18:17:25 CDT
+
+## RagnaKoK complete-operations activation
+
+For the exact `mm05366-sandbox` founder-pilot tenant, deploy Firebase with the
+`ragnakok-operations` profile and `firebase_scope=all`. After the workflow
+proves the tagged release, exact-main CI, runtime configuration, complete
+Function inventory, and provider state, dispatch these protected workflows
+against that same release SHA and Firebase run ID:
+
+1. **Set Event and Commercial Tenant** with the exact true-state confirmation.
+2. **Set Operational Staffing Tenant** with the exact true-state confirmation.
+3. **Set Inventory Tenant** with the exact true-state confirmation.
+
+Each operator uses the tenant-operator workload identity, requires the settings
+document to exist, changes only its named field or coupled Event/Commercial
+fields, and verifies readback. Browser presentation, server runtime, and tenant
+settings are independent gates. The shared deployment scope also fences every
+Inventory callable and invalidation trigger to `mm05366-sandbox`; the global
+Inventory environment value alone cannot admit another organization. Do not activate another tenant, buyer access,
+Revenue Autopilot sends, SMS, or Stripe Connect as part of this sequence.
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped

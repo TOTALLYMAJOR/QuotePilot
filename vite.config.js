@@ -167,6 +167,24 @@ export default defineConfig(({ mode }) => {
             return "ambient-opportunity-model";
           }
           if (
+            normalizedId.endsWith("/src/components/LivingCommercialTwin.jsx")
+            || normalizedId.endsWith("/src/components/CommercialScenarioWorkbench.jsx")
+            || normalizedId.endsWith("/src/components/EventIngredientProjectionPanel.jsx")
+            || normalizedId.endsWith("/src/components/FulfillmentIntelligence.jsx")
+            || normalizedId.endsWith("/src/hooks/useCommercialScenarioWorkbench.js")
+            || normalizedId.endsWith("/src/hooks/useEventIngredientProjection.js")
+            || normalizedId.endsWith("/src/hooks/useFulfillmentStaffingSnapshot.js")
+            || normalizedId.endsWith("/src/hooks/useInventoryRecipeExtension.js")
+            || normalizedId.endsWith("/src/lib/commercialInventoryConsequences.js")
+            || normalizedId.endsWith("/src/lib/commercialScenarioWorkbench.js")
+            || normalizedId.endsWith("/src/lib/fulfillmentProjection.js")
+            || normalizedId.endsWith("/src/lib/inventoryAuthorityClient.js")
+            || normalizedId.endsWith("/src/lib/livingCommercialTwinProjection.js")
+            || normalizedId.endsWith("/src/lib/staffMaturity.js")
+          ) {
+            return "commercial-scenario-intelligence";
+          }
+          if (
             normalizedId.endsWith("/src/components/WizardSteps.jsx")
             || normalizedId.endsWith("/src/lib/wizardUi.js")
             || normalizedId.endsWith("/src/components/ProposalComposer.jsx")

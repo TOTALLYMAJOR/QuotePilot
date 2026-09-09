@@ -174,7 +174,8 @@ test("maps metadata, revision staleness, dirty drafts, and retained listener fai
     freshness: "current", source: { state: "current" }
   }));
   expect(latest.read).toMatchObject({ state: "draft_not_evaluated", savedProjectionState: "current" });
-  expect(latest.canPreview).toBe(false);
+  expect(latest.canPreview).toBe(true);
+  expect(latest.canRecord).toBe(false);
 
   act(() => registrations.at(-1).onError({ message: "disconnected" }));
   expect(latest.read).toMatchObject({ state: "draft_not_evaluated", sourceState: "unavailable", retained: true });
@@ -231,6 +232,7 @@ test("keeps preview read-only for sales and allows admin recording only from a c
   expect(mocks.preview).toHaveBeenCalledWith(expect.objectContaining({ role: "sales", selections: BASE.selections }));
   expect(latest.preview).toMatchObject({ state: "current", projection });
   expect(latest.preview.scenarioFingerprint).toBe('{"guests":100}');
+  expect(latest.preview.inputFingerprint).toBe(JSON.stringify(BASE.selections));
   expect(latest.canRecord).toBe(false);
   await expect(latest.recordCurrentPreview()).rejects.toThrow(/administrator/i);
 
@@ -261,28 +263,85 @@ test("keeps preview read-only for sales and allows admin recording only from a c
   expect(latest.operation).toMatchObject({ state: "committed", receipt: { receiptId: "receipt-1" } });
 });
 
-test("invalidates a scenario preview when the exact form fingerprint changes and ignores its late result", async () => {
-  let resolvePreview;
-  mocks.preview.mockReturnValue(new Promise((resolve) => { resolvePreview = resolve; }));
+test("keeps only the newest scenario across rapid 175 → 150 → 160 previews", async () => {
+  const pending = [];
+  mocks.preview.mockImplementation(() => new Promise((resolve) => { pending.push(resolve); }));
   render();
-  let request;
-  act(() => { request = latest.previewCurrent(); });
+  let firstRequest;
+  act(() => { firstRequest = latest.previewCurrent(); });
   expect(latest.preview).toMatchObject({ state: "pending", scenarioFingerprint: '{"guests":100}' });
 
   render({ ...BASE, scenarioFingerprint: '{"guests":175}' });
-  expect(latest.preview).toMatchObject({
-    state: "not_evaluated",
-    projection: null,
-    scenarioFingerprint: '{"guests":175}'
-  });
+  let secondRequest;
+  act(() => { secondRequest = latest.previewCurrent(); });
+  render({ ...BASE, scenarioFingerprint: '{"guests":150}' });
+  let thirdRequest;
+  act(() => { thirdRequest = latest.previewCurrent(); });
+  render({ ...BASE, scenarioFingerprint: '{"guests":160}' });
+  let newestRequest;
+  act(() => { newestRequest = latest.previewCurrent(); });
+
   await act(async () => {
-    resolvePreview({ projection: { quoteId: "quote-1", quoteRevisionId: "quote-revision-2" } });
-    await request;
+    pending[3]({ projection: { quoteId: "quote-1", quoteRevisionId: "quote-revision-2", guestScenario: 160 } });
+    await newestRequest;
   });
   expect(latest.preview).toMatchObject({
-    state: "not_evaluated",
-    projection: null,
-    scenarioFingerprint: '{"guests":175}'
+    state: "current",
+    projection: { guestScenario: 160 },
+    scenarioFingerprint: '{"guests":160}'
+  });
+
+  await act(async () => {
+    pending[1]({ projection: { quoteId: "quote-1", quoteRevisionId: "quote-revision-2", guestScenario: 175 } });
+    pending[0]({ projection: { quoteId: "quote-1", quoteRevisionId: "quote-revision-2", guestScenario: 100 } });
+    pending[2]({ projection: { quoteId: "quote-1", quoteRevisionId: "quote-revision-2", guestScenario: 150 } });
+    await Promise.all([firstRequest, secondRequest, thirdRequest]);
+  });
+  expect(latest.preview).toMatchObject({
+    state: "current",
+    projection: { guestScenario: 160 },
+    scenarioFingerprint: '{"guests":160}'
+  });
+});
+
+test("keeps only the newest response when the same exact scenario is retried", async () => {
+  const pending = [];
+  mocks.preview.mockImplementation(() => new Promise((resolve) => { pending.push(resolve); }));
+  render();
+  let olderRequest;
+  let newerRequest;
+  act(() => { olderRequest = latest.previewCurrent(); });
+  act(() => { newerRequest = latest.previewCurrent(); });
+
+  await act(async () => {
+    pending[1]({
+      projection: {
+        quoteId: "quote-1",
+        quoteRevisionId: "quote-revision-2",
+        stockRevision: 12
+      }
+    });
+    await newerRequest;
+  });
+  expect(latest.preview).toMatchObject({
+    state: "current",
+    projection: { stockRevision: 12 },
+    scenarioFingerprint: '{"guests":100}'
+  });
+
+  await act(async () => {
+    pending[0]({
+      projection: {
+        quoteId: "quote-1",
+        quoteRevisionId: "quote-revision-2",
+        stockRevision: 11
+      }
+    });
+    await olderRequest;
+  });
+  expect(latest.preview).toMatchObject({
+    state: "current",
+    projection: { stockRevision: 12 }
   });
 });
 

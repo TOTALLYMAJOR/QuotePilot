@@ -228,6 +228,8 @@ export default function EventIngredientProjectionPanel({
   onReconcilePlan,
   onReconcileAllocation,
   onResetAllocation,
+  onPreviewInputChange,
+  showPreviewAction = true,
   title = "Ingredient impact"
 }) {
   const sourceFingerprint = useMemo(() => JSON.stringify(selectedMenuItems.map((item, index) => selectionDraft(item, index))), [selectedMenuItems]);
@@ -260,7 +262,20 @@ export default function EventIngredientProjectionPanel({
   const commandSelections = selections.map(commandSelection);
   const currentFingerprint = JSON.stringify(commandSelections);
   const valid = selections.length > 0 && issues.length === 0;
-  const previewMatchesInputs = preview.state === "current" && previewedFingerprint === currentFingerprint;
+  const exactPreviewInputFingerprint = text(preview.inputFingerprint) || previewedFingerprint;
+  useEffect(() => {
+    if (preview.state === "current" && text(preview.inputFingerprint)) {
+      setPreviewedFingerprint(text(preview.inputFingerprint));
+    }
+  }, [preview.inputFingerprint, preview.state]);
+  useEffect(() => {
+    onPreviewInputChange?.({
+      valid,
+      selections: commandSelections
+    });
+  }, [currentFingerprint, onPreviewInputChange, valid]);
+  const previewMatchesInputs = preview.state === "current"
+    && exactPreviewInputFingerprint === currentFingerprint;
   const projection = preview.state === "current" ? preview.projection : read.projection;
   const shownKind = preview.state === "current"
     ? (previewMatchesInputs ? "preview" : "prior_preview")
@@ -471,7 +486,9 @@ export default function EventIngredientProjectionPanel({
       <div className="event-ingredient-panel__actions" data-capability-state={!busy && valid ? "ready" : undefined}>
         {operation.state === "uncertain" && <button type="button" onClick={() => void run(onReconcile)} disabled={!onReconcile || operation.state === "reconciliation"} data-capability-state="recovery">Reconcile request</button>}
         {operation.state === "rejected" && <button type="button" onClick={() => void run(onReset)} disabled={!onReset} data-capability-state="recovery">Review and reset</button>}
-        <button type="button" className="ghost" onClick={() => void previewCurrentInputs()} disabled={!canPreview || !valid || busy || !onPreview}>Preview ingredient impact</button>
+        {showPreviewAction && (
+          <button type="button" className="ghost" onClick={() => void previewCurrentInputs()} disabled={!canPreview || !valid || busy || !onPreview}>Preview ingredient impact</button>
+        )}
         {onRecord && <button type="button" onClick={() => void recordCurrentInputs()} disabled={!canRecord || !previewMatchesInputs || busy} title={!canRecord || !previewMatchesInputs ? (recordBlockedReason || "Preview the currently displayed quantities before recording.") : ""}>Record requirement</button>}
       </div>
       {!canRecord && recordBlockedReason && onRecord && <p className="event-ingredient-panel__hint">{recordBlockedReason}</p>}

@@ -298,6 +298,7 @@ export function candidateBrowserEnvironment(
     VITE_PILOT_DECISION_ROOM_ENABLED: "true",
     VITE_AMBIENT_UI_ENABLED: "true",
     VITE_OPERATIONAL_STAFFING_ENABLED: "true",
+    VITE_INVENTORY_AUTHORITY_ENABLED: "true",
     VITE_PILOT_MEMORY_ENABLED: "false",
     VITE_PILOT_MODEL_ENABLED: "false",
     VITE_E2E_BYPASS_AUTH: "false",
@@ -651,6 +652,7 @@ async function deployFirebase({
     browserFlags: {
       VITE_AMBIENT_UI_ENABLED: true,
       VITE_OPERATIONAL_STAFFING_ENABLED: true,
+      VITE_INVENTORY_AUTHORITY_ENABLED: true,
       VITE_BUYER_ACCESS_ENABLED:
         candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:
@@ -982,6 +984,7 @@ async function deployVercel({
     browserFlags: {
       VITE_AMBIENT_UI_ENABLED: true,
       VITE_OPERATIONAL_STAFFING_ENABLED: true,
+      VITE_INVENTORY_AUTHORITY_ENABLED: true,
       VITE_BUYER_ACCESS_ENABLED:
         candidateProfile === RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:

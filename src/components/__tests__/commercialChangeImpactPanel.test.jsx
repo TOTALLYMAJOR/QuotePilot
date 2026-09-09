@@ -615,7 +615,9 @@ describe("CommercialChangeImpactPanel", () => {
     expect(LEGACY_APP_SOURCE).toContain("expectedActiveVersionId: editingQuote.activeVersionId");
     expect(LEGACY_APP_SOURCE).toContain("navigateAfterSave: false");
     expect(AMENDMENT_WORKSPACE_SOURCE).toContain("Preview consequences");
-    expect(APP_SOURCE).toContain("onRetry={() => handlePreviewChangeImpact({ recovery: true })}");
+    expect(APP_SOURCE).toContain("onRetry={proposalComposerActive");
+    expect(APP_SOURCE).toContain(": () => handlePreviewChangeImpact({ recovery: true })}");
+    expect(APP_SOURCE).toContain("onRetryConsequences: (request) => handlePreviewChangeImpact({");
     expect(AMENDMENT_WORKSPACE_SOURCE).toContain("No client-calculated substitute is shown");
     expect(FUNCTIONS_SOURCE).toContain("exports.simulateCommercialQuoteChange =");
     expect(FUNCTIONS_SOURCE).toContain("exports.requestCommercialQuoteChangeAuthorization =");

@@ -404,7 +404,7 @@ button.workspace-brand:focus-visible {
 .workspace-tools-dialog__header .workspace-tools-dialog__eyebrow {
   margin: 0;
   color: #6b6e74;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -16013,6 +16013,210 @@ hr {
   margin-top: 8px;
 }
 
+/* Living Commercial Twin. One quiet decision surface composes source-owned
+   consequences without turning each evidence rail into a competing card. */
+.living-commercial-twin {
+  display: grid;
+  gap: clamp(16px, 2.4vw, 24px);
+  margin-top: var(--space-4);
+  padding: clamp(16px, 2.5vw, 26px);
+  border: 1px solid #bfc8c1;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(145deg, rgba(249, 250, 247, 0.98), rgba(239, 243, 238, 0.92));
+  box-shadow: 0 18px 42px -38px rgba(31, 50, 40, 0.9);
+}
+
+.living-commercial-twin__head,
+.living-commercial-twin__footer,
+.living-commercial-twin__rails article > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.living-commercial-twin__head h3 {
+  max-width: 640px;
+  margin: 0.22rem 0 0;
+  color: #1c3025;
+  font-family: var(--font-display);
+  font-size: clamp(1.22rem, 2.3vw, 1.72rem);
+  line-height: 1.12;
+}
+
+.living-commercial-twin__scenario {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.5fr) auto minmax(100px, 0.5fr) minmax(180px, 1.25fr);
+  align-items: center;
+  gap: clamp(10px, 2vw, 22px);
+  padding-block: clamp(14px, 2vw, 20px);
+  border-block: 1px solid #cbd2cc;
+}
+
+.living-commercial-twin__scenario > div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.living-commercial-twin__scenario span,
+.living-commercial-twin__scenario small {
+  color: #667068;
+  font-size: 0.75rem;
+}
+
+.living-commercial-twin__scenario strong {
+  color: #183326;
+  font-family: var(--font-display);
+  font-size: clamp(1.85rem, 4vw, 2.8rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.living-commercial-twin__scenario [data-scenario-value="proposed"] {
+  animation: living-twin-proposal-settle 220ms ease-out;
+}
+
+.living-commercial-twin__scenario > p {
+  margin: 0;
+  color: #4f5b53;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.living-commercial-twin__arrow {
+  color: #587060;
+  font-size: 1.2rem;
+}
+
+.living-commercial-twin__rails {
+  border-block: 1px solid #ccd2cd;
+}
+
+.living-commercial-twin__rails article {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.45fr) minmax(0, 1.55fr);
+  gap: clamp(14px, 3vw, 32px);
+  padding: 13px 2px;
+  border-bottom: 1px solid #d7dcd7;
+}
+
+.living-commercial-twin__rails article:last-child {
+  border-bottom: 0;
+}
+
+.living-commercial-twin__rails article > div {
+  align-items: center;
+}
+
+.living-commercial-twin__rails article > div > strong {
+  color: #263b30;
+  font-size: 0.83rem;
+}
+
+.living-commercial-twin__rails article > p,
+.living-commercial-twin__limits p,
+.living-commercial-twin__footer p,
+.living-commercial-twin__provenance p {
+  margin: 0;
+  color: #535e56;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.living-commercial-twin__limits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid #cbd1cc;
+}
+
+.living-commercial-twin__limits > section {
+  min-width: 0;
+  padding: clamp(13px, 2vw, 18px);
+}
+
+.living-commercial-twin__limits > section + section {
+  border-left: 1px solid #cbd1cc;
+}
+
+.living-commercial-twin__limits h4 {
+  margin: 0.24rem 0 0.42rem;
+  color: #253b2f;
+  font-size: 0.93rem;
+}
+
+.living-commercial-twin__footer {
+  align-items: end;
+}
+
+.living-commercial-twin__footer > div:first-child {
+  display: grid;
+  gap: 0.28rem;
+  max-width: 660px;
+}
+
+.living-commercial-twin__footer strong {
+  color: #263a30;
+  font-size: 0.9rem;
+}
+
+.living-commercial-twin__revert {
+  justify-self: start;
+  min-height: 44px;
+  margin-top: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #355e49;
+  font-weight: 760;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.living-commercial-twin__next {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 0.34rem;
+}
+
+.living-commercial-twin__next button {
+  min-height: 44px;
+}
+
+.living-commercial-twin__provenance {
+  padding-top: 2px;
+  color: #526158;
+  font-size: 0.76rem;
+}
+
+.living-commercial-twin__provenance p {
+  margin-top: 0.45rem;
+}
+
+.commercial-twin-evidence-disclosure {
+  margin-top: var(--space-4);
+  padding: 12px 14px;
+  border: 1px solid #d2d6d2;
+  background: #f8f9f6;
+  color: #34463c;
+  font-size: 0.82rem;
+}
+
+.commercial-twin-evidence-disclosure > summary {
+  cursor: pointer;
+  font-weight: 780;
+}
+
+.commercial-twin-evidence-disclosure > div {
+  margin-top: 12px;
+}
+
+@keyframes living-twin-proposal-settle {
+  from { opacity: 0.55; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Governed Commercial Amendment reference slice. The composition keeps the
    current commitment, consequence preview, authority, receipt, and next action
    in one readable flow without creating a second commercial authority. */
@@ -16340,6 +16544,14 @@ hr {
 }
 
 @media (max-width: 900px) {
+  .living-commercial-twin__scenario {
+    grid-template-columns: minmax(90px, 1fr) auto minmax(90px, 1fr);
+  }
+
+  .living-commercial-twin__scenario > p {
+    grid-column: 1 / -1;
+  }
+
   .commercial-amendment-commitment,
   .commercial-amendment-protocol {
     grid-template-columns: 1fr;
@@ -16363,6 +16575,34 @@ hr {
 }
 
 @media (max-width: 560px) {
+  .living-commercial-twin__head,
+  .living-commercial-twin__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .living-commercial-twin__rails article,
+  .living-commercial-twin__limits {
+    grid-template-columns: 1fr;
+  }
+
+  .living-commercial-twin__rails article {
+    gap: 7px;
+  }
+
+  .living-commercial-twin__limits > section + section {
+    border-top: 1px solid #cbd1cc;
+    border-left: 0;
+  }
+
+  .living-commercial-twin__next {
+    justify-items: stretch;
+  }
+
+  .living-commercial-twin__next button {
+    width: 100%;
+  }
+
   .commercial-amendment-workspace-head,
   .commercial-amendment-preview-action,
   .commercial-amendment-receipt > header {
@@ -16417,6 +16657,12 @@ hr {
     max-width: 100%;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .living-commercial-twin__scenario [data-scenario-value="proposed"] {
+    animation: none;
   }
 }
 

@@ -11,6 +11,14 @@ import {
   withStaffRole
 } from "../lib/staffDirectoryClient";
 import {
+  OPERATIONAL_STAFFING_OPERATIONS,
+  buildOperationalStaffingRequestId,
+  configureOperationalStaffProfile,
+  isDefinitiveOperationalStaffingError,
+  resetDefinitiveOperationalStaffingAttempt
+} from "../lib/operationalStaffingClient";
+import { deriveStaffMaturity } from "../lib/staffMaturity";
+import {
   buildStaffBriefing,
   buildStaffBriefingEmail,
   exportStaffBriefingSheet
@@ -103,19 +111,6 @@ function safeError(error, fallback) {
   return String(error?.message || fallback).replace(/^FirebaseError:\s*/iu, "").trim();
 }
 
-function isDefinitiveStaffMutationError(error) {
-  const code = String(error?.code || "").trim().toLowerCase().replace(/^functions\//u, "");
-  return new Set([
-    "already-exists",
-    "failed-precondition",
-    "invalid-argument",
-    "not-found",
-    "permission-denied",
-    "resource-exhausted",
-    "unauthenticated"
-  ]).has(code);
-}
-
 function currency(value, code = "USD") {
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(Number(value || 0));
@@ -183,15 +178,6 @@ function calendarDateKey(value = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function needsAttention(entry) {
-  return Boolean(entry?.profile?.active) && (
-    entry?.record?.contact?.emailStatus !== "verified"
-    || !entry?.record?.contact?.emergencyContactPhone
-    || Number(entry?.record?.compensation?.hourlyRate || 0) <= 0
-    || !entry?.profile?.availabilityWindows?.length
-  );
-}
-
 function qualificationPresentation(qualification) {
   const status = String(qualification?.status || "").trim().toLowerCase();
   if (["missing", "pending"].includes(status)) return { label: "Missing", tone: "warning" };
@@ -212,7 +198,7 @@ function initials(entry) {
   return name.split(/\s+/u).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase();
 }
 
-function RoleIcons({ roles = [], interactive = false, onToggle = null }) {
+function RoleIcons({ roles = [], interactive = false, disabled = false, onToggle = null }) {
   return (
     <span className={`staff-role-icons${interactive ? " is-interactive" : ""}`} aria-label="Staff roles">
       {STAFF_ROLES.map((role) => {
@@ -226,6 +212,7 @@ function RoleIcons({ roles = [], interactive = false, onToggle = null }) {
             className={enabled ? "is-selected" : ""}
             aria-label={`${enabled ? "Remove" : "Add"} ${ROLE_LABELS[role]} role`}
             aria-pressed={enabled}
+            disabled={disabled}
             title={ROLE_LABELS[role]}
             onClick={() => onToggle?.(role, !enabled)}
           >
@@ -275,6 +262,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   const [rosterSearch, setRosterSearch] = useState("");
   const [rosterFilter, setRosterFilter] = useState("all");
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [rosterCommand, setRosterCommand] = useState(null);
 
   const load = async ({ recovery = false } = {}) => {
     const reconcilingInvitation = state.operation === "dispatch_invitation" && state.status === "uncertain";
@@ -375,26 +363,36 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   }, [selectedAssignmentId, draft?.record?.revision]);
 
   const choose = (entry) => {
+    if (state.operation === "create_profile" && ["saving", "uncertain", "recovery"].includes(state.status)) return;
     if (dirty && !window.confirm("Discard the unsaved staff record changes?")) return;
     setSelectedStaffId(entry.profile.staffId);
     setDraft(clone(entry));
     setDirty(false);
+    setRosterCommand(null);
     setMobileDetailOpen(true);
     setState((current) => ({ ...current, message: "Team profile open." }));
   };
 
   const addStaff = () => {
+    if (state.operation === "create_profile" && ["saving", "uncertain", "recovery"].includes(state.status)) return;
     if (dirty && !window.confirm("Discard the unsaved staff record changes?")) return;
     const staffId = `staff-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
     const entry = createStaffRecordDraft({ organizationId, staffId });
     setSelectedStaffId(staffId);
     setDraft(entry);
     setDirty(true);
-    setState({ status: "editing", message: "Great—add their details and welcome them to the team." });
+    setRosterCommand(null);
+    setMobileDetailOpen(true);
+    setState({
+      status: "editing",
+      message: "Add a name and at least one role. Everything else can wait.",
+      operation: "create_profile"
+    });
   };
 
   const patchProfile = (key, value) => {
     setDraft((current) => ({ ...current, profile: { ...current.profile, [key]: value } }));
+    setRosterCommand(null);
     setDirty(true);
   };
   const patchRecord = (key, value) => {
@@ -409,7 +407,115 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
     setDirty(true);
   };
 
+  const saveRosterProfile = async (retainedCommand = null, { reconciliation = false } = {}) => {
+    if (!draft?.profile?.displayName?.trim() || !draft?.profile?.capabilities?.length) {
+      setState({
+        status: "error",
+        message: "Add a display name and at least one role before adding this person.",
+        operation: "create_profile",
+        recovery: "review_roster"
+      });
+      return;
+    }
+    const command = retainedCommand || rosterCommand || {
+      requestId: buildOperationalStaffingRequestId(
+        OPERATIONAL_STAFFING_OPERATIONS.CONFIGURE_PROFILE
+      ),
+      organizationId,
+      staffId: draft.profile.staffId,
+      expectedRevision: 0,
+      profile: {
+        displayName: draft.profile.displayName.trim(),
+        active: true,
+        capabilities: [...draft.profile.capabilities],
+        availabilityWindows: []
+      }
+    };
+    setRosterCommand(command);
+    setState({
+      status: reconciliation ? "recovery" : "saving",
+      message: reconciliation
+        ? "Checking the exact previous roster save…"
+        : "Adding this person to the roster…",
+      operation: "create_profile"
+    });
+    try {
+      const result = await configureOperationalStaffProfile(command);
+      const entry = createStaffRecordDraft({
+        organizationId,
+        staffId: result.snapshot.staffId,
+        displayName: result.snapshot.displayName,
+        capabilities: result.snapshot.capabilities
+      });
+      entry.profile = clone(result.snapshot);
+      setDirectory((current) => {
+        const records = [...(current?.records || [])];
+        const index = records.findIndex((item) => item.profile.staffId === entry.profile.staffId);
+        if (index >= 0) records[index] = entry;
+        else records.push(entry);
+        records.sort((left, right) => left.profile.displayName.localeCompare(right.profile.displayName));
+        return { ...current, records };
+      });
+      setSelectedStaffId(entry.profile.staffId);
+      setDraft(entry);
+      setDirty(false);
+      setRosterCommand(null);
+      setState({
+        status: "receipt",
+        message: `${entry.profile.displayName} is Active and Rostered. Contact, availability, rates, and qualifications remain optional.`,
+        operation: "create_profile",
+        receipt: {
+          receiptId: result.receipt?.receiptId || "",
+          requestId: result.receipt?.requestId || command.requestId
+        }
+      });
+    } catch (error) {
+      const definitive = isDefinitiveOperationalStaffingError(error);
+      setState({
+        status: definitive ? "error" : "uncertain",
+        message: definitive
+          ? safeError(error, "This person could not be added to the roster.")
+          : "QuotePilot could not confirm whether this roster save finished.",
+        operation: "create_profile",
+        recovery: definitive ? "clear_roster" : "reconcile_roster",
+        support: definitive
+          ? "The name and role remain available. Clear the failed attempt, then submit a new request when ready."
+          : "Do not create another person. Check the exact previous request so a delayed receipt cannot create a duplicate."
+      });
+    }
+  };
+
+  const clearFailedRosterAttempt = () => {
+    if (!rosterCommand) return;
+    const cleared = resetDefinitiveOperationalStaffingAttempt({
+      operation: OPERATIONAL_STAFFING_OPERATIONS.CONFIGURE_PROFILE,
+      organizationId,
+      staffId: rosterCommand.staffId,
+      requestId: rosterCommand.requestId
+    });
+    if (!cleared) {
+      setState({
+        status: "error",
+        message: "The failed roster attempt could not be cleared safely.",
+        operation: "create_profile",
+        recovery: "clear_roster",
+        support: "Keep this draft open and contact support with the request reference before attempting another save."
+      });
+      return;
+    }
+    setRosterCommand(null);
+    setState({
+      status: "editing",
+      message: "The rejected roster attempt is cleared. Review the retained draft, then submit a new request when ready.",
+      operation: "create_profile"
+    });
+  };
+
   const save = async () => {
+    if (state.operation === "create_profile" && Number(draft?.profile?.revision || 0) === 0) {
+      await saveRosterProfile();
+      return;
+    }
     if (!draft?.profile?.displayName?.trim()) {
       setState({ status: "error", message: "Add a display name before saving this staff record.", operation: "save_record", recovery: "review_record" });
       return;
@@ -430,7 +536,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       setDirty(false);
       setState({ status: "receipt", message: `${entry.profile.displayName} is saved. Their profile and private details were recorded separately.`, operation: "save_record" });
     } catch (error) {
-      const definitive = isDefinitiveStaffMutationError(error);
+      const definitive = isDefinitiveOperationalStaffingError(error);
       setState({
         status: definitive ? "error" : "uncertain",
         message: definitive
@@ -565,13 +671,21 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
 
   const records = directory?.records || [];
   const allAssignments = directory?.assignments || [];
+  const rosterSaveLocked = state.operation === "create_profile"
+    && (["saving", "uncertain", "recovery"].includes(state.status)
+      || state.recovery === "clear_roster");
   const currentDay = calendarDateKey();
-  const activeCount = records.filter((entry) => entry.profile.active).length;
-  const needsAttentionCount = records.filter(needsAttention).length;
-  const availableCount = records.filter((entry) => (
-    entry.profile.active
-    && !needsAttention(entry)
-    && entry.profile.availabilityWindows?.some((window) => window.state === "available")
+  const maturityForEntry = (entry) => deriveStaffMaturity(entry, {
+    assignments: allAssignments
+  });
+  const rosteredCount = records.filter((entry) => (
+    maturityForEntry(entry).stages.rostered.state === "available"
+  )).length;
+  const contactableCount = records.filter((entry) => (
+    maturityForEntry(entry).stages.contactable.state === "available"
+  )).length;
+  const schedulableCount = records.filter((entry) => (
+    maturityForEntry(entry).stages.schedulable.state === "available"
   )).length;
   const assignedTodayCount = new Set(allAssignments
     .filter((assignment) => calendarDateKey(assignment.eventWindow?.startAtISO || assignment.event?.date || "") === currentDay)
@@ -585,13 +699,18 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
     return upcoming.length ? upcoming : ordered.reverse();
   };
   const operationalState = (entry) => {
-    if (!entry.profile.active) return { key: "inactive", label: "Inactive", tone: "neutral" };
-    if (needsAttention(entry)) return { key: "needs_attention", label: "Needs review", tone: "warning" };
-    if (assignmentsForStaff(entry.profile.staffId).length) return { key: "assigned", label: "Assigned", tone: "assigned" };
-    if (entry.profile.availabilityWindows?.some((window) => window.state === "available")) {
-      return { key: "available", label: "Available", tone: "good" };
+    const maturity = maturityForEntry(entry);
+    if (!maturity.active) return { key: "inactive", label: "Inactive", tone: "neutral" };
+    if (!maturity.rosterIdentityValid) {
+      return { key: "invalid_roster_identity", label: "Roster identity missing", tone: "warning" };
     }
-    return { key: "unavailable", label: "Unavailable", tone: "neutral" };
+    if (maturity.primaryState === "assigned") {
+      return { key: "assigned", label: "Assigned", tone: "assigned" };
+    }
+    if (maturity.stages.schedulable.state === "available") {
+      return { key: "schedulable", label: "Schedulable", tone: "good" };
+    }
+    return { key: "rostered", label: "Rostered", tone: "neutral" };
   };
   const normalizedRosterSearch = rosterSearch.trim().toLowerCase();
   const visibleRecords = records.filter((entry) => {
@@ -602,33 +721,36 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
       Array.isArray(entry.profile.capabilities) ? entry.profile.capabilities.join(" ") : ""
     ].join(" ").toLowerCase();
     const matchesSearch = !normalizedRosterSearch || searchable.includes(normalizedRosterSearch);
+    const entryMaturity = maturityForEntry(entry);
     const entryState = operationalState(entry).key;
     const matchesFilter = rosterFilter === "all"
-      || rosterFilter === entryState;
+      || (rosterFilter === "rostered" && entryMaturity.stages.rostered.state === "available")
+      || (rosterFilter === "schedulable" && entryMaturity.stages.schedulable.state === "available")
+      || (rosterFilter === "assigned" && entryState === "assigned");
     return matchesSearch && matchesFilter;
   });
   const selectedDisplayName = draft
     ? draft.record.preferredName || draft.profile.displayName || "New staff member"
     : "";
   const selectedRoles = draft?.profile?.capabilities || [];
-  const contactVerified = draft?.record?.contact?.emailStatus === "verified";
-  const emergencyReady = Boolean(draft?.record?.contact?.emergencyContactPhone);
   const hourlyRate = Number(draft?.record?.compensation?.hourlyRate || 0);
   const assignmentAccepted = currentInvitation?.acknowledgement?.state === "accepted";
   const availabilityWindows = draft?.profile?.availabilityWindows || [];
-  const availabilityProvided = availabilityWindows.length > 0;
-  const qualificationReady = Boolean(draft?.record?.qualifications?.length)
-    && draft.record.qualifications.every((qualification) => !["expired", "pending"].includes(qualification.status));
-  const readinessItems = draft ? [
-    { label: "Contact information", value: contactVerified ? "Complete" : "Needs review", state: contactVerified ? "complete" : "warning" },
-    { label: "Emergency contact", value: emergencyReady ? "Complete" : "Not provided", state: emergencyReady ? "complete" : "warning" },
-    { label: "Rate configured", value: hourlyRate > 0 ? "Complete" : "Not configured", state: hourlyRate > 0 ? "complete" : "warning" },
-    { label: "Availability provided", value: availabilityProvided ? "Complete" : "Not provided", state: availabilityProvided ? "complete" : "warning" },
-    { label: "Qualifications", value: qualificationReady ? "Complete" : "Needs review", state: qualificationReady ? "complete" : "warning" },
-    { label: "Acknowledgements", value: !selectedAssignment ? "Not applicable" : assignmentAccepted ? "Complete" : "Pending", state: !selectedAssignment ? "neutral" : assignmentAccepted ? "complete" : "warning" }
-  ] : [];
-  const selectedReadinessCompleteCount = readinessItems.filter((item) => item.state === "complete").length;
-  const selectedReadinessTotal = readinessItems.length;
+  const selectedMaturity = draft ? deriveStaffMaturity(draft, { assignments: allAssignments }) : null;
+  const maturityItems = selectedMaturity ? [
+    ["Roster", selectedMaturity.stages.rostered],
+    ["Contact", selectedMaturity.stages.contactable],
+    ["Scheduling", {
+      ...selectedMaturity.stages.schedulable,
+      label: availabilityWindows.length && selectedMaturity.stages.schedulable.state !== "available"
+        ? "No available window recorded"
+        : selectedMaturity.stages.schedulable.label
+    }],
+    ["Cost", selectedMaturity.stages.costAware],
+    ["Credentials", selectedMaturity.stages.credentialAware]
+  ].map(([label, stage]) => ({ label, value: stage.label, state: stage.state })) : [];
+  const isRosterDraft = state.operation === "create_profile"
+    && Number(draft?.profile?.revision || 0) === 0;
   const assignmentSteps = [
     ["Invited", Boolean(currentInvitation)],
     ["Accepted", assignmentAccepted],
@@ -646,6 +768,9 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
     refresh_team: { label: state.operation === "dispatch_invitation" ? "Refresh invitation status" : "Refresh the team", action: () => void load({ recovery: true }) },
     refresh_invitation: { label: "Refresh invitation status", action: () => void load({ recovery: true }) },
     retry_save: { label: "Retry staff save", action: () => void save() },
+    clear_roster: { label: "Clear failed roster attempt", action: clearFailedRosterAttempt },
+    reconcile_roster: { label: "Check previous roster save", action: () => void saveRosterProfile(rosterCommand, { reconciliation: true }) },
+    review_roster: { label: "Review name and roles", action: () => document.querySelector(".staff-quick-add input")?.focus() },
     review_record: { label: "Review staff details", action: focusStaffDetails },
     retry_preview: { label: "Retry invitation preview", action: () => void previewInvitation() },
     retry_download: { label: "Retry briefing download", action: downloadSheet },
@@ -654,6 +779,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   })[state.recovery] || null;
   const stateOperationLabel = ({
     load: "Team directory",
+    create_profile: "Roster save",
     save_record: "Staff record save",
     preview_invitation: "Invitation preview",
     dispatch_invitation: "Invitation dispatch",
@@ -664,11 +790,13 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
   })[state.operation] || "Staff workspace";
   const invitationOutcomeUncertain = state.operation === "dispatch_invitation"
     && ["uncertain", "recovery"].includes(state.status);
-  const preferredContactLabel = ({
-    email: "Email",
-    phone: "Phone",
-    either: "Either"
-  }[draft?.record?.contact?.preferredChannel] || "Email");
+  const preferredContactLabel = draft?.record?.contact?.email || draft?.record?.contact?.phone
+    ? ({
+        email: "Email",
+        phone: "Phone",
+        either: "Either"
+      }[draft?.record?.contact?.preferredChannel] || "Not recorded")
+    : "Not recorded";
   const selectedOperationalState = draft ? operationalState(draft) : null;
   const selectedActivities = [
     currentInvitation?.acknowledgement?.respondedAtISO ? {
@@ -711,7 +839,12 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
               } : undefined}
             />
           ) : (
-            <span>{state.status === "success" ? "Team profiles are here" : state.message}</span>
+            <span className="staff-workspace__status-copy">
+              {state.status === "success" ? "Team profiles are here" : state.message}
+              {state.receipt?.receiptId ? (
+                <small>Receipt {state.receipt.receiptId} · request {state.receipt.requestId}</small>
+              ) : null}
+            </span>
           )}
         </div>
       </div>
@@ -724,20 +857,20 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
           </div>
           <dl className="staff-command-metrics" aria-label="Staff operating metrics">
             <div>
-              <dt>Active</dt>
-              <dd>{activeCount}</dd>
+              <dt>Rostered</dt>
+              <dd>{rosteredCount}</dd>
             </div>
             <div>
-              <dt>Available</dt>
-              <dd>{availableCount}</dd>
+              <dt>Schedulable</dt>
+              <dd>{schedulableCount}</dd>
             </div>
             <div>
               <dt>Assigned today</dt>
               <dd>{assignedTodayCount}</dd>
             </div>
-            <div className="is-attention">
-              <dt>Next to complete</dt>
-              <dd>{needsAttentionCount}</dd>
+            <div>
+              <dt>Contactable</dt>
+              <dd>{contactableCount}</dd>
             </div>
           </dl>
         </div>
@@ -755,12 +888,12 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
           <div className="staff-command-filters" role="group" aria-label="Staff roster filters">
             <span><span className="staff-ui-glyph" aria-hidden="true">≡</span> Filters</span>
             <button type="button" className={rosterFilter === "all" ? "is-selected" : ""} onClick={() => setRosterFilter("all")}>All</button>
-            <button type="button" className={rosterFilter === "needs_attention" ? "is-selected" : ""} onClick={() => setRosterFilter("needs_attention")}>Next to complete</button>
-            <button type="button" className={rosterFilter === "available" ? "is-selected" : ""} onClick={() => setRosterFilter("available")}>Available</button>
+            <button type="button" className={rosterFilter === "rostered" ? "is-selected" : ""} onClick={() => setRosterFilter("rostered")}>Rostered</button>
+            <button type="button" className={rosterFilter === "schedulable" ? "is-selected" : ""} onClick={() => setRosterFilter("schedulable")}>Schedulable</button>
             <button type="button" className={rosterFilter === "assigned" ? "is-selected" : ""} onClick={() => setRosterFilter("assigned")}>Assigned</button>
           </div>
-          <button type="button" className="staff-command-add" onClick={addStaff} disabled={state.status === "unavailable"}>
-            <Plus size={18} aria-hidden="true" /> Welcome a teammate
+          <button type="button" className="staff-command-add" onClick={addStaff} disabled={state.status === "unavailable" || rosterSaveLocked}>
+              <Plus size={18} aria-hidden="true" /> Add person
           </button>
         </div>
       </section>
@@ -781,6 +914,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                 const nextAssignment = entryAssignments[0];
                 const nextAvailability = entry.profile.availabilityWindows?.find((window) => window.state === "available");
                 const entryState = operationalState(entry);
+                const entryMaturity = maturityForEntry(entry);
                 const rate = Number(entry.record.compensation.hourlyRate || 0);
                 return (
                   <li key={entry.profile.staffId}>
@@ -788,6 +922,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                       type="button"
                       className={selectedStaffId === entry.profile.staffId ? "is-selected" : ""}
                       onClick={() => choose(entry)}
+                      disabled={rosterSaveLocked}
                       aria-current={selectedStaffId === entry.profile.staffId ? "true" : undefined}
                     >
                       <span className="staff-avatar">
@@ -799,16 +934,14 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                           <em data-tone={entryState.tone}>{entryState.label}</em>
                         </span>
                         <small>{entry.profile.capabilities.map((role) => ROLE_LABELS[role] || role).join(" · ") || "Role not set"}</small>
-                        <small className={entryState.key === "needs_attention" ? "staff-roster__warning" : "staff-roster__meta"}>
-                          {entryState.key === "needs_attention"
-                            ? !entry.record.contact.emergencyContactPhone ? "Emergency contact not provided" : Number(entry.record.compensation.hourlyRate || 0) <= 0 ? "Rate not configured" : !entry.profile.availabilityWindows?.length ? "Availability not provided" : "Contact needs review"
-                            : nextAssignment ? `${dateLabel(nextAssignment.eventWindow?.startAtISO || nextAssignment.event?.date)} · ${nextAssignment.event?.name || "Assigned event"}`
-                              : nextAvailability ? `${dateLabel(nextAvailability.startAtISO)} · ${timeRange(nextAvailability.startAtISO, nextAvailability.endAtISO)}`
-                                : "No upcoming availability"}
+                        <small className="staff-roster__meta">
+                          {nextAssignment ? `${dateLabel(nextAssignment.eventWindow?.startAtISO || nextAssignment.event?.date)} · ${nextAssignment.event?.name || "Assigned event"}`
+                            : nextAvailability ? `${dateLabel(nextAvailability.startAtISO)} · ${timeRange(nextAvailability.startAtISO, nextAvailability.endAtISO)}`
+                              : `${entryMaturity.stages.contactable.label} · ${entryMaturity.stages.costAware.label}`}
                         </small>
                       </span>
                       <span className="staff-roster__rate">
-                        {rate > 0 ? <>{currency(rate, entry.record.compensation.currency)}<small>/hr</small></> : <small>Not set</small>}
+                        {rate > 0 ? <>{currency(rate, entry.record.compensation.currency)}<small>/hr</small></> : <small>Rate not recorded</small>}
                       </span>
                     </button>
                   </li>
@@ -819,7 +952,7 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
             <div className="staff-roster__empty">
               <UserCircle size={30} aria-hidden="true" />
               <p>{records.length ? "No teammates match this view yet." : "Your first teammate can start right here."}</p>
-              <button type="button" className="ghost" onClick={addStaff}>Welcome the first person</button>
+              <button type="button" className="ghost" onClick={addStaff} disabled={rosterSaveLocked}>Welcome the first person</button>
             </div>
           )}
         </aside>
@@ -842,22 +975,71 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                   </p>
                   <strong className="staff-primary-state" data-tone={selectedOperationalState?.tone}>{selectedOperationalState?.label}</strong>
                 </div>
-                <div className="staff-record__controls">
-                  <div className="staff-profile-actions">
-                    <button type="button" className="cta" disabled={!selectedAssignment || invitationBusy || dirty} onClick={() => void previewInvitation()}>
-                      {selectedAssignment ? "Review assignment" : "Assign staff"}
-                    </button>
-                    <button type="button" className="ghost staff-more-button" aria-label="More staff actions" onClick={focusStaffDetails}><span className="staff-ui-glyph is-more" aria-hidden="true">•••</span></button>
+                {isRosterDraft ? (
+                  <div className="staff-record__controls staff-record__controls--roster">
+                    <small>Name and one role create a valid roster member.</small>
                   </div>
-                  <div className="staff-record__save">
-                    <button type="button" className="ghost compact" onClick={() => void save()} disabled={!dirty || state.status === "saving"}>
-                      {state.status === "saving" ? "Saving…" : dirty ? "Save changes" : "Saved"}
-                    </button>
-                    <small>{dirty ? "Unsaved changes" : `Record revision ${draft.record.revision || 0}`}</small>
+                ) : (
+                  <div className="staff-record__controls">
+                    <div className="staff-profile-actions">
+                      <button type="button" className="cta" disabled={!selectedAssignment || invitationBusy || dirty} onClick={() => void previewInvitation()}>
+                        {selectedAssignment ? "Review assignment" : "Assign staff"}
+                      </button>
+                      <button type="button" className="ghost staff-more-button" aria-label="More staff actions" onClick={focusStaffDetails}><span className="staff-ui-glyph is-more" aria-hidden="true">•••</span></button>
+                    </div>
+                    <div className="staff-record__save">
+                      <button type="button" className="ghost compact" onClick={() => void save()} disabled={!dirty || state.status === "saving"}>
+                        {state.status === "saving" ? "Saving…" : dirty ? "Save changes" : "Saved"}
+                      </button>
+                      <small>{dirty ? "Unsaved changes" : `Record revision ${draft.record.revision || 0}`}</small>
+                    </div>
                   </div>
-                </div>
+                )}
               </header>
 
+              {isRosterDraft ? (
+                <form className="staff-quick-add" onSubmit={(event) => { event.preventDefault(); void saveRosterProfile(); }}>
+                  <div className="staff-quick-add__heading">
+                    <p className="eyebrow">Roster identity</p>
+                    <h3>Add one person in seconds</h3>
+                    <p>Contact, availability, rates, qualifications, and private details can be added later when they become relevant.</p>
+                  </div>
+                  <Field label="Display name" hint="Use the name teammates recognize.">
+                    <input
+                      autoFocus
+                      required
+                      disabled={rosterSaveLocked}
+                      maxLength={80}
+                      value={draft.profile.displayName}
+                      onChange={(event) => patchProfile("displayName", event.target.value)}
+                    />
+                  </Field>
+                  <fieldset className="staff-quick-add__roles">
+                    <legend>Can work as</legend>
+                    <RoleIcons
+                      roles={draft.profile.capabilities}
+                      interactive
+                      disabled={rosterSaveLocked}
+                      onToggle={(role, enabled) => {
+                        setDraft((current) => withStaffRole(current, role, enabled));
+                        setRosterCommand(null);
+                        setDirty(true);
+                      }}
+                    />
+                    <small>Select at least one role. This records capability only; it does not assign the person.</small>
+                  </fieldset>
+                  <button
+                    type="submit"
+                    className="cta staff-quick-add__submit"
+                    disabled={rosterSaveLocked
+                      || !draft.profile.displayName.trim()
+                      || !draft.profile.capabilities.length}
+                  >
+                    {state.status === "saving" ? "Adding person…" : "Add person"}
+                  </button>
+                </form>
+              ) : (
+                <>
               <nav className="staff-profile-tabs" aria-label="Staff profile sections">
                 <a href="#staff-overview">Overview</a>
                 <a href="#staff-next-assignment">Assignments</a>
@@ -900,16 +1082,16 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                         </div>
                       ))}
                     </div>
-                  ) : <p className="staff-honest-empty is-warning">Add availability to make scheduling easier.</p>}
+                  ) : <p className="staff-honest-empty">Availability not recorded. Add it when availability-backed scheduling is needed.</p>}
                 </article>
 
                 <div className="staff-ops-split">
                   <article id="staff-compensation" className="staff-ops-panel">
                     <header><div><p className="eyebrow">Compensation</p><h3>Rates</h3></div><CurrencyDollar size={21} aria-hidden="true" /></header>
                     <dl className="staff-key-values">
-                      <div><dt>Standard hourly rate</dt><dd>{hourlyRate > 0 ? `${currency(hourlyRate, draft.record.compensation.currency)}/hr` : "Rate not configured"}</dd></div>
-                      <div><dt>Event rate</dt><dd>{Number(draft.record.compensation.eventRate || 0) > 0 ? currency(draft.record.compensation.eventRate, draft.record.compensation.currency) : "Not configured"}</dd></div>
-                      <div><dt>Payroll status</dt><dd>{draft.record.compensation.payrollStatus === "ready" ? "Ready for review" : draft.record.compensation.payrollStatus === "on_hold" ? "On hold" : "Not ready"}</dd></div>
+                      <div><dt>Standard hourly rate</dt><dd>{hourlyRate > 0 ? `${currency(hourlyRate, draft.record.compensation.currency)}/hr` : "Rate not recorded"}</dd></div>
+                      <div><dt>Event rate</dt><dd>{Number(draft.record.compensation.eventRate || 0) > 0 ? currency(draft.record.compensation.eventRate, draft.record.compensation.currency) : "Rate not recorded"}</dd></div>
+                      <div><dt>Payroll status</dt><dd>{draft.record.compensation.payrollStatus === "ready" ? "Ready for review" : draft.record.compensation.payrollStatus === "on_hold" ? "On hold" : "Not recorded"}</dd></div>
                     </dl>
                     <button type="button" className="staff-text-action" onClick={focusStaffDetails}>Manage rates</button>
                   </article>
@@ -929,16 +1111,16 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
                           );
                         })}
                       </div>
-                    ) : <p className="staff-honest-empty is-warning">No qualifications recorded.</p>}
+                    ) : <p className="staff-honest-empty">Qualifications not recorded. Add one only when a role or policy requires it.</p>}
                   </article>
                 </div>
 
                 <article className="staff-ops-panel staff-personal-details">
                   <header><div><p className="eyebrow">Personal details</p><h3>Contact record</h3></div><UserCircle size={21} aria-hidden="true" /></header>
                   <dl className="staff-key-values">
-                    <div><dt>Phone</dt><dd>{draft.record.contact.phone || "Not provided"}</dd></div>
-                    <div><dt>Email</dt><dd>{draft.record.contact.email || "Not provided"}</dd></div>
-                    <div><dt>Emergency contact</dt><dd>{draft.record.contact.emergencyContactName && draft.record.contact.emergencyContactPhone ? `${draft.record.contact.emergencyContactName} · ${draft.record.contact.emergencyContactPhone}` : "Not provided"}</dd></div>
+                    <div><dt>Phone</dt><dd>{draft.record.contact.phone || "Not recorded"}</dd></div>
+                    <div><dt>Email</dt><dd>{draft.record.contact.email || "Not recorded"}</dd></div>
+                    <div><dt>Emergency contact</dt><dd>{draft.record.contact.emergencyContactName && draft.record.contact.emergencyContactPhone ? `${draft.record.contact.emergencyContactName} · ${draft.record.contact.emergencyContactPhone}` : "Not recorded"}</dd></div>
                     <div><dt>Preferred contact</dt><dd>{preferredContactLabel}</dd></div>
                   </dl>
                 </article>
@@ -1168,35 +1350,28 @@ export default function StaffWorkspace({ organizationId = "", organizationName =
               </Section>
                 </div>
               </details>
+                </>
+              )}
             </>
           ) : (
             <div className="staff-record__empty"><UserCircle size={34} aria-hidden="true" /><h2>Choose a teammate or welcome someone new</h2><p>Their profile and best next step will appear right here.</p></div>
           )}
         </section>
 
-        {draft ? (
-          <aside className="staff-evidence-rail" aria-label="Staff profile checklist and recent activity">
-            {selectedReadinessCompleteCount < selectedReadinessTotal ? (
-              <section className="staff-attention-callout">
-                <span className="staff-ui-glyph is-warning" aria-hidden="true">!</span>
-                <div>
-                  <strong>{selectedReadinessTotal - selectedReadinessCompleteCount} quick detail{selectedReadinessTotal - selectedReadinessCompleteCount === 1 ? "" : "s"} left to complete</strong>
-                  <p>Finish these details to make assignments easier.</p>
-                </div>
-              </section>
-            ) : null}
-
+        {draft && !isRosterDraft ? (
+          <aside className="staff-evidence-rail" aria-label="Staff maturity and recent activity">
             <section className="staff-rail-panel">
-              <header><p className="eyebrow">Profile checklist</p><strong>{selectedReadinessCompleteCount} of {selectedReadinessTotal} complete</strong></header>
+              <header><p className="eyebrow">Profile maturity</p><strong>Independent facts</strong></header>
               <ul className="staff-readiness-ledger">
-                {readinessItems.map((item) => (
+                {maturityItems.map((item) => (
                   <li key={item.label} data-state={item.state}>
-                    {item.state === "complete" ? <span className="staff-ui-glyph is-complete" aria-hidden="true">✓</span> : item.state === "warning" ? <span className="staff-ui-glyph is-warning" aria-hidden="true">!</span> : <span className="staff-neutral-dot" />}
+                    {item.state === "available" ? <span className="staff-ui-glyph is-complete" aria-hidden="true">✓</span> : <span className="staff-neutral-dot" />}
                     <span>{item.label}</span>
                     <strong>{item.value}</strong>
                   </li>
                 ))}
               </ul>
+              <p className="staff-maturity-boundary">Optional details do not invalidate a rostered teammate.</p>
             </section>
 
             {selectedAssignment ? (

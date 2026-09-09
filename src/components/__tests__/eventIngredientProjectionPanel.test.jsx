@@ -54,6 +54,18 @@ function projection(overrides = {}) {
   };
 }
 
+function selectionDraftForTest(selection) {
+  return {
+    selectionId: selection.selectionId,
+    menuItemId: selection.menuItemId,
+    recipeRevisionId: selection.recipeRevisionId,
+    requiredOutputQuantity: selection.requiredOutputQuantity,
+    outputUnitId: selection.outputUnitId,
+    portionBasis: selection.portionBasis,
+    commercialProvenance: selection.commercialProvenance
+  };
+}
+
 function render(props = {}) {
   act(() => root.render(<EventIngredientProjectionPanel {...props} />));
 }
@@ -115,6 +127,28 @@ test("requires explicit per-menu recipe output quantity and unit without guessin
     })]
   });
   expect(onPreview.mock.calls[0][0].selections[0]).not.toHaveProperty("guestCount");
+});
+
+test("shares exact preview inputs with the commercial orchestrator and hides a competing preview action", () => {
+  const onPreviewInputChange = vi.fn();
+  render({
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "125", outputUnitId: "portion" }],
+    read: { state: "recorded", projection: projection() },
+    canPreview: true,
+    onPreview: vi.fn(),
+    onPreviewInputChange,
+    showPreviewAction: false
+  });
+
+  expect(onPreviewInputChange).toHaveBeenLastCalledWith({
+    valid: true,
+    selections: [expect.objectContaining({
+      menuItemId: "chicken-alfredo",
+      requiredOutputQuantity: "125",
+      outputUnitId: "portion"
+    })]
+  });
+  expect(button("Preview ingredient impact")).toBeUndefined();
 });
 
 test("previews a missing recipe as explicit incomplete evidence without inventing an output unit", async () => {
@@ -210,10 +244,12 @@ test("labels a dirty quote as draft-not-evaluated while retaining the saved proj
 });
 
 test("shows a read-only preview without treating it as a recorded requirement", () => {
+  const selectedMenuItems = [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }];
+  const inputFingerprint = JSON.stringify(selectedMenuItems.map(selectionDraftForTest));
   render({
-    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }],
+    selectedMenuItems,
     read: { state: "current", projection: projection() },
-    preview: { state: "current", projection: projection() },
+    preview: { state: "current", projection: projection(), inputFingerprint },
     canPreview: true,
     canRecord: false,
     onPreview: vi.fn()
@@ -223,6 +259,9 @@ test("shows a read-only preview without treating it as a recorded requirement", 
   expect(button("Record requirement")).toBeUndefined();
   expect(container.querySelector("[data-event-ingredient-panel]").getAttribute("data-capability-state")).toBe("success");
   expect(container.innerHTML).toContain('data-capability-state="success"');
+  act(() => changeInput(container.querySelectorAll("input")[0], "120"));
+  expect(container.querySelector("[data-projection-kind]").textContent)
+    .toMatch(/prior preview · inputs changed/i);
 });
 
 test("locks target inputs in uncertain recovery and exposes one reconcile action", () => {

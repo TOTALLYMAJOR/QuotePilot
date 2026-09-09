@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear();
     sessionStorage.clear();
   });
-  await page.goto("/app");
+  await page.goto("/app/quotes/new");
   await expect(page.getByTestId("proposal-composer")).toBeVisible();
 });
 
@@ -224,8 +224,18 @@ test("editing a saved quote surfaces the change-impact preview in the composer",
 
   const impact = page.locator('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
   await expect(impact).toBeVisible();
-  await expect(impact).toContainText("What will this proposal change elsewhere?");
+  await expect(impact).toContainText("Understand the change before it becomes the next truth");
   await expect(impact).toContainText("browser-local mode");
+
+  const twin = page.locator('[data-capability-id="commercial-scenario-workbench"]');
+  const fulfillment = page.locator('[data-capability-id="living-commercial-twin-fulfillment"]');
+  await expect(twin).toHaveCount(1);
+  await expect(twin).toBeVisible();
+  await expect(twin).toHaveAttribute("data-authority", "session-only-non-authoritative");
+  await expect(fulfillment).toHaveCount(1);
+  await expect(fulfillment).toBeVisible();
+  await expect(fulfillment).toHaveAttribute("data-authority", "presentation-only");
+  await expect(fulfillment).not.toContainText("Supplier B");
 
   const watching = page.getByTestId("pc-watching");
   await expect(watching).toContainText("Saved-quote impact");

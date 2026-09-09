@@ -3421,7 +3421,7 @@ function createInventoryAuthorityRuntime({
     if (!beforeRevision || !afterRevision || beforeRevision === afterRevision) {
       return Object.freeze({ changed: false, affectedQuoteCount: 0 });
     }
-    if (!globalEnabled()) return Object.freeze({ changed: false, affectedQuoteCount: 0 });
+    if (!globalEnabled(orgId)) return Object.freeze({ changed: false, affectedQuoteCount: 0 });
     const refs = refsFor(orgId);
     return db.runTransaction(async (tx) => {
       const settingsSnap = await tx.get(refs.settingsRef);
@@ -3469,7 +3469,7 @@ function createInventoryAuthorityRuntime({
       || (changeKind === "cost" && (![beforeDigest, afterDigest].every((value) => /^[a-f0-9]{64}$/u.test(value))))) {
       throw new inventory.InventoryIngredientError("invalid-argument", "Menu ingredient invalidation requires an exact source transition.");
     }
-    if (!globalEnabled()) return Object.freeze({ changed: false, affectedQuoteCount: 0 });
+    if (!globalEnabled(orgId)) return Object.freeze({ changed: false, affectedQuoteCount: 0 });
     const refs = refsFor(orgId);
     return db.runTransaction(async (tx) => {
       const settingsSnap = await tx.get(refs.settingsRef);
