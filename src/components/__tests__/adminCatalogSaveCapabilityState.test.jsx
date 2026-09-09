@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AdminCatalogView } from "../AdminCatalogModal";
-import { getMenuCategories, getMenuItems } from "../../lib/menuService";
+import { getEventTypes, getMenuCategories, getMenuItems } from "../../lib/menuService";
 
 const setupDraft = vi.hoisted(() => ({ current: null }));
 const setupPreset = vi.hoisted(() => ({ stage: vi.fn() }));
@@ -82,6 +82,7 @@ beforeEach(() => {
     review: vi.fn(async () => ({ readyToPublish: true })),
     publish: vi.fn(async () => ({ catalogRevisionAfter: 2 }))
   };
+  vi.mocked(getEventTypes).mockResolvedValue([{ id: "evt-1", name: "Dinner" }]);
   vi.mocked(getMenuCategories).mockResolvedValue([{ id: "cat-1", eventTypeId: "evt-1", name: "Starters" }]);
   vi.mocked(getMenuItems).mockResolvedValue([]);
   container = document.createElement("div");
@@ -159,6 +160,144 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector('[aria-label="Edit Cocktail meatballs"]')).toBeTruthy();
     expect(container.querySelector('button[aria-pressed="true"]')?.textContent)
       .toContain("Cocktail meatballs");
+  });
+
+  test("keeps a dirty recipe mounted by locking every menu-context control until recovery", async () => {
+    vi.mocked(getEventTypes).mockResolvedValue([
+      { id: "evt-1", name: "Dinner" },
+      { id: "evt-2", name: "Reception" }
+    ]);
+    vi.mocked(getMenuCategories).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "cat-3", eventTypeId: "evt-2", name: "Canapes" }]
+      : [
+          { id: "cat-1", eventTypeId: "evt-1", name: "Entrees" },
+          { id: "cat-2", eventTypeId: "evt-1", name: "Desserts" }
+        ]);
+    vi.mocked(getMenuItems).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "item-3", eventTypeId: "evt-2", categoryId: "cat-3", name: "Bruschetta", price: 8, active: true }]
+      : [
+          { id: "item-1", eventTypeId: "evt-1", categoryId: "cat-1", name: "Chicken Alfredo", price: 18, active: true },
+          { id: "item-2", eventTypeId: "evt-1", categoryId: "cat-1", name: "Pasta Primavera", price: 16, active: true },
+          { id: "item-4", eventTypeId: "evt-1", categoryId: "cat-2", name: "Tiramisu", price: 9, active: true }
+        ]);
+    const onEventTypeChange = vi.fn();
+    const publishRecipe = vi.fn(async () => {
+      throw Object.assign(new Error("Catalog revision changed."), {
+        inventoryDefinitive: true,
+        inventoryAttempt: { requestId: "recipe-rejected-1" }
+      });
+    });
+    const resetRecipe = vi.fn(async () => ({ state: "idle" }));
+    const recipeExtension = (recipeRevision = 1, outputYield = "10") => ({
+      enabled: true,
+      ingredients: [{ ingredientId: "chicken", name: "Chicken", baseUnitId: "lb" }],
+      ingredientSourceState: "current",
+      activeMenuItemId: "item-1",
+      activeMenuCostProjectionState: "current",
+      recipesByMenuItemId: {
+        "item-1": {
+          menuItemId: "item-1",
+          recipeRevision,
+          outputYield,
+          outputUnitId: "portion",
+          lines: [{ lineId: "line-chicken", ingredientId: "chicken", quantity: "2", unitKind: "standard", unitId: "lb", quantityBasis: "as_purchased" }]
+        }
+      },
+      menuCostProjectionsByMenuItemId: {
+        "item-1": {
+          menuItemId: "item-1",
+          state: "complete",
+          projectedIngredientCostDisplay: "$6.00",
+          costPerYieldUnitDisplay: "$0.60",
+          recipeDefinition: { outputUnitId: "portion" }
+        }
+      },
+      publishRecipe,
+      resetRecipe
+    });
+    const renderRecipeView = (inventoryRecipeExtension) => renderView({
+      initialTab: "menu",
+      onEventTypeChange,
+      catalog: {
+        ...catalog(),
+        source: "firebase",
+        settings: { ...catalog().settings, catalogRevision: 1 }
+      },
+      inventoryRecipeExtension
+    });
+    renderRecipeView(recipeExtension());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    const alternateSelection = container.querySelector('input[aria-label="Select Pasta Primavera"]');
+    act(() => alternateSelection.click());
+    const recipeYield = container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]');
+    setInputValue(recipeYield, "12");
+    await act(async () => Promise.resolve());
+
+    const eventType = container.querySelector('[data-choice-field="catalog-event-type"] select');
+    const menuSection = container.querySelector('[data-choice-field="catalog-menu-section"] select');
+    const search = container.querySelector('input[type="search"][placeholder="Search by name"]');
+    const availabilityFilter = container.querySelector(".admin-menu-availability-filter input");
+    const alternateItem = [...container.querySelectorAll(".admin-menu-item-choice")]
+      .find((button) => button.textContent.includes("Pasta Primavera"));
+    const lockMessage = container.querySelector("#inventory-recipe-context-lock");
+
+    expect(lockMessage?.textContent).toContain("Publish or discard recipe changes");
+    expect(lockMessage?.textContent).toContain("recovery actions remain available");
+    expect(eventType.disabled).toBe(true);
+    expect(menuSection.disabled).toBe(true);
+    expect(search.disabled).toBe(true);
+    expect(availabilityFilter.disabled).toBe(true);
+    expect(alternateItem.disabled).toBe(true);
+    expect(alternateSelection.disabled).toBe(true);
+    expect(container.querySelector(".admin-menu-item-fields input").disabled).toBe(true);
+    expect([...container.querySelectorAll(".admin-menu-bulk-bar button")].every((button) => button.disabled)).toBe(true);
+    expect(search.getAttribute("aria-describedby")).toBe("inventory-recipe-context-lock");
+    expect([...container.querySelectorAll("button")].find((button) => button.textContent === "Discard recipe changes")?.disabled).toBe(false);
+
+    // Defense in depth: even if a host removes the DOM disabled property, the
+    // route handler must refuse a context change and preserve the recipe draft.
+    const eventTypeChangeCount = onEventTypeChange.mock.calls.length;
+    eventType.disabled = false;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(eventType, "evt-2");
+      eventType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onEventTypeChange).toHaveBeenCalledTimes(eventTypeChangeCount);
+    expect(container.querySelector("[data-inventory-recipe-editor]")?.dataset.menuItemId).toBe("item-1");
+    expect(container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]').value).toBe("12");
+
+    act(() => {
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "Discard recipe changes")
+        .click();
+    });
+    expect(container.querySelector("#inventory-recipe-context-lock")).toBeNull();
+    expect(container.querySelector('[data-choice-field="catalog-event-type"] select').disabled).toBe(false);
+    expect(container.querySelector('input[type="search"][placeholder="Search by name"]').disabled).toBe(false);
+
+    setInputValue(container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]'), "13");
+    const publishRecipeButton = container.querySelector('[data-inventory-recipe-editor] button[type="submit"]');
+    expect(
+      publishRecipeButton.disabled,
+      container.querySelector("[data-recipe-publish-disabled]")?.textContent || "recipe publish should be enabled"
+    ).toBe(false);
+    await act(async () => publishRecipeButton.click());
+    expect(container.querySelector("[data-recipe-operation-state='rejected']")).not.toBeNull();
+
+    renderRecipeView(recipeExtension(2, "14"));
+    await act(async () => Promise.resolve());
+    act(() => [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Use current recipe"))?.click());
+    expect(container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]').value).toBe("14");
+    expect(container.querySelector("#inventory-recipe-context-lock")?.textContent)
+      .toContain("Finish the current recipe outcome review");
+    expect(container.querySelector('input[type="search"][placeholder="Search by name"]').disabled).toBe(true);
+
+    await act(async () => [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Review and retry"))?.click());
+    expect(resetRecipe).toHaveBeenCalledWith({ requestId: "recipe-rejected-1" });
+    expect(container.querySelector("#inventory-recipe-context-lock")).toBeNull();
   });
 
   test("starts ready with no unsaved changes and no message", () => {

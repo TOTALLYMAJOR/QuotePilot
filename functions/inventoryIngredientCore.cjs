@@ -235,19 +235,30 @@ function normalizeIngredientRequest(value) {
   };
 }
 
-function planIngredient({ organizationId, request, current = null, currentCostState = null, actor, nowISO }) {
+function planIngredient({
+  organizationId,
+  request,
+  current = null,
+  currentCostState = null,
+  hasPackConversionEvidence = false,
+  actor,
+  nowISO
+}) {
   const orgId = opaqueId(organizationId, "organizationId");
   const normalized = normalizeIngredientRequest(request);
   const normalizedActor = normalizeActor(actor, orgId);
   const recordedAtISO = exactISO(nowISO, "nowISO");
+  if (typeof hasPackConversionEvidence !== "boolean") {
+    fail("invalid-argument", "Ingredient pack-conversion evidence state must be explicit.");
+  }
   const currentRevision = current ? revision(current.revision, "current ingredient revision", { allowZero: false }) : 0;
   if (currentRevision !== normalized.expectedRevision) fail("aborted", "Ingredient revision is stale.");
-  if (currentCostState && !current) {
-    fail("data-loss", "Ingredient cost evidence exists without its ingredient authority.");
+  if ((currentCostState || hasPackConversionEvidence) && !current) {
+    fail("data-loss", "Ingredient cost or pack-conversion evidence exists without its ingredient authority.");
   }
-  if ((current?.firstMovementId || currentCostState?.lastCostEvidenceId)
+  if ((current?.firstMovementId || currentCostState?.lastCostEvidenceId || hasPackConversionEvidence)
     && current.baseUnitId !== normalized.baseUnitId) {
-    fail("failed-precondition", "An ingredient base unit is immutable after its first stock or cost evidence.");
+    fail("failed-precondition", "An ingredient base unit is immutable after its first stock or cost evidence, or any pack-conversion evidence.");
   }
   if (currentCostState && (currentCostState.organizationId !== orgId
     || currentCostState.ingredientId !== normalized.ingredientId

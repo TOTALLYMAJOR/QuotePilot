@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
 const inventory = require("../../../functions/inventoryIngredientCore.cjs");
-const { createInventoryAuthorityRuntime } = require("../../../functions/inventoryAuthority.js");
+const recipe = require("../../../functions/inventoryRecipeCore.cjs");
+const { createInventoryAuthorityRuntime, packHeadId } = require("../../../functions/inventoryAuthority.js");
 
 const ORGANIZATION_ID = "org-inventory";
 const ADMIN_UID = "inventory-admin";
@@ -240,6 +241,81 @@ const costCommand = (overrides = {}) => ({
   currency: "USD",
   ...overrides
 });
+
+const packCommand = (overrides = {}) => ({
+  kind: "publish_pack_conversion",
+  ingredientId: "chicken",
+  packUnitId: "case",
+  packLabel: "40 lb case",
+  baseUnitId: "lb",
+  baseQuantity: "40",
+  sourceLabel: "Operator-declared purchase pack",
+  expectedRevision: 0,
+  ...overrides
+});
+
+const recipeCommand = (overrides = {}) => ({
+  kind: "publish_menu_recipe",
+  menuItemId: "chicken-alfredo",
+  expectedCatalogRevision: 7,
+  expectedRecipeRevision: 0,
+  outputYield: "10",
+  outputUnitId: "portion",
+  lines: [
+    {
+      lineId: "chicken-line",
+      ingredientId: "chicken",
+      quantity: "2",
+      unitKind: "standard",
+      unitId: "lb",
+      quantityBasis: "as_purchased",
+      usableYield: null
+    },
+    {
+      lineId: "pasta-line",
+      ingredientId: "pasta",
+      quantity: "1",
+      unitKind: "standard",
+      unitId: "lb",
+      quantityBasis: "as_purchased",
+      usableYield: null
+    }
+  ],
+  ...overrides
+});
+
+function menuItem(overrides = {}) {
+  return {
+    eventTypeId: "event-dinner",
+    categoryId: "entrees",
+    name: "Chicken Alfredo",
+    priceMinor: 1800,
+    costMinor: null,
+    pricingType: "per_person",
+    type: "menu_item",
+    active: true,
+    createdAtISO: EVIDENCE_TIME,
+    ...overrides
+  };
+}
+
+async function configureRecipeFixture(harness, { pastaCost = true } = {}) {
+  await configureChicken(harness);
+  await harness.runtime.applyInventoryCommand(envelope(ingredientCommand({
+    ingredientId: "pasta",
+    name: "Pasta",
+    category: "Pantry"
+  }), "ingredient-pasta-0001"), adminContext);
+  await harness.runtime.applyInventoryCommand(envelope(costCommand(), "cost-chicken-recipe-0001"), adminContext);
+  if (pastaCost) {
+    await harness.runtime.applyInventoryCommand(envelope(costCommand({
+      ingredientId: "pasta",
+      sourceLabel: "Opening pasta observation",
+      basisQuantity: "30",
+      totalCostMinor: 6000
+    }), "cost-pasta-recipe-0001"), adminContext);
+  }
+}
 
 async function configureChicken(harness) {
   await harness.runtime.applyInventoryCommand(envelope(locationCommand(), "location-create-0001"), adminContext);
@@ -556,5 +632,278 @@ describe("ingredient inventory authority runtime", () => {
     await expect(harness.runtime.applyInventoryCommand(
       envelope(costCommand(), "integrity-cost-0001"), adminContext
     )).rejects.toMatchObject({ code: "data-loss" });
+  });
+
+  test("publishes immutable ingredient-specific pack conversions and projects only their current heads", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    const first = await harness.runtime.applyInventoryCommand(
+      envelope(packCommand(), "pack-chicken-case-0001"), adminContext
+    );
+    expect(first).toMatchObject({
+      commandKind: "publish_pack_conversion",
+      result: { ingredientId: "chicken", packUnitId: "case", revision: 1 }
+    });
+    expect(first.result.packConversionRevisionId).toBe(
+      recipe.packConversionRevisionIdFor(ORGANIZATION_ID, "chicken", "case", 1)
+    );
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryPackConversionRevisions/${first.result.packConversionRevisionId}`
+    )).toMatchObject({ baseQuantity: "40", baseUnitId: "lb", revision: 1 });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    ).packConversions).toEqual([expect.objectContaining({
+      packUnitId: "case", packLabel: "40 lb case", baseQuantity: "40", revision: 1
+    })]);
+
+    await expect(harness.runtime.applyInventoryCommand(
+      envelope(packCommand({ baseQuantity: "42" }), "pack-chicken-case-stale"), adminContext
+    )).rejects.toMatchObject({ code: "aborted" });
+    const replay = await harness.runtime.applyInventoryCommand(
+      envelope(packCommand(), "pack-chicken-case-0001"), adminContext
+    );
+    expect(replay).toMatchObject({ idempotent: true, result: first.result });
+
+    await expect(harness.runtime.applyInventoryCommand(envelope(ingredientCommand({
+      baseUnitId: "kg",
+      expectedRevision: 1
+    }), "ingredient-unit-after-pack-0001"), adminContext)).rejects.toMatchObject({
+      code: "failed-precondition"
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredients/chicken`
+    ).baseUnitId).toBe("lb");
+  });
+
+  test("fails closed when stored pack-conversion evidence disagrees with the ingredient base unit", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(
+      envelope(packCommand(), "pack-integrity-case-0001"), adminContext
+    );
+    const headPath = `organizations/${ORGANIZATION_ID}/inventoryPackConversionHeads/${packHeadId("chicken", "case")}`;
+    harness.db.store.set(headPath, { ...harness.db.store.get(headPath), baseUnitId: "kg" });
+
+    await expect(harness.runtime.applyInventoryCommand(envelope(ingredientCommand({
+      expectedRevision: 1
+    }), "ingredient-pack-integrity-0001"), adminContext)).rejects.toMatchObject({
+      code: "data-loss"
+    });
+  });
+
+  test("publishes a catalog-fenced recipe and materializes exact $0.80 per-portion costing without stock", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness);
+    const result = await harness.runtime.applyInventoryCommand(
+      envelope(recipeCommand(), "recipe-alfredo-0001"), adminContext
+    );
+    expect(result).toMatchObject({
+      commandKind: "publish_menu_recipe",
+      result: { menuItemId: "chicken-alfredo", recipeRevision: 1, status: "complete" }
+    });
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`
+    );
+    expect(projection).toMatchObject({
+      status: "complete",
+      freshness: "current",
+      observedCatalogRevision: 7,
+      recipeDefinition: { outputYield: "10", outputUnitId: "portion" },
+      cost: {
+        projectedCostMinor: 800,
+        exactCostPerOutputUnitMinor: { numerator: "80", denominator: "1" },
+        coverage: { expectedIngredientCount: 2, costedIngredientCount: 2 }
+      }
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    ).stock.availability).toBe("not_yet_available");
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/chicken`
+    ).menuItemIds).toEqual(["chicken-alfredo"]);
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/pasta`
+    ).menuItemIds).toEqual(["chicken-alfredo"]);
+    expect(menuItem().costMinor).toBeNull();
+    expect(harness.db.store.get(`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`).costMinor).toBeNull();
+  });
+
+  test("reads recipe publication and dependency-refresh inputs before their first transactional write", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness);
+    harness.db.transactions.length = 0;
+
+    await harness.runtime.applyInventoryCommand(
+      envelope(recipeCommand(), "recipe-read-before-write-0001"), adminContext
+    );
+    expect(harness.db.transactions).toHaveLength(1);
+    expect(harness.db.transactions[0].reads).toEqual(expect.arrayContaining([
+      `organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`,
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeHeads/chicken-alfredo`,
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/chicken`,
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/pasta`,
+      `organizations/${ORGANIZATION_ID}/inventoryIngredients/chicken`,
+      `organizations/${ORGANIZATION_ID}/inventoryCostStates/${inventory.costStateId("chicken")}`
+    ]));
+    expect(harness.db.transactions[0].writes[0].path)
+      .toContain(`/inventoryRecipePolicies/`);
+
+    harness.db.transactions.length = 0;
+    await harness.runtime.applyInventoryCommand(envelope(costCommand({
+      expectedCostRevision: 1,
+      basisQuantity: "40",
+      totalCostMinor: 16000,
+      sourceLabel: "Current chicken receipt"
+    }), "cost-read-before-write-0002"), adminContext);
+    expect(harness.db.transactions).toHaveLength(2);
+    expect(harness.db.transactions[0].reads).toEqual(expect.arrayContaining([
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/chicken`,
+      `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`
+    ]));
+    expect(harness.db.transactions[1].reads).toEqual(expect.arrayContaining([
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeHeads/chicken-alfredo`,
+      `organizations/${ORGANIZATION_ID}/inventoryRecipePolicies/${harness.db.store.get(`organizations/${ORGANIZATION_ID}/inventoryRecipeHeads/chicken-alfredo`).recipeRevisionId}`
+    ]));
+  });
+
+  test("keeps a published recipe pinned when a newer purchase-pack head is declared", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness);
+    const firstPack = await harness.runtime.applyInventoryCommand(
+      envelope(packCommand(), "pack-pinned-recipe-0001"), adminContext
+    );
+    await harness.runtime.applyInventoryCommand(envelope(recipeCommand({
+      lines: [{
+        lineId: "chicken-case",
+        ingredientId: "chicken",
+        quantity: "0.05",
+        unitKind: "ingredient_pack",
+        packConversionRevisionId: firstPack.result.packConversionRevisionId,
+        quantityBasis: "as_purchased",
+        usableYield: null
+      }]
+    }), "recipe-pinned-pack-0001"), adminContext);
+    const projectionPath = `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`;
+    const before = clone(harness.db.store.get(projectionPath));
+
+    const secondPack = await harness.runtime.applyInventoryCommand(envelope(packCommand({
+      expectedRevision: 1,
+      packLabel: "50 lb case",
+      baseQuantity: "50"
+    }), "pack-pinned-recipe-0002"), adminContext);
+
+    expect(secondPack.result.affectedMenuItemIds).toEqual([]);
+    expect(harness.db.store.get(projectionPath)).toEqual(before);
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryRecipeHeads/chicken-alfredo`
+    ).revision).toBe(1);
+  });
+
+  test("changes only reverse-indexed menu costs when an ingredient cost changes", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness);
+    await harness.runtime.applyInventoryCommand(envelope(recipeCommand(), "recipe-alfredo-cost-change"), adminContext);
+    const result = await harness.runtime.applyInventoryCommand(envelope(costCommand({
+      expectedCostRevision: 1,
+      basisQuantity: "40",
+      totalCostMinor: 16000,
+      sourceLabel: "Current chicken receipt"
+    }), "cost-chicken-current-0002"), adminContext);
+    expect(result.result.affectedMenuItemIds).toEqual(["chicken-alfredo"]);
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`
+    );
+    expect(projection).toMatchObject({
+      freshness: "current",
+      status: "complete",
+      cost: {
+        projectedCostMinor: 1000,
+        exactCostPerOutputUnitMinor: { numerator: "100", denominator: "1" }
+      }
+    });
+    const lastTransaction = harness.db.transactions.at(-1);
+    expect(lastTransaction.writes.map((write) => write.path)).toEqual([
+      `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`
+    ]);
+  });
+
+  test("keeps partial costing explicit and preserves prior immutable recipe revisions", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness, { pastaCost: false });
+    const first = await harness.runtime.applyInventoryCommand(
+      envelope(recipeCommand(), "recipe-partial-0001"), adminContext
+    );
+    let projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`
+    );
+    expect(first.result.status).toBe("partial");
+    expect(projection.cost).toMatchObject({
+      status: "partial", knownCostMinor: 600,
+      coverage: { expectedIngredientCount: 2, costedIngredientCount: 1, missingCostIngredientCount: 1 }
+    });
+    expect(projection.cost).not.toHaveProperty("projectedCostMinor");
+    const firstPolicy = clone(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryRecipePolicies/${first.result.recipeRevisionId}`
+    ));
+    const second = await harness.runtime.applyInventoryCommand(envelope(recipeCommand({
+      expectedRecipeRevision: 1,
+      outputYield: "20"
+    }), "recipe-partial-0002"), adminContext);
+    projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`
+    );
+    expect(second.result.recipeRevision).toBe(2);
+    expect(projection.recipeDefinition.outputYield).toBe("20");
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryRecipePolicies/${first.result.recipeRevisionId}`
+    )).toEqual(firstPolicy);
+  });
+
+  test("rejects unpublished menu identities, stale catalog revisions, and recipe request substitution", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness);
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      recipeCommand({ menuItemId: "not-published" }), "recipe-missing-menu"
+    ), adminContext)).rejects.toMatchObject({ code: "not-found" });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      recipeCommand({ expectedCatalogRevision: 6 }), "recipe-stale-catalog"
+    ), adminContext)).rejects.toMatchObject({ code: "aborted" });
+    const exact = envelope(recipeCommand(), "recipe-idempotent-0001");
+    const first = await harness.runtime.applyInventoryCommand(exact, adminContext);
+    await expect(harness.runtime.applyInventoryCommand(exact, adminContext))
+      .resolves.toEqual({ ...first, idempotent: true });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      recipeCommand({ outputYield: "11" }), "recipe-idempotent-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "already-exists" });
   });
 });

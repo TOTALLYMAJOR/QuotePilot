@@ -21,6 +21,7 @@ function attempts(overrides = {}) {
     ingredient: attempt(),
     stock: attempt(),
     cost: attempt(),
+    conversion: attempt(),
     ...overrides
   };
 }
@@ -61,6 +62,7 @@ function projectionModel(overrides = {}) {
         observedAtISO: "",
         lastCostEvidenceId: ""
       },
+      packConversions: [],
       locationId: "main-kitchen",
       locationName: "Main kitchen"
     }],
@@ -108,6 +110,12 @@ function setInput(input, value) {
   descriptor.set.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function openPackEditor() {
+  const trigger = [...container.querySelectorAll("button")]
+    .find((button) => button.textContent === "Declare or revise pack");
+  await act(async () => trigger.click());
 }
 
 beforeEach(() => {
@@ -179,6 +187,60 @@ describe("InventoryWorkspace ingredient evidence presentation", () => {
     expect(html).toContain("Stock outcome unknown.");
     expect(html).toContain('data-inventory-axis="cost"');
     expect(html).toContain("Cost evidence is confirmed in the current projection");
+  });
+
+  test("shows declared purchase packs with their exact conversion provenance", () => {
+    const ingredient = {
+      ...projectionModel().ingredients[0],
+      packConversions: [{
+        packUnitId: "case-40lb",
+        packLabel: "40 lb case",
+        baseUnitId: "lb",
+        baseQuantity: "40",
+        sourceLabel: "Supplier specification",
+        revision: 2,
+        packConversionRevisionId: `ipc_${"a".repeat(48)}`
+      }]
+    };
+    const html = viewMarkup({ model: projectionModel({ ingredients: [ingredient] }) });
+    expect(html).toContain("40 lb case");
+    expect(html).toContain("1 case-40lb = 40 lb");
+    expect(html).toContain("Supplier specification · revision 2");
+  });
+
+  test("renders purchase-pack receipt, confirmation, uncertainty, and recovery states", () => {
+    const receipt = viewMarkup({
+      attemptOverrides: {
+        conversion: attempt("receipt", {
+          targetId: "chicken",
+          receipt: { receiptId: `iar_${"b".repeat(48)}` }
+        })
+      }
+    });
+    expect(receipt).toContain("Receipt recorded. Waiting for the server-confirmed purchase-pack projection");
+
+    const confirmed = viewMarkup({
+      attemptOverrides: {
+        conversion: attempt("committed", {
+          targetId: "chicken",
+          receipt: { recordedAtISO: "2026-09-09T05:00:00.000Z" }
+        })
+      }
+    });
+    expect(confirmed).toContain("Purchase pack is confirmed in the current projection");
+
+    const uncertain = viewMarkup({
+      attemptOverrides: {
+        conversion: attempt("uncertain", {
+          targetId: "chicken",
+          requestId: `inventory_request_${"c".repeat(32)}`,
+          error: "Purchase-pack outcome is not verified."
+        })
+      }
+    });
+    expect(uncertain).toContain('data-capability-state="uncertain"');
+    expect(uncertain).toContain("Purchase-pack outcome is not verified.");
+    expect(uncertain).toContain("Check exact request");
   });
 
   test("exposes canonical read-state locators without promoting cached or pending evidence", () => {
@@ -272,9 +334,268 @@ describe("InventoryWorkspace operator commands", () => {
     expect(stockForm.querySelector("select").disabled).toBe(false);
     expect(stockForm.querySelector('input[inputmode="decimal"]').disabled).toBe(false);
   });
+
+  test("publishes an exact purchase-pack conversion with projection-derived revision", async () => {
+    const onSubmit = vi.fn();
+    const ingredient = {
+      ...projectionModel().ingredients[0],
+      packConversions: [{
+        packUnitId: "case-40lb",
+        packLabel: "Old case label",
+        baseUnitId: "lb",
+        baseQuantity: "38",
+        sourceLabel: "Prior supplier sheet",
+        revision: 2,
+        packConversionRevisionId: `ipc_${"a".repeat(48)}`
+      }]
+    };
+    await act(async () => {
+      root.render(
+        <InventoryWorkspaceView
+          access={ADMIN_ACCESS}
+          read={{ state: "current", model: projectionModel({ ingredients: [ingredient] }), error: "" }}
+          attempts={attempts()}
+          onRetry={() => {}}
+          onSubmit={onSubmit}
+          onReconcile={() => {}}
+          onReset={() => {}}
+        />
+      );
+    });
+    await openPackEditor();
+    expect(container.querySelector('button[aria-controls="inventory-pack-editor-0"]').getAttribute("aria-expanded")).toBe("true");
+    const form = container.querySelector('form[data-inventory-command="publish_pack_conversion"]');
+    const [reference, label, quantity, source] = form.querySelectorAll("input");
+    await act(async () => {
+      setInput(reference, "case-40lb");
+      setInput(label, "40 lb case");
+      setInput(quantity, "40.000001");
+      setInput(source, "Current supplier specification");
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(onSubmit).toHaveBeenCalledWith("conversion", {
+      kind: "publish_pack_conversion",
+      ingredientId: "chicken",
+      packUnitId: "case-40lb",
+      packLabel: "40 lb case",
+      baseUnitId: "lb",
+      baseQuantity: "40.000001",
+      sourceLabel: "Current supplier specification",
+      expectedRevision: 2
+    });
+    expect(form.textContent).toContain("Publishing creates revision 3");
+  });
+
+  test("rejects ambiguous or non-canonical purchase-pack quantities before mutation", async () => {
+    const onSubmit = vi.fn();
+    await act(async () => {
+      root.render(
+        <InventoryWorkspaceView
+          access={ADMIN_ACCESS}
+          read={{ state: "current", model: projectionModel(), error: "" }}
+          attempts={attempts()}
+          onRetry={() => {}}
+          onSubmit={onSubmit}
+          onReconcile={() => {}}
+          onReset={() => {}}
+        />
+      );
+    });
+    await openPackEditor();
+    const form = container.querySelector('form[data-inventory-command="publish_pack_conversion"]');
+    const [reference, label, quantity, source] = form.querySelectorAll("input");
+    await act(async () => {
+      setInput(reference, "case-40lb");
+      setInput(label, "40 lb case");
+      setInput(source, "Supplier specification");
+      setInput(quantity, "1e3");
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("no more than six decimal places");
+
+    await act(async () => {
+      setInput(quantity, "0.000000");
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]').textContent).toContain("positive quantity");
+  });
+
+  test("keeps stock and cost controls available while a pack declaration is pending", async () => {
+    await act(async () => {
+      root.render(
+        <InventoryWorkspaceView
+          access={ADMIN_ACCESS}
+          read={{ state: "current", model: projectionModel(), error: "" }}
+          attempts={attempts({ conversion: attempt("submitting", { targetId: "chicken" }) })}
+          onRetry={() => {}}
+          onSubmit={() => {}}
+          onReconcile={() => {}}
+          onReset={() => {}}
+        />
+      );
+    });
+    expect(container.querySelector('form[aria-label="Record opening stock"] input[inputmode="decimal"]').disabled).toBe(false);
+    expect(container.querySelector('form[aria-label="Record purchase cost"] select').disabled).toBe(false);
+    expect(container.querySelector('form[data-inventory-command="publish_pack_conversion"] input').disabled).toBe(true);
+  });
+
+  test("routes uncertain purchase-pack recovery to the exact conversion attempt", async () => {
+    const onReconcile = vi.fn();
+    await act(async () => {
+      root.render(
+        <InventoryWorkspaceView
+          access={ADMIN_ACCESS}
+          read={{ state: "current", model: projectionModel(), error: "" }}
+          attempts={attempts({
+            conversion: attempt("uncertain", {
+              targetId: "chicken",
+              requestId: `inventory_request_${"d".repeat(32)}`,
+              error: "Outcome unknown."
+            })
+          })}
+          onRetry={() => {}}
+          onSubmit={() => {}}
+          onReconcile={onReconcile}
+          onReset={() => {}}
+        />
+      );
+    });
+    await act(async () => {
+      [...container.querySelectorAll('[data-inventory-axis="conversion"] button')]
+        .find((button) => button.textContent === "Check exact request")
+        .click();
+    });
+    expect(onReconcile).toHaveBeenCalledWith("conversion");
+  });
 });
 
 describe("InventoryWorkspace subscription lifecycle", () => {
+  test("holds a pack command pending until its exact projection confirms the receipt", async () => {
+    let subscription;
+    let resolveCommand;
+    const submitCommand = vi.fn(() => new Promise((resolve) => { resolveCommand = resolve; }));
+    const subscribeProjections = vi.fn((input) => {
+      subscription = input;
+      return vi.fn();
+    });
+    await act(async () => {
+      root.render(
+        <InventoryWorkspace
+          organizationId={ORGANIZATION_ID}
+          role="admin"
+          browserEnabled
+          tenantEnabled
+          subscribeProjections={subscribeProjections}
+          submitCommand={submitCommand}
+          pendingCommands={() => []}
+        />
+      );
+    });
+    await act(async () => subscription.onData(projectionModel()));
+    await openPackEditor();
+
+    const form = container.querySelector('form[data-inventory-command="publish_pack_conversion"]');
+    const [reference, label, quantity, source] = form.querySelectorAll("input");
+    await act(async () => {
+      setInput(reference, "case-40lb");
+      setInput(label, "40 lb case");
+      setInput(quantity, "40");
+      setInput(source, "Supplier specification");
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(container.textContent).toContain("Publishing purchase pack…");
+
+    const receipt = {
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      receiptId: `iar_${"e".repeat(48)}`,
+      requestId: submitCommand.mock.calls[0][0].requestId,
+      commandKind: "publish_pack_conversion",
+      recordedAtISO: "2026-09-09T06:00:00.000Z"
+    };
+    const confirmation = {
+      ingredientId: "chicken",
+      packUnitId: "case-40lb",
+      packConversionRevisionId: `ipc_${"a".repeat(48)}`,
+      revision: 1
+    };
+    await act(async () => resolveCommand({ receipt, confirmation }));
+    expect(container.textContent).toContain("Waiting for the server-confirmed purchase-pack projection");
+
+    const ingredient = {
+      ...projectionModel().ingredients[0],
+      packConversions: [{
+        packUnitId: "case-40lb",
+        packLabel: "40 lb case",
+        baseUnitId: "lb",
+        baseQuantity: "40",
+        sourceLabel: "Supplier specification",
+        revision: 1,
+        packConversionRevisionId: confirmation.packConversionRevisionId
+      }]
+    };
+    await act(async () => subscription.onData(projectionModel({ ingredients: [ingredient] })));
+    expect(container.textContent).toContain("Purchase pack is confirmed in the current projection");
+  });
+
+  test("restores and reconciles the exact unresolved pack request", async () => {
+    let subscription;
+    let resolveReconcile;
+    const reconcileCommand = vi.fn(() => new Promise((resolve) => { resolveReconcile = resolve; }));
+    const requestId = `inventory_request_${"1".repeat(32)}`;
+    const subscribeProjections = vi.fn((input) => {
+      subscription = input;
+      return vi.fn();
+    });
+    await act(async () => {
+      root.render(
+        <InventoryWorkspace
+          organizationId={ORGANIZATION_ID}
+          role="admin"
+          browserEnabled
+          tenantEnabled
+          subscribeProjections={subscribeProjections}
+          reconcileCommand={reconcileCommand}
+          pendingCommands={() => [{
+            requestId,
+            commandKind: "publish_pack_conversion",
+            targetId: "chicken",
+            definitive: false,
+            state: "uncertain",
+            error: "The original outcome is not verified."
+          }]}
+        />
+      );
+    });
+    await act(async () => subscription.onData(projectionModel()));
+    expect(container.textContent).toContain("The original outcome is not verified.");
+
+    const recovery = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Check exact request");
+    await act(async () => recovery.click());
+    expect(reconcileCommand).toHaveBeenCalledWith(expect.objectContaining({
+      organizationId: ORGANIZATION_ID,
+      requestId
+    }));
+    expect(container.textContent).toContain("Checking the exact original purchase pack request");
+
+    await act(async () => resolveReconcile({
+      receipt: {
+        organizationId: ORGANIZATION_ID,
+        commandKind: "publish_pack_conversion",
+        recordedAtISO: "2026-09-09T06:00:00.000Z"
+      },
+      confirmation: {
+        ingredientId: "chicken",
+        packConversionRevisionId: `ipc_${"b".repeat(48)}`,
+        revision: 1
+      }
+    }));
+    expect(container.textContent).toContain("Waiting for the server-confirmed purchase-pack projection");
+  });
+
   test("invalidates late callbacks when the active organization changes", async () => {
     const subscriptions = [];
     const subscribeProjections = vi.fn((input) => {

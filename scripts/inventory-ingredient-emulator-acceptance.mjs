@@ -194,6 +194,37 @@ function openingCommand(ingredientId, quantity, note = "Verified opening count")
   };
 }
 
+function recipeCommand() {
+  return {
+    kind: "publish_menu_recipe",
+    menuItemId: "chicken-alfredo",
+    expectedCatalogRevision: 1,
+    expectedRecipeRevision: 0,
+    outputYield: "10",
+    outputUnitId: "portion",
+    lines: [
+      {
+        lineId: "chicken-line",
+        ingredientId: "chicken",
+        quantity: "2",
+        unitKind: "standard",
+        unitId: "lb",
+        quantityBasis: "as_purchased",
+        usableYield: null
+      },
+      {
+        lineId: "pasta-line",
+        ingredientId: "pasta",
+        quantity: "1",
+        unitKind: "standard",
+        unitId: "lb",
+        quantityBasis: "as_purchased",
+        usableYield: null
+      }
+    ]
+  };
+}
+
 await Promise.all([
   db.collection("organizations").doc(ORGANIZATION_ID).set({
     name: "Ingredient Inventory Emulator Org",
@@ -202,7 +233,19 @@ await Promise.all([
     status: "active"
   }),
   db.collection("organizations").doc(ORGANIZATION_ID)
-    .collection("settings").doc("config").set({ inventoryAuthorityEnabled: true })
+    .collection("settings").doc("config").set({ inventoryAuthorityEnabled: true, catalogRevision: 1 }),
+  db.collection("organizations").doc(ORGANIZATION_ID)
+    .collection("menuItems").doc("chicken-alfredo").set({
+      eventTypeId: "dinner",
+      categoryId: "entrees",
+      name: "Chicken Alfredo",
+      priceMinor: 1800,
+      costMinor: null,
+      pricingType: "per_person",
+      type: "menu_item",
+      active: true,
+      createdAtISO: EVIDENCE_TIME
+    })
 ]);
 const principal = await createAdminPrincipal();
 
@@ -311,9 +354,72 @@ assert.equal(chickenCostState.docs[0].data()?.totalCostMinor, 12000);
 assert.equal(chickenCostState.docs[0].data()?.currency, "USD");
 assert.equal(chickenStockQueryAfter.size, 1, "A cost command must not manufacture another stock state.");
 
+await callInventory(principal, "cost-pasta-create-0001", {
+  kind: "record_ingredient_cost",
+  ingredientId: "pasta",
+  baseUnitId: "lb",
+  availability: "available",
+  sourceLabel: "Opening pasta observation",
+  observedAtISO: EVIDENCE_TIME,
+  note: "30 lb purchase basis with a total recorded cost of $60",
+  expectedCostRevision: 0,
+  basisQuantity: "30",
+  totalCostMinor: 6000,
+  currency: "USD"
+});
+
+const recipeRequestId = "recipe-chicken-alfredo-create-0001";
+const concurrentRecipeReplay = await Promise.all([
+  callInventory(principal, recipeRequestId, recipeCommand()),
+  callInventory(principal, recipeRequestId, recipeCommand())
+]);
+assert.deepEqual(concurrentRecipeReplay.map((result) => result.idempotent).sort(), [false, true]);
+assert.equal(concurrentRecipeReplay[0].receipt.receiptId, concurrentRecipeReplay[1].receipt.receiptId);
+const initialMenuCost = await orgRef.collection("inventoryMenuCostProjections").doc("chicken-alfredo").get();
+assert.equal(initialMenuCost.exists, true);
+assert.equal(initialMenuCost.data()?.freshness, "current");
+assert.equal(initialMenuCost.data()?.status, "complete");
+assert.equal(initialMenuCost.data()?.cost?.projectedCostMinor, 800);
+assert.deepEqual(initialMenuCost.data()?.cost?.exactCostPerOutputUnitMinor, {
+  numerator: "80",
+  denominator: "1"
+});
+assert.equal((await orgRef.collection("inventoryRecipePolicies").get()).size, 1);
+assert.equal((await orgRef.collection("inventoryRecipeDependencyIndex").doc("chicken").get()).data()?.menuItemIds?.[0], "chicken-alfredo");
+
+const changedChickenCost = await callInventory(principal, "cost-chicken-change-0002", {
+  kind: "record_ingredient_cost",
+  ingredientId: "chicken",
+  baseUnitId: "lb",
+  availability: "available",
+  sourceLabel: "Current chicken purchase observation",
+  observedAtISO: "2026-09-09T05:00:00.000Z",
+  note: "40 lb purchase basis with a total recorded cost of $160",
+  expectedCostRevision: 1,
+  basisQuantity: "40",
+  totalCostMinor: 16000,
+  currency: "USD"
+});
+assert.deepEqual(changedChickenCost.result.affectedMenuItemIds, ["chicken-alfredo"]);
+const changedMenuCost = await orgRef.collection("inventoryMenuCostProjections").doc("chicken-alfredo").get();
+assert.equal(changedMenuCost.data()?.freshness, "current");
+assert.equal(changedMenuCost.data()?.cost?.projectedCostMinor, 1000);
+assert.deepEqual(changedMenuCost.data()?.cost?.exactCostPerOutputUnitMinor, {
+  numerator: "100",
+  denominator: "1"
+});
+assert.equal((await orgRef.collection("inventoryRecipePolicies").get()).size, 1,
+  "An ingredient cost change must not rewrite immutable recipe history.");
+assert.equal((await orgRef.collection("menuItems").doc("chicken-alfredo").get()).data()?.costMinor, null,
+  "Derived ingredient cost must not overwrite the manual catalog cost field.");
+
 console.log("Authoritative ingredient inventory emulator acceptance passed.");
 console.log("- demo-only loopback safety, global gate, tenant gate, verified admin claims, and role authority were required");
 console.log("- concurrent location creates preserved the shared configuration fence and bounded workspace projection");
 console.log("- exact opening-stock replay was idempotent and request substitution failed closed with one immutable movement");
 console.log("- competing revision-zero openings produced exactly one winner and never summed physical stock");
 console.log("- recorded purchase cost advanced cost evidence without changing physical stock");
+console.log("- concurrent recipe publication produced one immutable recipe and one idempotent replay");
+console.log("- $8 per 10-portion recipe projected $0.80 per portion from bounded cost evidence");
+console.log("- a chicken cost change reprojected only its reverse-indexed menu dependency to $1.00 per portion");
+console.log("- recipe costing did not require stock and never mutated the catalog selling or manual cost authority");

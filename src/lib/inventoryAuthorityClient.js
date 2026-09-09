@@ -5,6 +5,8 @@ import { auth, cloudFunctions, db, firebaseReady } from "./firebase";
 export const INVENTORY_AUTHORITY_SCHEMA_VERSION = 2;
 export const INVENTORY_AUTHORITY_VERSION = "inventory-ingredient-authority-v2";
 export const INVENTORY_INGREDIENT_PROJECTION_LIMIT = 200;
+export const INVENTORY_MENU_COST_PROJECTION_LIMIT = 200;
+export const INVENTORY_MAX_PUBLISHED_RECIPE_LINES = 50;
 export const INVENTORY_AUTHORITY_CALLABLES = Object.freeze({
   applyCommand: "applyInventoryCommand"
 });
@@ -12,7 +14,9 @@ export const INVENTORY_COMMAND_KINDS = Object.freeze([
   "upsert_location",
   "upsert_ingredient",
   "opening_balance",
-  "record_ingredient_cost"
+  "record_ingredient_cost",
+  "publish_pack_conversion",
+  "publish_menu_recipe"
 ]);
 export const INVENTORY_COST_AVAILABILITY = Object.freeze([
   "available",
@@ -47,6 +51,8 @@ const REQUEST_ID_PATTERN = /^inventory_request_[a-f0-9]{32}$/u;
 const RECEIPT_ID_PATTERN = /^iar_[a-f0-9]{48}$/u;
 const MOVEMENT_ID_PATTERN = /^imv_[a-f0-9]{48}$/u;
 const COST_EVIDENCE_ID_PATTERN = /^ice_[a-f0-9]{48}$/u;
+const RECIPE_REVISION_ID_PATTERN = /^irr_[a-f0-9]{48}$/u;
+const PACK_CONVERSION_REVISION_ID_PATTERN = /^ipc_[a-f0-9]{48}$/u;
 const DECIMAL_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/u;
 const MONEY_INPUT_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/u;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/u;
@@ -255,10 +261,49 @@ export function getInventoryBrowserAccess({
   });
 }
 
+export function getInventoryMenuCostBrowserAccess({
+  organizationId = "",
+  role = "customer",
+  browserEnabled = false,
+  tenantEnabled = false
+} = {}) {
+  let organization = "";
+  try {
+    organization = identifier(organizationId, "organizationId");
+  } catch {
+    organization = "";
+  }
+  const normalizedRole = normalizeRole(role);
+  const readEnabled = browserEnabled === true && tenantEnabled === true
+    && Boolean(organization) && STAFF_ROLES.has(normalizedRole);
+  let reason = "";
+  if (browserEnabled !== true) reason = "Ingredient costing is not enabled in this QuotePilot build.";
+  else if (tenantEnabled !== true) reason = "Ingredient costing is not enabled for this organization.";
+  else if (!organization) reason = "Restore the active organization before reading ingredient costs.";
+  else if (!STAFF_ROLES.has(normalizedRole)) reason = "Ingredient cost intelligence is available only to authorized staff.";
+  return Object.freeze({
+    browserEnabled: browserEnabled === true,
+    tenantEnabled: tenantEnabled === true,
+    serverEnforced: true,
+    organizationId: organization,
+    role: normalizedRole,
+    readEnabled,
+    mutationEnabled: readEnabled && normalizedRole === "admin",
+    reason
+  });
+}
+
 function requireReadAccess(input) {
   const access = getInventoryBrowserAccess(input);
   if (!access.readEnabled) throw clientError("permission-denied", access.reason || "Inventory read access is unavailable.");
   if (!firebaseReady || !db) throw clientError("failed-precondition", "Inventory requires a connected QuotePilot workspace.");
+  return access;
+}
+
+function requireMenuCostReadAccess(input) {
+  const access = getInventoryMenuCostBrowserAccess(input);
+  if (!access.readEnabled) throw clientError("permission-denied", access.reason || "Ingredient cost intelligence is unavailable.");
+  if (!firebaseReady || !db) throw clientError("failed-precondition", "Ingredient costing requires a connected QuotePilot workspace.");
   return access;
 }
 
@@ -374,6 +419,86 @@ function normalizeCostCommand(value) {
   return result;
 }
 
+function normalizePackConversionCommand(value) {
+  exactKeys(value, [
+    "kind", "ingredientId", "packUnitId", "packLabel", "baseUnitId", "baseQuantity",
+    "sourceLabel", "expectedRevision"
+  ], "Ingredient pack conversion command");
+  if (value.kind !== "publish_pack_conversion") {
+    throw clientError("invalid-argument", "Ingredient pack conversion command is invalid.");
+  }
+  parseQuantityMicros(value.baseQuantity, "pack base quantity");
+  return {
+    kind: value.kind,
+    ingredientId: identifier(value.ingredientId, "ingredientId"),
+    packUnitId: identifier(value.packUnitId, "packUnitId"),
+    packLabel: exactText(value.packLabel, "pack label", 80),
+    baseUnitId: baseUnit(value.baseUnitId),
+    baseQuantity: value.baseQuantity,
+    sourceLabel: exactText(value.sourceLabel, "pack conversion source", 120),
+    expectedRevision: exactRevision(value.expectedRevision, "pack conversion expected revision")
+  };
+}
+
+function normalizeRecipeLine(value, index) {
+  if (!isRecord(value) || !["standard", "ingredient_pack"].includes(value.unitKind)) {
+    throw clientError("invalid-argument", `Recipe ingredient ${index + 1} has an unsupported unit kind.`);
+  }
+  const common = ["lineId", "ingredientId", "quantity", "unitKind", "quantityBasis", "usableYield"];
+  exactKeys(value, value.unitKind === "standard"
+    ? [...common, "unitId"] : [...common, "packConversionRevisionId"], `Recipe ingredient ${index + 1}`);
+  if (!["as_purchased", "usable"].includes(value.quantityBasis)
+    || (value.quantityBasis === "as_purchased" && value.usableYield !== null)
+    || (value.quantityBasis === "usable" && value.usableYield !== null && typeof value.usableYield !== "string")) {
+    throw clientError("invalid-argument", `Recipe ingredient ${index + 1} quantity basis is invalid.`);
+  }
+  parseQuantityMicros(value.quantity, `recipe ingredient ${index + 1} quantity`);
+  if (value.usableYield !== null) {
+    const yieldMicros = parseQuantityMicros(value.usableYield, `recipe ingredient ${index + 1} usable yield`);
+    if (yieldMicros > Number(QUANTITY_SCALE)) {
+      throw clientError("invalid-argument", `Recipe ingredient ${index + 1} usable yield cannot exceed 1.`);
+    }
+  }
+  const line = {
+    lineId: identifier(value.lineId, `recipe ingredient ${index + 1} lineId`),
+    ingredientId: identifier(value.ingredientId, `recipe ingredient ${index + 1} ingredientId`),
+    quantity: value.quantity,
+    unitKind: value.unitKind,
+    quantityBasis: value.quantityBasis,
+    usableYield: value.usableYield
+  };
+  if (value.unitKind === "standard") line.unitId = identifier(value.unitId, `recipe ingredient ${index + 1} unitId`);
+  else line.packConversionRevisionId = identifier(
+    value.packConversionRevisionId, `recipe ingredient ${index + 1} pack conversion revision`
+  );
+  return line;
+}
+
+function normalizeRecipeCommand(value) {
+  exactKeys(value, [
+    "kind", "menuItemId", "expectedCatalogRevision", "expectedRecipeRevision",
+    "outputYield", "outputUnitId", "lines"
+  ], "Menu recipe publication command");
+  if (value.kind !== "publish_menu_recipe" || !Array.isArray(value.lines)
+    || value.lines.length > INVENTORY_MAX_PUBLISHED_RECIPE_LINES) {
+    throw clientError("invalid-argument", `Menu recipes support at most ${INVENTORY_MAX_PUBLISHED_RECIPE_LINES} ingredient lines.`);
+  }
+  if (value.outputYield !== null) parseQuantityMicros(value.outputYield, "recipe output yield");
+  const lines = value.lines.map(normalizeRecipeLine);
+  if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
+    throw clientError("invalid-argument", "Recipe line identities must be unique.");
+  }
+  return {
+    kind: value.kind,
+    menuItemId: identifier(value.menuItemId, "menuItemId"),
+    expectedCatalogRevision: exactRevision(value.expectedCatalogRevision, "catalog expected revision"),
+    expectedRecipeRevision: exactRevision(value.expectedRecipeRevision, "recipe expected revision"),
+    outputYield: value.outputYield,
+    outputUnitId: identifier(value.outputUnitId, "recipe output unit"),
+    lines
+  };
+}
+
 function normalizeCommand(value) {
   if (!isRecord(value) || typeof value.kind !== "string" || !COMMAND_KINDS.has(value.kind)) {
     throw clientError("invalid-argument", "A supported schema-v2 inventory command is required.");
@@ -381,7 +506,9 @@ function normalizeCommand(value) {
   if (value.kind === "upsert_location") return deepFreeze(normalizeLocationCommand(value));
   if (value.kind === "upsert_ingredient") return deepFreeze(normalizeIngredientCommand(value));
   if (value.kind === "opening_balance") return deepFreeze(normalizeOpeningBalanceCommand(value));
-  return deepFreeze(normalizeCostCommand(value));
+  if (value.kind === "record_ingredient_cost") return deepFreeze(normalizeCostCommand(value));
+  if (value.kind === "publish_pack_conversion") return deepFreeze(normalizePackConversionCommand(value));
+  return deepFreeze(normalizeRecipeCommand(value));
 }
 
 export function inventoryCommandAxis(kind) {
@@ -389,11 +516,13 @@ export function inventoryCommandAxis(kind) {
   if (kind === "upsert_ingredient") return "ingredient";
   if (kind === "opening_balance") return "stock";
   if (kind === "record_ingredient_cost") return "cost";
+  if (kind === "publish_pack_conversion") return "conversion";
+  if (kind === "publish_menu_recipe") return "recipe";
   return "";
 }
 
 function targetIdentity(command) {
-  return command.locationId || command.ingredientId || "authority";
+  return command.locationId || command.ingredientId || command.menuItemId || "authority";
 }
 
 function normalizeEnvelope(input) {
@@ -511,15 +640,17 @@ function normalizeMutationResult(value, attempt, receipt) {
     return { ...value };
   }
   if (command.kind === "upsert_ingredient") {
-    exactKeys(value, ["schemaVersion", "ingredientId", "revision", "baseUnitId", "active"], "Inventory ingredient result", "data-loss");
+    exactKeys(value, ["schemaVersion", "ingredientId", "revision", "baseUnitId", "active", "affectedMenuItemIds"], "Inventory ingredient result", "data-loss");
     if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
       || value.ingredientId !== command.ingredientId
       || value.revision !== command.expectedRevision + 1
       || value.baseUnitId !== command.baseUnitId
-      || value.active !== command.active) {
+      || value.active !== command.active
+      || !Array.isArray(value.affectedMenuItemIds)
+      || value.affectedMenuItemIds.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
       throw clientError("data-loss", "Inventory ingredient result differs from the exact request.");
     }
-    return { ...value };
+    return { ...value, affectedMenuItemIds: value.affectedMenuItemIds.map((entry) => identifier(entry, "affected menu item", "data-loss")) };
   }
   if (command.kind === "opening_balance") {
     exactKeys(value, ["schemaVersion", "ingredientId", "locationId", "movementId", "stockRevision", "onHandMicros", "onHandQuantity"], "Inventory opening result", "data-loss");
@@ -535,15 +666,48 @@ function normalizeMutationResult(value, attempt, receipt) {
     }
     return { ...value };
   }
-  exactKeys(value, ["schemaVersion", "ingredientId", "costEvidenceId", "costRevision", "availability"], "Inventory cost result", "data-loss");
+  if (command.kind === "publish_pack_conversion") {
+    exactKeys(value, [
+      "schemaVersion", "ingredientId", "packUnitId", "packConversionRevisionId", "revision", "affectedMenuItemIds"
+    ], "Ingredient pack conversion result", "data-loss");
+    if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+      || value.ingredientId !== command.ingredientId || value.packUnitId !== command.packUnitId
+      || value.revision !== command.expectedRevision + 1
+      || !PACK_CONVERSION_REVISION_ID_PATTERN.test(value.packConversionRevisionId)
+      || !Array.isArray(value.affectedMenuItemIds)
+      || value.affectedMenuItemIds.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
+      throw clientError("data-loss", "Ingredient pack conversion result differs from the exact request.");
+    }
+    return { ...value, affectedMenuItemIds: value.affectedMenuItemIds.map((entry) => identifier(entry, "affected menu item", "data-loss")) };
+  }
+  if (command.kind === "publish_menu_recipe") {
+    exactKeys(value, [
+      "schemaVersion", "menuItemId", "recipeRevisionId", "recipeRevision",
+      "projectionSourceDigest", "status"
+    ], "Menu recipe publication result", "data-loss");
+    if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+      || value.menuItemId !== command.menuItemId
+      || value.recipeRevision !== command.expectedRecipeRevision + 1
+      || !RECIPE_REVISION_ID_PATTERN.test(value.recipeRevisionId)
+      || typeof value.projectionSourceDigest !== "string"
+      || !["complete", "partial", "invalid", "unavailable"].includes(value.status)) {
+      throw clientError("data-loss", "Menu recipe publication result differs from the exact request.");
+    }
+    return { ...value };
+  }
+  exactKeys(value, [
+    "schemaVersion", "ingredientId", "costEvidenceId", "costRevision", "availability", "affectedMenuItemIds"
+  ], "Inventory cost result", "data-loss");
   if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
     || value.ingredientId !== command.ingredientId
     || !COST_EVIDENCE_ID_PATTERN.test(value.costEvidenceId)
     || value.costRevision !== command.expectedCostRevision + 1
-    || value.availability !== command.availability) {
+    || value.availability !== command.availability
+    || !Array.isArray(value.affectedMenuItemIds)
+    || value.affectedMenuItemIds.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
     throw clientError("data-loss", "Inventory cost result differs from the exact request.");
   }
-  return { ...value };
+  return { ...value, affectedMenuItemIds: value.affectedMenuItemIds.map((entry) => identifier(entry, "affected menu item", "data-loss")) };
 }
 
 function normalizeCommandResult(value, attempt) {
@@ -770,10 +934,33 @@ function normalizeCostProjection(value, ingredient) {
   return result;
 }
 
+function normalizePackConversionProjection(value, ingredient, index) {
+  exactKeys(value, [
+    "packUnitId", "packLabel", "revision", "packConversionRevisionId", "baseUnitId",
+    "baseQuantity", "sourceLabel"
+  ], `Ingredient pack conversion ${index + 1}`, "data-loss");
+  if (value.baseUnitId !== ingredient.baseUnitId
+    || !PACK_CONVERSION_REVISION_ID_PATTERN.test(value.packConversionRevisionId)) {
+    throw clientError("data-loss", "Ingredient pack conversion projection has invalid provenance.");
+  }
+  parseQuantityMicros(value.baseQuantity, "projected pack base quantity", { code: "data-loss" });
+  return {
+    unitKind: "ingredient_pack",
+    packUnitId: identifier(value.packUnitId, "projected pack unit", "data-loss"),
+    packLabel: exactText(value.packLabel, "projected pack label", 80, { code: "data-loss" }),
+    label: value.packLabel,
+    revision: exactRevision(value.revision, "projected pack revision", { allowZero: false, code: "data-loss" }),
+    packConversionRevisionId: value.packConversionRevisionId,
+    baseUnitId: value.baseUnitId,
+    baseQuantity: value.baseQuantity,
+    sourceLabel: exactText(value.sourceLabel, "projected pack source", 120, { code: "data-loss" })
+  };
+}
+
 export function normalizeInventoryIngredientProjection(value, expectedOrganizationId, expectedDocumentId) {
   exactKeys(value, [
     "authorityVersion", "schemaVersion", "model", "organizationId", "ingredientId", "name", "nameSortKey",
-    "category", "baseUnitId", "dimension", "active", "ingredientRevision", "stock", "cost", "updatedAtISO"
+    "category", "baseUnitId", "dimension", "active", "ingredientRevision", "stock", "cost", "packConversions", "updatedAtISO"
   ], "Inventory ingredient projection", "data-loss");
   const organizationId = identifier(expectedOrganizationId, "expected organizationId");
   const ingredientId = identifier(value.ingredientId, "ingredient projection identity", "data-loss");
@@ -807,9 +994,206 @@ export function normalizeInventoryIngredientProjection(value, expectedOrganizati
   ingredient.itemRevision = ingredient.ingredientRevision;
   ingredient.stock = normalizeStockProjection(value.stock, ingredient);
   ingredient.cost = normalizeCostProjection(value.cost, ingredient);
+  if (!Array.isArray(value.packConversions) || value.packConversions.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT) {
+    throw clientError("data-loss", "Ingredient pack conversion projection is not bounded.");
+  }
+  ingredient.packConversions = value.packConversions.map((entry, index) => normalizePackConversionProjection(entry, ingredient, index));
+  const packKeys = ingredient.packConversions.map((entry) => `${entry.packLabel}\u0000${entry.packUnitId}`);
+  if (packKeys.some((key, index) => index > 0 && compareCodePoints(packKeys[index - 1], key) > 0)
+    || new Set(ingredient.packConversions.map((entry) => entry.packUnitId)).size !== ingredient.packConversions.length) {
+    throw clientError("data-loss", "Ingredient pack conversion projection order is invalid.");
+  }
+  ingredient.supportedRecipeUnits = [
+    ...Object.entries(INVENTORY_BASE_UNITS)
+      .filter(([, dimension]) => dimension === ingredient.dimension)
+      .map(([unitId]) => ({ unitKind: "standard", unitId })),
+    ...ingredient.packConversions
+  ];
   ingredient.updatedAtISO = exactIso(value.updatedAtISO, "ingredient projection update time");
   ingredient.locationId = ingredient.stock.locationId;
   return deepFreeze(ingredient);
+}
+
+function exactRational(value, label) {
+  exactKeys(value, ["numerator", "denominator"], label, "data-loss");
+  if (typeof value.numerator !== "string" || typeof value.denominator !== "string"
+    || !/^(0|[1-9]\d*)$/u.test(value.numerator) || !/^[1-9]\d*$/u.test(value.denominator)) {
+    throw clientError("data-loss", `${label} is not an exact non-negative rational value.`);
+  }
+  return { numerator: value.numerator, denominator: value.denominator };
+}
+
+function moneyDisplayFromRational(value, currency) {
+  const numerator = BigInt(value.numerator);
+  const denominator = BigInt(value.denominator);
+  const minor = (numerator * 2n + denominator) / (denominator * 2n);
+  if (minor > BigInt(Number.MAX_SAFE_INTEGER)) return "";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(minor) / 100);
+}
+
+function normalizeStoredRecipeLine(value, index) {
+  try {
+    return normalizeRecipeLine(value, index);
+  } catch (error) {
+    throw clientError("data-loss", error?.message || `Projected recipe line ${index + 1} is invalid.`);
+  }
+}
+
+function normalizeMenuCostResult(value, organizationId, menuItemId, recipeRevisionId) {
+  if (!isRecord(value)) throw clientError("data-loss", "Menu cost result is unavailable.");
+  const commonKeys = [
+    "authorityVersion", "schemaVersion", "costingVersion", "organizationId", "menuItemId",
+    "recipeRevisionId", "recipeDigest", "status", "outputYield", "outputUnitId", "ingredients",
+    "coverage", "issues", "resultDigest"
+  ];
+  const optionalKeys = [
+    "currency", "exactKnownCostMinor", "knownCostMinor", "projectedCostMinor", "exactCostPerOutputUnitMinor"
+  ].filter((key) => Object.hasOwn(value, key));
+  exactKeys(value, [...commonKeys, ...optionalKeys], "Menu cost result", "data-loss");
+  if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+    || value.costingVersion !== "ingredient-recipe-cost-v2"
+    || value.organizationId !== organizationId || value.menuItemId !== menuItemId
+    || value.recipeRevisionId !== recipeRevisionId
+    || !["complete", "partial", "invalid", "unavailable"].includes(value.status)
+    || !Array.isArray(value.ingredients) || value.ingredients.length > INVENTORY_MAX_PUBLISHED_RECIPE_LINES
+    || !Array.isArray(value.issues) || value.issues.length > (INVENTORY_MAX_PUBLISHED_RECIPE_LINES * 3) + 4
+    || typeof value.resultDigest !== "string") {
+    throw clientError("data-loss", "Menu cost result crossed its authority boundary.");
+  }
+  exactKeys(value.coverage, [
+    "expectedIngredientCount", "normalizedIngredientCount", "costedIngredientCount", "missingCostIngredientCount"
+  ], "Menu cost coverage", "data-loss");
+  Object.values(value.coverage).forEach((count) => exactSafeInteger(count, "menu cost coverage count"));
+  const ingredients = value.ingredients.map((row, index) => {
+    if (!isRecord(row)) throw clientError("data-loss", `Menu cost ingredient ${index + 1} is invalid.`);
+    const allowed = new Set([
+      "ingredientId", "ingredientRevision", "baseUnitId", "requiredBaseQuantityMicros", "lineIds",
+      "conversionProvenance", "costAvailability", "costRevision", "costEvidenceId", "currency", "exactCostMinor"
+    ]);
+    if (Object.keys(row).some((key) => !allowed.has(key))) {
+      throw clientError("data-loss", `Menu cost ingredient ${index + 1} contains unsupported evidence.`);
+    }
+    const required = [
+      "ingredientId", "ingredientRevision", "baseUnitId", "requiredBaseQuantityMicros", "lineIds",
+      "conversionProvenance", "costAvailability"
+    ];
+    if (required.some((key) => !Object.hasOwn(row, key))) {
+      throw clientError("data-loss", `Menu cost ingredient ${index + 1} is incomplete.`);
+    }
+    identifier(row.ingredientId, `menu cost ingredient ${index + 1}`, "data-loss");
+    exactRevision(row.ingredientRevision, `menu cost ingredient ${index + 1} revision`, { allowZero: false, code: "data-loss" });
+    baseUnit(row.baseUnitId, `menu cost ingredient ${index + 1} base unit`, "data-loss");
+    exactRational(row.requiredBaseQuantityMicros, `menu cost ingredient ${index + 1} quantity`);
+    if (!Array.isArray(row.lineIds) || !Array.isArray(row.conversionProvenance)) {
+      throw clientError("data-loss", `Menu cost ingredient ${index + 1} provenance is invalid.`);
+    }
+    if (Object.hasOwn(row, "exactCostMinor")) exactRational(row.exactCostMinor, `menu cost ingredient ${index + 1} exact cost`);
+    return canonicalClone(row, `Menu cost ingredient ${index + 1}`);
+  });
+  let currency = "";
+  if (Object.hasOwn(value, "currency")) {
+    if (typeof value.currency !== "string" || !CURRENCY_PATTERN.test(value.currency)) {
+      throw clientError("data-loss", "Menu cost currency is invalid.");
+    }
+    currency = value.currency;
+    exactRational(value.exactKnownCostMinor, "exact known recipe cost");
+    exactSafeInteger(value.knownCostMinor, "known recipe cost");
+  }
+  if (value.status === "complete") {
+    if (!currency || !Object.hasOwn(value, "projectedCostMinor") || !Object.hasOwn(value, "exactCostPerOutputUnitMinor")) {
+      throw clientError("data-loss", "Complete menu cost lacks exact output-boundary money.");
+    }
+    exactSafeInteger(value.projectedCostMinor, "projected recipe cost");
+    exactRational(value.exactCostPerOutputUnitMinor, "exact cost per recipe output unit");
+  }
+  return { ...canonicalClone(value, "Menu cost result"), ingredients, currency };
+}
+
+export function normalizeInventoryMenuCostProjection(value, expectedOrganizationId, expectedDocumentId) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "menuItemId", "menuItemName",
+    "menuItemNameSortKey", "observedCatalogRevision", "menuIdentityDigest", "recipeRevision",
+    "recipeRevisionId", "recipeDigest", "policyDigest", "recipeDefinition", "status", "freshness",
+    "staleReason", "cost", "updatedAtISO", "sourceDigest"
+  ], "Inventory menu cost projection", "data-loss");
+  const organizationId = identifier(expectedOrganizationId, "expected organizationId");
+  const menuItemId = identifier(value.menuItemId, "menu cost menuItemId", "data-loss");
+  const name = exactText(value.menuItemName, "menu cost item name", 120, { code: "data-loss" });
+  if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+    || value.model !== "inventory-menu-cost-projection-v2"
+    || value.organizationId !== organizationId || menuItemId !== expectedDocumentId
+    || value.menuItemNameSortKey !== name.toLocaleLowerCase("en-US")
+    || !["complete", "partial", "invalid", "unavailable", "stale"].includes(value.status)
+    || !["current", "stale"].includes(value.freshness)
+    || (value.freshness === "current" && (value.staleReason !== "" || value.status === "stale"))
+    || (value.freshness === "stale" && (typeof value.staleReason !== "string" || !value.staleReason || value.status !== "stale"))) {
+    throw clientError("data-loss", "Inventory menu cost projection is internally inconsistent.");
+  }
+  const recipeRevision = exactRevision(value.recipeRevision, "menu cost recipe revision", { allowZero: false, code: "data-loss" });
+  if (!RECIPE_REVISION_ID_PATTERN.test(value.recipeRevisionId)) {
+    throw clientError("data-loss", "Menu cost recipe revision identity is invalid.");
+  }
+  exactKeys(value.recipeDefinition, [
+    "revision", "recipeRevisionId", "recipeDigest", "outputYield", "outputUnitId", "lines", "definitionDigest"
+  ], "Projected recipe definition", "data-loss");
+  if (value.recipeDefinition.revision !== recipeRevision
+    || value.recipeDefinition.recipeRevisionId !== value.recipeRevisionId
+    || value.recipeDefinition.recipeDigest !== value.recipeDigest
+    || !Array.isArray(value.recipeDefinition.lines)
+    || value.recipeDefinition.lines.length > INVENTORY_MAX_PUBLISHED_RECIPE_LINES) {
+    throw clientError("data-loss", "Projected recipe definition is inconsistent.");
+  }
+  const recipeDefinition = {
+    revision: recipeRevision,
+    recipeRevision,
+    recipeRevisionId: value.recipeRevisionId,
+    recipeDigest: value.recipeDigest,
+    outputYield: value.recipeDefinition.outputYield,
+    outputUnitId: identifier(value.recipeDefinition.outputUnitId, "projected recipe output unit", "data-loss"),
+    lines: value.recipeDefinition.lines.map(normalizeStoredRecipeLine),
+    definitionDigest: value.recipeDefinition.definitionDigest
+  };
+  const cost = normalizeMenuCostResult(value.cost, organizationId, menuItemId, value.recipeRevisionId);
+  if (value.freshness === "current" && value.status !== cost.status) {
+    throw clientError("data-loss", "Current menu cost status contradicts its calculation.");
+  }
+  const projection = {
+    authorityVersion: INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    model: value.model,
+    organizationId,
+    menuItemId,
+    menuItemName: name,
+    menuItemNameSortKey: value.menuItemNameSortKey,
+    observedCatalogRevision: exactRevision(value.observedCatalogRevision, "observed catalog revision", { code: "data-loss" }),
+    menuIdentityDigest: value.menuIdentityDigest,
+    recipeRevision,
+    recipeRevisionId: value.recipeRevisionId,
+    recipeDigest: value.recipeDigest,
+    policyDigest: value.policyDigest,
+    recipeDefinition,
+    status: value.status,
+    freshness: value.freshness,
+    staleReason: value.staleReason,
+    cost,
+    coverage: cost.coverage,
+    issues: cost.issues,
+    yieldLabel: `${recipeDefinition.outputYield || "Unknown"} ${recipeDefinition.outputUnitId}`,
+    updatedAtISO: exactIso(value.updatedAtISO, "menu cost projection update time"),
+    sourceDigest: value.sourceDigest
+  };
+  if (cost.currency && cost.exactCostPerOutputUnitMinor) {
+    projection.costPerYieldUnitDisplay = moneyDisplayFromRational(cost.exactCostPerOutputUnitMinor, cost.currency);
+  }
+  if (cost.currency && Number.isSafeInteger(cost.projectedCostMinor ?? cost.knownCostMinor)) {
+    const minor = cost.projectedCostMinor ?? cost.knownCostMinor;
+    projection.projectedIngredientCostDisplay = new Intl.NumberFormat("en-US", {
+      style: "currency", currency: cost.currency
+    }).format(minor / 100);
+  }
+  return deepFreeze(projection);
 }
 
 function combinedFreshness(sources) {
@@ -939,6 +1323,211 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
   };
 }
 
+export function subscribeToInventoryMenuCostProjections(input = {}) {
+  const access = requireMenuCostReadAccess(input);
+  if (typeof input.onData !== "function") {
+    throw clientError("invalid-argument", "Menu cost projection listener requires onData.");
+  }
+  let active = true;
+  let retained = [];
+  const emit = (source) => {
+    if (!active) return;
+    input.onData(deepFreeze({
+      schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+      organizationId: access.organizationId,
+      projections: retained,
+      byMenuItemId: Object.fromEntries(retained.map((entry) => [entry.menuItemId, entry])),
+      source,
+      freshness: source.state,
+      bounded: retained.length === INVENTORY_MENU_COST_PROJECTION_LIMIT
+    }));
+  };
+  const unavailable = () => {
+    if (!active) return;
+    const source = { state: "unavailable", fromCache: false, hasPendingWrites: false };
+    emit(source);
+    input.onError?.(Object.freeze({
+      code: "inventory-menu-cost-projections-unavailable",
+      message: "Current menu cost projection updates are unavailable. Retained values are not confirmed current.",
+      source
+    }));
+  };
+  const projectionQuery = query(
+    collection(db, "organizations", access.organizationId, "inventoryMenuCostProjections"),
+    orderBy("menuItemNameSortKey", "asc"),
+    limit(INVENTORY_MENU_COST_PROJECTION_LIMIT)
+  );
+  let unsubscribe;
+  try {
+    unsubscribe = onSnapshot(projectionQuery, { includeMetadataChanges: true }, (snapshot) => {
+      if (!active) return;
+      try {
+        if (!Array.isArray(snapshot?.docs) || snapshot.docs.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
+          throw clientError("data-loss", "Menu cost projection query exceeded its bounded contract.");
+        }
+        const projections = snapshot.docs.map((entry) => normalizeInventoryMenuCostProjection(
+          entry.data(), access.organizationId, entry.id
+        ));
+        if (new Set(projections.map((entry) => entry.menuItemId)).size !== projections.length
+          || projections.some((entry, index) => index > 0
+            && compareCodePoints(projections[index - 1].menuItemNameSortKey, entry.menuItemNameSortKey) > 0)) {
+          throw clientError("data-loss", "Menu cost projections are not a stable ordered set.");
+        }
+        retained = projections;
+        const metadata = snapshot?.metadata || {};
+        emit({
+          state: sourceState(metadata),
+          fromCache: metadata.fromCache === true,
+          hasPendingWrites: metadata.hasPendingWrites === true
+        });
+      } catch {
+        unavailable();
+      }
+    }, unavailable);
+  } catch (error) {
+    active = false;
+    throw error;
+  }
+  return () => {
+    if (!active) return;
+    active = false;
+    if (typeof unsubscribe === "function") unsubscribe();
+  };
+}
+
+export function subscribeToInventoryMenuCostProjection(input = {}) {
+  const access = requireMenuCostReadAccess(input);
+  const menuItemId = identifier(input.menuItemId, "menu item identity");
+  if (typeof input.onData !== "function") {
+    throw clientError("invalid-argument", "Exact menu cost projection listener requires onData.");
+  }
+  let active = true;
+  let retained = null;
+  const emit = (source, exists) => {
+    if (!active) return;
+    input.onData(deepFreeze({
+      schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+      organizationId: access.organizationId,
+      menuItemId,
+      exists,
+      projection: retained,
+      source,
+      freshness: source.state
+    }));
+  };
+  const unavailable = () => {
+    if (!active) return;
+    const source = { state: "unavailable", fromCache: false, hasPendingWrites: false };
+    emit(source, retained !== null);
+    input.onError?.(Object.freeze({
+      code: "inventory-menu-cost-projection-unavailable",
+      message: "The exact menu cost projection is unavailable. Retained evidence is not confirmed current.",
+      source,
+      menuItemId
+    }));
+  };
+  const projectionRef = doc(
+    db,
+    "organizations",
+    access.organizationId,
+    "inventoryMenuCostProjections",
+    menuItemId
+  );
+  let unsubscribe;
+  try {
+    unsubscribe = onSnapshot(projectionRef, { includeMetadataChanges: true }, (snapshot) => {
+      if (!active) return;
+      try {
+        const exists = snapshot.exists();
+        retained = exists
+          ? normalizeInventoryMenuCostProjection(snapshot.data(), access.organizationId, menuItemId)
+          : null;
+        const metadata = snapshot?.metadata || {};
+        emit({
+          state: sourceState(metadata),
+          fromCache: metadata.fromCache === true,
+          hasPendingWrites: metadata.hasPendingWrites === true
+        }, exists);
+      } catch {
+        unavailable();
+      }
+    }, unavailable);
+  } catch (error) {
+    active = false;
+    throw error;
+  }
+  return () => {
+    if (!active) return;
+    active = false;
+    if (typeof unsubscribe === "function") unsubscribe();
+  };
+}
+
+export function subscribeToInventoryRecipeIngredients(input = {}) {
+  const access = requireReadAccess(input);
+  if (typeof input.onData !== "function") {
+    throw clientError("invalid-argument", "Recipe ingredient projection listener requires onData.");
+  }
+  let active = true;
+  let retained = [];
+  const emit = (source) => {
+    if (!active) return;
+    input.onData(deepFreeze({
+      schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+      organizationId: access.organizationId,
+      ingredients: retained,
+      source,
+      freshness: source.state,
+      bounded: retained.length === INVENTORY_INGREDIENT_PROJECTION_LIMIT
+    }));
+  };
+  const unavailable = () => {
+    if (!active) return;
+    const source = { state: "unavailable", fromCache: false, hasPendingWrites: false };
+    emit(source);
+    input.onError?.(Object.freeze({
+      code: "inventory-recipe-ingredients-unavailable",
+      message: "Current ingredient definitions are unavailable. Retained values cannot authorize recipe publication.",
+      source
+    }));
+  };
+  const ingredientQuery = query(
+    collection(db, "organizations", access.organizationId, "inventoryIngredientProjections"),
+    orderBy("nameSortKey", "asc"),
+    limit(INVENTORY_INGREDIENT_PROJECTION_LIMIT)
+  );
+  let unsubscribe;
+  try {
+    unsubscribe = onSnapshot(ingredientQuery, { includeMetadataChanges: true }, (snapshot) => {
+      if (!active) return;
+      try {
+        if (!Array.isArray(snapshot?.docs) || snapshot.docs.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT) {
+          throw clientError("data-loss", "Recipe ingredient projection query exceeded its bounded contract.");
+        }
+        retained = snapshot.docs.map((entry) => normalizeInventoryIngredientProjection(
+          entry.data(), access.organizationId, entry.id
+        ));
+        const metadata = snapshot?.metadata || {};
+        emit({
+          state: sourceState(metadata),
+          fromCache: metadata.fromCache === true,
+          hasPendingWrites: metadata.hasPendingWrites === true
+        });
+      } catch {
+        unavailable();
+      }
+    }, unavailable);
+  } catch (error) {
+    active = false;
+    throw error;
+  }
+  return () => {
+    if (!active) return;
+    active = false;
+    if (typeof unsubscribe === "function") unsubscribe();
+  };
+}
+
 export function inventoryProjectionConfirmsReceipt(model, attempt) {
   const receipt = attempt?.receipt;
   const result = attempt?.confirmation;
@@ -948,10 +1537,22 @@ export function inventoryProjectionConfirmsReceipt(model, attempt) {
   if (commandKind === "upsert_location") {
     return model.workspace?.locations.some((entry) => entry.locationId === result.locationId && entry.revision === result.revision) === true;
   }
-  const ingredient = model.ingredients.find((entry) => entry.ingredientId === result.ingredientId);
+  if (commandKind === "publish_menu_recipe") {
+    const projection = model.byMenuItemId?.[result.menuItemId]
+      || model.menuCostProjectionsByMenuItemId?.[result.menuItemId];
+    return projection?.freshness === "current"
+      && projection.recipeRevisionId === result.recipeRevisionId
+      && projection.sourceDigest === result.projectionSourceDigest;
+  }
+  const ingredient = Array.isArray(model.ingredients)
+    ? model.ingredients.find((entry) => entry.ingredientId === result.ingredientId) : null;
   if (!ingredient) return false;
   if (commandKind === "upsert_ingredient") return ingredient.ingredientRevision === result.revision;
   if (commandKind === "opening_balance") return ingredient.stock.revision === result.stockRevision && ingredient.stock.lastMovementId === result.movementId;
   if (commandKind === "record_ingredient_cost") return ingredient.cost.revision === result.costRevision && ingredient.cost.lastCostEvidenceId === result.costEvidenceId;
+  if (commandKind === "publish_pack_conversion") {
+    return ingredient.packConversions.some((entry) => entry.packConversionRevisionId === result.packConversionRevisionId
+      && entry.revision === result.revision);
+  }
   return false;
 }

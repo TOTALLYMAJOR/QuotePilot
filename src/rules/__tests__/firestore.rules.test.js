@@ -197,6 +197,16 @@ const SERVER_OWNED_INVENTORY_PATHS = Object.freeze([
   ["organizations", "org-a", "inventoryCostStates", "chicken"],
   ["organizations", "org-a", "inventoryAuthorityState", "current"],
   ["organizations", "org-a", "inventoryAuthorityReceipts", "authority-request-1"],
+  ["organizations", "org-a", "inventoryRecipePolicies", "recipe-revision-1"],
+  ["organizations", "org-a", "inventoryRecipeHeads", "menu-item-1"],
+  [
+    "organizations",
+    "org-a",
+    "inventoryPackConversionRevisions",
+    "pack-conversion-revision-1"
+  ],
+  ["organizations", "org-a", "inventoryPackConversionHeads", "chicken_case"],
+  ["organizations", "org-a", "inventoryRecipeDependencyIndex", "chicken"],
   ["organizations", "org-a", "inventoryRequirementPolicies", "policy-v1"],
   ["organizations", "org-a", "eventInventoryRequirements", "q1"],
   [
@@ -232,6 +242,13 @@ const INVENTORY_INGREDIENT_PROJECTION_PATH = Object.freeze([
   "org-a",
   "inventoryIngredientProjections",
   "chicken"
+]);
+
+const INVENTORY_MENU_COST_PROJECTION_PATH = Object.freeze([
+  "organizations",
+  "org-a",
+  "inventoryMenuCostProjections",
+  "menu-item-1"
 ]);
 
 const CATALOG_COLLECTIONS = new Set([
@@ -2500,6 +2517,129 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(getDoc(workspaceRef));
     await assertFails(getDoc(ingredientRef));
     await assertFails(getDocs(ingredientQuery));
+  }, 30_000);
+
+  test("menu cost projections are staff-readable, server-owned, and query bounded", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "organizations", "org-a", "settings", "config"), {
+        inventoryAuthorityEnabled: true
+      }, { merge: true });
+      await setDoc(doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH), {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        menuItemId: "menu-item-1",
+        state: "complete",
+        recipeRevision: 1,
+        projectedCostMinor: 12000
+      });
+    });
+
+    for (const [uid, role] of [
+      ["admin-org-a", "admin"],
+      ["sales-org-a", "sales"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`,
+        email_verified: true,
+        organizationId: "org-a",
+        role
+      }).firestore();
+      const projectionRef = doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH);
+      const projections = collection(
+        db,
+        ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)
+      );
+
+      await assertSucceeds(getDoc(projectionRef));
+      await assertSucceeds(getDocs(query(projections, limit(200))));
+      await assertFails(getDocs(projections));
+      await assertFails(getDocs(query(projections, limit(201))));
+      await assertFails(setDoc(doc(projections, `${uid}-forged`), {
+        organizationId: "org-a",
+        menuItemId: `${uid}-forged`,
+        state: "complete"
+      }));
+      await assertFails(updateDoc(projectionRef, { state: "stale" }));
+      await assertFails(deleteDoc(projectionRef));
+    }
+
+    for (const [uid, organizationId] of [
+      ["customer-org-a", "org-a"],
+      ["admin-org-b", "org-b"],
+      ["sales-org-b", "org-b"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      }).firestore();
+      await assertFails(getDoc(doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH)));
+      await assertFails(getDocs(query(
+        collection(db, ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)),
+        limit(200)
+      )));
+    }
+
+    const publicDb = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(publicDb, ...INVENTORY_MENU_COST_PROJECTION_PATH)));
+    await assertFails(getDocs(query(
+      collection(publicDb, ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)),
+      limit(200)
+    )));
+
+    // Menu-cost access must not widen the separate admin-only stock projection.
+    const salesDb = testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com", email_verified: true, organizationId: "org-a"
+    }).firestore();
+    await assertFails(getDoc(doc(salesDb, ...INVENTORY_INGREDIENT_PROJECTION_PATH)));
+  }, 30_000);
+
+  test("menu cost projections require the tenant inventory authority setting", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH), {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        menuItemId: "menu-item-1",
+        state: "partial"
+      });
+    });
+
+    for (const [uid, role] of [
+      ["admin-org-a", "admin"],
+      ["sales-org-a", "sales"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId: "org-a", role
+      }).firestore();
+      const projectionRef = doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH);
+      const projectionQuery = query(collection(
+        db,
+        ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)
+      ), limit(200));
+
+      // The base fixture omits inventoryAuthorityEnabled; false is also denied.
+      await assertFails(getDoc(projectionRef));
+      await assertFails(getDocs(projectionQuery));
+    }
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ), { inventoryAuthorityEnabled: false }, { merge: true });
+    });
+
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com", email_verified: true, organizationId: "org-a"
+    }).firestore();
+    await assertFails(getDoc(doc(adminDb, ...INVENTORY_MENU_COST_PROJECTION_PATH)));
+    await assertFails(getDocs(query(collection(
+      adminDb,
+      ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)
+    ), limit(200))));
   }, 30_000);
 
   test("inventory authority cannot be promoted by a browser administrator", async () => {

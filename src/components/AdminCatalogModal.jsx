@@ -32,6 +32,7 @@ import PackageWorkspace from "./PackageWorkspace";
 import CatalogDraftStateBar, { catalogDraftCapabilityState } from "./CatalogDraftStateBar";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import FieldStateIndicator from "./FieldStateIndicator";
+import InventoryRecipeEditor from "./InventoryRecipeEditor";
 import {
   validateCommercialPublication,
   validateConfigurationRule
@@ -700,30 +701,30 @@ const PRICE_BASIS_OPTIONS = [
   ["per_item", "Per item"]
 ];
 
-function MenuItemFields({ item, isNew = false, onChange, onBlur, onKeyDown }) {
+function MenuItemFields({ item, isNew = false, onChange, onBlur, onKeyDown, disabled = false }) {
   const aria = (field) => isNew ? `New menu item ${field}` : undefined;
   return (
     <>
       <label>
         <span>Name</span>
-        <input type="text" aria-label={aria("name")} value={item.name || ""} onChange={(event) => onChange("name", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} />
+        <input type="text" aria-label={aria("name")} value={item.name || ""} onChange={(event) => onChange("name", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} disabled={disabled} />
       </label>
       <label>
         <span>Price basis</span>
-        <select aria-label={aria("price basis")} value={item.pricingType || item.type || "per_event"} onChange={(event) => onChange("pricingType", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown}>
+        <select aria-label={aria("price basis")} value={item.pricingType || item.type || "per_event"} onChange={(event) => onChange("pricingType", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} disabled={disabled}>
           {PRICE_BASIS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
       <label>
         <span>Selling price</span>
-        <input type="number" step="0.01" aria-label={aria("price")} value={Number(item.price || 0)} onChange={(event) => onChange("price", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} />
+        <input type="number" step="0.01" aria-label={aria("price")} value={Number(item.price || 0)} onChange={(event) => onChange("price", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} disabled={disabled} />
       </label>
       <label>
         <span>Cost</span>
-        <input type="number" step="0.01" min="0" aria-label={aria("cost")} value={item.cost ?? ""} onChange={(event) => onChange("cost", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} />
+        <input type="number" step="0.01" min="0" aria-label={aria("cost")} value={item.cost ?? ""} onChange={(event) => onChange("cost", event.target.value)} onBlur={onBlur} onKeyDown={onKeyDown} disabled={disabled} />
       </label>
       <label className="admin-inline-toggle admin-menu-item-availability">
-        <input type="checkbox" checked={item.active !== false} onChange={(event) => onChange("active", event.target.checked)} onBlur={onBlur} />
+        <input type="checkbox" checked={item.active !== false} onChange={(event) => onChange("active", event.target.checked)} onBlur={onBlur} disabled={disabled} />
         <span>Available in new quotes</span>
       </label>
     </>
@@ -1141,7 +1142,8 @@ export function AdminCatalogView({
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
   onToast,
-  catalogSetupDraftController = null
+  catalogSetupDraftController = null,
+  inventoryRecipeExtension = null
 }) {
   const embedded = presentation === "embedded";
   const [draft, setDraft] = useState(catalog);
@@ -1182,6 +1184,12 @@ export function AdminCatalogView({
   const [selectedMenuItemIds, setSelectedMenuItemIds] = useState([]);
   const [activeMenuItemId, setActiveMenuItemId] = useState("");
   const [bulkTargetSection, setBulkTargetSection] = useState("");
+  const [recipeEditorInteraction, setRecipeEditorInteraction] = useState({ dirty: false, busy: false, locked: false });
+  const recipeInteractionLocked = Boolean(
+    recipeEditorInteraction.locked
+    || recipeEditorInteraction.busy
+    || recipeEditorInteraction.dirty
+  );
   const menuItemSaveInFlightRef = useRef(new Set());
   const resetOnNextOpenRef = useRef(true);
   const initializedViewScopeRef = useRef("");
@@ -1287,7 +1295,7 @@ export function AdminCatalogView({
   );
   const hasManagedMenuDraft = hasPendingMenuEditorDraft
     || Object.values(menuItemDirty).some((dirty) => dirty === true);
-  const hasAnyUnsavedChanges = hasUnsavedChanges || hasManagedMenuDraft;
+  const hasAnyUnsavedChanges = hasUnsavedChanges || hasManagedMenuDraft || recipeEditorInteraction.dirty;
   const hasDeviceOnlySetupChanges = Boolean(
     catalogSetupDraft.deviceOnly && catalogSetupDraftChanges.length > 0
   );
@@ -1633,6 +1641,16 @@ export function AdminCatalogView({
     targetItemId = "",
     options = {}
   ) => {
+    if (recipeInteractionLocked) {
+      const message = recipeEditorInteraction.busy
+        ? "Wait for the recipe publication outcome before changing another Library record."
+        : recipeEditorInteraction.dirty
+          ? "Publish or discard the open recipe changes before changing another Library record."
+          : "Finish the current recipe outcome review before changing another Library record.";
+      setStatus(message);
+      pushToast(message, "info");
+      return true;
+    }
     const includeCatalogDraft = options?.includeCatalogDraft !== false;
     const blocked = (includeCatalogDraft && hasUnsavedChanges)
       || (ownDraft !== "event-create" && Boolean(String(newEventTypeName || "").trim()))
@@ -1655,6 +1673,7 @@ export function AdminCatalogView({
     || menuActionLoading
     || menuItemSavingId
     || packActionId
+    || recipeInteractionLocked
   );
   useEffect(() => {
     onInteractionStateChange?.({
@@ -2243,9 +2262,17 @@ export function AdminCatalogView({
   };
 
   const selectAdminTab = (tabId) => {
+    if (tabId !== "menu" && recipeInteractionLocked) {
+      setStatus(recipeEditorInteraction.busy
+        ? "Wait for the recipe publication outcome before leaving Menu."
+        : recipeEditorInteraction.dirty
+          ? "Publish or discard recipe changes before leaving Menu."
+          : "Finish the current recipe outcome review before leaving Menu.");
+      return false;
+    }
     if (tabId !== "templates") {
       setActiveTab(tabId);
-      return;
+      return true;
     }
     try {
       const eventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
@@ -2254,9 +2281,11 @@ export function AdminCatalogView({
         settings: { ...(prev.settings || {}), eventTemplates }
       }));
       setActiveTab("templates");
+      return true;
     } catch (error) {
       setActiveTab("pricing");
       setStatus(`Fix Event Templates JSON before opening the structured editor: ${error.message}`);
+      return true;
     }
   };
 
@@ -2274,7 +2303,7 @@ export function AdminCatalogView({
           : (currentIndex - 1 + visibleAdminTabs.length) % visibleAdminTabs.length;
     const nextTab = visibleAdminTabs[nextIndex];
     if (!nextTab) return;
-    selectAdminTab(nextTab.id);
+    if (!selectAdminTab(nextTab.id)) return;
     window.requestAnimationFrame(() => {
       dialogRef.current?.querySelector(`[data-admin-tab-id="${nextTab.id}"]`)?.focus?.({
         preventScroll: true
@@ -2683,6 +2712,55 @@ export function AdminCatalogView({
   const activeMenuItem = selectedCategoryItems.find((item) => item.id === activeMenuItemId)
     || selectedCategoryItems[0]
     || null;
+  const recipeContextLocked = recipeInteractionLocked;
+  const recipeContextLockMessage = recipeEditorInteraction.busy
+    ? "Wait for the recipe publication outcome before changing the menu context."
+    : recipeEditorInteraction.dirty
+      ? "Publish or discard recipe changes before changing the menu context."
+      : "Finish the current recipe outcome review before changing the menu context.";
+  const blockRecipeContextChange = () => {
+    if (!recipeContextLocked) return false;
+    setStatus(recipeContextLockMessage);
+    return true;
+  };
+  const notifyActiveInventoryMenuItem = inventoryRecipeExtension?.onActiveMenuItemChange;
+  useEffect(() => {
+    notifyActiveInventoryMenuItem?.(open ? activeMenuItem?.id || "" : "");
+  }, [activeMenuItem?.id, notifyActiveInventoryMenuItem, open]);
+  const selectActiveMenuItem = (itemId) => {
+    if (itemId === activeMenuItem?.id) return;
+    if (blockRecipeContextChange()) return;
+    setActiveMenuItemId(itemId);
+  };
+  const recipeExtensionEnabled = inventoryRecipeExtension?.enabled === true;
+  const activeMenuRecipe = activeMenuItem
+    ? inventoryRecipeExtension?.recipesByMenuItemId?.[activeMenuItem.id] || null
+    : null;
+  const activeMenuCostProjection = activeMenuItem
+    ? inventoryRecipeExtension?.menuCostProjectionsByMenuItemId?.[activeMenuItem.id] || null
+    : null;
+  const activeMenuCostProjectionState = typeof notifyActiveInventoryMenuItem === "function"
+    ? inventoryRecipeExtension?.activeMenuItemId === activeMenuItem?.id
+      ? inventoryRecipeExtension?.activeMenuCostProjectionState || "loading"
+      : "loading"
+    : "current";
+  const activeMenuItemStaged = Boolean(activeMenuItem && catalogSetupDraftChanges.some((change) => (
+    change?.collection === "menuItems" && change?.recordId === activeMenuItem.id
+  )));
+  const activeMenuItemLocal = /local/u.test(String(activeMenuItem?.source || "").toLowerCase());
+  const recipePublishEligibility = activeMenuCostProjectionState !== "current"
+    ? { allowed: false, reason: "Wait for the current exact menu recipe projection before publishing. Cached, pending, or unavailable evidence cannot authorize a revision." }
+    : !publishedCatalogAvailable || activeMenuItemLocal
+    ? { allowed: false, reason: "Recipe publication requires a server-confirmed Library menu item." }
+    : activeMenuItemStaged
+      ? { allowed: false, reason: "Publish the staged menu item first, then reopen it to attach a recipe." }
+      : activeMenuItem && menuItemDirty[activeMenuItem.id]
+        ? { allowed: false, reason: "Save the menu item change before publishing its recipe." }
+        : saving || menuActionLoading || Boolean(menuItemSavingId)
+          ? { allowed: false, reason: "Wait for the current Library save to finish before publishing a recipe." }
+          : catalogRefreshRequired
+            ? { allowed: false, reason: "Load the newer Library version before publishing a recipe." }
+            : { allowed: true, reason: "" };
   const saveActiveMenuItem = () => activeMenuItem && handleManagedMenuItemBlur(activeMenuItem.id);
   const saveActiveMenuItemOnEnter = (event) => activeMenuItem && handleManagedMenuItemKeyDown(event, activeMenuItem.id);
   const selectedCategoryItemCount = menuItems.filter((item) => item.categoryId === selectedCategory).length;
@@ -2741,6 +2819,7 @@ export function AdminCatalogView({
     });
   };
   const applyBulkMenuChange = ({ active, categoryId } = {}) => {
+    if (blockRecipeContextChange()) return;
     const selected = menuItems.filter((item) => selectedMenuItemIds.includes(item.id));
     if (!selected.length) return;
     if (categoryId && !menuCategories.some((section) => section.id === categoryId)) {
@@ -3240,10 +3319,12 @@ export function AdminCatalogView({
                     options={menuEventTypeChoiceOptions}
                     value={selectedEventType}
                     onChange={(event) => {
+                      if (blockRecipeContextChange()) return;
                       setManagedEventType(event.target.value);
                       setActiveMenuItemId("");
                     }}
-                    disabled={menuLoading}
+                    disabled={menuLoading || recipeContextLocked}
+                    description={recipeContextLocked ? recipeContextLockMessage : ""}
                     placeholder="Choose event type"
                     emptyState="unavailable"
                     emptyReason={menuEventTypeSelectionStale
@@ -3291,10 +3372,12 @@ export function AdminCatalogView({
                     options={menuSectionChoiceOptions}
                     value={selectedCategory}
                     onChange={(event) => {
+                      if (blockRecipeContextChange()) return;
                       setSelectedCategory(event.target.value);
                       setActiveMenuItemId("");
                     }}
-                    disabled={!selectedEventType || menuLoading}
+                    disabled={!selectedEventType || menuLoading || recipeContextLocked}
+                    description={recipeContextLocked ? recipeContextLockMessage : ""}
                     placeholder="Choose menu section"
                     emptyReason={menuSectionSelectionStale
                       ? `The previously selected menu section ${selectedCategory} is not in the current Library read.`
@@ -3344,17 +3427,36 @@ export function AdminCatalogView({
                 </div>
 
                 <div className="admin-menu-builder-tools">
+                  {recipeContextLocked && (
+                    <p id="inventory-recipe-context-lock" className="source-note" role="status">
+                      {recipeContextLockMessage} Recipe recovery actions remain available in the open editor.
+                    </p>
+                  )}
                   <label className="admin-menu-search-field">
                     <span>Find an item</span>
                     <input
                       type="search"
                       placeholder="Search by name"
                       value={menuSearch}
-                      onChange={(event) => setMenuSearch(event.target.value)}
+                      disabled={recipeContextLocked}
+                      aria-describedby={recipeContextLocked ? "inventory-recipe-context-lock" : undefined}
+                      onChange={(event) => {
+                        if (blockRecipeContextChange()) return;
+                        setMenuSearch(event.target.value);
+                      }}
                     />
                   </label>
                   <label className="admin-inline-toggle admin-menu-availability-filter">
-                    <input type="checkbox" checked={showUnavailableMenuItems} onChange={(event) => setShowUnavailableMenuItems(event.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={showUnavailableMenuItems}
+                      disabled={recipeContextLocked}
+                      aria-describedby={recipeContextLocked ? "inventory-recipe-context-lock" : undefined}
+                      onChange={(event) => {
+                        if (blockRecipeContextChange()) return;
+                        setShowUnavailableMenuItems(event.target.checked);
+                      }}
+                    />
                     <span>Show unavailable</span>
                   </label>
                 </div>
@@ -3378,13 +3480,14 @@ export function AdminCatalogView({
                 {selectedMenuItemIds.length > 0 && (
                   <div className="admin-menu-bulk-bar">
                     <strong>{selectedMenuItemIds.length} selected</strong>
-                    <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: true })}>Make available</button>
-                    <button type="button" className="ghost compact" onClick={() => applyBulkMenuChange({ active: false })}>Make unavailable</button>
+                    <button type="button" className="ghost compact" disabled={recipeContextLocked} onClick={() => applyBulkMenuChange({ active: true })}>Make available</button>
+                    <button type="button" className="ghost compact" disabled={recipeContextLocked} onClick={() => applyBulkMenuChange({ active: false })}>Make unavailable</button>
                     <AdaptiveChoiceField
                       label="Move selected items to menu section"
                       options={bulkDestinationOptions}
                       value={resolvedBulkTargetSection}
                       onChange={(event) => setBulkTargetSection(event.target.value)}
+                      disabled={recipeContextLocked}
                       placeholder="Move to menu section…"
                       emptyReason="There is no other menu section to move these items into."
                       recoveryAction={{
@@ -3393,7 +3496,7 @@ export function AdminCatalogView({
                       }}
                       singleChoiceDetail="This is the only other menu section, so it is the confirmed destination."
                     />
-                    <button type="button" className="ghost compact" disabled={!resolvedBulkTargetSection} onClick={() => applyBulkMenuChange({ categoryId: resolvedBulkTargetSection })}>Move selected</button>
+                    <button type="button" className="ghost compact" disabled={!resolvedBulkTargetSection || recipeContextLocked} onClick={() => applyBulkMenuChange({ categoryId: resolvedBulkTargetSection })}>Move selected</button>
                   </div>
                 )}
 
@@ -3417,9 +3520,17 @@ export function AdminCatalogView({
                               type="checkbox"
                               aria-label={`Select ${item.name || "menu item"}`}
                               checked={selectedMenuItemIds.includes(item.id)}
+                              disabled={recipeContextLocked}
                               onChange={(event) => setSelectedMenuItemIds((current) => event.target.checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))}
                             />
-                            <button type="button" className="admin-menu-item-choice" aria-pressed={isActiveItem} onClick={() => setActiveMenuItemId(item.id)}>
+                            <button
+                              type="button"
+                              className="admin-menu-item-choice"
+                              aria-pressed={isActiveItem}
+                              aria-describedby={recipeContextLocked && !isActiveItem ? "inventory-recipe-context-lock" : undefined}
+                              disabled={recipeContextLocked && !isActiveItem}
+                              onClick={() => selectActiveMenuItem(item.id)}
+                            >
                               <strong>{item.name || "Unnamed item"}</strong>
                               <span>${Number(item.price || 0).toFixed(2)} · {priceBasisLabel}</span>
                             </button>
@@ -3435,8 +3546,25 @@ export function AdminCatalogView({
                           onChange={(field, value) => patchManagedMenuItem(activeMenuItem.id, field, value)}
                           onBlur={saveActiveMenuItem}
                           onKeyDown={saveActiveMenuItemOnEnter}
+                          disabled={recipeContextLocked}
                         />
                       </div>
+                      {recipeExtensionEnabled && (
+                        <InventoryRecipeEditor
+                          menuItem={activeMenuItem}
+                          ingredients={inventoryRecipeExtension?.ingredients}
+                          recipe={activeMenuRecipe}
+                          projection={activeMenuCostProjection}
+                          expectedCatalogRevision={catalogRevision}
+                          ingredientSourceState={inventoryRecipeExtension?.ingredientSourceState}
+                          recipeSourceState={activeMenuCostProjectionState}
+                          publishEligibility={recipePublishEligibility}
+                          onPublish={inventoryRecipeExtension?.publishRecipe}
+                          onReconcile={inventoryRecipeExtension?.reconcileRecipe}
+                          onReset={inventoryRecipeExtension?.resetRecipe}
+                          onInteractionStateChange={setRecipeEditorInteraction}
+                        />
+                      )}
                     </section>
                   </div>
                 )}

@@ -132,6 +132,82 @@ describe("ingredient stock evidence", () => {
       movementDigest: inventory.digest(internallyContradictory, "ingredient movement")
     })).toThrow(/internally inconsistent/i);
   });
+
+  test("locks the base stock unit after pack-conversion evidence while allowing metadata updates", () => {
+    const item = ingredient();
+    const common = {
+      organizationId: ORG,
+      current: item,
+      hasPackConversionEvidence: true,
+      actor: ACTOR,
+      nowISO: NOW
+    };
+
+    expect(() => inventory.planIngredient({
+      ...common,
+      request: {
+        kind: "upsert_ingredient",
+        ingredientId: "chicken",
+        name: "Chicken",
+        category: "Food",
+        baseUnitId: "kg",
+        active: true,
+        expectedRevision: 1
+      }
+    })).toThrow(/pack-conversion evidence/i);
+
+    expect(inventory.planIngredient({
+      ...common,
+      request: {
+        kind: "upsert_ingredient",
+        ingredientId: "chicken",
+        name: "Chicken breast",
+        category: "Protein",
+        baseUnitId: "lb",
+        active: true,
+        expectedRevision: 1
+      }
+    }).ingredient).toMatchObject({
+      name: "Chicken breast",
+      category: "Protein",
+      baseUnitId: "lb",
+      revision: 2
+    });
+  });
+
+  test("rejects invalid or orphaned pack-conversion evidence state", () => {
+    expect(() => inventory.planIngredient({
+      organizationId: ORG,
+      request: {
+        kind: "upsert_ingredient",
+        ingredientId: "chicken",
+        name: "Chicken",
+        category: "Food",
+        baseUnitId: "lb",
+        active: true,
+        expectedRevision: 0
+      },
+      hasPackConversionEvidence: true,
+      actor: ACTOR,
+      nowISO: NOW
+    })).toThrow(/without its ingredient authority/i);
+
+    expect(() => inventory.planIngredient({
+      organizationId: ORG,
+      request: {
+        kind: "upsert_ingredient",
+        ingredientId: "chicken",
+        name: "Chicken",
+        category: "Food",
+        baseUnitId: "lb",
+        active: true,
+        expectedRevision: 0
+      },
+      hasPackConversionEvidence: "yes",
+      actor: ACTOR,
+      nowISO: NOW
+    })).toThrow(/must be explicit/i);
+  });
 });
 
 describe("independent recorded cost evidence", () => {

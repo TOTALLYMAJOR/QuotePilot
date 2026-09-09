@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-09 01:23:34 CDT
+Last updated: 2026-09-09 03:14:29 CDT
 
 ## Ingredient inventory scope correction
 
@@ -12,7 +12,8 @@ superseded that interpretation: ingredient stock, recorded purchase cost,
 versioned recipes, menu/event demand, projected food cost, consumable
 availability, allocation, and consumption evidence now govern the program.
 
-Corrected Phase 2 is complete as a default-off local source candidate:
+Corrected Phase 2 and Phase 3 are complete as default-off local source
+candidates. Phase 2 lets
 administrators create ingredient identities and locations, record fractional
 opening stock, independently record exact purchase-cost evidence, and read
 bounded materialized stock/cost projections through metadata-aware realtime
@@ -23,12 +24,28 @@ availability, rentals, checkout/return, turnaround, and damage/repair behavior
 are removed from active scope. Nothing is deployed or tenant-enabled, and the
 earlier local commit remains historical rather than being rewritten.
 
-Local qualification includes 5,342 passing unit tests with 94 intentional
-skips, 88 passing Firestore-rules tests, the demo-only authoritative inventory
-emulator scenario, both production build selections with an emitted Inventory
-chunk, and passing environment, documentation, project-state, and scoped
-capability checks. These are source/emulator facts, not hosted or production
-proof.
+Phase 3 adds deterministic same-dimension conversion, immutable explicit
+ingredient purchase-pack revisions, versioned recipes attached to exact
+existing menu-item IDs and the current catalog revision, and exact rational
+recipe costing. Library administrators edit recipes in the existing menu-item
+workspace; authorized sales staff receive only safe menu-cost projections.
+Current ingredient changes mark only reverse-indexed dependent menu projections
+stale and repair those bounded projections idempotently. The browser never
+walks raw recipes, receipts, or stock movements to answer current menu cost,
+uses an exact-document listener for the actively edited menu item in addition
+to the bounded Library summary,
+and derived ingredient cost never overwrites `menuItems.priceMinor` or the
+operator-declared `menuItems.costMinor`.
+
+Phase 2's full-march checkpoint included 5,342 passing unit tests with 94
+intentional skips and 88 passing Firestore-rules tests. Phase 3 qualification
+passes 5,414 unit tests with 96 intentional skips, 90 Firestore-rules tests, the
+real demo-emulator recipe/cost scenario, both supported production builds,
+environment validation, documentation governance, and project-state checks.
+The capability-surfacing check reaches only the pre-existing unrelated
+`steward-private-validation-foundation` branch-base drift; its Phase 3
+inventory contract has no remaining finding. All results are source or local
+emulator evidence, not CI, hosted, production, or human-acceptance proof.
 
 The corrected architecture keeps menu costing and stock promise as independent
 siblings over one immutable ingredient-demand revision. Missing cost cannot

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 01:23:34 CDT
+Last updated: 2026-09-09 03:14:29 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add Ingredient Inventory Phase 3: exact same-dimension units, immutable
+  operator-declared purchase-pack conversions, catalog-revision-fenced menu
+  recipes, pure rational recipe costing, bounded reverse dependencies, and
+  materialized per-menu cost projections. Inventory exposes pack management;
+  Library attaches recipes to canonical menu-item IDs and reads a bounded
+  realtime summary plus an exact active-item projection with explicit complete, partial, unavailable, invalid, stale,
+  cached, pending, and uncertain states. Ingredient cost changes reproject only
+  dependent menus, while physical stock, selling price, and manual catalog cost
+  remain separate authorities. Dirty and unresolved recipe outcomes retain the
+  active Library context until publication, reconciliation, or explicit reset,
+  including after a newer realtime recipe revision arrives.
 - Correct the default-off Inventory Authority to its owner-directed ingredient
   objective. The active Phase 2 now preserves the organization, transaction,
   ledger, revision, receipt, and authorization substrate while replacing

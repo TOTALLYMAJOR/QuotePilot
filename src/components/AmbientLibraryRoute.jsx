@@ -11,8 +11,10 @@ import {
   useWorkspaceReturnContextAdapter
 } from "../context/WorkspaceNavigationContext";
 import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
+import { useInventoryRecipeExtension } from "../hooks/useInventoryRecipeExtension";
 import { AdminCatalogView } from "./AdminCatalogModal";
 import BusinessSetupCenter from "./BusinessSetupCenter";
+import { InventoryMenuCostSummary } from "./InventoryRecipeEditor";
 import "./ambientLibraryRoute.css";
 
 const TenantWorkflowConfigurationStudio = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
@@ -325,7 +327,9 @@ export default function AmbientLibraryRoute({
   arrivalAttempted = false,
   onArrivalResolution,
   onInteractionStateChange,
-  contextualOrigin = null
+  contextualOrigin = null,
+  inventoryRecipeExtension = null,
+  inventoryRecipeAccess = null
 }) {
   const navigation = useOptionalWorkspaceNavigation();
   const headingRef = useWorkspaceRouteHeadingFocus(open);
@@ -340,6 +344,14 @@ export default function AmbientLibraryRoute({
   const [editorTarget, setEditorTarget] = useState(null);
   const [editorPresentationSectionId, setEditorPresentationSectionId] = useState("");
   const isAdmin = text(currentUserRole).toLowerCase() === "admin";
+  const resolvedInventoryRecipeExtension = useInventoryRecipeExtension({
+    active: open,
+    injected: inventoryRecipeExtension,
+    organizationId,
+    role: currentUserRole,
+    browserEnabled: inventoryRecipeAccess?.browserEnabled === true,
+    tenantEnabled: inventoryRecipeAccess?.tenantEnabled === true
+  });
   const setupDraft = useCatalogSetupDraft({
     enabled: open && isAdmin && Boolean(organizationId),
     organizationId,
@@ -841,6 +853,7 @@ export default function AmbientLibraryRoute({
             onEventTypeChange={onEventTypeChange}
             onToast={onToast}
             catalogSetupDraftController={setupDraft}
+            inventoryRecipeExtension={resolvedInventoryRecipeExtension}
           />}
         </section>
       </main>
@@ -874,6 +887,14 @@ export default function AmbientLibraryRoute({
       />
 
       {contextualBanner}
+
+      {resolvedInventoryRecipeExtension?.enabled === true && (
+        <InventoryMenuCostSummary
+          projections={resolvedInventoryRecipeExtension.menuCostProjections
+            || Object.values(resolvedInventoryRecipeExtension.menuCostProjectionsByMenuItemId || {})}
+          sourceState={resolvedInventoryRecipeExtension.menuCostProjectionSourceState}
+        />
+      )}
 
       {workflowAllowed && <section className="ambient-library__group" data-library-section="workflow" aria-label="Workflow configuration"><div className="ambient-library__group-title"><p>Workflow configuration</p><span aria-hidden="true" /></div><ol className="ambient-library__row-list"><li><article className="ambient-library__row" data-library-record-id="workflow"><span className="ambient-library__row-icon" aria-hidden="true">◎</span><h3>Business workflows</h3><p>Set tasks, timing, and review rules for quote approval, final guest count, event execution, and closeout follow-up.</p><button type="button" className="ambient-library__row-action" data-library-action-id="open-workflow-studio" data-workflow-studio-entry="library" onClick={(event) => openAction(workflowAction, event.currentTarget)}><span className="ambient-library__row-action-label">Open Configuration Studio</span><span aria-hidden="true">→</span></button></article></li></ol></section>}
       <div className="ambient-library__workspace" data-library-workspace="commercial">

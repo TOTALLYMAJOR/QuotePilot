@@ -1,8 +1,8 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 01:23:34 CDT
+Last updated: 2026-09-09 03:14:29 CDT
 
-Status: Accepted scope correction; default-off source implementation in progress
+Status: Accepted scope correction; corrected Phases 2 and 3 complete as default-off local source candidates
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -81,6 +81,10 @@ normal reads:
 | `inventoryAuthorityState/ingredient-v2` | Shared configuration fence and exact location/ingredient counts for contention-safe bounded setup. |
 | `inventoryAuthorityReceipts/{requestId}` | Immutable idempotent command outcome; request substitution fails closed. |
 | `inventoryRecipePolicies/{recipeRevisionId}` | Immutable recipe revision attached to a stable existing menu-item ID. |
+| `inventoryRecipeHeads/{menuItemId}` | Current server-authoritative recipe pointer, observed catalog revision, menu identity snapshot, and bounded dependency set. |
+| `inventoryPackConversionRevisions/{packConversionRevisionId}` | Immutable ingredient-specific purchase-pack conversion evidence. |
+| `inventoryPackConversionHeads/{ingredientId_packUnitId}` | Current revision pointer for an operator-declared ingredient purchase pack. |
+| `inventoryRecipeDependencyIndex/{ingredientId}` | Bounded reverse index of menu items whose current recipes use an ingredient. |
 | `inventoryMenuCostProjections/{menuItemId}` | Bounded current recipe quantity/cost projection with coverage and missing evidence. |
 | `eventIngredientRequirements/{quoteId}/revisions/{requirementRevisionId}` | Immutable compiled ingredient demand and projected cost bound to exact inputs. |
 | `eventIngredientPlans/{quoteId}` | Current server-authoritative consumable allocation state. |
@@ -181,10 +185,12 @@ cost revisions, and records `complete`, `partial`, `stale`, `unavailable`, or
 produce a clearly labeled partial amount, but never a complete-cost claim.
 
 `inventoryMenuCostProjections/{menuItemId}` is the preferred Library read model.
-It carries recipe cost, output yield, full-precision cost per yield unit,
-coverage, issues, source revisions and digest. Library subscribes to that one
-bounded projection rather than walking recipes, ingredient evidence and ledger
-history in the browser. Quote/event costing composes these already-calculated
+It carries total recipe ingredient cost, output yield, full-precision cost per
+yield unit, coverage, issues, source revisions and digest. Library uses a
+bounded realtime query for its summary and an exact-document `onSnapshot()`
+listener for the actively edited menu item. Absence from a truncated summary
+can therefore never masquerade as “no recipe.” The browser does not walk
+recipes, ingredient evidence, or ledger history. Quote/event costing composes these already-calculated
 menu projections with explicit portions, while the immutable event requirement
 revision retains the exact recipe and cost observations used. A later current
 cost change can refresh the current menu projection and identify affected
@@ -262,9 +268,10 @@ promote it. Organization, principal, role, or feature-gate changes unsubscribe
 and invalidate late callbacks.
 
 The first operator surface is `/app/inventory` under Operations. It lets an
-authorized administrator create an ingredient, record opening stock, and
-independently record cost evidence. Library receives recipe editing only when
-the recipe slice is implemented. Sales receive only explicitly approved
+authorized administrator create an ingredient, record opening stock,
+independently record cost evidence, and publish explicit purchase-pack
+conversions. Library now receives versioned recipe editing within its existing
+menu-item workspace. Sales receive only explicitly approved
 same-tenant projections and previews; customers and cross-tenant actors receive
 no inventory access.
 
@@ -306,10 +313,17 @@ corrected slices and final qualification complete.
    Edit, Preflight, Operations, and reporting projections plus deterministic
    utilization, shortage, and due-supply insights.
 
-Corrected Phase 2 is now complete as a default-off local source candidate. The
-next independently committed target is Phase 3; its recipe and costing work
-must consume the retained ingredient authority without enlarging or blocking
-the stock evidence rail.
+Corrected Phase 2 and Phase 3 are now complete as default-off local source
+candidates. Phase 3 adds same-dimension conversions, immutable declared
+purchase-pack revisions, versioned recipes attached to exact existing menu
+items, pure exact costing, bounded reverse dependencies, and materialized menu
+cost projections. Library uses bounded summary listeners and an exact active
+menu-item listener instead of replaying ingredient evidence; cached or pending snapshots never authorize recipe
+publication. Recorded menu cost remains independent of physical stock, never
+overwrites catalog selling or manual cost fields, and carries explicit partial,
+unavailable, invalid, stale, and current evidence. The next independently
+committed target is Phase 4: exact event demand plus separate projected-cost and
+consumable-shortage outcomes over one immutable requirement revision.
 
 ## Acceptance anchor
 

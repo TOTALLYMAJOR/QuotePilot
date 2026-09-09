@@ -52,6 +52,7 @@ import { useWorkspaceActionFeedback } from "./context/WorkspaceActionFeedbackCon
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useCatalogData } from "./hooks/useCatalogData";
 import { useCommercialWorkspaceSnapshot } from "./hooks/useCommercialWorkspaceSnapshot";
+import { useInventoryRecipeExtension } from "./hooks/useInventoryRecipeExtension";
 import {
   calculateQuotePricing,
   notifyOwnerNewQuote
@@ -2726,6 +2727,13 @@ export default function App({
     && inventoryTenantEnabled
     && firebaseReady
     && authSession.isAdmin;
+  const inventoryRecipeExtension = useInventoryRecipeExtension({
+    active: adminOpen || catalogRouteOpen || catalogModalOpen,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled
+  });
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
@@ -5930,6 +5938,7 @@ export default function App({
               onEventTypeChange={setGlobalEventTypeId}
               onInteractionStateChange={setCatalogModalInteraction}
               onToast={pushToast}
+              inventoryRecipeExtension={inventoryRecipeExtension}
             />
           </WorkspaceLazyTool>
         )}
@@ -5953,7 +5962,8 @@ export default function App({
       onReload: catalog.reload,
       saving: catalog.saving,
       initialTab: adminInitialTab,
-      onToast: pushToast
+      onToast: pushToast,
+      inventoryRecipeExtension
     },
     route: {
       mounted: catalogRouteMounted,
@@ -5966,6 +5976,11 @@ export default function App({
         principalId: authSession.user?.uid || "",
         workflowStudioEnabled: EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true,
         workflowSource: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source,
+        inventoryRecipeAccess: {
+          browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+          tenantEnabled: inventoryTenantEnabled
+        },
+        inventoryRecipeExtension,
         arrivalContext: workspaceArrivalContext?.surfaceId === "ambient-library"
           ? workspaceArrivalContext
           : null,

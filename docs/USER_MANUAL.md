@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 01:23:34 CDT
+Last updated: 2026-09-09 03:14:29 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1269,6 +1269,38 @@ states are not confirmation. If an action may have reached the server but no
 receipt returned, keep the entered values and use **Check exact request**; do
 not start a replacement request.
 
+For an ingredient bought in a supplier pack, open **Declare or revise pack** on
+that ingredient. Give the pack a stable reference, label, exact quantity in the
+ingredient's base unit, and evidence source. For example, `case-chicken-40lb`
+may declare `1 case = 40 lb`. Publishing creates a new immutable conversion
+revision; it does not receive stock or create cost evidence. Never use a pack
+conversion to infer a density, edible yield, or case contents that the operator
+has not declared.
+
+To cost an existing menu item:
+
+1. Open **Library → Menus**, then open the saved menu item.
+2. In **Recipe & ingredient cost**, enter the recipe's explicit output yield,
+   such as `10 portions`.
+3. Add each ingredient quantity and choose a compatible standard unit or one
+   of that ingredient's declared purchase packs.
+4. Mark the quantity **As purchased** or **Usable quantity**. A usable quantity
+   needs an explicit yield ratio, such as `0.8`; QuotePilot does not assume one.
+5. Publish the recipe revision. A local, dirty, staged, saving, or stale catalog
+   item must first be saved and refreshed.
+
+The cost card is a server-calculated projection, not browser arithmetic. It
+shows the total ingredient cost for the recipe batch separately from cost per
+recipe output unit, ingredient coverage, and explicit missing or
+invalid evidence. **Partial projected cost** means only the named known inputs
+are included; it is never the complete recipe cost. **Stale** means an upstream
+ingredient or recipe changed and the projection is awaiting or recovering its
+exact recalculation. Cached or pending ingredient data cannot authorize recipe
+publication. Sales staff may read the bounded menu-cost summary but cannot
+read stock details or publish recipes. When an administrator opens a menu item,
+the editor also listens to that item’s exact projection document; a menu item
+outside the bounded summary can never be mistaken for one with no recipe.
+
 This source-candidate slice supports at most 200 location definitions and 200
 ingredient definitions per organization. The shared server transaction fence
 rejects record 201, and a projection at its bound is labeled **Partial**. That
@@ -1276,11 +1308,11 @@ temporary limit must be replaced by cursor-based navigation before larger
 catalogs are activated; the browser never silently treats a truncated list as
 complete.
 
-This slice does not yet claim recipe cost, menu cost, event shortage,
-allocation, consumption, inventory value, or COGS. Versioned recipes and menu
-costing follow in Library. Event cost and stock availability will then consume
-the same immutable ingredient-demand revision as independent outcomes, so one
-can remain useful when the other is incomplete.
+This slice now supports current recipe and menu-item ingredient cost. It does
+not yet claim quote/event food cost, event ingredient demand, shortage,
+allocation, consumption, inventory value, or COGS. The next slice compiles an
+exact event requirement revision and derives menu cost and stock availability
+as independent outcomes, so one remains useful when the other is incomplete.
 
 ## Commercial Change Authority
 

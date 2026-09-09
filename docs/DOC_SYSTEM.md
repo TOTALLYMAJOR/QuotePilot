@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-09 01:23:34 CDT
+Last updated: 2026-09-09 03:14:29 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -65,7 +65,7 @@ it.
 | Change Type | Trigger Examples | Required Canonical Doc Update |
 |---|---|---|
 | code | `src/`, `functions/`, `e2e/`, `truthloop/`, `evidence/`, runtime behavior files | `CHANGELOG.md` |
-| backend capability | `functions/`, rules/indexes, data/provider clients, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
+| backend capability | `functions/`, rules/indexes, data/provider clients, realtime authority hooks, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
 | process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | backlog | roadmap/backlog/task artifacts | `DEV_TASKS.md` |

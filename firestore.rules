@@ -1225,6 +1225,31 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Recipe and pack-conversion publications are immutable server evidence.
+    // Mutable heads and the reverse dependency index are coordination state,
+    // not browser authority. Publication receipts share the existing inventory
+    // receipt collection above so request IDs remain collision-safe across the
+    // whole ingredient authority.
+    match /organizations/{orgId}/inventoryRecipePolicies/{recipeRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryRecipeHeads/{menuItemId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryPackConversionRevisions/{packConversionRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryPackConversionHeads/{conversionHeadId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryRecipeDependencyIndex/{ingredientId} {
+      allow read, write: if false;
+    }
+
     // Location/setup data stays in one exact, server-owned projection. The
     // first Phase-2 route is administrator-only and has no browser write path.
     match /organizations/{orgId}/inventoryWorkspaceProjections/{projectionId} {
@@ -1241,6 +1266,19 @@ service cloud.firestore {
       allow get: if isOrgAdmin(orgId)
         && inventoryAuthorityEnabled(orgId);
       allow list: if isOrgAdmin(orgId)
+        && inventoryAuthorityEnabled(orgId)
+        && request.query.limit != null
+        && request.query.limit <= 200;
+      allow create, update, delete: if false;
+    }
+
+    // Menu costing is safe commercial consequence intelligence for same-tenant
+    // staff. Reads stay feature-gated and bounded; canonical recipes, cost
+    // evidence, dependency state, and every projection write remain server-only.
+    match /organizations/{orgId}/inventoryMenuCostProjections/{menuItemId} {
+      allow get: if isOrgStaff(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if isOrgStaff(orgId)
         && inventoryAuthorityEnabled(orgId)
         && request.query.limit != null
         && request.query.limit <= 200;

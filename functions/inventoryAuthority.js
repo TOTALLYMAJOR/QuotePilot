@@ -1,6 +1,7 @@
 "use strict";
 
 const inventory = require("./inventoryIngredientCore.cjs");
+const recipe = require("./inventoryRecipeCore.cjs");
 
 const COLLECTIONS = Object.freeze({
   locations: "inventoryLocations",
@@ -12,11 +13,20 @@ const COLLECTIONS = Object.freeze({
   authorityState: "inventoryAuthorityState",
   receipts: "inventoryAuthorityReceipts",
   workspaceProjections: "inventoryWorkspaceProjections",
-  ingredientProjections: "inventoryIngredientProjections"
+  ingredientProjections: "inventoryIngredientProjections",
+  recipePolicies: "inventoryRecipePolicies",
+  recipeHeads: "inventoryRecipeHeads",
+  recipeDependencies: "inventoryRecipeDependencyIndex",
+  packConversionRevisions: "inventoryPackConversionRevisions",
+  packConversionHeads: "inventoryPackConversionHeads",
+  menuCostProjections: "inventoryMenuCostProjections"
 });
 const WORKSPACE_LIMIT = 200;
+const MENU_COST_PROJECTION_LIMIT = 200;
+const MAX_PUBLISHED_RECIPE_LINES = 50;
 const COMMAND_KINDS = new Set([
-  "upsert_location", "upsert_ingredient", "opening_balance", "record_ingredient_cost"
+  "upsert_location", "upsert_ingredient", "opening_balance", "record_ingredient_cost",
+  "publish_pack_conversion", "publish_menu_recipe"
 ]);
 
 function isRecord(value) {
@@ -32,6 +42,63 @@ function exactKeys(value, keys, label) {
   }
 }
 
+function boundedText(value, label, maximum, { allowEmpty = false } = {}) {
+  if (typeof value !== "string" || value !== value.trim()) {
+    throw new inventory.InventoryIngredientError("invalid-argument", `${label} must be exact text.`);
+  }
+  const normalized = value.replace(/\s+/gu, " ");
+  if ((!allowEmpty && !normalized) || normalized.length > maximum) {
+    throw new inventory.InventoryIngredientError("invalid-argument", `${label} must be bounded${allowEmpty ? "" : " non-empty"} text.`);
+  }
+  return normalized;
+}
+
+function normalizePackConversionCommand(value) {
+  exactKeys(value, [
+    "kind", "ingredientId", "packUnitId", "packLabel", "baseUnitId", "baseQuantity",
+    "sourceLabel", "expectedRevision"
+  ], "Ingredient pack conversion command");
+  const expectedRevision = inventory.revision(value.expectedRevision, "pack conversion expected revision");
+  recipe.createPackConversionRevision({
+    organizationId: "validation-org",
+    ingredientId: value.ingredientId,
+    packUnitId: value.packUnitId,
+    packLabel: value.packLabel,
+    revision: expectedRevision + 1,
+    baseUnitId: value.baseUnitId,
+    baseQuantity: value.baseQuantity,
+    sourceLabel: value.sourceLabel,
+    publishedAtISO: "2000-01-01T00:00:00.000Z"
+  });
+}
+
+function normalizeRecipeCommand(value) {
+  exactKeys(value, [
+    "kind", "menuItemId", "expectedCatalogRevision", "expectedRecipeRevision",
+    "outputYield", "outputUnitId", "lines"
+  ], "Menu recipe publication command");
+  const expectedRecipeRevision = inventory.revision(value.expectedRecipeRevision, "recipe expected revision");
+  inventory.revision(value.expectedCatalogRevision, "catalog expected revision");
+  if (!Array.isArray(value.lines) || value.lines.length > MAX_PUBLISHED_RECIPE_LINES) {
+    throw new inventory.InventoryIngredientError(
+      "resource-exhausted",
+      `Published recipes currently support at most ${MAX_PUBLISHED_RECIPE_LINES} ingredient lines.`
+    );
+  }
+  recipe.createRecipeRevision({
+    organizationId: "validation-org",
+    menuItemId: value.menuItemId,
+    revision: expectedRecipeRevision + 1,
+    priorRecipeRevisionId: expectedRecipeRevision === 0 ? "" : recipe.recipeRevisionIdFor(
+      "validation-org", value.menuItemId, expectedRecipeRevision
+    ),
+    outputYield: value.outputYield,
+    outputUnitId: value.outputUnitId,
+    lines: value.lines,
+    publishedAtISO: "2000-01-01T00:00:00.000Z"
+  });
+}
+
 function normalizeCommand(value) {
   if (!isRecord(value) || !COMMAND_KINDS.has(value.kind)) {
     throw new inventory.InventoryIngredientError("invalid-argument", "A supported ingredient inventory command is required.");
@@ -39,7 +106,9 @@ function normalizeCommand(value) {
   if (value.kind === "upsert_location") inventory.normalizeLocationRequest(value);
   else if (value.kind === "upsert_ingredient") inventory.normalizeIngredientRequest(value);
   else if (value.kind === "opening_balance") inventory.normalizeOpeningBalanceRequest(value);
-  else inventory.normalizeCostEvidenceRequest(value);
+  else if (value.kind === "record_ingredient_cost") inventory.normalizeCostEvidenceRequest(value);
+  else if (value.kind === "publish_pack_conversion") normalizePackConversionCommand(value);
+  else normalizeRecipeCommand(value);
   return inventory.canonicalClone(value, "ingredient inventory command");
 }
 
@@ -147,7 +216,19 @@ function projectCostAxis(costState) {
   return Object.freeze(result);
 }
 
-function ingredientProjection({ ingredient, stockStates, costState, nowISO }) {
+function projectedPackConversion(head) {
+  return Object.freeze({
+    packUnitId: head.packUnitId,
+    packLabel: head.packLabel,
+    revision: head.revision,
+    packConversionRevisionId: head.packConversionRevisionId,
+    baseUnitId: head.baseUnitId,
+    baseQuantity: head.baseQuantity,
+    sourceLabel: head.sourceLabel
+  });
+}
+
+function ingredientProjection({ ingredient, stockStates, costState, packConversionHeads = [], nowISO }) {
   const stock = projectStockAxis(stockStates);
   const cost = projectCostAxis(costState);
   return Object.freeze({
@@ -165,8 +246,318 @@ function ingredientProjection({ ingredient, stockStates, costState, nowISO }) {
     ingredientRevision: ingredient.revision,
     stock,
     cost,
+    packConversions: Object.freeze(packConversionHeads
+      .map(projectedPackConversion)
+      .sort((left, right) => left.packLabel.localeCompare(right.packLabel)
+        || left.packUnitId.localeCompare(right.packUnitId))),
     updatedAtISO: nowISO
   });
+}
+
+function menuIdentity(menuItem, menuItemId) {
+  const identity = {
+    menuItemId: inventory.opaqueId(menuItemId, "menuItemId"),
+    eventTypeId: inventory.opaqueId(menuItem?.eventTypeId, "menu item eventTypeId"),
+    categoryId: inventory.opaqueId(menuItem?.categoryId, "menu item categoryId"),
+    name: boundedText(menuItem?.name, "menu item name", 120),
+    priceMinor: menuItem?.priceMinor,
+    costMinor: menuItem?.costMinor ?? null,
+    pricingType: boundedText(menuItem?.pricingType, "menu item pricingType", 40),
+    type: boundedText(menuItem?.type, "menu item type", 40),
+    active: menuItem?.active
+  };
+  if (!Number.isSafeInteger(identity.priceMinor) || identity.priceMinor < 0
+    || (identity.costMinor !== null && (!Number.isSafeInteger(identity.costMinor) || identity.costMinor < 0))
+    || typeof identity.active !== "boolean") {
+    throw new inventory.InventoryIngredientError("data-loss", "Canonical menu item fields are invalid for recipe publication.");
+  }
+  return Object.freeze({ ...identity, identityDigest: inventory.digest(identity, "menu item recipe identity") });
+}
+
+function packHeadId(ingredientId, packUnitId) {
+  return `iph_${inventory.digest({
+    ingredientId: inventory.opaqueId(ingredientId, "ingredientId"),
+    packUnitId: inventory.opaqueId(packUnitId, "packUnitId")
+  }, "ingredient pack head identity").slice(0, 48)}`;
+}
+
+function verifyPackHead(value, { organizationId, ingredientId, documentId } = {}) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "ingredientId", "headId",
+    "packUnitId", "packLabel", "revision", "packConversionRevisionId", "baseUnitId",
+    "baseQuantity", "sourceLabel", "updatedAtISO"
+  ], "Ingredient pack conversion head");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "ingredient-pack-conversion-head-v2"
+    || value.organizationId !== organizationId || value.ingredientId !== ingredientId
+    || value.headId !== packHeadId(ingredientId, value.packUnitId)
+    || (documentId && value.headId !== documentId)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient pack conversion head identity is invalid.");
+  }
+  inventory.revision(value.revision, "pack conversion revision", { allowZero: false });
+  inventory.baseUnitId(value.baseUnitId);
+  inventory.formatQuantityMicros(inventory.parseQuantityMicros(value.baseQuantity, "pack base quantity"));
+  boundedText(value.packLabel, "pack label", 80);
+  boundedText(value.sourceLabel, "pack source", 120);
+  inventory.exactISO(value.updatedAtISO, "pack head updatedAtISO");
+  if (value.packConversionRevisionId !== recipe.packConversionRevisionIdFor(
+    organizationId, ingredientId, value.packUnitId, value.revision
+  )) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient pack conversion head revision is inconsistent.");
+  }
+  return value;
+}
+
+function recipeHead(menuItem, recipeRevision, catalogRevision, nowISO) {
+  const identity = menuIdentity(menuItem, recipeRevision.menuItemId);
+  const ingredientIds = [...new Set(recipeRevision.lines.map((line) => line.ingredientId))].sort();
+  const packConversionRevisionIds = [...new Set(recipeRevision.lines
+    .filter((line) => line.unitKind === "ingredient_pack")
+    .map((line) => line.packConversionRevisionId))].sort();
+  return Object.freeze({
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "ingredient-recipe-head-v2",
+    organizationId: recipeRevision.organizationId,
+    menuItemId: recipeRevision.menuItemId,
+    revision: recipeRevision.revision,
+    recipeRevisionId: recipeRevision.recipeRevisionId,
+    recipeDigest: recipeRevision.recipeDigest,
+    catalogRevision,
+    menuIdentity: identity,
+    ingredientIds: Object.freeze(ingredientIds),
+    packConversionRevisionIds: Object.freeze(packConversionRevisionIds),
+    updatedAtISO: nowISO
+  });
+}
+
+function verifyRecipeHead(value, { organizationId, menuItemId, documentId } = {}) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "menuItemId", "revision",
+    "recipeRevisionId", "recipeDigest", "catalogRevision", "menuIdentity", "ingredientIds",
+    "packConversionRevisionIds", "updatedAtISO"
+  ], "Ingredient recipe head");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "ingredient-recipe-head-v2"
+    || value.organizationId !== organizationId || value.menuItemId !== menuItemId
+    || (documentId && documentId !== menuItemId)
+    || value.recipeRevisionId !== recipe.recipeRevisionIdFor(organizationId, menuItemId, value.revision)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient recipe head identity is invalid.");
+  }
+  inventory.revision(value.revision, "recipe head revision", { allowZero: false });
+  inventory.revision(value.catalogRevision, "recipe catalog revision");
+  inventory.exactISO(value.updatedAtISO, "recipe head updatedAtISO");
+  if (!Array.isArray(value.ingredientIds) || value.ingredientIds.length > recipe.MAX_RECIPE_LINES
+    || !Array.isArray(value.packConversionRevisionIds) || value.packConversionRevisionIds.length > recipe.MAX_PACK_CONVERSIONS
+    || [...value.ingredientIds].sort().join("\u0000") !== value.ingredientIds.join("\u0000")
+    || new Set(value.ingredientIds).size !== value.ingredientIds.length) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient recipe head dependencies are invalid.");
+  }
+  value.ingredientIds.forEach((ingredientId) => inventory.opaqueId(ingredientId, "recipe ingredientId"));
+  value.packConversionRevisionIds.forEach((revisionId) => inventory.opaqueId(revisionId, "recipe pack conversion revisionId"));
+  const identity = menuIdentity(value.menuIdentity, menuItemId);
+  if (inventory.canonicalSerialize(identity) !== inventory.canonicalSerialize(value.menuIdentity)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient recipe menu identity snapshot is invalid.");
+  }
+  return value;
+}
+
+function recipePolicy(head, recipeRevision) {
+  const body = {
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "ingredient-recipe-policy-v2",
+    organizationId: head.organizationId,
+    menuItemId: head.menuItemId,
+    recipeRevisionId: recipeRevision.recipeRevisionId,
+    catalogRevision: head.catalogRevision,
+    menuIdentity: head.menuIdentity,
+    recipeRevision
+  };
+  return Object.freeze({ ...body, policyDigest: inventory.digest(body, "ingredient recipe policy") });
+}
+
+function verifyRecipePolicy(value, { organizationId, recipeRevisionId, documentId } = {}) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "menuItemId",
+    "recipeRevisionId", "catalogRevision", "menuIdentity", "recipeRevision", "policyDigest"
+  ], "Ingredient recipe policy");
+  const { policyDigest, ...body } = value;
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "ingredient-recipe-policy-v2" || value.organizationId !== organizationId
+    || value.recipeRevisionId !== recipeRevisionId || (documentId && documentId !== recipeRevisionId)
+    || policyDigest !== inventory.digest(body, "ingredient recipe policy")) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient recipe policy identity or digest is invalid.");
+  }
+  recipe.verifyRecipeRevision(value.recipeRevision);
+  if (value.recipeRevision.organizationId !== organizationId
+    || value.recipeRevision.menuItemId !== value.menuItemId
+    || value.recipeRevision.recipeRevisionId !== recipeRevisionId
+    || inventory.canonicalSerialize(menuIdentity(value.menuIdentity, value.menuItemId))
+      !== inventory.canonicalSerialize(value.menuIdentity)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient recipe policy provenance is invalid.");
+  }
+  inventory.revision(value.catalogRevision, "recipe policy catalog revision");
+  return value;
+}
+
+function verifyRecipeDependency(value, { organizationId, ingredientId, documentId } = {}) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "ingredientId",
+    "menuItemIds", "revision", "updatedAtISO"
+  ], "Ingredient recipe dependency index");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "ingredient-recipe-dependency-index-v2"
+    || value.organizationId !== organizationId || value.ingredientId !== ingredientId
+    || (documentId && documentId !== ingredientId)
+    || !Array.isArray(value.menuItemIds) || value.menuItemIds.length > MENU_COST_PROJECTION_LIMIT
+    || [...value.menuItemIds].sort().join("\u0000") !== value.menuItemIds.join("\u0000")
+    || new Set(value.menuItemIds).size !== value.menuItemIds.length) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient recipe dependency index is invalid.");
+  }
+  value.menuItemIds.forEach((menuItemId) => inventory.opaqueId(menuItemId, "dependent menuItemId"));
+  inventory.revision(value.revision, "recipe dependency revision", { allowZero: false });
+  inventory.exactISO(value.updatedAtISO, "recipe dependency updatedAtISO");
+  return value;
+}
+
+function menuCostProjection({ head, policy, cost, nowISO }) {
+  const recipeDefinitionBody = {
+    revision: policy.recipeRevision.revision,
+    recipeRevisionId: policy.recipeRevision.recipeRevisionId,
+    recipeDigest: policy.recipeRevision.recipeDigest,
+    outputYield: policy.recipeRevision.outputYield,
+    outputUnitId: policy.recipeRevision.outputUnitId,
+    lines: policy.recipeRevision.lines
+  };
+  const sourceDigest = inventory.digest({
+    organizationId: head.organizationId,
+    menuItemId: head.menuItemId,
+    menuIdentityDigest: head.menuIdentity.identityDigest,
+    observedCatalogRevision: head.catalogRevision,
+    recipeRevisionId: head.recipeRevisionId,
+    recipeDigest: head.recipeDigest,
+    policyDigest: policy.policyDigest,
+    costResultDigest: cost.resultDigest
+  }, "inventory menu cost projection sources");
+  const body = {
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "inventory-menu-cost-projection-v2",
+    organizationId: head.organizationId,
+    menuItemId: head.menuItemId,
+    menuItemName: head.menuIdentity.name,
+    menuItemNameSortKey: head.menuIdentity.name.toLocaleLowerCase("en-US"),
+    observedCatalogRevision: head.catalogRevision,
+    menuIdentityDigest: head.menuIdentity.identityDigest,
+    recipeRevision: head.revision,
+    recipeRevisionId: head.recipeRevisionId,
+    recipeDigest: head.recipeDigest,
+    policyDigest: policy.policyDigest,
+    recipeDefinition: Object.freeze({
+      ...recipeDefinitionBody,
+      definitionDigest: inventory.digest(recipeDefinitionBody, "projected recipe definition")
+    }),
+    status: cost.status,
+    freshness: "current",
+    staleReason: "",
+    cost,
+    updatedAtISO: nowISO,
+    sourceDigest
+  };
+  return Object.freeze(body);
+}
+
+function staleMenuCostProjection(value, { reason, nowISO }) {
+  const current = verifyMenuCostProjection(value, {
+    organizationId: value?.organizationId,
+    menuItemId: value?.menuItemId
+  });
+  const body = {
+    ...current,
+    status: "stale",
+    freshness: "stale",
+    staleReason: boundedText(reason, "menu cost stale reason", 80),
+    updatedAtISO: nowISO
+  };
+  return Object.freeze(body);
+}
+
+function verifyRecipeCostResult(value, { organizationId, menuItemId, recipeRevisionId } = {}) {
+  if (!isRecord(value) || typeof value.resultDigest !== "string") {
+    throw new inventory.InventoryIngredientError("data-loss", "Inventory menu cost result is unavailable.");
+  }
+  const { resultDigest, ...body } = value;
+  if (resultDigest !== inventory.digest(body, "ingredient recipe cost")
+    || value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.costingVersion !== recipe.RECIPE_COST_VERSION
+    || value.organizationId !== organizationId || value.menuItemId !== menuItemId
+    || value.recipeRevisionId !== recipeRevisionId
+    || !["complete", "partial", "invalid", "unavailable"].includes(value.status)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Inventory menu cost result identity or digest is invalid.");
+  }
+  return value;
+}
+
+function verifyMenuCostProjection(value, { organizationId, menuItemId, documentId } = {}) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "menuItemId",
+    "menuItemName", "menuItemNameSortKey", "observedCatalogRevision", "menuIdentityDigest",
+    "recipeRevision", "recipeRevisionId", "recipeDigest", "policyDigest", "recipeDefinition", "status",
+    "freshness", "staleReason", "cost", "updatedAtISO", "sourceDigest"
+  ], "Inventory menu cost projection");
+  const expectedSourceDigest = inventory.digest({
+    organizationId: value.organizationId,
+    menuItemId: value.menuItemId,
+    menuIdentityDigest: value.menuIdentityDigest,
+    observedCatalogRevision: value.observedCatalogRevision,
+    recipeRevisionId: value.recipeRevisionId,
+    recipeDigest: value.recipeDigest,
+    policyDigest: value.policyDigest,
+    costResultDigest: value.cost?.resultDigest
+  }, "inventory menu cost projection sources");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "inventory-menu-cost-projection-v2"
+    || value.organizationId !== organizationId || value.menuItemId !== menuItemId
+    || (documentId && documentId !== menuItemId)
+    || value.sourceDigest !== expectedSourceDigest) {
+    throw new inventory.InventoryIngredientError("data-loss", "Inventory menu cost projection identity or digest is invalid.");
+  }
+  boundedText(value.menuItemName, "projected menu item name", 120);
+  if (value.menuItemNameSortKey !== value.menuItemName.toLocaleLowerCase("en-US")) {
+    throw new inventory.InventoryIngredientError("data-loss", "Inventory menu cost projection sort key is invalid.");
+  }
+  inventory.revision(value.observedCatalogRevision, "projected catalog revision");
+  inventory.revision(value.recipeRevision, "projected recipe revision", { allowZero: false });
+  if (value.recipeRevisionId !== recipe.recipeRevisionIdFor(organizationId, menuItemId, value.recipeRevision)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Inventory menu cost recipe revision is invalid.");
+  }
+  exactKeys(value.recipeDefinition, [
+    "revision", "recipeRevisionId", "recipeDigest", "outputYield", "outputUnitId", "lines", "definitionDigest"
+  ], "Projected recipe definition");
+  const { definitionDigest, ...recipeDefinitionBody } = value.recipeDefinition;
+  if (value.recipeDefinition.revision !== value.recipeRevision
+    || value.recipeDefinition.recipeRevisionId !== value.recipeRevisionId
+    || value.recipeDefinition.recipeDigest !== value.recipeDigest
+    || definitionDigest !== inventory.digest(recipeDefinitionBody, "projected recipe definition")
+    || !Array.isArray(value.recipeDefinition.lines)
+    || value.recipeDefinition.lines.length > MAX_PUBLISHED_RECIPE_LINES) {
+    throw new inventory.InventoryIngredientError("data-loss", "Projected recipe definition provenance is invalid.");
+  }
+  inventory.exactISO(value.updatedAtISO, "menu cost projection updatedAtISO");
+  verifyRecipeCostResult(value.cost, { organizationId, menuItemId, recipeRevisionId: value.recipeRevisionId });
+  if (!["current", "stale"].includes(value.freshness)
+    || (value.freshness === "current" && (value.staleReason || value.status !== value.cost.status))
+    || (value.freshness === "stale" && (!value.staleReason || value.status !== "stale"))) {
+    throw new inventory.InventoryIngredientError("data-loss", "Inventory menu cost freshness is invalid.");
+  }
+  return value;
 }
 
 function publicReceipt(receipt) {
@@ -270,7 +661,7 @@ function verifyIngredientProjection(value, organizationId, ingredientId) {
   exactKeys(value, [
     "authorityVersion", "schemaVersion", "model", "organizationId", "ingredientId", "name",
     "nameSortKey", "category", "baseUnitId", "dimension", "active", "ingredientRevision",
-    "stock", "cost", "updatedAtISO"
+    "stock", "cost", "packConversions", "updatedAtISO"
   ], "Ingredient inventory projection");
   if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
     || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
@@ -329,6 +720,31 @@ function verifyIngredientProjection(value, organizationId, ingredientId) {
       throw new inventory.InventoryIngredientError("data-loss", "Available ingredient cost projection is invalid.");
     }
   }
+  if (!Array.isArray(value.packConversions) || value.packConversions.length > recipe.MAX_PACK_CONVERSIONS) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient pack conversion projection is invalid.");
+  }
+  const packSortKeys = value.packConversions.map((entry) => `${entry.packLabel}\u0000${entry.packUnitId}`);
+  if (packSortKeys.some((key, index) => index > 0 && packSortKeys[index - 1].localeCompare(key) > 0)
+    || new Set(value.packConversions.map((entry) => entry.packUnitId)).size !== value.packConversions.length) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient pack conversion projection order is invalid.");
+  }
+  value.packConversions.forEach((entry) => {
+    exactKeys(entry, [
+      "packUnitId", "packLabel", "revision", "packConversionRevisionId", "baseUnitId",
+      "baseQuantity", "sourceLabel"
+    ], "Projected ingredient pack conversion");
+    inventory.opaqueId(entry.packUnitId, "projected packUnitId");
+    inventory.revision(entry.revision, "projected pack revision", { allowZero: false });
+    inventory.baseUnitId(entry.baseUnitId);
+    inventory.parseQuantityMicros(entry.baseQuantity, "projected pack base quantity");
+    boundedText(entry.packLabel, "projected pack label", 80);
+    boundedText(entry.sourceLabel, "projected pack source", 120);
+    if (entry.baseUnitId !== value.baseUnitId || entry.packConversionRevisionId !== recipe.packConversionRevisionIdFor(
+      organizationId, ingredientId, entry.packUnitId, entry.revision
+    )) {
+      throw new inventory.InventoryIngredientError("data-loss", "Projected ingredient pack conversion provenance is invalid.");
+    }
+  });
   return value;
 }
 
@@ -359,7 +775,14 @@ function createInventoryAuthorityRuntime({
       configurationStateRef: organizationRef.collection(COLLECTIONS.authorityState).doc("ingredient-v2"),
       receipts: organizationRef.collection(COLLECTIONS.receipts),
       workspaceProjectionRef: organizationRef.collection(COLLECTIONS.workspaceProjections).doc("current"),
-      ingredientProjections: organizationRef.collection(COLLECTIONS.ingredientProjections)
+      ingredientProjections: organizationRef.collection(COLLECTIONS.ingredientProjections),
+      recipePolicies: organizationRef.collection(COLLECTIONS.recipePolicies),
+      recipeHeads: organizationRef.collection(COLLECTIONS.recipeHeads),
+      recipeDependencies: organizationRef.collection(COLLECTIONS.recipeDependencies),
+      packConversionRevisions: organizationRef.collection(COLLECTIONS.packConversionRevisions),
+      packConversionHeads: organizationRef.collection(COLLECTIONS.packConversionHeads),
+      menuCostProjections: organizationRef.collection(COLLECTIONS.menuCostProjections),
+      menuItems: organizationRef.collection("menuItems")
     };
   }
 
@@ -397,6 +820,7 @@ function createInventoryAuthorityRuntime({
     assertStoredAuthority({
       organizationId: actor.organizationId, actor, roleSnap, organizationSnap, tombstoneSnap, settingsSnap
     });
+    return { roleSnap, organizationSnap, tombstoneSnap, settingsSnap };
   }
 
   function storedCanonical(value, kind, identity) {
@@ -448,15 +872,17 @@ function createInventoryAuthorityRuntime({
     const ingredientRef = refs.ingredients.doc(ingredientId);
     const costRef = refs.costStates.doc(inventory.costStateId(ingredientId));
     const stockQuery = refs.stockStates.where("ingredientId", "==", ingredientId).limit(WORKSPACE_LIMIT + 1);
-    const [ingredientSnap, costSnap, stockSnap] = await Promise.all([
-      tx.get(ingredientRef), tx.get(costRef), tx.get(stockQuery)
+    const packHeadQuery = refs.packConversionHeads.where("ingredientId", "==", ingredientId)
+      .limit(recipe.MAX_PACK_CONVERSIONS + 1);
+    const [ingredientSnap, costSnap, stockSnap, packHeadSnap] = await Promise.all([
+      tx.get(ingredientRef), tx.get(costRef), tx.get(stockQuery), tx.get(packHeadQuery)
     ]);
     const ingredient = ingredientSnap.exists
       ? storedCanonical(ingredientSnap.data() || {}, "ingredient", {
         organizationId, ingredientId, documentId: ingredientSnap.id
       }) : null;
-    if (stockSnap.size > WORKSPACE_LIMIT) {
-      throw new inventory.InventoryIngredientError("resource-exhausted", "Ingredient stock projection exceeds its bounded location limit.");
+    if (stockSnap.size > WORKSPACE_LIMIT || packHeadSnap.size > recipe.MAX_PACK_CONVERSIONS) {
+      throw new inventory.InventoryIngredientError("resource-exhausted", "Ingredient evidence exceeds its bounded projection limit.");
     }
     const stockStates = stockSnap.docs.map((doc) => storedCanonical(doc.data() || {}, "stock state", {
       organizationId, ingredientId, documentId: doc.id
@@ -465,14 +891,150 @@ function createInventoryAuthorityRuntime({
       ? storedCanonical(costSnap.data() || {}, "cost state", {
         organizationId, ingredientId, documentId: costSnap.id
       }) : null;
+    const packConversionHeads = packHeadSnap.docs.map((doc) => verifyPackHead(doc.data() || {}, {
+      organizationId, ingredientId, documentId: doc.id
+    }));
     if (!ingredient && (stockStates.length || costState)) {
       throw new inventory.InventoryIngredientError("data-loss", "Ingredient evidence exists without its ingredient authority.");
     }
     if (ingredient && (stockStates.some((state) => state.baseUnitId !== ingredient.baseUnitId)
-      || (costState && costState.baseUnitId !== ingredient.baseUnitId))) {
+      || (costState && costState.baseUnitId !== ingredient.baseUnitId)
+      || packConversionHeads.some((head) => head.baseUnitId !== ingredient.baseUnitId))) {
       throw new inventory.InventoryIngredientError("data-loss", "Ingredient evidence base units do not match the ingredient authority.");
     }
-    return { ingredientRef, costRef, ingredient, costState, stockStates };
+    if (!ingredient && packConversionHeads.length) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient pack conversions exist without their ingredient authority.");
+    }
+    return { ingredientRef, costRef, ingredient, costState, stockStates, packConversionHeads };
+  }
+
+  async function readDependencyImpact(tx, refs, organizationId, ingredientId, nowISO, reason) {
+    const dependencyRef = refs.recipeDependencies.doc(ingredientId);
+    const dependencySnap = await tx.get(dependencyRef);
+    if (!dependencySnap.exists) return { dependency: null, affectedMenuItemIds: [], writes: [] };
+    const dependency = verifyRecipeDependency(dependencySnap.data() || {}, {
+      organizationId, ingredientId, documentId: dependencySnap.id
+    });
+    const projectionRefs = dependency.menuItemIds.map((menuItemId) => refs.menuCostProjections.doc(menuItemId));
+    const projectionSnaps = projectionRefs.length ? await tx.getAll(...projectionRefs) : [];
+    const writes = [];
+    projectionSnaps.forEach((snapshot, index) => {
+      if (!snapshot.exists) return;
+      const menuItemId = dependency.menuItemIds[index];
+      const current = verifyMenuCostProjection(snapshot.data() || {}, {
+        organizationId, menuItemId, documentId: snapshot.id
+      });
+      writes.push({
+        operation: "set",
+        ref: projectionRefs[index],
+        value: staleMenuCostProjection(current, { reason, nowISO })
+      });
+    });
+    return { dependency, affectedMenuItemIds: dependency.menuItemIds, writes };
+  }
+
+  async function readRecipeCostInputs(tx, refs, policy) {
+    const ingredientIds = [...new Set(policy.recipeRevision.lines.map((line) => line.ingredientId))].sort();
+    const packRevisionIds = [...new Set(policy.recipeRevision.lines
+      .filter((line) => line.unitKind === "ingredient_pack")
+      .map((line) => line.packConversionRevisionId))].sort();
+    const ingredientRefs = ingredientIds.map((ingredientId) => refs.ingredients.doc(ingredientId));
+    const costRefs = ingredientIds.map((ingredientId) => refs.costStates.doc(inventory.costStateId(ingredientId)));
+    const packRefs = packRevisionIds.map((revisionId) => refs.packConversionRevisions.doc(revisionId));
+    const snapshots = ingredientRefs.length || costRefs.length || packRefs.length
+      ? await tx.getAll(...ingredientRefs, ...costRefs, ...packRefs) : [];
+    const ingredientSnaps = snapshots.slice(0, ingredientRefs.length);
+    const costSnaps = snapshots.slice(ingredientRefs.length, ingredientRefs.length + costRefs.length);
+    const packSnaps = snapshots.slice(ingredientRefs.length + costRefs.length);
+    const ingredients = ingredientSnaps.flatMap((snapshot, index) => snapshot.exists ? [storedCanonical(
+      snapshot.data() || {}, "ingredient", {
+        organizationId: policy.organizationId,
+        ingredientId: ingredientIds[index],
+        documentId: snapshot.id
+      }
+    )] : []);
+    const costStates = costSnaps.flatMap((snapshot, index) => snapshot.exists ? [storedCanonical(
+      snapshot.data() || {}, "cost state", {
+        organizationId: policy.organizationId,
+        ingredientId: ingredientIds[index],
+        documentId: snapshot.id
+      }
+    )] : []);
+    const packConversions = packSnaps.flatMap((snapshot, index) => {
+      if (!snapshot.exists) return [];
+      const value = snapshot.data() || {};
+      try {
+        recipe.verifyPackConversionRevision(value);
+      } catch (error) {
+        if (error instanceof recipe.InventoryRecipeError) {
+          throw new inventory.InventoryIngredientError("data-loss", error.message);
+        }
+        throw error;
+      }
+      if (value.organizationId !== policy.organizationId || value.packConversionRevisionId !== packRevisionIds[index]
+        || snapshot.id !== packRevisionIds[index]) {
+        throw new inventory.InventoryIngredientError("data-loss", "Ingredient pack conversion revision is misfiled.");
+      }
+      return [value];
+    });
+    return { ingredients, costStates, packConversions };
+  }
+
+  async function calculateCurrentMenuProjection(tx, refs, { organizationId, menuItemId, nowISO }) {
+    const headRef = refs.recipeHeads.doc(menuItemId);
+    const projectionRef = refs.menuCostProjections.doc(menuItemId);
+    const [headSnap, currentProjectionSnap] = await Promise.all([tx.get(headRef), tx.get(projectionRef)]);
+    if (!headSnap.exists) {
+      throw new inventory.InventoryIngredientError("data-loss", "Recipe dependency points to a missing current recipe head.");
+    }
+    const head = verifyRecipeHead(headSnap.data() || {}, { organizationId, menuItemId, documentId: headSnap.id });
+    const policyRef = refs.recipePolicies.doc(head.recipeRevisionId);
+    const policySnap = await tx.get(policyRef);
+    if (!policySnap.exists) {
+      throw new inventory.InventoryIngredientError("data-loss", "Current recipe head points to a missing immutable policy.");
+    }
+    const policy = verifyRecipePolicy(policySnap.data() || {}, {
+      organizationId, recipeRevisionId: head.recipeRevisionId, documentId: policySnap.id
+    });
+    if (policy.recipeRevision.recipeDigest !== head.recipeDigest || policy.catalogRevision !== head.catalogRevision
+      || policy.menuIdentity.identityDigest !== head.menuIdentity.identityDigest) {
+      throw new inventory.InventoryIngredientError("data-loss", "Current recipe head and immutable policy disagree.");
+    }
+    const inputs = await readRecipeCostInputs(tx, refs, policy);
+    const cost = recipe.calculateRecipeCost({
+      recipeRevision: policy.recipeRevision,
+      ingredients: inputs.ingredients,
+      costStates: inputs.costStates,
+      packConversions: inputs.packConversions
+    });
+    const projection = menuCostProjection({ head, policy, cost, nowISO });
+    if (currentProjectionSnap.exists) verifyMenuCostProjection(currentProjectionSnap.data() || {}, {
+      organizationId, menuItemId, documentId: currentProjectionSnap.id
+    });
+    return { head, policy, cost, projection, projectionRef, currentProjectionSnap };
+  }
+
+  async function refreshMenuCostProjection(refs, actor, menuItemId) {
+    return db.runTransaction(async (tx) => {
+      await readAuthorityEnvelope(tx, refs, actor);
+      const nowISO = inventory.exactISO(now(), "menu projection refreshedAtISO");
+      const calculated = await calculateCurrentMenuProjection(tx, refs, {
+        organizationId: actor.organizationId, menuItemId, nowISO
+      });
+      const current = calculated.currentProjectionSnap.exists
+        ? calculated.currentProjectionSnap.data() || {} : null;
+      if (current?.freshness === "current" && current?.sourceDigest === calculated.projection.sourceDigest) {
+        return calculated.projection;
+      }
+      tx.set(calculated.projectionRef, calculated.projection);
+      return calculated.projection;
+    });
+  }
+
+  async function refreshAffectedMenuCosts(refs, actor, menuItemIds) {
+    for (const menuItemId of menuItemIds) {
+      await refreshMenuCostProjection(refs, actor, menuItemId);
+    }
   }
 
   function commandResult(commandKind, planned) {
@@ -482,7 +1044,8 @@ function createInventoryAuthorityRuntime({
       ingredientId: planned.ingredient.ingredientId,
       revision: planned.ingredient.revision,
       baseUnitId: planned.ingredient.baseUnitId,
-      active: planned.ingredient.active
+      active: planned.ingredient.active,
+      affectedMenuItemIds: Object.freeze(planned.affectedMenuItemIds || [])
     });
     if (commandKind === "opening_balance") return Object.freeze({
       schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
@@ -493,12 +1056,29 @@ function createInventoryAuthorityRuntime({
       onHandMicros: planned.nextStockState.onHandMicros,
       onHandQuantity: inventory.formatQuantityMicros(planned.nextStockState.onHandMicros)
     });
+    if (commandKind === "publish_pack_conversion") return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      ingredientId: planned.packConversion.ingredientId,
+      packUnitId: planned.packConversion.packUnitId,
+      packConversionRevisionId: planned.packConversion.packConversionRevisionId,
+      revision: planned.packConversion.revision,
+      affectedMenuItemIds: Object.freeze(planned.affectedMenuItemIds || [])
+    });
+    if (commandKind === "publish_menu_recipe") return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      menuItemId: planned.recipeRevision.menuItemId,
+      recipeRevisionId: planned.recipeRevision.recipeRevisionId,
+      recipeRevision: planned.recipeRevision.revision,
+      projectionSourceDigest: planned.menuCostProjection.sourceDigest,
+      status: planned.menuCostProjection.status
+    });
     return Object.freeze({
       schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
       ingredientId: planned.costEvidence.ingredientId,
       costEvidenceId: planned.costEvidence.costEvidenceId,
       costRevision: planned.nextCostState.revision,
-      availability: planned.nextCostState.availability
+      availability: planned.nextCostState.availability,
+      affectedMenuItemIds: Object.freeze(planned.affectedMenuItemIds || [])
     });
   }
 
@@ -518,9 +1098,9 @@ function createInventoryAuthorityRuntime({
         principal: { uid: actor.uid, organizationId: actor.organizationId }
       }, "ingredient inventory command");
 
-      return await db.runTransaction(async (tx) => {
+      const outcome = await db.runTransaction(async (tx) => {
         const receiptSnap = await tx.get(receiptRef);
-        await readAuthorityEnvelope(tx, refs, actor);
+        const authority = await readAuthorityEnvelope(tx, refs, actor);
         if (receiptSnap.exists) {
           return publicOutcome(verifyReceipt(receiptSnap.data() || {}, {
             organizationId: envelope.organizationId,
@@ -594,6 +1174,96 @@ function createInventoryAuthorityRuntime({
             locations,
             updatedAtISO: nowISO
           } });
+        } else if (commandKind === "publish_menu_recipe") {
+          const menuItemId = envelope.command.menuItemId;
+          const headRef = refs.recipeHeads.doc(menuItemId);
+          const menuItemRef = refs.menuItems.doc(menuItemId);
+          const projectionRef = refs.menuCostProjections.doc(menuItemId);
+          const [headSnap, menuItemSnap, currentProjectionSnap] = await Promise.all([
+            tx.get(headRef), tx.get(menuItemRef), tx.get(projectionRef)
+          ]);
+          if (!menuItemSnap.exists) {
+            throw new inventory.InventoryIngredientError("not-found", "Publish the menu item before publishing its ingredient recipe.");
+          }
+          const catalogRevision = authority.settingsSnap.data()?.catalogRevision;
+          inventory.revision(catalogRevision, "catalog revision");
+          if (catalogRevision !== envelope.command.expectedCatalogRevision) {
+            throw new inventory.InventoryIngredientError("aborted", "The Library catalog changed. Reload the menu item before publishing its recipe.");
+          }
+          const currentHead = headSnap.exists ? verifyRecipeHead(headSnap.data() || {}, {
+            organizationId: envelope.organizationId, menuItemId, documentId: headSnap.id
+          }) : null;
+          if ((currentHead?.revision || 0) !== envelope.command.expectedRecipeRevision) {
+            throw new inventory.InventoryIngredientError("aborted", "The menu recipe changed. Reload it before publishing another revision.");
+          }
+          const recipeRevision = recipe.createRecipeRevision({
+            organizationId: envelope.organizationId,
+            menuItemId,
+            revision: (currentHead?.revision || 0) + 1,
+            priorRecipeRevisionId: currentHead?.recipeRevisionId || "",
+            outputYield: envelope.command.outputYield,
+            outputUnitId: envelope.command.outputUnitId,
+            lines: envelope.command.lines,
+            publishedAtISO: nowISO
+          });
+          const head = recipeHead(menuItemSnap.data() || {}, recipeRevision, catalogRevision, nowISO);
+          const policy = recipePolicy(head, recipeRevision);
+          const changedIngredientIds = [...new Set([
+            ...(currentHead?.ingredientIds || []), ...head.ingredientIds
+          ])].sort();
+          const dependencyRefs = changedIngredientIds.map((ingredientId) => refs.recipeDependencies.doc(ingredientId));
+          const dependencySnaps = dependencyRefs.length ? await tx.getAll(...dependencyRefs) : [];
+          const dependencyWrites = dependencySnaps.map((snapshot, index) => {
+            const ingredientId = changedIngredientIds[index];
+            const current = snapshot.exists ? verifyRecipeDependency(snapshot.data() || {}, {
+              organizationId: envelope.organizationId, ingredientId, documentId: snapshot.id
+            }) : null;
+            if (!current && currentHead?.ingredientIds.includes(ingredientId)) {
+              throw new inventory.InventoryIngredientError("data-loss", "Current recipe is missing its reverse dependency index.");
+            }
+            const nextIds = new Set(current?.menuItemIds || []);
+            if (head.ingredientIds.includes(ingredientId)) nextIds.add(menuItemId);
+            else nextIds.delete(menuItemId);
+            if (nextIds.size > MENU_COST_PROJECTION_LIMIT) {
+              throw new inventory.InventoryIngredientError(
+                "resource-exhausted",
+                `An ingredient cannot currently index more than ${MENU_COST_PROJECTION_LIMIT} dependent menu items.`
+              );
+            }
+            return {
+              operation: current ? "set" : "create",
+              ref: dependencyRefs[index],
+              value: {
+                authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+                schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+                model: "ingredient-recipe-dependency-index-v2",
+                organizationId: envelope.organizationId,
+                ingredientId,
+                menuItemIds: [...nextIds].sort(),
+                revision: (current?.revision || 0) + 1,
+                updatedAtISO: nowISO
+              }
+            };
+          });
+          const inputs = await readRecipeCostInputs(tx, refs, policy);
+          const cost = recipe.calculateRecipeCost({
+            recipeRevision,
+            ingredients: inputs.ingredients,
+            costStates: inputs.costStates,
+            packConversions: inputs.packConversions
+          });
+          const nextProjection = menuCostProjection({ head, policy, cost, nowISO });
+          if (currentProjectionSnap.exists) verifyMenuCostProjection(currentProjectionSnap.data() || {}, {
+            organizationId: envelope.organizationId, menuItemId, documentId: currentProjectionSnap.id
+          });
+          planned = { recipeRevision, head, policy, menuCostProjection: nextProjection };
+          priorRevision = currentHead?.revision || 0;
+          writes.push(
+            { operation: "create", ref: refs.recipePolicies.doc(recipeRevision.recipeRevisionId), value: policy },
+            { operation: currentHead ? "set" : "create", ref: headRef, value: head },
+            ...dependencyWrites,
+            { operation: "set", ref: projectionRef, value: nextProjection }
+          );
         } else {
           const ingredientId = envelope.command.ingredientId;
           const projectionRef = refs.ingredientProjections.doc(ingredientId);
@@ -607,8 +1277,16 @@ function createInventoryAuthorityRuntime({
             }
             planned = inventory.planIngredient({
               organizationId: envelope.organizationId, request: envelope.command,
-              current: inputs.ingredient, currentCostState: inputs.costState, actor, nowISO
+              current: inputs.ingredient,
+              currentCostState: inputs.costState,
+              hasPackConversionEvidence: inputs.packConversionHeads.length > 0,
+              actor,
+              nowISO
             });
+            const impact = await readDependencyImpact(
+              tx, refs, envelope.organizationId, ingredientId, nowISO, "ingredient_definition_changed"
+            );
+            planned = { ...planned, affectedMenuItemIds: impact.affectedMenuItemIds };
             priorRevision = inputs.ingredient?.revision || 0;
             writes.push({ operation: inputs.ingredient ? "set" : "create", ref: inputs.ingredientRef, value: planned.ingredient });
             if (!inputs.ingredient) writes.push({
@@ -622,8 +1300,10 @@ function createInventoryAuthorityRuntime({
               })
             });
             writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
-              ingredient: planned.ingredient, stockStates: inputs.stockStates, costState: inputs.costState, nowISO
+              ingredient: planned.ingredient, stockStates: inputs.stockStates, costState: inputs.costState,
+              packConversionHeads: inputs.packConversionHeads, nowISO
             }) });
+            writes.push(...impact.writes);
           } else if (commandKind === "opening_balance") {
             const stockRef = refs.stockStates.doc(inventory.stockStateId(ingredientId, envelope.command.locationId));
             const locationRef = refs.locations.doc(envelope.command.locationId);
@@ -655,28 +1335,93 @@ function createInventoryAuthorityRuntime({
             writes.push({ operation: stockSnap.exists ? "set" : "create", ref: stockRef, value: planned.nextStockState });
             writes.push({ operation: "set", ref: inputs.ingredientRef, value: nextIngredient });
             writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
-              ingredient: nextIngredient, stockStates, costState: inputs.costState, nowISO
+              ingredient: nextIngredient, stockStates, costState: inputs.costState,
+              packConversionHeads: inputs.packConversionHeads, nowISO
             }) });
+          } else if (commandKind === "publish_pack_conversion") {
+            if (!inputs.ingredient) {
+              throw new inventory.InventoryIngredientError("not-found", "Create the ingredient before publishing a purchase pack conversion.");
+            }
+            if (inputs.ingredient.baseUnitId !== envelope.command.baseUnitId) {
+              throw new inventory.InventoryIngredientError("failed-precondition", "Purchase pack base unit must match the ingredient base stock unit.");
+            }
+            const currentHead = inputs.packConversionHeads.find(
+              (entry) => entry.packUnitId === envelope.command.packUnitId
+            ) || null;
+            if ((currentHead?.revision || 0) !== envelope.command.expectedRevision) {
+              throw new inventory.InventoryIngredientError("aborted", "The purchase pack conversion changed. Reload it before publishing another revision.");
+            }
+            const packConversion = recipe.createPackConversionRevision({
+              organizationId: envelope.organizationId,
+              ingredientId,
+              packUnitId: envelope.command.packUnitId,
+              packLabel: envelope.command.packLabel,
+              revision: (currentHead?.revision || 0) + 1,
+              baseUnitId: envelope.command.baseUnitId,
+              baseQuantity: envelope.command.baseQuantity,
+              sourceLabel: envelope.command.sourceLabel,
+              publishedAtISO: nowISO
+            });
+            const nextHead = {
+              authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+              schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+              model: "ingredient-pack-conversion-head-v2",
+              organizationId: envelope.organizationId,
+              ingredientId,
+              headId: packHeadId(ingredientId, envelope.command.packUnitId),
+              packUnitId: packConversion.packUnitId,
+              packLabel: packConversion.packLabel,
+              revision: packConversion.revision,
+              packConversionRevisionId: packConversion.packConversionRevisionId,
+              baseUnitId: packConversion.baseUnitId,
+              baseQuantity: packConversion.baseQuantity,
+              sourceLabel: packConversion.sourceLabel,
+              updatedAtISO: nowISO
+            };
+            verifyPackHead(nextHead, {
+              organizationId: envelope.organizationId, ingredientId, documentId: nextHead.headId
+            });
+            const packConversionHeads = inputs.packConversionHeads
+              .filter((entry) => entry.packUnitId !== nextHead.packUnitId)
+              .concat(nextHead);
+            planned = { packConversion, nextHead, affectedMenuItemIds: [] };
+            priorRevision = currentHead?.revision || 0;
+            writes.push(
+              { operation: "create", ref: refs.packConversionRevisions.doc(packConversion.packConversionRevisionId), value: packConversion },
+              { operation: currentHead ? "set" : "create", ref: refs.packConversionHeads.doc(nextHead.headId), value: nextHead },
+              { operation: "set", ref: projectionRef, value: ingredientProjection({
+                ingredient: inputs.ingredient, stockStates: inputs.stockStates, costState: inputs.costState,
+                packConversionHeads, nowISO
+              }) }
+            );
           } else {
             planned = inventory.planIngredientCostEvidence({
               organizationId: envelope.organizationId, requestId: envelope.requestId,
               request: envelope.command, ingredient: inputs.ingredient,
               currentCostState: inputs.costState, actor, nowISO
             });
+            const impact = await readDependencyImpact(
+              tx, refs, envelope.organizationId, ingredientId, nowISO, "ingredient_cost_changed"
+            );
+            planned = { ...planned, affectedMenuItemIds: impact.affectedMenuItemIds };
             priorRevision = inputs.costState?.revision || 0;
             writes.push({ operation: "create", ref: refs.costEvidence.doc(planned.costEvidence.costEvidenceId), value: planned.costEvidence });
             writes.push({ operation: inputs.costState ? "set" : "create", ref: inputs.costRef, value: planned.nextCostState });
             writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
               ingredient: inputs.ingredient, stockStates: inputs.stockStates,
-              costState: planned.nextCostState, nowISO
+              costState: planned.nextCostState, packConversionHeads: inputs.packConversionHeads, nowISO
             }) });
+            writes.push(...impact.writes);
           }
         }
 
         const result = commandResult(commandKind, planned);
         const resultRevision = commandKind === "upsert_location" ? planned.location.revision
           : commandKind === "upsert_ingredient" ? planned.ingredient.revision
-            : commandKind === "opening_balance" ? planned.nextStockState.revision : planned.nextCostState.revision;
+            : commandKind === "opening_balance" ? planned.nextStockState.revision
+              : commandKind === "publish_pack_conversion" ? planned.packConversion.revision
+                : commandKind === "publish_menu_recipe" ? planned.recipeRevision.revision
+                  : planned.nextCostState.revision;
         const body = {
           authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
           schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
@@ -698,6 +1443,12 @@ function createInventoryAuthorityRuntime({
         for (const write of writes) tx[write.operation](write.ref, write.value);
         return publicOutcome(receipt, false);
       });
+      if (["upsert_ingredient", "record_ingredient_cost"].includes(envelope.command.kind)
+        && Array.isArray(outcome.result?.affectedMenuItemIds)
+        && outcome.result.affectedMenuItemIds.length) {
+        await refreshAffectedMenuCosts(refs, actor, outcome.result.affectedMenuItemIds);
+      }
+      return outcome;
     } catch (error) {
       return throwFailure(error, "applyInventoryCommand");
     }
@@ -742,6 +1493,7 @@ function createInventoryAuthorityRuntime({
   function throwFailure(error, operation) {
     if (error instanceof HttpsError) throw error;
     if (error instanceof inventory.InventoryIngredientError) throw new HttpsError(error.code, error.message);
+    if (error instanceof recipe.InventoryRecipeError) throw new HttpsError(error.code, error.message);
     logger.error("Ingredient inventory authority failed.", {
       operation,
       errorName: String(error?.name || "Error"),
@@ -755,12 +1507,21 @@ function createInventoryAuthorityRuntime({
 
 module.exports = {
   COLLECTIONS,
+  MAX_PUBLISHED_RECIPE_LINES,
+  MENU_COST_PROJECTION_LIMIT,
   WORKSPACE_LIMIT,
   createInventoryAuthorityRuntime,
   ingredientProjection,
+  menuCostProjection,
   normalizeApplyEnvelope,
   normalizeWorkspaceEnvelope,
+  packHeadId,
   receiptIdFor,
+  verifyMenuCostProjection,
+  verifyPackHead,
+  verifyRecipeDependency,
+  verifyRecipeHead,
+  verifyRecipePolicy,
   verifyIngredientProjection,
   verifyWorkspaceProjection
 };

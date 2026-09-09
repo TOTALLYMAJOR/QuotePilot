@@ -33,22 +33,30 @@ vi.mock("../firebase", () => ({
 import {
   INVENTORY_AUTHORITY_CALLABLES,
   INVENTORY_INGREDIENT_PROJECTION_LIMIT,
+  INVENTORY_MENU_COST_PROJECTION_LIMIT,
   applyInventoryCommand,
   buildInventoryRequestId,
   getInventoryBrowserAccess,
+  getInventoryMenuCostBrowserAccess,
   inventoryMoneyInputToMinorUnits,
   inventoryProjectionConfirmsReceipt,
   normalizeInventoryIngredientProjection,
+  normalizeInventoryMenuCostProjection,
   normalizeInventoryWorkspaceProjection,
   readPendingInventoryCommands,
   reconcileInventoryCommand,
   resetDefinitiveInventoryCommand,
-  subscribeToInventoryIngredientProjections
+  subscribeToInventoryIngredientProjections,
+  subscribeToInventoryMenuCostProjection,
+  subscribeToInventoryMenuCostProjections,
+  subscribeToInventoryRecipeIngredients
 } from "../inventoryAuthorityClient";
 
 const ORGANIZATION_ID = "org-inventory-client";
 const REQUEST_ID = `inventory_request_${"a".repeat(32)}`;
 const RECEIPT_ID = `iar_${"b".repeat(48)}`;
+const PACK_CONVERSION_REVISION_ID = `ipc_${"e".repeat(48)}`;
+const RECIPE_REVISION_ID = `irr_${"f".repeat(48)}`;
 const NOW = "2026-09-09T05:00:00.000Z";
 const ADMIN_SCOPE = Object.freeze({
   organizationId: ORGANIZATION_ID,
@@ -103,7 +111,138 @@ function ingredientProjection(overrides = {}) {
       totalCostMinor: 12_000,
       currency: "USD"
     },
+    packConversions: [],
     updatedAtISO: NOW,
+    ...overrides
+  };
+}
+
+function packConversionCommand() {
+  return {
+    kind: "publish_pack_conversion",
+    ingredientId: "chicken",
+    packUnitId: "case",
+    packLabel: "Case",
+    baseUnitId: "lb",
+    baseQuantity: "10",
+    sourceLabel: "Operator-declared case contents",
+    expectedRevision: 0
+  };
+}
+
+function recipeCommand() {
+  return {
+    kind: "publish_menu_recipe",
+    menuItemId: "chicken-pasta",
+    expectedCatalogRevision: 7,
+    expectedRecipeRevision: 0,
+    outputYield: "10",
+    outputUnitId: "portion",
+    lines: [
+      { lineId: "chicken", ingredientId: "chicken", quantity: "2", unitKind: "standard", quantityBasis: "as_purchased", usableYield: null, unitId: "lb" },
+      { lineId: "pasta", ingredientId: "pasta", quantity: "1", unitKind: "standard", quantityBasis: "as_purchased", usableYield: null, unitId: "lb" }
+    ]
+  };
+}
+
+function menuCostResult(status = "complete") {
+  const chicken = {
+    ingredientId: "chicken",
+    ingredientRevision: 1,
+    baseUnitId: "lb",
+    requiredBaseQuantityMicros: { numerator: "2000000", denominator: "1" },
+    lineIds: ["chicken"],
+    conversionProvenance: [{ kind: "identity", fromUnitId: "lb", toUnitId: "lb" }],
+    costAvailability: "available",
+    costRevision: 1,
+    costEvidenceId: `ice_${"d".repeat(48)}`,
+    currency: "USD",
+    exactCostMinor: { numerator: "600", denominator: "1" }
+  };
+  const pasta = status === "partial" ? {
+    ingredientId: "pasta",
+    ingredientRevision: 1,
+    baseUnitId: "lb",
+    requiredBaseQuantityMicros: { numerator: "1000000", denominator: "1" },
+    lineIds: ["pasta"],
+    conversionProvenance: [{ kind: "identity", fromUnitId: "lb", toUnitId: "lb" }],
+    costAvailability: "missing"
+  } : {
+    ingredientId: "pasta",
+    ingredientRevision: 1,
+    baseUnitId: "lb",
+    requiredBaseQuantityMicros: { numerator: "1000000", denominator: "1" },
+    lineIds: ["pasta"],
+    conversionProvenance: [{ kind: "identity", fromUnitId: "lb", toUnitId: "lb" }],
+    costAvailability: "available",
+    costRevision: 1,
+    costEvidenceId: `ice_${"1".repeat(48)}`,
+    currency: "USD",
+    exactCostMinor: { numerator: "200", denominator: "1" }
+  };
+  const complete = status === "complete";
+  return {
+    authorityVersion: "inventory-ingredient-authority-v2",
+    schemaVersion: 2,
+    costingVersion: "ingredient-recipe-cost-v2",
+    organizationId: ORGANIZATION_ID,
+    menuItemId: "chicken-pasta",
+    recipeRevisionId: RECIPE_REVISION_ID,
+    recipeDigest: "recipe-digest",
+    status,
+    outputYield: "10",
+    outputUnitId: "portion",
+    ingredients: [chicken, pasta],
+    coverage: {
+      expectedIngredientCount: 2,
+      normalizedIngredientCount: 2,
+      costedIngredientCount: complete ? 2 : 1,
+      missingCostIngredientCount: complete ? 0 : 1
+    },
+    issues: complete ? [] : [{ code: "missing_cost", ingredientId: "pasta" }],
+    currency: "USD",
+    exactKnownCostMinor: { numerator: complete ? "800" : "600", denominator: "1" },
+    knownCostMinor: complete ? 800 : 600,
+    ...(complete ? {
+      projectedCostMinor: 800,
+      exactCostPerOutputUnitMinor: { numerator: "80", denominator: "1" }
+    } : {}),
+    resultDigest: `${status}-result-digest`
+  };
+}
+
+function menuCostProjection(status = "complete", overrides = {}) {
+  const stale = status === "stale";
+  const calculatedStatus = stale ? "complete" : status;
+  return {
+    authorityVersion: "inventory-ingredient-authority-v2",
+    schemaVersion: 2,
+    model: "inventory-menu-cost-projection-v2",
+    organizationId: ORGANIZATION_ID,
+    menuItemId: "chicken-pasta",
+    menuItemName: "Chicken Pasta",
+    menuItemNameSortKey: "chicken pasta",
+    observedCatalogRevision: 7,
+    menuIdentityDigest: "menu-identity-digest",
+    recipeRevision: 1,
+    recipeRevisionId: RECIPE_REVISION_ID,
+    recipeDigest: "recipe-digest",
+    policyDigest: "policy-digest",
+    recipeDefinition: {
+      revision: 1,
+      recipeRevisionId: RECIPE_REVISION_ID,
+      recipeDigest: "recipe-digest",
+      outputYield: "10",
+      outputUnitId: "portion",
+      lines: recipeCommand().lines,
+      definitionDigest: "definition-digest"
+    },
+    status,
+    freshness: stale ? "stale" : "current",
+    staleReason: stale ? "ingredient_cost_changed" : "",
+    cost: menuCostResult(calculatedStatus),
+    updatedAtISO: NOW,
+    sourceDigest: "projection-source-digest",
     ...overrides
   };
 }
@@ -131,11 +270,17 @@ function responseFor(payload, resultOverrides = {}) {
   if (payload.command.kind === "upsert_location") {
     result = { schemaVersion: 2, locationId: payload.command.locationId, name: payload.command.name, active: payload.command.active, revision: payload.command.expectedRevision + 1, updatedAtISO: NOW };
   } else if (payload.command.kind === "upsert_ingredient") {
-    result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, revision: payload.command.expectedRevision + 1, baseUnitId: payload.command.baseUnitId, active: payload.command.active };
+    result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, revision: payload.command.expectedRevision + 1, baseUnitId: payload.command.baseUnitId, active: payload.command.active, affectedMenuItemIds: [] };
   } else if (payload.command.kind === "opening_balance") {
     result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, locationId: payload.command.locationId, movementId: `imv_${"c".repeat(48)}`, stockRevision: payload.command.expectedStockRevision + 1, onHandMicros: 40_000_000, onHandQuantity: payload.command.quantity };
   } else {
-    result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, costEvidenceId: `ice_${"d".repeat(48)}`, costRevision: payload.command.expectedCostRevision + 1, availability: payload.command.availability };
+    if (payload.command.kind === "publish_pack_conversion") {
+      result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, packUnitId: payload.command.packUnitId, packConversionRevisionId: PACK_CONVERSION_REVISION_ID, revision: payload.command.expectedRevision + 1, affectedMenuItemIds: [] };
+    } else if (payload.command.kind === "publish_menu_recipe") {
+      result = { schemaVersion: 2, menuItemId: payload.command.menuItemId, recipeRevisionId: RECIPE_REVISION_ID, recipeRevision: payload.command.expectedRecipeRevision + 1, projectionSourceDigest: "projection-source-digest", status: "complete" };
+    } else {
+      result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, costEvidenceId: `ice_${"d".repeat(48)}`, costRevision: payload.command.expectedCostRevision + 1, availability: payload.command.availability, affectedMenuItemIds: [] };
+    }
   }
   return {
     ok: true,
@@ -230,6 +375,89 @@ describe("inventory schema-v2 command authority", () => {
     mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
     await expect(applyInventoryCommand({ ...ADMIN_SCOPE, organizationId: `org-command-${requestCharacter}`, requestId, command }))
       .resolves.toMatchObject({ commandKind: command.kind });
+  });
+
+  test("publishes only the exact ingredient pack conversion shape and validates its receipt result", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-pack-command" };
+    const command = packConversionCommand();
+    mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
+
+    await expect(applyInventoryCommand({ ...scope, requestId: `inventory_request_${"5".repeat(32)}`, command }))
+      .resolves.toMatchObject({
+        commandKind: "publish_pack_conversion",
+        confirmation: {
+          ingredientId: "chicken",
+          packUnitId: "case",
+          packConversionRevisionId: PACK_CONVERSION_REVISION_ID,
+          revision: 1,
+          affectedMenuItemIds: []
+        }
+      });
+    expect(mocks.callable.mock.calls[0][0].command).toEqual(command);
+
+    await expect(applyInventoryCommand({
+      ...scope,
+      requestId: `inventory_request_${"6".repeat(32)}`,
+      command: { ...command, inferredCaseContents: true }
+    })).rejects.toThrow(/unsupported fields/i);
+  });
+
+  test("publishes only the exact versioned menu recipe shape and validates immutable result identity", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-recipe-command" };
+    const command = recipeCommand();
+    mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
+
+    await expect(applyInventoryCommand({ ...scope, requestId: `inventory_request_${"7".repeat(32)}`, command }))
+      .resolves.toMatchObject({
+        commandKind: "publish_menu_recipe",
+        confirmation: {
+          menuItemId: "chicken-pasta",
+          recipeRevisionId: RECIPE_REVISION_ID,
+          recipeRevision: 1,
+          status: "complete"
+        }
+      });
+    expect(mocks.callable.mock.calls[0][0].command).toEqual(command);
+
+    await expect(applyInventoryCommand({
+      ...scope,
+      requestId: `inventory_request_${"8".repeat(32)}`,
+      command: { ...command, derivedSellingPriceMinor: 2400 }
+    })).rejects.toThrow(/unsupported fields/i);
+  });
+
+  test("reconciles an uncertain recipe publication with the byte-identical command and idempotent receipt", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-uncertain-recipe" };
+    const requestId = `inventory_request_${"9".repeat(32)}`;
+    const command = recipeCommand();
+    mocks.callable.mockRejectedValueOnce(Object.assign(new Error("connection ended"), { code: "functions/unavailable" }));
+
+    await expect(applyInventoryCommand({ ...scope, requestId, command })).rejects.toThrow(/connection ended/i);
+    expect(readPendingInventoryCommands(scope)).toEqual([
+      expect.objectContaining({ requestId, commandKind: "publish_menu_recipe", targetId: "chicken-pasta", state: "uncertain" })
+    ]);
+
+    mocks.callable.mockImplementationOnce(async (payload) => ({ data: { ...responseFor(payload), idempotent: true } }));
+    await expect(reconcileInventoryCommand({ ...scope, requestId })).resolves.toMatchObject({
+      commandKind: "publish_menu_recipe",
+      mutationMode: "reconciliation",
+      idempotent: true
+    });
+    expect(mocks.callable.mock.calls[1][0]).toEqual(mocks.callable.mock.calls[0][0]);
+  });
+
+  test("retains recipe publication uncertainty when returned projection evidence is not an allowed status", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-invalid-recipe-result" };
+    const requestId = `inventory_request_${"0".repeat(32)}`;
+    mocks.callable.mockImplementationOnce(async (payload) => ({
+      data: responseFor(payload, { status: "stale" })
+    }));
+
+    await expect(applyInventoryCommand({ ...scope, requestId, command: recipeCommand() }))
+      .rejects.toMatchObject({ code: "unknown", inventoryDefinitive: false });
+    expect(readPendingInventoryCommands(scope)).toEqual([
+      expect.objectContaining({ requestId, commandKind: "publish_menu_recipe", state: "uncertain", definitive: false })
+    ]);
   });
 
   test("keeps a transport-uncertain request byte-equivalent for reconciliation", async () => {
@@ -362,5 +590,229 @@ describe("inventory projection validation and listeners", () => {
     };
     expect(inventoryProjectionConfirmsReceipt(model, attempt)).toBe(true);
     expect(inventoryProjectionConfirmsReceipt({ ...model, freshness: "cached" }, attempt)).toBe(false);
+  });
+});
+
+describe("menu costing projection access and realtime evidence", () => {
+  test("allows same-tenant sales to read menu costs without granting ingredient-stock access", () => {
+    const salesScope = { ...ADMIN_SCOPE, role: "sales" };
+    expect(getInventoryMenuCostBrowserAccess(salesScope)).toMatchObject({
+      readEnabled: true,
+      mutationEnabled: false,
+      role: "sales"
+    });
+    expect(getInventoryBrowserAccess(salesScope)).toMatchObject({ readEnabled: false, mutationEnabled: false });
+
+    mocks.onSnapshot.mockReturnValue(vi.fn());
+    expect(() => subscribeToInventoryMenuCostProjections({ ...salesScope, onData: vi.fn() })).not.toThrow();
+    expect(() => subscribeToInventoryIngredientProjections({ ...salesScope, onData: vi.fn() })).toThrow(/administrator/i);
+    expect(() => subscribeToInventoryRecipeIngredients({ ...salesScope, onData: vi.fn() })).toThrow(/administrator/i);
+  });
+
+  test.each([
+    ["complete", "current", "$8.00", 2, 0],
+    ["partial", "current", "$6.00", 1, 1],
+    ["stale", "stale", "$8.00", 2, 0]
+  ])("normalizes %s menu-cost projections with their exact completeness and freshness", (
+    status,
+    freshness,
+    display,
+    costedIngredientCount,
+    missingCostIngredientCount
+  ) => {
+    const normalized = normalizeInventoryMenuCostProjection(
+      menuCostProjection(status), ORGANIZATION_ID, "chicken-pasta"
+    );
+    expect(normalized).toMatchObject({
+      menuItemId: "chicken-pasta",
+      recipeRevision: 1,
+      status,
+      freshness,
+      projectedIngredientCostDisplay: display,
+      coverage: { costedIngredientCount, missingCostIngredientCount }
+    });
+    expect(normalized.recipeDefinition.lines.map(({ ingredientId }) => ingredientId)).toEqual(["chicken", "pasta"]);
+    if (status === "stale") {
+      expect(normalized.staleReason).toBe("ingredient_cost_changed");
+      expect(normalized.cost.status).toBe("complete");
+    }
+    if (status === "partial") expect(normalized.cost).not.toHaveProperty("projectedCostMinor");
+  });
+
+  test("rejects projection authority drift and contradictory current status", () => {
+    expect(() => normalizeInventoryMenuCostProjection(
+      menuCostProjection("complete", { organizationId: "other-org" }), ORGANIZATION_ID, "chicken-pasta"
+    )).toThrow(/authority boundary|internally inconsistent/i);
+    expect(() => normalizeInventoryMenuCostProjection(
+      menuCostProjection("complete", { status: "partial" }), ORGANIZATION_ID, "chicken-pasta"
+    )).toThrow(/contradicts/i);
+    expect(() => normalizeInventoryMenuCostProjection(
+      menuCostProjection("stale", { staleReason: "" }), ORGANIZATION_ID, "chicken-pasta"
+    )).toThrow(/internally inconsistent/i);
+  });
+
+  test("uses one bounded ordered onSnapshot query and retains menu-cost values through cache, pending writes, and errors", () => {
+    const registrations = [];
+    const unsubscribeSnapshot = vi.fn();
+    mocks.onSnapshot.mockImplementation((reference, options, onNext, onError) => {
+      registrations.push({ reference, options, onNext, onError });
+      return unsubscribeSnapshot;
+    });
+    const onData = vi.fn();
+    const onError = vi.fn();
+    const unsubscribe = subscribeToInventoryMenuCostProjections({ ...ADMIN_SCOPE, onData, onError });
+
+    expect(mocks.collection).toHaveBeenCalledWith(
+      mocks.db, "organizations", ORGANIZATION_ID, "inventoryMenuCostProjections"
+    );
+    expect(mocks.orderBy).toHaveBeenCalledWith("menuItemNameSortKey", "asc");
+    expect(mocks.limit).toHaveBeenCalledWith(INVENTORY_MENU_COST_PROJECTION_LIMIT);
+    expect(registrations).toHaveLength(1);
+    expect(registrations[0].options).toEqual({ includeMetadataChanges: true });
+
+    const snapshot = (metadata) => ({
+      docs: [{ id: "chicken-pasta", data: () => menuCostProjection("complete") }],
+      metadata
+    });
+    registrations[0].onNext(snapshot({ fromCache: true, hasPendingWrites: false }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "cached",
+      projections: [{ menuItemId: "chicken-pasta" }],
+      source: { state: "cached", fromCache: true, hasPendingWrites: false }
+    });
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: true }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "pending",
+      projections: [{ menuItemId: "chicken-pasta" }]
+    });
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: false }));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "current",
+      byMenuItemId: { "chicken-pasta": { status: "complete" } }
+    });
+
+    registrations[0].onError(new Error("listener disconnected"));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "unavailable",
+      projections: [{ menuItemId: "chicken-pasta" }]
+    });
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      code: "inventory-menu-cost-projections-unavailable",
+      source: expect.objectContaining({ state: "unavailable" })
+    }));
+
+    const countBeforeUnsubscribe = onData.mock.calls.length;
+    unsubscribe();
+    expect(unsubscribeSnapshot).toHaveBeenCalledOnce();
+    registrations[0].onNext(snapshot({ fromCache: false, hasPendingWrites: false }));
+    expect(onData).toHaveBeenCalledTimes(countBeforeUnsubscribe);
+  });
+
+  test("uses an exact-document listener for the active menu item and treats only a current missing document as no recipe", () => {
+    const registrations = [];
+    mocks.onSnapshot.mockImplementation((reference, options, onNext, onError) => {
+      registrations.push({ reference, options, onNext, onError });
+      return vi.fn();
+    });
+    const onData = vi.fn();
+    subscribeToInventoryMenuCostProjection({
+      ...ADMIN_SCOPE,
+      menuItemId: "chicken-pasta",
+      onData
+    });
+
+    expect(mocks.doc).toHaveBeenCalledWith(
+      mocks.db, "organizations", ORGANIZATION_ID, "inventoryMenuCostProjections", "chicken-pasta"
+    );
+    registrations[0].onNext({
+      exists: () => false,
+      metadata: { fromCache: true, hasPendingWrites: false }
+    });
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      menuItemId: "chicken-pasta", exists: false, projection: null, freshness: "cached"
+    });
+
+    registrations[0].onNext({
+      exists: () => false,
+      metadata: { fromCache: false, hasPendingWrites: false }
+    });
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      menuItemId: "chicken-pasta", exists: false, projection: null, freshness: "current"
+    });
+
+    registrations[0].onNext({
+      exists: () => true,
+      data: () => menuCostProjection("complete"),
+      metadata: { fromCache: false, hasPendingWrites: false }
+    });
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      exists: true,
+      freshness: "current",
+      projection: { menuItemId: "chicken-pasta", recipeRevision: 1 }
+    });
+  });
+
+  test("accepts the maximum server-produced issue envelope for a 50-line recipe", () => {
+    const cost = {
+      ...menuCostResult("invalid"),
+      issues: Array.from({ length: (50 * 3) + 1 }, (_, index) => ({
+        code: "invalid_recipe_evidence",
+        lineId: `line-${index}`
+      }))
+    };
+    expect(() => normalizeInventoryMenuCostProjection(
+      menuCostProjection("invalid", { cost }), ORGANIZATION_ID, "chicken-pasta"
+    )).not.toThrow();
+  });
+
+  test("subscribes recipe editing to the bounded ingredient projection and retains definitions on listener failure", () => {
+    const registrations = [];
+    mocks.onSnapshot.mockImplementation((reference, options, onNext, onError) => {
+      registrations.push({ reference, options, onNext, onError });
+      return vi.fn();
+    });
+    const onData = vi.fn();
+    const onError = vi.fn();
+    subscribeToInventoryRecipeIngredients({ ...ADMIN_SCOPE, onData, onError });
+
+    expect(mocks.collection).toHaveBeenCalledWith(
+      mocks.db, "organizations", ORGANIZATION_ID, "inventoryIngredientProjections"
+    );
+    expect(mocks.orderBy).toHaveBeenCalledWith("nameSortKey", "asc");
+    expect(mocks.limit).toHaveBeenCalledWith(INVENTORY_INGREDIENT_PROJECTION_LIMIT);
+    expect(registrations[0].options).toEqual({ includeMetadataChanges: true });
+
+    registrations[0].onNext({
+      docs: [{ id: "chicken", data: () => ingredientProjection({
+        packConversions: [{
+          packUnitId: "case",
+          packLabel: "Case",
+          revision: 1,
+          packConversionRevisionId: PACK_CONVERSION_REVISION_ID,
+          baseUnitId: "lb",
+          baseQuantity: "10",
+          sourceLabel: "Operator-declared case contents"
+        }]
+      }) }],
+      metadata: { fromCache: false, hasPendingWrites: false }
+    });
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "current",
+      ingredients: [{
+        ingredientId: "chicken",
+        supportedRecipeUnits: expect.arrayContaining([
+          expect.objectContaining({ unitKind: "ingredient_pack", packUnitId: "case" })
+        ])
+      }]
+    });
+
+    registrations[0].onError(new Error("listener disconnected"));
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "unavailable",
+      ingredients: [{ ingredientId: "chicken" }]
+    });
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      code: "inventory-recipe-ingredients-unavailable"
+    }));
   });
 });

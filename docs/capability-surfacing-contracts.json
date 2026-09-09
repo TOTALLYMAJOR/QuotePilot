@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 77,
+  "catalogVersion": 78,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -9060,14 +9060,14 @@
     },
     {
       "id": "ingredient-inventory-workspace",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
       "audiences": [
         "organization_admins"
       ],
-      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock, independently retain exact purchase-cost evidence, and observe bounded server-owned projections in realtime.",
+      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock, independently retain exact purchase-cost evidence, publish explicit ingredient-specific purchase packs, and observe bounded server-owned projections in realtime.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -9157,7 +9157,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The new Operations route uses the established workspace shell and exact tenant route, renders stock and purchase cost as independent evidence axes, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit.",
+      "surfaceReviewNote": "The Operations route uses the established workspace shell and exact tenant route, renders stock and purchase cost as independent evidence axes, adds one contextual explicit-pack editor, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -9233,7 +9233,177 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "With every gate enabled, a same-tenant administrator can record an ingredient, physical opening quantity, and optional exact purchase-cost observation through receipt-producing commands and watch server-confirmed bounded projections update. Stock remains valid without cost, cost never manufactures stock, cached or pending data cannot authorize writes, customers and sales cannot read this slice, and nothing derives recipes, menu cost, shortages, selling price, booking, deployment, or production readiness."
+      "safeOutcome": "With every gate enabled, a same-tenant administrator can record an ingredient, physical opening quantity, optional exact purchase-cost observation, and explicit purchase-pack conversion through receipt-producing commands and watch server-confirmed bounded projections update. Stock remains valid without cost, cost never manufactures stock, cached or pending data cannot authorize writes, customers and sales cannot read stock, and this surface never derives shortages, selling price, booking, deployment, or production readiness."
+    },
+    {
+      "id": "ingredient-menu-recipe-costing",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "organization_admins",
+        "organization_sales"
+      ],
+      "summary": "Library attaches immutable ingredient recipes to exact existing menu-item identities and exposes independently calculated, revision-bound ingredient-cost evidence through bounded summaries plus an exact realtime projection for the menu item being edited.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/inventoryAuthority.js",
+        "functions/inventoryIngredientCore.cjs",
+        "functions/inventoryRecipeCore.cjs",
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/hooks/useInventoryRecipeExtension.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/AmbientLibraryRoute.jsx",
+        "src/components/InventoryRecipeEditor.jsx",
+        "src/hooks/useInventoryRecipeExtension.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/InventoryRecipeEditor.jsx",
+          "locator": "data-inventory-recipe-editor"
+        }
+      ],
+      "testPaths": [
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/components/__tests__/ambientLibraryRoute.test.jsx",
+        "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+        "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+        "src/lib/__tests__/inventoryProductionRoute.test.js",
+        "src/lib/__tests__/inventoryRecipeCore.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/inventoryRecipeCore.server.test.js",
+          "locator": "calculates the owner fixture exactly without a rounded unit-cost intermediate"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+          "locator": "publishes a catalog-fenced recipe and materializes exact $0.80 per-portion costing without stock"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryAuthorityClient.test.js",
+          "locator": "uses an exact-document listener for the active menu item and treats only a current missing document as no recipe"
+        },
+        {
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "clears a definitive rejected request before allowing a corrected retry"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "menu cost projections are staff-readable, server-owned, and query bounded"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Ingredient Inventory Phase 3"
+        },
+        {
+          "path": "docs/INVENTORY_AUTHORITY_ADR.md",
+          "locator": "## Versioned recipes and pure costing"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "To cost an existing menu item:"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Recipe composition is embedded in the existing Library menu-item editor in both production app graphs. The tenant-wide cost summary remains bounded, while the active editor subscribes to its exact projection document so truncation can never masquerade as no recipe. Pending, uncertain, committed, and definitively rejected attempts lock the visible inputs until reconciliation, projection refresh, or explicit reset.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "renders loading while the exact active-menu projection is unresolved",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "shows no-recipe state and only units supplied by ingredient authority",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "publishes an exact menu-item recipe payload without deriving cost in React",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "keeps partial, stale, unavailable, and invalid evidence explicit",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "keeps partial, stale, unavailable, and invalid evidence explicit",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "keeps partial, stale, unavailable, and invalid evidence explicit",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "disables publication for retained ingredient data and explains recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "publishes an exact menu-item recipe payload without deriving cost in React",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "locks the recipe while a publication is submitting",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "locks an uncertain request to its reconciliation action",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "locks an uncertain request to its reconciliation action",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "publishes an exact menu-item recipe payload without deriving cost in React",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "With all inventory gates enabled, administrators can publish immutable recipes and explicit pack conversions without changing menu selling price or manual declared catalog cost. Administrators and sales can read safe cost projections; only administrators can read ingredient stock or mutate recipes. Missing costs and conversions remain incomplete evidence, cached or pending snapshots cannot authorize writes, and recipe costing remains independent from stock availability, quote demand, allocation, COGS, deployment, production behavior, and human acceptance."
     }
   ]
 }

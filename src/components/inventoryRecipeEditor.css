@@ -1,0 +1,223 @@
+.inventory-recipe-editor {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--border, #d7d1c7) 82%, transparent);
+}
+
+.inventory-recipe-editor > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.72fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.inventory-recipe-editor h3,
+.inventory-recipe-editor h4,
+.inventory-menu-cost-summary h2 {
+  margin: 0;
+}
+
+.inventory-recipe-editor header p,
+.inventory-menu-cost-summary p {
+  margin: 0.35rem 0 0;
+  color: var(--muted, #655f56);
+}
+
+.inventory-recipe-editor__eyebrow {
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inventory-recipe-editor__cost {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border, #d7d1c7);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, var(--bg, #f4f1eb));
+}
+
+.inventory-recipe-editor__cost[data-menu-cost-state="partial"],
+.inventory-recipe-editor__cost[data-menu-cost-state="stale"],
+.inventory-recipe-editor__cost[data-menu-cost-state="invalid"] {
+  border-color: color-mix(in srgb, #a55d13 58%, var(--border, #d7d1c7));
+}
+
+.inventory-recipe-editor__state {
+  width: fit-content;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inventory-recipe-editor__cost ul,
+.inventory-recipe-editor__issues ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.inventory-recipe-editor form {
+  display: grid;
+  gap: 1rem;
+}
+
+.inventory-recipe-editor fieldset {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.45fr) minmax(9rem, 0.55fr);
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--border, #d7d1c7);
+  border-radius: 0.75rem;
+}
+
+.inventory-recipe-editor legend {
+  padding: 0 0.35rem;
+  font-weight: 720;
+}
+
+.inventory-recipe-editor label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.inventory-recipe-editor label > span {
+  font-size: 0.78rem;
+  font-weight: 690;
+}
+
+.inventory-recipe-editor input,
+.inventory-recipe-editor select {
+  width: 100%;
+  min-width: 0;
+}
+
+.inventory-recipe-editor__lines {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.inventory-recipe-editor__lines > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.inventory-recipe-editor__lines ol {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: recipe-line;
+}
+
+.inventory-recipe-editor__lines li {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1.4fr) minmax(6rem, 0.55fr) minmax(7rem, 0.62fr) minmax(8rem, 0.72fr) auto;
+  gap: 0.65rem;
+  align-items: end;
+  padding: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--border, #d7d1c7) 75%, transparent);
+  border-radius: 0.7rem;
+}
+
+.inventory-recipe-editor__empty,
+.inventory-recipe-editor__recovery,
+.inventory-recipe-editor__operation,
+.inventory-recipe-editor__issues {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--bg, #f4f1eb) 78%, transparent);
+}
+
+.inventory-recipe-editor__operation[data-recipe-operation-state="uncertain"],
+.inventory-recipe-editor__operation[data-recipe-operation-state="rejected"],
+.inventory-recipe-editor__issues {
+  border-left: 3px solid #a55d13;
+}
+
+.inventory-recipe-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.inventory-menu-cost-summary {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.7fr) minmax(16rem, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #d7d1c7);
+  border-radius: 0.8rem;
+}
+
+.inventory-menu-cost-summary ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inventory-menu-cost-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #d7d1c7) 65%, transparent);
+}
+
+.inventory-menu-cost-summary li:last-child {
+  border-bottom: 0;
+}
+
+.inventory-menu-cost-summary li > span:first-child {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.inventory-menu-cost-summary small {
+  color: var(--muted, #655f56);
+  text-transform: capitalize;
+}
+
+@media (max-width: 860px) {
+  .inventory-recipe-editor > header,
+  .inventory-menu-cost-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-recipe-editor__lines li {
+    grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.5fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .inventory-recipe-editor fieldset,
+  .inventory-recipe-editor__lines li {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-recipe-editor__lines > div:first-child,
+  .inventory-menu-cost-summary li,
+  .inventory-recipe-editor__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inventory-recipe-editor__actions > button {
+    width: 100%;
+  }
+}

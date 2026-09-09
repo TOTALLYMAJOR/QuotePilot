@@ -46,6 +46,7 @@ import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useCatalogData } from "./hooks/useCatalogData";
 import { useCommercialWorkspaceSnapshot } from "./hooks/useCommercialWorkspaceSnapshot";
+import { useInventoryRecipeExtension } from "./hooks/useInventoryRecipeExtension";
 import {
   calculateQuotePricing,
   notifyOwnerNewQuote
@@ -141,6 +142,10 @@ const StaffWorkspace = createRecoverableLazy(
 const InventoryWorkspace = createRecoverableLazy(
   () => import("./components/InventoryWorkspace"),
   "InventoryWorkspace"
+);
+const InventoryMenuCostSummary = createRecoverableLazy(
+  () => import("./components/InventoryRecipeEditor").then((module) => ({ default: module.InventoryMenuCostSummary })),
+  "InventoryMenuCostSummary"
 );
 const MessagingStation = createRecoverableLazy(
   () => import("./components/LegacyMessagingStation"),
@@ -1360,6 +1365,13 @@ function LegacyAppCore({
     && inventoryTenantEnabled
     && firebaseReady
     && authSession.isAdmin;
+  const inventoryRecipeExtension = useInventoryRecipeExtension({
+    active: catalogRouteOpen || catalogModalOpen || step === 2,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled
+  });
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
@@ -4086,6 +4098,7 @@ function LegacyAppCore({
             onEventTypeChange={setGlobalEventTypeId}
             onToast={pushToast}
             onInteractionStateChange={setCatalogInteraction}
+            inventoryRecipeExtension={inventoryRecipeExtension}
           />
         </WorkspaceLazyRoute>
       )}
@@ -4430,6 +4443,15 @@ function LegacyAppCore({
                     catalog.packages.find((item) => item.id === form.pkg)?.includedMenuItemIds || []
                   }
                 />
+                {inventoryRecipeExtension.enabled && inventoryRecipeExtension.menuCostProjections.length > 0 && (
+                  <Suspense fallback={<p role="status">Loading ingredient cost intelligence…</p>}>
+                    <InventoryMenuCostSummary
+                      projections={inventoryRecipeExtension.menuCostProjections}
+                      sourceState={inventoryRecipeExtension.menuCostProjectionSourceState}
+                      title="Menu ingredient cost"
+                    />
+                  </Suspense>
+                )}
                 {menuSelectionValidationMessage && (
                   <p
                     className="warning-note step-guidance"
@@ -4595,6 +4617,7 @@ function LegacyAppCore({
             initialTab={adminInitialTab}
             onToast={pushToast}
             onInteractionStateChange={setCatalogInteraction}
+            inventoryRecipeExtension={inventoryRecipeExtension}
           />
         </WorkspaceLazyTool>
       )}

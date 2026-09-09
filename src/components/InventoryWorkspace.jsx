@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyInventoryCommand,
   buildInventoryRequestId,
@@ -24,10 +24,12 @@ const stackStyle = Object.freeze({
   gap: "var(--space-4, 1rem)"
 });
 
-const AXES = Object.freeze(["location", "ingredient", "stock", "cost"]);
+const AXES = Object.freeze(["location", "ingredient", "stock", "cost", "conversion"]);
+const CANONICAL_QUANTITY = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u;
+const STABLE_REFERENCE = /^[^\s/?#\\\u0000]{1,180}$/u;
 
 function initialAttempt() {
-  return { state: "ready", error: "", requestId: "", receipt: null, confirmation: null };
+  return { state: "ready", error: "", requestId: "", targetId: "", receipt: null, confirmation: null };
 }
 
 function initialAttempts() {
@@ -168,10 +170,18 @@ function ReadBoundary({ state, model, error, onRetry }) {
 }
 
 function AttemptState({ axis, attempt, onReconcile, onReset }) {
-  const label = axis === "stock" ? "Stock evidence" : axis === "cost" ? "Cost evidence" : axis === "ingredient" ? "Ingredient" : "Location";
+  const label = axis === "stock"
+    ? "Stock evidence"
+    : axis === "cost"
+      ? "Cost evidence"
+      : axis === "conversion"
+        ? "Purchase pack"
+        : axis === "ingredient"
+          ? "Ingredient"
+          : "Location";
   if (attempt.state === "ready") return null;
   if (attempt.state === "submitting") {
-    return <div className="status-strip" data-capability-state="submitting" role="status">Recording {label.toLowerCase()}…</div>;
+    return <div className="status-strip" data-capability-state="submitting" role="status">{axis === "conversion" ? "Publishing purchase pack…" : `Recording ${label.toLowerCase()}…`}</div>;
   }
   if (attempt.state === "reconciliation") {
     return <div className="status-strip" data-capability-state="reconciliation" role="status">Checking the exact original {label.toLowerCase()} request…</div>;
@@ -188,7 +198,7 @@ function AttemptState({ axis, attempt, onReconcile, onReset }) {
   if (attempt.state === "receipt") {
     return (
       <div className="status-strip" data-capability-state="receipt" role="status" tabIndex={-1} aria-label={`${label} request outcome`}>
-        Receipt recorded. Waiting for the server-confirmed {axis === "ingredient" ? "ingredient" : axis} projection.
+        Receipt recorded. Waiting for the server-confirmed {axis === "ingredient" ? "ingredient" : axis === "conversion" ? "purchase-pack" : axis} projection.
         {attempt.receipt?.receiptId && <span className="source-note">Receipt {attempt.receipt.receiptId}</span>}
       </div>
     );
@@ -205,6 +215,88 @@ function AttemptState({ axis, attempt, onReconcile, onReset }) {
     <div className="error-note" data-capability-state="error" role="alert" tabIndex={-1} aria-label={`${label} request outcome`}>
       <p>{attempt.error || `${label} was definitively rejected.`}</p>
       <button className="ghost" type="button" data-capability-state="recovery" onClick={() => onReset(axis)}>Review before a new request</button>
+    </div>
+  );
+}
+
+function PackConversionEditor({ ingredient, current, attempt, onSubmit, onReconcile, onReset, editorId }) {
+  const packs = Array.isArray(ingredient.packConversions) ? ingredient.packConversions : [];
+  const [packUnitId, setPackUnitId] = useState("");
+  const [packLabel, setPackLabel] = useState("");
+  const [baseQuantity, setBaseQuantity] = useState("");
+  const [sourceLabel, setSourceLabel] = useState("");
+  const [validationError, setValidationError] = useState("");
+  const matchingPack = packs.find((entry) => entry.packUnitId === packUnitId.trim());
+  const expectedRevision = matchingPack?.revision || 0;
+  const disabled = !current || axisLocked(attempt) || !ingredient.active;
+
+  const changePackReference = (value) => {
+    setPackUnitId(value);
+    setValidationError("");
+    const declared = packs.find((entry) => entry.packUnitId === value.trim());
+    if (!declared) return;
+    setPackLabel(declared.packLabel);
+    setBaseQuantity(declared.baseQuantity);
+    setSourceLabel(declared.sourceLabel);
+  };
+
+  const submit = (event) => {
+    event.preventDefault();
+    const reference = packUnitId.trim();
+    if (!STABLE_REFERENCE.test(reference) || reference === "." || reference === "..") {
+      setValidationError("Enter a stable purchase-pack reference without spaces, slashes, or query characters.");
+      return;
+    }
+    if (!CANONICAL_QUANTITY.test(baseQuantity.trim()) || /^0(?:\.0{1,6})?$/u.test(baseQuantity.trim())) {
+      setValidationError("Enter a positive quantity with no more than six decimal places; exponent notation is not supported.");
+      return;
+    }
+    setValidationError("");
+    onSubmit("conversion", {
+      kind: "publish_pack_conversion",
+      ingredientId: ingredient.ingredientId,
+      packUnitId: reference,
+      packLabel: packLabel.trim(),
+      baseUnitId: ingredient.baseUnitId,
+      baseQuantity: baseQuantity.trim(),
+      sourceLabel: sourceLabel.trim(),
+      expectedRevision
+    });
+  };
+
+  return (
+    <div id={editorId} data-inventory-axis="conversion" data-capability-state={attempt.state} style={stackStyle}>
+      <div>
+        <p className="eyebrow">Purchase-pack declaration</p>
+        <h3>{ingredient.name}</h3>
+      </div>
+        <form aria-label={`Declare purchase pack for ${ingredient.name}`} data-inventory-command="publish_pack_conversion" onSubmit={submit} style={stackStyle}>
+          <p className="muted">Define how one supplier pack converts to the ingredient’s base unit. This does not change stock or cost evidence.</p>
+          <label className="field">
+            Purchase-pack reference
+            <input required maxLength={180} value={packUnitId} disabled={disabled} onChange={(event) => changePackReference(event.target.value)} placeholder="case-40lb" />
+          </label>
+          <label className="field">
+            Pack label
+            <input required maxLength={80} value={packLabel} disabled={disabled} onChange={(event) => { setPackLabel(event.target.value); setValidationError(""); }} placeholder="40 lb case" />
+          </label>
+          <label className="field">
+            Quantity in base unit ({ingredient.baseUnitId})
+            <input required inputMode="decimal" value={baseQuantity} disabled={disabled} onChange={(event) => { setBaseQuantity(event.target.value); setValidationError(""); }} placeholder="40" />
+          </label>
+          <label className="field">
+            Declaration source
+            <input required maxLength={120} value={sourceLabel} disabled={disabled} onChange={(event) => { setSourceLabel(event.target.value); setValidationError(""); }} placeholder="Supplier pack specification" />
+          </label>
+          <p className="source-note" aria-live="polite">
+            Expected revision: {expectedRevision}. Publishing creates revision {expectedRevision + 1} if the declaration is still current.
+          </p>
+          {validationError && <p className="error-note" role="alert">{validationError}</p>}
+          <button className="ghost" type="submit" disabled={disabled || !packUnitId.trim() || !packLabel.trim() || !baseQuantity.trim() || !sourceLabel.trim()}>
+            Publish purchase pack
+          </button>
+        </form>
+      <AttemptState axis="conversion" attempt={attempt} onReconcile={onReconcile} onReset={onReset} />
     </div>
   );
 }
@@ -481,7 +573,20 @@ function EvidenceForms({ ingredients, locations, current, attempts, onSubmit, on
   );
 }
 
-function IngredientEvidenceTable({ ingredients, freshness }) {
+function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canManagePacks, packAttempt, onSubmit, onReconcile, onReset }) {
+  const [selectedIngredientId, setSelectedIngredientId] = useState(() => (
+    ingredients.some((entry) => entry.ingredientId === packAttempt.targetId)
+      ? packAttempt.targetId
+      : ""
+  ));
+  useEffect(() => {
+    if (packAttempt.targetId && ingredients.some((entry) => entry.ingredientId === packAttempt.targetId)) {
+      setSelectedIngredientId(packAttempt.targetId);
+    } else if (selectedIngredientId && !ingredients.some((entry) => entry.ingredientId === selectedIngredientId)) {
+      setSelectedIngredientId("");
+    }
+  }, [ingredients, packAttempt.targetId, selectedIngredientId]);
+
   if (!ingredients.length) {
     return (
       <section className="panel" aria-labelledby="inventory-empty-title">
@@ -502,17 +607,63 @@ function IngredientEvidenceTable({ ingredients, freshness }) {
         <table aria-describedby="inventory-list-description">
           <caption className="sr-only">Ingredient stock evidence and independent purchase-cost evidence</caption>
           <thead>
-            <tr><th scope="col">Ingredient</th><th scope="col">Stock evidence</th><th scope="col">Cost evidence</th><th scope="col">Location</th></tr>
+            <tr><th scope="col">Ingredient</th><th scope="col">Stock evidence</th><th scope="col">Cost evidence</th><th scope="col">Location</th><th scope="col">Purchase packs</th></tr>
           </thead>
           <tbody>
-            {ingredients.map((ingredient) => (
-              <tr key={ingredient.ingredientId}>
-                <th scope="row">{ingredient.name}<span className="source-note"> · {ingredient.category}</span></th>
-                <td data-inventory-axis="stock">{stockText(ingredient)}</td>
-                <td data-inventory-axis="cost">{costText(ingredient)}</td>
-                <td>{ingredient.locationName || ingredient.locationId || "No location evidence"}</td>
-              </tr>
-            ))}
+            {ingredients.map((ingredient, index) => {
+              const packs = Array.isArray(ingredient.packConversions) ? ingredient.packConversions : [];
+              const selected = selectedIngredientId === ingredient.ingredientId;
+              const editorId = `inventory-pack-editor-${index}`;
+              return (
+                <Fragment key={ingredient.ingredientId}>
+                  <tr>
+                    <th scope="row">{ingredient.name}<span className="source-note"> · {ingredient.category}</span></th>
+                    <td data-inventory-axis="stock">{stockText(ingredient)}</td>
+                    <td data-inventory-axis="cost">{costText(ingredient)}</td>
+                    <td>{ingredient.locationName || ingredient.locationId || "No location evidence"}</td>
+                    <td>
+                      {packs.length ? (
+                        <ul className="plain-list" aria-label={`Declared purchase packs for ${ingredient.name}`}>
+                          {packs.map((pack) => (
+                            <li key={pack.packUnitId}>
+                              <strong>{pack.packLabel}</strong> · 1 {pack.packUnitId} = {pack.baseQuantity} {pack.baseUnitId}
+                              <span className="source-note"> · {pack.sourceLabel} · revision {pack.revision}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <p className="source-note">No purchase packs declared.</p>}
+                      {canManagePacks && (
+                        <button
+                          className="ghost"
+                          type="button"
+                          aria-expanded={selected}
+                          aria-controls={editorId}
+                          disabled={!packsCurrent || !ingredient.active || (axisLocked(packAttempt) && !selected)}
+                          onClick={() => setSelectedIngredientId(selected ? "" : ingredient.ingredientId)}
+                        >
+                          {selected ? "Close pack editor" : "Declare or revise pack"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {selected && canManagePacks && (
+                    <tr>
+                      <td colSpan="5">
+                        <PackConversionEditor
+                          ingredient={ingredient}
+                          current={packsCurrent}
+                          attempt={packAttempt}
+                          onSubmit={onSubmit}
+                          onReconcile={onReconcile}
+                          onReset={onReset}
+                          editorId={editorId}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -571,7 +722,16 @@ export function InventoryWorkspaceView({
             </ul>
           </section>
 
-          <IngredientEvidenceTable ingredients={ingredients} freshness={read.state} />
+          <IngredientEvidenceTable
+            ingredients={ingredients}
+            freshness={read.state}
+            packsCurrent={read.state === "current" && currentSource(model, "ingredients")}
+            canManagePacks={access.mutationEnabled === true}
+            packAttempt={attempts.conversion || initialAttempt()}
+            onSubmit={onSubmit}
+            onReconcile={onReconcile}
+            onReset={onReset}
+          />
 
           {access.mutationEnabled ? (
             <>
@@ -659,6 +819,7 @@ export default function InventoryWorkspace({
             state: attempt.definitive ? "error" : "uncertain",
             error: attempt.error || "This exact inventory request still needs reconciliation.",
             requestId: attempt.requestId,
+            targetId: attempt.targetId || "",
             receipt: null
           };
         });
@@ -730,14 +891,16 @@ export default function InventoryWorkspace({
     let requestId = "";
     try {
       requestId = buildInventoryRequestId();
-      setAttempt(axis, { state: "submitting", error: "", requestId, receipt: null, confirmation: null });
+      const targetId = command.ingredientId || command.locationId || command.menuItemId || "";
+      setAttempt(axis, { state: "submitting", error: "", requestId, targetId, receipt: null, confirmation: null });
       const result = await submitCommand({ ...scope, requestId, command });
-      setAttempt(axis, { state: "receipt", error: "", requestId, receipt: result.receipt, confirmation: result.confirmation });
+      setAttempt(axis, { state: "receipt", error: "", requestId, targetId, receipt: result.receipt, confirmation: result.confirmation });
     } catch (error) {
       setAttempt(axis, {
         state: isDefinitiveInventoryError(error) ? "error" : "uncertain",
         error: safeMessage(error, "Inventory did not return a verified receipt."),
         requestId,
+        targetId: command.ingredientId || command.locationId || command.menuItemId || "",
         receipt: null,
         confirmation: null
       });
@@ -750,7 +913,14 @@ export default function InventoryWorkspace({
     setAttempt(axis, { ...attempts[axis], state: "reconciliation", error: "" });
     try {
       const result = await reconcileCommand({ ...scope, requestId });
-      setAttempt(axis, { state: "receipt", error: "", requestId, receipt: result.receipt, confirmation: result.confirmation });
+      setAttempt(axis, {
+        state: "receipt",
+        error: "",
+        requestId,
+        targetId: attempts[axis]?.targetId || result.confirmation?.ingredientId || "",
+        receipt: result.receipt,
+        confirmation: result.confirmation
+      });
     } catch (error) {
       setAttempt(axis, {
         ...attempts[axis],

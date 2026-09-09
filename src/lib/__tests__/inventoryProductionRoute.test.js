@@ -35,6 +35,11 @@ describe("ingredient inventory production-route coverage", () => {
     expect(LEGACY_APP_SOURCE).toContain('import("./components/InventoryWorkspace")');
     expect(LEGACY_APP_SOURCE).toContain("resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && inventoryWorkspaceEnabled");
     expect(LEGACY_APP_SOURCE).toContain("navigateWorkspace(WORKSPACE_PATHS.inventory)");
+    expect(LEGACY_APP_SOURCE).toContain('import { useInventoryRecipeExtension } from "./hooks/useInventoryRecipeExtension"');
+    expect(LEGACY_APP_SOURCE).toContain("active: catalogRouteOpen || catalogModalOpen");
+    expect(LEGACY_APP_SOURCE).toContain("inventoryRecipeExtension={inventoryRecipeExtension}");
+    expect(LEGACY_APP_SOURCE).toContain("<InventoryMenuCostSummary");
+    expect(LEGACY_APP_SOURCE).toContain('title="Menu ingredient cost"');
   });
 
   test("retains the same fail-closed route in the Ambient production graph", () => {
@@ -43,5 +48,6 @@ describe("ingredient inventory production-route coverage", () => {
     expect(AMBIENT_APP_SOURCE).toContain("effectiveSettings.inventoryAuthorityEnabled === true");
     expect(AMBIENT_APP_SOURCE).toContain('import("./components/InventoryWorkspace")');
     expect(AMBIENT_APP_SOURCE).toContain("resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && inventoryWorkspaceEnabled");
+    expect(AMBIENT_APP_SOURCE).toContain("inventoryRecipeAccess");
   });
 });
