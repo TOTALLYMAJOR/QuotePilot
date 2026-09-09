@@ -18,6 +18,7 @@ export const WORKSPACE_ROUTE_IDS = Object.freeze({
   MESSAGING: "messaging",
   WORKFLOW: "workflow",
   OPERATIONS: "operations",
+  INVENTORY: "inventory",
   SCHEDULE: "schedule",
   REPORTING: "reporting",
   CATALOG: "catalog",
@@ -40,6 +41,7 @@ export const WORKSPACE_PATHS = Object.freeze({
   messaging: `${WORKSPACE_ROOT}/messages`,
   workflow: `${WORKSPACE_ROOT}/workflow`,
   operations: `${WORKSPACE_ROOT}/operations`,
+  inventory: `${WORKSPACE_ROOT}/inventory`,
   schedule: `${WORKSPACE_ROOT}/schedule`,
   reporting: `${WORKSPACE_ROOT}/reporting`,
   catalog: `${WORKSPACE_ROOT}/catalog`,
@@ -65,6 +67,7 @@ const ROUTE_META = Object.freeze({
   [WORKSPACE_ROUTE_IDS.MESSAGING]: Object.freeze({ section: "messaging", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.WORKFLOW]: Object.freeze({ section: "workflow", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.OPERATIONS]: Object.freeze({ section: "operations", delivery: "follow-on" }),
+  [WORKSPACE_ROUTE_IDS.INVENTORY]: Object.freeze({ section: "operations", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.SCHEDULE]: Object.freeze({ section: "schedule", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.REPORTING]: Object.freeze({ section: "reporting", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.CATALOG]: Object.freeze({ section: "catalog", delivery: "follow-on" }),
@@ -151,6 +154,7 @@ const STATIC_ROUTES = new Map([
   [WORKSPACE_PATHS.messaging, WORKSPACE_ROUTE_IDS.MESSAGING],
   [WORKSPACE_PATHS.workflow, WORKSPACE_ROUTE_IDS.WORKFLOW],
   [WORKSPACE_PATHS.operations, WORKSPACE_ROUTE_IDS.OPERATIONS],
+  [WORKSPACE_PATHS.inventory, WORKSPACE_ROUTE_IDS.INVENTORY],
   [WORKSPACE_PATHS.schedule, WORKSPACE_ROUTE_IDS.SCHEDULE],
   [WORKSPACE_PATHS.reporting, WORKSPACE_ROUTE_IDS.REPORTING],
   [WORKSPACE_PATHS.catalog, WORKSPACE_ROUTE_IDS.CATALOG],
@@ -320,6 +324,8 @@ export function buildWorkspacePath(routeId, params = {}) {
       return buildWorkflowPath(params);
     case WORKSPACE_ROUTE_IDS.OPERATIONS:
       return WORKSPACE_PATHS.operations;
+    case WORKSPACE_ROUTE_IDS.INVENTORY:
+      return WORKSPACE_PATHS.inventory;
     case WORKSPACE_ROUTE_IDS.SCHEDULE:
       return WORKSPACE_PATHS.schedule;
     case WORKSPACE_ROUTE_IDS.REPORTING:

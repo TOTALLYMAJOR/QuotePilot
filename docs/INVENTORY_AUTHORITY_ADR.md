@@ -1,153 +1,355 @@
-# Inventory Operating-Model Authority
+# Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-08 21:49:12 CDT
+Last updated: 2026-09-09 01:23:34 CDT
 
-Status: Accepted for default-off source implementation
+Status: Accepted scope correction; default-off source implementation in progress
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
-## Context
+## Governing objective
 
-QuotePilot currently turns catering choices into commercial truth, but it does
-not own physical-stock, allocation, or execution truth. Treating a mutable
-quantity field as inventory would lose the reason stock changed, make
-concurrent event commitments unsafe, and let screens infer readiness from
-catalog data that owns no physical evidence.
+QuotePilot inventory exists to turn recorded ingredient stock and purchase-cost
+evidence into versioned menu recipes, trustworthy event ingredient demand,
+projected food cost, stock shortages, allocations, and eventual
+planned-versus-actual consumption evidence.
 
-## Decision
+The governing progression is:
 
-Add an organization-scoped Inventory Authority with this dependency chain:
+`ingredient -> opening stock and cost -> units and conversions -> versioned recipe -> menu-item quantity and cost -> event ingredient demand -> availability and shortage -> allocation -> consumption and waste -> operational consequence`
 
-`commercial configuration -> physical requirement -> availability -> commitment -> execution -> evidence -> system consequence`
+This decision supersedes the earlier equipment-first interpretation. Reusable
+equipment reservations, rentals, chafers, tables, checkout/return scheduling,
+turnaround windows, and damage/repair workflows are outside this program. The
+already committed Phase 1 remains an honest historical checkpoint, but its
+equipment-specific behavior does not govern active implementation and will not
+be exposed as a parallel inventory authority.
 
-Library remains the commercial composition surface. It may publish versioned
-rules explaining which physical resources an Offer, Package, rental, menu item,
-or service style implies, but it does not own stock or reservations. Inventory
-is an Operations authority. Event and quote experiences consume its bounded
-projection without becoming inventory writers or claiming that inventory alone
-establishes event readiness.
+## Scope reconciliation
 
-Every runtime surface and callable remains independently default-off behind:
+The interrupted Phase 2 was implementing Library-to-equipment policies for
+whole-unit reusable resources. Its downstream compiler, interval availability,
+reservation, execution, and workspace drafts assumed resources returned after
+an event window. That is incorrect for consumable ingredients.
 
-- `INVENTORY_AUTHORITY_ENABLED=true` in the Functions runtime;
+The correction classifies the existing foundation as follows:
+
+| Classification | Retained or changed behavior |
+|---|---|
+| KEEP | Organization scoping, explicit runtime and tenant gates, server-only consequential writes, App Check, stable request IDs, expected revisions, transaction retries, immutable receipts, canonical serialization/digests, immutable ledger evidence, replayable stock projections, and strict tenant/role rules. |
+| MODIFY | Inventory identity becomes ingredient identity; quantities become decimal-safe fractional base-unit amounts; stock projections represent consumable on-hand quantity; cost becomes independent immutable evidence and a revisioned planning-cost projection; Library mappings become versioned recipes attached to existing menu items. |
+| DEFER | Receiving, packs and conversions, event demand, consumable allocation, release, consumption, waste, actual-cost reconciliation, and deeper commercial/readiness integration advance only in their ordered slices. |
+| REMOVE FROM ACTIVE SCOPE | Whole-unit constraints, reusable-resource buckets, turnaround, interval-overlap availability, local-day allocation fences, checkout/return/damage/repair/loss/retire commands, rental mappings, equipment attention UI, and equipment utilization insights. |
+
+There is one active plan. Equipment-first requirements are historical context,
+not a competing backlog.
+
+## Authority boundaries
+
+The existing catalog remains the authority for menu items, packages, and
+selling prices. Recipes attach to stable existing menu-item IDs and never create
+a second menu catalog. Library is the operator surface for recipe composition;
+it does not own physical stock.
+
+Inventory owns ingredient definitions, stock evidence, current stock
+projections, purchase-cost observations, ingredient allocations, consumption,
+and waste. It does not own selling price, quote revisions, customer acceptance,
+payment, booking, BEO currentness, or overall event readiness.
+
+Pricing remains governed by `docs/PRICING_CONSTITUTION.md`. Derived ingredient
+cost is advisory internal cost evidence. It must not automatically overwrite a
+catalog cost, selling price, quote total, deposit, or margin. Ingredient-only
+cost is not complete event cost or profit.
+
+Commercial quote revisions and recipe revisions remain immutable historical
+inputs. Recalculation creates a new projection; it never rewrites the estimate
+that supported an earlier quote or decision.
+
+## Firestore model
+
+All documents are organization scoped under `organizations/{orgId}`. The
+active implementation uses bounded documents rather than tenant-wide replay on
+normal reads:
+
+| Collection | Authority |
+|---|---|
+| `inventoryLocations/{locationId}` | Stable stock locations; the first rollout may operate with one location. |
+| `inventoryIngredients/{ingredientId}` | Ingredient identity, category, active state, base stock unit, revision, and schema kind. No editable quantity or derived availability. The separate collection prevents old equipment-shaped documents from being mistaken for ingredient authority. |
+| `inventoryMovements/{movementId}` | Immutable ingredient stock evidence such as opening balance, later receiving, consumption, waste, and correction. |
+| `inventoryStockStates/{ingredientId_locationId}` | Rebuildable current on-hand projection with ledger revision. |
+| `inventoryCostEvidence/{evidenceId}` | Immutable recorded purchase-cost observation or explicit unknown-cost evidence. |
+| `inventoryCostStates/{ingredientId}` | Revisioned organization planning-cost basis and its exact evidence provenance. |
+| `inventoryAuthorityState/ingredient-v2` | Shared configuration fence and exact location/ingredient counts for contention-safe bounded setup. |
+| `inventoryAuthorityReceipts/{requestId}` | Immutable idempotent command outcome; request substitution fails closed. |
+| `inventoryRecipePolicies/{recipeRevisionId}` | Immutable recipe revision attached to a stable existing menu-item ID. |
+| `inventoryMenuCostProjections/{menuItemId}` | Bounded current recipe quantity/cost projection with coverage and missing evidence. |
+| `eventIngredientRequirements/{quoteId}/revisions/{requirementRevisionId}` | Immutable compiled ingredient demand and projected cost bound to exact inputs. |
+| `eventIngredientPlans/{quoteId}` | Current server-authoritative consumable allocation state. |
+| `inventoryAllocationFences/{ingredientId_locationId}` | Shared contention record for cumulative available-to-promise stock. |
+| `eventIngredientProjections/{quoteId}` | Client-safe event demand, costing completeness, availability, shortage, and freshness. |
+| `inventoryIngredientProjections/{ingredientId}` | Client-safe current stock and cost axes for the operator workspace. |
+| `inventoryWorkspaceProjections/current` | Bounded client-safe location/setup projection; it never contains the item ledger. |
+
+Collection names preserve the organization-scoped inventory namespace, while
+schema and command versions reject old equipment-shaped documents. No automatic
+name-based migration or production data mutation is part of this source march.
+
+Per-ingredient and per-menu projections avoid one tenant-global hot document.
+The exact workspace document remains small because it carries locations and
+setup revision only. Clients use exact-document listeners where they already
+know an entity ID and bounded ordered `onSnapshot()` queries with explicit
+limits for workspace lists. A listener is a read model, never allocation
+authority.
+
+Corrected Phase 2 deliberately caps location and ingredient definitions at 200
+each until cursor-based inventory navigation is implemented. Creates advance
+one shared configuration fence in the same transaction, so simultaneous record
+201 attempts contend rather than leaving a projection the application cannot
+read. This is an explicit source-candidate limit, not a claim that a mature
+ingredient catalog should remain capped at 200.
+
+## Ingredient quantity and unit contract
+
+Ingredient quantities are fractional and decimal safe. Public command payloads
+use strict canonical decimal strings. Runtime arithmetic converts those values
+to a fixed integer scale and uses integer/BigInt intermediates; JavaScript
+floating-point values, exponent notation, excess precision, whitespace, NaN,
+and negative values fail closed.
+
+Every ingredient declares one base stock unit and dimension. Supported
+cross-unit conversions must be explicitly defined within the same dimension.
+Ingredient-specific purchase packs require a declared conversion. QuotePilot
+never infers pounds-to-cups, case contents, cooking loss, edible yield, or
+density. A missing conversion remains missing evidence.
+
+The base unit becomes immutable after the first stock movement. Historical
+ingredients and locations may be deactivated, not deleted.
+
+## Opening stock and recorded cost
+
+An administrator can create an ingredient and independently:
+
+1. record opening stock at a location with quantity, base unit, effective time,
+   actor, and reason/source; and
+2. record purchase-cost evidence with total exact minor-unit money, currency,
+   basis quantity and unit, effective time, and provenance, or explicitly mark
+   the cost unknown.
+
+The two commands have separate request identities, expected revisions,
+receipts, and projection states. Valid stock evidence commits even when cost is
+missing or rejected. Valid cost evidence remains inspectable when stock is
+missing or uncertain. The UI must never collapse these into one misleading
+“inventory ready” status.
+
+The first unambiguous observation may support a planning unit-cost ratio, such
+as `$120 / 40 lb`, without prematurely rounding the unit price. Later purchase
+observations are retained, but no FIFO, LIFO, weighted-average, replacement-cost,
+or accounting valuation policy is inferred. Until an owner-declared policy is
+adopted, the projection exposes its exact observation basis and completeness;
+it does not claim inventory value or authoritative COGS.
+
+`unknown` cost is distinct from zero cost.
+
+## Versioned recipes and pure costing
+
+A recipe revision belongs to one existing menu item and records:
+
+- output yield and output unit, normally portions;
+- ingredient references;
+- exact ingredient quantities and recipe units for that yield;
+- explicit as-purchased versus usable/edible-portion semantics;
+- any declared usable-yield assumption;
+- conversion provenance, validity state, revision, and digest.
+
+Publishing creates an immutable revision and advances only the menu item’s
+recipe head. Invalid references, unsupported conversions, missing yields, and
+missing cost evidence remain explicit.
+
+Recipe costing is a pure deterministic calculation. It accepts the exact recipe
+revision, normalized ingredient quantities, and pinned cost observations. It
+returns ingredient contributions, projected cost, coverage, missing evidence,
+and digest. It does not read Firestore, mutate stock, or change selling prices.
+Integer/rational arithmetic carries full precision through aggregation and
+rounds money only at the declared output boundary.
+
+The recipe head also maintains bounded reverse dependency references from each
+ingredient to the recipe revisions that use it. Updating chicken cost therefore
+queues only chicken-dependent menu projections; it does not scan or rebuild the
+whole catalog. Recalculation is idempotent and source-revision fenced. A menu
+projection is published only from an exact recipe revision and exact ingredient
+cost revisions, and records `complete`, `partial`, `stale`, `unavailable`, or
+`invalid` evidence with the contributing ingredient rows. Missing evidence may
+produce a clearly labeled partial amount, but never a complete-cost claim.
+
+`inventoryMenuCostProjections/{menuItemId}` is the preferred Library read model.
+It carries recipe cost, output yield, full-precision cost per yield unit,
+coverage, issues, source revisions and digest. Library subscribes to that one
+bounded projection rather than walking recipes, ingredient evidence and ledger
+history in the browser. Quote/event costing composes these already-calculated
+menu projections with explicit portions, while the immutable event requirement
+revision retains the exact recipe and cost observations used. A later current
+cost change can refresh the current menu projection and identify affected
+events; it cannot rewrite previously recorded quote/event cost evidence.
+
+## Shared event demand with independent result rails
+
+The event compiler consumes the exact organization, quote and commercial
+revision, selected menu items, explicit portion basis or menu-choice counts,
+recipe revisions, required-by time, and conversion assumptions. It emits a
+deterministically sorted immutable ingredient-demand revision, aggregated by
+ingredient while preserving each menu item’s contribution.
+
+It must respect explicit portions and established package/menu semantics. It
+must not assume every dish serves every guest or double-count a package
+inclusion that is also represented as an explicit selection. An unavailable
+portion basis blocks demand compilation rather than inviting a guess.
+
+That quantity-only demand revision is the shared dependency for two sibling
+rails:
+
+```text
+immutable ingredient demand
+        ├── recipe/menu cost projection
+        └── stock availability and allocation projection
+```
+
+Costing does not depend on stock availability. A valid `$80` projected food
+cost remains valid when chicken is short. Availability does not depend on cost
+coverage. A valid five-pound shortage remains visible when chicken cost is
+unknown. Invalid demand provenance may block both, but one rail’s operational
+failure does not downgrade the other rail’s valid evidence.
+
+## Consumable availability and allocation
+
+Ingredients are consumed and do not automatically return after an event.
+Availability is cumulative rather than interval based:
+
+`available to allocate = usable on hand + confirmed recorded inbound supply - active allocations`
+
+Recorded inbound supply contributes only when the implementation can establish
+its authoritative quantity and availability; an expected or unconfirmed
+purchase is not stock. The initial rollout does not claim freshness,
+suitability, lot traceability, or expiry evidence.
+
+Preview is pure and informational. Allocation commands re-read authoritative
+stock state, all active allocation totals, demand revision, and shared
+item/location fence inside one Firestore transaction. Competing events—even on
+different days—touch the same fence and cannot overallocate the same physical
+stock. Partial allocation records the maximum valid amount and explicit unmet
+demand.
+
+Allocation changes commitment, not physical on-hand stock. Release changes the
+allocation only. Consumption changes physical stock and settles the related
+allocation without subtracting the same quantity twice. Every command is
+expected-revision fenced and retry safe.
+
+## Realtime projections and evidence state
+
+Canonical inventory, recipe, allocation, and receipt writes are server only.
+Clients subscribe only to bounded safe projections. Listeners use
+`includeMetadataChanges: true` and preserve these distinctions:
+
+- server-confirmed current;
+- pending receipt/readback;
+- cached;
+- stale;
+- unavailable/not yet projected;
+- uncertain command outcome; and
+- rejected command with an explicit recovery path.
+
+`fromCache` and `hasPendingWrites` never render as confirmed current. A listener
+failure may retain the last confirmed projection as stale but cannot silently
+promote it. Organization, principal, role, or feature-gate changes unsubscribe
+and invalidate late callbacks.
+
+The first operator surface is `/app/inventory` under Operations. It lets an
+authorized administrator create an ingredient, record opening stock, and
+independently record cost evidence. Library receives recipe editing only when
+the recipe slice is implemented. Sales receive only explicitly approved
+same-tenant projections and previews; customers and cross-tenant actors receive
+no inventory access.
+
+Every runtime surface and callable remains independently default off behind:
+
+- `INVENTORY_AUTHORITY_ENABLED=true` in Functions;
 - `organizations/{orgId}/settings/config.inventoryAuthorityEnabled=true`; and
 - `VITE_INVENTORY_AUTHORITY_ENABLED=true` in the browser.
 
-The server flag does not inherit the tenant-workflow/RagnaKoK override. An
-explicit environment value is required so enabling another operational program
-cannot activate inventory accidentally.
+## Corrected delivery sequence
 
-## Physical truth
+Each completed slice receives its own local commit. Nothing is pushed until all
+corrected slices and final qualification complete.
 
-`organizations/{orgId}/inventoryItems/{itemId}` stores stable resource
-definition only: display name, category, unit, active state, turnaround minutes,
-and revision. It never stores canonical owned, reserved, or available totals.
-An item's unit is immutable after its first movement.
+1. **Historical Phase 1 — authority substrate.** Preserve the organization,
+   transaction, ledger, receipt, revision, and rule foundations; supersede its
+   equipment semantics.
+2. **Corrected Phase 2 — ingredient stock and cost vertical.** Ingredient setup,
+   fractional base-unit quantities, opening balance, independent recorded cost
+   evidence, materialized projections, realtime operator UI, and rules.
+3. **Phase 3 — units, packs, recipes, and menu costing.** Explicit conversions,
+   versioned recipes in Library, pure costing, reverse dependencies, and
+   per-menu cost projections.
+4. **Phase 4 — event demand, projected food cost, and shortages.** Immutable
+   menu/event demand compiler plus independent cost and stock-availability
+   projections.
+5. **Phase 5 — receiving and consumable allocation.** Receiving, shared
+   contention fences, partial allocation, release, idempotency, and concurrency
+   acceptance.
+6. **Phase 6 — change reconciliation and Commercial Change intelligence.** Pin
+   historical estimates; distinguish recipe/cost-basis drift from operator
+   commercial changes; add separate recipe-cost and ingredient-availability
+   consequences to Commercial Change without changing price or turning
+   advisory evidence into a universal publish blocker.
+7. **Phase 7 — consumption and actual variance.** Consumption, waste,
+   corrections, allocation settlement, and planned-versus-actual quantity and
+   cost reconciliation.
+8. **Phase 8 — deeper realtime product integration.** Bounded Library, Quote
+   Edit, Preflight, Operations, and reporting projections plus deterministic
+   utilization, shortage, and due-supply insights.
 
-`organizations/{orgId}/inventoryMovements/{movementId}` is the immutable
-physical evidence ledger. A movement carries a positive whole-unit quantity,
-actor and server time, occurrence time, request identity, expected stock
-revisions, and explicit `from` and `to` endpoints. Current buckets are:
+Corrected Phase 2 is now complete as a default-off local source candidate. The
+next independently committed target is Phase 3; its recipe and costing work
+must consume the retained ingredient authority without enlarging or blocking
+the stock evidence rail.
 
-- `usable`;
-- `checked_out`; and
-- `damaged`.
+## Acceptance anchor
 
-`lost` and `retired` are terminal destinations. Supported movement kinds are
-`opening_balance`, `adjustment`, `transfer`, `checkout`, `return`, `damage`,
-`repair`, `loss`, and `retire`. `adjustment` requires a declared reason;
-`transfer` changes location without changing organization ownership. Missing
-equipment is an unresolved execution exception, not a movement, until an
-operator records a return or confirms a loss.
+The first end-to-end fixture remains:
 
-`inventoryStockStates/{stockStateId}` is a transactionally maintained read
-projection. It contains bucket balances, ledger revision, and last movement
-identity for one item and location. It is not independent truth: replaying the
-immutable ledger must reproduce it exactly.
+- Chicken: `40 lb`, recorded total cost `$120`.
+- Pasta: `30 lb`, recorded total cost `$60`.
+- Recipe yield: `10 portions`, requiring `2 lb` chicken and `1 lb` pasta.
+- Event selection: `100 portions`.
 
-## Requirement and availability truth
+The deterministic result is `20 lb` chicken, `10 lb` pasta, `$60` chicken cost,
+`$20` pasta cost, and `$80` projected ingredient cost. If another event has an
+active `25 lb` chicken allocation, physical on-hand remains `40 lb`, available
+to allocate is `15 lb`, and the new event shortage is `5 lb`, regardless of
+whether the events occur on different days.
 
-Published `inventoryRequirementPolicies/{policyRevisionId}` documents are
-immutable bounded rule sets. Rules reference stable catalog IDs, never display
-names, and use only fixed, ceiling-rounded per-guest, or per-selected-unit
-formulas. Compilation binds its result to the exact quote ID, immutable quote
-revision, event window, and policy revision. Existing compiled requirements do
-not change when a later policy publishes.
+Later slices must also prove shared-ingredient aggregation, portion-change
+deltas, preserved historical estimates, recipe invalidation without history
+rewrite, explicit missing cost/conversion, concurrent no-overallocation,
+idempotent receive/allocate/consume, release without stock mutation,
+consumption without double subtraction, tenant and role denials, and distinct
+pending/committed/uncertain UI evidence.
 
-Availability calculation is a pure deterministic contract. It reduces physical
-state, requirements, overlapping allocations, and item turnaround into
-per-item and per-unit-group required, usable, committed, available, and shortage
-values. Unlike units are never added into a false grand total. The pure module
-performs no Firestore read or write and is shared by tests, trusted callables,
-projections, and simulations.
+## Evidence boundary and unresolved policy
 
-## Commitment and Firestore coordination
+Unit, emulator, rules, build, governance, and browser checks establish local
+source evidence only. A branch push establishes publication only. PR review,
+merge, deployment, feature activation, migration, production-data correctness,
+provider evidence, assistive-technology acceptance, and human acceptance remain
+separate events.
 
-`eventInventoryPlans/{quoteId}` is the mutable server-authoritative inventory
-aggregate for an event. It binds source quote revision, event window,
-requirement revision, allocation revision, requirement lines, allocations,
-shortages, execution state, and freshness. Its state vocabulary is
-`not_evaluated`, `available`, `partially_reserved`, `reserved`, `shortage`,
-`stale`, and `released`; execution remains a separate axis.
+Corrected Phase 2's demo-only emulator lane exercises the real callable and
+Firestore transaction path. It proves that competing configuration writes
+preserve the shared fence and projection, identical opening requests produce
+one movement and receipt, substituted request input fails closed, competing
+revision-zero openings have one winner, and cost evidence does not mutate stock.
+It does not prove later receiving, allocation, or consumption behavior.
 
-Accepted and booked work may hold capacity. Draft and sent quotes receive
-read-only evaluation only. A later commercial revision preserves the previous
-hold, marks the plan stale, and requires an explicit administrator reconcile.
-It never silently releases or reallocates accepted operational capacity.
-
-Reservations use a single Firestore transaction over deterministic
-item/location/tenant-local-day `inventoryAllocationFences`. Exact intervals are
-retained inside each fence, and item turnaround extends the effective end. Two
-overlapping requests therefore read and write at least one shared document,
-letting Firestore contention retry protect the invariant. Insufficient capacity
-reserves the maximum available amount and records the rest as shortage.
-
-Every command carries an expected revision and stable request ID. Exact replay
-returns the retained immutable receipt; reuse with different command or actor
-evidence fails. The target plan, fences, receipt, and target projection change
-atomically. Other affected projections are refreshed idempotently and may never
-regress to an older source revision.
-
-The public command envelope is versioned and exact:
-
-`{ schemaVersion, organizationId, requestId, command: { kind, ...payload } }`.
-
-Unknown fields fail closed. One organization-scoped receipt identity is shared
-across configuration and movement commands, so the same request ID cannot be
-substituted across command kinds. The first movement atomically writes an
-immutable `firstMovementId` marker on the item document; item definition edits
-read that same document, making Firestore transaction retry the fence that
-prevents a unit change from racing the first physical movement.
-
-## Read and security boundary
-
-Canonical inventory documents are Admin SDK only. Browser clients cannot read
-or write items, movements, stock states, policies, requirements, plans, fences,
-receipts, or insights directly. Same-tenant admins and sales may `get` one exact
-`eventInventoryProjections/{quoteId}` document; lists and every browser write
-are denied. Bounded workspace lists come from the trusted callable.
-
-Admins own configuration, reservation, reconciliation, release, and movement
-commands. Sales may read and preview. Customers have no inventory access.
-Cached or pending Firestore listener state remains visible and cannot be
-presented as server-confirmed current evidence.
-
-## Consequences and non-goals
-
-The model can distinguish owned, usable, out, damaged, reserved, returned,
-lost, and retired quantities without treating any of them as synonyms. Quote
-Edit and Event Preflight may show read-only physical consequences and the next
-authorized action. Inventory contributes one readiness fact; it does not own
-overall readiness, price, BEO currentness, customer acceptance, or booking.
-
-This program does not add serialized assets, fractional quantities, vendor
-inventory, purchasing, external-rental cost capture, automated acquisition
-advice, or name-based catalog migration. Initial state is established through
-explicit items, locations, mappings, and opening-balance movements.
-
-## Evidence boundary
-
-Unit, emulator, rules, build, and browser checks establish local source
-evidence only. A branch push establishes publication only. PR review, merge,
-deployment, tenant activation, production-data correctness, provider evidence,
-assistive-technology acceptance, and human acceptance remain separate events.
+The genuinely unresolved product/accounting decision is the valuation policy
+for multiple cost observations and actual consumption. Corrected Phase 2
+records exact evidence and supports the unambiguous first observation without
+inventing that policy. The decision is required before the system claims
+inventory valuation, authoritative COGS, or actual cost variance.

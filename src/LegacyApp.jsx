@@ -138,6 +138,10 @@ const StaffWorkspace = createRecoverableLazy(
   () => import("./components/StaffWorkspace"),
   "StaffWorkspace"
 );
+const InventoryWorkspace = createRecoverableLazy(
+  () => import("./components/InventoryWorkspace"),
+  "InventoryWorkspace"
+);
 const MessagingStation = createRecoverableLazy(
   () => import("./components/LegacyMessagingStation"),
   "MessagingStation"
@@ -216,6 +220,7 @@ const PROPOSAL_COMPOSER_ENABLED = !["0", "false", "no", "off"].includes(
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
+const INVENTORY_AUTHORITY_UI_ENABLED = import.meta.env.VITE_INVENTORY_AUTHORITY_ENABLED === "true";
 // The NOW surface is an additional default-off presentation gate. Absent or
 // unrecognized values keep it off; it never widens data access or authority.
 const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
@@ -1349,6 +1354,12 @@ function LegacyAppCore({
   const integrationsEnabled = featureFlags.integrationsOps !== false;
   const diagnosticsEnabled = featureFlags.diagnostics !== false;
   const dashboardEnabled = featureFlags.reportingDashboard !== false;
+  const inventoryTenantEnabled = effectiveSettings.inventoryAuthorityEnabled === true;
+  const inventoryWorkspaceEnabled = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && INVENTORY_AUTHORITY_UI_ENABLED
+    && inventoryTenantEnabled
+    && firebaseReady
+    && authSession.isAdmin;
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
@@ -1356,6 +1367,7 @@ function LegacyAppCore({
     (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF
       && authSession.isAdmin
       && OPERATIONAL_STAFFING_UI_ENABLED)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && inventoryWorkspaceEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
@@ -3829,6 +3841,7 @@ function LegacyAppCore({
               {openHeaderMenu === "operations" && (
                 <div className="header-menu-popover" role="menu" aria-label="Operations">
                   {CUSTOMER_CENTERED_WORKSPACE_ENABLED && authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.staff); }}>Staff</button>}
+                  {inventoryWorkspaceEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.inventory); }}>Inventory</button>}
                   {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Event Schedule</button>}
                   {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Reporting Dashboard</button>}
                   {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Integrations Ops</button>}
@@ -3881,6 +3894,7 @@ function LegacyAppCore({
               {openHeaderMenu === "more" && (
                 <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
                   {CUSTOMER_CENTERED_WORKSPACE_ENABLED && authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.staff); }}>Staff</button>}
+                  {inventoryWorkspaceEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.inventory); }}>Inventory</button>}
                   {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: moreMenuTriggerRef })}>Event Schedule</button>}
                   {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: moreMenuTriggerRef })}>Reporting Dashboard</button>}
                   {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Integrations Ops</button>}
@@ -4033,6 +4047,23 @@ function LegacyAppCore({
         </WorkspaceLazyRoute>
       )}
 
+      {CUSTOMER_CENTERED_WORKSPACE_ENABLED
+        && inventoryWorkspaceEnabled
+        && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && (
+        <WorkspaceLazyRoute
+          surfaceName="Inventory"
+          component={InventoryWorkspace}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <InventoryWorkspace
+            organizationId={authSession.organizationId}
+            role={authSession.role}
+            browserEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
+            tenantEnabled={inventoryTenantEnabled}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
       {authSession.isAdmin && catalogRouteMounted && (
         <WorkspaceLazyRoute
           active={catalogRouteOpen}
@@ -4159,6 +4190,7 @@ function LegacyAppCore({
         || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
         || ([
           WORKSPACE_ROUTE_IDS.STAFF,
+          WORKSPACE_ROUTE_IDS.INVENTORY,
           WORKSPACE_ROUTE_IDS.SCHEDULE,
           WORKSPACE_ROUTE_IDS.REPORTING,
           WORKSPACE_ROUTE_IDS.CATALOG,
@@ -4168,6 +4200,7 @@ function LegacyAppCore({
         ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
         || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
           WORKSPACE_ROUTE_IDS.STAFF,
+          WORKSPACE_ROUTE_IDS.INVENTORY,
           WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
           WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
           WORKSPACE_ROUTE_IDS.MESSAGING

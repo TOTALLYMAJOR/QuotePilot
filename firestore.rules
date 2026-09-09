@@ -53,6 +53,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role in ["admin", "sales"];
     }
 
+    function inventoryAuthorityEnabled(orgId) {
+      let settingsPath = /databases/$(database)/documents/organizations/$(orgId)/settings/config;
+      return exists(settingsPath)
+        && get(settingsPath).data.get("inventoryAuthorityEnabled", false) == true;
+    }
+
     function managedMenuAvailabilityUpdateAllowed() {
       let previousActive = resource.data.get("active", true);
       let nextActive = request.resource.data.get("active", true);
@@ -1179,15 +1185,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Physical inventory definitions, immutable movements, rebuildable stock
-    // state, requirement policies, event plans, allocation fences, receipts,
-    // and deterministic insights are trusted-server authority. Browser staff
-    // use bounded callables for workspace reads and commands.
+    // Ingredient definitions, immutable stock/cost evidence, rebuildable
+    // current states, recipes, event demand, allocations, receipts, and
+    // deterministic insights are trusted-server authority. Browser clients
+    // may read only the bounded projections declared below.
     match /organizations/{orgId}/inventoryLocations/{locationId} {
       allow read, write: if false;
     }
 
     match /organizations/{orgId}/inventoryItems/{itemId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryIngredients/{ingredientId} {
       allow read, write: if false;
     }
 
@@ -1199,12 +1209,42 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /organizations/{orgId}/inventoryCostEvidence/{evidenceId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryCostStates/{costStateId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/inventoryAuthorityState/{stateId} {
       allow read, write: if false;
     }
 
     match /organizations/{orgId}/inventoryAuthorityReceipts/{receiptId} {
       allow read, write: if false;
+    }
+
+    // Location/setup data stays in one exact, server-owned projection. The
+    // first Phase-2 route is administrator-only and has no browser write path.
+    match /organizations/{orgId}/inventoryWorkspaceProjections/{projectionId} {
+      allow get: if projectionId == "current"
+        && isOrgAdmin(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Ingredient rows are materialized independently to avoid a tenant-global
+    // hot document. Realtime list reads must remain explicitly bounded.
+    match /organizations/{orgId}/inventoryIngredientProjections/{ingredientId} {
+      allow get: if isOrgAdmin(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if isOrgAdmin(orgId)
+        && inventoryAuthorityEnabled(orgId)
+        && request.query.limit != null
+        && request.query.limit <= 200;
+      allow create, update, delete: if false;
     }
 
     match /organizations/{orgId}/inventoryRequirementPolicies/{policyRevisionId} {
@@ -1231,13 +1271,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Realtime consumers may observe one exact, client-safe event projection.
-    // Listing would turn this bounded read into an inventory scan, and every
-    // write remains callable-owned.
+    // The superseded equipment-event projection has no active browser surface.
+    // Ingredient event projections receive a separate contract in their slice.
     match /organizations/{orgId}/eventInventoryProjections/{quoteId} {
-      allow get: if isOrgStaff(orgId);
-      allow list: if false;
-      allow create, update, delete: if false;
+      allow read, write: if false;
     }
 
     match /organizations/{orgId}/inventoryInsights/{periodKey} {

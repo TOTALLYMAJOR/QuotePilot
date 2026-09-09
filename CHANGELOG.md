@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-08 21:49:12 CDT
+Last updated: 2026-09-09 01:23:34 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,12 +8,29 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Correct the default-off Inventory Authority to its owner-directed ingredient
+  objective. The active Phase 2 now preserves the organization, transaction,
+  ledger, revision, receipt, and authorization substrate while replacing
+  reusable-equipment assumptions with fractional ingredient stock, independent
+  recorded purchase-cost evidence, bounded materialized projections, and an
+  early operator workflow reachable from both supported production build
+  graphs when its exact default-off gates are enabled. The corrected plan makes immutable ingredient demand
+  the shared dependency of independent menu-costing and stock-availability
+  rails and reserves a later slice for Commercial Change intelligence. The
+  demo-only emulator acceptance proves real callable authentication and App
+  Check, shared Firestore contention, replay-safe opening stock, request-ID
+  substitution rejection, and stock/cost independence. The
+  interrupted Library-to-equipment policy, interval availability, and equipment
+  workspace drafts are removed from active scope; no tenant, deployment,
+  migration, or production authority is activated.
 - Establish Phase 1 of the default-off Inventory Authority: stable locations
   and resource definitions, immutable reasoned physical movements, rebuildable
   item/location bucket projections, unified idempotent command receipts,
   transaction-fenced unit immutability, App Check protected callables, and
   browser-denied canonical Firestore records. This is local source evidence;
-  no tenant, deployment, or production inventory authority is activated.
+  no tenant, deployment, or production inventory authority is activated. This
+  commit remains an honest historical checkpoint; its equipment-specific
+  semantics are superseded by the ingredient-first correction above.
 - Add schema-v2 task planning and the repository-local
   `catering-domain-intelligence` skill. Domain-relevant agent work now preserves
   its existing execution profile while selecting current QuotePilot authorities

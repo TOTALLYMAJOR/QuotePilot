@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 76,
+  "catalogVersion": 77,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -9057,6 +9057,183 @@
       ],
       "headlessReason": "Developer-only launchers and synthetic fixture seeders are restricted to disposable demo projects and loopback Auth/Firestore/Functions. Fresh local setup creates named taxonomy before native pricing confirmation, then staff sign-in/display fixtures and native-planned synthetic acceptance/booking after verifying current catalog authority and preserving version, pricing and payment. The shared Firebase browser seed separately requires a demo project plus loopback Auth and Firestore before creating its active portal fixture. There is no hosted seed or tenant activation mode.",
       "safeOutcome": "Operators rehearse existing user surfaces locally with explicit synthetic evidence, normal role checks and providers disabled. Native acceptance and coordination fixtures are never customer or provider proof."
+    },
+    {
+      "id": "ingredient-inventory-workspace",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "organization_admins"
+      ],
+      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock, independently retain exact purchase-cost evidence, and observe bounded server-owned projections in realtime.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/inventoryAuthority.js",
+        "functions/inventoryAuthorityCore.cjs",
+        "functions/inventoryIngredientCore.cjs",
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getInventoryWorkspace",
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getInventoryWorkspace",
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/InventoryWorkspace.jsx",
+        "src/components/WorkspaceShell.jsx",
+        "src/lib/aiui01CompatibilityBaseline.js",
+        "src/lib/inventoryAuthorityClient.js",
+        "src/lib/workspaceRoutes.js",
+        "src/lib/workspaceShellModel.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/InventoryWorkspace.jsx",
+          "locator": "data-capability-id=\"inventory-workspace\""
+        }
+      ],
+      "testPaths": [
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/components/__tests__/inventoryWorkspace.test.jsx",
+        "src/components/__tests__/workspaceShell.test.jsx",
+        "src/lib/__tests__/aiui01CompatibilityBaseline.test.js",
+        "src/lib/__tests__/deploymentSafety.test.js",
+        "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+        "src/lib/__tests__/inventoryIngredientCore.server.test.js",
+        "src/lib/__tests__/inventoryProductionRoute.test.js",
+        "src/lib/__tests__/workspaceRoutes.test.js",
+        "src/lib/__tests__/workspaceShellModel.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "keeps physical stock and purchase-cost evidence as separate axes"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryAuthorityClient.test.js",
+          "locator": "subscribes to the exact workspace doc and bounded ordered ingredient query with metadata"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "ingredient projections require the tenant inventory authority setting"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryProductionRoute.test.js",
+          "locator": "wires the triple-gated inventory route into the default production graph"
+        },
+        {
+          "path": "src/lib/__tests__/aiui01CompatibilityBaseline.test.js",
+          "locator": "keeps admin-only Catalog, Imports, Inventory, and Staff absent for sales"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Corrected Ingredient Inventory Phase 2"
+        },
+        {
+          "path": "docs/INVENTORY_AUTHORITY_ADR.md",
+          "locator": "## Corrected delivery sequence"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Ingredient inventory (default-off source candidate)"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The new Operations route uses the established workspace shell and exact tenant route, renders stock and purchase cost as independent evidence axes, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "With every gate enabled, a same-tenant administrator can record an ingredient, physical opening quantity, and optional exact purchase-cost observation through receipt-producing commands and watch server-confirmed bounded projections update. Stock remains valid without cost, cost never manufactures stock, cached or pending data cannot authorize writes, customers and sales cannot read this slice, and nothing derives recipes, menu cost, shortages, selling price, booking, deployment, or production readiness."
     }
   ]
 }

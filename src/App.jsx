@@ -149,6 +149,7 @@ const EVENT_OPERATING_SPINE_UI_ENABLED = import.meta.env.VITE_EVENT_OPERATING_SP
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
+const INVENTORY_AUTHORITY_UI_ENABLED = import.meta.env.VITE_INVENTORY_AUTHORITY_ENABLED === "true";
 const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
@@ -194,6 +195,10 @@ const CustomerWorkspaceView = createRecoverableLazy(
 const StaffWorkspace = createRecoverableLazy(
   () => import("./components/StaffWorkspace"),
   "StaffWorkspace"
+);
+const InventoryWorkspace = createRecoverableLazy(
+  () => import("./components/InventoryWorkspace"),
+  "InventoryWorkspace"
 );
 const MessagingStation = createRecoverableLazy(
   () => import("quotepilot-active-messaging-station"),
@@ -1735,6 +1740,7 @@ export default function App({
   const importsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.IMPORTS);
   const catalogRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.CATALOG);
   const staffRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.STAFF);
+  const inventoryRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INVENTORY);
   const diagnosticsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.DIAGNOSTICS);
   const scheduleModalOpen = shellModalOpen(scheduleOpen, WORKSPACE_ROUTE_IDS.SCHEDULE);
   const reportingModalOpen = shellModalOpen(dashboardOpen, WORKSPACE_ROUTE_IDS.REPORTING);
@@ -1863,6 +1869,7 @@ export default function App({
   const dashboardMounted = useStickyMount(reportingModalOpen);
   const catalogRouteMounted = useStickyMount(catalogRouteOpen);
   const staffRouteMounted = useStickyMount(staffRouteOpen);
+  const inventoryRouteMounted = useStickyMount(inventoryRouteOpen);
   const scheduleRouteMounted = useStickyMount(scheduleRouteOpen);
   const reportingRouteMounted = useStickyMount(reportingRouteOpen);
   const integrationsRouteMounted = useStickyMount(integrationsRouteOpen);
@@ -2713,6 +2720,12 @@ export default function App({
   const integrationsEnabled = featureFlags.integrationsOps !== false;
   const diagnosticsEnabled = featureFlags.diagnostics !== false;
   const dashboardEnabled = featureFlags.reportingDashboard !== false;
+  const inventoryTenantEnabled = effectiveSettings.inventoryAuthorityEnabled === true;
+  const inventoryWorkspaceEnabled = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && INVENTORY_AUTHORITY_UI_ENABLED
+    && inventoryTenantEnabled
+    && firebaseReady
+    && authSession.isAdmin;
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
@@ -2877,6 +2890,7 @@ export default function App({
       && authSession.isAdmin
       && OPERATIONAL_STAFFING_UI_ENABLED)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && eventScheduleEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && inventoryWorkspaceEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
@@ -2894,6 +2908,7 @@ export default function App({
       || ([
         WORKSPACE_ROUTE_IDS.STAFF,
         WORKSPACE_ROUTE_IDS.OPERATIONS,
+        WORKSPACE_ROUTE_IDS.INVENTORY,
         WORKSPACE_ROUTE_IDS.SCHEDULE,
         WORKSPACE_ROUTE_IDS.REPORTING,
         WORKSPACE_ROUTE_IDS.CATALOG,
@@ -2911,6 +2926,7 @@ export default function App({
         WORKSPACE_ROUTE_IDS.EVENT_LIVE,
         WORKSPACE_ROUTE_IDS.EVENT_REPLAY,
         WORKSPACE_ROUTE_IDS.OPERATIONS,
+        WORKSPACE_ROUTE_IDS.INVENTORY,
         WORKSPACE_ROUTE_IDS.MESSAGING
       ].includes(resolvedWorkspaceRouteId))
   };
@@ -5990,6 +6006,20 @@ export default function App({
     route: { mounted: staffRouteMounted, open: staffRouteOpen },
     modal: { mounted: false, open: false }
   };
+  const inventoryTool = {
+    surfaceName: "Inventory",
+    component: InventoryWorkspace,
+    enabled: inventoryWorkspaceEnabled,
+    onClose: returnWorkspaceHome,
+    surfaceProps: {
+      organizationId: authSession.organizationId,
+      role: authSession.role,
+      browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+      tenantEnabled: inventoryTenantEnabled
+    },
+    route: { mounted: inventoryRouteMounted, open: inventoryRouteOpen },
+    modal: { mounted: false, open: false }
+  };
   const importsTool = {
     surfaceName: "Import Studio",
     component: ImportStudioView,
@@ -6454,6 +6484,7 @@ export default function App({
         customerPortal: customerPortalEnabled,
         staffDirectory: CUSTOMER_CENTERED_WORKSPACE_ENABLED && OPERATIONAL_STAFFING_UI_ENABLED,
         eventSchedule: eventScheduleEnabled,
+        inventoryAuthority: inventoryWorkspaceEnabled,
         reportingDashboard: dashboardEnabled,
         integrationsOps: integrationsEnabled,
         diagnostics: diagnosticsEnabled
@@ -6485,6 +6516,9 @@ export default function App({
         onClearDeck: () => navigateWorkspace(WORKSPACE_PATHS.clearDeck),
         onOperations: eventScheduleEnabled
           ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
+          : undefined,
+        onInventory: inventoryWorkspaceEnabled
+          ? () => navigateWorkspace(WORKSPACE_PATHS.inventory)
           : undefined,
         onMessages: () => navigateWorkspace(WORKSPACE_PATHS.messaging),
         onWorkflow: () => navigateWorkspace(WORKSPACE_PATHS.workflow),
@@ -6932,6 +6966,7 @@ export default function App({
 
       {renderWorkspaceTools("route", [
         staffTool,
+        inventoryTool,
         catalogTool,
         importsTool,
         scheduleTool,
@@ -6948,6 +6983,10 @@ export default function App({
               ? !authSession.isAdmin
                 ? "role-denied"
                 : "feature-disabled"
+              : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY
+                ? !authSession.isAdmin
+                  ? "role-denied"
+                  : "feature-disabled"
               : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG
                 && !authSession.isAdmin
                 && !AMBIENT_UI_ENABLED

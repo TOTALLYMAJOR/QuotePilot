@@ -1,107 +1,346 @@
 "use strict";
 
-const inventory = require("./inventoryAuthorityCore.cjs");
+const inventory = require("./inventoryIngredientCore.cjs");
 
 const COLLECTIONS = Object.freeze({
   locations: "inventoryLocations",
-  items: "inventoryItems",
+  ingredients: "inventoryIngredients",
   movements: "inventoryMovements",
   stockStates: "inventoryStockStates",
-  authorityReceipts: "inventoryAuthorityReceipts",
-  authorityState: "inventoryAuthorityState"
+  costEvidence: "inventoryCostEvidence",
+  costStates: "inventoryCostStates",
+  authorityState: "inventoryAuthorityState",
+  receipts: "inventoryAuthorityReceipts",
+  workspaceProjections: "inventoryWorkspaceProjections",
+  ingredientProjections: "inventoryIngredientProjections"
 });
 const WORKSPACE_LIMIT = 200;
-const MOVEMENT_LIMIT = 100;
-const COMMAND_SCHEMA_VERSION = 1;
-const PHASE_ONE_MOVEMENT_KINDS = new Set(["opening_balance", "adjustment", "transfer"]);
+const COMMAND_KINDS = new Set([
+  "upsert_location", "upsert_ingredient", "opening_balance", "record_ingredient_cost"
+]);
 
-function isPlainRecord(value) {
+function isRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function assertExactKeys(value, allowed, label) {
-  if (!isPlainRecord(value)) {
-    throw new inventory.InventoryAuthorityError("invalid-argument", `${label} must be an object.`);
-  }
-  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unknown.length) {
-    throw new inventory.InventoryAuthorityError("invalid-argument", `${label} contains unsupported fields.`);
+function exactKeys(value, keys, label) {
+  if (!isRecord(value) || Object.keys(value).length !== keys.length
+    || keys.some((key) => !Object.hasOwn(value, key))) {
+    throw new inventory.InventoryIngredientError("invalid-argument", `${label} contains missing or unsupported fields.`);
   }
 }
 
+function normalizeCommand(value) {
+  if (!isRecord(value) || !COMMAND_KINDS.has(value.kind)) {
+    throw new inventory.InventoryIngredientError("invalid-argument", "A supported ingredient inventory command is required.");
+  }
+  if (value.kind === "upsert_location") inventory.normalizeLocationRequest(value);
+  else if (value.kind === "upsert_ingredient") inventory.normalizeIngredientRequest(value);
+  else if (value.kind === "opening_balance") inventory.normalizeOpeningBalanceRequest(value);
+  else inventory.normalizeCostEvidenceRequest(value);
+  return inventory.canonicalClone(value, "ingredient inventory command");
+}
+
 function normalizeApplyEnvelope(data) {
-  assertExactKeys(data, ["schemaVersion", "organizationId", "requestId", "command"], "Inventory command envelope");
-  if (data.schemaVersion !== COMMAND_SCHEMA_VERSION) {
-    throw new inventory.InventoryAuthorityError("invalid-argument", "Inventory command schemaVersion is unsupported.");
+  exactKeys(data, ["schemaVersion", "organizationId", "requestId", "command"], "Ingredient inventory command envelope");
+  if (data.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION) {
+    throw new inventory.InventoryIngredientError("invalid-argument", "Ingredient inventory command schemaVersion is unsupported.");
   }
-  const organizationId = inventory.opaqueId(data.organizationId, "organizationId");
-  const retryId = inventory.requestId(data.requestId);
-  assertExactKeys(data.command, ["kind", "location", "item", "movement"], "Inventory command");
-  const kind = String(data.command.kind || "").trim().toLowerCase();
-  const expectedKeys = {
-    upsert_location: ["kind", "location"],
-    upsert_item: ["kind", "item"],
-    record_movement: ["kind", "movement"]
-  }[kind];
-  if (!expectedKeys) {
-    throw new inventory.InventoryAuthorityError("invalid-argument", "A supported inventory command kind is required.");
-  }
-  assertExactKeys(data.command, expectedKeys, `Inventory ${kind} command`);
-  const normalizedCommand = inventory.canonicalClone(data.command, "Inventory command");
-  normalizedCommand.kind = kind;
   return Object.freeze({
-    schemaVersion: COMMAND_SCHEMA_VERSION,
-    organizationId,
-    requestId: retryId,
-    command: normalizedCommand
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    organizationId: inventory.opaqueId(data.organizationId, "organizationId"),
+    requestId: inventory.requestId(data.requestId),
+    command: Object.freeze(normalizeCommand(data.command))
   });
 }
 
 function normalizeWorkspaceEnvelope(data) {
-  assertExactKeys(data, ["schemaVersion", "organizationId"], "Inventory workspace request");
-  if (data.schemaVersion !== COMMAND_SCHEMA_VERSION) {
-    throw new inventory.InventoryAuthorityError("invalid-argument", "Inventory workspace schemaVersion is unsupported.");
+  exactKeys(data, ["schemaVersion", "organizationId"], "Ingredient inventory workspace request");
+  if (data.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION) {
+    throw new inventory.InventoryIngredientError("invalid-argument", "Ingredient inventory workspace schemaVersion is unsupported.");
   }
   return Object.freeze({
-    schemaVersion: COMMAND_SCHEMA_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
     organizationId: inventory.opaqueId(data.organizationId, "organizationId")
   });
 }
 
+function receiptIdFor(organizationId, retryId) {
+  return `iar_${inventory.digest({
+    organizationId: inventory.opaqueId(organizationId, "organizationId"),
+    requestId: inventory.requestId(retryId)
+  }).slice(0, 48)}`;
+}
+
+function safeLocation(location) {
+  return Object.freeze({
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    locationId: location.locationId,
+    name: location.name,
+    active: location.active,
+    revision: location.revision,
+    updatedAtISO: location.updatedAtISO
+  });
+}
+
+function projectedLocation(location) {
+  return Object.freeze({
+    locationId: location.locationId,
+    name: location.name,
+    active: location.active,
+    revision: location.revision
+  });
+}
+
+function projectStockAxis(stockStates) {
+  if (stockStates.length > 1) {
+    throw new inventory.InventoryIngredientError(
+      "failed-precondition",
+      "Ingredient stock currently supports one authoritative location. Multiple states require an explicit later-phase aggregation policy."
+    );
+  }
+  if (!stockStates.length) {
+    return Object.freeze({
+      availability: "not_yet_available",
+      stockRevision: 0,
+      onHandMicros: 0,
+      quantity: "0",
+      locationId: "",
+      lastMovementId: ""
+    });
+  }
+  const [state] = stockStates;
+  return Object.freeze({
+    availability: "current",
+    stockRevision: state.revision,
+    onHandMicros: state.onHandMicros,
+    quantity: inventory.formatQuantityMicros(state.onHandMicros),
+    locationId: state.locationId,
+    lastMovementId: state.lastMovementId
+  });
+}
+
+function projectCostAxis(costState) {
+  if (!costState) return Object.freeze({
+    availability: "not_yet_available",
+    costRevision: 0,
+    sourceLabel: "",
+    observedAtISO: "",
+    lastCostEvidenceId: ""
+  });
+  const result = {
+    availability: costState.availability,
+    costRevision: costState.revision,
+    sourceLabel: costState.sourceLabel,
+    observedAtISO: costState.observedAtISO,
+    lastCostEvidenceId: costState.lastCostEvidenceId
+  };
+  if (costState.availability === "available") {
+    Object.assign(result, {
+      basisQuantityMicros: costState.basisQuantityMicros,
+      totalCostMinor: costState.totalCostMinor,
+      currency: costState.currency
+    });
+  }
+  return Object.freeze(result);
+}
+
+function ingredientProjection({ ingredient, stockStates, costState, nowISO }) {
+  const stock = projectStockAxis(stockStates);
+  const cost = projectCostAxis(costState);
+  return Object.freeze({
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "inventory-ingredient-projection-v2",
+    organizationId: ingredient.organizationId,
+    ingredientId: ingredient.ingredientId,
+    name: ingredient.name,
+    nameSortKey: ingredient.nameSortKey,
+    category: ingredient.category,
+    baseUnitId: ingredient.baseUnitId,
+    dimension: ingredient.dimension,
+    active: ingredient.active,
+    ingredientRevision: ingredient.revision,
+    stock,
+    cost,
+    updatedAtISO: nowISO
+  });
+}
+
+function publicReceipt(receipt) {
+  return Object.freeze({
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    organizationId: receipt.organizationId,
+    receiptId: receipt.receiptId,
+    requestId: receipt.requestId,
+    commandKind: receipt.commandKind,
+    recordedAtISO: receipt.recordedAtISO
+  });
+}
+
+function publicOutcome(receipt, idempotent) {
+  return Object.freeze({
+    ok: true,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    organizationId: receipt.organizationId,
+    commandKind: receipt.commandKind,
+    idempotent,
+    receipt: publicReceipt(receipt),
+    result: receipt.result
+  });
+}
+
+function verifyConfigurationState(value, organizationId) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "stateId",
+    "locationCount", "ingredientCount", "revision", "updatedAtISO"
+  ], "Ingredient inventory configuration state");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "inventory-configuration-state-v2"
+    || value.organizationId !== organizationId || value.stateId !== "ingredient-v2"
+    || !Number.isSafeInteger(value.locationCount) || value.locationCount < 0 || value.locationCount > WORKSPACE_LIMIT
+    || !Number.isSafeInteger(value.ingredientCount) || value.ingredientCount < 0 || value.ingredientCount > WORKSPACE_LIMIT) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory configuration state is invalid.");
+  }
+  inventory.revision(value.revision, "configuration revision", { allowZero: false });
+  if (value.revision !== value.locationCount + value.ingredientCount) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory configuration revision is inconsistent.");
+  }
+  inventory.exactISO(value.updatedAtISO, "configuration updatedAtISO");
+  return value;
+}
+
+function advanceConfigurationState({ current, organizationId, increment, nowISO }) {
+  const prior = current || {
+    locationCount: 0,
+    ingredientCount: 0,
+    revision: 0
+  };
+  const field = increment === "location" ? "locationCount" : "ingredientCount";
+  if (prior[field] >= WORKSPACE_LIMIT) {
+    throw new inventory.InventoryIngredientError(
+      "resource-exhausted",
+      `Ingredient inventory currently supports at most ${WORKSPACE_LIMIT} ${increment} records per organization.`
+    );
+  }
+  return Object.freeze({
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "inventory-configuration-state-v2",
+    organizationId,
+    stateId: "ingredient-v2",
+    locationCount: prior.locationCount + (increment === "location" ? 1 : 0),
+    ingredientCount: prior.ingredientCount + (increment === "ingredient" ? 1 : 0),
+    revision: prior.revision + 1,
+    updatedAtISO: nowISO
+  });
+}
+
+function verifyWorkspaceProjection(value, organizationId) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "projectionId",
+    "workspaceRevision", "locations", "updatedAtISO"
+  ], "Ingredient inventory workspace projection");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "inventory-workspace-projection-v2"
+    || value.organizationId !== organizationId || value.projectionId !== "current") {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory workspace projection identity is invalid.");
+  }
+  inventory.revision(value.workspaceRevision, "workspaceRevision", { allowZero: false });
+  inventory.exactISO(value.updatedAtISO, "workspace updatedAtISO");
+  if (!Array.isArray(value.locations) || value.locations.length > WORKSPACE_LIMIT) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory workspace location projection is invalid.");
+  }
+  value.locations.forEach((location) => {
+    exactKeys(location, ["locationId", "name", "active", "revision"], "Projected inventory location");
+    inventory.opaqueId(location.locationId, "projected locationId");
+    inventory.revision(location.revision, "projected location revision", { allowZero: false });
+    if (typeof location.name !== "string" || typeof location.active !== "boolean") {
+      throw new inventory.InventoryIngredientError("data-loss", "Projected inventory location fields are invalid.");
+    }
+  });
+  return value;
+}
+
+function verifyIngredientProjection(value, organizationId, ingredientId) {
+  exactKeys(value, [
+    "authorityVersion", "schemaVersion", "model", "organizationId", "ingredientId", "name",
+    "nameSortKey", "category", "baseUnitId", "dimension", "active", "ingredientRevision",
+    "stock", "cost", "updatedAtISO"
+  ], "Ingredient inventory projection");
+  if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+    || value.model !== "inventory-ingredient-projection-v2"
+    || value.organizationId !== organizationId || value.ingredientId !== ingredientId) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory projection identity is invalid.");
+  }
+  const unit = inventory.baseUnitId(value.baseUnitId);
+  inventory.revision(value.ingredientRevision, "projected ingredient revision", { allowZero: false });
+  inventory.exactISO(value.updatedAtISO, "ingredient projection updatedAtISO");
+  if (typeof value.active !== "boolean" || typeof value.name !== "string"
+    || typeof value.nameSortKey !== "string" || typeof value.category !== "string"
+    || value.nameSortKey !== value.name.toLocaleLowerCase("en-US")
+    || value.dimension !== inventory.BASE_UNITS[unit]) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory projection fields are invalid.");
+  }
+  exactKeys(value.stock, [
+    "availability", "stockRevision", "onHandMicros", "quantity", "locationId", "lastMovementId"
+  ], "Ingredient stock projection");
+  if (!new Set(["current", "not_yet_available"]).has(value.stock.availability)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient stock projection availability is invalid.");
+  }
+  const stockRevision = inventory.revision(value.stock.stockRevision, "projected stock revision");
+  if (inventory.formatQuantityMicros(value.stock.onHandMicros) !== value.stock.quantity
+    || (value.stock.availability === "not_yet_available"
+      && (stockRevision !== 0 || value.stock.onHandMicros !== 0 || value.stock.locationId || value.stock.lastMovementId))
+    || (value.stock.availability === "current"
+      && (stockRevision < 1 || !/^imv_[a-f0-9]{48}$/u.test(value.stock.lastMovementId)))) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient stock projection quantity is invalid.");
+  }
+  if (value.stock.availability === "current") inventory.opaqueId(value.stock.locationId, "projected stock locationId");
+  const costKeys = ["availability", "costRevision", "sourceLabel", "observedAtISO", "lastCostEvidenceId"];
+  if (value.cost.availability === "available") {
+    costKeys.push("basisQuantityMicros", "totalCostMinor", "currency");
+  }
+  exactKeys(value.cost, costKeys, "Ingredient cost projection");
+  if (!inventory.COST_AVAILABILITY.includes(value.cost.availability)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient cost projection availability is invalid.");
+  }
+  const costRevision = inventory.revision(value.cost.costRevision, "projected cost revision");
+  if (costRevision === 0 && (value.cost.availability !== "not_yet_available"
+    || value.cost.sourceLabel || value.cost.observedAtISO || value.cost.lastCostEvidenceId)) {
+    throw new inventory.InventoryIngredientError("data-loss", "Unrecorded ingredient cost projection is invalid.");
+  }
+  if (costRevision > 0) {
+    inventory.exactISO(value.cost.observedAtISO, "projected cost observedAtISO");
+    if (typeof value.cost.sourceLabel !== "string" || !value.cost.sourceLabel
+      || !/^ice_[a-f0-9]{48}$/u.test(value.cost.lastCostEvidenceId)) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient cost projection lacks evidence provenance.");
+    }
+  }
+  if (value.cost.availability === "available") {
+    inventory.formatQuantityMicros(value.cost.basisQuantityMicros, "projected basisQuantityMicros");
+    if (!Number.isSafeInteger(value.cost.totalCostMinor) || value.cost.totalCostMinor < 0
+      || !/^[A-Z]{3}$/u.test(value.cost.currency)) {
+      throw new inventory.InventoryIngredientError("data-loss", "Available ingredient cost projection is invalid.");
+    }
+  }
+  return value;
+}
+
 function createInventoryAuthorityRuntime({
-  db,
-  FieldValue,
-  HttpsError,
-  assertStaff,
-  normalizeOrganizationId,
-  isOrganizationRecordActive,
-  globalEnabled,
-  logger = { error() {} }
+  db, FieldValue, HttpsError, assertStaff, normalizeOrganizationId,
+  isOrganizationRecordActive, globalEnabled, logger = { error() {} },
+  now = () => new Date().toISOString()
 }) {
   if (!db || !FieldValue || !HttpsError || typeof assertStaff !== "function"
     || typeof normalizeOrganizationId !== "function" || typeof isOrganizationRecordActive !== "function"
-    || typeof globalEnabled !== "function") {
-    throw new TypeError("Inventory authority runtime dependencies are required.");
-  }
-
-  function scopeFor(data = {}) {
-    const organizationId = normalizeOrganizationId(data?.organizationId);
-    try {
-      return { organizationId: inventory.opaqueId(organizationId, "organizationId") };
-    } catch (error) {
-      throwFailure(error, "scope");
-    }
-  }
-
-  function actorFor(staff, organizationId) {
-    return inventory.normalizeActor({
-      organizationId,
-      principalOrganizationId: normalizeOrganizationId(staff?.principalOrganizationId),
-      uid: staff?.uid,
-      role: String(staff?.role || "").trim().toLowerCase()
-    }, organizationId, { mutation: false });
+    || typeof globalEnabled !== "function" || typeof now !== "function") {
+    throw new TypeError("Ingredient inventory authority runtime dependencies are required.");
   }
 
   function refsFor(organizationId) {
@@ -110,529 +349,405 @@ function createInventoryAuthorityRuntime({
       organizationRef,
       tombstoneRef: db.collection("organizationTombstones").doc(organizationId),
       settingsRef: organizationRef.collection("settings").doc("config"),
-      roleRef(uid) { return db.collection("userRoles").doc(uid); },
+      roleRef: (uid) => db.collection("userRoles").doc(uid),
       locations: organizationRef.collection(COLLECTIONS.locations),
-      items: organizationRef.collection(COLLECTIONS.items),
+      ingredients: organizationRef.collection(COLLECTIONS.ingredients),
       movements: organizationRef.collection(COLLECTIONS.movements),
       stockStates: organizationRef.collection(COLLECTIONS.stockStates),
-      authorityReceipts: organizationRef.collection(COLLECTIONS.authorityReceipts),
-      authorityStateRef: organizationRef.collection(COLLECTIONS.authorityState).doc("current")
+      costEvidence: organizationRef.collection(COLLECTIONS.costEvidence),
+      costStates: organizationRef.collection(COLLECTIONS.costStates),
+      configurationStateRef: organizationRef.collection(COLLECTIONS.authorityState).doc("ingredient-v2"),
+      receipts: organizationRef.collection(COLLECTIONS.receipts),
+      workspaceProjectionRef: organizationRef.collection(COLLECTIONS.workspaceProjections).doc("current"),
+      ingredientProjections: organizationRef.collection(COLLECTIONS.ingredientProjections)
     };
   }
 
-  function assertStoredPrincipal({ actor, organizationId, roleSnap, organizationSnap, tombstoneSnap, settingsSnap }) {
-    if (!roleSnap?.exists || !organizationSnap?.exists || tombstoneSnap?.exists || !settingsSnap?.exists) {
-      throw new inventory.InventoryAuthorityError("failed-precondition", "Current inventory organization authority is unavailable.");
+  function actorFor(staff, organizationId) {
+    return inventory.normalizeActor({
+      uid: staff?.uid,
+      email: staff?.email,
+      role: String(staff?.role || "").trim().toLowerCase(),
+      organizationId: normalizeOrganizationId(staff?.principalOrganizationId || staff?.organizationId)
+    }, organizationId);
+  }
+
+  function assertStoredAuthority({ organizationId, actor, roleSnap, organizationSnap, tombstoneSnap, settingsSnap }) {
+    if (!roleSnap.exists || !organizationSnap.exists || tombstoneSnap.exists || !settingsSnap.exists) {
+      throw new inventory.InventoryIngredientError("failed-precondition", "Current ingredient inventory authority is unavailable.");
     }
     const role = roleSnap.data() || {};
+    const storedEmail = String(role.email || "").trim().toLowerCase();
     if (normalizeOrganizationId(role.organizationId) !== organizationId
-      || String(role.role || "").trim().toLowerCase() !== actor.role
+      || String(role.role || "").trim().toLowerCase() !== "admin"
+      || actor.role !== "admin"
+      || (storedEmail && storedEmail !== actor.email.toLowerCase())
       || !isOrganizationRecordActive(organizationSnap.data() || {})) {
-      throw new inventory.InventoryAuthorityError("permission-denied", "Inventory authority changed. Refresh your access before continuing.");
+      throw new inventory.InventoryIngredientError("permission-denied", "Ingredient inventory authority changed. Refresh access before continuing.");
     }
-    inventory.assertEnabled(globalEnabled(organizationId) === true, settingsSnap.data() || {});
+    if (globalEnabled(organizationId) !== true || settingsSnap.data()?.inventoryAuthorityEnabled !== true) {
+      throw new inventory.InventoryIngredientError("failed-precondition", "Ingredient inventory authority is not enabled for this environment and organization.");
+    }
   }
 
-  async function authorityEnvelope(tx, refs, actor) {
+  async function readAuthorityEnvelope(tx, refs, actor) {
     const [roleSnap, organizationSnap, tombstoneSnap, settingsSnap] = await tx.getAll(
-      refs.roleRef(actor.uid),
-      refs.organizationRef,
-      refs.tombstoneRef,
-      refs.settingsRef
+      refs.roleRef(actor.uid), refs.organizationRef, refs.tombstoneRef, refs.settingsRef
     );
-    assertStoredPrincipal({
-      actor,
-      organizationId: actor.organizationId,
-      roleSnap,
-      organizationSnap,
-      tombstoneSnap,
-      settingsSnap
-    });
-    return { settings: settingsSnap.data() || {} };
-  }
-
-  function receiptIdFor(organizationId, retryId) {
-    return `iar_${inventory.digest({ organizationId, requestId: inventory.requestId(retryId) }).slice(0, 48)}`;
-  }
-
-  function publicReceipt(receipt) {
-    return Object.freeze({
-      schemaVersion: COMMAND_SCHEMA_VERSION,
-      organizationId: receipt.organizationId,
-      receiptId: receipt.receiptId,
-      requestId: receipt.requestId,
-      commandKind: receipt.commandKind,
-      recordedAtISO: receipt.recordedAtISO
+    assertStoredAuthority({
+      organizationId: actor.organizationId, actor, roleSnap, organizationSnap, tombstoneSnap, settingsSnap
     });
   }
 
-  function verifyAuthorityReceipt(value, { organizationId, receiptId, requestId: retryId, commandKind, commandDigest, actor }) {
-    if (!value || typeof value !== "object") throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority receipt is unavailable.");
-    const receipt = value.receipt || value;
-    try {
-      assertExactKeys(receipt, [
-        "authorityVersion", "schemaVersion", "organizationId", "receiptId", "requestId",
-        "commandKind", "commandDigest", "recordedAtISO", "recordedBy", "priorRevision",
-        "resultRevision", "result", "receiptDigest"
-      ], "Inventory authority receipt");
-    } catch {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority receipt schema is invalid.");
+  function storedCanonical(value, kind, identity) {
+    if (kind === "location") inventory.verifyLocation(value, {
+      ...identity,
+      locationId: identity.locationId || value?.locationId
+    });
+    else if (kind === "ingredient") inventory.verifyIngredient(value, {
+      ...identity,
+      ingredientId: identity.ingredientId || value?.ingredientId
+    });
+    else if (kind === "stock state") inventory.verifyStockState(value, {
+      ...identity,
+      locationId: identity.locationId || value?.locationId
+    });
+    else if (kind === "cost state") inventory.verifyCostState(value, identity);
+    else throw new inventory.InventoryIngredientError("data-loss", "Stored ingredient inventory kind is unsupported.");
+    const storedDocumentId = kind === "location" ? value.locationId
+      : kind === "ingredient" ? value.ingredientId
+        : kind === "stock state" ? value.stockStateId : value.costStateId;
+    if (identity.documentId && identity.documentId !== storedDocumentId) {
+      throw new inventory.InventoryIngredientError("data-loss", `Stored ingredient inventory ${kind} is filed under the wrong document identity.`);
+    }
+    return value;
+  }
+
+  function verifyReceipt(wrapper, claim) {
+    const receipt = wrapper?.receipt;
+    if (!isRecord(receipt)) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory receipt is unavailable.");
     }
     const { receiptDigest, ...body } = receipt;
-    let retainedDigest;
-    try {
-      retainedDigest = inventory.digest(body, "Inventory authority receipt");
-    } catch {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority receipt contains invalid retained evidence.");
-    }
-    if (receiptDigest !== retainedDigest) {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority receipt failed integrity validation.");
-    }
-    let retainedActor;
-    try {
-      retainedActor = inventory.normalizeActor(receipt.recordedBy, organizationId, { mutation: true });
-    } catch {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority receipt actor evidence is invalid.");
+    if (receiptDigest !== inventory.digest(body, "ingredient inventory receipt")) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory receipt failed integrity validation.");
     }
     if (receipt.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
-      || receipt.schemaVersion !== COMMAND_SCHEMA_VERSION
-      || receipt.organizationId !== organizationId
-      || receipt.receiptId !== receiptId
-      || receipt.requestId !== retryId
-      || receipt.commandKind !== commandKind
-      || receipt.commandDigest !== commandDigest
-      || inventory.digest(retainedActor) !== inventory.digest(actor)) {
-      throw new inventory.InventoryAuthorityError("already-exists", "This request identity belongs to a different immutable inventory command.");
+      || receipt.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
+      || receipt.organizationId !== claim.organizationId || receipt.receiptId !== claim.receiptId
+      || receipt.requestId !== claim.requestId) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory receipt identity is invalid.");
     }
-    try {
-      inventory.exactISO(receipt.recordedAtISO, "receipt recordedAtISO", "data-loss");
-      inventory.revision(receipt.priorRevision, "receipt prior revision");
-      inventory.revision(receipt.resultRevision, "receipt result revision", { allowZero: false });
-    } catch {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority receipt revision or time evidence is invalid.");
-    }
-    if (receipt.resultRevision !== receipt.priorRevision + 1) {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority receipt revision transition is invalid.");
+    if (receipt.commandKind !== claim.commandKind || receipt.commandDigest !== claim.commandDigest) {
+      throw new inventory.InventoryIngredientError("already-exists", "This request identity belongs to a different immutable ingredient inventory command.");
     }
     return receipt;
   }
 
-  function verifyConfigurationReceiptResult(receipt, { commandKind, entity, entityId, organizationId }) {
-    let retained;
-    let expected;
+  async function readIngredientInputs(tx, refs, organizationId, ingredientId) {
+    const ingredientRef = refs.ingredients.doc(ingredientId);
+    const costRef = refs.costStates.doc(inventory.costStateId(ingredientId));
+    const stockQuery = refs.stockStates.where("ingredientId", "==", ingredientId).limit(WORKSPACE_LIMIT + 1);
+    const [ingredientSnap, costSnap, stockSnap] = await Promise.all([
+      tx.get(ingredientRef), tx.get(costRef), tx.get(stockQuery)
+    ]);
+    const ingredient = ingredientSnap.exists
+      ? storedCanonical(ingredientSnap.data() || {}, "ingredient", {
+        organizationId, ingredientId, documentId: ingredientSnap.id
+      }) : null;
+    if (stockSnap.size > WORKSPACE_LIMIT) {
+      throw new inventory.InventoryIngredientError("resource-exhausted", "Ingredient stock projection exceeds its bounded location limit.");
+    }
+    const stockStates = stockSnap.docs.map((doc) => storedCanonical(doc.data() || {}, "stock state", {
+      organizationId, ingredientId, documentId: doc.id
+    }));
+    const costState = costSnap.exists
+      ? storedCanonical(costSnap.data() || {}, "cost state", {
+        organizationId, ingredientId, documentId: costSnap.id
+      }) : null;
+    if (!ingredient && (stockStates.length || costState)) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient evidence exists without its ingredient authority.");
+    }
+    if (ingredient && (stockStates.some((state) => state.baseUnitId !== ingredient.baseUnitId)
+      || (costState && costState.baseUnitId !== ingredient.baseUnitId))) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient evidence base units do not match the ingredient authority.");
+    }
+    return { ingredientRef, costRef, ingredient, costState, stockStates };
+  }
+
+  function commandResult(commandKind, planned) {
+    if (commandKind === "upsert_location") return safeLocation(planned.location);
+    if (commandKind === "upsert_ingredient") return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      ingredientId: planned.ingredient.ingredientId,
+      revision: planned.ingredient.revision,
+      baseUnitId: planned.ingredient.baseUnitId,
+      active: planned.ingredient.active
+    });
+    if (commandKind === "opening_balance") return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      ingredientId: planned.movement.ingredientId,
+      locationId: planned.movement.locationId,
+      movementId: planned.movement.movementId,
+      stockRevision: planned.nextStockState.revision,
+      onHandMicros: planned.nextStockState.onHandMicros,
+      onHandQuantity: inventory.formatQuantityMicros(planned.nextStockState.onHandMicros)
+    });
+    return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      ingredientId: planned.costEvidence.ingredientId,
+      costEvidenceId: planned.costEvidence.costEvidenceId,
+      costRevision: planned.nextCostState.revision,
+      availability: planned.nextCostState.availability
+    });
+  }
+
+  async function applyInventoryCommand(data = {}, context = {}) {
     try {
-      retained = commandKind === "upsert_location"
-        ? inventory.verifyLocation(receipt.result)
-        : inventory.verifyItem(receipt.result);
-      const artificialCurrent = entity.expectedRevision === 0
-        ? null
-        : { ...retained, revision: entity.expectedRevision };
-      expected = commandKind === "upsert_location"
-        ? inventory.normalizeLocation({ ...entity, organizationId }, artificialCurrent)
-        : inventory.normalizeItem(
-          { ...entity, organizationId },
-          artificialCurrent,
-          { hasMovements: Boolean(retained.firstMovementId) }
-        );
-    } catch {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory configuration receipt result is invalid.");
-    }
-    const retainedId = commandKind === "upsert_location" ? retained.locationId : retained.itemId;
-    if (retained.organizationId !== organizationId
-      || retainedId !== entityId
-      || retained.revision !== receipt.resultRevision
-      || retained.updatedAtISO !== receipt.recordedAtISO
-      || Object.keys(expected).some((key) => retained[key] !== expected[key])) {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory configuration receipt result does not match its immutable command.");
-    }
-    return retained;
-  }
+      const envelope = normalizeApplyEnvelope(data);
+      const staff = await assertStaff(context, { expectedOrganizationId: envelope.organizationId });
+      const actor = actorFor(staff, envelope.organizationId);
+      const refs = refsFor(envelope.organizationId);
+      const receiptId = receiptIdFor(envelope.organizationId, envelope.requestId);
+      const receiptRef = refs.receipts.doc(receiptId);
+      const commandDigest = inventory.digest({
+        schemaVersion: envelope.schemaVersion,
+        organizationId: envelope.organizationId,
+        requestId: envelope.requestId,
+        command: envelope.command,
+        principal: { uid: actor.uid, organizationId: actor.organizationId }
+      }, "ingredient inventory command");
 
-  async function applyConfigurationCommand({ envelope, actor, refs, nowISO }) {
-    const commandKind = envelope.command.kind;
-    const retryId = envelope.requestId;
-    const entity = commandKind === "upsert_location" ? envelope.command.location : envelope.command.item;
-    const request = inventory.canonicalClone({ commandKind, requestId: retryId, entity }, "Inventory configuration command");
-    const receiptId = receiptIdFor(actor.organizationId, retryId);
-    const commandDigest = inventory.digest({ request, actor }, "Inventory configuration command");
-    const receiptRef = refs.authorityReceipts.doc(receiptId);
-    const entityId = inventory.opaqueId(commandKind === "upsert_location" ? entity.locationId : entity.itemId, commandKind === "upsert_location" ? "locationId" : "itemId");
-    const entityRef = commandKind === "upsert_location" ? refs.locations.doc(entityId) : refs.items.doc(entityId);
-    return db.runTransaction(async (tx) => {
-      const receiptSnap = await tx.get(receiptRef);
-      await authorityEnvelope(tx, refs, actor);
-      if (receiptSnap.exists) {
-        const retained = verifyAuthorityReceipt(receiptSnap.data() || {}, {
-          organizationId: actor.organizationId,
+      return await db.runTransaction(async (tx) => {
+        const receiptSnap = await tx.get(receiptRef);
+        await readAuthorityEnvelope(tx, refs, actor);
+        if (receiptSnap.exists) {
+          return publicOutcome(verifyReceipt(receiptSnap.data() || {}, {
+            organizationId: envelope.organizationId,
+            receiptId,
+            requestId: envelope.requestId,
+            commandKind: envelope.command.kind,
+            commandDigest
+          }), true);
+        }
+
+        const nowISO = inventory.exactISO(now(), "recordedAtISO");
+        const commandKind = envelope.command.kind;
+        let planned;
+        let priorRevision = 0;
+        const writes = [];
+
+        if (commandKind === "upsert_location") {
+          const locationRef = refs.locations.doc(envelope.command.locationId);
+          const [locationSnap, locationsSnap, workspaceSnap, configurationSnap] = await Promise.all([
+            tx.get(locationRef),
+            tx.get(refs.locations.orderBy("name").limit(WORKSPACE_LIMIT + 1)),
+            tx.get(refs.workspaceProjectionRef),
+            tx.get(refs.configurationStateRef)
+          ]);
+          if (locationsSnap.size > WORKSPACE_LIMIT) {
+            throw new inventory.InventoryIngredientError("resource-exhausted", "Inventory locations exceed the bounded workspace limit.");
+          }
+          const current = locationSnap.exists ? storedCanonical(locationSnap.data() || {}, "location", {
+            organizationId: envelope.organizationId, locationId: envelope.command.locationId,
+            documentId: locationSnap.id
+          }) : null;
+          const configuration = configurationSnap.exists
+            ? verifyConfigurationState(configurationSnap.data() || {}, envelope.organizationId) : null;
+          if ((current || locationsSnap.size > 0) && !configuration) {
+            throw new inventory.InventoryIngredientError("data-loss", "Inventory locations exist without their configuration fence.");
+          }
+          if (configuration && configuration.locationCount !== locationsSnap.size) {
+            throw new inventory.InventoryIngredientError("data-loss", "Inventory location count disagrees with its configuration fence.");
+          }
+          planned = inventory.planLocation({
+            organizationId: envelope.organizationId, request: envelope.command, current, actor, nowISO
+          });
+          priorRevision = current?.revision || 0;
+          const locations = locationsSnap.docs.filter((doc) => doc.id !== planned.location.locationId)
+            .map((doc) => projectedLocation(storedCanonical(doc.data() || {}, "location", {
+              organizationId: envelope.organizationId, documentId: doc.id
+            })))
+            .concat(projectedLocation(planned.location))
+            .sort((left, right) => left.name.localeCompare(right.name) || left.locationId.localeCompare(right.locationId));
+          const priorWorkspaceRevision = workspaceSnap.exists
+            ? verifyWorkspaceProjection(workspaceSnap.data() || {}, envelope.organizationId).workspaceRevision : 0;
+          inventory.revision(priorWorkspaceRevision, "workspaceRevision");
+          writes.push({ operation: locationSnap.exists ? "set" : "create", ref: locationRef, value: planned.location });
+          if (!current) writes.push({
+            operation: configuration ? "set" : "create",
+            ref: refs.configurationStateRef,
+            value: advanceConfigurationState({
+              current: configuration,
+              organizationId: envelope.organizationId,
+              increment: "location",
+              nowISO
+            })
+          });
+          writes.push({ operation: "set", ref: refs.workspaceProjectionRef, value: {
+            authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+            schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+            model: "inventory-workspace-projection-v2",
+            organizationId: envelope.organizationId,
+            projectionId: "current",
+            workspaceRevision: priorWorkspaceRevision + 1,
+            locations,
+            updatedAtISO: nowISO
+          } });
+        } else {
+          const ingredientId = envelope.command.ingredientId;
+          const projectionRef = refs.ingredientProjections.doc(ingredientId);
+          const inputs = await readIngredientInputs(tx, refs, envelope.organizationId, ingredientId);
+          if (commandKind === "upsert_ingredient") {
+            const configurationSnap = await tx.get(refs.configurationStateRef);
+            const configuration = configurationSnap.exists
+              ? verifyConfigurationState(configurationSnap.data() || {}, envelope.organizationId) : null;
+            if (inputs.ingredient && !configuration) {
+              throw new inventory.InventoryIngredientError("data-loss", "Inventory ingredients exist without their configuration fence.");
+            }
+            planned = inventory.planIngredient({
+              organizationId: envelope.organizationId, request: envelope.command,
+              current: inputs.ingredient, currentCostState: inputs.costState, actor, nowISO
+            });
+            priorRevision = inputs.ingredient?.revision || 0;
+            writes.push({ operation: inputs.ingredient ? "set" : "create", ref: inputs.ingredientRef, value: planned.ingredient });
+            if (!inputs.ingredient) writes.push({
+              operation: configuration ? "set" : "create",
+              ref: refs.configurationStateRef,
+              value: advanceConfigurationState({
+                current: configuration,
+                organizationId: envelope.organizationId,
+                increment: "ingredient",
+                nowISO
+              })
+            });
+            writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
+              ingredient: planned.ingredient, stockStates: inputs.stockStates, costState: inputs.costState, nowISO
+            }) });
+          } else if (commandKind === "opening_balance") {
+            const stockRef = refs.stockStates.doc(inventory.stockStateId(ingredientId, envelope.command.locationId));
+            const locationRef = refs.locations.doc(envelope.command.locationId);
+            const [stockSnap, locationSnap] = await Promise.all([tx.get(stockRef), tx.get(locationRef)]);
+            const stockState = stockSnap.exists ? storedCanonical(stockSnap.data() || {}, "stock state", {
+              organizationId: envelope.organizationId, ingredientId, locationId: envelope.command.locationId,
+              documentId: stockSnap.id
+            }) : null;
+            const location = locationSnap.exists ? storedCanonical(locationSnap.data() || {}, "location", {
+              organizationId: envelope.organizationId, locationId: envelope.command.locationId,
+              documentId: locationSnap.id
+            }) : null;
+            planned = inventory.planOpeningBalance({
+              organizationId: envelope.organizationId, requestId: envelope.requestId,
+              request: envelope.command, ingredient: inputs.ingredient, location,
+              stockState, actor, nowISO
+            });
+            priorRevision = stockState?.revision || 0;
+            const nextIngredient = Object.freeze({
+              ...inputs.ingredient,
+              firstMovementId: inputs.ingredient.firstMovementId || planned.movement.movementId,
+              movementCount: (inputs.ingredient.movementCount || 0) + 1,
+              updatedAtISO: nowISO,
+              updatedBy: actor
+            });
+            const stockStates = inputs.stockStates.filter((state) => state.stockStateId !== planned.nextStockState.stockStateId)
+              .concat(planned.nextStockState);
+            writes.push({ operation: "create", ref: refs.movements.doc(planned.movement.movementId), value: planned.movement });
+            writes.push({ operation: stockSnap.exists ? "set" : "create", ref: stockRef, value: planned.nextStockState });
+            writes.push({ operation: "set", ref: inputs.ingredientRef, value: nextIngredient });
+            writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
+              ingredient: nextIngredient, stockStates, costState: inputs.costState, nowISO
+            }) });
+          } else {
+            planned = inventory.planIngredientCostEvidence({
+              organizationId: envelope.organizationId, requestId: envelope.requestId,
+              request: envelope.command, ingredient: inputs.ingredient,
+              currentCostState: inputs.costState, actor, nowISO
+            });
+            priorRevision = inputs.costState?.revision || 0;
+            writes.push({ operation: "create", ref: refs.costEvidence.doc(planned.costEvidence.costEvidenceId), value: planned.costEvidence });
+            writes.push({ operation: inputs.costState ? "set" : "create", ref: inputs.costRef, value: planned.nextCostState });
+            writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
+              ingredient: inputs.ingredient, stockStates: inputs.stockStates,
+              costState: planned.nextCostState, nowISO
+            }) });
+          }
+        }
+
+        const result = commandResult(commandKind, planned);
+        const resultRevision = commandKind === "upsert_location" ? planned.location.revision
+          : commandKind === "upsert_ingredient" ? planned.ingredient.revision
+            : commandKind === "opening_balance" ? planned.nextStockState.revision : planned.nextCostState.revision;
+        const body = {
+          authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+          schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+          organizationId: envelope.organizationId,
           receiptId,
-          requestId: retryId,
+          requestId: envelope.requestId,
           commandKind,
           commandDigest,
-          actor
-        });
-        const retainedResult = verifyConfigurationReceiptResult(retained, {
-          commandKind,
-          entity,
-          entityId,
-          organizationId: actor.organizationId
-        });
-        return { idempotent: true, entity: retainedResult, receipt: publicReceipt(retained) };
-      }
-      inventory.normalizeActor(actor, actor.organizationId, { mutation: true });
-      const entitySnap = await tx.get(entityRef);
-      const current = entitySnap.exists ? entitySnap.data() || {} : null;
-      if (commandKind === "upsert_item" && current) inventory.verifyItem(current);
-      if (commandKind === "upsert_location" && current) inventory.verifyLocation(current);
-      const result = commandKind === "upsert_location"
-        ? inventory.normalizeLocation({ ...entity, organizationId: actor.organizationId }, current)
-        : inventory.normalizeItem({ ...entity, organizationId: actor.organizationId }, current, { hasMovements: Boolean(current?.firstMovementId) });
-      const resultWithEvidence = {
-        ...result,
-        ...(commandKind === "upsert_item" ? {
-          movementCount: Number(current?.movementCount || 0),
-          firstMovementId: String(current?.firstMovementId || ""),
-          lastMovementId: String(current?.lastMovementId || ""),
-          physicalUpdatedAtISO: String(current?.physicalUpdatedAtISO || "")
-        } : {}),
-        createdAtISO: current?.createdAtISO || nowISO,
-        updatedAtISO: nowISO
-      };
-      const body = {
-        authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
-        schemaVersion: COMMAND_SCHEMA_VERSION,
-        organizationId: actor.organizationId,
-        receiptId,
-        requestId: retryId,
-        commandKind,
-        commandDigest,
-        recordedAtISO: nowISO,
-        recordedBy: actor,
-        priorRevision: Number(current?.revision || 0),
-        resultRevision: result.revision,
-        result: resultWithEvidence
-      };
-      const receipt = { ...body, receiptDigest: inventory.digest(body, "Inventory authority receipt") };
-      const timestamps = {
-        createdAt: entitySnap.exists && entitySnap.data()?.createdAt ? entitySnap.data().createdAt : FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      };
-      if (entitySnap.exists) tx.set(entityRef, { ...resultWithEvidence, ...timestamps });
-      else tx.create(entityRef, { ...resultWithEvidence, ...timestamps });
-      tx.create(receiptRef, { receipt, createdAtISO: nowISO, createdAt: FieldValue.serverTimestamp() });
-      return { idempotent: false, entity: resultWithEvidence, receipt: publicReceipt(receipt) };
-    });
-  }
-
-  function authorityRevisionFrom(snapshot, organizationId) {
-    if (!snapshot.exists) return 0;
-    const value = snapshot.data() || {};
-    if (value.authorityVersion !== inventory.INVENTORY_AUTHORITY_VERSION
-      || value.schemaVersion !== inventory.INVENTORY_SCHEMA_VERSION
-      || value.organizationId !== organizationId
-      || !Number.isSafeInteger(value.inventoryRevision)
-      || value.inventoryRevision < 1
-      || value.inventoryRevision > 1_000_000_000
-      || !/^imv_[a-f0-9]{48}$/u.test(String(value.lastMovementId || ""))) {
-      throw new inventory.InventoryAuthorityError("data-loss", "Inventory authority revision evidence is invalid.");
-    }
-    return value.inventoryRevision;
-  }
-
-  async function applyMovementCommand({ envelope, actor, refs, nowISO }) {
-    const commandKind = envelope.command.kind;
-    const request = inventory.normalizeMovementRequest({
-      ...envelope.command.movement,
-      organizationId: actor.organizationId,
-      requestId: envelope.requestId
-    });
-    if (!PHASE_ONE_MOVEMENT_KINDS.has(request.kind)) {
-      throw new inventory.InventoryAuthorityError(
-        "failed-precondition",
-        "This inventory movement requires the event allocation and execution authority introduced in a later phase."
-      );
-    }
-    const movementId = inventory.movementIdFor(actor.organizationId, request.requestId);
-    const movementRef = refs.movements.doc(movementId);
-    const receiptId = receiptIdFor(actor.organizationId, request.requestId);
-    const receiptRef = refs.authorityReceipts.doc(receiptId);
-    const commandDigest = inventory.digest({
-      request: { commandKind, requestId: request.requestId, movement: request },
-      actor
-    }, "Inventory movement command");
-    const itemRef = refs.items.doc(request.itemId);
-    const locationIds = [...new Set([request.from?.locationId, request.to?.locationId].filter(Boolean))].sort();
-    const locationRefs = locationIds.map((locationId) => refs.locations.doc(locationId));
-    const stockRefs = locationIds.map((locationId) => refs.stockStates.doc(inventory.stockStateId(request.itemId, locationId)));
-    return db.runTransaction(async (tx) => {
-      const receiptSnap = await tx.get(receiptRef);
-      await authorityEnvelope(tx, refs, actor);
-      inventory.normalizeActor(actor, actor.organizationId, { mutation: true });
-      if (receiptSnap.exists) {
-        const retainedReceipt = verifyAuthorityReceipt(receiptSnap.data() || {}, {
-          organizationId: actor.organizationId,
-          receiptId,
-          requestId: request.requestId,
-          commandKind,
-          commandDigest,
-          actor
-        });
-        const movementSnap = await tx.get(movementRef);
-        if (!movementSnap.exists) {
-          throw new inventory.InventoryAuthorityError("data-loss", "Inventory movement receipt has no immutable movement evidence.");
-        }
-        const replay = inventory.planMovement({ request, actor, existingMovement: movementSnap.data() || {}, nowISO });
-        const stock = Object.values(replay.nextStockStates).map(inventory.publicStockState);
-        if (retainedReceipt.result?.movementId !== replay.movement.movementId
-          || retainedReceipt.result?.inventoryRevision !== retainedReceipt.resultRevision
-          || inventory.digest(retainedReceipt.result?.stock) !== inventory.digest(stock)) {
-          throw new inventory.InventoryAuthorityError("data-loss", "Inventory movement receipt outcome is inconsistent.");
-        }
-        return { idempotent: true, movement: replay.movement, stock, inventoryRevision: retainedReceipt.resultRevision, receipt: publicReceipt(retainedReceipt) };
-      }
-      const [movementSnap, itemSnap, authorityStateSnap, ...remaining] = await tx.getAll(
-        movementRef,
-        itemRef,
-        refs.authorityStateRef,
-        ...locationRefs,
-        ...stockRefs
-      );
-      if (movementSnap.exists) {
-        throw new inventory.InventoryAuthorityError("data-loss", "Inventory movement evidence has no immutable command receipt.");
-      }
-      if (!itemSnap.exists || itemSnap.data()?.organizationId !== actor.organizationId || itemSnap.data()?.itemId !== request.itemId) {
-        throw new inventory.InventoryAuthorityError("failed-precondition", "The inventory item is unavailable or outside this organization.");
-      }
-      const item = inventory.verifyItem(itemSnap.data() || {});
-      if (item.movementCount >= 1_000_000_000) {
-        throw new inventory.InventoryAuthorityError("resource-exhausted", "Inventory item movement count limit was reached.");
-      }
-      const addsOwnedStock = request.kind === "opening_balance" || (request.kind === "adjustment" && request.to != null);
-      if (!item.active && addsOwnedStock) {
-        throw new inventory.InventoryAuthorityError("failed-precondition", "New stock cannot be introduced for an inactive inventory item.");
-      }
-      const locationSnaps = remaining.slice(0, locationRefs.length);
-      const stockSnaps = remaining.slice(locationRefs.length);
-      locationSnaps.forEach((snapshot, index) => {
-        if (!snapshot.exists) {
-          throw new inventory.InventoryAuthorityError("failed-precondition", "A movement location is unavailable or outside this organization.");
-        }
-        const location = inventory.verifyLocation(snapshot.data() || {});
-        if (location.organizationId !== actor.organizationId || location.locationId !== locationIds[index]) {
-          throw new inventory.InventoryAuthorityError("failed-precondition", "A movement location is unavailable or outside this organization.");
-        }
-        if (!location.active && request.to?.locationId === locationIds[index]) {
-          throw new inventory.InventoryAuthorityError("failed-precondition", "New stock cannot move into an inactive location.");
-        }
-      });
-      const currentStockStates = Object.fromEntries(stockSnaps.map((snapshot, index) => [locationIds[index], snapshot.exists ? snapshot.data() || {} : null]));
-      const planned = inventory.planMovement({ request, actor, currentStockStates, nowISO });
-      const priorAuthorityRevision = authorityRevisionFrom(authorityStateSnap, actor.organizationId);
-      if (priorAuthorityRevision >= 1_000_000_000) {
-        throw new inventory.InventoryAuthorityError("resource-exhausted", "Inventory authority revision limit was reached.");
-      }
-      const authorityRevision = priorAuthorityRevision + 1;
-      const stock = Object.values(planned.nextStockStates).map(inventory.publicStockState);
-      const receiptResult = {
-        movementId: planned.movement.movementId,
-        inventoryRevision: authorityRevision,
-        stock
-      };
-      const receiptBody = {
-        authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
-        schemaVersion: COMMAND_SCHEMA_VERSION,
-        organizationId: actor.organizationId,
-        receiptId,
-        requestId: request.requestId,
-        commandKind,
-        commandDigest,
-        recordedAtISO: nowISO,
-        recordedBy: actor,
-        priorRevision: priorAuthorityRevision,
-        resultRevision: authorityRevision,
-        result: receiptResult
-      };
-      const receipt = {
-        ...receiptBody,
-        receiptDigest: inventory.digest(receiptBody, "Inventory authority receipt")
-      };
-      tx.create(movementRef, { ...planned.movement, createdAt: FieldValue.serverTimestamp() });
-      locationIds.forEach((locationId, index) => {
-        const stockRef = stockRefs[index];
-        const priorSnap = stockSnaps[index];
-        const state = planned.nextStockStates[locationId];
-        const record = {
-          ...state,
-          createdAt: priorSnap.exists && priorSnap.data()?.createdAt ? priorSnap.data().createdAt : FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
+          recordedAtISO: nowISO,
+          recordedBy: actor,
+          priorRevision,
+          resultRevision,
+          result
         };
-        if (priorSnap.exists) tx.set(stockRef, record);
-        else tx.create(stockRef, record);
+        const receipt = Object.freeze({ ...body, receiptDigest: inventory.digest(body, "ingredient inventory receipt") });
+        writes.push({ operation: "create", ref: receiptRef, value: {
+          receipt, createdAt: FieldValue.serverTimestamp()
+        } });
+        for (const write of writes) tx[write.operation](write.ref, write.value);
+        return publicOutcome(receipt, false);
       });
-      tx.set(itemRef, {
-        ...itemSnap.data(),
-        movementCount: item.movementCount + 1,
-        firstMovementId: item.firstMovementId || planned.movement.movementId,
-        lastMovementId: planned.movement.movementId,
-        physicalUpdatedAtISO: nowISO,
-        updatedAt: FieldValue.serverTimestamp()
-      });
-      const authorityRecord = {
-        authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
-        schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
-        organizationId: actor.organizationId,
-        inventoryRevision: authorityRevision,
-        lastMovementId: planned.movement.movementId,
-        updatedAtISO: nowISO,
-        createdAtISO: authorityStateSnap.exists ? authorityStateSnap.data()?.createdAtISO : nowISO,
-        createdAt: authorityStateSnap.exists && authorityStateSnap.data()?.createdAt ? authorityStateSnap.data().createdAt : FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      };
-      if (authorityStateSnap.exists) tx.set(refs.authorityStateRef, authorityRecord);
-      else tx.create(refs.authorityStateRef, authorityRecord);
-      tx.create(receiptRef, { receipt, createdAtISO: nowISO, createdAt: FieldValue.serverTimestamp() });
-      return {
-        idempotent: false,
-        movement: planned.movement,
-        stock,
-        inventoryRevision: authorityRevision,
-        receipt: publicReceipt(receipt)
-      };
-    });
-  }
-
-  async function applyInventoryCommand(data, context) {
-    let envelope;
-    try {
-      envelope = normalizeApplyEnvelope(data);
     } catch (error) {
       return throwFailure(error, "applyInventoryCommand");
     }
-    const scope = scopeFor(envelope);
-    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
-    const actor = actorFor(staff, scope.organizationId);
-    const refs = refsFor(scope.organizationId);
-    const nowISO = new Date().toISOString();
-    try {
-      const commandKind = envelope.command.kind;
-      const result = commandKind === "record_movement"
-        ? await applyMovementCommand({ envelope, actor, refs, nowISO })
-        : await applyConfigurationCommand({ envelope, actor, refs, nowISO });
-      return {
-        ok: true,
-        storage: "firebase",
-        schemaVersion: COMMAND_SCHEMA_VERSION,
-        organizationId: scope.organizationId,
-        commandKind,
-        ...result
-      };
-    } catch (error) {
-      return throwFailure(error, "applyInventoryCommand", { organizationId: scope.organizationId, actorUid: actor.uid });
-    }
   }
 
-  function boundedDocs(snapshot, maximum, label) {
-    if (snapshot.size > maximum) throw new inventory.InventoryAuthorityError("resource-exhausted", `${label} exceeds the bounded workspace read. Narrow or archive inventory records.`);
-    return snapshot.docs;
-  }
-
-  async function getInventoryWorkspace(data, context) {
-    let envelope;
+  async function getInventoryWorkspace(data = {}, context = {}) {
     try {
-      envelope = normalizeWorkspaceEnvelope(data);
+      const envelope = normalizeWorkspaceEnvelope(data);
+      const staff = await assertStaff(context, { expectedOrganizationId: envelope.organizationId });
+      const actor = actorFor(staff, envelope.organizationId);
+      const refs = refsFor(envelope.organizationId);
+      return await db.runTransaction(async (tx) => {
+        await readAuthorityEnvelope(tx, refs, actor);
+        const [locationsSnap, projectionsSnap] = await Promise.all([
+          tx.get(refs.locations.orderBy("name").limit(WORKSPACE_LIMIT + 1)),
+          tx.get(refs.ingredientProjections.orderBy("nameSortKey").limit(WORKSPACE_LIMIT + 1))
+        ]);
+        if (locationsSnap.size > WORKSPACE_LIMIT || projectionsSnap.size > WORKSPACE_LIMIT) {
+          throw new inventory.InventoryIngredientError("resource-exhausted", "Ingredient inventory workspace exceeds its bounded recovery limit.");
+        }
+        const locations = locationsSnap.docs.map((doc) => safeLocation(storedCanonical(doc.data() || {}, "location", {
+          organizationId: envelope.organizationId, documentId: doc.id
+        })));
+        const ingredients = projectionsSnap.docs.map((doc) => {
+          const projection = doc.data() || {};
+          return verifyIngredientProjection(projection, envelope.organizationId, doc.id);
+        });
+        return Object.freeze({
+          schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+          organizationId: envelope.organizationId,
+          locations,
+          ingredients,
+          bounded: true,
+          limit: WORKSPACE_LIMIT
+        });
+      });
     } catch (error) {
       return throwFailure(error, "getInventoryWorkspace");
     }
-    const scope = scopeFor(envelope);
-    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
-    const actor = actorFor(staff, scope.organizationId);
-    const refs = refsFor(scope.organizationId);
-    const observedAtISO = new Date().toISOString();
-    try {
-      return await db.runTransaction(async (tx) => {
-        const locationQuery = refs.locations.limit(WORKSPACE_LIMIT + 1);
-        const itemQuery = refs.items.limit(WORKSPACE_LIMIT + 1);
-        const stockQuery = refs.stockStates.limit(WORKSPACE_LIMIT + 1);
-        const movementQuery = refs.movements.orderBy("occurredAtISO", "desc").limit(MOVEMENT_LIMIT + 1);
-        const [locationsSnap, itemsSnap, stockSnap, movementsSnap, authorityStateSnap] = await Promise.all([
-          tx.get(locationQuery),
-          tx.get(itemQuery),
-          tx.get(stockQuery),
-          tx.get(movementQuery),
-          tx.get(refs.authorityStateRef)
-        ]);
-        await authorityEnvelope(tx, refs, actor);
-        const locations = boundedDocs(locationsSnap, WORKSPACE_LIMIT, "Inventory locations").map((snapshot) => {
-          const value = inventory.verifyLocation(snapshot.data() || {});
-          if (snapshot.id !== value.locationId || value.organizationId !== scope.organizationId) {
-            throw new inventory.InventoryAuthorityError("data-loss", "Inventory location document identity is inconsistent.");
-          }
-          return { locationId: value.locationId, name: value.name, active: value.active, revision: value.revision };
-        }).sort((left, right) => left.name.localeCompare(right.name) || left.locationId.localeCompare(right.locationId));
-        const items = boundedDocs(itemsSnap, WORKSPACE_LIMIT, "Inventory items").map((snapshot) => {
-          const value = inventory.verifyItem(snapshot.data() || {});
-          if (snapshot.id !== value.itemId || value.organizationId !== scope.organizationId) {
-            throw new inventory.InventoryAuthorityError("data-loss", "Inventory item document identity is inconsistent.");
-          }
-          return { itemId: value.itemId, name: value.name, category: value.category, unit: value.unit, active: value.active, turnaroundMinutes: value.turnaroundMinutes, revision: value.revision };
-        }).sort((left, right) => left.name.localeCompare(right.name) || left.itemId.localeCompare(right.itemId));
-        const stock = boundedDocs(stockSnap, WORKSPACE_LIMIT, "Inventory stock pools").map((snapshot) => {
-          const raw = snapshot.data() || {};
-          const value = inventory.publicStockState(raw);
-          if (raw.organizationId !== scope.organizationId || snapshot.id !== value.stockStateId) {
-            throw new inventory.InventoryAuthorityError("data-loss", "Inventory stock document identity is inconsistent.");
-          }
-          return value;
-        }).sort((left, right) => left.itemId.localeCompare(right.itemId) || left.locationId.localeCompare(right.locationId));
-        const movements = boundedDocs(movementsSnap, MOVEMENT_LIMIT, "Inventory movement history").map((snapshot) => {
-          const value = inventory.verifyMovement(snapshot.data() || {});
-          if (value.organizationId !== scope.organizationId || snapshot.id !== value.movementId) {
-            throw new inventory.InventoryAuthorityError("data-loss", "Inventory movement document identity is inconsistent.");
-          }
-          return {
-            movementId: value.movementId,
-            itemId: value.itemId,
-            kind: value.kind,
-            quantity: value.quantity,
-            from: value.from,
-            to: value.to,
-            eventPlanId: value.eventPlanId,
-            adjustmentReason: value.adjustmentReason,
-            note: value.note,
-            occurredAtISO: value.occurredAtISO,
-            recordedAtISO: value.recordedAtISO
-          };
-        });
-        const inventoryRevision = authorityRevisionFrom(authorityStateSnap, scope.organizationId);
-        return {
-          ok: true,
-          storage: "firebase",
-          schemaVersion: COMMAND_SCHEMA_VERSION,
-          authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
-          organizationId: scope.organizationId,
-          role: actor.role,
-          inventoryRevision,
-          locations,
-          items,
-          stock,
-          movements,
-          observedAtISO,
-          evidenceBoundary: inventory.INVENTORY_EVIDENCE_BOUNDARY
-        };
-      });
-    } catch (error) {
-      return throwFailure(error, "getInventoryWorkspace", { organizationId: scope.organizationId, actorUid: actor.uid });
-    }
   }
 
-  function throwFailure(error, operation, scope = {}) {
+  function throwFailure(error, operation) {
     if (error instanceof HttpsError) throw error;
-    if (error instanceof inventory.InventoryAuthorityError) throw new HttpsError(error.code, error.message);
-    logger.error(`${operation} failed`, {
-      organizationId: String(scope.organizationId || ""),
-      actorUid: String(scope.actorUid || ""),
-      error: String(error?.message || "").slice(0, 240)
+    if (error instanceof inventory.InventoryIngredientError) throw new HttpsError(error.code, error.message);
+    logger.error("Ingredient inventory authority failed.", {
+      operation,
+      errorName: String(error?.name || "Error"),
+      errorMessage: String(error?.message || "Unknown failure")
     });
-    throw new HttpsError("internal", "The authoritative inventory operation did not complete.");
+    throw new HttpsError("internal", "Ingredient inventory authority failed without a confirmed outcome. Retry the same request identity.");
   }
 
   return Object.freeze({ applyInventoryCommand, getInventoryWorkspace });
@@ -641,6 +756,11 @@ function createInventoryAuthorityRuntime({
 module.exports = {
   COLLECTIONS,
   WORKSPACE_LIMIT,
-  MOVEMENT_LIMIT,
-  createInventoryAuthorityRuntime
+  createInventoryAuthorityRuntime,
+  ingredientProjection,
+  normalizeApplyEnvelope,
+  normalizeWorkspaceEnvelope,
+  receiptIdFor,
+  verifyIngredientProjection,
+  verifyWorkspaceProjection
 };

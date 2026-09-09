@@ -1,6 +1,44 @@
 # Project Status
 
-Last updated: 2026-09-08 09:45:47 CDT
+Last updated: 2026-09-09 01:23:34 CDT
+
+## Ingredient inventory scope correction
+
+The default-off inventory branch remains local and unpushed. Its first local
+commit established an organization-scoped transaction, immutable ledger,
+rebuildable projection, expected-revision, receipt, authorization, and rules
+substrate, but interpreted the domain as reusable equipment. The owner has
+superseded that interpretation: ingredient stock, recorded purchase cost,
+versioned recipes, menu/event demand, projected food cost, consumable
+availability, allocation, and consumption evidence now govern the program.
+
+Corrected Phase 2 is complete as a default-off local source candidate:
+administrators create ingredient identities and locations, record fractional
+opening stock, independently record exact purchase-cost evidence, and read
+bounded materialized stock/cost projections through metadata-aware realtime
+listeners. The canonical Operations route is present in both supported build
+graphs and fails closed outside its exact workspace, browser, tenant, Firebase,
+and administrator gates. Equipment policies, interval
+availability, rentals, checkout/return, turnaround, and damage/repair behavior
+are removed from active scope. Nothing is deployed or tenant-enabled, and the
+earlier local commit remains historical rather than being rewritten.
+
+Local qualification includes 5,342 passing unit tests with 94 intentional
+skips, 88 passing Firestore-rules tests, the demo-only authoritative inventory
+emulator scenario, both production build selections with an emitted Inventory
+chunk, and passing environment, documentation, project-state, and scoped
+capability checks. These are source/emulator facts, not hosted or production
+proof.
+
+The corrected architecture keeps menu costing and stock promise as independent
+siblings over one immutable ingredient-demand revision. Missing cost cannot
+hide a valid shortage, and a shortage cannot invalidate a valid projected food
+cost. A later explicit slice will add recipe-cost and ingredient-availability
+consequences to existing Commercial Change intelligence without changing
+authoritative selling prices or turning advisory evidence into a universal
+publish blocker. The multiple-receipt inventory valuation and actual-consumption
+cost policy remains an owner decision; the current slice records exact evidence
+without inventing FIFO, LIFO, or weighted-average behavior.
 
 ## v0.18.0 Capability Realization Release Candidate
 

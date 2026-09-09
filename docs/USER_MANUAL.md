@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-08 09:45:47 CDT
+Last updated: 2026-09-09 01:23:34 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1241,6 +1241,46 @@ assistive-technology, or human acceptance.
   heading when complete current evidence correctly proves that decision is no
   longer pending. Local or responsive evidence does not substitute for a
   connected approval write, provider outcome, or human acceptance.
+
+## Ingredient inventory (default-off source candidate)
+
+When all three Inventory Authority gates are explicitly enabled, an
+administrator can open **Workspace tools → Operations → Inventory**. The route
+is not available to customers or sales staff in the first ingredient slice.
+It requires a connected Firebase workspace; there is no browser-local stock or
+cost authority.
+
+The initial setup is intentionally small:
+
+1. Create a stock location, such as **Main kitchen**.
+2. Add an ingredient with its stable name, category, and base stock unit.
+3. Record the opening counted quantity at that location.
+4. Independently record the observed total purchase cost and quantity basis, or
+   leave cost explicitly not yet available.
+
+For example, record **Chicken**, `40 lb`, and a `$120` total cost basis. The
+stock receipt establishes 40 lb on hand; the separate cost receipt retains the
+exact `$120 / 40 lb` evidence. A cost failure does not undo the stock record,
+and missing cost is never displayed as zero.
+
+The ingredient list and location setup read bounded Firestore projections in
+realtime. **Cached**, **pending**, **stale**, **unavailable**, and **uncertain**
+states are not confirmation. If an action may have reached the server but no
+receipt returned, keep the entered values and use **Check exact request**; do
+not start a replacement request.
+
+This source-candidate slice supports at most 200 location definitions and 200
+ingredient definitions per organization. The shared server transaction fence
+rejects record 201, and a projection at its bound is labeled **Partial**. That
+temporary limit must be replaced by cursor-based navigation before larger
+catalogs are activated; the browser never silently treats a truncated list as
+complete.
+
+This slice does not yet claim recipe cost, menu cost, event shortage,
+allocation, consumption, inventory value, or COGS. Versioned recipes and menu
+costing follow in Library. Event cost and stock availability will then consume
+the same immutable ingredient-demand revision as independent outcomes, so one
+can remain useful when the other is incomplete.
 
 ## Commercial Change Authority
 

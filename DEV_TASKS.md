@@ -1,10 +1,36 @@
 # Dev Tasks
 
-Last updated: 2026-09-08 09:45:47 CDT
+Last updated: 2026-09-09 01:23:34 CDT
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
 [`CHANGELOG.md`](CHANGELOG.md).
+
+## Ingredient inventory and menu-costing march
+
+1. Add explicit same-dimension units, ingredient-specific purchase-pack
+   conversions, versioned recipes attached to existing menu items, pure recipe
+   costing, dependency references, and per-menu cost projections in Library.
+2. Compile immutable event ingredient demand from exact portions and recipe
+   revisions, then project food cost and consumable stock shortage as
+   independent sibling outcomes.
+3. Add simple receiving and cumulative concurrency-safe allocation/release.
+   Different event dates must still contend for the same consumable stock.
+4. Preserve historical estimates and reconcile commercial/recipe changes; add
+   separate recipe-cost and ingredient-availability consequence nodes to the
+   existing Commercial Change intelligence without mutating selling price.
+5. Add consumption, waste, corrections, allocation settlement, and
+   planned-versus-actual quantity/cost evidence after an owner-declared
+   multi-receipt valuation policy exists.
+6. Deepen bounded realtime Library, Quote Edit, Preflight, Operations, and
+   reporting projections. Keep cached, pending, stale, unavailable, and
+   uncertain evidence distinct.
+
+Each completed slice receives a local commit. Preserve the historical Phase 1
+checkpoint, keep equipment workflows outside active scope, and do not push the
+branch until the corrected march passes final qualification. PR, merge,
+deployment, migration, tenant activation, production proof, and human
+acceptance require separate evidence and authorization.
 
 ## v0.18.0 capability campaign promotion
 

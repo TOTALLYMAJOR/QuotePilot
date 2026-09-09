@@ -1,22 +1,12 @@
 import { createRequire } from "node:module";
-import fs from "node:fs";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
-const inventory = require("../../../functions/inventoryAuthorityCore.cjs");
+const inventory = require("../../../functions/inventoryIngredientCore.cjs");
 const { createInventoryAuthorityRuntime } = require("../../../functions/inventoryAuthority.js");
-const FUNCTIONS_INDEX_SOURCE = fs.readFileSync(
-  new URL("../../../functions/index.js", import.meta.url),
-  "utf8"
-);
-const FIRESTORE_RULES_SOURCE = fs.readFileSync(
-  new URL("../../../firestore.rules", import.meta.url),
-  "utf8"
-);
 
 const ORGANIZATION_ID = "org-inventory";
 const ADMIN_UID = "inventory-admin";
-const SALES_UID = "inventory-sales";
 const EVIDENCE_TIME = "2026-09-08T22:00:00.000Z";
 
 function clone(value) {
@@ -29,10 +19,7 @@ class FakeDocumentRef {
     this.path = path;
     this.id = path.split("/").at(-1);
   }
-
-  collection(name) {
-    return new FakeCollectionRef(this.store, `${this.path}/${name}`);
-  }
+  collection(name) { return new FakeCollectionRef(this.store, `${this.path}/${name}`); }
 }
 
 class FakeCollectionRef {
@@ -41,18 +28,18 @@ class FakeCollectionRef {
     this.path = path;
     this.constraints = constraints;
   }
-
-  doc(id) {
-    return new FakeDocumentRef(this.store, `${this.path}/${id}`);
+  doc(id) { return new FakeDocumentRef(this.store, `${this.path}/${id}`); }
+  where(field, operator, value) {
+    return new FakeCollectionRef(this.store, this.path, {
+      ...this.constraints, where: { field, operator, value }
+    });
   }
-
-  limit(count) {
-    return new FakeCollectionRef(this.store, this.path, { ...this.constraints, limit: count });
+  orderBy(field, direction = "asc") {
+    return new FakeCollectionRef(this.store, this.path, {
+      ...this.constraints, orderBy: { field, direction }
+    });
   }
-
-  orderBy(field, direction) {
-    return new FakeCollectionRef(this.store, this.path, { ...this.constraints, orderBy: { field, direction } });
-  }
+  limit(limit) { return new FakeCollectionRef(this.store, this.path, { ...this.constraints, limit }); }
 }
 
 function documentSnapshot(ref, store) {
@@ -70,17 +57,20 @@ function collectionSnapshot(ref, store) {
   let docs = [...store.keys()]
     .filter((path) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
     .map((path) => documentSnapshot(new FakeDocumentRef(store, path), store));
+  const filter = ref.constraints.where;
+  if (filter) {
+    if (filter.operator !== "==") throw new Error("Unsupported fake query operator.");
+    docs = docs.filter((doc) => doc.data()[filter.field] === filter.value);
+  }
   const ordering = ref.constraints.orderBy;
   if (ordering) {
     docs.sort((left, right) => {
-      const leftValue = left.data()[ordering.field];
-      const rightValue = right.data()[ordering.field];
-      const result = leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0;
-      return ordering.direction === "desc" ? -result : result;
+      const a = left.data()[ordering.field];
+      const b = right.data()[ordering.field];
+      const order = a < b ? -1 : a > b ? 1 : left.id.localeCompare(right.id);
+      return ordering.direction === "desc" ? -order : order;
     });
-  } else {
-    docs.sort((left, right) => left.id.localeCompare(right.id));
-  }
+  } else docs.sort((left, right) => left.id.localeCompare(right.id));
   if (Number.isSafeInteger(ref.constraints.limit)) docs = docs.slice(0, ref.constraints.limit);
   return { docs, size: docs.length };
 }
@@ -88,64 +78,46 @@ function collectionSnapshot(ref, store) {
 function createFakeDb(entries = []) {
   const store = new Map(entries.map(([path, value]) => [path, clone(value)]));
   const transactions = [];
-  let retryMutation = null;
-
   return {
     store,
     transactions,
-    collection(name) {
-      return new FakeCollectionRef(store, name);
-    },
-    retryNextTransactionWith(mutation) {
-      retryMutation = mutation;
-    },
+    collection(name) { return new FakeCollectionRef(store, name); },
     async runTransaction(callback) {
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
-        const trace = { attempt, reads: [], writes: [] };
-        const staged = [];
-        let hasWritten = false;
-        const assertReadable = () => {
-          if (hasWritten) throw new Error("Firestore transaction attempted a read after a write.");
-        };
-        const tx = {
-          async get(ref) {
-            assertReadable();
-            trace.reads.push(ref.path);
-            return ref instanceof FakeCollectionRef
-              ? collectionSnapshot(ref, store)
-              : documentSnapshot(ref, store);
-          },
-          async getAll(...refs) {
-            assertReadable();
-            trace.reads.push(...refs.map((ref) => ref.path));
-            return refs.map((ref) => documentSnapshot(ref, store));
-          },
-          create(ref, value) {
-            hasWritten = true;
-            trace.writes.push({ operation: "create", path: ref.path });
-            staged.push({ operation: "create", ref, value: clone(value) });
-          },
-          set(ref, value) {
-            hasWritten = true;
-            trace.writes.push({ operation: "set", path: ref.path });
-            staged.push({ operation: "set", ref, value: clone(value) });
-          }
-        };
-        transactions.push(trace);
-        const result = await callback(tx);
-        if (attempt === 1 && retryMutation) {
-          const mutate = retryMutation;
-          retryMutation = null;
-          mutate(store);
-          continue;
+      const trace = { reads: [], writes: [] };
+      const staged = [];
+      let wrote = false;
+      const readable = () => {
+        if (wrote) throw new Error("Firestore transaction attempted a read after a write.");
+      };
+      const tx = {
+        async get(ref) {
+          readable();
+          trace.reads.push(ref.path);
+          return ref instanceof FakeCollectionRef ? collectionSnapshot(ref, store) : documentSnapshot(ref, store);
+        },
+        async getAll(...refs) {
+          readable();
+          trace.reads.push(...refs.map((ref) => ref.path));
+          return refs.map((ref) => documentSnapshot(ref, store));
+        },
+        create(ref, value) {
+          wrote = true;
+          trace.writes.push({ operation: "create", path: ref.path });
+          staged.push({ operation: "create", ref, value: clone(value) });
+        },
+        set(ref, value) {
+          wrote = true;
+          trace.writes.push({ operation: "set", path: ref.path });
+          staged.push({ operation: "set", ref, value: clone(value) });
         }
-        staged.forEach(({ operation, ref, value }) => {
-          if (operation === "create" && store.has(ref.path)) throw new Error(`Document already exists: ${ref.path}`);
-          store.set(ref.path, value);
-        });
-        return result;
+      };
+      transactions.push(trace);
+      const result = await callback(tx);
+      for (const { operation, ref, value } of staged) {
+        if (operation === "create" && store.has(ref.path)) throw new Error(`Document already exists: ${ref.path}`);
+        store.set(ref.path, value);
       }
-      throw new Error("Transaction retry limit exceeded.");
+      return result;
     }
   };
 }
@@ -158,413 +130,431 @@ class FakeHttpsError extends Error {
   }
 }
 
-function principal(uid, role) {
-  return {
-    uid,
-    role,
-    organizationId: ORGANIZATION_ID,
-    principalOrganizationId: ORGANIZATION_ID
-  };
-}
-
-function baseEntries({ tenantEnabled = true } = {}) {
+function baseEntries({ enabled = true } = {}) {
   return [
     [`organizations/${ORGANIZATION_ID}`, { active: true }],
-    [`organizations/${ORGANIZATION_ID}/settings/config`, { inventoryAuthorityEnabled: tenantEnabled }],
-    [`userRoles/${ADMIN_UID}`, { organizationId: ORGANIZATION_ID, role: "admin" }],
-    [`userRoles/${SALES_UID}`, { organizationId: ORGANIZATION_ID, role: "sales" }]
+    [`organizations/${ORGANIZATION_ID}/settings/config`, { inventoryAuthorityEnabled: enabled }],
+    [`userRoles/${ADMIN_UID}`, {
+      organizationId: ORGANIZATION_ID, role: "admin", email: "admin@example.com"
+    }]
   ];
 }
 
-function storedLocation(overrides = {}) {
+function configurationState(overrides = {}) {
   return {
-    ...inventory.normalizeLocation({
-      organizationId: ORGANIZATION_ID,
-      locationId: "warehouse",
-      expectedRevision: 0,
-      name: "Main warehouse",
-      active: true
-    }),
-    createdAtISO: EVIDENCE_TIME,
-    updatedAtISO: EVIDENCE_TIME,
-    ...overrides
-  };
-}
-
-function storedItem(overrides = {}) {
-  return {
-    ...inventory.normalizeItem({
-      organizationId: ORGANIZATION_ID,
-      itemId: "chafer",
-      expectedRevision: 0,
-      name: "Chafer",
-      category: "Service equipment",
-      unit: "each",
-      active: true,
-      turnaroundMinutes: 60
-    }),
-    movementCount: 0,
-    firstMovementId: "",
-    lastMovementId: "",
-    physicalUpdatedAtISO: "",
-    createdAtISO: EVIDENCE_TIME,
-    updatedAtISO: EVIDENCE_TIME,
-    ...overrides
-  };
-}
-
-function inventoryEntries() {
-  return [
-    [`organizations/${ORGANIZATION_ID}/inventoryLocations/warehouse`, storedLocation()],
-    [`organizations/${ORGANIZATION_ID}/inventoryItems/chafer`, storedItem()]
-  ];
-}
-
-function applyEnvelope(command, requestId = "inventory-command-request-0001") {
-  return {
-    schemaVersion: 1,
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: 2,
+    model: "inventory-configuration-state-v2",
     organizationId: ORGANIZATION_ID,
-    requestId,
-    command
-  };
-}
-
-function openingBalanceCommand(overrides = {}) {
-  return {
-    kind: "record_movement",
-    movement: {
-      itemId: "chafer",
-      kind: "opening_balance",
-      quantity: 30,
-      from: null,
-      to: { locationId: "warehouse", bucket: "usable" },
-      eventPlanId: "",
-      sourceMovementId: "",
-      adjustmentReason: "",
-      note: "Initial verified count",
-      occurredAtISO: EVIDENCE_TIME,
-      expectedStockRevisions: { warehouse: 0 },
-      ...overrides
-    }
+    stateId: "ingredient-v2",
+    locationCount: 0,
+    ingredientCount: 0,
+    revision: 1,
+    updatedAtISO: EVIDENCE_TIME,
+    ...overrides
   };
 }
 
 function createHarness({ entries = [], globalEnabled = true } = {}) {
   const db = createFakeDb([...baseEntries(), ...entries]);
-  let environmentGate = globalEnabled;
   const assertStaff = vi.fn(async (context, { expectedOrganizationId }) => {
     if (!context?.staff || context.staff.organizationId !== expectedOrganizationId) {
       throw new FakeHttpsError("permission-denied", "Staff authority is required.");
     }
     return context.staff;
   });
-  const runtime = createInventoryAuthorityRuntime({
-    db,
-    FieldValue: { serverTimestamp: () => ({ __serverTimestamp: true }) },
-    HttpsError: FakeHttpsError,
-    assertStaff,
-    normalizeOrganizationId: (value) => String(value || "").trim(),
-    isOrganizationRecordActive: (value) => value.active === true,
-    globalEnabled: () => environmentGate,
-    logger: { error: vi.fn() }
-  });
   return {
     db,
-    runtime,
     assertStaff,
-    setGlobalEnabled(value) { environmentGate = value; }
+    runtime: createInventoryAuthorityRuntime({
+      db,
+      FieldValue: { serverTimestamp: () => ({ __serverTimestamp: true }) },
+      HttpsError: FakeHttpsError,
+      assertStaff,
+      normalizeOrganizationId: (value) => String(value || "").trim(),
+      isOrganizationRecordActive: (value) => value.active === true,
+      globalEnabled: () => globalEnabled,
+      logger: { error: vi.fn() },
+      now: () => EVIDENCE_TIME
+    })
   };
 }
 
-const adminContext = { staff: principal(ADMIN_UID, "admin") };
-const salesContext = { staff: principal(SALES_UID, "sales") };
+const adminContext = {
+  staff: {
+    uid: ADMIN_UID,
+    role: "admin",
+    email: "admin@example.com",
+    organizationId: ORGANIZATION_ID,
+    principalOrganizationId: ORGANIZATION_ID
+  }
+};
 
-beforeEach(() => {
-  vi.restoreAllMocks();
+function envelope(command, retryId) {
+  return { schemaVersion: 2, organizationId: ORGANIZATION_ID, requestId: retryId, command };
+}
+
+const locationCommand = (overrides = {}) => ({
+  kind: "upsert_location",
+  locationId: "main-kitchen",
+  name: "Main kitchen",
+  active: true,
+  expectedRevision: 0,
+  ...overrides
 });
 
-describe("inventory authority runtime", () => {
-  test("binds exactly two App Check enforced callable surfaces to the direct server gate", () => {
-    expect(FUNCTIONS_INDEX_SOURCE.match(/exports\.getInventoryWorkspace\s*=/gu)).toHaveLength(1);
-    expect(FUNCTIONS_INDEX_SOURCE.match(/exports\.applyInventoryCommand\s*=/gu)).toHaveLength(1);
-    expect(FUNCTIONS_INDEX_SOURCE).toContain("createInventoryAuthorityRuntime({");
-    expect(FUNCTIONS_INDEX_SOURCE).toContain("process.env.INVENTORY_AUTHORITY_ENABLED");
-    expect(FUNCTIONS_INDEX_SOURCE).toContain(".runWith({ enforceAppCheck: true })");
-    expect(FUNCTIONS_INDEX_SOURCE).not.toContain('tenantWorkflowRuntimeEnabled("INVENTORY_AUTHORITY_ENABLED"');
-    expect(FIRESTORE_RULES_SOURCE).toContain("match /organizations/{orgId}/inventoryMovements/{movementId}");
-    expect(FIRESTORE_RULES_SOURCE).toContain("match /organizations/{orgId}/inventoryAuthorityReceipts/{receiptId}");
-  });
+const ingredientCommand = (overrides = {}) => ({
+  kind: "upsert_ingredient",
+  ingredientId: "chicken",
+  name: "Chicken breast",
+  category: "Protein",
+  baseUnitId: "lb",
+  active: true,
+  expectedRevision: 0,
+  ...overrides
+});
 
-  test("rejects non-v1 and open-ended envelopes before authentication or persistence", async () => {
+const openingCommand = (overrides = {}) => ({
+  kind: "opening_balance",
+  ingredientId: "chicken",
+  locationId: "main-kitchen",
+  quantity: "40",
+  baseUnitId: "lb",
+  occurredAtISO: EVIDENCE_TIME,
+  note: "Verified opening count",
+  expectedStockRevision: 0,
+  ...overrides
+});
+
+const costCommand = (overrides = {}) => ({
+  kind: "record_ingredient_cost",
+  ingredientId: "chicken",
+  baseUnitId: "lb",
+  availability: "available",
+  sourceLabel: "Opening stock observation",
+  observedAtISO: EVIDENCE_TIME,
+  note: "Recorded from operator evidence",
+  expectedCostRevision: 0,
+  basisQuantity: "40",
+  totalCostMinor: 12000,
+  currency: "USD",
+  ...overrides
+});
+
+async function configureChicken(harness) {
+  await harness.runtime.applyInventoryCommand(envelope(locationCommand(), "location-create-0001"), adminContext);
+  await harness.runtime.applyInventoryCommand(envelope(ingredientCommand(), "ingredient-create-0001"), adminContext);
+}
+
+describe("ingredient inventory authority runtime", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  test("requires exact schema-v2 envelopes and supported ingredient commands", async () => {
     const harness = createHarness();
-    const invalid = [
-      {},
-      { schemaVersion: 2, organizationId: ORGANIZATION_ID, requestId: "inventory-command-request-0001", command: { kind: "upsert_location", location: {} } },
-      { ...applyEnvelope({ kind: "upsert_location", location: {} }), surprise: true },
-      applyEnvelope({ kind: "upsert_location", location: {}, item: {} }),
-      applyEnvelope({ kind: "invent_stock", item: {} })
-    ];
-
-    for (const envelope of invalid) {
-      await expect(harness.runtime.applyInventoryCommand(envelope, adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
-    }
-    await expect(harness.runtime.getInventoryWorkspace({ schemaVersion: 1, organizationId: ORGANIZATION_ID, cursor: "all" }, salesContext))
-      .rejects.toMatchObject({ code: "invalid-argument" });
-    expect(harness.assertStaff).not.toHaveBeenCalled();
+    await expect(harness.runtime.applyInventoryCommand({
+      schemaVersion: 1,
+      organizationId: ORGANIZATION_ID,
+      requestId: "wrong-schema-0001",
+      command: locationCommand()
+    }, adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(harness.runtime.applyInventoryCommand({
+      ...envelope(locationCommand(), "extra-envelope-0001"), extra: true
+    }, adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(harness.runtime.applyInventoryCommand(envelope({
+      ...locationCommand(), turnaroundMinutes: 60
+    }, "equipment-field-0001"), adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
     expect(harness.db.transactions).toHaveLength(0);
   });
 
-  test("permits sales reads but reserves every mutation for administrators", async () => {
-    const harness = createHarness({ entries: inventoryEntries() });
-    const workspace = await harness.runtime.getInventoryWorkspace(
-      { schemaVersion: 1, organizationId: ORGANIZATION_ID },
-      salesContext
-    );
-    expect(workspace).toMatchObject({ ok: true, role: "sales", organizationId: ORGANIZATION_ID });
-    expect(workspace.items).toEqual([expect.objectContaining({ itemId: "chafer", unit: "each" })]);
-
-    await expect(harness.runtime.applyInventoryCommand(applyEnvelope({
-      kind: "upsert_location",
-      location: { locationId: "annex", expectedRevision: 0, name: "Annex", active: true }
-    }), salesContext)).rejects.toMatchObject({ code: "permission-denied" });
-    expect(harness.db.store.has(`organizations/${ORGANIZATION_ID}/inventoryLocations/annex`)).toBe(false);
-  });
-
-  test("fails closed unless both environment and tenant gates are enabled", async () => {
-    const environmentOff = createHarness({ entries: inventoryEntries(), globalEnabled: false });
-    await expect(environmentOff.runtime.getInventoryWorkspace(
-      { schemaVersion: 1, organizationId: ORGANIZATION_ID },
-      adminContext
+  test("enforces environment, tenant, active organization, and admin gates", async () => {
+    const globallyOff = createHarness({ globalEnabled: false });
+    await expect(globallyOff.runtime.applyInventoryCommand(
+      envelope(locationCommand(), "global-off-0001"), adminContext
     )).rejects.toMatchObject({ code: "failed-precondition" });
 
-    const tenantOff = createHarness({ entries: [
-      ...inventoryEntries(),
-      [`organizations/${ORGANIZATION_ID}/settings/config`, { inventoryAuthorityEnabled: false }]
-    ] });
-    await expect(tenantOff.runtime.getInventoryWorkspace(
-      { schemaVersion: 1, organizationId: ORGANIZATION_ID },
-      adminContext
+    const tenantOff = createHarness({ entries: [[
+      `organizations/${ORGANIZATION_ID}/settings/config`, { inventoryAuthorityEnabled: false }
+    ]] });
+    await expect(tenantOff.runtime.applyInventoryCommand(
+      envelope(locationCommand(), "tenant-off-0001"), adminContext
     )).rejects.toMatchObject({ code: "failed-precondition" });
+
+    const salesContext = { staff: { ...adminContext.staff, role: "sales" } };
+    await expect(createHarness().runtime.applyInventoryCommand(
+      envelope(locationCommand(), "sales-denied-0001"), salesContext
+    )).rejects.toMatchObject({ code: "permission-denied" });
+
+    const crossTenant = { staff: { ...adminContext.staff, organizationId: "org-foreign" } };
+    await expect(createHarness().runtime.applyInventoryCommand(
+      envelope(locationCommand(), "cross-tenant-0001"), crossTenant
+    )).rejects.toMatchObject({ code: "permission-denied" });
   });
 
-  test("creates an immutable receipt, replays it exactly, and rejects request-ID substitution", async () => {
+  test("creates location and ingredient authorities with bounded projections", async () => {
     const harness = createHarness();
-    const envelope = applyEnvelope({
-      kind: "upsert_location",
-      location: { locationId: "annex", expectedRevision: 0, name: "Annex", active: true }
-    }, "inventory-location-request-0001");
-    const first = await harness.runtime.applyInventoryCommand(envelope, adminContext);
-    const receiptPath = [...harness.db.store.keys()].find((path) => path.includes("/inventoryAuthorityReceipts/"));
-    const retainedReceipt = clone(harness.db.store.get(receiptPath));
-    const replay = await harness.runtime.applyInventoryCommand(envelope, adminContext);
-
-    expect(first.idempotent).toBe(false);
-    expect(replay).toEqual({ ...first, idempotent: true });
-    expect(harness.db.store.get(receiptPath)).toEqual(retainedReceipt);
-    expect(harness.db.transactions[1].reads).not.toContain(
-      `organizations/${ORGANIZATION_ID}/inventoryLocations/annex`
+    const location = await harness.runtime.applyInventoryCommand(
+      envelope(locationCommand(), "location-create-0001"), adminContext
     );
-    await expect(harness.runtime.applyInventoryCommand(applyEnvelope({
-      kind: "upsert_location",
-      location: { locationId: "annex", expectedRevision: 0, name: "Substituted annex", active: true }
-    }, "inventory-location-request-0001"), adminContext)).rejects.toMatchObject({ code: "already-exists" });
-    expect(harness.db.store.get(receiptPath)).toEqual(retainedReceipt);
+    const ingredient = await harness.runtime.applyInventoryCommand(
+      envelope(ingredientCommand(), "ingredient-create-0001"), adminContext
+    );
+    expect(location).toMatchObject({
+      ok: true, schemaVersion: 2, commandKind: "upsert_location", idempotent: false,
+      result: { locationId: "main-kitchen", revision: 1 }
+    });
+    expect(ingredient).toMatchObject({
+      ok: true, commandKind: "upsert_ingredient",
+      result: { ingredientId: "chicken", revision: 1, baseUnitId: "lb" }
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryWorkspaceProjections/current`
+    )).toEqual({
+      authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+      schemaVersion: 2,
+      model: "inventory-workspace-projection-v2",
+      organizationId: ORGANIZATION_ID,
+      projectionId: "current",
+      workspaceRevision: 1,
+      locations: [{ locationId: "main-kitchen", name: "Main kitchen", active: true, revision: 1 }],
+      updatedAtISO: EVIDENCE_TIME
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    )).toMatchObject({
+      model: "inventory-ingredient-projection-v2",
+      ingredientId: "chicken",
+      stock: { availability: "not_yet_available", stockRevision: 0, quantity: "0" },
+      cost: { availability: "not_yet_available", costRevision: 0 }
+    });
   });
 
-  test("rejects a coherently re-signed configuration receipt with a substituted result", async () => {
+  test("records 40 lb opening stock and $120 cost as independent evidence axes", async () => {
     const harness = createHarness();
-    const envelope = applyEnvelope({
-      kind: "upsert_location",
-      location: { locationId: "annex", expectedRevision: 0, name: "Annex", active: true }
-    }, "inventory-location-tamper-0001");
-    await harness.runtime.applyInventoryCommand(envelope, adminContext);
-    const receiptPath = [...harness.db.store.keys()].find((path) => path.includes("/inventoryAuthorityReceipts/"));
-    const wrapper = clone(harness.db.store.get(receiptPath));
-    wrapper.receipt.result.name = "Substituted warehouse";
-    const { receiptDigest: _discarded, ...body } = wrapper.receipt;
-    wrapper.receipt.receiptDigest = inventory.digest(body, "Inventory authority receipt");
-    harness.db.store.set(receiptPath, wrapper);
+    await configureChicken(harness);
+    const opening = await harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "opening-chicken-0001"), adminContext
+    );
+    let projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    );
+    expect(opening.result).toMatchObject({
+      ingredientId: "chicken", stockRevision: 1, onHandMicros: 40000000, onHandQuantity: "40"
+    });
+    expect(projection.stock).toEqual({
+      availability: "current",
+      stockRevision: 1,
+      onHandMicros: 40000000,
+      quantity: "40",
+      locationId: "main-kitchen",
+      lastMovementId: opening.result.movementId
+    });
+    expect(projection.cost).toMatchObject({ availability: "not_yet_available", costRevision: 0 });
 
-    await expect(harness.runtime.applyInventoryCommand(envelope, adminContext))
-      .rejects.toMatchObject({ code: "data-loss" });
+    const cost = await harness.runtime.applyInventoryCommand(
+      envelope(costCommand(), "cost-chicken-0001"), adminContext
+    );
+    projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    );
+    expect(cost.result).toMatchObject({ costRevision: 1, availability: "available" });
+    expect(projection.stock).toMatchObject({ onHandMicros: 40000000, stockRevision: 1 });
+    expect(projection.cost).toEqual({
+      availability: "available",
+      costRevision: 1,
+      sourceLabel: "Opening stock observation",
+      observedAtISO: EVIDENCE_TIME,
+      lastCostEvidenceId: cost.result.costEvidenceId,
+      basisQuantityMicros: 40000000,
+      totalCostMinor: 12000,
+      currency: "USD"
+    });
+    expect(projection.cost).not.toHaveProperty("unitCostMinor");
   });
 
-  test("reads every transaction dependency before its first write", async () => {
-    const harness = createHarness({ entries: inventoryEntries() });
+  test("cost evidence can be recorded before stock without manufacturing on-hand quantity", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
     await expect(harness.runtime.applyInventoryCommand(
-      applyEnvelope(openingBalanceCommand(), "inventory-opening-request-0001"),
-      adminContext
-    )).resolves.toMatchObject({ ok: true, idempotent: false });
-
-    expect(harness.db.transactions).toHaveLength(1);
-    expect(harness.db.transactions[0].reads).toEqual(expect.arrayContaining([
-      `organizations/${ORGANIZATION_ID}/inventoryItems/chafer`,
-      `organizations/${ORGANIZATION_ID}/inventoryLocations/warehouse`,
-      `organizations/${ORGANIZATION_ID}/inventoryAuthorityState/current`,
-      `organizations/${ORGANIZATION_ID}/settings/config`,
-      `userRoles/${ADMIN_UID}`
-    ]));
-    expect(harness.db.transactions[0].writes[0].operation).toBe("create");
-  });
-
-  test("fences item units with the first movement marker and advances movementCount", async () => {
-    const harness = createHarness({ entries: inventoryEntries() });
-    const outcome = await harness.runtime.applyInventoryCommand(
-      applyEnvelope(openingBalanceCommand(), "inventory-opening-request-0002"),
-      adminContext
+      envelope(costCommand(), "cost-before-stock-0001"), adminContext
+    )).resolves.toMatchObject({ result: { costRevision: 1 } });
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
     );
-    const item = harness.db.store.get(`organizations/${ORGANIZATION_ID}/inventoryItems/chafer`);
-
-    expect(item).toMatchObject({
-      movementCount: 1,
-      firstMovementId: outcome.movement.movementId,
-      lastMovementId: outcome.movement.movementId
+    expect(projection.stock).toMatchObject({ availability: "not_yet_available", onHandMicros: 0 });
+    expect(projection.cost).toMatchObject({ availability: "available", totalCostMinor: 12000 });
+    await expect(harness.runtime.applyInventoryCommand(envelope(ingredientCommand({
+      baseUnitId: "kg",
+      expectedRevision: 1
+    }), "unit-change-after-cost-0001"), adminContext)).rejects.toMatchObject({
+      code: "failed-precondition"
     });
-    expect(item.physicalUpdatedAtISO).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
-
-    await expect(harness.runtime.applyInventoryCommand(applyEnvelope({
-      kind: "upsert_item",
-      item: {
-        itemId: "chafer",
-        expectedRevision: 1,
-        name: "Chafer",
-        category: "Service equipment",
-        unit: "sets",
-        active: true,
-        turnaroundMinutes: 60
-      }
-    }, "inventory-unit-change-request-0001"), adminContext)).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredients/chicken`
+    ).baseUnitId).toBe("lb");
   });
 
-  test("movement replay returns the movement-sealed stock outcome, not mutable projection state", async () => {
-    const harness = createHarness({ entries: inventoryEntries() });
-    const envelope = applyEnvelope(openingBalanceCommand(), "inventory-opening-request-0003");
-    const first = await harness.runtime.applyInventoryCommand(envelope, adminContext);
-    const stockPath = `organizations/${ORGANIZATION_ID}/inventoryStockStates/${first.stock[0].stockStateId}`;
-    harness.db.store.set(stockPath, {
-      ...harness.db.store.get(stockPath),
-      buckets: { usable: 999, checked_out: 0, damaged: 0 }
-    });
-
-    const replay = await harness.runtime.applyInventoryCommand(envelope, adminContext);
-    expect(replay.idempotent).toBe(true);
-    expect(replay.stock).toEqual(first.stock);
-    expect(replay.stock).toEqual([expect.objectContaining({ usable: 30, owned: 30, revision: 1 })]);
-    [
-      `organizations/${ORGANIZATION_ID}/inventoryAuthorityState/current`,
-      `organizations/${ORGANIZATION_ID}/inventoryItems/chafer`,
-      `organizations/${ORGANIZATION_ID}/inventoryLocations/warehouse`,
-      stockPath
-    ].forEach((path) => expect(harness.db.transactions[1].reads).not.toContain(path));
-  });
-
-  test("fails closed on valid foreign-organization evidence misfiled under the active tenant", async () => {
-    const foreignOrganizationId = "org-foreign";
-    const foreignActor = {
-      organizationId: foreignOrganizationId,
-      principalOrganizationId: foreignOrganizationId,
-      uid: "foreign-admin",
-      role: "admin"
+  test("unknown cost remains explicit and does not block confirmed stock", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(envelope(openingCommand(), "opening-no-cost-0001"), adminContext);
+    const unavailable = {
+      kind: "record_ingredient_cost",
+      ingredientId: "chicken",
+      baseUnitId: "lb",
+      availability: "missing",
+      sourceLabel: "Opening count",
+      observedAtISO: EVIDENCE_TIME,
+      note: "Purchase cost unavailable",
+      expectedCostRevision: 0
     };
-    const foreign = inventory.planMovement({
-      request: {
-        organizationId: foreignOrganizationId,
-        itemId: "chafer",
-        requestId: "inventory-foreign-opening-0001",
-        kind: "opening_balance",
-        quantity: 30,
-        from: null,
-        to: { locationId: "warehouse", bucket: "usable" },
-        eventPlanId: "",
-        sourceMovementId: "",
-        adjustmentReason: "",
-        note: "Foreign opening",
-        occurredAtISO: EVIDENCE_TIME,
-        expectedStockRevisions: { warehouse: 0 }
-      },
-      actor: foreignActor,
-      nowISO: EVIDENCE_TIME
-    });
-    const stockState = foreign.nextStockStates.warehouse;
-    const stockHarness = createHarness({ entries: [
-      ...inventoryEntries(),
-      [`organizations/${ORGANIZATION_ID}/inventoryStockStates/${stockState.stockStateId}`, stockState]
-    ] });
-    await expect(stockHarness.runtime.getInventoryWorkspace(
-      { schemaVersion: 1, organizationId: ORGANIZATION_ID },
-      adminContext
-    )).rejects.toMatchObject({ code: "data-loss" });
-
-    const movementHarness = createHarness({ entries: [
-      ...inventoryEntries(),
-      [`organizations/${ORGANIZATION_ID}/inventoryMovements/${foreign.movement.movementId}`, foreign.movement]
-    ] });
-    await expect(movementHarness.runtime.getInventoryWorkspace(
-      { schemaVersion: 1, organizationId: ORGANIZATION_ID },
-      adminContext
-    )).rejects.toMatchObject({ code: "data-loss" });
+    await harness.runtime.applyInventoryCommand(envelope(unavailable, "unknown-cost-0001"), adminContext);
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    );
+    expect(projection.stock).toMatchObject({ availability: "current", quantity: "40" });
+    expect(projection.cost).toMatchObject({ availability: "missing", costRevision: 1 });
+    expect(projection.cost).not.toHaveProperty("totalCostMinor");
   });
 
-  test("rejects execution movements until allocation-aware Phase 9 authority exists", async () => {
-    const harness = createHarness({ entries: inventoryEntries() });
-    const executionKinds = ["checkout", "return", "damage", "repair", "loss", "retire"];
-    const shapes = {
-      checkout: { from: { locationId: "warehouse", bucket: "usable" }, to: { locationId: "warehouse", bucket: "checked_out" }, eventPlanId: "event-plan-1" },
-      return: { from: { locationId: "warehouse", bucket: "checked_out" }, to: { locationId: "warehouse", bucket: "usable" }, eventPlanId: "event-plan-1", sourceMovementId: "movement-checkout-1" },
-      damage: { from: { locationId: "warehouse", bucket: "usable" }, to: { locationId: "warehouse", bucket: "damaged" } },
-      repair: { from: { locationId: "warehouse", bucket: "damaged" }, to: { locationId: "warehouse", bucket: "usable" } },
-      loss: { from: { locationId: "warehouse", bucket: "usable" }, to: { locationId: "warehouse", bucket: "lost" } },
-      retire: { from: { locationId: "warehouse", bucket: "usable" }, to: { locationId: "warehouse", bucket: "retired" } }
+  test("rejects stale revisions without changing canonical evidence", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(envelope(costCommand(), "cost-current-0001"), adminContext);
+    const before = clone(harness.db.store);
+    await expect(harness.runtime.applyInventoryCommand(
+      envelope(costCommand({ totalCostMinor: 12500 }), "cost-stale-0001"), adminContext
+    )).rejects.toMatchObject({ code: "aborted" });
+    expect([...harness.db.store.entries()]).toEqual([...before.entries()]);
+  });
+
+  test("replays an exact request from its receipt and rejects request substitution", async () => {
+    const harness = createHarness();
+    const exact = envelope(locationCommand(), "idempotent-location-0001");
+    const first = await harness.runtime.applyInventoryCommand(exact, adminContext);
+    const replay = await harness.runtime.applyInventoryCommand(exact, adminContext);
+    expect(replay).toEqual({ ...first, idempotent: true });
+    expect(harness.db.transactions[1].reads[0]).toBe(
+      `organizations/${ORGANIZATION_ID}/inventoryAuthorityReceipts/${first.receipt.receiptId}`
+    );
+    expect(harness.db.transactions[1].reads).not.toContain(
+      `organizations/${ORGANIZATION_ID}/inventoryLocations/main-kitchen`
+    );
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      locationCommand({ name: "Substituted kitchen" }), "idempotent-location-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "already-exists" });
+  });
+
+  test("replays an exact request after an authorized email change because identity uses stable uid and organization", async () => {
+    const harness = createHarness();
+    const exact = envelope(locationCommand(), "idempotent-after-email-0001");
+    const first = await harness.runtime.applyInventoryCommand(exact, adminContext);
+    harness.db.store.set(`userRoles/${ADMIN_UID}`, {
+      organizationId: ORGANIZATION_ID,
+      role: "admin",
+      email: "renamed-admin@example.com"
+    });
+    const changedEmailContext = {
+      staff: { ...adminContext.staff, email: "renamed-admin@example.com" }
     };
-
-    for (const [index, kind] of executionKinds.entries()) {
-      const movement = openingBalanceCommand({
-        kind,
-        quantity: 1,
-        from: shapes[kind].from,
-        to: shapes[kind].to,
-        eventPlanId: shapes[kind].eventPlanId || "",
-        sourceMovementId: shapes[kind].sourceMovementId || "",
-        expectedStockRevisions: { warehouse: 0 }
-      });
-      await expect(harness.runtime.applyInventoryCommand(
-        applyEnvelope(movement, `inventory-execution-request-000${index + 1}`),
-        adminContext
-      )).rejects.toMatchObject({ code: "failed-precondition" });
-    }
-    expect(harness.db.transactions).toHaveLength(0);
+    await expect(harness.runtime.applyInventoryCommand(exact, changedEmailContext))
+      .resolves.toEqual({ ...first, idempotent: true });
   });
 
-  test("retries against a concurrent first movement and then rejects a stale unit change", async () => {
-    const harness = createHarness({ entries: inventoryEntries() });
-    const concurrentMovementId = inventory.movementIdFor(ORGANIZATION_ID, "inventory-concurrent-first-0001");
-    harness.db.retryNextTransactionWith((store) => {
-      store.set(`organizations/${ORGANIZATION_ID}/inventoryItems/chafer`, storedItem({
-        movementCount: 1,
-        firstMovementId: concurrentMovementId,
-        lastMovementId: concurrentMovementId,
-        physicalUpdatedAtISO: EVIDENCE_TIME
-      }));
+  test("uses one shared configuration fence to reject location and ingredient record 201", async () => {
+    const actor = {
+      uid: ADMIN_UID,
+      email: "admin@example.com",
+      role: "admin",
+      organizationId: ORGANIZATION_ID
+    };
+    const locationEntries = Array.from({ length: 200 }, (_, index) => {
+      const locationId = `location-${String(index).padStart(3, "0")}`;
+      const record = inventory.planLocation({
+        organizationId: ORGANIZATION_ID,
+        request: {
+          kind: "upsert_location",
+          locationId,
+          name: `Location ${String(index).padStart(3, "0")}`,
+          active: true,
+          expectedRevision: 0
+        },
+        actor,
+        nowISO: EVIDENCE_TIME
+      }).location;
+      return [`organizations/${ORGANIZATION_ID}/inventoryLocations/${locationId}`, record];
     });
+    const locationHarness = createHarness({ entries: [
+      ...locationEntries,
+      [`organizations/${ORGANIZATION_ID}/inventoryAuthorityState/ingredient-v2`, configurationState({
+        locationCount: 200,
+        revision: 200
+      })]
+    ] });
+    await expect(locationHarness.runtime.applyInventoryCommand(envelope(
+      locationCommand({ locationId: "location-201", name: "Location 201" }),
+      "location-limit-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "resource-exhausted" });
 
-    await expect(harness.runtime.applyInventoryCommand(applyEnvelope({
-      kind: "upsert_item",
-      item: {
-        itemId: "chafer",
-        expectedRevision: 1,
-        name: "Chafer",
-        category: "Service equipment",
-        unit: "sets",
-        active: true,
-        turnaroundMinutes: 60
-      }
-    }, "inventory-concurrent-unit-request-0001"), adminContext)).rejects.toMatchObject({ code: "failed-precondition" });
+    const ingredientHarness = createHarness({ entries: [[
+      `organizations/${ORGANIZATION_ID}/inventoryAuthorityState/ingredient-v2`,
+      configurationState({ ingredientCount: 200, revision: 200 })
+    ]] });
+    await expect(ingredientHarness.runtime.applyInventoryCommand(envelope(
+      ingredientCommand(), "ingredient-limit-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "resource-exhausted" });
+  });
 
-    expect(harness.db.transactions.map(({ attempt }) => attempt)).toEqual([1, 2]);
-    expect(harness.db.store.get(`organizations/${ORGANIZATION_ID}/inventoryItems/chafer`)).toMatchObject({
-      unit: "each",
-      movementCount: 1,
-      firstMovementId: concurrentMovementId
+  test("reads every transaction dependency before the first write", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await expect(harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "read-before-write-0001"), adminContext
+    )).resolves.toMatchObject({ ok: true });
+    const trace = harness.db.transactions.at(-1);
+    expect(trace.reads).toEqual(expect.arrayContaining([
+      `organizations/${ORGANIZATION_ID}/inventoryIngredients/chicken`,
+      `organizations/${ORGANIZATION_ID}/inventoryLocations/main-kitchen`,
+      `organizations/${ORGANIZATION_ID}/settings/config`
+    ]));
+    expect(trace.writes[0].path).toContain("/inventoryMovements/");
+  });
+
+  test("workspace recovery is admin-only and bounded to safe projections", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(envelope(openingCommand(), "workspace-opening-0001"), adminContext);
+    const workspace = await harness.runtime.getInventoryWorkspace(
+      { schemaVersion: 2, organizationId: ORGANIZATION_ID }, adminContext
+    );
+    expect(workspace).toMatchObject({
+      schemaVersion: 2, organizationId: ORGANIZATION_ID, bounded: true, limit: 200
     });
+    expect(workspace.locations).toHaveLength(1);
+    expect(workspace.ingredients[0]).toMatchObject({
+      ingredientId: "chicken", stock: { quantity: "40" }, cost: { availability: "not_yet_available" }
+    });
+    expect(JSON.stringify(workspace)).not.toContain("admin@example.com");
+    expect(JSON.stringify(workspace)).not.toContain("Verified opening count");
+  });
+
+  test("fails closed when canonical evidence is misfiled across tenants", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    const path = `organizations/${ORGANIZATION_ID}/inventoryIngredients/chicken`;
+    harness.db.store.set(path, { ...harness.db.store.get(path), organizationId: "org-foreign" });
+    await expect(harness.runtime.applyInventoryCommand(
+      envelope(costCommand(), "foreign-evidence-0001"), adminContext
+    )).rejects.toMatchObject({ code: "data-loss" });
+  });
+
+  test("fails closed on internally inconsistent stored stock and cost projections", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(envelope(openingCommand(), "integrity-opening-0001"), adminContext);
+    const stockPath = `organizations/${ORGANIZATION_ID}/inventoryStockStates/${inventory.stockStateId("chicken", "main-kitchen")}`;
+    harness.db.store.set(stockPath, { ...harness.db.store.get(stockPath), stockStateId: "wrong-state" });
+    await expect(harness.runtime.applyInventoryCommand(
+      envelope(costCommand(), "integrity-cost-0001"), adminContext
+    )).rejects.toMatchObject({ code: "data-loss" });
   });
 });

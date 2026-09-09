@@ -57,6 +57,7 @@
     "test:catalog-import:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-catalog-import emulators:exec --only auth,firestore,functions \"node scripts/catalog-import-emulator.mjs\"",
     "test:rebook-quote:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-rebook-quote emulators:exec --only auth,firestore,functions \"node scripts/rebook-quote-emulator-acceptance.mjs\"",
     "test:operational-staffing:emulator": "OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true AUTH_PLATFORM_ADMIN_EMAILS=staffing-platform@local.test STAFF_INVITATION_TOKEN_SECRET=local-staff-invitation-token-secret-32-bytes-minimum npx firebase-tools --config firebase.e2e.json --project demo-operational-staffing emulators:exec --only auth,firestore,functions \"node scripts/operational-staffing-emulator-acceptance.mjs\"",
+    "test:inventory:emulator": "INVENTORY_AUTHORITY_ENABLED=true npx firebase-tools --config firebase.e2e.json --project demo-inventory-ingredient emulators:exec --only auth,firestore,functions \"node scripts/inventory-ingredient-emulator-acceptance.mjs\"",
     "test:customer-centered-authority:emulator": "node ./scripts/run-customer-centered-authority-emulator.mjs",
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
     "check:project-state": "node ./scripts/check-project-state.mjs",
