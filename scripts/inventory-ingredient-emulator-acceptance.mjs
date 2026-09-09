@@ -254,6 +254,39 @@ function recipeCommand() {
   };
 }
 
+async function seedQuote(quoteId, { date, guests }) {
+  const quoteRef = db.collection("organizations").doc(ORGANIZATION_ID)
+    .collection("quotes").doc(quoteId);
+  const snapshot = {
+    id: quoteId,
+    organizationId: ORGANIZATION_ID,
+    activeVersionId: "v0001",
+    event: { date, time: "17:00", guests },
+    selection: {
+      packageId: "dinner-package",
+      packageInclusions: { menuItems: [] },
+      menuItems: ["chicken-alfredo"],
+      menuItemsSnapshot: [{ id: "chicken-alfredo", name: "Chicken Alfredo" }]
+    }
+  };
+  await Promise.all([
+    quoteRef.set({
+      id: quoteId,
+      organizationId: ORGANIZATION_ID,
+      status: "accepted",
+      activeVersionId: "v0001",
+      versionMeta: { versionId: "v0001" }
+    }),
+    quoteRef.collection("versions").doc("v0001").set({
+      versionId: "v0001",
+      versionNumber: 1,
+      quoteId,
+      organizationId: ORGANIZATION_ID,
+      snapshot
+    })
+  ]);
+}
+
 await Promise.all([
   db.collection("organizations").doc(ORGANIZATION_ID).set({
     name: "Ingredient Inventory Emulator Org",
@@ -283,6 +316,7 @@ await Promise.all([
     .collection("quotes").doc("quote-alfredo").set({
       id: "quote-alfredo",
       organizationId: ORGANIZATION_ID,
+      status: "accepted",
       activeVersionId: "v0001",
       versionMeta: { versionId: "v0001" }
     }),
@@ -304,7 +338,10 @@ await Promise.all([
           menuItemsSnapshot: [{ id: "chicken-alfredo", name: "Chicken Alfredo" }]
         }
       }
-    })
+    }),
+  seedQuote("quote-other-day", { date: "2026-10-11", guests: 125 }),
+  seedQuote("quote-race-a", { date: "2026-10-18", guests: 150 }),
+  seedQuote("quote-race-b", { date: "2026-10-25", guests: 150 })
 ]);
 const principal = await createAdminPrincipal();
 
@@ -457,15 +494,40 @@ assert.equal((await orgRef.collection("inventoryRecipePolicies").get()).size, 1)
 assert.equal((await orgRef.collection("inventoryRecipeDependencyIndex").doc("chicken").get()).data()?.menuItemIds?.[0], "chicken-alfredo");
 
 const recipeRevisionId = concurrentRecipeReplay[0].result.recipeRevisionId;
-const eventSelection = {
-  selectionId: "chicken-alfredo",
+function eventSelectionFor(quoteId, requiredOutputQuantity) {
+  return {
+  selectionId: `${quoteId}-chicken-alfredo`,
   menuItemId: "chicken-alfredo",
   recipeRevisionId,
-  requiredOutputQuantity: "100",
+  requiredOutputQuantity,
   outputUnitId: "portion",
   portionBasis: { kind: "explicit_output_quantity", evidenceId: "chicken-alfredo" },
   commercialProvenance: { kind: "direct", sourceId: "chicken-alfredo" }
-};
+  };
+}
+const eventSelection = eventSelectionFor("quote-alfredo", "100");
+
+async function compileRequirement(quoteId, requiredOutputQuantity, requestId) {
+  const selection = eventSelectionFor(quoteId, requiredOutputQuantity);
+  const preview = await callEventPreview(principal, {
+    schemaVersion: 2,
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    quoteRevisionId: "v0001",
+    requiredByBasis: { kind: "quote_event_start" },
+    selections: [selection]
+  });
+  const result = await callInventory(principal, requestId, {
+    kind: "compile_event_ingredient_demand",
+    quoteId,
+    quoteRevisionId: "v0001",
+    requiredByBasis: { kind: "quote_event_start" },
+    selections: [selection],
+    expectedRequirementRevision: 0,
+    expectedPreviewProjectionDigest: preview.projection.projectionDigest
+  });
+  return { preview, result };
+}
 const eventPreview = await callEventPreview(principal, {
   schemaVersion: 2,
   organizationId: ORGANIZATION_ID,
@@ -512,6 +574,203 @@ assert.equal(savedEventProjection.data()?.requirementRevision, 1);
 assert.equal(savedEventProjection.data()?.projectedCostMinor, 8000);
 assert.equal((await orgRef.collection("eventIngredientRequirements").doc("quote-alfredo")
   .collection("revisions").get()).size, 1);
+
+const otherRequirement = await compileRequirement(
+  "quote-other-day", "125", "event-demand-other-day-create-0001"
+);
+const allocateOtherCommand = {
+  kind: "allocate_event_ingredients",
+  quoteId: "quote-other-day",
+  eventRequirementRevisionId: otherRequirement.result.result.eventRequirementRevisionId,
+  locationId: "main-kitchen",
+  expectedRequirementRevision: 1,
+  expectedAllocationRevision: 0
+};
+const otherAllocation = await callInventory(
+  principal, "allocate-other-day-create-0001", allocateOtherCommand
+);
+assert.equal(otherAllocation.result.state, "reserved");
+assert.equal(otherAllocation.result.fullyAllocatedIngredientCount, 2);
+
+const allocateAlfredoCommand = {
+  kind: "allocate_event_ingredients",
+  quoteId: "quote-alfredo",
+  eventRequirementRevisionId: concurrentEventReplay[0].result.eventRequirementRevisionId,
+  locationId: "main-kitchen",
+  expectedRequirementRevision: 1,
+  expectedAllocationRevision: 0
+};
+const allocationRequestId = "allocate-alfredo-create-0001";
+const alfredoAllocation = await callInventory(principal, allocationRequestId, allocateAlfredoCommand);
+assert.equal(alfredoAllocation.result.state, "shortage");
+assert.equal(alfredoAllocation.result.shortageIngredientCount, 1);
+const alfredoPlanRef = orgRef.collection("eventIngredientPlans").doc("quote-alfredo");
+const alfredoPlan = (await alfredoPlanRef.get()).data();
+const allocatedChicken = alfredoPlan?.ingredients?.find((row) => row.ingredientId === "chicken");
+assert.equal(allocatedChicken?.requiredQuantityMicros, 20_000_000);
+assert.equal(allocatedChicken?.allocatedQuantityMicros, 15_000_000);
+assert.equal(allocatedChicken?.shortageQuantityMicros, 5_000_000);
+assert.equal((await orgRef.collection("inventoryStockStates")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.onHandMicros, 40_000_000,
+"Allocating ingredients must not reduce physical on-hand stock.");
+const chickenFence = (await orgRef.collection("inventoryAllocationFences")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data();
+assert.equal(chickenFence?.committedMicros, 40_000_000,
+  "Different event dates must contend on the same consumable-stock fence.");
+const allocationReplay = await callInventory(principal, allocationRequestId, allocateAlfredoCommand);
+assert.equal(allocationReplay.idempotent, true);
+assert.equal(allocationReplay.receipt.receiptId, alfredoAllocation.receipt.receiptId);
+await expectCallableError(
+  () => callInventory(principal, allocationRequestId, {
+    ...allocateAlfredoCommand,
+    locationId: "dry-storage"
+  }),
+  "ALREADY_EXISTS",
+  /different immutable ingredient inventory command/i
+);
+assert.equal((await alfredoPlanRef.collection("revisions").get()).size, 1);
+const allocatedEventProjection = (await orgRef.collection("eventIngredientProjections")
+  .doc("quote-alfredo").get()).data();
+assert.equal(allocatedEventProjection?.allocation?.state, "shortage");
+assert.equal(allocatedEventProjection?.allocation?.allocationRevision, 1);
+
+const shortageReceivingRequest = {
+  kind: "receive_stock",
+  ingredientId: "chicken",
+  locationId: "main-kitchen",
+  quantity: "5",
+  baseUnitId: "lb",
+  occurredAtISO: "2026-09-09T04:15:00.000Z",
+  sourceLabel: "Shortage recovery receiving observation",
+  note: "5 lb received to recover the active shortage",
+  expectedStockRevision: 1,
+  expectedCostRevision: 1,
+  cost: { availability: "available", totalCostMinor: 1800, currency: "USD" }
+};
+const shortageReceiving = await callInventory(
+  principal, "receive-shortage-recovery-0001", shortageReceivingRequest
+);
+assert.equal(shortageReceiving.result.onHandMicros, 45_000_000);
+assert.equal(shortageReceiving.result.costRevision, 1);
+const toppedUpAllocation = await callInventory(principal, "allocate-alfredo-top-up-0002", {
+  ...allocateAlfredoCommand,
+  expectedAllocationRevision: 1
+});
+assert.equal(toppedUpAllocation.result.state, "reserved");
+assert.equal(toppedUpAllocation.result.allocationRevision, 2);
+assert.equal(toppedUpAllocation.result.shortageIngredientCount, 0);
+const toppedUpPlan = (await alfredoPlanRef.get()).data();
+assert.equal(toppedUpPlan?.ingredients?.find(
+  (row) => row.ingredientId === "chicken"
+)?.allocatedQuantityMicros, 20_000_000);
+assert.equal((await orgRef.collection("inventoryAllocationFences")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.committedMicros, 45_000_000);
+
+const releaseAlfredo = await callInventory(principal, "release-alfredo-create-0001", {
+  kind: "release_event_ingredients",
+  quoteId: "quote-alfredo",
+  expectedAllocationRevision: 2,
+  reason: "Acceptance fixture release"
+});
+assert.equal(releaseAlfredo.result.state, "released");
+assert.equal(releaseAlfredo.result.releasedIngredientCount, 2);
+assert.equal(Object.hasOwn(releaseAlfredo.result, "releaseReason"), false);
+assert.equal((await orgRef.collection("inventoryStockStates")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.onHandMicros, 45_000_000,
+"Release must not mutate physical stock.");
+assert.equal((await orgRef.collection("inventoryAllocationFences")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.committedMicros, 25_000_000);
+assert.equal((await alfredoPlanRef.collection("revisions").get()).size, 3);
+await expectCallableError(
+  () => callInventory(principal, "release-alfredo-again-0002", {
+    kind: "release_event_ingredients",
+    quoteId: "quote-alfredo",
+    expectedAllocationRevision: 3,
+    reason: "A second release must fail"
+  }),
+  "FAILED_PRECONDITION",
+  /already released/i
+);
+
+await callInventory(principal, "release-other-day-create-0001", {
+  kind: "release_event_ingredients",
+  quoteId: "quote-other-day",
+  expectedAllocationRevision: 1,
+  reason: "Clear stock before concurrency acceptance"
+});
+const [raceRequirementA, raceRequirementB] = await Promise.all([
+  compileRequirement("quote-race-a", "150", "event-demand-race-a-create-0001"),
+  compileRequirement("quote-race-b", "150", "event-demand-race-b-create-0001")
+]);
+const competingAllocations = await Promise.all([
+  callInventory(principal, "allocate-race-a-create-0001", {
+    kind: "allocate_event_ingredients",
+    quoteId: "quote-race-a",
+    eventRequirementRevisionId: raceRequirementA.result.result.eventRequirementRevisionId,
+    locationId: "main-kitchen",
+    expectedRequirementRevision: 1,
+    expectedAllocationRevision: 0
+  }),
+  callInventory(principal, "allocate-race-b-create-0001", {
+    kind: "allocate_event_ingredients",
+    quoteId: "quote-race-b",
+    eventRequirementRevisionId: raceRequirementB.result.result.eventRequirementRevisionId,
+    locationId: "main-kitchen",
+    expectedRequirementRevision: 1,
+    expectedAllocationRevision: 0
+  })
+]);
+const racePlans = await Promise.all(["quote-race-a", "quote-race-b"].map(async (quoteId) =>
+  (await orgRef.collection("eventIngredientPlans").doc(quoteId).get()).data()));
+const totalRaceChickenAllocation = racePlans.reduce((sum, plan) => sum
+  + plan.ingredients.find((row) => row.ingredientId === "chicken").allocatedQuantityMicros, 0);
+assert.equal(totalRaceChickenAllocation, 45_000_000,
+  "Concurrent event allocations must never exceed shared physical chicken stock.");
+assert.equal(competingAllocations.some((result) => result.result.state === "shortage"), true);
+assert.equal((await orgRef.collection("inventoryAllocationFences")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.committedMicros, 45_000_000);
+await Promise.all(racePlans.map((plan) => callInventory(
+  principal,
+  `release-${plan.quoteId}-create-0001`,
+  {
+    kind: "release_event_ingredients",
+    quoteId: plan.quoteId,
+    expectedAllocationRevision: 1,
+    reason: "Clear concurrent acceptance fixture"
+  }
+)));
+
+const receivingRequest = {
+  kind: "receive_stock",
+  ingredientId: "chicken",
+  locationId: "main-kitchen",
+  quantity: "5",
+  baseUnitId: "lb",
+  occurredAtISO: "2026-09-09T04:30:00.000Z",
+  sourceLabel: "Acceptance receiving observation",
+  note: "5 lb received at a different observed cost",
+  expectedStockRevision: 2,
+  expectedCostRevision: 1,
+  cost: { availability: "available", totalCostMinor: 2500, currency: "USD" }
+};
+const receivingResult = await callInventory(
+  principal, "receive-chicken-create-0001", receivingRequest
+);
+assert.equal(receivingResult.result.onHandMicros, 50_000_000);
+assert.equal(receivingResult.result.costRevision, 1,
+  "A later receipt must not silently replace the established planning-cost basis.");
+assert.equal(Object.hasOwn(receivingResult.result, "planningBasisAction"), false);
+assert.equal(Object.hasOwn(receivingResult.result, "affectedMenuItemIds"), false);
+const receivingReplay = await callInventory(principal, "receive-chicken-create-0001", receivingRequest);
+assert.equal(receivingReplay.idempotent, true);
+assert.equal((await orgRef.collection("inventoryMovements")
+  .where("ingredientId", "==", "chicken").get()).size, 3);
+assert.equal((await orgRef.collection("inventoryCostStates")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.totalCostMinor, 12000);
+const receivingEvidence = await orgRef.collection("inventoryCostEvidence")
+  .doc(receivingResult.result.costEvidenceId).get();
+assert.equal(receivingEvidence.data()?.planningBasisAction, "retained_existing");
+assert.equal(receivingEvidence.data()?.totalCostMinor, 2500);
 
 const changedChickenCost = await callInventory(principal, "cost-chicken-change-0002", {
   kind: "record_ingredient_cost",
@@ -570,6 +829,10 @@ console.log("- concurrent recipe publication produced one immutable recipe and o
 console.log("- $8 per 10-portion recipe projected $0.80 per portion from bounded cost evidence");
 console.log("- 100 explicit portions compiled to 20 lb chicken + 10 lb pasta and $80 projected ingredient cost");
 console.log("- event preview wrote nothing; exact compile replay produced one immutable requirement and one realtime projection");
+console.log("- a 25 lb allocation on another date left 15 lb available and forced a safe 15 lb allocation with a 5 lb shortage");
+console.log("- concurrent allocations contended on shared ingredient-location fences and never exceeded physical stock");
+console.log("- release removed commitment without changing physical stock and preserved immutable plan revisions");
+console.log("- exact receiving replay produced one movement, while a later receipt cost stayed evidence instead of replacing planning cost");
 console.log("- recorded event evidence remained historical while a new preview used changed cost, and stale-preview recording failed closed");
 console.log("- a chicken cost change reprojected only its reverse-indexed menu dependency to $1.00 per portion");
 console.log("- recipe costing did not require stock and never mutated the catalog selling or manual cost authority");

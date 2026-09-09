@@ -24,7 +24,7 @@ const stackStyle = Object.freeze({
   gap: "var(--space-4, 1rem)"
 });
 
-const AXES = Object.freeze(["location", "ingredient", "stock", "cost", "conversion"]);
+const AXES = Object.freeze(["location", "ingredient", "stock", "receiving", "cost", "conversion"]);
 const CANONICAL_QUANTITY = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u;
 const STABLE_REFERENCE = /^[^\s/?#\\\u0000]{1,180}$/u;
 
@@ -108,6 +108,18 @@ function stockText(ingredient) {
   return `${stock.quantity} ${stock.unit}`;
 }
 
+function committedStockText(ingredient) {
+  const stock = ingredient.stock;
+  if (!stock || stock.state !== "recorded") return "—";
+  return `${stock.committedQuantity} ${stock.unit}`;
+}
+
+function availableStockText(ingredient) {
+  const stock = ingredient.stock;
+  if (!stock || stock.state !== "recorded") return "—";
+  return `${stock.availableToAllocateQuantity} ${stock.unit}`;
+}
+
 function costText(ingredient) {
   const cost = ingredient.cost;
   if (!cost || cost.state === "not_recorded") return "Cost not recorded";
@@ -172,6 +184,8 @@ function ReadBoundary({ state, model, error, onRetry }) {
 function AttemptState({ axis, attempt, onReconcile, onReset }) {
   const label = axis === "stock"
     ? "Stock evidence"
+    : axis === "receiving"
+      ? "Receiving evidence"
     : axis === "cost"
       ? "Cost evidence"
       : axis === "conversion"
@@ -395,11 +409,22 @@ function IngredientSetup({ disabled, locations, attempt, onSubmit, onReconcile, 
 
 function EvidenceForms({ ingredients, locations, current, attempts, onSubmit, onReconcile, onReset }) {
   const activeIngredients = ingredients.filter((entry) => entry.active);
+  const receivingAttempt = attempts.receiving || initialAttempt();
   const [stockIngredientId, setStockIngredientId] = useState("");
   const [stockLocationId, setStockLocationId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [stockOccurredAt, setStockOccurredAt] = useState("");
   const [stockNote, setStockNote] = useState("");
+  const [receivingIngredientId, setReceivingIngredientId] = useState("");
+  const [receivingLocationId, setReceivingLocationId] = useState("");
+  const [receivingQuantity, setReceivingQuantity] = useState("");
+  const [receivingOccurredAt, setReceivingOccurredAt] = useState("");
+  const [receivingSource, setReceivingSource] = useState("");
+  const [receivingNote, setReceivingNote] = useState("");
+  const [receivingCostAvailability, setReceivingCostAvailability] = useState("available");
+  const [receivingTotalCost, setReceivingTotalCost] = useState("");
+  const [receivingCurrency, setReceivingCurrency] = useState("USD");
+  const [receivingInputError, setReceivingInputError] = useState("");
   const [costIngredientId, setCostIngredientId] = useState("");
   const [costAvailability, setCostAvailability] = useState("available");
   const [totalCost, setTotalCost] = useState("");
@@ -417,7 +442,11 @@ function EvidenceForms({ ingredients, locations, current, attempts, onSubmit, on
     if (!activeIngredients.some((entry) => entry.ingredientId === costIngredientId)) {
       setCostIngredientId(activeIngredients[0]?.ingredientId || "");
     }
-  }, [activeIngredients, costIngredientId, stockIngredientId]);
+    const receivable = activeIngredients.filter((entry) => entry.stock?.state === "recorded");
+    if (!receivable.some((entry) => entry.ingredientId === receivingIngredientId)) {
+      setReceivingIngredientId(receivable[0]?.ingredientId || "");
+    }
+  }, [activeIngredients, costIngredientId, receivingIngredientId, stockIngredientId]);
 
   useEffect(() => {
     if (!locations.some((entry) => entry.locationId === stockLocationId)) setStockLocationId(locations[0]?.locationId || "");
@@ -425,8 +454,14 @@ function EvidenceForms({ ingredients, locations, current, attempts, onSubmit, on
 
   const stockIngredient = activeIngredients.find((entry) => entry.ingredientId === stockIngredientId);
   const costIngredient = activeIngredients.find((entry) => entry.ingredientId === costIngredientId);
+  const receivingIngredient = activeIngredients.find((entry) => entry.ingredientId === receivingIngredientId);
+  useEffect(() => {
+    const recordedLocationId = receivingIngredient?.stock?.locationId || "";
+    if (recordedLocationId !== receivingLocationId) setReceivingLocationId(recordedLocationId);
+  }, [receivingIngredient, receivingLocationId]);
   const stockDisabled = !current || axisLocked(attempts.stock);
   const costDisabled = !current || axisLocked(attempts.cost);
+  const receivingDisabled = !current || axisLocked(receivingAttempt) || !receivingIngredient;
 
   const submitStock = (event) => {
     event.preventDefault();
@@ -472,6 +507,39 @@ function EvidenceForms({ ingredients, locations, current, attempts, onSubmit, on
     } : common);
   };
 
+  const submitReceiving = (event) => {
+    event.preventDefault();
+    if (!CANONICAL_QUANTITY.test(receivingQuantity.trim()) || /^0(?:\.0{1,6})?$/u.test(receivingQuantity.trim())) {
+      setReceivingInputError("Enter a positive received quantity with no more than six decimal places.");
+      return;
+    }
+    let totalCostMinor;
+    if (receivingCostAvailability === "available") {
+      try {
+        totalCostMinor = inventoryMoneyInputToMinorUnits(receivingTotalCost.trim());
+      } catch (error) {
+        setReceivingInputError(safeMessage(error, "Enter the exact recorded receipt total."));
+        return;
+      }
+    }
+    setReceivingInputError("");
+    onSubmit("receiving", {
+      kind: "receive_stock",
+      ingredientId: receivingIngredientId,
+      locationId: receivingLocationId,
+      quantity: receivingQuantity.trim(),
+      baseUnitId: receivingIngredient?.baseUnitId || "",
+      occurredAtISO: exactLocalInstant(receivingOccurredAt),
+      sourceLabel: receivingSource.trim(),
+      note: receivingNote.trim(),
+      expectedStockRevision: receivingIngredient?.stock?.revision || 0,
+      expectedCostRevision: receivingIngredient?.cost?.revision || 0,
+      cost: receivingCostAvailability === "available"
+        ? { availability: "available", totalCostMinor, currency: receivingCurrency.trim().toUpperCase() }
+        : { availability: "not_yet_available" }
+    });
+  };
+
   return (
     <section aria-labelledby="inventory-evidence-title">
       <p className="eyebrow">2 and 3 · Independent evidence</p>
@@ -509,6 +577,64 @@ function EvidenceForms({ ingredients, locations, current, attempts, onSubmit, on
             <button className="cta" type="submit" disabled={stockDisabled || !stockIngredientId || !stockLocationId || !quantity.trim() || !stockOccurredAt || !stockNote.trim()}>Record opening stock</button>
           </form>
           <AttemptState axis="stock" attempt={attempts.stock} onReconcile={onReconcile} onReset={onReset} />
+        </div>
+
+        <div className="panel" data-inventory-axis="receiving" data-capability-state={receivingAttempt.state}>
+          <h3>Receive ingredient stock</h3>
+          <p className="muted">Add a confirmed delivery to physical on-hand stock and record its observed total cost—or explicitly leave cost unknown.</p>
+          {receivingIngredient ? (
+            <form aria-label="Receive ingredient stock" data-inventory-command="receive_stock" onSubmit={submitReceiving} style={stackStyle}>
+              <label className="field">
+                Ingredient
+                <select required value={receivingIngredientId} disabled={receivingDisabled} onChange={(event) => { setReceivingIngredientId(event.target.value); setReceivingInputError(""); }}>
+                  {activeIngredients.filter((entry) => entry.stock?.state === "recorded").map((entry) => <option key={entry.ingredientId} value={entry.ingredientId}>{entry.name} · {entry.baseUnitId}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                Receiving location
+                <input readOnly value={locations.find((entry) => entry.locationId === receivingLocationId)?.name || receivingLocationId} />
+              </label>
+              <label className="field">
+                Quantity received ({receivingIngredient.baseUnitId})
+                <input required inputMode="decimal" value={receivingQuantity} disabled={receivingDisabled} onChange={(event) => { setReceivingQuantity(event.target.value); setReceivingInputError(""); }} placeholder="20" />
+              </label>
+              <label className="field">
+                Received at
+                <input required type="datetime-local" value={receivingOccurredAt} disabled={receivingDisabled} onChange={(event) => setReceivingOccurredAt(event.target.value)} />
+              </label>
+              <label className="field">
+                Receipt or delivery source
+                <input required maxLength={120} value={receivingSource} disabled={receivingDisabled} onChange={(event) => setReceivingSource(event.target.value)} placeholder="Vendor receipt 1842" />
+              </label>
+              <label className="field">
+                Cost evidence
+                <select value={receivingCostAvailability} disabled={receivingDisabled} onChange={(event) => { setReceivingCostAvailability(event.target.value); setReceivingInputError(""); }}>
+                  <option value="available">Recorded total cost</option>
+                  <option value="not_yet_available">Cost currently unknown</option>
+                </select>
+              </label>
+              {receivingCostAvailability === "available" && (
+                <div style={formGridStyle}>
+                  <label className="field">
+                    Recorded receipt total
+                    <input required inputMode="decimal" value={receivingTotalCost} disabled={receivingDisabled} onChange={(event) => { setReceivingTotalCost(event.target.value); setReceivingInputError(""); }} placeholder="75.00" />
+                  </label>
+                  <label className="field">
+                    Currency
+                    <input required maxLength={3} value={receivingCurrency} disabled={receivingDisabled} onChange={(event) => setReceivingCurrency(event.target.value.toUpperCase())} />
+                  </label>
+                </div>
+              )}
+              <label className="field">
+                Receiving note <span className="source-note">optional</span>
+                <textarea rows="2" maxLength={240} value={receivingNote} disabled={receivingDisabled} onChange={(event) => setReceivingNote(event.target.value)} />
+              </label>
+              <p className="source-note">Receiving increases on-hand stock. It does not create or release an event allocation.</p>
+              {receivingInputError && <p className="error-note" role="alert">{receivingInputError}</p>}
+              <button className="cta" type="submit" disabled={receivingDisabled || !receivingLocationId || !receivingQuantity.trim() || !receivingOccurredAt || !receivingSource.trim() || (receivingCostAvailability === "available" && (!receivingTotalCost.trim() || !receivingCurrency.trim()))}>Record receiving</button>
+            </form>
+          ) : <p className="source-note" data-capability-state="empty">Record opening stock before receiving later deliveries.</p>}
+          <AttemptState axis="receiving" attempt={receivingAttempt} onReconcile={onReconcile} onReset={onReset} />
         </div>
 
         <div className="panel" data-inventory-axis="cost" data-capability-state={attempts.cost.state}>
@@ -605,9 +731,9 @@ function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canMana
       </p>
       <div className="history-table-wrap">
         <table aria-describedby="inventory-list-description">
-          <caption className="sr-only">Ingredient stock evidence and independent purchase-cost evidence</caption>
+          <caption className="sr-only">Ingredient on-hand, committed, available-to-allocate, and independent purchase-cost evidence</caption>
           <thead>
-            <tr><th scope="col">Ingredient</th><th scope="col">Stock evidence</th><th scope="col">Cost evidence</th><th scope="col">Location</th><th scope="col">Purchase packs</th></tr>
+            <tr><th scope="col">Ingredient</th><th scope="col">Physical on hand</th><th scope="col">Committed</th><th scope="col">Available to allocate</th><th scope="col">Cost evidence</th><th scope="col">Location</th><th scope="col">Purchase packs</th></tr>
           </thead>
           <tbody>
             {ingredients.map((ingredient, index) => {
@@ -619,6 +745,8 @@ function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canMana
                   <tr>
                     <th scope="row">{ingredient.name}<span className="source-note"> · {ingredient.category}</span></th>
                     <td data-inventory-axis="stock">{stockText(ingredient)}</td>
+                    <td data-inventory-axis="allocation">{committedStockText(ingredient)}</td>
+                    <td data-inventory-axis="availability">{availableStockText(ingredient)}</td>
                     <td data-inventory-axis="cost">{costText(ingredient)}</td>
                     <td>{ingredient.locationName || ingredient.locationId || "No location evidence"}</td>
                     <td>
@@ -648,7 +776,7 @@ function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canMana
                   </tr>
                   {selected && canManagePacks && (
                     <tr>
-                      <td colSpan="5">
+                      <td colSpan="7">
                         <PackConversionEditor
                           ingredient={ingredient}
                           current={packsCurrent}
@@ -700,7 +828,7 @@ export function InventoryWorkspaceView({
         <div>
           <p className="eyebrow">Operations</p>
           <h1 id="inventory-workspace-title" className="workspace-route-heading" tabIndex={-1}>Inventory</h1>
-          <p className="muted">Create ingredients, record physical opening stock, and independently retain purchase-cost evidence.</p>
+          <p className="muted">Create ingredients, receive physical stock, track event commitments, and independently retain purchase-cost evidence.</p>
         </div>
       </header>
 
@@ -799,6 +927,7 @@ export default function InventoryWorkspace({
   const [attempts, setAttempts] = useState(initialAttempts);
   const [retryGeneration, setRetryGeneration] = useState(0);
   const readGenerationRef = useRef(0);
+  const commandGenerationRef = useRef(0);
 
   useEffect(() => {
     const heading = document.getElementById("inventory-workspace-title");
@@ -806,28 +935,34 @@ export default function InventoryWorkspace({
   }, [access.readEnabled, organizationId]);
 
   useEffect(() => {
+    const generation = commandGenerationRef.current + 1;
+    commandGenerationRef.current = generation;
     setAttempts(initialAttempts());
-    if (!access.mutationEnabled) return;
-    try {
-      const restored = pendingCommands(scope);
-      setAttempts((current) => {
-        const next = { ...current };
-        restored.forEach((attempt) => {
-          const axis = inventoryCommandAxis(attempt.commandKind);
-          if (!AXES.includes(axis)) return;
-          next[axis] = {
-            state: attempt.definitive ? "error" : "uncertain",
-            error: attempt.error || "This exact inventory request still needs reconciliation.",
-            requestId: attempt.requestId,
-            targetId: attempt.targetId || "",
-            receipt: null
-          };
+    if (access.mutationEnabled) {
+      try {
+        const restored = pendingCommands(scope);
+        setAttempts((current) => {
+          const next = { ...current };
+          restored.forEach((attempt) => {
+            const axis = inventoryCommandAxis(attempt.commandKind);
+            if (!AXES.includes(axis)) return;
+            next[axis] = {
+              state: attempt.definitive ? "error" : "uncertain",
+              error: attempt.error || "This exact inventory request still needs reconciliation.",
+              requestId: attempt.requestId,
+              targetId: attempt.targetId || "",
+              receipt: null
+            };
+          });
+          return next;
         });
-        return next;
-      });
-    } catch {
-      // Closed gates render their own recovery state; no browser fallback is created.
+      } catch {
+        // Closed gates render their own recovery state; no browser fallback is created.
+      }
     }
+    return () => {
+      if (commandGenerationRef.current === generation) commandGenerationRef.current += 1;
+    };
   }, [access.mutationEnabled, pendingCommands, scope]);
 
   useEffect(() => {
@@ -889,44 +1024,54 @@ export default function InventoryWorkspace({
 
   const onSubmit = useCallback(async (axis, command) => {
     let requestId = "";
+    const generation = commandGenerationRef.current;
     try {
       requestId = buildInventoryRequestId();
       const targetId = command.ingredientId || command.locationId || command.menuItemId || "";
       setAttempt(axis, { state: "submitting", error: "", requestId, targetId, receipt: null, confirmation: null });
       const result = await submitCommand({ ...scope, requestId, command });
-      setAttempt(axis, { state: "receipt", error: "", requestId, targetId, receipt: result.receipt, confirmation: result.confirmation });
+      if (commandGenerationRef.current === generation) {
+        setAttempt(axis, { state: "receipt", error: "", requestId, targetId, receipt: result.receipt, confirmation: result.confirmation });
+      }
     } catch (error) {
-      setAttempt(axis, {
-        state: isDefinitiveInventoryError(error) ? "error" : "uncertain",
-        error: safeMessage(error, "Inventory did not return a verified receipt."),
-        requestId,
-        targetId: command.ingredientId || command.locationId || command.menuItemId || "",
-        receipt: null,
-        confirmation: null
-      });
+      if (commandGenerationRef.current === generation) {
+        setAttempt(axis, {
+          state: isDefinitiveInventoryError(error) ? "error" : "uncertain",
+          error: safeMessage(error, "Inventory did not return a verified receipt."),
+          requestId,
+          targetId: command.ingredientId || command.locationId || command.menuItemId || "",
+          receipt: null,
+          confirmation: null
+        });
+      }
     }
   }, [scope, setAttempt, submitCommand]);
 
   const onReconcile = useCallback(async (axis) => {
     const requestId = attempts[axis]?.requestId;
     if (!requestId) return;
+    const generation = commandGenerationRef.current;
     setAttempt(axis, { ...attempts[axis], state: "reconciliation", error: "" });
     try {
       const result = await reconcileCommand({ ...scope, requestId });
-      setAttempt(axis, {
-        state: "receipt",
-        error: "",
-        requestId,
-        targetId: attempts[axis]?.targetId || result.confirmation?.ingredientId || "",
-        receipt: result.receipt,
-        confirmation: result.confirmation
-      });
+      if (commandGenerationRef.current === generation) {
+        setAttempt(axis, {
+          state: "receipt",
+          error: "",
+          requestId,
+          targetId: attempts[axis]?.targetId || result.confirmation?.ingredientId || "",
+          receipt: result.receipt,
+          confirmation: result.confirmation
+        });
+      }
     } catch (error) {
-      setAttempt(axis, {
-        ...attempts[axis],
-        state: isDefinitiveInventoryError(error) ? "error" : "uncertain",
-        error: safeMessage(error)
-      });
+      if (commandGenerationRef.current === generation) {
+        setAttempt(axis, {
+          ...attempts[axis],
+          state: isDefinitiveInventoryError(error) ? "error" : "uncertain",
+          error: safeMessage(error)
+        });
+      }
     }
   }, [attempts, reconcileCommand, scope, setAttempt]);
 

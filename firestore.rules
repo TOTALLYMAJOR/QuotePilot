@@ -1262,6 +1262,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Current consumable allocation plans and their immutable revisions are
+    // callable-owned coordination/evidence. Staff consume only the exact safe
+    // event projection below; no browser actor reads or mutates allocation truth.
+    match /organizations/{orgId}/eventIngredientPlans/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientPlans/{quoteId}/revisions/{planRevisionId} {
+      allow read, write: if false;
+    }
+
     // Location/setup data stays in one exact, server-owned projection. The
     // first Phase-2 route is administrator-only and has no browser write path.
     match /organizations/{orgId}/inventoryWorkspaceProjections/{projectionId} {

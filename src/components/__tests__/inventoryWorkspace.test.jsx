@@ -20,6 +20,7 @@ function attempts(overrides = {}) {
     location: attempt(),
     ingredient: attempt(),
     stock: attempt(),
+    receiving: attempt(),
     cost: attempt(),
     conversion: attempt(),
     ...overrides
@@ -50,6 +51,11 @@ function projectionModel(overrides = {}) {
         revision: 1,
         onHandMicros: 40_000_000,
         quantity: "40",
+        allocationRevision: 1,
+        committedMicros: 25_000_000,
+        committedQuantity: "25",
+        availableToAllocateMicros: 15_000_000,
+        availableToAllocateQuantity: "15",
         unit: "lb",
         locationId: "main-kitchen",
         lastMovementId: `imv_${"a".repeat(48)}`
@@ -133,6 +139,8 @@ describe("InventoryWorkspace ingredient evidence presentation", () => {
   test("keeps physical stock and purchase-cost evidence as separate axes", () => {
     const html = viewMarkup();
     expect(html).toContain("40 lb");
+    expect(html).toContain("25 lb");
+    expect(html).toContain("15 lb");
     expect(html).toContain("Cost not recorded");
     expect(html).toContain('data-inventory-axis="stock"');
     expect(html).toContain('data-inventory-axis="cost"');
@@ -187,6 +195,23 @@ describe("InventoryWorkspace ingredient evidence presentation", () => {
     expect(html).toContain("Stock outcome unknown.");
     expect(html).toContain('data-inventory-axis="cost"');
     expect(html).toContain("Cost evidence is confirmed in the current projection");
+  });
+
+  test("keeps receiving at receipt until the current stock projection confirms it", () => {
+    const receipt = viewMarkup({
+      attemptOverrides: {
+        receiving: attempt("receipt", { receipt: { receiptId: `iar_${"7".repeat(48)}` } })
+      }
+    });
+    expect(receipt).toContain('data-inventory-axis="receiving" data-capability-state="receipt"');
+    expect(receipt).toContain("Waiting for the server-confirmed receiving projection");
+
+    const confirmed = viewMarkup({
+      attemptOverrides: {
+        receiving: attempt("committed", { receipt: { recordedAtISO: "2026-09-09T05:00:00.000Z" } })
+      }
+    });
+    expect(confirmed).toContain("Receiving evidence is confirmed in the current projection");
   });
 
   test("shows declared purchase packs with their exact conversion provenance", () => {
@@ -333,6 +358,52 @@ describe("InventoryWorkspace operator commands", () => {
     expect([...costForm.elements].every((entry) => !["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(entry.tagName) || entry.disabled)).toBe(true);
     expect(stockForm.querySelector("select").disabled).toBe(false);
     expect(stockForm.querySelector('input[inputmode="decimal"]').disabled).toBe(false);
+  });
+
+  test("emits exact receiving evidence without changing allocation authority", async () => {
+    const onSubmit = vi.fn();
+    await act(async () => {
+      root.render(
+        <InventoryWorkspaceView
+          access={ADMIN_ACCESS}
+          read={{ state: "current", model: projectionModel(), error: "" }}
+          attempts={attempts()}
+          onRetry={() => {}}
+          onSubmit={onSubmit}
+          onReconcile={() => {}}
+          onReset={() => {}}
+        />
+      );
+    });
+    const form = container.querySelector('form[aria-label="Receive ingredient stock"]');
+    const quantity = form.querySelector('input[inputmode="decimal"]');
+    const occurredAt = form.querySelector('input[type="datetime-local"]');
+    const source = [...form.querySelectorAll("input")].find((entry) => entry.placeholder === "Vendor receipt 1842");
+    const [totalCost, currency] = [...form.querySelectorAll('input[inputmode="decimal"], input[maxlength="3"]')]
+      .filter((entry) => entry !== quantity);
+    await act(async () => {
+      setInput(quantity, "10");
+      setInput(occurredAt, "2026-09-09T05:00");
+      setInput(source, "Vendor receipt 1842");
+      setInput(totalCost, "30.00");
+      setInput(currency, "USD");
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(onSubmit).toHaveBeenCalledWith("receiving", {
+      kind: "receive_stock",
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      quantity: "10",
+      baseUnitId: "lb",
+      occurredAtISO: "2026-09-09T10:00:00.000Z",
+      sourceLabel: "Vendor receipt 1842",
+      note: "",
+      expectedStockRevision: 1,
+      expectedCostRevision: 0,
+      cost: { availability: "available", totalCostMinor: 3000, currency: "USD" }
+    });
+    expect(form.textContent).toContain("does not create or release an event allocation");
+    expect(form.querySelector('input[readonly]').value).toBe("Main kitchen");
   });
 
   test("publishes an exact purchase-pack conversion with projection-derived revision", async () => {
@@ -629,6 +700,46 @@ describe("InventoryWorkspace subscription lifecycle", () => {
       subscriptions[1].onData({ ...projectionModel(), organizationId: "org-b", ingredients: [{ ...projectionModel().ingredients[0], ingredientId: "pasta", name: "Pasta" }] });
     });
     expect(container.textContent).toContain("Pasta");
+  });
+
+  test("ignores a late receiving response after the organization changes", async () => {
+    const subscriptions = [];
+    let resolveReceive;
+    const submitCommand = vi.fn(() => new Promise((resolve) => { resolveReceive = resolve; }));
+    const subscribeProjections = vi.fn((input) => {
+      subscriptions.push(input);
+      return vi.fn();
+    });
+    const common = {
+      role: "admin",
+      browserEnabled: true,
+      tenantEnabled: true,
+      subscribeProjections,
+      submitCommand,
+      pendingCommands: () => []
+    };
+    await act(async () => root.render(<InventoryWorkspace organizationId="org-a" {...common} />));
+    await act(async () => subscriptions[0].onData({ ...projectionModel(), organizationId: "org-a" }));
+    const form = container.querySelector('form[aria-label="Receive ingredient stock"]');
+    const quantity = form.querySelector('input[inputmode="decimal"]');
+    const occurredAt = form.querySelector('input[type="datetime-local"]');
+    const source = [...form.querySelectorAll("input")].find((entry) => entry.placeholder === "Vendor receipt 1842");
+    const totalCost = [...form.querySelectorAll('input[inputmode="decimal"]')].find((entry) => entry !== quantity);
+    await act(async () => {
+      setInput(quantity, "10");
+      setInput(occurredAt, "2026-09-09T05:00");
+      setInput(source, "Vendor receipt 1842");
+      setInput(totalCost, "30.00");
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(container.textContent).toContain("Recording receiving evidence");
+
+    await act(async () => root.render(<InventoryWorkspace organizationId="org-b" {...common} />));
+    await act(async () => resolveReceive({
+      receipt: { receiptId: `iar_${"8".repeat(48)}` },
+      confirmation: { ingredientId: "chicken", stockRevision: 2 }
+    }));
+    expect(container.textContent).not.toContain("Waiting for the server-confirmed receiving projection");
   });
 
   test("never attaches a listener for sales or closed feature gates", async () => {

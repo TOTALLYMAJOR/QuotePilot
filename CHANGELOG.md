@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 04:12:00 CDT
+Last updated: 2026-09-09 05:17:00 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add Ingredient Inventory Phase 5: confirmed receiving appends immutable
+  physical and exact known-or-unknown purchase-cost evidence, while shared
+  date-independent ingredient/location fences coordinate accepted/booked event
+  allocations without changing on-hand stock. Transactions recheck current
+  commercial, recipe, requirement, plan, stock, and fence authority; competing
+  events receive only the safe maximum, partial plans preserve their holds and
+  can top up after receiving, and release changes commitment only. Exact
+  metadata-aware ingredient and event projections keep on-hand, committed,
+  available, pending receipt, server-confirmed allocation, shortage, and
+  uncertain recovery distinct. Later receipt costs cannot silently replace an
+  existing planning basis or invent a valuation policy.
 - Add Ingredient Inventory Phase 4: a pure deterministic compiler turns exact
   saved menu selections, explicit recipe-output quantities, pinned recipe and
   cost observations, and server-derived event timing into immutable event

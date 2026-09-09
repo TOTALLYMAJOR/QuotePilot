@@ -16,10 +16,13 @@ export const INVENTORY_COMMAND_KINDS = Object.freeze([
   "upsert_location",
   "upsert_ingredient",
   "opening_balance",
+  "receive_stock",
   "record_ingredient_cost",
   "publish_pack_conversion",
   "publish_menu_recipe",
-  "compile_event_ingredient_demand"
+  "compile_event_ingredient_demand",
+  "allocate_event_ingredients",
+  "release_event_ingredients"
 ]);
 export const INVENTORY_COST_AVAILABILITY = Object.freeze([
   "available",
@@ -57,6 +60,7 @@ const COST_EVIDENCE_ID_PATTERN = /^ice_[a-f0-9]{48}$/u;
 const RECIPE_REVISION_ID_PATTERN = /^irr_[a-f0-9]{48}$/u;
 const PACK_CONVERSION_REVISION_ID_PATTERN = /^ipc_[a-f0-9]{48}$/u;
 const EVENT_REQUIREMENT_REVISION_ID_PATTERN = /^eir_[a-f0-9]{48}$/u;
+const EVENT_PLAN_ID_PATTERN = /^eip_[a-f0-9]{48}$/u;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const DECIMAL_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/u;
 const MONEY_INPUT_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/u;
@@ -409,6 +413,46 @@ function normalizeOpeningBalanceCommand(value) {
   };
 }
 
+function normalizeReceivingCost(value) {
+  if (!isRecord(value) || !COST_AVAILABILITY.has(value.availability)) {
+    throw clientError("invalid-argument", "Receiving cost evidence state is invalid.");
+  }
+  exactKeys(value, value.availability === "available"
+    ? ["availability", "totalCostMinor", "currency"]
+    : ["availability"], "Receiving cost evidence");
+  if (value.availability !== "available") return { availability: value.availability };
+  if (typeof value.currency !== "string" || !CURRENCY_PATTERN.test(value.currency)) {
+    throw clientError("invalid-argument", "Receiving currency must be an uppercase ISO code.");
+  }
+  return {
+    availability: value.availability,
+    totalCostMinor: exactSafeInteger(value.totalCostMinor, "receiving totalCostMinor", { code: "invalid-argument" }),
+    currency: value.currency
+  };
+}
+
+function normalizeReceiveStockCommand(value) {
+  exactKeys(value, [
+    "kind", "ingredientId", "locationId", "quantity", "baseUnitId", "occurredAtISO",
+    "sourceLabel", "note", "expectedStockRevision", "expectedCostRevision", "cost"
+  ], "Ingredient receiving command");
+  if (value.kind !== "receive_stock") throw clientError("invalid-argument", "Ingredient receiving command is invalid.");
+  parseQuantityMicros(value.quantity, "received quantity");
+  return {
+    kind: value.kind,
+    ingredientId: identifier(value.ingredientId, "ingredientId"),
+    locationId: identifier(value.locationId, "locationId"),
+    quantity: value.quantity,
+    baseUnitId: baseUnit(value.baseUnitId),
+    occurredAtISO: exactIso(value.occurredAtISO, "receiving effective time", "invalid-argument"),
+    sourceLabel: exactText(value.sourceLabel, "receiving source", 120),
+    note: exactText(value.note, "receiving note", 240, { allowEmpty: true }),
+    expectedStockRevision: exactRevision(value.expectedStockRevision, "receiving stock expected revision"),
+    expectedCostRevision: exactRevision(value.expectedCostRevision, "receiving cost expected revision"),
+    cost: normalizeReceivingCost(value.cost)
+  };
+}
+
 function normalizeCostCommand(value) {
   if (!isRecord(value) || value.kind !== "record_ingredient_cost" || !COST_AVAILABILITY.has(value.availability)) {
     throw clientError("invalid-argument", "Ingredient cost command is invalid.");
@@ -613,6 +657,38 @@ function normalizeCompileEventIngredientCommand(value) {
   };
 }
 
+function normalizeAllocateEventIngredientsCommand(value) {
+  exactKeys(value, [
+    "kind", "quoteId", "eventRequirementRevisionId", "locationId", "expectedRequirementRevision",
+    "expectedAllocationRevision"
+  ], "Event ingredient allocation command");
+  if (value.kind !== "allocate_event_ingredients" || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId)
+  ) {
+    throw clientError("invalid-argument", "Event ingredient allocation command is invalid.");
+  }
+  return {
+    kind: value.kind,
+    quoteId: identifier(value.quoteId, "allocation quoteId"),
+    eventRequirementRevisionId: value.eventRequirementRevisionId,
+    locationId: identifier(value.locationId, "allocation locationId"),
+    expectedRequirementRevision: exactRevision(value.expectedRequirementRevision, "allocation requirement expected revision", { allowZero: false }),
+    expectedAllocationRevision: exactRevision(value.expectedAllocationRevision, "allocation expected revision")
+  };
+}
+
+function normalizeReleaseEventIngredientsCommand(value) {
+  exactKeys(value, ["kind", "quoteId", "expectedAllocationRevision", "reason"], "Event ingredient release command");
+  if (value.kind !== "release_event_ingredients") {
+    throw clientError("invalid-argument", "Event ingredient release command is invalid.");
+  }
+  return {
+    kind: value.kind,
+    quoteId: identifier(value.quoteId, "release quoteId"),
+    expectedAllocationRevision: exactRevision(value.expectedAllocationRevision, "release expected allocation revision", { allowZero: false }),
+    reason: exactText(value.reason, "release reason", 160)
+  };
+}
+
 function normalizeEventRequiredByBasis(value) {
   exactKeys(value, ["kind"], "Event ingredient required-by basis");
   if (value.kind !== "quote_event_start") {
@@ -628,20 +704,25 @@ function normalizeCommand(value) {
   if (value.kind === "upsert_location") return deepFreeze(normalizeLocationCommand(value));
   if (value.kind === "upsert_ingredient") return deepFreeze(normalizeIngredientCommand(value));
   if (value.kind === "opening_balance") return deepFreeze(normalizeOpeningBalanceCommand(value));
+  if (value.kind === "receive_stock") return deepFreeze(normalizeReceiveStockCommand(value));
   if (value.kind === "record_ingredient_cost") return deepFreeze(normalizeCostCommand(value));
   if (value.kind === "publish_pack_conversion") return deepFreeze(normalizePackConversionCommand(value));
   if (value.kind === "publish_menu_recipe") return deepFreeze(normalizeRecipeCommand(value));
-  return deepFreeze(normalizeCompileEventIngredientCommand(value));
+  if (value.kind === "compile_event_ingredient_demand") return deepFreeze(normalizeCompileEventIngredientCommand(value));
+  if (value.kind === "allocate_event_ingredients") return deepFreeze(normalizeAllocateEventIngredientsCommand(value));
+  return deepFreeze(normalizeReleaseEventIngredientsCommand(value));
 }
 
 export function inventoryCommandAxis(kind) {
   if (kind === "upsert_location") return "location";
   if (kind === "upsert_ingredient") return "ingredient";
   if (kind === "opening_balance") return "stock";
+  if (kind === "receive_stock") return "receiving";
   if (kind === "record_ingredient_cost") return "cost";
   if (kind === "publish_pack_conversion") return "conversion";
   if (kind === "publish_menu_recipe") return "recipe";
   if (kind === "compile_event_ingredient_demand") return "event_requirement";
+  if (kind === "allocate_event_ingredients" || kind === "release_event_ingredients") return "allocation";
   return "";
 }
 
@@ -791,6 +872,24 @@ function normalizeMutationResult(value, attempt, receipt) {
     }
     return { ...value };
   }
+  if (command.kind === "receive_stock") {
+    exactKeys(value, [
+      "schemaVersion", "ingredientId", "locationId", "movementId", "costEvidenceId",
+      "stockRevision", "costRevision", "onHandMicros", "onHandQuantity"
+    ], "Ingredient receiving result", "data-loss");
+    if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+      || value.ingredientId !== command.ingredientId
+      || value.locationId !== command.locationId
+      || !MOVEMENT_ID_PATTERN.test(value.movementId)
+      || !COST_EVIDENCE_ID_PATTERN.test(value.costEvidenceId)
+      || value.stockRevision !== command.expectedStockRevision + 1
+      || !new Set([command.expectedCostRevision, command.expectedCostRevision + 1]).has(value.costRevision)
+      || !Number.isSafeInteger(value.onHandMicros) || value.onHandMicros < 1
+      || value.onHandQuantity !== formatQuantityMicros(value.onHandMicros, "received on-hand micros")) {
+      throw clientError("data-loss", "Ingredient receiving result differs from the exact request.");
+    }
+    return { ...value };
+  }
   if (command.kind === "publish_pack_conversion") {
     exactKeys(value, [
       "schemaVersion", "ingredientId", "packUnitId", "packConversionRevisionId", "revision", "affectedMenuItemIds"
@@ -841,6 +940,36 @@ function normalizeMutationResult(value, attempt, receipt) {
       || !["complete", "partial", "unavailable", "invalid"].includes(value.costState)
       || !["available", "shortage", "unavailable", "invalid"].includes(value.availabilityState)) {
       throw clientError("data-loss", "Event ingredient requirement result differs from the exact request.");
+    }
+    return { ...value };
+  }
+  if (command.kind === "allocate_event_ingredients" || command.kind === "release_event_ingredients") {
+    const release = command.kind === "release_event_ingredients";
+    exactKeys(value, [
+      "schemaVersion", "quoteId", "eventPlanId", "allocationRevision", "state",
+      "eventRequirementRevisionId", "ingredientCount", "fullyAllocatedIngredientCount",
+      "shortageIngredientCount", ...(release ? ["releasedIngredientCount"] : [])
+    ], `Event ingredient ${release ? "release" : "allocation"} result`, "data-loss");
+    if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+      || value.quoteId !== command.quoteId
+      || !EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
+      || value.allocationRevision !== command.expectedAllocationRevision + 1
+      || !["reserved", "shortage", "released"].includes(value.state)
+      || (release && value.state !== "released")
+      || (!release && value.state === "released")
+      || (!release && value.eventRequirementRevisionId !== command.eventRequirementRevisionId)
+      || (release && !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId))) {
+      throw clientError("data-loss", `Event ingredient ${release ? "release" : "allocation"} result differs from the request.`);
+    }
+    exactSafeInteger(value.ingredientCount, "event ingredientCount", { minimum: 1 });
+    for (const key of [
+      "fullyAllocatedIngredientCount", "shortageIngredientCount", ...(release ? ["releasedIngredientCount"] : [])
+    ]) exactSafeInteger(value[key], `event ${key}`);
+    if (value.fullyAllocatedIngredientCount + value.shortageIngredientCount !== value.ingredientCount
+      || (value.state === "reserved" && value.shortageIngredientCount !== 0)
+      || (value.state === "shortage" && value.shortageIngredientCount === 0)
+      || (release && value.releasedIngredientCount > value.ingredientCount)) {
+      throw clientError("data-loss", `Event ingredient ${release ? "release" : "allocation"} result counts contradict its state.`);
     }
     return { ...value };
   }
@@ -1010,16 +1139,30 @@ export function normalizeInventoryWorkspaceProjection(value, expectedOrganizatio
 }
 
 function normalizeStockProjection(value, ingredient) {
-  exactKeys(value, ["availability", "stockRevision", "onHandMicros", "quantity", "locationId", "lastMovementId"], "Ingredient stock projection", "data-loss");
+  exactKeys(value, [
+    "availability", "stockRevision", "onHandMicros", "quantity", "locationId", "lastMovementId",
+    "allocationRevision", "committedMicros", "committedQuantity", "availableToAllocateMicros",
+    "availableToAllocateQuantity"
+  ], "Ingredient stock projection", "data-loss");
   if (!["current", "not_yet_available"].includes(value.availability)) {
     throw clientError("data-loss", "Ingredient stock projection availability is invalid.");
   }
   const revision = exactRevision(value.stockRevision, "stock projection revision", { code: "data-loss" });
   const onHandMicros = exactSafeInteger(value.onHandMicros, "stock on-hand micros");
+  const allocationRevision = exactRevision(value.allocationRevision, "stock allocation revision", { code: "data-loss" });
+  const committedMicros = exactSafeInteger(value.committedMicros, "stock committed micros");
+  const availableToAllocateMicros = exactSafeInteger(value.availableToAllocateMicros, "stock available-to-allocate micros");
   const quantity = formatQuantityMicros(onHandMicros, "stock on-hand micros");
-  if (value.quantity !== quantity) throw clientError("data-loss", "Ingredient stock projection quantity contradicts its fixed-point evidence.");
+  const committedQuantity = formatQuantityMicros(committedMicros, "stock committed micros");
+  const availableToAllocateQuantity = formatQuantityMicros(availableToAllocateMicros, "stock available-to-allocate micros");
+  if (value.quantity !== quantity || value.committedQuantity !== committedQuantity
+    || value.availableToAllocateQuantity !== availableToAllocateQuantity
+    || committedMicros > onHandMicros || availableToAllocateMicros !== onHandMicros - committedMicros) {
+    throw clientError("data-loss", "Ingredient stock projection quantities contradict their fixed-point evidence.");
+  }
   if (value.availability === "not_yet_available") {
-    if (revision !== 0 || onHandMicros !== 0 || value.locationId !== "" || value.lastMovementId !== "") {
+    if (revision !== 0 || onHandMicros !== 0 || allocationRevision !== 0 || committedMicros !== 0
+      || value.locationId !== "" || value.lastMovementId !== "") {
       throw clientError("data-loss", "Unavailable stock projection contains invented physical evidence.");
     }
   } else if (revision < 1 || !MOVEMENT_ID_PATTERN.test(value.lastMovementId)) {
@@ -1031,6 +1174,11 @@ function normalizeStockProjection(value, ingredient) {
     revision,
     onHandMicros,
     quantity,
+    allocationRevision,
+    committedMicros,
+    committedQuantity,
+    availableToAllocateMicros,
+    availableToAllocateQuantity,
     unit: ingredient.baseUnitId,
     locationId: value.availability === "current" ? identifier(value.locationId, "stock location", "data-loss") : "",
     lastMovementId: value.lastMovementId
@@ -1519,6 +1667,76 @@ function normalizeIngredientLabels(value) {
   return labels;
 }
 
+function normalizeEventAllocationSummary(value, projection, labelsById) {
+  exactKeys(value, [
+    "state", "eventPlanId", "allocationRevision", "eventRequirementRevisionId", "ingredientCount",
+    "fullyAllocatedIngredientCount", "shortageIngredientCount", "ingredients"
+  ], "Event ingredient allocation summary", "data-loss");
+  if (!new Set(["reserved", "shortage", "released"]).has(value.state)
+    || !EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
+    || value.eventRequirementRevisionId !== projection.eventRequirementRevisionId
+    || !Array.isArray(value.ingredients) || value.ingredients.length > 100) {
+    throw clientError("data-loss", "Event ingredient allocation summary identity is invalid.");
+  }
+  const allocationRevision = exactRevision(value.allocationRevision, "event allocation revision", { allowZero: false, code: "data-loss" });
+  const ingredientCount = exactSafeInteger(value.ingredientCount, "event allocation ingredient count", { minimum: 1 });
+  const fullyAllocatedIngredientCount = exactSafeInteger(value.fullyAllocatedIngredientCount, "fully allocated ingredient count");
+  const shortageIngredientCount = exactSafeInteger(value.shortageIngredientCount, "allocation shortage ingredient count");
+  if (ingredientCount !== value.ingredients.length
+    || fullyAllocatedIngredientCount + shortageIngredientCount !== ingredientCount
+    || (value.state === "reserved" && shortageIngredientCount !== 0)
+    || (value.state === "shortage" && shortageIngredientCount === 0)) {
+    throw clientError("data-loss", "Event ingredient allocation counts contradict its state.");
+  }
+  const ingredients = value.ingredients.map((entry, index) => {
+    exactKeys(entry, [
+      "ingredientId", "locationId", "baseUnitId", "requiredQuantityMicros",
+      "allocatedQuantityMicros", "shortageQuantityMicros"
+    ], `Allocated event ingredient ${index + 1}`, "data-loss");
+    const requiredQuantityMicros = exactSafeInteger(entry.requiredQuantityMicros, "allocated ingredient required micros");
+    const allocatedQuantityMicros = exactSafeInteger(entry.allocatedQuantityMicros, "allocated ingredient quantity micros");
+    const shortageQuantityMicros = exactSafeInteger(entry.shortageQuantityMicros, "allocated ingredient shortage micros");
+    if (allocatedQuantityMicros > requiredQuantityMicros
+      || shortageQuantityMicros !== requiredQuantityMicros - allocatedQuantityMicros) {
+      throw clientError("data-loss", "Allocated ingredient quantities contradict their requirement.");
+    }
+    return {
+      ingredientId: identifier(entry.ingredientId, `allocated ingredient ${index + 1}`, "data-loss"),
+      ingredientName: labelsById.get(entry.ingredientId) || "",
+      locationId: identifier(entry.locationId, `allocated ingredient ${index + 1} location`, "data-loss"),
+      baseUnitId: baseUnit(entry.baseUnitId, `allocated ingredient ${index + 1} base unit`, "data-loss"),
+      requiredQuantityMicros,
+      allocatedQuantityMicros,
+      shortageQuantityMicros
+    };
+  });
+  if (new Set(ingredients.map(({ ingredientId }) => ingredientId)).size !== ingredients.length
+    || ingredients.some((entry, index) => index > 0
+      && compareCodePoints(ingredients[index - 1].ingredientId, entry.ingredientId) >= 0)) {
+    throw clientError("data-loss", "Allocated ingredients are not a sorted unique set.");
+  }
+  const projectedById = new Map(projection.ingredients.map((entry) => [entry.ingredientId, entry]));
+  const locations = new Set(ingredients.map((entry) => entry.locationId));
+  if (ingredients.length !== projection.ingredients.length || locations.size > 1
+    || ingredients.some((entry) => {
+      const projected = projectedById.get(entry.ingredientId);
+      return !projected || projected.baseUnitId !== entry.baseUnitId
+        || projected.requiredQuantityMicros !== entry.requiredQuantityMicros;
+    })) {
+    throw clientError("data-loss", "Event ingredient allocation does not match the saved requirement projection.");
+  }
+  return {
+    state: value.state,
+    eventPlanId: value.eventPlanId,
+    allocationRevision,
+    eventRequirementRevisionId: value.eventRequirementRevisionId,
+    ingredientCount,
+    fullyAllocatedIngredientCount,
+    shortageIngredientCount,
+    ingredients
+  };
+}
+
 function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId, { persisted, ingredientLabels = [] }) {
   const baseKeys = [
     "authorityVersion", "schemaVersion", "projectionVersion", "organizationId", "quoteId", "quoteRevisionId",
@@ -1527,8 +1745,9 @@ function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId
   ];
   const optionalKeys = ["currency", "exactKnownCostMinor", "knownCostMinor", "projectedCostMinor"];
   const persistedKeys = ["model", "requirementRevision", "ingredientLabels", "freshness", "staleReason", "updatedAtISO"];
+  const persistedOptionalKeys = ["allocation"];
   assertAllowedKeys(value, persisted ? [...baseKeys, ...persistedKeys] : baseKeys,
-    [...baseKeys, ...optionalKeys, ...(persisted ? persistedKeys : [])], "Event ingredient projection");
+    [...baseKeys, ...optionalKeys, ...(persisted ? [...persistedKeys, ...persistedOptionalKeys] : [])], "Event ingredient projection");
   const organizationId = identifier(expectedOrganizationId, "expected organizationId");
   const quoteId = identifier(expectedQuoteId, "expected quoteId");
   if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION
@@ -1654,6 +1873,9 @@ function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId
     projection.freshness = value.freshness;
     projection.staleReason = value.staleReason;
     projection.updatedAtISO = exactIso(value.updatedAtISO, "event ingredient projection update time");
+    projection.allocation = Object.hasOwn(value, "allocation")
+      ? normalizeEventAllocationSummary(value.allocation, projection, labelsById)
+      : null;
   } else {
     projection.freshness = "preview";
     projection.staleReason = "";
@@ -2197,6 +2419,11 @@ export function inventoryProjectionConfirmsReceipt(model, attempt) {
   if (!ingredient) return false;
   if (commandKind === "upsert_ingredient") return ingredient.ingredientRevision === result.revision;
   if (commandKind === "opening_balance") return ingredient.stock.revision === result.stockRevision && ingredient.stock.lastMovementId === result.movementId;
+  if (commandKind === "receive_stock") {
+    return ingredient.stock.revision === result.stockRevision
+      && ingredient.stock.lastMovementId === result.movementId
+      && ingredient.cost.revision === result.costRevision;
+  }
   if (commandKind === "record_ingredient_cost") return ingredient.cost.revision === result.costRevision && ingredient.cost.lastCostEvidenceId === result.costEvidenceId;
   if (commandKind === "publish_pack_conversion") {
     return ingredient.packConversions.some((entry) => entry.packConversionRevisionId === result.packConversionRevisionId

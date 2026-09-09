@@ -47,6 +47,9 @@ function projection(overrides = {}) {
       shortageQuantityMicros: 5_000_000,
       availabilityState: "shortage"
     }],
+    sourceRevisions: {
+      stockRevisions: [{ ingredientId: "chicken", locationId: "main-kitchen", revision: 1 }]
+    },
     ...overrides
   };
 }
@@ -294,4 +297,122 @@ test("keeps the ingredient table keyboard-scrollable and reports consumable avai
   expect(region.textContent).toContain("25 lb");
   expect(region.textContent).toContain("15 lb");
   expect(region.textContent).toContain("5 lb");
+});
+
+test("shows partial allocation independently and emits exact admin allocate and release intents", async () => {
+  const onAllocate = vi.fn().mockResolvedValue({});
+  const onRelease = vi.fn().mockResolvedValue({});
+  const allocation = {
+    state: "shortage",
+    eventPlanId: `eip_${"d".repeat(48)}`,
+    allocationRevision: 1,
+    eventRequirementRevisionId: `eir_${"e".repeat(48)}`,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 0,
+    shortageIngredientCount: 1,
+    ingredients: [{
+      ingredientId: "chicken",
+      ingredientName: "Chicken",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      requiredQuantityMicros: 20_000_000,
+      allocatedQuantityMicros: 15_000_000,
+      shortageQuantityMicros: 5_000_000
+    }]
+  };
+  const baseProps = {
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }],
+    read: { state: "recorded", projection: projection() },
+    canAllocate: true,
+    canRelease: false,
+    canManageAllocation: true,
+    onAllocate,
+    onRelease
+  };
+  render(baseProps);
+  expect(container.querySelector("[data-ingredient-allocation-state='not_allocated']").getAttribute("data-capability-state")).toBe("empty");
+  expect(container.textContent).toContain("does not reduce physical on-hand stock");
+  await act(async () => button("Allocate ingredients").click());
+  expect(onAllocate).toHaveBeenCalledWith({ locationId: "main-kitchen" });
+
+  render({
+    ...baseProps,
+    read: { state: "recorded", projection: projection({ allocation }) },
+    canAllocate: true,
+    canRelease: true
+  });
+  expect(container.querySelector("[data-ingredient-allocation-state='shortage']").getAttribute("data-capability-state")).toBe("partial");
+  expect(container.textContent).toContain("Partially allocated");
+  expect(container.querySelector("[role='region'][aria-label='Current event ingredient allocation']").textContent).toContain("15 lb");
+  await act(async () => button("Allocate remaining").click());
+  expect(onAllocate).toHaveBeenLastCalledWith({ locationId: "main-kitchen" });
+  expect(onAllocate).toHaveBeenCalledTimes(2);
+  const releaseInput = [...container.querySelectorAll("input")].find((input) => input.placeholder.includes("Event cancelled"));
+  act(() => changeInput(releaseInput, "Event cancelled"));
+  await act(async () => button("Release allocation").click());
+  expect(onRelease).toHaveBeenCalledWith({ reason: "Event cancelled" });
+});
+
+test("treats an allocation callable result as a receipt until realtime evidence confirms it", () => {
+  const onReconcileAllocation = vi.fn();
+  render({
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }],
+    read: { state: "recorded", projection: projection() },
+    allocationOperation: {
+      state: "receipt",
+      message: "Allocation receipt recorded. Waiting for the exact current projection."
+    },
+    allocationControlsLocked: true,
+    canAllocate: false,
+    canManageAllocation: true,
+    onAllocate: vi.fn(),
+    onReconcileAllocation
+  });
+  const operation = container.querySelector("[data-ingredient-allocation-operation-state='receipt']");
+  expect(operation.getAttribute("data-capability-state")).toBe("receipt");
+  expect(operation.textContent).toMatch(/waiting for the exact current projection/i);
+  expect(button("Allocate ingredients").disabled).toBe(true);
+  expect(container.textContent).not.toContain("Fully allocated");
+});
+
+test("keeps allocation evidence visible to sales without rendering mutation controls", () => {
+  const allocation = {
+    state: "reserved",
+    allocationRevision: 1,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 1,
+    shortageIngredientCount: 0,
+    ingredients: []
+  };
+  render({
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }],
+    read: { state: "recorded", projection: projection({ allocation }) },
+    canManageAllocation: false,
+    canAllocate: false,
+    canRelease: false,
+    onAllocate: vi.fn(),
+    onRelease: vi.fn()
+  });
+  expect(container.textContent).toContain("Fully allocated");
+  expect(button("Allocate ingredients")).toBeUndefined();
+  expect(button("Release allocation")).toBeUndefined();
+  expect(container.querySelector(".event-ingredient-panel__allocation-controls")).toBeNull();
+});
+
+test("locks allocation targets during uncertainty and exposes exact-request recovery", () => {
+  const onReconcileAllocation = vi.fn();
+  render({
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }],
+    read: { state: "recorded", projection: projection() },
+    allocationOperation: { state: "uncertain", message: "Allocation outcome is not verified." },
+    allocationControlsLocked: true,
+    canAllocate: false,
+    canManageAllocation: true,
+    onAllocate: vi.fn(),
+    onReconcileAllocation
+  });
+  expect(container.querySelector(".event-ingredient-panel__allocation-controls").disabled).toBe(true);
+  expect(container.querySelector("[data-ingredient-allocation-operation-state='uncertain']").getAttribute("role")).toBe("alert");
+  act(() => button("Reconcile allocation request").click());
+  expect(onReconcileAllocation).toHaveBeenCalledOnce();
 });

@@ -39,6 +39,7 @@ const BASE = {
   browserEnabled: true,
   tenantEnabled: true,
   quoteId: "quote-1",
+  quoteStatus: "accepted",
   savedQuoteRevisionId: "quote-revision-2",
   selections: [{
     selectionId: "selection-1",
@@ -200,15 +201,30 @@ test("ignores late snapshot callbacks after its exact listener is replaced", () 
 });
 
 test("keeps preview read-only for sales and allows admin recording only from a current unchanged preview", async () => {
+  const registrations = [];
+  mocks.subscribe.mockImplementation((input) => {
+    registrations.push(input);
+    return vi.fn();
+  });
   const projection = {
     quoteId: "quote-1",
     quoteRevisionId: "quote-revision-2",
     requiredByISO: "2026-10-11T16:00:00.000Z",
     selections: BASE.selections,
-    projectionDigest: "a".repeat(64)
+    projectionDigest: "a".repeat(64),
+    eventRequirementRevisionId: `eir_${"b".repeat(48)}`,
+    requirementDigest: "c".repeat(64)
   };
   mocks.preview.mockResolvedValue({ projection });
-  mocks.apply.mockResolvedValue({ receipt: { receiptId: "receipt-1" }, confirmation: { requirementRevision: 1 } });
+  const confirmation = {
+    quoteId: "quote-1",
+    quoteRevisionId: "quote-revision-2",
+    requirementRevision: 1,
+    eventRequirementRevisionId: projection.eventRequirementRevisionId,
+    requirementDigest: projection.requirementDigest,
+    projectionDigest: projection.projectionDigest
+  };
+  mocks.apply.mockResolvedValue({ receipt: { receiptId: "receipt-1" }, confirmation });
   render({ ...BASE, role: "sales" });
 
   await act(async () => latest.previewCurrent());
@@ -233,13 +249,27 @@ test("keeps preview read-only for sales and allows admin recording only from a c
       expectedPreviewProjectionDigest: "a".repeat(64)
     })
   }));
+  expect(latest.operation).toMatchObject({ state: "receipt", receipt: { receiptId: "receipt-1" } });
+  act(() => registrations.at(-1).onData({
+    quoteId: "quote-1",
+    exists: true,
+    projection: { ...projection, ...confirmation, freshness: "as_recorded" },
+    freshness: "current",
+    source: { state: "current" }
+  }));
   expect(latest.operation).toMatchObject({ state: "committed", receipt: { receiptId: "receipt-1" } });
 });
 
 test("locks a transport-uncertain target through reconciliation and requires reset after definitive rejection", async () => {
+  const registrations = [];
+  mocks.subscribe.mockImplementation((input) => {
+    registrations.push(input);
+    return vi.fn();
+  });
   const projection = {
     quoteId: "quote-1", quoteRevisionId: "quote-revision-2", requiredByISO: "2026-10-11T16:00:00.000Z",
-    selections: BASE.selections, projectionDigest: "a".repeat(64)
+    selections: BASE.selections, projectionDigest: "a".repeat(64),
+    eventRequirementRevisionId: `eir_${"b".repeat(48)}`, requirementDigest: "c".repeat(64)
   };
   mocks.preview.mockResolvedValue({ projection });
   mocks.apply.mockRejectedValue(Object.assign(new Error("connection ended"), { inventoryDefinitive: false }));
@@ -256,9 +286,23 @@ test("locks a transport-uncertain target through reconciliation and requires res
   act(() => { reconcilePromise = latest.reconcile(); });
   expect(latest.operation.state).toBe("reconciliation");
   await act(async () => {
-    finishReconcile({ receipt: { receiptId: "receipt-1" }, confirmation: { requirementRevision: 1 } });
+    finishReconcile({
+      receipt: { receiptId: "receipt-1" },
+      confirmation: {
+        quoteId: "quote-1", quoteRevisionId: "quote-revision-2", requirementRevision: 1,
+        eventRequirementRevisionId: projection.eventRequirementRevisionId,
+        requirementDigest: projection.requirementDigest,
+        projectionDigest: projection.projectionDigest
+      }
+    });
     await reconcilePromise;
   });
+  expect(latest.operation.state).toBe("receipt");
+  act(() => registrations[0].onData({
+    quoteId: "quote-1", exists: true,
+    projection: { ...projection, requirementRevision: 1, freshness: "as_recorded" },
+    freshness: "current", source: { state: "current" }
+  }));
   expect(latest.operation.state).toBe("committed");
 
   mocks.apply.mockRejectedValue(Object.assign(new Error("revision stale"), { inventoryDefinitive: true }));
@@ -270,4 +314,177 @@ test("locks a transport-uncertain target through reconciliation and requires res
   mocks.reset.mockReturnValue(true);
   act(() => latest.reset());
   expect(latest.operation.state).toBe("idle");
+});
+
+test("keeps allocation and release pending until the exact current projection confirms their receipts", async () => {
+  const registrations = [];
+  mocks.subscribe.mockImplementation((input) => {
+    registrations.push(input);
+    return vi.fn();
+  });
+  const requirement = {
+    quoteId: "quote-1",
+    quoteRevisionId: "quote-revision-2",
+    requirementRevision: 1,
+    eventRequirementRevisionId: `eir_${"b".repeat(48)}`,
+    freshness: "as_recorded",
+    demandState: "complete",
+    sourceRevisions: {
+      stockRevisions: [{ ingredientId: "chicken", locationId: "main-kitchen", revision: 1 }]
+    }
+  };
+  const allocationConfirmation = {
+    quoteId: "quote-1",
+    eventPlanId: `eip_${"d".repeat(48)}`,
+    allocationRevision: 1,
+    state: "shortage",
+    eventRequirementRevisionId: requirement.eventRequirementRevisionId,
+    ingredientCount: 2,
+    fullyAllocatedIngredientCount: 1,
+    shortageIngredientCount: 1
+  };
+  mocks.apply.mockResolvedValueOnce({ receipt: { receiptId: "allocation-receipt" }, confirmation: allocationConfirmation });
+  render();
+  act(() => registrations[0].onData({
+    quoteId: "quote-1", exists: true, projection: requirement,
+    freshness: "current", source: { state: "current" }
+  }));
+  expect(latest.canAllocate).toBe(true);
+
+  await act(async () => latest.allocate({ locationId: "main-kitchen" }));
+  expect(mocks.apply).toHaveBeenLastCalledWith(expect.objectContaining({
+    command: {
+      kind: "allocate_event_ingredients",
+      quoteId: "quote-1",
+      eventRequirementRevisionId: requirement.eventRequirementRevisionId,
+      locationId: "main-kitchen",
+      expectedRequirementRevision: 1,
+      expectedAllocationRevision: 0
+    }
+  }));
+  expect(latest.allocationOperation.state).toBe("receipt");
+  expect(latest.allocationControlsLocked).toBe(true);
+
+  const allocation = { ...allocationConfirmation, ingredients: [] };
+  act(() => registrations[0].onData({
+    quoteId: "quote-1", exists: true, projection: { ...requirement, allocation },
+    freshness: "current", source: { state: "current" }
+  }));
+  expect(latest.allocationOperation.state).toBe("committed");
+  expect(latest.canAllocate).toBe(true);
+  expect(latest.canRelease).toBe(true);
+
+  const topUpConfirmation = {
+    ...allocationConfirmation,
+    allocationRevision: 2,
+    state: "reserved",
+    fullyAllocatedIngredientCount: 2,
+    shortageIngredientCount: 0
+  };
+  mocks.apply.mockResolvedValueOnce({ receipt: { receiptId: "top-up-receipt" }, confirmation: topUpConfirmation });
+  await act(async () => latest.allocate({ locationId: "main-kitchen" }));
+  expect(mocks.apply).toHaveBeenLastCalledWith(expect.objectContaining({
+    command: expect.objectContaining({
+      kind: "allocate_event_ingredients",
+      expectedAllocationRevision: 1,
+      locationId: "main-kitchen"
+    })
+  }));
+  expect(latest.allocationOperation.state).toBe("receipt");
+  act(() => registrations[0].onData({
+    quoteId: "quote-1", exists: true,
+    projection: {
+      ...requirement,
+      allocation: {
+        ...allocation,
+        state: "reserved",
+        allocationRevision: 2,
+        fullyAllocatedIngredientCount: 2,
+        shortageIngredientCount: 0
+      }
+    },
+    freshness: "current", source: { state: "current" }
+  }));
+  expect(latest.allocationOperation.state).toBe("committed");
+  expect(latest.canAllocate).toBe(false);
+  expect(latest.canRelease).toBe(true);
+
+  const releaseConfirmation = {
+    ...topUpConfirmation,
+    allocationRevision: 3,
+    state: "released",
+    releasedIngredientCount: 2
+  };
+  mocks.apply.mockResolvedValueOnce({ receipt: { receiptId: "release-receipt" }, confirmation: releaseConfirmation });
+  await act(async () => latest.release({ reason: "Event cancelled" }));
+  expect(mocks.apply).toHaveBeenLastCalledWith(expect.objectContaining({
+    command: {
+      kind: "release_event_ingredients",
+      quoteId: "quote-1",
+      expectedAllocationRevision: 2,
+      reason: "Event cancelled"
+    }
+  }));
+  expect(latest.allocationOperation.state).toBe("receipt");
+  act(() => registrations[0].onData({
+    quoteId: "quote-1", exists: true,
+    projection: {
+      ...requirement,
+      allocation: {
+        ...allocation,
+        state: "released",
+        allocationRevision: 3,
+        fullyAllocatedIngredientCount: 2,
+        shortageIngredientCount: 0
+      }
+    },
+    freshness: "current", source: { state: "current" }
+  }));
+  expect(latest.allocationOperation.state).toBe("committed");
+});
+
+test.each(["draft", "sent", "declined", "cancelled"])("withholds allocation changes for %s quotes while preserving preview intelligence", async (quoteStatus) => {
+  render({ ...BASE, quoteStatus });
+  expect(latest.canPreview).toBe(true);
+  expect(latest.canAllocate).toBe(false);
+  expect(latest.canRelease).toBe(false);
+  expect(latest.allocationBlockedReason).toMatch(/accepted or booked/i);
+  await expect(latest.allocate({ locationId: "main-kitchen" })).rejects.toThrow(/accepted or booked/i);
+  expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+test("keeps sales read-only and ignores late allocation callbacks after teardown", async () => {
+  render({ ...BASE, role: "sales" });
+  await expect(latest.allocate({ locationId: "main-kitchen" })).rejects.toThrow(/administrator/i);
+  expect(latest.canManageAllocation).toBe(false);
+  expect(latest.canAllocate).toBe(false);
+
+  let finish;
+  mocks.apply.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  const registrations = [];
+  mocks.subscribe.mockImplementation((input) => { registrations.push(input); return vi.fn(); });
+  render(BASE);
+  act(() => registrations[0].onData({
+    quoteId: "quote-1", exists: true,
+    projection: {
+      quoteId: "quote-1", quoteRevisionId: "quote-revision-2", requirementRevision: 1,
+      eventRequirementRevisionId: `eir_${"b".repeat(48)}`, freshness: "as_recorded", demandState: "complete"
+    },
+    freshness: "current", source: { state: "current" }
+  }));
+  let commandPromise;
+  act(() => { commandPromise = latest.allocate({ locationId: "main-kitchen" }); });
+  render({ ...BASE, active: false });
+  await act(async () => {
+    finish({
+      receipt: { receiptId: "late" },
+      confirmation: {
+        quoteId: "quote-1", eventPlanId: `eip_${"d".repeat(48)}`, allocationRevision: 1,
+        state: "reserved", eventRequirementRevisionId: `eir_${"b".repeat(48)}`,
+        ingredientCount: 1, fullyAllocatedIngredientCount: 1, shortageIngredientCount: 0
+      }
+    });
+    await commandPromise;
+  });
+  expect(latest.allocationOperation.state).toBe("idle");
 });

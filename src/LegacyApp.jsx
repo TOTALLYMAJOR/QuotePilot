@@ -1464,6 +1464,7 @@ function LegacyAppCore({
     browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
     tenantEnabled: inventoryTenantEnabled,
     quoteId: editingQuote.id,
+    quoteStatus: editingQuote.status,
     savedQuoteRevisionId: String(
       editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
     ).trim(),
@@ -3587,15 +3588,25 @@ function LegacyAppCore({
             read={eventIngredientProjection.read}
             preview={eventIngredientProjection.preview}
             operation={eventIngredientProjection.operation}
+            allocationOperation={eventIngredientProjection.allocationOperation}
             quoteDirty={quoteDirty}
             canPreview={eventIngredientProjection.canPreview}
             canRecord={eventIngredientProjection.canRecord}
             controlsLocked={eventIngredientProjection.controlsLocked}
+            allocationControlsLocked={eventIngredientProjection.allocationControlsLocked}
+            canManageAllocation={eventIngredientProjection.canManageAllocation}
+            canAllocate={eventIngredientProjection.canAllocate}
+            canRelease={eventIngredientProjection.canRelease}
+            allocationBlockedReason={eventIngredientProjection.allocationBlockedReason}
             recordBlockedReason={eventIngredientProjection.recordBlockedReason}
             onPreview={eventIngredientProjection.previewCurrent}
             onRecord={authSession.isAdmin ? eventIngredientProjection.recordCurrentPreview : undefined}
             onReconcile={eventIngredientProjection.reconcile}
             onReset={eventIngredientProjection.reset}
+            onAllocate={eventIngredientProjection.allocate}
+            onRelease={eventIngredientProjection.release}
+            onReconcileAllocation={eventIngredientProjection.reconcileAllocation}
+            onResetAllocation={eventIngredientProjection.resetAllocation}
           />
         </div>
       )}

@@ -1,8 +1,8 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 04:12:00 CDT
+Last updated: 2026-09-09 05:17:00 CDT
 
-Status: Accepted scope correction; corrected Phases 2 through 4 complete as default-off local source candidates
+Status: Accepted scope correction; corrected Phases 2 through 5 complete as default-off local source candidates
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -88,8 +88,8 @@ normal reads:
 | `inventoryMenuCostProjections/{menuItemId}` | Bounded current recipe quantity/cost projection with coverage and missing evidence. |
 | `eventIngredientRequirements/{quoteId}/revisions/{requirementRevisionId}` | Immutable compiled ingredient demand and projected cost bound to exact inputs. |
 | `eventIngredientRequirementHeads/{quoteId}` | Current numeric requirement revision and immutable requirement pointer used for optimistic concurrency. |
-| `eventIngredientPlans/{quoteId}` | Current server-authoritative consumable allocation state. |
-| `inventoryAllocationFences/{ingredientId_locationId}` | Shared contention record for cumulative available-to-promise stock. |
+| `eventIngredientPlans/{quoteId}` | Current server-authoritative consumable allocation state; immutable snapshots live under `revisions/{planRevisionId}`. |
+| `inventoryAllocationFences/{ingredientId_locationId}` | Shared, date-independent contention record for cumulative active ingredient commitments. |
 | `eventIngredientProjections/{quoteId}` | Client-safe event demand, costing completeness, availability, shortage, and freshness. |
 | `inventoryIngredientProjections/{ingredientId}` | Client-safe current stock and cost axes for the operator workspace. |
 | `inventoryWorkspaceProjections/current` | Bounded client-safe location/setup projection; it never contains the item ledger. |
@@ -153,6 +153,17 @@ adopted, the projection exposes its exact observation basis and completeness;
 it does not claim inventory value or authoritative COGS.
 
 `unknown` cost is distinct from zero cost.
+
+Receiving is a separate physical-evidence command for goods already in hand.
+It appends an immutable positive stock movement and an exact available-or-
+unknown purchase-cost observation, then advances the materialized on-hand
+projection. It never represents expected or unconfirmed supply. If no planning
+cost state exists, the first known receipt may establish the narrow
+first-observation basis. Once any cost state exists—including missing or
+contradictory evidence—later receipt costs remain observations and cannot
+silently replace that state. Consequently, an unrelated cost revision never
+blocks a valid physical receipt whose cost observation is being retained only
+as evidence.
 
 ## Versioned recipes and pure costing
 
@@ -238,19 +249,31 @@ failure does not downgrade the other rail’s valid evidence.
 Ingredients are consumed and do not automatically return after an event.
 Availability is cumulative rather than interval based:
 
-`available to allocate = usable on hand + confirmed recorded inbound supply - active allocations`
+`available to allocate = usable on hand - active allocations`
 
-Recorded inbound supply contributes only when the implementation can establish
-its authoritative quantity and availability; an expected or unconfirmed
-purchase is not stock. The initial rollout does not claim freshness,
-suitability, lot traceability, or expiry evidence.
+Receiving increases usable on-hand only after an operator records that the
+goods were physically received; an expected or unconfirmed purchase is not
+stock. The initial rollout does not claim freshness, suitability, lot
+traceability, or expiry evidence.
 
 Preview is pure and informational. Allocation commands re-read authoritative
 stock state, all active allocation totals, demand revision, and shared
 item/location fence inside one Firestore transaction. Competing events—even on
 different days—touch the same fence and cannot overallocate the same physical
 stock. Partial allocation records the maximum valid amount and explicit unmet
-demand.
+demand. Each atomic command is capped at 100 ingredients, writes one exact
+item/location fence per ingredient, and never sums unlike units into a total.
+Only accepted or booked quotes can allocate. The command revalidates the active
+immutable quote revision, current recipe heads, exact requirement digest, and
+current plan revision in the same transaction. Draft and sent quotes retain
+read-only demand/cost/shortage intelligence without consuming capacity.
+
+A partial plan retains its valid hold. After receiving, an administrator may
+retry allocation with the expected plan revision to fill only the remaining
+shortage; the operator does not have to release already secured stock. Each
+change writes the current plan, one immutable plan-revision snapshot, affected
+fences, ingredient projections, the exact event projection, and an idempotent
+receipt atomically.
 
 Allocation changes commitment, not physical on-hand stock. Release changes the
 allocation only. Consumption changes physical stock and settles the related
@@ -329,7 +352,7 @@ corrected slices and final qualification complete.
    Edit, Preflight, Operations, and reporting projections plus deterministic
    utilization, shortage, and due-supply insights.
 
-Corrected Phases 2 through 4 are now complete as default-off local source
+Corrected Phases 2 through 5 are now complete as default-off local source
 candidates. Phase 3 adds same-dimension conversions, immutable declared
 purchase-pack revisions, versioned recipes attached to exact existing menu
 items, pure exact costing, bounded reverse dependencies, and materialized menu
@@ -343,9 +366,13 @@ per-menu contribution while aggregating shared ingredients, and publishes one
 immutable requirement plus an exact event projection. The projection keeps
 demand, projected cost, and consumable availability as independent result
 states and is read with an exact metadata-aware `onSnapshot()` subscription.
-Preview is read-only; only an administrator may record a requirement. The next
-independently committed target is Phase 5: receiving and concurrency-safe
-consumable allocation and release.
+Preview is read-only; only an administrator may record a requirement. Phase 5
+adds immutable receiving evidence and accepted/booked-only cumulative
+allocation through deterministic item/location fences. Partial holds can top
+up without release; every allocation revision is preserved, and exact event and
+ingredient projections update atomically. The next independently committed
+target is Phase 6: historical change reconciliation and separate recipe-cost
+and ingredient-availability nodes in Commercial Change intelligence.
 
 ## Acceptance anchor
 
@@ -385,8 +412,12 @@ revision-zero openings have one winner, and cost evidence does not mutate stock.
 Phase 4 extends that lane through the owner fixture: the callable derives the
 event instant in the tenant timezone, previews `20 lb` chicken, `10 lb` pasta,
 and `$80` without writing, then concurrent identical recording requests create
-one immutable requirement and one exact projection. It does not prove later
-receiving, allocation, or consumption behavior.
+one immutable requirement and one exact projection. Phase 5 proves confirmed
+receiving idempotency, later-cost retention, `25 lb` committed on another date
+plus `20 lb` demand producing a `15 lb` hold and `5 lb` shortage, true
+simultaneous shared-fence contention without over-allocation, safe shortage
+top-up after receiving, and release without changing on-hand. It does not prove
+consumption, valuation, deployment, or production behavior.
 
 The genuinely unresolved product/accounting decision is the valuation policy
 for multiple cost observations and actual consumption. Corrected Phase 2

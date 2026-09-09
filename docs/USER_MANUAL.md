@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 04:30:00 CDT
+Last updated: 2026-09-09 05:17:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1257,6 +1257,10 @@ The initial setup is intentionally small:
 3. Record the opening counted quantity at that location.
 4. Independently record the observed total purchase cost and quantity basis, or
    leave cost explicitly not yet available.
+5. For later goods already received, use **Record receiving** on the ingredient,
+   enter the exact quantity, received time, source, and known or explicitly
+   unavailable purchase cost, then wait for the realtime stock projection to
+   confirm the receipt.
 
 For example, record **Chicken**, `40 lb`, and a `$120` total cost basis. The
 stock receipt establishes 40 lb on hand; the separate cost receipt retains the
@@ -1321,6 +1325,24 @@ do not submit a replacement command. The event required-by instant is derived
 on the server from the saved event date/time and organization business timezone,
 not from the browser clock.
 
+For an **accepted** or **booked** quote with a complete recorded requirement, an
+administrator may choose the stock location and select **Allocate
+ingredients**. The server rechecks the active quote and recipe revisions,
+physical on-hand, every existing commitment, and the event plan in one
+transaction. It allocates the maximum safe quantity and names each shortage;
+it never treats a later event date as making consumed ingredients available
+again. A sales user sees the exact allocation evidence but no mutation controls.
+
+Receiving changes physical on-hand without creating or releasing an event
+allocation. Allocation changes commitments without reducing on-hand. If a
+partial allocation remains short after new stock is received, select
+**Allocate remaining** to preserve the existing hold and fill only the shortage.
+Use **Release allocation** with a reason when the commitment is no longer
+needed; release does not change physical stock. A callable receipt remains
+pending evidence until the exact metadata-aware event projection confirms the
+same allocation revision. Reconcile uncertain outcomes with the original
+request identity.
+
 This source-candidate slice supports at most 200 location definitions and 200
 ingredient definitions per organization. The shared server transaction fence
 rejects record 201, and a projection at its bound is labeled **Partial**. That
@@ -1328,12 +1350,13 @@ temporary limit must be replaced by cursor-based navigation before larger
 catalogs are activated; the browser never silently treats a truncated list as
 complete.
 
-The source candidate now supports current recipe/menu-item cost plus immutable
-event ingredient demand, projected event ingredient cost, and consumable-stock
-shortage previews. It does not yet claim allocation, receiving, consumption,
-inventory value, or COGS. The next slice adds simple receiving and
-concurrency-safe consumable allocation/release without turning event dates into
-equipment-style availability windows.
+The source candidate now supports current recipe/menu-item cost, immutable
+event ingredient demand and projected cost, durable receiving, cumulative
+consumable-stock shortage, and concurrency-safe allocation/release. It does not
+yet claim consumption, waste, inventory value, authoritative COGS, deployment,
+or human acceptance. The next slice preserves historical estimates during
+commercial and recipe changes and integrates recipe-cost and ingredient-
+availability consequences into Commercial Change intelligence.
 
 ## Commercial Change Authority
 

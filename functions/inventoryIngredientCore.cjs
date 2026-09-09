@@ -6,6 +6,7 @@ const INVENTORY_AUTHORITY_VERSION = "inventory-ingredient-authority-v2";
 const INVENTORY_SCHEMA_VERSION = 2;
 const INVENTORY_MOVEMENT_VERSION = "ingredient-stock-movement-v2";
 const INVENTORY_COST_VERSION = "ingredient-cost-evidence-v1";
+const INVENTORY_RECEIVING_COST_VERSION = "ingredient-receiving-cost-observation-v1";
 const QUANTITY_SCALE = 1_000_000;
 const MAX_REVISION = 1_000_000_000;
 const MAX_QUANTITY_MICROS = Number.MAX_SAFE_INTEGER;
@@ -320,6 +321,247 @@ function normalizeOpeningBalanceRequest(value) {
   };
 }
 
+function normalizeReceivingRequest(value) {
+  exact(value, [
+    "kind", "ingredientId", "locationId", "quantity", "baseUnitId", "occurredAtISO",
+    "sourceLabel", "note", "expectedStockRevision", "expectedCostRevision", "cost"
+  ], "ingredient receiving command");
+  if (value.kind !== "receive_stock") fail("invalid-argument", "Ingredient receiving command is invalid.");
+  if (!isRecord(value.cost) || !COST_AVAILABILITY.includes(value.cost.availability)) {
+    fail("invalid-argument", "Receiving cost evidence availability is required.");
+  }
+  const costAvailable = value.cost.availability === "available";
+  exact(value.cost, costAvailable
+    ? ["availability", "totalCostMinor", "currency"]
+    : ["availability"], "receiving cost evidence");
+  const normalized = {
+    kind: value.kind,
+    ingredientId: opaqueId(value.ingredientId, "ingredientId"),
+    locationId: opaqueId(value.locationId, "locationId"),
+    quantity: formatQuantityMicros(parseQuantityMicros(value.quantity)),
+    quantityMicros: parseQuantityMicros(value.quantity),
+    baseUnitId: baseUnitId(value.baseUnitId),
+    occurredAtISO: exactISO(value.occurredAtISO, "occurredAtISO"),
+    sourceLabel: cleanText(value.sourceLabel, "receiving source", 120),
+    note: cleanText(value.note, "receiving note", 240, { allowEmpty: true }),
+    expectedStockRevision: revision(value.expectedStockRevision, "expectedStockRevision", { allowZero: false }),
+    expectedCostRevision: revision(value.expectedCostRevision, "expectedCostRevision"),
+    cost: { availability: value.cost.availability }
+  };
+  if (costAvailable) {
+    if (!Number.isSafeInteger(value.cost.totalCostMinor) || value.cost.totalCostMinor < 0) {
+      fail("invalid-argument", "Receiving totalCostMinor must be exact non-negative minor-unit money.");
+    }
+    if (typeof value.cost.currency !== "string" || !CURRENCY_PATTERN.test(value.cost.currency)) {
+      fail("invalid-argument", "Receiving currency must be an uppercase ISO code.");
+    }
+    Object.assign(normalized.cost, {
+      totalCostMinor: value.cost.totalCostMinor,
+      currency: value.cost.currency
+    });
+  }
+  return normalized;
+}
+
+function planReceiving({
+  organizationId,
+  requestId: retryId,
+  request,
+  ingredient,
+  location,
+  stockState,
+  currentCostState = null,
+  actor,
+  nowISO
+}) {
+  const orgId = opaqueId(organizationId, "organizationId");
+  const normalized = normalizeReceivingRequest(request);
+  const normalizedActor = normalizeActor(actor, orgId);
+  const recordedAtISO = exactISO(nowISO, "nowISO");
+  if (!ingredient || ingredient.organizationId !== orgId
+    || ingredient.ingredientId !== normalized.ingredientId || ingredient.itemKind !== "ingredient"
+    || !ingredient.active || ingredient.baseUnitId !== normalized.baseUnitId) {
+    fail("failed-precondition", "Receiving requires the active same-tenant ingredient in its base stock unit.");
+  }
+  if (!location || location.organizationId !== orgId || location.locationId !== normalized.locationId || !location.active) {
+    fail("failed-precondition", "Receiving requires the active same-tenant stock location.");
+  }
+  verifyStockState(stockState, {
+    organizationId: orgId,
+    ingredientId: normalized.ingredientId,
+    locationId: normalized.locationId
+  });
+  if (stockState.revision !== normalized.expectedStockRevision || stockState.baseUnitId !== normalized.baseUnitId) {
+    fail("aborted", "Ingredient stock changed before receiving was recorded.");
+  }
+  if (stockState.onHandMicros > MAX_QUANTITY_MICROS - normalized.quantityMicros) {
+    fail("out-of-range", "Receiving would exceed the exact ingredient quantity range.");
+  }
+  const costRequest = {
+    kind: "record_ingredient_cost",
+    ingredientId: normalized.ingredientId,
+    baseUnitId: normalized.baseUnitId,
+    availability: normalized.cost.availability,
+    sourceLabel: normalized.sourceLabel,
+    observedAtISO: normalized.occurredAtISO,
+    note: normalized.note,
+    expectedCostRevision: normalized.expectedCostRevision
+  };
+  if (normalized.cost.availability === "available") Object.assign(costRequest, {
+    basisQuantity: normalized.quantity,
+    totalCostMinor: normalized.cost.totalCostMinor,
+    currency: normalized.cost.currency
+  });
+  const currentCostRevision = currentCostState?.revision || 0;
+  if (currentCostState) verifyCostState(currentCostState, {
+    organizationId: orgId,
+    ingredientId: normalized.ingredientId
+  });
+  const establishesPlanningBasis = currentCostState === null;
+  // Schema v2 keeps this CAS strict for first-basis establishment. Once any cost
+  // state exists, receiving observes its transaction revision and preserves it;
+  // unrelated planning-cost changes must not block physical quantity evidence.
+  if (establishesPlanningBasis && normalized.expectedCostRevision !== 0) {
+    fail("aborted", "Ingredient planning cost evidence changed before receiving was recorded.");
+  }
+  let costEvidence;
+  let nextCostState = currentCostState;
+  if (establishesPlanningBasis) {
+    const plannedCost = planIngredientCostEvidence({
+      organizationId: orgId,
+      requestId: retryId,
+      request: costRequest,
+      ingredient,
+      currentCostState,
+      actor: normalizedActor,
+      nowISO: recordedAtISO
+    });
+    costEvidence = plannedCost.costEvidence;
+    nextCostState = plannedCost.nextCostState;
+  } else {
+    const evidenceBody = {
+      authorityVersion: INVENTORY_AUTHORITY_VERSION,
+      schemaVersion: INVENTORY_SCHEMA_VERSION,
+      costEvidenceVersion: INVENTORY_RECEIVING_COST_VERSION,
+      organizationId: orgId,
+      ingredientId: normalized.ingredientId,
+      costEvidenceId: costEvidenceIdFor(orgId, retryId),
+      requestId: requestId(retryId),
+      requestDigest: digest(normalized, "receiving request"),
+      priorCostRevision: currentCostRevision,
+      resultCostRevision: currentCostRevision,
+      planningBasisAction: "retained_existing",
+      availability: normalized.cost.availability,
+      sourceLabel: normalized.sourceLabel,
+      observedAtISO: normalized.occurredAtISO,
+      recordedAtISO,
+      note: normalized.note,
+      actor: normalizedActor
+    };
+    if (normalized.cost.availability === "available") Object.assign(evidenceBody, {
+      basisQuantity: normalized.quantity,
+      basisQuantityMicros: normalized.quantityMicros,
+      totalCostMinor: normalized.cost.totalCostMinor,
+      currency: normalized.cost.currency
+    });
+    costEvidence = Object.freeze({
+      ...evidenceBody,
+      costEvidenceDigest: digest(evidenceBody, "ingredient receiving cost observation")
+    });
+  }
+  const id = movementIdFor(orgId, retryId);
+  const nextStockState = Object.freeze({
+    ...stockState,
+    revision: stockState.revision + 1,
+    onHandMicros: stockState.onHandMicros + normalized.quantityMicros,
+    lastMovementId: id,
+    updatedAtISO: recordedAtISO
+  });
+  const body = {
+    authorityVersion: INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: INVENTORY_SCHEMA_VERSION,
+    movementVersion: INVENTORY_MOVEMENT_VERSION,
+    organizationId: orgId,
+    movementId: id,
+    requestId: requestId(retryId),
+    requestDigest: digest({
+      kind: normalized.kind,
+      ingredientId: normalized.ingredientId,
+      locationId: normalized.locationId,
+      quantity: normalized.quantity,
+      baseUnitId: normalized.baseUnitId,
+      occurredAtISO: normalized.occurredAtISO,
+      sourceLabel: normalized.sourceLabel,
+      note: normalized.note,
+      expectedStockRevision: normalized.expectedStockRevision,
+      costEvidenceId: costEvidence.costEvidenceId
+    }, "receiving movement request"),
+    kind: "receive_stock",
+    ingredientId: normalized.ingredientId,
+    locationId: normalized.locationId,
+    baseUnitId: normalized.baseUnitId,
+    quantity: normalized.quantity,
+    quantityMicros: normalized.quantityMicros,
+    priorStockRevision: stockState.revision,
+    resultStockRevision: nextStockState.revision,
+    priorOnHandMicros: stockState.onHandMicros,
+    resultOnHandMicros: nextStockState.onHandMicros,
+    occurredAtISO: normalized.occurredAtISO,
+    recordedAtISO,
+    sourceLabel: normalized.sourceLabel,
+    costEvidenceId: costEvidence.costEvidenceId,
+    note: normalized.note,
+    actor: normalizedActor
+  };
+  return Object.freeze({
+    request: normalized,
+    movement: Object.freeze({ ...body, movementDigest: digest(body, "ingredient movement") }),
+    nextStockState,
+    costEvidence,
+    nextCostState,
+    planningBasisAction: establishesPlanningBasis ? "established" : "retained_existing"
+  });
+}
+
+function verifyReceivingCostEvidence(value) {
+  const available = value?.availability === "available";
+  const commonKeys = [
+    "authorityVersion", "schemaVersion", "costEvidenceVersion", "organizationId", "ingredientId",
+    "costEvidenceId", "requestId", "requestDigest", "priorCostRevision", "resultCostRevision",
+    "planningBasisAction", "availability", "sourceLabel", "observedAtISO", "recordedAtISO",
+    "note", "actor", "costEvidenceDigest"
+  ];
+  exact(value, available
+    ? [...commonKeys, "basisQuantity", "basisQuantityMicros", "totalCostMinor", "currency"]
+    : commonKeys, "ingredient receiving cost observation", "data-loss");
+  const { costEvidenceDigest, ...body } = value;
+  const orgId = opaqueId(value.organizationId, "receiving cost organizationId");
+  if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION
+    || value.schemaVersion !== INVENTORY_SCHEMA_VERSION
+    || value.costEvidenceVersion !== INVENTORY_RECEIVING_COST_VERSION
+    || value.planningBasisAction !== "retained_existing"
+    || value.priorCostRevision < 1 || value.resultCostRevision !== value.priorCostRevision
+    || value.costEvidenceId !== costEvidenceIdFor(orgId, value.requestId)
+    || costEvidenceDigest !== digest(body, "ingredient receiving cost observation")) {
+    fail("data-loss", "Ingredient receiving cost observation is inconsistent.");
+  }
+  normalizeActor(value.actor, orgId);
+  opaqueId(value.ingredientId, "receiving cost ingredientId");
+  requestId(value.requestId);
+  exactISO(value.observedAtISO, "receiving cost observedAtISO");
+  exactISO(value.recordedAtISO, "receiving cost recordedAtISO");
+  cleanText(value.sourceLabel, "receiving cost source", 120);
+  cleanText(value.note, "receiving cost note", 240, { allowEmpty: true });
+  if (available) {
+    if (parseQuantityMicros(value.basisQuantity) !== value.basisQuantityMicros
+      || !Number.isSafeInteger(value.totalCostMinor) || value.totalCostMinor < 0
+      || typeof value.currency !== "string" || !CURRENCY_PATTERN.test(value.currency)) {
+      fail("data-loss", "Available receiving cost observation is inconsistent.");
+    }
+  }
+  return value;
+}
+
 function planOpeningBalance({ organizationId, requestId: retryId, request, ingredient, location, stockState, actor, nowISO }) {
   const orgId = opaqueId(organizationId, "organizationId");
   const normalized = normalizeOpeningBalanceRequest(request);
@@ -372,39 +614,66 @@ function planOpeningBalance({ organizationId, requestId: retryId, request, ingre
 }
 
 function verifyMovement(value) {
-  exact(value, [
+  const commonKeys = [
     "authorityVersion", "schemaVersion", "movementVersion", "organizationId", "movementId",
     "requestId", "requestDigest", "kind", "ingredientId", "locationId", "baseUnitId",
     "quantity", "quantityMicros", "priorStockRevision", "resultStockRevision",
     "priorOnHandMicros", "resultOnHandMicros", "occurredAtISO", "recordedAtISO", "note",
     "actor", "movementDigest"
-  ], "ingredient movement", "data-loss");
+  ];
+  exact(value, value?.kind === "receive_stock"
+    ? [...commonKeys, "sourceLabel", "costEvidenceId"]
+    : commonKeys, "ingredient movement", "data-loss");
   if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION || value.schemaVersion !== INVENTORY_SCHEMA_VERSION
-    || value.movementVersion !== INVENTORY_MOVEMENT_VERSION || value.kind !== "opening_balance") {
+    || value.movementVersion !== INVENTORY_MOVEMENT_VERSION
+    || !["opening_balance", "receive_stock"].includes(value.kind)) {
     fail("data-loss", "Ingredient movement uses an unsupported schema.");
   }
   const { movementDigest, ...body } = value;
   if (movementDigest !== digest(body, "ingredient movement")) fail("data-loss", "Ingredient movement digest does not match.");
   const orgId = opaqueId(value.organizationId, "movement organizationId");
   const retryId = requestId(value.requestId);
-  const normalized = normalizeOpeningBalanceRequest({
-    kind: value.kind,
-    ingredientId: value.ingredientId,
-    locationId: value.locationId,
-    quantity: value.quantity,
-    baseUnitId: value.baseUnitId,
-    occurredAtISO: value.occurredAtISO,
-    note: value.note,
-    expectedStockRevision: value.priorStockRevision
-  });
   normalizeActor(value.actor, orgId);
   exactISO(value.recordedAtISO, "movement recordedAtISO");
-  if (value.movementId !== movementIdFor(orgId, retryId)
-    || value.requestDigest !== digest(normalized, "opening request")
-    || parseQuantityMicros(value.quantity) !== value.quantityMicros
-    || value.priorStockRevision !== 0 || value.resultStockRevision !== 1
-    || value.priorOnHandMicros !== 0 || value.resultOnHandMicros !== value.quantityMicros) {
-    fail("data-loss", "Ingredient opening movement is internally inconsistent.");
+  const commonValid = value.movementId === movementIdFor(orgId, retryId)
+    && parseQuantityMicros(value.quantity) === value.quantityMicros
+    && value.resultStockRevision === value.priorStockRevision + 1
+    && value.resultOnHandMicros === value.priorOnHandMicros + value.quantityMicros;
+  if (!commonValid) {
+    fail("data-loss", "Ingredient stock movement is internally inconsistent.");
+  }
+  if (value.kind === "opening_balance") {
+    const normalized = normalizeOpeningBalanceRequest({
+      kind: value.kind,
+      ingredientId: value.ingredientId,
+      locationId: value.locationId,
+      quantity: value.quantity,
+      baseUnitId: value.baseUnitId,
+      occurredAtISO: value.occurredAtISO,
+      note: value.note,
+      expectedStockRevision: value.priorStockRevision
+    });
+    if (value.requestDigest !== digest(normalized, "opening request")
+      || value.priorStockRevision !== 0 || value.resultStockRevision !== 1
+      || value.priorOnHandMicros !== 0) {
+      fail("data-loss", "Ingredient opening movement is internally inconsistent.");
+    }
+  } else if (!COST_EVIDENCE_ID_PATTERN.test(value.costEvidenceId)
+    || cleanText(value.sourceLabel, "receiving source", 120) !== value.sourceLabel
+    || value.priorStockRevision < 1
+    || value.requestDigest !== digest({
+      kind: value.kind,
+      ingredientId: value.ingredientId,
+      locationId: value.locationId,
+      quantity: value.quantity,
+      baseUnitId: value.baseUnitId,
+      occurredAtISO: value.occurredAtISO,
+      sourceLabel: value.sourceLabel,
+      note: value.note,
+      expectedStockRevision: value.priorStockRevision,
+      costEvidenceId: value.costEvidenceId
+    }, "receiving movement request")) {
+    fail("data-loss", "Ingredient receiving movement is internally inconsistent.");
   }
   return value;
 }
@@ -414,10 +683,18 @@ function replayMovements({ organizationId, ingredientId, locationId, baseUnitId:
   let state = createEmptyStockState({ organizationId, ingredientId, locationId, baseUnitId: unit });
   for (const movement of movements) {
     verifyMovement(movement);
-    if (state.revision !== 0 || movement.organizationId !== state.organizationId || movement.ingredientId !== state.ingredientId || movement.locationId !== state.locationId || movement.baseUnitId !== state.baseUnitId) {
+    if (movement.organizationId !== state.organizationId || movement.ingredientId !== state.ingredientId
+      || movement.locationId !== state.locationId || movement.baseUnitId !== state.baseUnitId
+      || movement.priorStockRevision !== state.revision || movement.priorOnHandMicros !== state.onHandMicros) {
       fail("data-loss", "Ingredient movement cannot follow this stock state.");
     }
-    state = Object.freeze({ ...state, revision: 1, onHandMicros: movement.quantityMicros, lastMovementId: movement.movementId, updatedAtISO: movement.recordedAtISO });
+    state = Object.freeze({
+      ...state,
+      revision: movement.resultStockRevision,
+      onHandMicros: movement.resultOnHandMicros,
+      lastMovementId: movement.movementId,
+      updatedAtISO: movement.recordedAtISO
+    });
   }
   return state;
 }
@@ -702,6 +979,7 @@ module.exports = {
   INVENTORY_AUTHORITY_VERSION,
   INVENTORY_COST_VERSION,
   INVENTORY_MOVEMENT_VERSION,
+  INVENTORY_RECEIVING_COST_VERSION,
   INVENTORY_SCHEMA_VERSION,
   InventoryIngredientError,
   QUANTITY_SCALE,
@@ -721,12 +999,14 @@ module.exports = {
   normalizeIngredientRequest,
   normalizeLocationRequest,
   normalizeOpeningBalanceRequest,
+  normalizeReceivingRequest,
   opaqueId,
   parseQuantityMicros,
   planIngredient,
   planIngredientCostEvidence,
   planLocation,
   planOpeningBalance,
+  planReceiving,
   replayMovements,
   requestId,
   revision,
@@ -736,5 +1016,6 @@ module.exports = {
   verifyIngredient,
   verifyLocation,
   verifyMovement,
+  verifyReceivingCostEvidence,
   verifyStockState
 };

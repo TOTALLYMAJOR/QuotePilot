@@ -9060,14 +9060,14 @@
     },
     {
       "id": "ingredient-inventory-workspace",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
       "audiences": [
         "organization_admins"
       ],
-      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock, independently retain exact purchase-cost evidence, publish explicit ingredient-specific purchase packs, and observe bounded server-owned projections in realtime.",
+      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock and later receiving, independently retain exact purchase-cost evidence, publish explicit ingredient-specific purchase packs, and observe on-hand, committed, and available-to-allocate projections in realtime.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -9121,6 +9121,10 @@
           "locator": "keeps physical stock and purchase-cost evidence as separate axes"
         },
         {
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "emits exact receiving evidence without changing allocation authority"
+        },
+        {
           "path": "src/lib/__tests__/inventoryAuthorityClient.test.js",
           "locator": "subscribes to the exact workspace doc and bounded ordered ingredient query with metadata"
         },
@@ -9157,7 +9161,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The Operations route uses the established workspace shell and exact tenant route, renders stock and purchase cost as independent evidence axes, adds one contextual explicit-pack editor, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit.",
+      "surfaceReviewNote": "The Operations route uses the established workspace shell and exact tenant route, renders physical stock, active commitment, available-to-allocate, and purchase cost as separate evidence axes, adds contextual receiving and explicit-pack controls, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -9233,7 +9237,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "With every gate enabled, a same-tenant administrator can record an ingredient, physical opening quantity, optional exact purchase-cost observation, and explicit purchase-pack conversion through receipt-producing commands and watch server-confirmed bounded projections update. Stock remains valid without cost, cost never manufactures stock, cached or pending data cannot authorize writes, customers and sales cannot read stock, and this surface never derives shortages, selling price, booking, deployment, or production readiness."
+      "safeOutcome": "With every gate enabled, a same-tenant administrator can record an ingredient, physical opening quantity, later confirmed receiving, optional exact purchase-cost observations, and explicit purchase-pack conversions through receipt-producing commands and watch server-confirmed bounded projections update. Receiving changes on-hand only, later receipt cost cannot silently replace an existing planning basis, cached or pending data cannot authorize writes, customers and sales cannot read stock, and this surface never changes selling price, booking, deployment, or production readiness."
     },
     {
       "id": "ingredient-menu-recipe-costing",
@@ -9407,7 +9411,7 @@
     },
     {
       "id": "event-ingredient-demand-consequence",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -9415,12 +9419,13 @@
         "organization_admins",
         "organization_sales"
       ],
-      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability as independent server-derived evidence rails.",
+      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability, then lets administrators allocate or release accepted/booked event commitments through shared date-independent Firestore fences.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
         "functions/inventoryAuthority.js",
         "functions/inventoryEventDemandCore.cjs",
+        "functions/inventoryIngredientAllocationCore.cjs",
         "scripts/inventory-ingredient-emulator-acceptance.mjs",
         "src/hooks/useEventIngredientProjection.js",
         "src/lib/inventoryAuthorityClient.js"
@@ -9456,6 +9461,7 @@
         "src/lib/__tests__/inventoryAuthorityClient.test.js",
         "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
         "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
+        "src/lib/__tests__/inventoryIngredientAllocationCore.server.test.js",
         "src/lib/__tests__/inventoryProductionRoute.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
@@ -9467,6 +9473,14 @@
         {
           "path": "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
           "locator": "unknown pasta cost preserves valid physical shortage evidence"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryIngredientAllocationCore.server.test.js",
+          "locator": "tops up only the remaining shortage after stock is received and preserves the prior hold"
+        },
+        {
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "shows partial allocation independently and emits exact admin allocate and release intents"
         },
         {
           "path": "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
@@ -9497,7 +9511,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The consequence card is composed into existing Quote Edit in both supported production graphs. It requires explicit output evidence, never infers portions from guest or billing quantity, previews without writing, records only for administrators, and subscribes to the exact event projection with snapshot metadata and retained stale recovery.",
+      "surfaceReviewNote": "The consequence card is composed into existing Quote Edit in both supported production graphs. It requires explicit output evidence, never infers portions from guest or billing quantity, previews without writing, records and allocates only for administrators, and subscribes to the exact event projection with snapshot metadata. Accepted/booked allocation, partial top-up, release, receipt readback, retained stale evidence, and uncertain recovery remain visibly distinct.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -9573,7 +9587,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote ingredient demand, projected ingredient cost, and consumable availability without writing. Only administrators can record an immutable requirement. Missing cost cannot hide a shortage, shortage cannot invalidate valid cost, cached or pending reads are not current, and this phase does not allocate or consume stock, mutate selling price, claim COGS, or establish deployment or human acceptance."
+      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote ingredient demand, projected ingredient cost, consumable availability, and current allocation evidence. Only administrators can record requirements or change accepted/booked allocations. Shared ingredient/location fences prevent cross-date over-allocation; receiving changes physical stock, allocation and release change commitment only, cached or pending reads are not current, and this phase does not consume stock, mutate selling price, claim COGS, or establish deployment or human acceptance."
     }
   ]
 }

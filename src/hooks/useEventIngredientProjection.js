@@ -70,8 +70,8 @@ function initialOperation() {
   return { state: "idle", message: "", requestId: "", receipt: null, confirmation: null };
 }
 
-function wrappedAttemptError(error, requestId) {
-  const wrapped = new Error(text(error?.message) || "Event ingredient requirement did not return verified evidence.", { cause: error });
+function wrappedAttemptError(error, requestId, fallback = "Event ingredient requirement did not return verified evidence.") {
+  const wrapped = new Error(text(error?.message) || fallback, { cause: error });
   wrapped.code = error?.code;
   wrapped.inventoryDefinitive = error?.inventoryDefinitive;
   wrapped.inventoryAttempt = { requestId };
@@ -119,6 +119,7 @@ export function useEventIngredientProjection({
   browserEnabled = false,
   tenantEnabled = false,
   quoteId = "",
+  quoteStatus = "",
   savedQuoteRevisionId = "",
   selections = [],
   draftDirty = false,
@@ -131,9 +132,11 @@ export function useEventIngredientProjection({
     browserEnabled, organizationId, role, tenantEnabled
   ]);
   const inputFingerprint = useMemo(() => JSON.stringify({ selections }), [selections]);
+  const allocationCommerciallyEligible = new Set(["accepted", "booked"]).has(text(quoteStatus).toLowerCase());
   const [read, setRead] = useState(() => initialRead(quoteId));
   const [preview, setPreview] = useState({ state: "not_evaluated", projection: null, error: "" });
   const [operation, setOperation] = useState(initialOperation);
+  const [allocationOperation, setAllocationOperation] = useState(initialOperation);
   const lifecycleRef = useRef(0);
 
   useEffect(() => {
@@ -182,8 +185,44 @@ export function useEventIngredientProjection({
 
   useEffect(() => {
     setPreview({ state: "not_evaluated", projection: null, error: "" });
+  }, [draftDirty, inputFingerprint, quoteId, savedQuoteRevisionId]);
+
+  useEffect(() => {
     setOperation(initialOperation());
-  }, [access.readEnabled, access.role, active, draftDirty, inputFingerprint, organizationId, quoteId, savedQuoteRevisionId]);
+    setAllocationOperation(initialOperation());
+  }, [access.readEnabled, access.role, active, organizationId, quoteId]);
+
+  useEffect(() => {
+    if (read.sourceState !== "current" || read.projection?.freshness !== "as_recorded") return;
+    setOperation((current) => {
+      if (current.state !== "receipt" || !current.confirmation) return current;
+      const result = current.confirmation;
+      return read.projection.quoteId === result.quoteId
+        && read.projection.quoteRevisionId === result.quoteRevisionId
+        && read.projection.requirementRevision === result.requirementRevision
+        && read.projection.eventRequirementRevisionId === result.eventRequirementRevisionId
+        && read.projection.requirementDigest === result.requirementDigest
+        && read.projection.projectionDigest === result.projectionDigest
+        ? { ...current, state: "committed", message: "Event ingredient requirement confirmed in the current projection." }
+        : current;
+    });
+    setAllocationOperation((current) => {
+      if (current.state !== "receipt" || !current.confirmation) return current;
+      const allocation = read.projection.allocation;
+      const result = current.confirmation;
+      return allocation?.eventPlanId === result.eventPlanId
+        && allocation.allocationRevision === result.allocationRevision
+        && allocation.state === result.state
+        && allocation.eventRequirementRevisionId === result.eventRequirementRevisionId
+        && allocation.ingredientCount === result.ingredientCount
+        && allocation.fullyAllocatedIngredientCount === result.fullyAllocatedIngredientCount
+        && allocation.shortageIngredientCount === result.shortageIngredientCount
+        ? { ...current, state: "committed", message: result.state === "released"
+          ? "Allocation release confirmed in the current projection."
+          : "Ingredient allocation confirmed in the current projection." }
+        : current;
+    });
+  }, [allocationOperation.state, operation.state, read.projection, read.sourceState]);
 
   const previewCurrent = useCallback(async (overrides = {}) => {
     const lifecycle = lifecycleRef.current;
@@ -258,8 +297,8 @@ export function useEventIngredientProjection({
       });
       if (lifecycleRef.current === lifecycle) {
         setOperation({
-          state: "committed",
-          message: "Event ingredient requirement recorded.",
+          state: "receipt",
+          message: "Requirement receipt recorded. Waiting for the exact current projection.",
           requestId,
           receipt: result.receipt,
           confirmation: result.confirmation
@@ -292,8 +331,8 @@ export function useEventIngredientProjection({
       const result = await reconcileInventoryCommand({ ...scope, requestId });
       if (lifecycleRef.current === lifecycle) {
         setOperation({
-          state: "committed",
-          message: "Event ingredient requirement reconciled.",
+          state: "receipt",
+          message: "Requirement receipt reconciled. Waiting for the exact current projection.",
           requestId,
           receipt: result.receipt,
           confirmation: result.confirmation
@@ -320,12 +359,132 @@ export function useEventIngredientProjection({
     return resetResult;
   }, [operation.requestId, operation.state, scope]);
 
+  const applyAllocation = useCallback(async ({ kind, locationId = "", reason = "" }) => {
+    if (access.role !== "admin" || !access.mutationEnabled) {
+      throw new Error("Only an authorized administrator may change ingredient allocations.");
+    }
+    if (!allocationCommerciallyEligible) {
+      throw new Error("Ingredient allocation changes are available only for an accepted or booked quote.");
+    }
+    if (draftDirty || read.sourceState !== "current" || read.projection?.freshness !== "as_recorded"
+      || read.projection.quoteRevisionId !== savedQuoteRevisionId) {
+      throw new Error("Ingredient allocation requires the exact current saved requirement projection.");
+    }
+    if (new Set(["pending", "receipt", "uncertain", "reconciliation", "rejected"]).has(allocationOperation.state)) {
+      throw new Error("Resolve the existing ingredient allocation request before starting another.");
+    }
+    const requestId = buildInventoryRequestId();
+    const currentAllocationRevision = read.projection.allocation?.allocationRevision || 0;
+    const command = kind === "allocate_event_ingredients" ? {
+      kind,
+      quoteId,
+      eventRequirementRevisionId: read.projection.eventRequirementRevisionId,
+      locationId,
+      expectedRequirementRevision: read.projection.requirementRevision,
+      expectedAllocationRevision: currentAllocationRevision
+    } : {
+      kind,
+      quoteId,
+      expectedAllocationRevision: currentAllocationRevision,
+      reason
+    };
+    const lifecycle = lifecycleRef.current;
+    setAllocationOperation({ ...initialOperation(), state: "pending", requestId });
+    try {
+      const result = await applyInventoryCommand({ ...scope, requestId, command });
+      if (lifecycleRef.current === lifecycle) {
+        setAllocationOperation({
+          state: "receipt",
+          message: result.confirmation.state === "released"
+            ? "Release receipt recorded. Waiting for the exact current projection."
+            : "Allocation receipt recorded. Waiting for the exact current projection.",
+          requestId,
+          receipt: result.receipt,
+          confirmation: result.confirmation
+        });
+      }
+      return result;
+    } catch (error) {
+      if (lifecycleRef.current === lifecycle) {
+        setAllocationOperation({
+          state: isDefinitiveInventoryError(error) ? "rejected" : "uncertain",
+          message: text(error?.message) || "Ingredient allocation did not return verified evidence.",
+          requestId,
+          receipt: null,
+          confirmation: null
+        });
+      }
+      throw wrappedAttemptError(error, requestId, "Ingredient allocation did not return verified evidence.");
+    }
+  }, [access.mutationEnabled, access.role, allocationCommerciallyEligible, allocationOperation.state, draftDirty, quoteId, read.projection, read.sourceState, savedQuoteRevisionId, scope]);
+
+  const allocate = useCallback(({ locationId }) => applyAllocation({
+    kind: "allocate_event_ingredients", locationId: text(locationId)
+  }), [applyAllocation]);
+
+  const release = useCallback(({ reason }) => applyAllocation({
+    kind: "release_event_ingredients", reason: text(reason)
+  }), [applyAllocation]);
+
+  const reconcileAllocation = useCallback(async () => {
+    if (!allocationOperation.requestId || allocationOperation.state !== "uncertain") {
+      throw new Error("There is no uncertain ingredient allocation request to reconcile.");
+    }
+    const requestId = allocationOperation.requestId;
+    const lifecycle = lifecycleRef.current;
+    setAllocationOperation((current) => ({ ...current, state: "reconciliation", message: "" }));
+    try {
+      const result = await reconcileInventoryCommand({ ...scope, requestId });
+      if (lifecycleRef.current === lifecycle) {
+        setAllocationOperation({
+          state: "receipt",
+          message: "Allocation receipt reconciled. Waiting for the exact current projection.",
+          requestId,
+          receipt: result.receipt,
+          confirmation: result.confirmation
+        });
+      }
+      return result;
+    } catch (error) {
+      if (lifecycleRef.current === lifecycle) {
+        setAllocationOperation((current) => ({
+          ...current,
+          state: isDefinitiveInventoryError(error) ? "rejected" : "uncertain",
+          message: text(error?.message) || "Ingredient allocation reconciliation is unresolved."
+        }));
+      }
+      throw error;
+    }
+  }, [allocationOperation.requestId, allocationOperation.state, scope]);
+
+  const resetAllocation = useCallback(() => {
+    if (!allocationOperation.requestId || allocationOperation.state !== "rejected") return false;
+    const resetResult = resetDefinitiveInventoryCommand({ ...scope, requestId: allocationOperation.requestId });
+    if (resetResult) setAllocationOperation(initialOperation());
+    return resetResult;
+  }, [allocationOperation.requestId, allocationOperation.state, scope]);
+
   if (injected) return injected;
 
   const previewMatchesSaved = preview.state === "current"
     && preview.projection?.quoteRevisionId === savedQuoteRevisionId;
-  const controlsLocked = new Set(["pending", "uncertain", "reconciliation", "rejected"]).has(operation.state);
+  const controlsLocked = new Set(["pending", "receipt", "uncertain", "reconciliation", "rejected"]).has(operation.state);
+  const allocationControlsLocked = new Set(["pending", "receipt", "uncertain", "reconciliation", "rejected"])
+    .has(allocationOperation.state);
+  const requirementCurrent = read.sourceState === "current"
+    && read.projection?.freshness === "as_recorded"
+    && read.projection?.quoteRevisionId === savedQuoteRevisionId
+    && read.state === "recorded";
+  const allocationState = read.projection?.allocation?.state || "";
+  const allocationActive = new Set(["reserved", "shortage"]).has(allocationState);
   const canRecord = access.role === "admin" && access.mutationEnabled && !draftDirty && previewMatchesSaved && !controlsLocked;
+  const canAllocate = access.role === "admin" && access.mutationEnabled && !draftDirty
+    && allocationCommerciallyEligible && requirementCurrent && read.projection?.demandState === "complete"
+    && allocationState !== "reserved"
+    && !controlsLocked && !allocationControlsLocked;
+  const canRelease = access.role === "admin" && access.mutationEnabled && !draftDirty
+    && allocationCommerciallyEligible && requirementCurrent && allocationActive
+    && !controlsLocked && !allocationControlsLocked;
   let recordBlockedReason = "";
   if (access.role !== "admin" || !access.mutationEnabled) recordBlockedReason = "Only an authorized administrator may record requirements.";
   else if (draftDirty) recordBlockedReason = "Save the quote revision before recording ingredient requirements.";
@@ -337,14 +496,32 @@ export function useEventIngredientProjection({
     read,
     preview,
     operation,
+    allocationOperation,
     controlsLocked,
-    canPreview: access.readEnabled && !draftDirty && !controlsLocked,
+    allocationControlsLocked,
+    canPreview: access.readEnabled && !draftDirty && !controlsLocked && !allocationControlsLocked,
     canRecord,
+    canManageAllocation: access.role === "admin" && access.mutationEnabled,
+    canAllocate,
+    canRelease,
+    allocationBlockedReason: !access.mutationEnabled || access.role !== "admin"
+      ? "Only an authorized administrator may change ingredient allocations."
+      : !allocationCommerciallyEligible ? "Ingredient allocation is available only for accepted or booked quotes."
+      : draftDirty ? "Save the quote revision before changing ingredient allocations."
+      : !requirementCurrent ? "A server-current saved ingredient requirement is required before allocation."
+      : read.projection?.demandState !== "complete" ? "Resolve missing recipe or portion evidence before allocation."
+      : controlsLocked || allocationControlsLocked ? "Resolve the current inventory request before changing the allocation."
+      : allocationState === "reserved" ? "The current ingredient requirement is already fully allocated."
+      : "",
     recordBlockedReason,
     previewCurrent,
     recordCurrentPreview,
     reconcile,
-    reset
+    reset,
+    allocate,
+    release,
+    reconcileAllocation,
+    resetAllocation
   };
 }
 

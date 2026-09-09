@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-09 04:12:00 CDT
+Last updated: 2026-09-09 05:30:00 CDT
 
 ## Ingredient inventory scope correction
 
@@ -12,7 +12,7 @@ superseded that interpretation: ingredient stock, recorded purchase cost,
 versioned recipes, menu/event demand, projected food cost, consumable
 availability, allocation, and consumption evidence now govern the program.
 
-Corrected Phases 2 through 4 are complete as default-off local source
+Corrected Phases 2 through 5 are complete as default-off local source
 candidates. Phase 2 lets
 administrators create ingredient identities and locations, record fractional
 opening stock, independently record exact purchase-cost evidence, and read
@@ -51,6 +51,19 @@ metadata, retains stale evidence visibly, and provides a read-only preview to
 sales plus receipt-producing recording and recovery to administrators. No
 Phase 4 action allocates or consumes stock.
 
+Phase 5 adds confirmed receiving and cumulative consumable allocation. A
+receiving transaction appends one immutable physical movement plus exact known-
+or-unknown cost evidence; only an absent planning-cost state may be established
+from that first known observation, so later receipts cannot invent latest-cost
+or weighted-average policy. Accepted/booked events allocate against deterministic
+ingredient/location fences that span all dates. The transaction revalidates the
+active quote version, current recipes, immutable requirement, current plan,
+physical stock, and every fence before writing a partial or full allocation,
+immutable plan revision, receipt, and exact projections. Receiving changes
+on-hand only; allocation/release changes commitment only. A short plan can top
+up after receiving without surrendering its existing hold. Administrators own
+mutations; sales receive the same exact read-only event evidence.
+
 Phase 2's full-march checkpoint included 5,342 passing unit tests with 94
 intentional skips and 88 passing Firestore-rules tests. Phase 3 qualification
 passes 5,414 unit tests with 96 intentional skips, 90 Firestore-rules tests, the
@@ -69,6 +82,19 @@ pre-existing unrelated `steward-private-validation-foundation` branch-base
 drift; its Phase 4 inventory contracts have no remaining finding. These local
 results do not establish CI, deployment, activation, production behavior, or
 human acceptance.
+
+Phase 5 qualification passes 5,485 unit tests with 98 intentional skips, 92
+Firestore-rules tests, and the real Auth/Firestore/Functions emulator scenario,
+including simultaneous allocations that contend on the same ingredient and
+location fence. The fixture proves cross-date commitments remain cumulative,
+partial allocation never promises more than on-hand stock, release leaves
+physical stock unchanged, receiving is retry-safe, and exact event projections
+confirm immutable receipts. Both supported production builds, environment
+validation, documentation governance, and project-state checks pass. The
+capability-surfacing and product-drift gates still report only the pre-existing
+unrelated `steward-private-validation-foundation` branch-base issue; product
+drift also correctly reports this not-yet-committed worktree as dirty. These
+results remain local evidence only.
 
 The corrected architecture keeps menu costing and stock promise as independent
 siblings over one immutable ingredient-demand revision. Missing cost cannot

@@ -3,6 +3,7 @@
 const inventory = require("./inventoryIngredientCore.cjs");
 const recipe = require("./inventoryRecipeCore.cjs");
 const eventDemand = require("./inventoryEventDemandCore.cjs");
+const allocation = require("./inventoryIngredientAllocationCore.cjs");
 const { wallTimeToExactISO } = require("./operationalStaffingRuntime.js");
 
 const COLLECTIONS = Object.freeze({
@@ -24,14 +25,17 @@ const COLLECTIONS = Object.freeze({
   menuCostProjections: "inventoryMenuCostProjections",
   eventRequirementHeads: "eventIngredientRequirementHeads",
   eventRequirements: "eventIngredientRequirements",
-  eventProjections: "eventIngredientProjections"
+  eventProjections: "eventIngredientProjections",
+  eventPlans: "eventIngredientPlans",
+  allocationFences: "inventoryAllocationFences"
 });
 const WORKSPACE_LIMIT = 200;
 const MENU_COST_PROJECTION_LIMIT = 200;
 const MAX_PUBLISHED_RECIPE_LINES = 50;
 const COMMAND_KINDS = new Set([
   "upsert_location", "upsert_ingredient", "opening_balance", "record_ingredient_cost",
-  "publish_pack_conversion", "publish_menu_recipe", "compile_event_ingredient_demand"
+  "publish_pack_conversion", "publish_menu_recipe", "compile_event_ingredient_demand",
+  "receive_stock", "allocate_event_ingredients", "release_event_ingredients"
 ]);
 
 function isRecord(value) {
@@ -196,6 +200,9 @@ function normalizeCommand(value) {
   else if (value.kind === "upsert_ingredient") inventory.normalizeIngredientRequest(value);
   else if (value.kind === "opening_balance") inventory.normalizeOpeningBalanceRequest(value);
   else if (value.kind === "record_ingredient_cost") inventory.normalizeCostEvidenceRequest(value);
+  else if (value.kind === "receive_stock") inventory.normalizeReceivingRequest(value);
+  else if (value.kind === "allocate_event_ingredients") allocation.normalizeAllocateRequest(value);
+  else if (value.kind === "release_event_ingredients") allocation.normalizeReleaseRequest(value);
   else if (value.kind === "publish_pack_conversion") normalizePackConversionCommand(value);
   else if (value.kind === "publish_menu_recipe") normalizeRecipeCommand(value);
   else normalizeEventDemandInput(value, { includeExpectedRevision: true });
@@ -272,7 +279,7 @@ function projectedLocation(location) {
   });
 }
 
-function projectStockAxis(stockStates) {
+function projectStockAxis(stockStates, allocationFences = []) {
   if (stockStates.length > 1) {
     throw new inventory.InventoryIngredientError(
       "failed-precondition",
@@ -286,17 +293,52 @@ function projectStockAxis(stockStates) {
       onHandMicros: 0,
       quantity: "0",
       locationId: "",
-      lastMovementId: ""
+      lastMovementId: "",
+      allocationRevision: 0,
+      committedMicros: 0,
+      committedQuantity: "0",
+      availableToAllocateMicros: 0,
+      availableToAllocateQuantity: "0"
     });
   }
   const [state] = stockStates;
+  if (allocationFences.length > 1) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient projection has multiple allocation fences for one stock location.");
+  }
+  const fence = allocationFences[0] || allocation.emptyFence({
+    organizationId: state.organizationId,
+    ingredientId: state.ingredientId,
+    locationId: state.locationId,
+    baseUnitId: state.baseUnitId
+  });
+  try {
+    allocation.verifyFence(fence, {
+      organizationId: state.organizationId,
+      ingredientId: state.ingredientId,
+      locationId: state.locationId
+    });
+  } catch (error) {
+    if (error instanceof allocation.InventoryAllocationError) {
+      throw new inventory.InventoryIngredientError(error.code, error.message);
+    }
+    throw error;
+  }
+  if (fence.baseUnitId !== state.baseUnitId || fence.committedMicros > state.onHandMicros) {
+    throw new inventory.InventoryIngredientError("data-loss", "Ingredient commitment exceeds or disagrees with physical stock.");
+  }
+  const availableToAllocateMicros = state.onHandMicros - fence.committedMicros;
   return Object.freeze({
     availability: "current",
     stockRevision: state.revision,
     onHandMicros: state.onHandMicros,
     quantity: inventory.formatQuantityMicros(state.onHandMicros),
     locationId: state.locationId,
-    lastMovementId: state.lastMovementId
+    lastMovementId: state.lastMovementId,
+    allocationRevision: fence.revision,
+    committedMicros: fence.committedMicros,
+    committedQuantity: inventory.formatQuantityMicros(fence.committedMicros),
+    availableToAllocateMicros,
+    availableToAllocateQuantity: inventory.formatQuantityMicros(availableToAllocateMicros)
   });
 }
 
@@ -337,8 +379,10 @@ function projectedPackConversion(head) {
   });
 }
 
-function ingredientProjection({ ingredient, stockStates, costState, packConversionHeads = [], nowISO }) {
-  const stock = projectStockAxis(stockStates);
+function ingredientProjection({
+  ingredient, stockStates, costState, allocationFences = [], packConversionHeads = [], nowISO
+}) {
+  const stock = projectStockAxis(stockStates, allocationFences);
   const cost = projectCostAxis(costState);
   return Object.freeze({
     authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
@@ -361,6 +405,22 @@ function ingredientProjection({ ingredient, stockStates, costState, packConversi
         || left.packUnitId.localeCompare(right.packUnitId))),
     updatedAtISO: nowISO
   });
+}
+
+function withIngredientStockProjection(current, stockState, fence, nowISO) {
+  verifyIngredientProjection(current, current.organizationId, current.ingredientId);
+  inventory.verifyStockState(stockState, {
+    organizationId: current.organizationId,
+    ingredientId: current.ingredientId,
+    locationId: stockState.locationId
+  });
+  const next = Object.freeze({
+    ...current,
+    stock: projectStockAxis([stockState], [fence]),
+    updatedAtISO: nowISO
+  });
+  verifyIngredientProjection(next, next.organizationId, next.ingredientId);
+  return next;
 }
 
 function menuIdentity(menuItem, menuItemId) {
@@ -802,6 +862,60 @@ function persistedEventProjection({ projection, requirementRevision, ingredientL
   return value;
 }
 
+function eventAllocationSummary(plan) {
+  return Object.freeze({
+    state: plan.state,
+    eventPlanId: plan.eventPlanId,
+    allocationRevision: plan.allocationRevision,
+    eventRequirementRevisionId: plan.eventRequirementRevisionId,
+    ingredientCount: plan.ingredientCount,
+    fullyAllocatedIngredientCount: plan.fullyAllocatedIngredientCount,
+    shortageIngredientCount: plan.shortageIngredientCount,
+    ingredients: Object.freeze(plan.ingredients.map((entry) => Object.freeze({
+      ingredientId: entry.ingredientId,
+      locationId: entry.locationId,
+      baseUnitId: entry.baseUnitId,
+      requiredQuantityMicros: entry.requiredQuantityMicros,
+      allocatedQuantityMicros: entry.allocatedQuantityMicros,
+      shortageQuantityMicros: entry.shortageQuantityMicros
+    })))
+  });
+}
+
+function withEventAllocation(projection, plan, nowISO) {
+  verifyPersistedEventProjection(projection, {
+    organizationId: plan.organizationId,
+    quoteId: plan.quoteId
+  });
+  if (projection.eventRequirementRevisionId !== plan.eventRequirementRevisionId
+    || projection.requirementRevision !== plan.requirementRevision
+    || projection.requirementDigest !== plan.requirementDigest) {
+    throw new inventory.InventoryIngredientError(
+      "aborted",
+      "The event ingredient projection changed before allocation. Re-evaluate ingredient demand."
+    );
+  }
+  const next = Object.freeze({
+    ...projection,
+    allocation: eventAllocationSummary(plan),
+    updatedAtISO: nowISO
+  });
+  verifyPersistedEventProjection(next, { organizationId: plan.organizationId, quoteId: plan.quoteId });
+  return next;
+}
+
+function assertProjectedAllocationMatchesPlan(projection, plan) {
+  const expected = eventAllocationSummary(plan);
+  if (!projection.allocation
+    || inventory.canonicalSerialize(projection.allocation)
+      !== inventory.canonicalSerialize(expected)) {
+    throw new inventory.InventoryIngredientError(
+      "data-loss",
+      "The event ingredient projection allocation disagrees with its canonical plan."
+    );
+  }
+}
+
 function eventRequirementRecord({ requirement, actor, nowISO }) {
   eventDemand.verifyEventIngredientRequirement(requirement);
   return Object.freeze({
@@ -850,7 +964,8 @@ function verifyPersistedEventProjection(value, { organizationId, quoteId, docume
     throw new inventory.InventoryIngredientError("data-loss", "Event ingredient projection is unavailable.");
   }
   const {
-    model, requirementRevision, ingredientLabels, freshness, staleReason, updatedAtISO, ...coreProjection
+    model, requirementRevision, ingredientLabels, freshness, staleReason, updatedAtISO,
+    allocation: allocationSummary, ...coreProjection
   } = value;
   if (model !== "event-ingredient-projection-v1"
     || value.organizationId !== organizationId || value.quoteId !== quoteId
@@ -892,6 +1007,64 @@ function verifyPersistedEventProjection(value, { organizationId, quoteId, docume
   if (inventory.canonicalSerialize(projectedIds)
     !== inventory.canonicalSerialize(ingredientLabels.map(({ ingredientId }) => ingredientId))) {
     throw new inventory.InventoryIngredientError("data-loss", "Event ingredient projection labels do not cover its ingredient rows.");
+  }
+  if (typeof allocationSummary !== "undefined") {
+    exactKeys(allocationSummary, [
+      "state", "eventPlanId", "allocationRevision", "eventRequirementRevisionId", "ingredientCount",
+      "fullyAllocatedIngredientCount", "shortageIngredientCount", "ingredients"
+    ], "Event ingredient allocation projection");
+    if (allocationSummary.eventPlanId !== allocation.eventPlanIdFor(organizationId, quoteId)
+      || !["reserved", "shortage", "released"].includes(allocationSummary.state)
+      || allocationSummary.eventRequirementRevisionId !== coreProjection.eventRequirementRevisionId
+      || allocationSummary.ingredientCount !== allocationSummary.ingredients?.length
+      || allocationSummary.fullyAllocatedIngredientCount + allocationSummary.shortageIngredientCount
+        !== allocationSummary.ingredientCount) {
+      throw new inventory.InventoryIngredientError("data-loss", "Event ingredient allocation projection is invalid.");
+    }
+    inventory.revision(allocationSummary.allocationRevision, "event projection allocationRevision", { allowZero: false });
+    const allocationIngredientIds = new Set();
+    let priorAllocationIngredientId = "";
+    let projectedFullCount = 0;
+    let projectedShortageCount = 0;
+    allocationSummary.ingredients.forEach((entry) => {
+      exactKeys(entry, [
+        "ingredientId", "locationId", "baseUnitId", "requiredQuantityMicros",
+        "allocatedQuantityMicros", "shortageQuantityMicros"
+      ], "Event projected ingredient allocation");
+      inventory.opaqueId(entry.ingredientId, "projected allocation ingredientId");
+      inventory.opaqueId(entry.locationId, "projected allocation locationId");
+      inventory.baseUnitId(entry.baseUnitId);
+      if (allocationIngredientIds.has(entry.ingredientId)
+        || (priorAllocationIngredientId && priorAllocationIngredientId.localeCompare(entry.ingredientId) >= 0)
+        || !Number.isSafeInteger(entry.requiredQuantityMicros) || entry.requiredQuantityMicros <= 0
+        || !Number.isSafeInteger(entry.allocatedQuantityMicros) || entry.allocatedQuantityMicros < 0
+        || !Number.isSafeInteger(entry.shortageQuantityMicros) || entry.shortageQuantityMicros < 0
+        || entry.allocatedQuantityMicros + entry.shortageQuantityMicros !== entry.requiredQuantityMicros) {
+        throw new inventory.InventoryIngredientError("data-loss", "Event projected allocation quantities are invalid.");
+      }
+      allocationIngredientIds.add(entry.ingredientId);
+      priorAllocationIngredientId = entry.ingredientId;
+      if (entry.shortageQuantityMicros > 0) projectedShortageCount += 1;
+      else projectedFullCount += 1;
+    });
+    const requiredRows = coreProjection.ingredients.map((entry) => ({
+      ingredientId: entry.ingredientId,
+      baseUnitId: entry.baseUnitId,
+      requiredQuantityMicros: entry.requiredQuantityMicros
+    })).sort((left, right) => left.ingredientId.localeCompare(right.ingredientId));
+    const allocatedRows = allocationSummary.ingredients.map((entry) => ({
+      ingredientId: entry.ingredientId,
+      baseUnitId: entry.baseUnitId,
+      requiredQuantityMicros: entry.requiredQuantityMicros
+    }));
+    if (projectedFullCount !== allocationSummary.fullyAllocatedIngredientCount
+      || projectedShortageCount !== allocationSummary.shortageIngredientCount
+      || inventory.canonicalSerialize(allocatedRows) !== inventory.canonicalSerialize(requiredRows)) {
+      throw new inventory.InventoryIngredientError(
+        "data-loss",
+        "Event projected allocation does not exactly cover its ingredient requirement."
+      );
+    }
   }
   return value;
 }
@@ -1015,15 +1188,23 @@ function verifyIngredientProjection(value, organizationId, ingredientId) {
     throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory projection fields are invalid.");
   }
   exactKeys(value.stock, [
-    "availability", "stockRevision", "onHandMicros", "quantity", "locationId", "lastMovementId"
+    "availability", "stockRevision", "onHandMicros", "quantity", "locationId", "lastMovementId",
+    "allocationRevision", "committedMicros", "committedQuantity", "availableToAllocateMicros",
+    "availableToAllocateQuantity"
   ], "Ingredient stock projection");
   if (!new Set(["current", "not_yet_available"]).has(value.stock.availability)) {
     throw new inventory.InventoryIngredientError("data-loss", "Ingredient stock projection availability is invalid.");
   }
   const stockRevision = inventory.revision(value.stock.stockRevision, "projected stock revision");
+  inventory.revision(value.stock.allocationRevision, "projected allocation revision");
   if (inventory.formatQuantityMicros(value.stock.onHandMicros) !== value.stock.quantity
+    || inventory.formatQuantityMicros(value.stock.committedMicros) !== value.stock.committedQuantity
+    || inventory.formatQuantityMicros(value.stock.availableToAllocateMicros)
+      !== value.stock.availableToAllocateQuantity
+    || value.stock.committedMicros + value.stock.availableToAllocateMicros !== value.stock.onHandMicros
     || (value.stock.availability === "not_yet_available"
-      && (stockRevision !== 0 || value.stock.onHandMicros !== 0 || value.stock.locationId || value.stock.lastMovementId))
+      && (stockRevision !== 0 || value.stock.onHandMicros !== 0 || value.stock.locationId
+        || value.stock.lastMovementId || value.stock.allocationRevision !== 0 || value.stock.committedMicros !== 0))
     || (value.stock.availability === "current"
       && (stockRevision < 1 || !/^imv_[a-f0-9]{48}$/u.test(value.stock.lastMovementId)))) {
     throw new inventory.InventoryIngredientError("data-loss", "Ingredient stock projection quantity is invalid.");
@@ -1121,6 +1302,8 @@ function createInventoryAuthorityRuntime({
       eventRequirementHeads: organizationRef.collection(COLLECTIONS.eventRequirementHeads),
       eventRequirements: organizationRef.collection(COLLECTIONS.eventRequirements),
       eventProjections: organizationRef.collection(COLLECTIONS.eventProjections),
+      eventPlans: organizationRef.collection(COLLECTIONS.eventPlans),
+      allocationFences: organizationRef.collection(COLLECTIONS.allocationFences),
       menuItems: organizationRef.collection("menuItems"),
       quotes: organizationRef.collection("quotes")
     };
@@ -1228,6 +1411,11 @@ function createInventoryAuthorityRuntime({
     if (receipt.commandKind !== claim.commandKind || receipt.commandDigest !== claim.commandDigest) {
       throw new inventory.InventoryIngredientError("already-exists", "This request identity belongs to a different immutable ingredient inventory command.");
     }
+    if ((receipt.commandKind === "receive_stock"
+      && !["established", "retained_existing"].includes(receipt.planningBasisAction))
+      || (receipt.commandKind !== "receive_stock" && Object.hasOwn(receipt, "planningBasisAction"))) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient inventory receipt effect evidence is invalid.");
+    }
     return receipt;
   }
 
@@ -1237,8 +1425,9 @@ function createInventoryAuthorityRuntime({
     const stockQuery = refs.stockStates.where("ingredientId", "==", ingredientId).limit(WORKSPACE_LIMIT + 1);
     const packHeadQuery = refs.packConversionHeads.where("ingredientId", "==", ingredientId)
       .limit(recipe.MAX_PACK_CONVERSIONS + 1);
-    const [ingredientSnap, costSnap, stockSnap, packHeadSnap] = await Promise.all([
-      tx.get(ingredientRef), tx.get(costRef), tx.get(stockQuery), tx.get(packHeadQuery)
+    const fenceQuery = refs.allocationFences.where("ingredientId", "==", ingredientId).limit(2);
+    const [ingredientSnap, costSnap, stockSnap, packHeadSnap, fenceSnap] = await Promise.all([
+      tx.get(ingredientRef), tx.get(costRef), tx.get(stockQuery), tx.get(packHeadQuery), tx.get(fenceQuery)
     ]);
     const ingredient = ingredientSnap.exists
       ? storedCanonical(ingredientSnap.data() || {}, "ingredient", {
@@ -1257,6 +1446,21 @@ function createInventoryAuthorityRuntime({
     const packConversionHeads = packHeadSnap.docs.map((doc) => verifyPackHead(doc.data() || {}, {
       organizationId, ingredientId, documentId: doc.id
     }));
+    if (fenceSnap.size > 1) {
+      throw new inventory.InventoryIngredientError("data-loss", "Ingredient has multiple active allocation-location fences in the one-location rollout.");
+    }
+    const allocationFences = fenceSnap.docs.map((doc) => {
+      try {
+        return allocation.verifyFence(doc.data() || {}, {
+          organizationId, ingredientId, locationId: doc.data()?.locationId, documentId: doc.id
+        });
+      } catch (error) {
+        if (error instanceof allocation.InventoryAllocationError) {
+          throw new inventory.InventoryIngredientError(error.code, error.message);
+        }
+        throw error;
+      }
+    });
     if (!ingredient && (stockStates.length || costState)) {
       throw new inventory.InventoryIngredientError("data-loss", "Ingredient evidence exists without its ingredient authority.");
     }
@@ -1268,7 +1472,9 @@ function createInventoryAuthorityRuntime({
     if (!ingredient && packConversionHeads.length) {
       throw new inventory.InventoryIngredientError("data-loss", "Ingredient pack conversions exist without their ingredient authority.");
     }
-    return { ingredientRef, costRef, ingredient, costState, stockStates, packConversionHeads };
+    return {
+      ingredientRef, costRef, ingredient, costState, stockStates, packConversionHeads, allocationFences
+    };
   }
 
   async function readDependencyImpact(tx, refs, organizationId, ingredientId, nowISO, reason) {
@@ -1346,11 +1552,13 @@ function createInventoryAuthorityRuntime({
   async function readEventDemandInputs(tx, refs, envelope, settings) {
     const quoteRef = refs.quotes.doc(envelope.quoteId);
     const versionRef = quoteRef.collection("versions").doc(envelope.quoteRevisionId);
+    const eventPlanRef = refs.eventPlans.doc(envelope.quoteId);
     const selectionMenuItemIds = envelope.selections.map(({ menuItemId }) => menuItemId);
     const recipeHeadRefs = selectionMenuItemIds.map((menuItemId) => refs.recipeHeads.doc(menuItemId));
-    const [quoteSnap, versionSnap, ...recipeHeadSnaps] = await tx.getAll(
+    const [quoteSnap, versionSnap, eventPlanSnap, ...recipeHeadSnaps] = await tx.getAll(
       quoteRef,
       versionRef,
+      eventPlanRef,
       ...recipeHeadRefs
     );
     if (!quoteSnap.exists || !versionSnap.exists) {
@@ -1453,12 +1661,48 @@ function createInventoryAuthorityRuntime({
       .filter((ingredient) => normalizedIngredientIds.includes(ingredient.ingredientId))
       .map((ingredient) => ({ ingredientId: ingredient.ingredientId, name: ingredient.name }))
       .sort((left, right) => left.ingredientId.localeCompare(right.ingredientId));
+    const fenceQueries = normalizedIngredientIds.map((ingredientId) =>
+      refs.allocationFences.where("ingredientId", "==", ingredientId).limit(2));
+    const fenceSnapshots = await Promise.all(fenceQueries.map((query) => tx.get(query)));
+    const activeAllocations = fenceSnapshots.flatMap((snapshot, index) => {
+      if (snapshot.size > 1) {
+        throw new inventory.InventoryIngredientError(
+          "data-loss",
+          "Ingredient availability found multiple contention fences in the one-location rollout."
+        );
+      }
+      if (!snapshot.size) return [];
+      const fence = allocation.verifyFence(snapshot.docs[0].data() || {}, {
+        organizationId: envelope.organizationId,
+        ingredientId: normalizedIngredientIds[index],
+        locationId: snapshot.docs[0].data()?.locationId,
+        documentId: snapshot.docs[0].id
+      });
+      return fence.allocations.map((entry) => ({
+        allocationId: entry.allocationId,
+        organizationId: envelope.organizationId,
+        eventPlanId: entry.eventPlanId,
+        ingredientId: fence.ingredientId,
+        locationId: fence.locationId,
+        baseUnitId: fence.baseUnitId,
+        quantityMicros: entry.quantityMicros,
+        revision: fence.revision,
+        sourceRequirementRevisionId: entry.eventRequirementRevisionId
+      }));
+    });
+    const currentPlan = eventPlanSnap.exists ? allocation.verifyPlan(eventPlanSnap.data() || {}, {
+      organizationId: envelope.organizationId,
+      quoteId: envelope.quoteId,
+      documentId: eventPlanSnap.id
+    }) : null;
     return {
       quote: quoteSnap.data() || {},
       version: versionSnap.data() || {},
       recipeRevisions,
       recipeCostResults,
       stockStates,
+      activeAllocations,
+      excludedPlanId: currentPlan && currentPlan.state !== "released" ? currentPlan.eventPlanId : "",
       ingredientLabels,
       canonicalRequiredByISO
     };
@@ -1476,7 +1720,8 @@ function createInventoryAuthorityRuntime({
         recipeRevisions: inputs.recipeRevisions,
         recipeCostResults: inputs.recipeCostResults,
         stockStates: inputs.stockStates,
-        activeAllocations: []
+        activeAllocations: inputs.activeAllocations,
+        excludedPlanId: inputs.excludedPlanId
       });
       return { ...compiled, ingredientLabels: inputs.ingredientLabels };
     } catch (error) {
@@ -1544,6 +1789,21 @@ function createInventoryAuthorityRuntime({
     }
   }
 
+  async function refreshIngredientMenuCosts(refs, actor, ingredientId) {
+    const menuItemIds = await db.runTransaction(async (tx) => {
+      await readAuthorityEnvelope(tx, refs, actor);
+      const dependencyRef = refs.recipeDependencies.doc(ingredientId);
+      const dependencySnap = await tx.get(dependencyRef);
+      if (!dependencySnap.exists) return [];
+      return verifyRecipeDependency(dependencySnap.data() || {}, {
+        organizationId: actor.organizationId,
+        ingredientId,
+        documentId: dependencySnap.id
+      }).menuItemIds;
+    });
+    await refreshAffectedMenuCosts(refs, actor, menuItemIds);
+  }
+
   function commandResult(commandKind, planned) {
     if (commandKind === "upsert_location") return safeLocation(planned.location);
     if (commandKind === "upsert_ingredient") return Object.freeze({
@@ -1563,6 +1823,36 @@ function createInventoryAuthorityRuntime({
       onHandMicros: planned.nextStockState.onHandMicros,
       onHandQuantity: inventory.formatQuantityMicros(planned.nextStockState.onHandMicros)
     });
+    if (commandKind === "receive_stock") return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      ingredientId: planned.movement.ingredientId,
+      locationId: planned.movement.locationId,
+      movementId: planned.movement.movementId,
+      costEvidenceId: planned.costEvidence.costEvidenceId,
+      stockRevision: planned.nextStockState.revision,
+      costRevision: planned.nextCostState?.revision || 0,
+      onHandMicros: planned.nextStockState.onHandMicros,
+      onHandQuantity: inventory.formatQuantityMicros(planned.nextStockState.onHandMicros)
+    });
+    if (["allocate_event_ingredients", "release_event_ingredients"].includes(commandKind)) {
+      const result = {
+        schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+        quoteId: planned.plan.quoteId,
+        eventPlanId: planned.plan.eventPlanId,
+        allocationRevision: planned.plan.allocationRevision,
+        state: planned.plan.state,
+        eventRequirementRevisionId: planned.plan.eventRequirementRevisionId,
+        ingredientCount: planned.plan.ingredientCount,
+        fullyAllocatedIngredientCount: planned.plan.fullyAllocatedIngredientCount,
+        shortageIngredientCount: planned.plan.shortageIngredientCount
+      };
+      if (commandKind === "release_event_ingredients") {
+        result.releasedIngredientCount = planned.plan.ingredients.filter(
+          ({ allocatedQuantityMicros }) => allocatedQuantityMicros > 0
+        ).length;
+      }
+      return Object.freeze(result);
+    }
     if (commandKind === "publish_pack_conversion") return Object.freeze({
       schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
       ingredientId: planned.packConversion.ingredientId,
@@ -1617,17 +1907,20 @@ function createInventoryAuthorityRuntime({
         principal: { uid: actor.uid, organizationId: actor.organizationId }
       }, "ingredient inventory command");
 
+      let receivingPlanningBasisAction = "";
       const outcome = await db.runTransaction(async (tx) => {
         const receiptSnap = await tx.get(receiptRef);
         const authority = await readAuthorityEnvelope(tx, refs, actor);
         if (receiptSnap.exists) {
-          return publicOutcome(verifyReceipt(receiptSnap.data() || {}, {
+          const receipt = verifyReceipt(receiptSnap.data() || {}, {
             organizationId: envelope.organizationId,
             receiptId,
             requestId: envelope.requestId,
             commandKind: envelope.command.kind,
             commandDigest
-          }), true);
+          });
+          receivingPlanningBasisAction = receipt.planningBasisAction || "";
+          return publicOutcome(receipt, true);
         }
 
         const nowISO = inventory.exactISO(now(), "recordedAtISO");
@@ -1693,6 +1986,244 @@ function createInventoryAuthorityRuntime({
             locations,
             updatedAtISO: nowISO
           } });
+        } else if (commandKind === "allocate_event_ingredients") {
+          const request = allocation.normalizeAllocateRequest(envelope.command);
+          const headRef = refs.eventRequirementHeads.doc(request.quoteId);
+          const requirementRef = refs.eventRequirements.doc(request.quoteId)
+            .collection("revisions").doc(request.eventRequirementRevisionId);
+          const planRef = refs.eventPlans.doc(request.quoteId);
+          const locationRef = refs.locations.doc(request.locationId);
+          const eventProjectionRef = refs.eventProjections.doc(request.quoteId);
+          const [headSnap, requirementSnap, planSnap, locationSnap, eventProjectionSnap] = await Promise.all([
+            tx.get(headRef), tx.get(requirementRef), tx.get(planRef), tx.get(locationRef), tx.get(eventProjectionRef)
+          ]);
+          if (!headSnap.exists || !requirementSnap.exists || !locationSnap.exists || !eventProjectionSnap.exists) {
+            throw new inventory.InventoryIngredientError(
+              "failed-precondition",
+              "Allocation requires the exact saved requirement, active location, and event projection."
+            );
+          }
+          const head = verifyEventRequirementHead(headSnap.data() || {}, {
+            organizationId: envelope.organizationId, quoteId: request.quoteId, documentId: headSnap.id
+          });
+          const requirementRecord = verifyEventRequirementRecord(requirementSnap.data() || {}, {
+            organizationId: envelope.organizationId,
+            quoteId: request.quoteId,
+            eventRequirementRevisionId: request.eventRequirementRevisionId,
+            documentId: requirementSnap.id
+          });
+          const requirement = requirementRecord.requirement;
+          const quoteRef = refs.quotes.doc(request.quoteId);
+          const quoteVersionRef = quoteRef.collection("versions").doc(requirement.quoteRevisionId);
+          const recipeHeadRefs = requirement.selections.map((selection) =>
+            refs.recipeHeads.doc(selection.menuItemId));
+          const [quoteSnap, quoteVersionSnap, ...recipeHeadSnaps] = await tx.getAll(
+            quoteRef, quoteVersionRef, ...recipeHeadRefs
+          );
+          if (!quoteSnap.exists || !quoteVersionSnap.exists) {
+            throw new inventory.InventoryIngredientError(
+              "failed-precondition",
+              "Allocation requires the exact current accepted or booked quote revision."
+            );
+          }
+          const quote = quoteSnap.data() || {};
+          if (!["accepted", "booked"].includes(String(quote.status || "").trim().toLowerCase())) {
+            throw new inventory.InventoryIngredientError(
+              "failed-precondition",
+              "Ingredient allocation is available only for an accepted or booked quote."
+            );
+          }
+          validateQuoteDemandScope({
+            organizationId: envelope.organizationId,
+            quoteId: request.quoteId,
+            quoteRevisionId: requirement.quoteRevisionId,
+            quote,
+            version: quoteVersionSnap.data() || {},
+            selections: requirement.selections
+          });
+          recipeHeadSnaps.forEach((snapshot, index) => {
+            const selection = requirement.selections[index];
+            if (!snapshot.exists || selection.recipeRevisionId === null) {
+              throw new inventory.InventoryIngredientError(
+                "aborted",
+                "A menu recipe changed after ingredient demand was recorded. Re-evaluate before allocating."
+              );
+            }
+            const currentRecipeHead = verifyRecipeHead(snapshot.data() || {}, {
+              organizationId: envelope.organizationId,
+              menuItemId: selection.menuItemId,
+              documentId: snapshot.id
+            });
+            if (currentRecipeHead.recipeRevisionId !== selection.recipeRevisionId
+              || currentRecipeHead.recipeDigest !== selection.recipeDigest) {
+              throw new inventory.InventoryIngredientError(
+                "aborted",
+                "A menu recipe changed after ingredient demand was recorded. Re-evaluate before allocating."
+              );
+            }
+          });
+          const location = storedCanonical(locationSnap.data() || {}, "location", {
+            organizationId: envelope.organizationId, locationId: request.locationId, documentId: locationSnap.id
+          });
+          if (!location.active) {
+            throw new inventory.InventoryIngredientError("failed-precondition", "Ingredient allocation requires an active stock location.");
+          }
+          const currentPlan = planSnap.exists ? allocation.verifyPlan(planSnap.data() || {}, {
+            organizationId: envelope.organizationId, quoteId: request.quoteId, documentId: planSnap.id
+          }) : null;
+          const eventProjection = verifyPersistedEventProjection(eventProjectionSnap.data() || {}, {
+            organizationId: envelope.organizationId, quoteId: request.quoteId, documentId: eventProjectionSnap.id
+          });
+          if (eventProjection.freshness !== "as_recorded" || eventProjection.staleReason
+            || eventProjection.quoteRevisionId !== requirement.quoteRevisionId
+            || eventProjection.eventRequirementRevisionId !== requirement.eventRequirementRevisionId
+            || eventProjection.requirementDigest !== requirement.requirementDigest
+            || head.requirementDigest !== requirement.requirementDigest
+            || head.quoteRevisionId !== requirement.quoteRevisionId) {
+            throw new inventory.InventoryIngredientError(
+              "aborted",
+              "The event ingredient projection is stale or no longer matches its immutable requirement."
+            );
+          }
+          if (currentPlan) assertProjectedAllocationMatchesPlan(eventProjection, currentPlan);
+          if (requirementRecord.requirement.ingredients.length > allocation.MAX_ALLOCATION_INGREDIENTS) {
+            throw new inventory.InventoryIngredientError(
+              "resource-exhausted",
+              `Allocation supports at most ${allocation.MAX_ALLOCATION_INGREDIENTS} ingredients atomically.`
+            );
+          }
+          const rows = requirement.ingredients;
+          const stockRefs = rows.map((row) => refs.stockStates.doc(inventory.stockStateId(row.ingredientId, request.locationId)));
+          const fenceRefs = rows.map((row) => refs.allocationFences.doc(
+            allocation.allocationFenceId(envelope.organizationId, row.ingredientId, request.locationId)
+          ));
+          const projectionRefs = rows.map((row) => refs.ingredientProjections.doc(row.ingredientId));
+          const evidenceSnaps = await tx.getAll(...stockRefs, ...fenceRefs, ...projectionRefs);
+          const stockSnaps = evidenceSnaps.slice(0, rows.length);
+          const fenceSnaps = evidenceSnaps.slice(rows.length, rows.length * 2);
+          const ingredientProjectionSnaps = evidenceSnaps.slice(rows.length * 2);
+          const stockStates = stockSnaps.map((snapshot, index) => {
+            if (!snapshot.exists) {
+              throw new inventory.InventoryIngredientError("failed-precondition", "An ingredient requirement lacks stock evidence at this location.");
+            }
+            return storedCanonical(snapshot.data() || {}, "stock state", {
+              organizationId: envelope.organizationId,
+              ingredientId: rows[index].ingredientId,
+              locationId: request.locationId,
+              documentId: snapshot.id
+            });
+          });
+          const fences = fenceSnaps.flatMap((snapshot, index) => {
+            if (!snapshot.exists) return [];
+            return [allocation.verifyFence(snapshot.data() || {}, {
+              organizationId: envelope.organizationId,
+              ingredientId: rows[index].ingredientId,
+              locationId: request.locationId,
+              documentId: snapshot.id
+            })];
+          });
+          ingredientProjectionSnaps.forEach((snapshot, index) => {
+            if (!snapshot.exists) {
+              throw new inventory.InventoryIngredientError("data-loss", "Ingredient stock exists without its safe projection.");
+            }
+            verifyIngredientProjection(snapshot.data() || {}, envelope.organizationId, rows[index].ingredientId);
+          });
+          planned = allocation.planEventAllocation({
+            request,
+            organizationId: envelope.organizationId,
+            requirementHead: head,
+            requirement,
+            currentPlan,
+            stockStates,
+            fences,
+            nowISO
+          });
+          const planRevisionRef = planRef.collection("revisions").doc(planned.plan.planRevisionId);
+          const planRevisionSnap = await tx.get(planRevisionRef);
+          if (planRevisionSnap.exists) {
+            throw new inventory.InventoryIngredientError("data-loss", "Immutable event ingredient plan revision already exists.");
+          }
+          priorRevision = currentPlan?.allocationRevision || 0;
+          planned.fences.forEach((fence, index) => {
+            writes.push({ operation: fenceSnaps[index].exists ? "set" : "create", ref: fenceRefs[index], value: fence });
+            writes.push({ operation: "set", ref: projectionRefs[index], value: withIngredientStockProjection(
+              ingredientProjectionSnaps[index].data() || {}, stockStates[index], fence, nowISO
+            ) });
+          });
+          const projectedEvent = withEventAllocation(eventProjection, planned.plan, nowISO);
+          writes.push(
+            { operation: currentPlan ? "set" : "create", ref: planRef, value: planned.plan },
+            { operation: "create", ref: planRevisionRef, value: planned.plan },
+            { operation: "set", ref: eventProjectionRef, value: projectedEvent }
+          );
+        } else if (commandKind === "release_event_ingredients") {
+          const request = allocation.normalizeReleaseRequest(envelope.command);
+          const planRef = refs.eventPlans.doc(request.quoteId);
+          const eventProjectionRef = refs.eventProjections.doc(request.quoteId);
+          const [planSnap, eventProjectionSnap] = await Promise.all([tx.get(planRef), tx.get(eventProjectionRef)]);
+          if (!planSnap.exists || !eventProjectionSnap.exists) {
+            throw new inventory.InventoryIngredientError("not-found", "The event has no current ingredient allocation to release.");
+          }
+          const currentPlan = allocation.verifyPlan(planSnap.data() || {}, {
+            organizationId: envelope.organizationId, quoteId: request.quoteId, documentId: planSnap.id
+          });
+          const eventProjection = verifyPersistedEventProjection(eventProjectionSnap.data() || {}, {
+            organizationId: envelope.organizationId, quoteId: request.quoteId, documentId: eventProjectionSnap.id
+          });
+          assertProjectedAllocationMatchesPlan(eventProjection, currentPlan);
+          const fenceRefs = currentPlan.ingredients.map((row) => refs.allocationFences.doc(row.fenceId));
+          const stockRefs = currentPlan.ingredients.map((row) => refs.stockStates.doc(
+            inventory.stockStateId(row.ingredientId, row.locationId)
+          ));
+          const projectionRefs = currentPlan.ingredients.map((row) => refs.ingredientProjections.doc(row.ingredientId));
+          const evidenceSnaps = await tx.getAll(...fenceRefs, ...stockRefs, ...projectionRefs);
+          const fenceSnaps = evidenceSnaps.slice(0, currentPlan.ingredients.length);
+          const stockSnaps = evidenceSnaps.slice(currentPlan.ingredients.length, currentPlan.ingredients.length * 2);
+          const ingredientProjectionSnaps = evidenceSnaps.slice(currentPlan.ingredients.length * 2);
+          const fences = fenceSnaps.map((snapshot, index) => {
+            if (!snapshot.exists) throw new inventory.InventoryIngredientError("data-loss", "Active allocation fence is missing.");
+            return allocation.verifyFence(snapshot.data() || {}, {
+              organizationId: envelope.organizationId,
+              ingredientId: currentPlan.ingredients[index].ingredientId,
+              locationId: currentPlan.ingredients[index].locationId,
+              documentId: snapshot.id
+            });
+          });
+          const stockStates = stockSnaps.map((snapshot, index) => {
+            if (!snapshot.exists) throw new inventory.InventoryIngredientError("data-loss", "Allocated ingredient stock state is missing.");
+            return storedCanonical(snapshot.data() || {}, "stock state", {
+              organizationId: envelope.organizationId,
+              ingredientId: currentPlan.ingredients[index].ingredientId,
+              locationId: currentPlan.ingredients[index].locationId,
+              documentId: snapshot.id
+            });
+          });
+          ingredientProjectionSnaps.forEach((snapshot, index) => {
+            if (!snapshot.exists) throw new inventory.InventoryIngredientError("data-loss", "Allocated ingredient projection is missing.");
+            verifyIngredientProjection(
+              snapshot.data() || {}, envelope.organizationId, currentPlan.ingredients[index].ingredientId
+            );
+          });
+          planned = allocation.planEventRelease({
+            request, organizationId: envelope.organizationId, currentPlan, fences, nowISO
+          });
+          const planRevisionRef = planRef.collection("revisions").doc(planned.plan.planRevisionId);
+          const planRevisionSnap = await tx.get(planRevisionRef);
+          if (planRevisionSnap.exists) {
+            throw new inventory.InventoryIngredientError("data-loss", "Immutable event ingredient plan revision already exists.");
+          }
+          priorRevision = currentPlan.allocationRevision;
+          planned.fences.forEach((fence, index) => {
+            writes.push({ operation: "set", ref: fenceRefs[index], value: fence });
+            writes.push({ operation: "set", ref: projectionRefs[index], value: withIngredientStockProjection(
+              ingredientProjectionSnaps[index].data() || {}, stockStates[index], fence, nowISO
+            ) });
+          });
+          writes.push(
+            { operation: "set", ref: planRef, value: planned.plan },
+            { operation: "create", ref: planRevisionRef, value: planned.plan },
+            { operation: "set", ref: eventProjectionRef, value: withEventAllocation(eventProjection, planned.plan, nowISO) }
+          );
         } else if (commandKind === "compile_event_ingredient_demand") {
           const normalizedCommand = normalizeEventDemandInput(envelope.command, { includeExpectedRevision: true });
           const eventEnvelope = Object.freeze({
@@ -1910,7 +2441,7 @@ function createInventoryAuthorityRuntime({
             });
             writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
               ingredient: planned.ingredient, stockStates: inputs.stockStates, costState: inputs.costState,
-              packConversionHeads: inputs.packConversionHeads, nowISO
+              allocationFences: inputs.allocationFences, packConversionHeads: inputs.packConversionHeads, nowISO
             }) });
             writes.push(...impact.writes);
           } else if (commandKind === "opening_balance") {
@@ -1945,8 +2476,80 @@ function createInventoryAuthorityRuntime({
             writes.push({ operation: "set", ref: inputs.ingredientRef, value: nextIngredient });
             writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
               ingredient: nextIngredient, stockStates, costState: inputs.costState,
-              packConversionHeads: inputs.packConversionHeads, nowISO
+              allocationFences: inputs.allocationFences, packConversionHeads: inputs.packConversionHeads, nowISO
             }) });
+          } else if (commandKind === "receive_stock") {
+            const stockRef = refs.stockStates.doc(inventory.stockStateId(ingredientId, envelope.command.locationId));
+            const locationRef = refs.locations.doc(envelope.command.locationId);
+            const [stockSnap, locationSnap] = await Promise.all([tx.get(stockRef), tx.get(locationRef)]);
+            if (!stockSnap.exists || !locationSnap.exists) {
+              throw new inventory.InventoryIngredientError(
+                "failed-precondition",
+                "Receiving requires an opened ingredient stock state and active location."
+              );
+            }
+            const stockState = storedCanonical(stockSnap.data() || {}, "stock state", {
+              organizationId: envelope.organizationId,
+              ingredientId,
+              locationId: envelope.command.locationId,
+              documentId: stockSnap.id
+            });
+            const location = storedCanonical(locationSnap.data() || {}, "location", {
+              organizationId: envelope.organizationId,
+              locationId: envelope.command.locationId,
+              documentId: locationSnap.id
+            });
+            planned = inventory.planReceiving({
+              organizationId: envelope.organizationId,
+              requestId: envelope.requestId,
+              request: envelope.command,
+              ingredient: inputs.ingredient,
+              location,
+              stockState,
+              currentCostState: inputs.costState,
+              actor,
+              nowISO
+            });
+            priorRevision = stockState.revision;
+            const nextIngredient = Object.freeze({
+              ...inputs.ingredient,
+              movementCount: inputs.ingredient.movementCount + 1,
+              updatedAtISO: nowISO,
+              updatedBy: actor
+            });
+            const stockStates = inputs.stockStates
+              .filter((state) => state.stockStateId !== planned.nextStockState.stockStateId)
+              .concat(planned.nextStockState);
+            let affectedMenuItemIds = [];
+            let impactWrites = [];
+            if (planned.planningBasisAction === "established") {
+              const impact = await readDependencyImpact(
+                tx, refs, envelope.organizationId, ingredientId, nowISO, "ingredient_cost_changed"
+              );
+              affectedMenuItemIds = impact.affectedMenuItemIds;
+              impactWrites = impact.writes;
+            }
+            planned = { ...planned, affectedMenuItemIds };
+            writes.push(
+              { operation: "create", ref: refs.movements.doc(planned.movement.movementId), value: planned.movement },
+              { operation: "set", ref: stockRef, value: planned.nextStockState },
+              { operation: "create", ref: refs.costEvidence.doc(planned.costEvidence.costEvidenceId), value: planned.costEvidence },
+              { operation: "set", ref: inputs.ingredientRef, value: nextIngredient }
+            );
+            if (planned.planningBasisAction === "established") writes.push({
+              operation: inputs.costState ? "set" : "create",
+              ref: inputs.costRef,
+              value: planned.nextCostState
+            });
+            writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
+              ingredient: nextIngredient,
+              stockStates,
+              costState: planned.nextCostState,
+              allocationFences: inputs.allocationFences,
+              packConversionHeads: inputs.packConversionHeads,
+              nowISO
+            }) });
+            writes.push(...impactWrites);
           } else if (commandKind === "publish_pack_conversion") {
             if (!inputs.ingredient) {
               throw new inventory.InventoryIngredientError("not-found", "Create the ingredient before publishing a purchase pack conversion.");
@@ -2000,7 +2603,7 @@ function createInventoryAuthorityRuntime({
               { operation: currentHead ? "set" : "create", ref: refs.packConversionHeads.doc(nextHead.headId), value: nextHead },
               { operation: "set", ref: projectionRef, value: ingredientProjection({
                 ingredient: inputs.ingredient, stockStates: inputs.stockStates, costState: inputs.costState,
-                packConversionHeads, nowISO
+                allocationFences: inputs.allocationFences, packConversionHeads, nowISO
               }) }
             );
           } else {
@@ -2018,7 +2621,8 @@ function createInventoryAuthorityRuntime({
             writes.push({ operation: inputs.costState ? "set" : "create", ref: inputs.costRef, value: planned.nextCostState });
             writes.push({ operation: "set", ref: projectionRef, value: ingredientProjection({
               ingredient: inputs.ingredient, stockStates: inputs.stockStates,
-              costState: planned.nextCostState, packConversionHeads: inputs.packConversionHeads, nowISO
+              costState: planned.nextCostState, allocationFences: inputs.allocationFences,
+              packConversionHeads: inputs.packConversionHeads, nowISO
             }) });
             writes.push(...impact.writes);
           }
@@ -2028,6 +2632,9 @@ function createInventoryAuthorityRuntime({
         const resultRevision = commandKind === "upsert_location" ? planned.location.revision
           : commandKind === "upsert_ingredient" ? planned.ingredient.revision
             : commandKind === "opening_balance" ? planned.nextStockState.revision
+              : commandKind === "receive_stock" ? planned.nextStockState.revision
+                : ["allocate_event_ingredients", "release_event_ingredients"].includes(commandKind)
+                  ? planned.plan.allocationRevision
               : commandKind === "publish_pack_conversion" ? planned.packConversion.revision
                 : commandKind === "publish_menu_recipe" ? planned.recipeRevision.revision
                   : commandKind === "compile_event_ingredient_demand" ? planned.head.revision
@@ -2046,6 +2653,10 @@ function createInventoryAuthorityRuntime({
           resultRevision,
           result
         };
+        if (commandKind === "receive_stock") {
+          body.planningBasisAction = planned.planningBasisAction;
+          receivingPlanningBasisAction = planned.planningBasisAction;
+        }
         const receipt = Object.freeze({ ...body, receiptDigest: inventory.digest(body, "ingredient inventory receipt") });
         writes.push({ operation: "create", ref: receiptRef, value: {
           receipt, createdAt: FieldValue.serverTimestamp()
@@ -2057,6 +2668,9 @@ function createInventoryAuthorityRuntime({
         && Array.isArray(outcome.result?.affectedMenuItemIds)
         && outcome.result.affectedMenuItemIds.length) {
         await refreshAffectedMenuCosts(refs, actor, outcome.result.affectedMenuItemIds);
+      }
+      if (envelope.command.kind === "receive_stock" && receivingPlanningBasisAction === "established") {
+        await refreshIngredientMenuCosts(refs, actor, envelope.command.ingredientId);
       }
       return outcome;
     } catch (error) {
@@ -2135,6 +2749,7 @@ function createInventoryAuthorityRuntime({
     if (error instanceof HttpsError) throw error;
     if (error instanceof inventory.InventoryIngredientError) throw new HttpsError(error.code, error.message);
     if (error instanceof recipe.InventoryRecipeError) throw new HttpsError(error.code, error.message);
+    if (error instanceof allocation.InventoryAllocationError) throw new HttpsError(error.code, error.message);
     logger.error("Ingredient inventory authority failed.", {
       operation,
       errorName: String(error?.name || "Error"),

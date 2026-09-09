@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
 const inventory = require("../../../functions/inventoryIngredientCore.cjs");
+const allocation = require("../../../functions/inventoryIngredientAllocationCore.cjs");
 const recipe = require("../../../functions/inventoryRecipeCore.cjs");
 const { createInventoryAuthorityRuntime, packHeadId } = require("../../../functions/inventoryAuthority.js");
 
@@ -227,6 +228,21 @@ const openingCommand = (overrides = {}) => ({
   ...overrides
 });
 
+const receivingCommand = (overrides = {}) => ({
+  kind: "receive_stock",
+  ingredientId: "chicken",
+  locationId: "main-kitchen",
+  quantity: "10",
+  baseUnitId: "lb",
+  occurredAtISO: EVIDENCE_TIME,
+  sourceLabel: "Receiving record",
+  note: "Verified delivery",
+  expectedStockRevision: 1,
+  expectedCostRevision: 0,
+  cost: { availability: "available", totalCostMinor: 3000, currency: "USD" },
+  ...overrides
+});
+
 const costCommand = (overrides = {}) => ({
   kind: "record_ingredient_cost",
   ingredientId: "chicken",
@@ -306,6 +322,24 @@ const eventDemandCommand = ({ recipeRevisionId, overrides = {} } = {}) => ({
   ...overrides
 });
 
+const allocateCommand = (eventRequirementRevisionId, overrides = {}) => ({
+  kind: "allocate_event_ingredients",
+  quoteId: "quote-alfredo",
+  eventRequirementRevisionId,
+  locationId: "main-kitchen",
+  expectedRequirementRevision: 1,
+  expectedAllocationRevision: 0,
+  ...overrides
+});
+
+const releaseCommand = (overrides = {}) => ({
+  kind: "release_event_ingredients",
+  quoteId: "quote-alfredo",
+  expectedAllocationRevision: 1,
+  reason: "Event cancelled by operator",
+  ...overrides
+});
+
 function menuItem(overrides = {}) {
   return {
     eventTypeId: "event-dinner",
@@ -343,6 +377,7 @@ function quoteDemandEntries() {
     [`organizations/${ORGANIZATION_ID}/quotes/quote-alfredo`, {
       id: "quote-alfredo",
       organizationId: ORGANIZATION_ID,
+      status: "accepted",
       activeVersionId: "v0001",
       versionMeta: { versionId: "v0001" }
     }],
@@ -371,6 +406,24 @@ async function configureEventDemandFixture(harness) {
     adminContext
   );
   return published.result.recipeRevisionId;
+}
+
+async function compileEventDemandFixture(harness) {
+  const recipeRevisionId = await configureEventDemandFixture(harness);
+  const command = eventDemandCommand({ recipeRevisionId });
+  const preview = await harness.runtime.previewEventInventory({
+    schemaVersion: 2,
+    organizationId: ORGANIZATION_ID,
+    quoteId: command.quoteId,
+    quoteRevisionId: command.quoteRevisionId,
+    requiredByBasis: command.requiredByBasis,
+    selections: command.selections
+  }, adminContext);
+  const result = await harness.runtime.applyInventoryCommand(envelope(eventDemandCommand({
+    recipeRevisionId,
+    overrides: { expectedPreviewProjectionDigest: preview.projection.projectionDigest }
+  }), "compile-event-allocation-fixture-0001"), adminContext);
+  return result.result;
 }
 
 async function configureRecipeFixture(harness, { pastaCost = true } = {}) {
@@ -496,7 +549,12 @@ describe("ingredient inventory authority runtime", () => {
       onHandMicros: 40000000,
       quantity: "40",
       locationId: "main-kitchen",
-      lastMovementId: opening.result.movementId
+      lastMovementId: opening.result.movementId,
+      allocationRevision: 0,
+      committedMicros: 0,
+      committedQuantity: "0",
+      availableToAllocateMicros: 40000000,
+      availableToAllocateQuantity: "40"
     });
     expect(projection.cost).toMatchObject({ availability: "not_yet_available", costRevision: 0 });
 
@@ -519,6 +577,120 @@ describe("ingredient inventory authority runtime", () => {
       currency: "USD"
     });
     expect(projection.cost).not.toHaveProperty("unitCostMinor");
+  });
+
+  test("receives stock idempotently and preserves an established planning-cost basis", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "opening-before-receiving-0001"), adminContext
+    );
+
+    const firstRequest = envelope(receivingCommand(), "receive-chicken-0001");
+    const first = await harness.runtime.applyInventoryCommand(firstRequest, adminContext);
+    expect(first).toMatchObject({
+      ok: true,
+      idempotent: false,
+      commandKind: "receive_stock",
+      result: {
+        ingredientId: "chicken",
+        locationId: "main-kitchen",
+        stockRevision: 2,
+        costRevision: 1,
+        onHandMicros: 50000000,
+        onHandQuantity: "50"
+      }
+    });
+    expect(Object.keys(first.result).sort()).toEqual([
+      "costEvidenceId", "costRevision", "ingredientId", "locationId", "movementId",
+      "onHandMicros", "onHandQuantity", "schemaVersion", "stockRevision"
+    ]);
+    await expect(harness.runtime.applyInventoryCommand(firstRequest, adminContext))
+      .resolves.toEqual({ ...first, idempotent: true });
+    await expect(harness.runtime.applyInventoryCommand(envelope(receivingCommand({
+      quantity: "11"
+    }), "receive-chicken-0001"), adminContext)).rejects.toMatchObject({ code: "already-exists" });
+
+    const costPath = `organizations/${ORGANIZATION_ID}/inventoryCostStates/${inventory.costStateId("chicken")}`;
+    const establishedCost = clone(harness.db.store.get(costPath));
+    const later = await harness.runtime.applyInventoryCommand(envelope(receivingCommand({
+      quantity: "5",
+      expectedStockRevision: 2,
+      expectedCostRevision: 1,
+      sourceLabel: "Later high-price delivery",
+      cost: { availability: "available", totalCostMinor: 5000, currency: "USD" }
+    }), "receive-chicken-0002"), adminContext);
+    expect(later.result).toMatchObject({ stockRevision: 3, costRevision: 1, onHandQuantity: "55" });
+    expect(harness.db.store.get(costPath)).toEqual(establishedCost);
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryCostEvidence/${later.result.costEvidenceId}`
+    )).toMatchObject({
+      costEvidenceVersion: inventory.INVENTORY_RECEIVING_COST_VERSION,
+      planningBasisAction: "retained_existing",
+      basisQuantity: "5",
+      totalCostMinor: 5000
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    )).toMatchObject({
+      stock: { onHandMicros: 55000000, stockRevision: 3 },
+      cost: { costRevision: 1, basisQuantityMicros: 10000000, totalCostMinor: 3000 }
+    });
+  });
+
+  test("rejects stale receiving revisions before writing quantity or cost evidence", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "opening-before-stale-receive-0001"), adminContext
+    );
+    const before = clone([...harness.db.store.entries()]);
+    await expect(harness.runtime.applyInventoryCommand(envelope(receivingCommand({
+      expectedStockRevision: 2
+    }), "receive-stale-stock-0001"), adminContext)).rejects.toMatchObject({ code: "aborted" });
+    expect([...harness.db.store.entries()]).toEqual(before);
+  });
+
+  test("receives physical stock after a concurrent missing-cost observation without replacing cost authority", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "opening-before-cost-race-0001"), adminContext
+    );
+    await harness.runtime.applyInventoryCommand(envelope({
+      kind: "record_ingredient_cost",
+      ingredientId: "chicken",
+      baseUnitId: "lb",
+      availability: "missing",
+      sourceLabel: "Unpriced count",
+      observedAtISO: EVIDENCE_TIME,
+      note: "Cost not yet available",
+      expectedCostRevision: 0
+    }, "missing-cost-before-receive-0001"), adminContext);
+
+    const received = await harness.runtime.applyInventoryCommand(envelope(receivingCommand({
+      quantity: "5",
+      expectedCostRevision: 0,
+      sourceLabel: "Receipt observed after cost edit",
+      cost: { availability: "available", totalCostMinor: 2500, currency: "USD" }
+    }), "receive-after-cost-race-0001"), adminContext);
+    expect(received.result).toMatchObject({
+      stockRevision: 2,
+      costRevision: 1,
+      onHandMicros: 45000000
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryCostStates/${inventory.costStateId("chicken")}`
+    )).toMatchObject({ availability: "missing", revision: 1 });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryCostEvidence/${received.result.costEvidenceId}`
+    )).toMatchObject({
+      planningBasisAction: "retained_existing",
+      priorCostRevision: 1,
+      resultCostRevision: 1,
+      availability: "available",
+      totalCostMinor: 2500
+    });
   });
 
   test("cost evidence can be recorded before stock without manufacturing on-hand quantity", async () => {
@@ -881,6 +1053,268 @@ describe("ingredient inventory authority runtime", () => {
         projectedCostMinor: 8000
       }
     });
+  });
+
+  test("partially allocates consumable stock against a cross-date shared fence and releases only commitment", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    const compiled = await compileEventDemandFixture(harness);
+    const chickenFenceId = allocation.allocationFenceId(ORGANIZATION_ID, "chicken", "main-kitchen");
+    const otherPlanId = allocation.eventPlanIdFor(ORGANIZATION_ID, "quote-other-day");
+    harness.db.store.set(
+      `organizations/${ORGANIZATION_ID}/inventoryAllocationFences/${chickenFenceId}`,
+      {
+        authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+        schemaVersion: 2,
+        allocationVersion: allocation.ALLOCATION_VERSION,
+        model: "ingredient-allocation-fence-v1",
+        organizationId: ORGANIZATION_ID,
+        fenceId: chickenFenceId,
+        ingredientId: "chicken",
+        locationId: "main-kitchen",
+        baseUnitId: "lb",
+        revision: 1,
+        committedMicros: 25000000,
+        allocations: [{
+          allocationId: allocation.allocationIdFor(
+            ORGANIZATION_ID, "quote-other-day", "chicken", "main-kitchen"
+          ),
+          eventPlanId: otherPlanId,
+          quoteId: "quote-other-day",
+          eventRequirementRevisionId: "eir_" + "1".repeat(48),
+          quantityMicros: 25000000
+        }],
+        updatedAtISO: EVIDENCE_TIME
+      }
+    );
+
+    const allocateRequest = envelope(
+      allocateCommand(compiled.eventRequirementRevisionId),
+      "allocate-alfredo-0001"
+    );
+    const first = await harness.runtime.applyInventoryCommand(allocateRequest, adminContext);
+    expect(first).toMatchObject({
+      ok: true,
+      idempotent: false,
+      commandKind: "allocate_event_ingredients",
+      result: {
+        quoteId: "quote-alfredo",
+        allocationRevision: 1,
+        state: "shortage",
+        ingredientCount: 2,
+        fullyAllocatedIngredientCount: 1,
+        shortageIngredientCount: 1
+      }
+    });
+    expect(Object.keys(first.result).sort()).toEqual([
+      "allocationRevision", "eventPlanId", "eventRequirementRevisionId", "fullyAllocatedIngredientCount",
+      "ingredientCount", "quoteId", "schemaVersion", "shortageIngredientCount", "state"
+    ]);
+    await expect(harness.runtime.applyInventoryCommand(allocateRequest, adminContext))
+      .resolves.toEqual({ ...first, idempotent: true });
+    await expect(harness.runtime.applyInventoryCommand(envelope(allocateCommand(
+      compiled.eventRequirementRevisionId,
+      { locationId: "substituted-location" }
+    ), "allocate-alfredo-0001"), adminContext)).rejects.toMatchObject({ code: "already-exists" });
+
+    const currentPlanPath = `organizations/${ORGANIZATION_ID}/eventIngredientPlans/quote-alfredo`;
+    const currentPlan = harness.db.store.get(currentPlanPath);
+    expect(currentPlan.ingredients).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        ingredientId: "chicken",
+        requiredQuantityMicros: 20000000,
+        allocatedQuantityMicros: 15000000,
+        shortageQuantityMicros: 5000000
+      }),
+      expect.objectContaining({
+        ingredientId: "pasta",
+        requiredQuantityMicros: 10000000,
+        allocatedQuantityMicros: 10000000,
+        shortageQuantityMicros: 0
+      })
+    ]));
+    expect(harness.db.store.has(`${currentPlanPath}/revisions/${currentPlan.planRevisionId}`)).toBe(true);
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryStockStates/${inventory.stockStateId("chicken", "main-kitchen")}`
+    ).onHandMicros).toBe(40000000);
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    ).stock).toMatchObject({
+      onHandMicros: 40000000,
+      committedMicros: 40000000,
+      availableToAllocateMicros: 0,
+      allocationRevision: 2
+    });
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/eventIngredientProjections/quote-alfredo`
+    ).allocation).toMatchObject({
+      state: "shortage",
+      allocationRevision: 1,
+      ingredientCount: 2,
+      shortageIngredientCount: 1
+    });
+
+    await harness.runtime.applyInventoryCommand(envelope(receivingCommand({
+      quantity: "5",
+      expectedStockRevision: 1,
+      expectedCostRevision: 1,
+      sourceLabel: "Supply received for shortage recovery",
+      cost: { availability: "available", totalCostMinor: 1800, currency: "USD" }
+    }), "receive-for-allocation-top-up-0001"), adminContext);
+    const eventProjectionPath =
+      `organizations/${ORGANIZATION_ID}/eventIngredientProjections/quote-alfredo`;
+    const projectionBeforeTamper = harness.db.store.get(eventProjectionPath);
+    harness.db.store.set(eventProjectionPath, {
+      ...projectionBeforeTamper,
+      allocation: {
+        ...projectionBeforeTamper.allocation,
+        ingredients: projectionBeforeTamper.allocation.ingredients.map((row, index) => index === 0
+          ? { ...row, allocatedQuantityMicros: row.allocatedQuantityMicros - 1,
+            shortageQuantityMicros: row.shortageQuantityMicros + 1 }
+          : row)
+      }
+    });
+    await expect(harness.runtime.applyInventoryCommand(envelope(allocateCommand(
+      compiled.eventRequirementRevisionId,
+      { expectedAllocationRevision: 1 }
+    ), "allocate-alfredo-top-up-tampered-0002"), adminContext)).rejects.toMatchObject({
+      code: "data-loss"
+    });
+    harness.db.store.set(eventProjectionPath, projectionBeforeTamper);
+    const toppedUp = await harness.runtime.applyInventoryCommand(envelope(allocateCommand(
+      compiled.eventRequirementRevisionId,
+      { expectedAllocationRevision: 1 }
+    ), "allocate-alfredo-top-up-0002"), adminContext);
+    expect(toppedUp.result).toMatchObject({
+      state: "reserved",
+      allocationRevision: 2,
+      fullyAllocatedIngredientCount: 2,
+      shortageIngredientCount: 0
+    });
+    expect(harness.db.store.get(currentPlanPath).ingredients).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        ingredientId: "chicken",
+        requiredQuantityMicros: 20000000,
+        allocatedQuantityMicros: 20000000,
+        shortageQuantityMicros: 0
+      })
+    ]));
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryAllocationFences/${chickenFenceId}`
+    )).toMatchObject({ committedMicros: 45000000, revision: 3 });
+
+    const release = await harness.runtime.applyInventoryCommand(
+      envelope(releaseCommand({ expectedAllocationRevision: 2 }), "release-alfredo-0001"), adminContext
+    );
+    expect(release.result).toEqual({
+      schemaVersion: 2,
+      quoteId: "quote-alfredo",
+      eventPlanId: first.result.eventPlanId,
+      allocationRevision: 3,
+      state: "released",
+      eventRequirementRevisionId: compiled.eventRequirementRevisionId,
+      ingredientCount: 2,
+      fullyAllocatedIngredientCount: 2,
+      shortageIngredientCount: 0,
+      releasedIngredientCount: 2
+    });
+    expect(release.result).not.toHaveProperty("releaseReason");
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryStockStates/${inventory.stockStateId("chicken", "main-kitchen")}`
+    ).onHandMicros).toBe(45000000);
+    expect(harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryAllocationFences/${chickenFenceId}`
+    )).toMatchObject({ committedMicros: 25000000, revision: 4 });
+    const releasedPlan = harness.db.store.get(currentPlanPath);
+    expect(releasedPlan).toMatchObject({
+      state: "released", allocationRevision: 3, releaseReason: "Event cancelled by operator"
+    });
+    expect(harness.db.store.has(`${currentPlanPath}/revisions/${releasedPlan.planRevisionId}`)).toBe(true);
+    await expect(harness.runtime.applyInventoryCommand(envelope(releaseCommand({
+      expectedAllocationRevision: 3
+    }), "release-alfredo-new-request-0002"), adminContext)).rejects.toMatchObject({
+      code: "failed-precondition"
+    });
+  });
+
+  test("fails allocation closed when commercial, recipe, or projection authority drifts", async () => {
+    async function preparedHarness() {
+      const harness = createHarness({ entries: [
+        [`organizations/${ORGANIZATION_ID}/settings/config`, {
+          inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+        }],
+        [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+        ...quoteDemandEntries()
+      ] });
+      const compiled = await compileEventDemandFixture(harness);
+      return { harness, compiled };
+    }
+
+    const sent = await preparedHarness();
+    const quotePath = `organizations/${ORGANIZATION_ID}/quotes/quote-alfredo`;
+    sent.harness.db.store.set(quotePath, {
+      ...sent.harness.db.store.get(quotePath), status: "sent"
+    });
+    await expect(sent.harness.runtime.applyInventoryCommand(envelope(
+      allocateCommand(sent.compiled.eventRequirementRevisionId),
+      "allocate-sent-denied-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "failed-precondition" });
+
+    const revisionDrift = await preparedHarness();
+    revisionDrift.harness.db.store.set(quotePath, {
+      ...revisionDrift.harness.db.store.get(quotePath), activeVersionId: "v0002"
+    });
+    await expect(revisionDrift.harness.runtime.applyInventoryCommand(envelope(
+      allocateCommand(revisionDrift.compiled.eventRequirementRevisionId),
+      "allocate-revision-drift-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "aborted" });
+
+    const recipeDrift = await preparedHarness();
+    await recipeDrift.harness.runtime.applyInventoryCommand(envelope(recipeCommand({
+      expectedRecipeRevision: 1
+    }), "recipe-drift-before-allocation-0002"), adminContext);
+    await expect(recipeDrift.harness.runtime.applyInventoryCommand(envelope(
+      allocateCommand(recipeDrift.compiled.eventRequirementRevisionId),
+      "allocate-recipe-drift-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "aborted" });
+
+    const staleProjection = await preparedHarness();
+    const eventProjectionPath = `organizations/${ORGANIZATION_ID}/eventIngredientProjections/quote-alfredo`;
+    staleProjection.harness.db.store.set(eventProjectionPath, {
+      ...staleProjection.harness.db.store.get(eventProjectionPath),
+      freshness: "stale",
+      staleReason: "recipe_changed"
+    });
+    await expect(staleProjection.harness.runtime.applyInventoryCommand(envelope(
+      allocateCommand(staleProjection.compiled.eventRequirementRevisionId),
+      "allocate-stale-projection-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "aborted" });
+
+    const tamperedProjection = await preparedHarness();
+    await tamperedProjection.harness.runtime.applyInventoryCommand(envelope(
+      allocateCommand(tamperedProjection.compiled.eventRequirementRevisionId),
+      "allocate-before-projection-tamper-0001"
+    ), adminContext);
+    const projection = tamperedProjection.harness.db.store.get(eventProjectionPath);
+    tamperedProjection.harness.db.store.set(eventProjectionPath, {
+      ...projection,
+      allocation: {
+        ...projection.allocation,
+        fullyAllocatedIngredientCount: 1,
+        shortageIngredientCount: 1,
+        ingredients: projection.allocation.ingredients.map((row, index) => index === 0
+          ? { ...row, allocatedQuantityMicros: row.allocatedQuantityMicros - 1,
+            shortageQuantityMicros: row.shortageQuantityMicros + 1 }
+          : row)
+      }
+    });
+    await expect(tamperedProjection.harness.runtime.applyInventoryCommand(envelope(releaseCommand(),
+      "release-tampered-projection-0001"), adminContext)).rejects.toMatchObject({ code: "data-loss" });
   });
 
   test("rejects recording when cost or stock evidence changes after preview", async () => {
