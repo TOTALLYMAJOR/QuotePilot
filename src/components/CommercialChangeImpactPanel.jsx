@@ -478,6 +478,133 @@ function SimulationEvidence({ model }) {
   );
 }
 
+function formatIngredientQuantity(micros, unit, { signed = false } = {}) {
+  if (!Number.isSafeInteger(micros)) return "Unknown";
+  const absolute = Math.abs(micros);
+  const whole = Math.floor(absolute / 1_000_000);
+  const fraction = String(absolute % 1_000_000).padStart(6, "0").replace(/0+$/u, "");
+  const quantity = fraction ? `${whole}.${fraction}` : String(whole);
+  const sign = signed && micros > 0 ? "+" : signed && micros < 0 ? "−" : "";
+  return `${sign}${quantity} ${unit}`;
+}
+
+function inventoryEvidenceStateLabel(state) {
+  return ({
+    current: "Current evidence",
+    not_evaluated: "Not evaluated",
+    pending: "Preview pending",
+    stale: "Evidence changed",
+    mismatched: "Evidence mismatch",
+    unavailable: "Unavailable"
+  })[state] || "Unavailable";
+}
+
+function IngredientConsequenceIntelligence({ consequence }) {
+  if (!consequence) return null;
+  const current = consequence.state === "current";
+  const cost = consequence.cost || {};
+  const availability = consequence.availability || {};
+  const rows = Array.isArray(availability.ingredients) ? availability.ingredients : [];
+  const changedRows = rows.filter((row) => row.changed);
+  const stateFamily = current ? "confirmed"
+    : consequence.state === "pending" ? "pending"
+      : consequence.state === "not_evaluated" ? "info" : "action";
+  return (
+    <section
+      className="workflow-form-section"
+      aria-labelledby="commercial-change-ingredient-intelligence-title"
+      data-commercial-inventory-consequence={consequence.state}
+      data-authority="read-only-advisory"
+    >
+      <div className="workflow-attention-head">
+        <div>
+          <p className="eyebrow">Ingredient consequence · read only</p>
+          <h4 id="commercial-change-ingredient-intelligence-title">Food cost and stock impact</h4>
+        </div>
+        <StatusChip family={stateFamily} label={inventoryEvidenceStateLabel(consequence.state)} />
+      </div>
+      {!current ? (
+        <p className="source-note" role={consequence.state === "unavailable" ? "alert" : "status"}>
+          Ingredient consequence evidence is {inventoryEvidenceStateLabel(consequence.state).toLowerCase()}.
+          Run a server preview for this exact unsaved scenario; cached, pending, stale, or mismatched evidence is never shown as current.
+        </p>
+      ) : (
+        <>
+          <div className="workflow-form-grid" data-inventory-rails="independent">
+            <article data-inventory-rail="cost">
+              <h5>Projected ingredient cost</h5>
+              {["changed", "unchanged"].includes(cost.state) ? (
+                <>
+                  <p>
+                    {formatCurrency(cost.before.projectedCostMinor / 100, cost.currency)} →{" "}
+                    {formatCurrency(cost.proposedAfter.projectedCostMinor / 100, cost.currency)}
+                  </p>
+                  <strong>{formatSignedCurrency(
+                    cost.before.projectedCostMinor / 100,
+                    cost.proposedAfter.projectedCostMinor / 100,
+                    cost.currency
+                  )}</strong>
+                </>
+              ) : (
+                <p className="warning-note">
+                  Cost change is unknown. Both estimates must be complete and use the same currency; unknown cost is not treated as zero.
+                </p>
+              )}
+            </article>
+            <article data-inventory-rail="availability">
+              <h5>Ingredient stock availability</h5>
+              {["changed", "unchanged"].includes(availability.state) ? (
+                <p>
+                  {changedRows.length === 0
+                    ? "No ingredient requirement or shortage change."
+                    : `${changedRows.length} ingredient requirement${changedRows.length === 1 ? "" : "s"} changed.`}
+                </p>
+              ) : (
+                <p className="warning-note">Availability comparison is incomplete. Known cost evidence remains independent.</p>
+              )}
+            </article>
+          </div>
+          {changedRows.length > 0 && (
+            <ul className="command-center-list" aria-label="Ingredient requirement and shortage changes">
+              {changedRows.map((row) => (
+                <li className="command-center-row" key={`${row.ingredientId}:${row.baseUnitId}`}>
+                  <div className="command-center-row-main">
+                    <strong>{row.proposedAfter?.ingredientName || row.before?.ingredientName || row.ingredientId}</strong>
+                    <p className="command-center-row-meta">
+                      Requirement {formatIngredientQuantity(row.requiredDeltaMicros, row.baseUnitId, { signed: true })}
+                      {Number.isSafeInteger(row.shortageDeltaMicros)
+                        ? ` · Shortage ${formatIngredientQuantity(row.shortageDeltaMicros, row.baseUnitId, { signed: true })}`
+                        : " · Shortage comparison unavailable"}
+                    </p>
+                  </div>
+                  <StatusChip
+                    family={row.proposedAfter?.availabilityState === "shortage" ? "action" : "info"}
+                    label={row.proposedAfter?.availabilityState === "shortage" ? "Shortage" : "Review"}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          <details className="commercial-change-evidence">
+            <summary>Ingredient consequence provenance</summary>
+            <dl className="staff-evidence-details">
+              <div><dt>Saved requirement</dt><dd><code>{consequence.provenance.before.eventRequirementRevisionId}</code><small>revision {consequence.provenance.before.requirementRevision} · digest <code>{consequence.provenance.before.requirementDigest}</code></small></dd></div>
+              <div><dt>Scenario requirement</dt><dd><code>{consequence.provenance.proposedAfter.eventRequirementRevisionId}</code><small>digest <code>{consequence.provenance.proposedAfter.requirementDigest}</code></small></dd></div>
+              <div><dt>Quote source</dt><dd><code>{consequence.expected.quoteId}</code><small>revision <code>{consequence.expected.savedQuoteRevisionId}</code></small></dd></div>
+              <div><dt>Scenario fingerprint</dt><dd><code>{consequence.provenance.proposedAfter.projectionDigest}</code><small>Server preview matched the exact unsaved form fingerprint; form contents are not exposed here.</small></dd></div>
+              <div><dt>Saved projection</dt><dd><code>{consequence.provenance.before.projectionDigest}</code><small>Source fingerprint <code>{consequence.provenance.before.sourceFingerprint}</code></small></dd></div>
+              <div><dt>Scenario projection</dt><dd><code>{consequence.provenance.proposedAfter.projectionDigest}</code><small>Source fingerprint <code>{consequence.provenance.proposedAfter.sourceFingerprint}</code></small></dd></div>
+            </dl>
+          </details>
+        </>
+      )}
+      <p className="workflow-attention-boundary" role="note">
+        This is consequence intelligence only. It does not reserve ingredients, change selling prices, authorize this amendment, or alter commercial apply and publish controls.
+      </p>
+    </section>
+  );
+}
+
 function AmendmentReceipt({
   model,
   commitment,
@@ -866,6 +993,7 @@ export default function CommercialChangeImpactPanel({
   applyOutcome = null,
   appliedQuote = null,
   scopeCurrent = false,
+  inventoryConsequences = null,
   onRetry,
   onReturnToEdit,
   onRequestAuthorization,
@@ -942,6 +1070,7 @@ export default function CommercialChangeImpactPanel({
       </p>
 
       {view.snapshotAvailable && <SimulationEvidence model={model} />}
+      {inventoryConsequences && <IngredientConsequenceIntelligence consequence={inventoryConsequences} />}
       {view.snapshotAvailable && <PreservedTruth commitment={commitment} />}
       {view.snapshotAvailable && unifiedReview && (
         <UnifiedCommercialConsequenceReview

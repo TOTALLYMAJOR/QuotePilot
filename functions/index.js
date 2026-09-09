@@ -400,6 +400,8 @@ initializeApp();
 const auth = getAuth();
 const db = getFirestore();
 const REGION = "us-central1";
+const inventoryAuthorityGlobalEnabled = () =>
+  normalizeText(process.env.INVENTORY_AUTHORITY_ENABLED).toLowerCase() === "true";
 const inventoryAuthorityRuntime = createInventoryAuthorityRuntime({
   db,
   FieldValue,
@@ -407,7 +409,7 @@ const inventoryAuthorityRuntime = createInventoryAuthorityRuntime({
   assertStaff,
   normalizeOrganizationId,
   isOrganizationRecordActive,
-  globalEnabled: () => normalizeText(process.env.INVENTORY_AUTHORITY_ENABLED).toLowerCase() === "true",
+  globalEnabled: inventoryAuthorityGlobalEnabled,
   logger: functions.logger
 });
 exports.getInventoryWorkspace = functions
@@ -422,6 +424,58 @@ exports.previewEventInventory = functions
   .runWith({ enforceAppCheck: true })
   .region(REGION)
   .https.onCall((data, context) => inventoryAuthorityRuntime.previewEventInventory(data, context));
+exports.invalidateEventIngredientsOnQuoteChange = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document("organizations/{organizationId}/quotes/{quoteId}")
+  .onUpdate((change, context) => {
+    if (!inventoryAuthorityGlobalEnabled()) return null;
+    return inventoryAuthorityRuntime.invalidateEventIngredientsForQuoteChange({
+      organizationId: context.params.organizationId,
+      quoteId: context.params.quoteId,
+      beforeActiveVersionId: change.before.data()?.activeVersionId,
+      afterActiveVersionId: change.after.data()?.activeVersionId
+    });
+  });
+exports.invalidateEventIngredientsOnRecipeChange = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document("organizations/{organizationId}/inventoryRecipeHeads/{menuItemId}")
+  .onWrite((change, context) => {
+    if (!inventoryAuthorityGlobalEnabled()) return null;
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    if (!after || before?.recipeRevisionId === after.recipeRevisionId) return null;
+    return inventoryAuthorityRuntime.invalidateEventIngredientsForMenuChange({
+      organizationId: context.params.organizationId,
+      menuItemId: context.params.menuItemId,
+      changeKind: "recipe",
+      beforeSourceDigest: before?.recipeRevisionId || "",
+      afterSourceDigest: after.recipeRevisionId
+    });
+  });
+exports.invalidateEventIngredientsOnMenuCostChange = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document("organizations/{organizationId}/inventoryMenuCostProjections/{menuItemId}")
+  .onWrite((change, context) => {
+    if (!inventoryAuthorityGlobalEnabled()) return null;
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    const beforeCostResultDigest = before?.cost?.resultDigest;
+    const afterCostResultDigest = after?.cost?.resultDigest;
+    if (!before || !after || before.recipeRevisionId !== after.recipeRevisionId
+      || before.sourceDigest === after.sourceDigest
+      || !beforeCostResultDigest || !afterCostResultDigest
+      || beforeCostResultDigest === afterCostResultDigest) return null;
+    return inventoryAuthorityRuntime.invalidateEventIngredientsForMenuChange({
+      organizationId: context.params.organizationId,
+      menuItemId: context.params.menuItemId,
+      changeKind: "cost",
+      beforeSourceDigest: beforeCostResultDigest,
+      afterSourceDigest: afterCostResultDigest
+    });
+  });
 const ROLES_COLLECTION = "userRoles";
 const ORGANIZATIONS_COLLECTION = "organizations";
 const TENANT_DOMAINS_COLLECTION = "tenantDomains";

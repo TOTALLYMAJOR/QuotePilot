@@ -1250,6 +1250,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /organizations/{orgId}/eventIngredientDependencyIndex/{menuItemId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/eventIngredientRequirementHeads/{quoteId} {
       allow read, write: if false;
     }

@@ -353,6 +353,114 @@ test("shows partial allocation independently and emits exact admin allocate and 
   expect(onRelease).toHaveBeenCalledWith({ reason: "Event cancelled" });
 });
 
+test("keeps a stale hold releasable without exposing top-up or premature reconciliation", async () => {
+  const onAllocate = vi.fn();
+  const onRelease = vi.fn().mockResolvedValue({});
+  const onReconcilePlan = vi.fn();
+  const allocation = {
+    state: "shortage",
+    eventPlanId: `eip_${"d".repeat(48)}`,
+    allocationRevision: 4,
+    eventRequirementRevisionId: `eir_${"d".repeat(48)}`,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 0,
+    shortageIngredientCount: 1,
+    ingredients: [{
+      ingredientId: "chicken",
+      ingredientName: "Chicken",
+      locationId: "main-kitchen",
+      baseUnitId: "lb",
+      requiredQuantityMicros: 20_000_000,
+      allocatedQuantityMicros: 15_000_000,
+      shortageQuantityMicros: 5_000_000
+    }]
+  };
+  render({
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "100", outputUnitId: "portion" }],
+    read: {
+      state: "stale",
+      sourceState: "current",
+      projection: projection({
+        freshness: "stale",
+        allocation,
+        freshnessState: {
+          demand: { state: "stale", reason: "quote_revision_changed" },
+          cost: { state: "stale", reason: "quote_revision_changed" },
+          availability: { state: "stale", reason: "quote_revision_changed" },
+          allocation: { state: "stale", reason: "quote_revision_changed" }
+        }
+      })
+    },
+    canManageAllocation: true,
+    canAllocate: false,
+    canRelease: true,
+    canReconcilePlan: false,
+    onAllocate,
+    onRelease,
+    onReconcilePlan
+  });
+  expect(button("Allocate remaining")).toBeUndefined();
+  expect(button("Reconcile retained allocation").disabled).toBe(true);
+  expect(container.querySelector("[data-ingredient-allocation-state='shortage']").getAttribute("data-capability-state"))
+    .toBe("stale");
+  const releaseInput = [...container.querySelectorAll("input")].find((input) => input.placeholder.includes("Event cancelled"));
+  act(() => changeInput(releaseInput, "Superseded event scope"));
+  await act(async () => button("Release allocation").click());
+  expect(onRelease).toHaveBeenCalledWith({ reason: "Superseded event scope" });
+  expect(onAllocate).not.toHaveBeenCalled();
+  expect(onReconcilePlan).not.toHaveBeenCalled();
+});
+
+test("emits reconcile only for a current revised requirement with a stale retained hold", async () => {
+  const onReconcilePlan = vi.fn().mockResolvedValue({});
+  const allocation = {
+    state: "shortage",
+    eventPlanId: `eip_${"d".repeat(48)}`,
+    allocationRevision: 4,
+    eventRequirementRevisionId: `eir_${"c".repeat(48)}`,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 0,
+    shortageIngredientCount: 1,
+    ingredients: [{
+      ingredientId: "chicken", ingredientName: "Chicken", locationId: "main-kitchen",
+      baseUnitId: "lb", requiredQuantityMicros: 20_000_000,
+      allocatedQuantityMicros: 15_000_000, shortageQuantityMicros: 5_000_000
+    }]
+  };
+  render({
+    selectedMenuItems: [{ ...SELECTION, requiredOutputQuantity: "120", outputUnitId: "portion" }],
+    read: {
+      state: "recorded",
+      sourceState: "current",
+      projection: projection({
+        allocation,
+        freshnessState: {
+          demand: { state: "current", reason: "" },
+          cost: { state: "current", reason: "" },
+          availability: { state: "current", reason: "" },
+          allocation: { state: "stale", reason: "requirement_changed" }
+        }
+      })
+    },
+    canManageAllocation: true,
+    canAllocate: false,
+    canRelease: true,
+    canReconcilePlan: true,
+    onAllocate: vi.fn(),
+    onRelease: vi.fn(),
+    onReconcilePlan
+  });
+  expect(button("Allocate remaining")).toBeUndefined();
+  const reasonInput = [...container.querySelectorAll("input")]
+    .find((input) => input.placeholder.includes("Commercial or recipe"));
+  act(() => changeInput(reasonInput, "Guest count changed"));
+  await act(async () => button("Reconcile retained allocation").click());
+  expect(onReconcilePlan).toHaveBeenCalledWith({
+    locationId: "main-kitchen",
+    reason: "Guest count changed"
+  });
+});
+
 test("treats an allocation callable result as a receipt until realtime evidence confirms it", () => {
   const onReconcileAllocation = vi.fn();
   render({

@@ -123,6 +123,7 @@ export function useEventIngredientProjection({
   savedQuoteRevisionId = "",
   selections = [],
   draftDirty = false,
+  scenarioFingerprint = "",
   injected = null
 } = {}) {
   const access = useMemo(() => getInventoryMenuCostBrowserAccess({
@@ -132,12 +133,17 @@ export function useEventIngredientProjection({
     browserEnabled, organizationId, role, tenantEnabled
   ]);
   const inputFingerprint = useMemo(() => JSON.stringify({ selections }), [selections]);
+  const exactScenarioFingerprint = text(scenarioFingerprint) || inputFingerprint;
   const allocationCommerciallyEligible = new Set(["accepted", "booked"]).has(text(quoteStatus).toLowerCase());
   const [read, setRead] = useState(() => initialRead(quoteId));
-  const [preview, setPreview] = useState({ state: "not_evaluated", projection: null, error: "" });
+  const [preview, setPreview] = useState({
+    state: "not_evaluated", projection: null, error: "", scenarioFingerprint: exactScenarioFingerprint
+  });
   const [operation, setOperation] = useState(initialOperation);
   const [allocationOperation, setAllocationOperation] = useState(initialOperation);
   const lifecycleRef = useRef(0);
+  const scenarioFingerprintRef = useRef(exactScenarioFingerprint);
+  scenarioFingerprintRef.current = exactScenarioFingerprint;
 
   useEffect(() => {
     lifecycleRef.current += 1;
@@ -184,8 +190,10 @@ export function useEventIngredientProjection({
   }, [access.readEnabled, active, draftDirty, injected, quoteId, savedQuoteRevisionId, scope]);
 
   useEffect(() => {
-    setPreview({ state: "not_evaluated", projection: null, error: "" });
-  }, [draftDirty, inputFingerprint, quoteId, savedQuoteRevisionId]);
+    setPreview({
+      state: "not_evaluated", projection: null, error: "", scenarioFingerprint: exactScenarioFingerprint
+    });
+  }, [draftDirty, exactScenarioFingerprint, inputFingerprint, quoteId, savedQuoteRevisionId]);
 
   useEffect(() => {
     setOperation(initialOperation());
@@ -226,7 +234,10 @@ export function useEventIngredientProjection({
 
   const previewCurrent = useCallback(async (overrides = {}) => {
     const lifecycle = lifecycleRef.current;
-    setPreview((current) => ({ ...current, state: "pending", error: "" }));
+    const requestedScenarioFingerprint = scenarioFingerprintRef.current;
+    setPreview((current) => ({
+      ...current, state: "pending", error: "", scenarioFingerprint: requestedScenarioFingerprint
+    }));
     try {
       const result = await previewEventInventory({
         ...scope,
@@ -236,12 +247,19 @@ export function useEventIngredientProjection({
         selections,
         ...overrides
       });
-      if (lifecycleRef.current === lifecycle) {
-        setPreview({ state: "current", projection: result.projection, error: "" });
+      if (lifecycleRef.current === lifecycle
+        && scenarioFingerprintRef.current === requestedScenarioFingerprint) {
+        setPreview({
+          state: "current",
+          projection: result.projection,
+          error: "",
+          scenarioFingerprint: requestedScenarioFingerprint
+        });
       }
       return result;
     } catch (error) {
-      if (lifecycleRef.current === lifecycle) {
+      if (lifecycleRef.current === lifecycle
+        && scenarioFingerprintRef.current === requestedScenarioFingerprint) {
         setPreview((current) => ({
           ...current,
           state: "unavailable",
@@ -256,7 +274,8 @@ export function useEventIngredientProjection({
     if (role !== "admin" || !access.mutationEnabled) {
       throw new Error("Only an authorized administrator may record an event ingredient requirement.");
     }
-    if (draftDirty || preview.state !== "current" || preview.projection?.quoteRevisionId !== savedQuoteRevisionId) {
+    if (draftDirty || preview.state !== "current" || preview.projection?.quoteRevisionId !== savedQuoteRevisionId
+      || preview.scenarioFingerprint !== scenarioFingerprintRef.current) {
       throw new Error("Record only a current preview for the unchanged saved quote revision.");
     }
     const requestId = buildInventoryRequestId();
@@ -366,9 +385,20 @@ export function useEventIngredientProjection({
     if (!allocationCommerciallyEligible) {
       throw new Error("Ingredient allocation changes are available only for an accepted or booked quote.");
     }
-    if (draftDirty || read.sourceState !== "current" || read.projection?.freshness !== "as_recorded"
-      || read.projection.quoteRevisionId !== savedQuoteRevisionId) {
+    const release = kind === "release_event_ingredients";
+    const reconcilePlan = kind === "reconcile_event_ingredients";
+    const allocationFreshness = read.projection?.freshnessState?.allocation?.state;
+    if (draftDirty || read.sourceState !== "current" || !read.projection) {
+      throw new Error("Ingredient allocation requires current server evidence for the saved quote.");
+    }
+    if (!release && (read.projection.freshness !== "as_recorded"
+      || read.projection.quoteRevisionId !== savedQuoteRevisionId)) {
       throw new Error("Ingredient allocation requires the exact current saved requirement projection.");
+    }
+    if (reconcilePlan && (allocationFreshness !== "stale"
+      || read.projection.freshnessState?.demand?.state !== "current"
+      || read.projection.freshnessState?.availability?.state !== "current")) {
+      throw new Error("Record the revised ingredient requirement before reconciling its retained allocation.");
     }
     if (new Set(["pending", "receipt", "uncertain", "reconciliation", "rejected"]).has(allocationOperation.state)) {
       throw new Error("Resolve the existing ingredient allocation request before starting another.");
@@ -382,6 +412,14 @@ export function useEventIngredientProjection({
       locationId,
       expectedRequirementRevision: read.projection.requirementRevision,
       expectedAllocationRevision: currentAllocationRevision
+    } : reconcilePlan ? {
+      kind,
+      quoteId,
+      eventRequirementRevisionId: read.projection.eventRequirementRevisionId,
+      locationId,
+      expectedRequirementRevision: read.projection.requirementRevision,
+      expectedAllocationRevision: currentAllocationRevision,
+      reason
     } : {
       kind,
       quoteId,
@@ -397,7 +435,9 @@ export function useEventIngredientProjection({
           state: "receipt",
           message: result.confirmation.state === "released"
             ? "Release receipt recorded. Waiting for the exact current projection."
-            : "Allocation receipt recorded. Waiting for the exact current projection.",
+            : reconcilePlan
+              ? "Reconciliation receipt recorded. Waiting for the exact current projection."
+              : "Allocation receipt recorded. Waiting for the exact current projection.",
           requestId,
           receipt: result.receipt,
           confirmation: result.confirmation
@@ -424,6 +464,12 @@ export function useEventIngredientProjection({
 
   const release = useCallback(({ reason }) => applyAllocation({
     kind: "release_event_ingredients", reason: text(reason)
+  }), [applyAllocation]);
+
+  const reconcileStaleAllocation = useCallback(({ locationId, reason }) => applyAllocation({
+    kind: "reconcile_event_ingredients",
+    locationId: text(locationId),
+    reason: text(reason)
   }), [applyAllocation]);
 
   const reconcileAllocation = useCallback(async () => {
@@ -467,7 +513,8 @@ export function useEventIngredientProjection({
   if (injected) return injected;
 
   const previewMatchesSaved = preview.state === "current"
-    && preview.projection?.quoteRevisionId === savedQuoteRevisionId;
+    && preview.projection?.quoteRevisionId === savedQuoteRevisionId
+    && preview.scenarioFingerprint === exactScenarioFingerprint;
   const controlsLocked = new Set(["pending", "receipt", "uncertain", "reconciliation", "rejected"]).has(operation.state);
   const allocationControlsLocked = new Set(["pending", "receipt", "uncertain", "reconciliation", "rejected"])
     .has(allocationOperation.state);
@@ -477,13 +524,24 @@ export function useEventIngredientProjection({
     && read.state === "recorded";
   const allocationState = read.projection?.allocation?.state || "";
   const allocationActive = new Set(["reserved", "shortage"]).has(allocationState);
+  const allocationFreshness = read.projection?.freshnessState?.allocation?.state
+    || (requirementCurrent && allocationActive ? "current" : allocationActive ? "stale" : "not_allocated");
+  const serverCurrentAllocationEvidence = read.sourceState === "current" && allocationActive
+    && new Set(["current", "stale"]).has(allocationFreshness);
   const canRecord = access.role === "admin" && access.mutationEnabled && !draftDirty && previewMatchesSaved && !controlsLocked;
   const canAllocate = access.role === "admin" && access.mutationEnabled && !draftDirty
     && allocationCommerciallyEligible && requirementCurrent && read.projection?.demandState === "complete"
+    && allocationFreshness !== "stale"
     && allocationState !== "reserved"
     && !controlsLocked && !allocationControlsLocked;
   const canRelease = access.role === "admin" && access.mutationEnabled && !draftDirty
+    && allocationCommerciallyEligible && serverCurrentAllocationEvidence
+    && !controlsLocked && !allocationControlsLocked;
+  const canReconcilePlan = access.role === "admin" && access.mutationEnabled && !draftDirty
     && allocationCommerciallyEligible && requirementCurrent && allocationActive
+    && allocationFreshness === "stale"
+    && read.projection?.freshnessState?.demand?.state === "current"
+    && read.projection?.freshnessState?.availability?.state === "current"
     && !controlsLocked && !allocationControlsLocked;
   let recordBlockedReason = "";
   if (access.role !== "admin" || !access.mutationEnabled) recordBlockedReason = "Only an authorized administrator may record requirements.";
@@ -504,10 +562,15 @@ export function useEventIngredientProjection({
     canManageAllocation: access.role === "admin" && access.mutationEnabled,
     canAllocate,
     canRelease,
+    canReconcilePlan,
     allocationBlockedReason: !access.mutationEnabled || access.role !== "admin"
       ? "Only an authorized administrator may change ingredient allocations."
       : !allocationCommerciallyEligible ? "Ingredient allocation is available only for accepted or booked quotes."
       : draftDirty ? "Save the quote revision before changing ingredient allocations."
+      : allocationFreshness === "stale" && !requirementCurrent
+        ? "Record a current revised ingredient requirement before reconciling the retained hold. Release remains available."
+      : allocationFreshness === "stale"
+        ? "Reconcile the retained hold to the current recorded requirement, or release it."
       : !requirementCurrent ? "A server-current saved ingredient requirement is required before allocation."
       : read.projection?.demandState !== "complete" ? "Resolve missing recipe or portion evidence before allocation."
       : controlsLocked || allocationControlsLocked ? "Resolve the current inventory request before changing the allocation."
@@ -520,6 +583,7 @@ export function useEventIngredientProjection({
     reset,
     allocate,
     release,
+    reconcileStaleAllocation,
     reconcileAllocation,
     resetAllocation
   };

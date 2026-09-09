@@ -217,8 +217,22 @@ function releaseEventCommand() {
   };
 }
 
+function reconcileEventCommand() {
+  return {
+    kind: "reconcile_event_ingredients",
+    quoteId: "quote-event-1",
+    eventRequirementRevisionId: EVENT_REQUIREMENT_REVISION_ID,
+    locationId: "main-kitchen",
+    expectedRequirementRevision: 2,
+    expectedAllocationRevision: 3,
+    reason: "Guest count changed"
+  };
+}
+
 function eventIngredientProjection(overrides = {}) {
   const digest = "a".repeat(64);
+  const defaultAllocationFreshness = overrides.allocation?.state === "released"
+    ? "released" : overrides.allocation ? "current" : "not_allocated";
   const contribution = {
     ...eventSelection(),
     recipeDigest: digest,
@@ -298,6 +312,12 @@ function eventIngredientProjection(overrides = {}) {
     ingredientLabels: [{ ingredientId: "chicken", name: "Chicken" }],
     freshness: "as_recorded",
     staleReason: "",
+    freshnessState: overrides.freshnessState || {
+      demand: { state: "current", reason: "" },
+      cost: { state: "current", reason: "" },
+      availability: { state: "current", reason: "" },
+      allocation: { state: defaultAllocationFreshness, reason: "" }
+    },
     updatedAtISO: NOW,
     ...overrides
   };
@@ -525,6 +545,19 @@ function responseFor(payload, resultOverrides = {}) {
         shortageIngredientCount: 1,
         releasedIngredientCount: 2
       };
+    } else if (payload.command.kind === "reconcile_event_ingredients") {
+      result = {
+        schemaVersion: 2,
+        quoteId: payload.command.quoteId,
+        eventPlanId: EVENT_PLAN_ID,
+        allocationRevision: payload.command.expectedAllocationRevision + 2,
+        state: "shortage",
+        eventRequirementRevisionId: payload.command.eventRequirementRevisionId,
+        ingredientCount: 2,
+        fullyAllocatedIngredientCount: 1,
+        shortageIngredientCount: 1,
+        reconciledFromAllocationRevision: payload.command.expectedAllocationRevision
+      };
     } else {
       result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, costEvidenceId: `ice_${"d".repeat(48)}`, costRevision: payload.command.expectedCostRevision + 1, availability: payload.command.availability, affectedMenuItemIds: [] };
     }
@@ -647,6 +680,61 @@ describe("inventory schema-v2 command authority", () => {
       requestId: `inventory_request_${"6".repeat(32)}`,
       command: { ...command, inferredCaseContents: true }
     })).rejects.toThrow(/unsupported fields/i);
+  });
+
+  test("sends an exact stale-allocation reconciliation and requires the atomic +2 result revision", async () => {
+    const command = reconcileEventCommand();
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-reconcile-command" };
+    const requestId = `inventory_request_${"7".repeat(32)}`;
+    mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
+
+    await expect(applyInventoryCommand({ ...scope, requestId, command })).resolves.toMatchObject({
+      commandKind: "reconcile_event_ingredients",
+      confirmation: {
+        allocationRevision: 5,
+        reconciledFromAllocationRevision: 3,
+        eventRequirementRevisionId: EVENT_REQUIREMENT_REVISION_ID
+      }
+    });
+    expect(mocks.callable).toHaveBeenCalledWith(expect.objectContaining({ requestId, command }));
+
+    mocks.callable.mockImplementation(async (payload) => ({
+      data: responseFor(payload, { allocationRevision: payload.command.expectedAllocationRevision + 1 })
+    }));
+    await expect(applyInventoryCommand({
+      ...scope,
+      requestId: `inventory_request_${"8".repeat(32)}`,
+      command
+    })).rejects.toThrow(/differs from the request/i);
+  });
+
+  test("rejects reconciliation request substitution and mismatched result provenance as data loss", async () => {
+    const command = reconcileEventCommand();
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-reconcile-substitution" };
+    mocks.callable.mockRejectedValueOnce(Object.assign(new Error("connection ended"), {
+      code: "functions/unavailable"
+    }));
+    await expect(applyInventoryCommand({
+      ...scope,
+      requestId: `inventory_request_${"9".repeat(32)}`,
+      command
+    })).rejects.toThrow(/connection ended/i);
+    await expect(applyInventoryCommand({
+      ...scope,
+      requestId: `inventory_request_${"0".repeat(32)}`,
+      command: { ...command, reason: "Different request contents" }
+    })).rejects.toThrow(/without changing its identity or contents/i);
+    expect(mocks.callable).toHaveBeenCalledTimes(1);
+
+    mocks.callable.mockImplementation(async (payload) => ({
+      data: responseFor(payload, { eventRequirementRevisionId: `eir_${"f".repeat(48)}` })
+    }));
+    await expect(applyInventoryCommand({
+      ...scope,
+      organizationId: "org-reconcile-data-loss",
+      requestId: `inventory_request_${"0".repeat(32)}`,
+      command
+    })).rejects.toMatchObject({ code: "unknown", inventoryDefinitive: false });
   });
 
   test("publishes only the exact versioned menu recipe shape and validates immutable result identity", async () => {
@@ -1160,7 +1248,10 @@ describe("event ingredient preview, immutable requirements, and exact realtime r
         requirementRevision: eventIngredientRequirement(),
         ingredientLabels: [{ ingredientId: "chicken", name: "Chicken" }],
         projection: (() => {
-          const { model, requirementRevision, ingredientLabels, freshness, staleReason, updatedAtISO, ...core } = eventIngredientProjection();
+          const {
+            model, requirementRevision, ingredientLabels, freshness, staleReason,
+            freshnessState, updatedAtISO, ...core
+          } = eventIngredientProjection();
           return core;
         })()
       }
@@ -1299,6 +1390,47 @@ describe("event ingredient preview, immutable requirements, and exact realtime r
         ...allocation,
         ingredients: [{ ...allocation.ingredients[0], baseUnitId: "oz" }]
       }
+    }), ORGANIZATION_ID, "quote-event-1")).toThrow(/saved requirement projection/i);
+  });
+
+  test("accepts an explicitly stale retained allocation without rebinding it to the revised requirement", () => {
+    const retainedAllocation = {
+      state: "reserved",
+      eventPlanId: EVENT_PLAN_ID,
+      allocationRevision: 3,
+      eventRequirementRevisionId: `eir_${"f".repeat(48)}`,
+      ingredientCount: 1,
+      fullyAllocatedIngredientCount: 1,
+      shortageIngredientCount: 0,
+      ingredients: [{
+        ingredientId: "chicken",
+        locationId: "main-kitchen",
+        baseUnitId: "lb",
+        requiredQuantityMicros: 10_000_000,
+        allocatedQuantityMicros: 10_000_000,
+        shortageQuantityMicros: 0
+      }]
+    };
+    const staleFreshness = {
+      demand: { state: "current", reason: "" },
+      cost: { state: "current", reason: "" },
+      availability: { state: "current", reason: "" },
+      allocation: { state: "stale", reason: "requirement_changed" }
+    };
+    expect(normalizeEventIngredientProjection(eventIngredientProjection({
+      allocation: retainedAllocation,
+      freshnessState: staleFreshness
+    }), ORGANIZATION_ID, "quote-event-1")).toMatchObject({
+      freshnessState: staleFreshness,
+      allocation: {
+        allocationRevision: 3,
+        eventRequirementRevisionId: retainedAllocation.eventRequirementRevisionId,
+        ingredients: [{ requiredQuantityMicros: 10_000_000 }]
+      }
+    });
+    expect(() => normalizeEventIngredientProjection(eventIngredientProjection({
+      allocation: retainedAllocation,
+      freshnessState: { ...staleFreshness, allocation: { state: "current", reason: "" } }
     }), ORGANIZATION_ID, "quote-event-1")).toThrow(/saved requirement projection/i);
   });
 

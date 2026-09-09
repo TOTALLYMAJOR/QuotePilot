@@ -4,7 +4,7 @@
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -9419,19 +9419,24 @@
         "organization_admins",
         "organization_sales"
       ],
-      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability, then lets administrators allocate or release accepted/booked event commitments through shared date-independent Firestore fences.",
+      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability; accepted/booked commitments reconcile through shared date-independent Firestore fences, while Commercial Change shows independent read-only cost and stock consequences.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
         "functions/inventoryAuthority.js",
         "functions/inventoryEventDemandCore.cjs",
         "functions/inventoryIngredientAllocationCore.cjs",
+        "functions/inventoryIngredientReconciliationCore.cjs",
         "scripts/inventory-ingredient-emulator-acceptance.mjs",
         "src/hooks/useEventIngredientProjection.js",
+        "src/lib/commercialInventoryConsequences.js",
         "src/lib/inventoryAuthorityClient.js"
       ],
       "backendExports": [
-        "functions/index.js#previewEventInventory"
+        "functions/index.js#previewEventInventory",
+        "functions/index.js#invalidateEventIngredientsOnQuoteChange",
+        "functions/index.js#invalidateEventIngredientsOnRecipeChange",
+        "functions/index.js#invalidateEventIngredientsOnMenuCostChange"
       ],
       "affectedBackendExports": [
         "functions/index.js#applyInventoryCommand"
@@ -9440,8 +9445,10 @@
         "src/App.jsx",
         "src/LegacyApp.jsx",
         "src/components/EventIngredientProjectionPanel.jsx",
+        "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/eventIngredientProjectionPanel.css",
         "src/hooks/useEventIngredientProjection.js",
+        "src/lib/commercialInventoryConsequences.js",
         "src/lib/inventoryAuthorityClient.js"
       ],
       "entryPointLocators": [
@@ -9452,14 +9459,20 @@
         {
           "path": "src/LegacyApp.jsx",
           "locator": "data-capability-id=\"inventory-event-ingredient-consequence\""
+        },
+        {
+          "path": "src/components/CommercialChangeImpactPanel.jsx",
+          "locator": "data-commercial-inventory-consequence"
         }
       ],
       "testPaths": [
         "scripts/inventory-ingredient-emulator-acceptance.mjs",
         "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+        "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
         "src/lib/__tests__/inventoryAuthorityClient.test.js",
         "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+        "src/lib/__tests__/commercialInventoryConsequences.test.js",
         "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
         "src/lib/__tests__/inventoryIngredientAllocationCore.server.test.js",
         "src/lib/__tests__/inventoryProductionRoute.test.js",
@@ -9487,6 +9500,18 @@
           "locator": "builds exact saved menu evidence without inferring portions from guests or billing quantities"
         },
         {
+          "path": "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+          "locator": "preserves release for a stale active hold while forbidding top-up and reconcile"
+        },
+        {
+          "path": "src/lib/__tests__/commercialInventoryConsequences.test.js",
+          "locator": "returns immutable cost and per-unit availability deltas with exact provenance"
+        },
+        {
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders independent read-only ingredient cost and stock consequences without changing commercial authority"
+        },
+        {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "event ingredient projections are exact-document staff reads and server-owned"
         }
@@ -9511,7 +9536,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The consequence card is composed into existing Quote Edit in both supported production graphs. It requires explicit output evidence, never infers portions from guest or billing quantity, previews without writing, records and allocates only for administrators, and subscribes to the exact event projection with snapshot metadata. Accepted/booked allocation, partial top-up, release, receipt readback, retained stale evidence, and uncertain recovery remain visibly distinct.",
+      "surfaceReviewNote": "The consequence card is composed into existing Quote Edit in both supported production graphs. It requires explicit output evidence, never infers portions from guest or billing quantity, previews without writing, records and allocates only for administrators, and subscribes to the exact event projection with snapshot metadata. Accepted/booked allocation, partial top-up, stale-hold reconcile or release, receipt readback, and uncertain recovery remain visibly distinct. Commercial Change consumes the same exact saved projection plus a scenario-bound preview and cannot alter commercial authorization or apply behavior.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -9587,7 +9612,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote ingredient demand, projected ingredient cost, consumable availability, and current allocation evidence. Only administrators can record requirements or change accepted/booked allocations. Shared ingredient/location fences prevent cross-date over-allocation; receiving changes physical stock, allocation and release change commitment only, cached or pending reads are not current, and this phase does not consume stock, mutate selling price, claim COGS, or establish deployment or human acceptance."
+      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote ingredient demand, projected ingredient cost, consumable availability, allocation freshness, and read-only Commercial Change deltas. Only administrators can record requirements or change accepted/booked allocations. Shared ingredient/location fences prevent cross-date over-allocation; changed requirements preserve historical estimates and active holds until explicit reconcile or release; receiving changes physical stock; cached or pending reads are not current; and this phase does not consume stock, mutate selling price, claim COGS, or establish deployment or human acceptance."
     }
   ]
 }

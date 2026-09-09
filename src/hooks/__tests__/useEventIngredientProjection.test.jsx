@@ -50,6 +50,7 @@ const BASE = {
     portionBasis: { kind: "explicit_output_quantity", evidenceId: "menu-1" },
     commercialProvenance: { kind: "direct", sourceId: "menu-1" }
   }],
+  scenarioFingerprint: '{"guests":100}',
   draftDirty: false
 };
 
@@ -154,7 +155,6 @@ test("maps metadata, revision staleness, dirty drafts, and retained listener fai
   });
   render();
   const projection = { quoteId: "quote-1", quoteRevisionId: "quote-revision-1", demandState: "complete" };
-
   act(() => registrations[0].onData({
     quoteId: "quote-1", exists: true, projection, freshness: "cached", source: { state: "cached" }
   }));
@@ -230,6 +230,7 @@ test("keeps preview read-only for sales and allows admin recording only from a c
   await act(async () => latest.previewCurrent());
   expect(mocks.preview).toHaveBeenCalledWith(expect.objectContaining({ role: "sales", selections: BASE.selections }));
   expect(latest.preview).toMatchObject({ state: "current", projection });
+  expect(latest.preview.scenarioFingerprint).toBe('{"guests":100}');
   expect(latest.canRecord).toBe(false);
   await expect(latest.recordCurrentPreview()).rejects.toThrow(/administrator/i);
 
@@ -258,6 +259,31 @@ test("keeps preview read-only for sales and allows admin recording only from a c
     source: { state: "current" }
   }));
   expect(latest.operation).toMatchObject({ state: "committed", receipt: { receiptId: "receipt-1" } });
+});
+
+test("invalidates a scenario preview when the exact form fingerprint changes and ignores its late result", async () => {
+  let resolvePreview;
+  mocks.preview.mockReturnValue(new Promise((resolve) => { resolvePreview = resolve; }));
+  render();
+  let request;
+  act(() => { request = latest.previewCurrent(); });
+  expect(latest.preview).toMatchObject({ state: "pending", scenarioFingerprint: '{"guests":100}' });
+
+  render({ ...BASE, scenarioFingerprint: '{"guests":175}' });
+  expect(latest.preview).toMatchObject({
+    state: "not_evaluated",
+    projection: null,
+    scenarioFingerprint: '{"guests":175}'
+  });
+  await act(async () => {
+    resolvePreview({ projection: { quoteId: "quote-1", quoteRevisionId: "quote-revision-2" } });
+    await request;
+  });
+  expect(latest.preview).toMatchObject({
+    state: "not_evaluated",
+    projection: null,
+    scenarioFingerprint: '{"guests":175}'
+  });
 });
 
 test("locks a transport-uncertain target through reconciliation and requires reset after definitive rejection", async () => {
@@ -441,6 +467,160 @@ test("keeps allocation and release pending until the exact current projection co
     freshness: "current", source: { state: "current" }
   }));
   expect(latest.allocationOperation.state).toBe("committed");
+});
+
+test("preserves release for a stale active hold while forbidding top-up and reconcile", async () => {
+  const registrations = [];
+  mocks.subscribe.mockImplementation((input) => { registrations.push(input); return vi.fn(); });
+  const priorRequirementId = `eir_${"c".repeat(48)}`;
+  const allocation = {
+    eventPlanId: `eip_${"e".repeat(48)}`,
+    allocationRevision: 4,
+    state: "shortage",
+    eventRequirementRevisionId: priorRequirementId,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 0,
+    shortageIngredientCount: 1,
+    ingredients: [{ locationId: "main-kitchen" }]
+  };
+  render();
+  act(() => registrations[0].onData({
+    quoteId: "quote-1",
+    exists: true,
+    projection: {
+      quoteId: "quote-1",
+      quoteRevisionId: "quote-revision-1",
+      requirementRevision: 1,
+      eventRequirementRevisionId: priorRequirementId,
+      freshness: "stale",
+      demandState: "complete",
+      allocation,
+      freshnessState: {
+        demand: { state: "stale", reason: "quote_revision_changed" },
+        cost: { state: "stale", reason: "quote_revision_changed" },
+        availability: { state: "stale", reason: "quote_revision_changed" },
+        allocation: { state: "stale", reason: "quote_revision_changed" }
+      }
+    },
+    freshness: "current",
+    source: { state: "current" }
+  }));
+  expect(latest).toMatchObject({ canAllocate: false, canRelease: true, canReconcilePlan: false });
+  await expect(latest.allocate({ locationId: "main-kitchen" })).rejects.toThrow(/exact current saved requirement/i);
+
+  mocks.apply.mockResolvedValueOnce({
+    receipt: { receiptId: "release-stale" },
+    confirmation: {
+      ...allocation,
+      allocationRevision: 5,
+      state: "released",
+      releasedIngredientCount: 1
+    }
+  });
+  await act(async () => latest.release({ reason: "Superseded event scope" }));
+  expect(mocks.apply).toHaveBeenLastCalledWith(expect.objectContaining({
+    command: {
+      kind: "release_event_ingredients",
+      quoteId: "quote-1",
+      expectedAllocationRevision: 4,
+      reason: "Superseded event scope"
+    }
+  }));
+});
+
+test("enables retained-hold reconcile only after revised demand and availability are server current", async () => {
+  const registrations = [];
+  mocks.subscribe.mockImplementation((input) => { registrations.push(input); return vi.fn(); });
+  const priorRequirementId = `eir_${"c".repeat(48)}`;
+  const revisedRequirementId = `eir_${"d".repeat(48)}`;
+  const allocation = {
+    eventPlanId: `eip_${"e".repeat(48)}`,
+    allocationRevision: 4,
+    state: "shortage",
+    eventRequirementRevisionId: priorRequirementId,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 0,
+    shortageIngredientCount: 1,
+    ingredients: [{ locationId: "main-kitchen" }]
+  };
+  render();
+  act(() => registrations[0].onData({
+    quoteId: "quote-1",
+    exists: true,
+    projection: {
+      quoteId: "quote-1",
+      quoteRevisionId: "quote-revision-2",
+      requirementRevision: 2,
+      eventRequirementRevisionId: revisedRequirementId,
+      freshness: "as_recorded",
+      demandState: "complete",
+      allocation,
+      freshnessState: {
+        demand: { state: "current", reason: "" },
+        cost: { state: "current", reason: "" },
+        availability: { state: "current", reason: "" },
+        allocation: { state: "stale", reason: "requirement_changed" }
+      }
+    },
+    freshness: "current",
+    source: { state: "current" }
+  }));
+  expect(latest).toMatchObject({ canAllocate: false, canRelease: true, canReconcilePlan: true });
+
+  const confirmation = {
+    quoteId: "quote-1",
+    eventPlanId: allocation.eventPlanId,
+    allocationRevision: 6,
+    state: "shortage",
+    eventRequirementRevisionId: revisedRequirementId,
+    ingredientCount: 1,
+    fullyAllocatedIngredientCount: 0,
+    shortageIngredientCount: 1,
+    reconciledFromAllocationRevision: 4
+  };
+  mocks.apply.mockResolvedValueOnce({ receipt: { receiptId: "reconcile-plan" }, confirmation });
+  await act(async () => latest.reconcileStaleAllocation({
+    locationId: "main-kitchen",
+    reason: "Guest count changed"
+  }));
+  expect(mocks.apply).toHaveBeenLastCalledWith(expect.objectContaining({
+    command: {
+      kind: "reconcile_event_ingredients",
+      quoteId: "quote-1",
+      eventRequirementRevisionId: revisedRequirementId,
+      locationId: "main-kitchen",
+      expectedRequirementRevision: 2,
+      expectedAllocationRevision: 4,
+      reason: "Guest count changed"
+    }
+  }));
+
+  render({ ...BASE, quoteId: "quote-2" });
+  act(() => registrations.at(-1).onData({
+    quoteId: "quote-2",
+    exists: true,
+    projection: {
+      quoteId: "quote-2",
+      quoteRevisionId: "quote-revision-2",
+      requirementRevision: 2,
+      eventRequirementRevisionId: revisedRequirementId,
+      freshness: "as_recorded",
+      demandState: "complete",
+      allocation,
+      freshnessState: {
+        demand: { state: "current", reason: "" },
+        cost: { state: "current", reason: "" },
+        availability: { state: "stale", reason: "stock_changed" },
+        allocation: { state: "stale", reason: "requirement_changed" }
+      }
+    },
+    freshness: "current",
+    source: { state: "current" }
+  }));
+  expect(latest.canReconcilePlan).toBe(false);
+  await expect(latest.reconcileStaleAllocation({
+    locationId: "main-kitchen", reason: "Guest count changed"
+  })).rejects.toThrow(/record the revised ingredient requirement/i);
 });
 
 test.each(["draft", "sent", "declined", "cancelled"])("withholds allocation changes for %s quotes while preserving preview intelligence", async (quoteStatus) => {

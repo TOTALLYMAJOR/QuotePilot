@@ -188,6 +188,16 @@ async function expectCallableError(action, status, messagePattern) {
   return caught;
 }
 
+async function waitForDocument(ref, predicate, label) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const snapshot = await ref.get();
+    if (snapshot.exists && predicate(snapshot.data() || {})) return snapshot.data() || {};
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for ${label}.`);
+}
+
 function locationCommand(locationId, name) {
   return {
     kind: "upsert_location",
@@ -666,10 +676,85 @@ assert.equal(toppedUpPlan?.ingredients?.find(
 assert.equal((await orgRef.collection("inventoryAllocationFences")
   .where("ingredientId", "==", "chicken").get()).docs[0].data()?.committedMicros, 45_000_000);
 
+const quoteAlfredoRef = orgRef.collection("quotes").doc("quote-alfredo");
+await quoteAlfredoRef.collection("versions").doc("v0002").set({
+  versionId: "v0002",
+  versionNumber: 2,
+  quoteId: "quote-alfredo",
+  organizationId: ORGANIZATION_ID,
+  snapshot: {
+    id: "quote-alfredo",
+    organizationId: ORGANIZATION_ID,
+    activeVersionId: "v0002",
+    event: { date: "2026-10-04", time: "17:00", guests: 150 },
+    selection: {
+      packageId: "dinner-package",
+      packageInclusions: { menuItems: [] },
+      menuItems: ["chicken-alfredo"],
+      menuItemsSnapshot: [{ id: "chicken-alfredo", name: "Chicken Alfredo" }]
+    }
+  }
+});
+await quoteAlfredoRef.update({ activeVersionId: "v0002", versionMeta: { versionId: "v0002" } });
+const eventProjectionRef = orgRef.collection("eventIngredientProjections").doc("quote-alfredo");
+const staleCommercialProjection = await waitForDocument(
+  eventProjectionRef,
+  (value) => value.freshnessState?.demand?.reason === "commercial_revision_changed",
+  "commercial ingredient invalidation"
+);
+assert.equal(staleCommercialProjection.freshnessState?.allocation?.state, "stale");
+assert.equal((await alfredoPlanRef.get()).data()?.allocationRevision, 2,
+  "Commercial invalidation must preserve the active allocation plan.");
+
+const revisedSelection = eventSelectionFor("quote-alfredo", "150");
+const revisedPreview = await callEventPreview(principal, {
+  schemaVersion: 2,
+  organizationId: ORGANIZATION_ID,
+  quoteId: "quote-alfredo",
+  quoteRevisionId: "v0002",
+  requiredByBasis: { kind: "quote_event_start" },
+  selections: [revisedSelection]
+});
+const revisedRequirement = await callInventory(principal, "event-demand-alfredo-revision-0002", {
+  kind: "compile_event_ingredient_demand",
+  quoteId: "quote-alfredo",
+  quoteRevisionId: "v0002",
+  requiredByBasis: { kind: "quote_event_start" },
+  selections: [revisedSelection],
+  expectedRequirementRevision: 1,
+  expectedPreviewProjectionDigest: revisedPreview.projection.projectionDigest
+});
+const preservedAllocationProjection = (await eventProjectionRef.get()).data();
+assert.equal(preservedAllocationProjection?.eventRequirementRevisionId,
+  revisedRequirement.result.eventRequirementRevisionId);
+assert.equal(preservedAllocationProjection?.allocation?.eventRequirementRevisionId,
+  alfredoAllocation.result.eventRequirementRevisionId);
+assert.equal(preservedAllocationProjection?.freshnessState?.allocation?.state, "stale");
+assert.equal((await orgRef.collection("inventoryAllocationFences")
+  .where("ingredientId", "==", "chicken").get()).docs[0].data()?.committedMicros, 45_000_000,
+"Recording changed demand must not orphan or release an active hold.");
+
+const reconcileRequest = {
+  kind: "reconcile_event_ingredients",
+  quoteId: "quote-alfredo",
+  eventRequirementRevisionId: revisedRequirement.result.eventRequirementRevisionId,
+  locationId: "main-kitchen",
+  expectedRequirementRevision: 2,
+  expectedAllocationRevision: 2,
+  reason: "Reconcile accepted quote revision v0002"
+};
+const reconciled = await callInventory(principal, "reconcile-alfredo-revision-0002", reconcileRequest);
+assert.equal(reconciled.result.allocationRevision, 4);
+assert.equal(reconciled.result.state, "shortage");
+assert.equal(reconciled.result.reconciledFromAllocationRevision, 2);
+const reconciledReplay = await callInventory(principal, "reconcile-alfredo-revision-0002", reconcileRequest);
+assert.equal(reconciledReplay.idempotent, true);
+assert.equal((await eventProjectionRef.get()).data()?.freshnessState?.allocation?.state, "current");
+
 const releaseAlfredo = await callInventory(principal, "release-alfredo-create-0001", {
   kind: "release_event_ingredients",
   quoteId: "quote-alfredo",
-  expectedAllocationRevision: 2,
+  expectedAllocationRevision: 4,
   reason: "Acceptance fixture release"
 });
 assert.equal(releaseAlfredo.result.state, "released");
@@ -680,12 +765,12 @@ assert.equal((await orgRef.collection("inventoryStockStates")
 "Release must not mutate physical stock.");
 assert.equal((await orgRef.collection("inventoryAllocationFences")
   .where("ingredientId", "==", "chicken").get()).docs[0].data()?.committedMicros, 25_000_000);
-assert.equal((await alfredoPlanRef.collection("revisions").get()).size, 3);
+assert.equal((await alfredoPlanRef.collection("revisions").get()).size, 5);
 await expectCallableError(
   () => callInventory(principal, "release-alfredo-again-0002", {
     kind: "release_event_ingredients",
     quoteId: "quote-alfredo",
-    expectedAllocationRevision: 3,
+    expectedAllocationRevision: 5,
     reason: "A second release must fail"
   }),
   "FAILED_PRECONDITION",
@@ -793,23 +878,35 @@ assert.deepEqual(changedMenuCost.data()?.cost?.exactCostPerOutputUnitMinor, {
   numerator: "100",
   denominator: "1"
 });
-const retainedEventProjection = await orgRef.collection("eventIngredientProjections").doc("quote-alfredo").get();
-assert.equal(retainedEventProjection.data()?.freshness, "as_recorded");
-assert.equal(retainedEventProjection.data()?.projectedCostMinor, 8000,
+const retainedEventProjection = await waitForDocument(
+  eventProjectionRef,
+  (value) => value.freshnessState?.cost?.reason === "menu_cost_basis_changed",
+  "cost-only event ingredient invalidation"
+);
+assert.equal(retainedEventProjection.freshness, "as_recorded");
+assert.equal(retainedEventProjection.freshnessState?.demand?.state, "current");
+assert.equal(retainedEventProjection.freshnessState?.availability?.state, "current");
+assert.equal(retainedEventProjection.freshnessState?.allocation?.state, "released");
+assert.equal(retainedEventProjection.projectedCostMinor, 12000,
   "Recorded event evidence must remain pinned rather than silently claiming the new cost basis.");
 const changedEventPreview = await callEventPreview(principal, {
   schemaVersion: 2,
   organizationId: ORGANIZATION_ID,
   quoteId: "quote-alfredo",
-  quoteRevisionId: "v0001",
+  quoteRevisionId: "v0002",
   requiredByBasis: { kind: "quote_event_start" },
-  selections: [eventSelection]
+  selections: [revisedSelection]
 });
-assert.equal(changedEventPreview.projection.projectedCostMinor, 10000);
+assert.equal(changedEventPreview.projection.projectedCostMinor, 15000);
 await assert.rejects(
   callInventory(principal, "event-demand-stale-preview-0001", {
-    ...eventCommand,
-    expectedRequirementRevision: 1
+    kind: "compile_event_ingredient_demand",
+    quoteId: "quote-alfredo",
+    quoteRevisionId: "v0002",
+    requiredByBasis: { kind: "quote_event_start" },
+    selections: [revisedSelection],
+    expectedRequirementRevision: 2,
+    expectedPreviewProjectionDigest: revisedPreview.projection.projectionDigest
   }),
   (error) => error?.status === "ABORTED",
   "Recording must reject when its preview cost or stock digest is no longer authoritative."
@@ -834,5 +931,6 @@ console.log("- concurrent allocations contended on shared ingredient-location fe
 console.log("- release removed commitment without changing physical stock and preserved immutable plan revisions");
 console.log("- exact receiving replay produced one movement, while a later receipt cost stayed evidence instead of replacing planning cost");
 console.log("- recorded event evidence remained historical while a new preview used changed cost, and stale-preview recording failed closed");
+console.log("- quote drift retained its active hold until an idempotent transaction reconciled old and revised plan evidence");
 console.log("- a chicken cost change reprojected only its reverse-indexed menu dependency to $1.00 per portion");
 console.log("- recipe costing did not require stock and never mutated the catalog selling or manual cost authority");

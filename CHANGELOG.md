@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 05:17:00 CDT
+Last updated: 2026-09-09 06:19:39 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add Ingredient Inventory Phase 6: exact quote, recipe, and menu-cost source
+  transitions now invalidate only bounded dependent event projections while
+  preserving immutable requirements, historical estimates, and active holds.
+  A receipt-producing reconcile command releases the retained hold and
+  reallocates the current recorded requirement atomically through the same
+  shared consumable fences. Demand, cost, availability, and allocation carry
+  independent freshness, and Commercial Change composes saved exact-document
+  evidence with a read-only scenario preview to show ingredient-cost and stock
+  consequences without changing commercial authorization, selling price, or
+  publication behavior.
 - Add Ingredient Inventory Phase 5: confirmed receiving appends immutable
   physical and exact known-or-unknown purchase-cost evidence, while shared
   date-independent ingredient/location fences coordinate accepted/booked event

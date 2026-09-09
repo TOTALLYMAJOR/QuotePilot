@@ -22,7 +22,8 @@ export const INVENTORY_COMMAND_KINDS = Object.freeze([
   "publish_menu_recipe",
   "compile_event_ingredient_demand",
   "allocate_event_ingredients",
-  "release_event_ingredients"
+  "release_event_ingredients",
+  "reconcile_event_ingredients"
 ]);
 export const INVENTORY_COST_AVAILABILITY = Object.freeze([
   "available",
@@ -689,6 +690,34 @@ function normalizeReleaseEventIngredientsCommand(value) {
   };
 }
 
+function normalizeReconcileEventIngredientsCommand(value) {
+  exactKeys(value, [
+    "kind", "quoteId", "eventRequirementRevisionId", "locationId",
+    "expectedRequirementRevision", "expectedAllocationRevision", "reason"
+  ], "Event ingredient reconciliation command");
+  if (value.kind !== "reconcile_event_ingredients"
+    || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId)) {
+    throw clientError("invalid-argument", "Event ingredient reconciliation command is invalid.");
+  }
+  return {
+    kind: value.kind,
+    quoteId: identifier(value.quoteId, "reconciliation quoteId"),
+    eventRequirementRevisionId: value.eventRequirementRevisionId,
+    locationId: identifier(value.locationId, "reconciliation locationId"),
+    expectedRequirementRevision: exactRevision(
+      value.expectedRequirementRevision,
+      "reconciliation requirement expected revision",
+      { allowZero: false }
+    ),
+    expectedAllocationRevision: exactRevision(
+      value.expectedAllocationRevision,
+      "reconciliation allocation expected revision",
+      { allowZero: false }
+    ),
+    reason: exactText(value.reason, "reconciliation reason", 160)
+  };
+}
+
 function normalizeEventRequiredByBasis(value) {
   exactKeys(value, ["kind"], "Event ingredient required-by basis");
   if (value.kind !== "quote_event_start") {
@@ -710,6 +739,7 @@ function normalizeCommand(value) {
   if (value.kind === "publish_menu_recipe") return deepFreeze(normalizeRecipeCommand(value));
   if (value.kind === "compile_event_ingredient_demand") return deepFreeze(normalizeCompileEventIngredientCommand(value));
   if (value.kind === "allocate_event_ingredients") return deepFreeze(normalizeAllocateEventIngredientsCommand(value));
+  if (value.kind === "reconcile_event_ingredients") return deepFreeze(normalizeReconcileEventIngredientsCommand(value));
   return deepFreeze(normalizeReleaseEventIngredientsCommand(value));
 }
 
@@ -722,7 +752,7 @@ export function inventoryCommandAxis(kind) {
   if (kind === "publish_pack_conversion") return "conversion";
   if (kind === "publish_menu_recipe") return "recipe";
   if (kind === "compile_event_ingredient_demand") return "event_requirement";
-  if (kind === "allocate_event_ingredients" || kind === "release_event_ingredients") return "allocation";
+  if (["allocate_event_ingredients", "release_event_ingredients", "reconcile_event_ingredients"].includes(kind)) return "allocation";
   return "";
 }
 
@@ -943,23 +973,28 @@ function normalizeMutationResult(value, attempt, receipt) {
     }
     return { ...value };
   }
-  if (command.kind === "allocate_event_ingredients" || command.kind === "release_event_ingredients") {
+  if (["allocate_event_ingredients", "release_event_ingredients", "reconcile_event_ingredients"].includes(command.kind)) {
     const release = command.kind === "release_event_ingredients";
+    const reconcile = command.kind === "reconcile_event_ingredients";
     exactKeys(value, [
       "schemaVersion", "quoteId", "eventPlanId", "allocationRevision", "state",
       "eventRequirementRevisionId", "ingredientCount", "fullyAllocatedIngredientCount",
-      "shortageIngredientCount", ...(release ? ["releasedIngredientCount"] : [])
-    ], `Event ingredient ${release ? "release" : "allocation"} result`, "data-loss");
+      "shortageIngredientCount", ...(release ? ["releasedIngredientCount"] : []),
+      ...(reconcile ? ["reconciledFromAllocationRevision"] : [])
+    ], `Event ingredient ${release ? "release" : reconcile ? "reconciliation" : "allocation"} result`, "data-loss");
     if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
       || value.quoteId !== command.quoteId
       || !EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
-      || value.allocationRevision !== command.expectedAllocationRevision + 1
+      || value.allocationRevision !== command.expectedAllocationRevision + (reconcile ? 2 : 1)
       || !["reserved", "shortage", "released"].includes(value.state)
       || (release && value.state !== "released")
       || (!release && value.state === "released")
       || (!release && value.eventRequirementRevisionId !== command.eventRequirementRevisionId)
       || (release && !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId))) {
-      throw clientError("data-loss", `Event ingredient ${release ? "release" : "allocation"} result differs from the request.`);
+      throw clientError("data-loss", `Event ingredient ${release ? "release" : reconcile ? "reconciliation" : "allocation"} result differs from the request.`);
+    }
+    if (reconcile && value.reconciledFromAllocationRevision !== command.expectedAllocationRevision) {
+      throw clientError("data-loss", "Event ingredient reconciliation result does not identify the replaced allocation revision.");
     }
     exactSafeInteger(value.ingredientCount, "event ingredientCount", { minimum: 1 });
     for (const key of [
@@ -969,7 +1004,7 @@ function normalizeMutationResult(value, attempt, receipt) {
       || (value.state === "reserved" && value.shortageIngredientCount !== 0)
       || (value.state === "shortage" && value.shortageIngredientCount === 0)
       || (release && value.releasedIngredientCount > value.ingredientCount)) {
-      throw clientError("data-loss", `Event ingredient ${release ? "release" : "allocation"} result counts contradict its state.`);
+      throw clientError("data-loss", `Event ingredient ${release ? "release" : reconcile ? "reconciliation" : "allocation"} result counts contradict its state.`);
     }
     return { ...value };
   }
@@ -1667,14 +1702,13 @@ function normalizeIngredientLabels(value) {
   return labels;
 }
 
-function normalizeEventAllocationSummary(value, projection, labelsById) {
+function normalizeEventAllocationSummary(value, projection, labelsById, allocationFreshness) {
   exactKeys(value, [
     "state", "eventPlanId", "allocationRevision", "eventRequirementRevisionId", "ingredientCount",
     "fullyAllocatedIngredientCount", "shortageIngredientCount", "ingredients"
   ], "Event ingredient allocation summary", "data-loss");
   if (!new Set(["reserved", "shortage", "released"]).has(value.state)
     || !EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
-    || value.eventRequirementRevisionId !== projection.eventRequirementRevisionId
     || !Array.isArray(value.ingredients) || value.ingredients.length > 100) {
     throw clientError("data-loss", "Event ingredient allocation summary identity is invalid.");
   }
@@ -1717,12 +1751,14 @@ function normalizeEventAllocationSummary(value, projection, labelsById) {
   }
   const projectedById = new Map(projection.ingredients.map((entry) => [entry.ingredientId, entry]));
   const locations = new Set(ingredients.map((entry) => entry.locationId));
-  if (ingredients.length !== projection.ingredients.length || locations.size > 1
-    || ingredients.some((entry) => {
+  if (locations.size > 1 || (allocationFreshness === "current"
+    && (value.eventRequirementRevisionId !== projection.eventRequirementRevisionId
+      || ingredients.length !== projection.ingredients.length
+      || ingredients.some((entry) => {
       const projected = projectedById.get(entry.ingredientId);
       return !projected || projected.baseUnitId !== entry.baseUnitId
         || projected.requiredQuantityMicros !== entry.requiredQuantityMicros;
-    })) {
+      })))) {
     throw clientError("data-loss", "Event ingredient allocation does not match the saved requirement projection.");
   }
   return {
@@ -1744,7 +1780,10 @@ function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId
     "availabilityState", "selections", "ingredients", "coverage", "sourceRevisions", "issues", "projectionDigest"
   ];
   const optionalKeys = ["currency", "exactKnownCostMinor", "knownCostMinor", "projectedCostMinor"];
-  const persistedKeys = ["model", "requirementRevision", "ingredientLabels", "freshness", "staleReason", "updatedAtISO"];
+  const persistedKeys = [
+    "model", "requirementRevision", "ingredientLabels", "freshness", "staleReason",
+    "freshnessState", "updatedAtISO"
+  ];
   const persistedOptionalKeys = ["allocation"];
   assertAllowedKeys(value, persisted ? [...baseKeys, ...persistedKeys] : baseKeys,
     [...baseKeys, ...optionalKeys, ...(persisted ? [...persistedKeys, ...persistedOptionalKeys] : [])], "Event ingredient projection");
@@ -1872,10 +1911,36 @@ function normalizeEventProjection(value, expectedOrganizationId, expectedQuoteId
     }
     projection.freshness = value.freshness;
     projection.staleReason = value.staleReason;
+    exactKeys(value.freshnessState, ["demand", "cost", "availability", "allocation"], "Event ingredient freshness state", "data-loss");
+    const freshnessState = {};
+    for (const key of ["demand", "cost", "availability", "allocation"]) {
+      exactKeys(value.freshnessState[key], ["state", "reason"], `Event ingredient ${key} freshness`, "data-loss");
+      const allowed = key === "allocation"
+        ? ["not_allocated", "current", "stale", "released"]
+        : ["current", "stale"];
+      const state = value.freshnessState[key].state;
+      const rawReason = value.freshnessState[key].reason;
+      const reason = textValue(rawReason);
+      if (typeof rawReason !== "string" || rawReason !== reason
+        || !allowed.includes(state) || (state === "stale") !== Boolean(reason)) {
+        throw clientError("data-loss", `Event ingredient ${key} freshness is inconsistent.`);
+      }
+      freshnessState[key] = { state, reason };
+    }
+    if ((projection.freshness === "stale") !== (freshnessState.demand.state === "stale")
+      || projection.staleReason !== freshnessState.demand.reason) {
+      throw clientError("data-loss", "Event ingredient legacy freshness disagrees with demand freshness.");
+    }
+    projection.freshnessState = freshnessState;
     projection.updatedAtISO = exactIso(value.updatedAtISO, "event ingredient projection update time");
     projection.allocation = Object.hasOwn(value, "allocation")
-      ? normalizeEventAllocationSummary(value.allocation, projection, labelsById)
+      ? normalizeEventAllocationSummary(value.allocation, projection, labelsById, freshnessState.allocation.state)
       : null;
+    if ((projection.allocation && freshnessState.allocation.state === "not_allocated")
+      || (!projection.allocation && !["not_allocated", "released"].includes(freshnessState.allocation.state))
+      || (projection.allocation?.state === "released") !== (freshnessState.allocation.state === "released")) {
+      throw clientError("data-loss", "Event ingredient allocation freshness contradicts its projection.");
+    }
   } else {
     projection.freshness = "preview";
     projection.staleReason = "";

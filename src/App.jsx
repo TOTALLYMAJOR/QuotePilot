@@ -58,6 +58,7 @@ import {
   useEventIngredientProjection
 } from "./hooks/useEventIngredientProjection";
 import EventIngredientProjectionPanel from "./components/EventIngredientProjectionPanel";
+import { buildCommercialInventoryConsequences } from "./lib/commercialInventoryConsequences";
 import {
   calculateQuotePricing,
   notifyOwnerNewQuote
@@ -2846,6 +2847,7 @@ export default function App({
     quote: editingQuote,
     recipeProjectionsByMenuItemId: inventoryRecipeExtension.menuCostProjectionsByMenuItemId
   }), [editingQuote, inventoryRecipeExtension.menuCostProjectionsByMenuItemId]);
+  const currentChangeImpactFormKey = JSON.stringify(form);
   const eventIngredientProjection = useEventIngredientProjection({
     active: isEditingQuote && firebaseReady,
     organizationId: authSession.organizationId,
@@ -2858,9 +2860,27 @@ export default function App({
       editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
     ).trim(),
     selections: eventIngredientSelections,
+    scenarioFingerprint: currentChangeImpactFormKey,
     draftDirty: quoteDirty
   });
-  const currentChangeImpactFormKey = JSON.stringify(form);
+  const commercialInventoryConsequences = useMemo(() => buildCommercialInventoryConsequences({
+    savedRead: eventIngredientProjection.read,
+    scenarioPreview: eventIngredientProjection.preview,
+    organizationId: authSession.organizationId,
+    quoteId: editingQuote.id,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim(),
+    scenarioFingerprint: currentChangeImpactFormKey
+  }), [
+    authSession.organizationId,
+    currentChangeImpactFormKey,
+    editingQuote.activeVersionId,
+    editingQuote.id,
+    editingQuote.versionMeta?.versionId,
+    eventIngredientProjection.preview,
+    eventIngredientProjection.read
+  ]);
   const changeImpactPresentationError = changeImpactPreview.error || (
     changeImpactPreview.model
       ? changeImpactPreview.formKey
@@ -6359,6 +6379,7 @@ export default function App({
             canManageAllocation={eventIngredientProjection.canManageAllocation}
             canAllocate={eventIngredientProjection.canAllocate}
             canRelease={eventIngredientProjection.canRelease}
+            canReconcilePlan={eventIngredientProjection.canReconcilePlan}
             allocationBlockedReason={eventIngredientProjection.allocationBlockedReason}
             recordBlockedReason={eventIngredientProjection.recordBlockedReason}
             onPreview={eventIngredientProjection.previewCurrent}
@@ -6367,6 +6388,7 @@ export default function App({
             onReset={eventIngredientProjection.reset}
             onAllocate={eventIngredientProjection.allocate}
             onRelease={eventIngredientProjection.release}
+            onReconcilePlan={eventIngredientProjection.reconcileStaleAllocation}
             onReconcileAllocation={eventIngredientProjection.reconcileAllocation}
             onResetAllocation={eventIngredientProjection.resetAllocation}
           />
@@ -6416,6 +6438,9 @@ export default function App({
               applyResult={changeImpactPreview.applyResult}
               applyOutcome={changeImpactPreview.applyOutcome}
               appliedQuote={changeImpactPreview.appliedQuote}
+              inventoryConsequences={eventIngredientProjection.access.readEnabled
+                ? commercialInventoryConsequences
+                : null}
               scopeCurrent={!changeImpactPresentationError}
               onRetry={() => handlePreviewChangeImpact({ recovery: true })}
               onRequestAuthorization={handleRequestChangeAuthorization}

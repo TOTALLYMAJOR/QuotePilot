@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-09 05:30:00 CDT
+Last updated: 2026-09-09 06:19:39 CDT
 
 ## Ingredient inventory scope correction
 
@@ -12,7 +12,7 @@ superseded that interpretation: ingredient stock, recorded purchase cost,
 versioned recipes, menu/event demand, projected food cost, consumable
 availability, allocation, and consumption evidence now govern the program.
 
-Corrected Phases 2 through 5 are complete as default-off local source
+Corrected Phases 2 through 6 are complete as default-off local source
 candidates. Phase 2 lets
 administrators create ingredient identities and locations, record fractional
 opening stock, independently record exact purchase-cost evidence, and read
@@ -64,6 +64,21 @@ on-hand only; allocation/release changes commitment only. A short plan can top
 up after receiving without surrendering its existing hold. Administrators own
 mutations; sales receive the same exact read-only event evidence.
 
+Phase 6 preserves historical estimates and active holds when commercial,
+recipe, or menu-cost evidence changes. Exact source-transition triggers use a
+bounded menu-to-event dependency index and no-op when an older trigger arrives
+after the projection or source has advanced. Demand, projected cost,
+availability, and allocation now carry independent freshness: a cost-only
+change does not stale physical availability, while a quantity change retains
+the prior allocation as a visibly stale hold. After recording the revised
+requirement, an administrator may explicitly reconcile that hold; one
+transaction releases its old fence quantities, reallocates the current demand,
+writes both immutable plan revisions, and returns an idempotent receipt.
+Commercial Change shows saved-versus-proposed ingredient-cost and per-unit
+stock consequences from exact server projections as read-only advisory
+intelligence. These consequences are deliberately outside the commercial
+authorization, apply, pricing, and publication graph.
+
 Phase 2's full-march checkpoint included 5,342 passing unit tests with 94
 intentional skips and 88 passing Firestore-rules tests. Phase 3 qualification
 passes 5,414 unit tests with 96 intentional skips, 90 Firestore-rules tests, the
@@ -96,13 +111,23 @@ unrelated `steward-private-validation-foundation` branch-base issue; product
 drift also correctly reports this not-yet-committed worktree as dirty. These
 results remain local evidence only.
 
+Phase 6 qualification passes 5,508 unit tests with 98 intentional skips, 92
+Firestore-rules tests, 142 focused runtime/client/hook/component tests, and the
+real Auth/Firestore/Functions emulator change-and-reconcile scenario. Default
+and Ambient production builds, environment validation, documentation
+governance, and project-state checks pass. The capability-surfacing and
+product-drift checks reach only the same pre-existing unrelated
+`bounded-security-operations-audit` and/or
+`steward-private-validation-foundation` branch-base findings plus the expected
+dirty-worktree notice before this phase commit. No local result establishes CI,
+hosted, deployed, tenant-enabled, production, or human-acceptance proof.
+
 The corrected architecture keeps menu costing and stock promise as independent
 siblings over one immutable ingredient-demand revision. Missing cost cannot
 hide a valid shortage, and a shortage cannot invalidate a valid projected food
-cost. A later explicit slice will add recipe-cost and ingredient-availability
-consequences to existing Commercial Change intelligence without changing
-authoritative selling prices or turning advisory evidence into a universal
-publish blocker. The multiple-receipt inventory valuation and actual-consumption
+cost. Commercial Change now presents both rails without changing authoritative
+selling prices or turning advisory evidence into a universal publish blocker.
+The multiple-receipt inventory valuation and actual-consumption
 cost policy remains an owner decision; the current slice records exact evidence
 without inventing FIFO, LIFO, or weighted-average behavior.
 

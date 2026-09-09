@@ -191,6 +191,108 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain("+$1,110.00");
   });
 
+  test("renders independent read-only ingredient cost and stock consequences without changing commercial authority", () => {
+    const inventoryConsequences = {
+      state: "current",
+      authority: "read_only_advisory",
+      expected: {
+        quoteId: "quote-henderson-picnic",
+        savedQuoteRevisionId: "v0014",
+        scenarioFingerprint: '{"guests":175}'
+      },
+      provenance: {
+        before: {
+          eventRequirementRevisionId: "requirement-before",
+          requirementRevision: 3,
+          requirementDigest: "a".repeat(64),
+          projectionDigest: "b".repeat(64),
+          sourceFingerprint: '{"recipes":["recipe-1"]}'
+        },
+        proposedAfter: {
+          eventRequirementRevisionId: "requirement-after",
+          requirementDigest: "c".repeat(64),
+          projectionDigest: "d".repeat(64),
+          sourceFingerprint: '{"recipes":["recipe-1"]}'
+        }
+      },
+      cost: {
+        state: "changed",
+        currency: "USD",
+        before: { projectedCostMinor: 8000 },
+        proposedAfter: { projectedCostMinor: 9500 },
+        deltaMinor: 1500
+      },
+      availability: {
+        state: "changed",
+        ingredients: [{
+          ingredientId: "chicken",
+          baseUnitId: "lb",
+          requiredDeltaMicros: 5_000_000,
+          shortageDeltaMicros: 2_000_000,
+          changed: true,
+          proposedAfter: { availabilityState: "shortage" }
+        }]
+      }
+    };
+    const markup = renderPanel({ model: emptySimulation(), inventoryConsequences });
+    expect(markup).toContain('data-capability-state="empty"');
+    expect(markup).toContain('data-commercial-inventory-consequence="current"');
+    expect(markup).toContain('data-authority="read-only-advisory"');
+    expect(markup).toContain("Food cost and stock impact");
+    expect(markup).toContain("+$15.00");
+    expect(markup).toContain("Requirement +5 lb · Shortage +2 lb");
+    expect(markup).toContain("does not reserve ingredients");
+    expect(markup).not.toContain("Apply this exact change");
+  });
+
+  test("does not render stale inventory values as current and keeps unknown cost explicit", () => {
+    const unavailable = renderPanel({
+      model: emptySimulation(),
+      inventoryConsequences: {
+        state: "stale",
+        cost: { state: "unavailable" },
+        availability: { state: "unavailable", ingredients: [] }
+      }
+    });
+    expect(unavailable).toContain('data-commercial-inventory-consequence="stale"');
+    expect(unavailable).toMatch(/cached, pending, stale, or mismatched evidence is never shown as current/i);
+    expect(unavailable).not.toContain("Projected ingredient cost</h5>");
+
+    const incomplete = renderPanel({
+      model: emptySimulation(),
+      inventoryConsequences: {
+        state: "current",
+        expected: { quoteId: "q", savedQuoteRevisionId: "v", scenarioFingerprint: "f" },
+        provenance: {
+          before: { eventRequirementRevisionId: "rb", requirementRevision: 1, requirementDigest: "a", projectionDigest: "b", sourceFingerprint: "s" },
+          proposedAfter: { eventRequirementRevisionId: "ra", requirementDigest: "c", projectionDigest: "d", sourceFingerprint: "s" }
+        },
+        cost: { state: "incomplete", before: {}, proposedAfter: {}, deltaMinor: null },
+        availability: { state: "unchanged", ingredients: [] }
+      }
+    });
+    expect(incomplete).toMatch(/unknown cost is not treated as zero/i);
+    expect(incomplete).toMatch(/No ingredient requirement or shortage change/i);
+  });
+
+  test("inventory evidence cannot alter the commercial apply fence", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: false,
+      scopeCurrent: true,
+      onApply: () => {},
+      inventoryConsequences: {
+        state: "stale",
+        cost: { state: "unavailable" },
+        availability: { state: "unavailable", ingredients: [] }
+      }
+    });
+    expect(markup).toContain('data-commercial-inventory-consequence="stale"');
+    expect(markup).toMatch(/>Apply reviewed change<\/button>/);
+    expect(markup).not.toMatch(/<button[^>]*disabled=""[^>]*>Apply reviewed change<\/button>/);
+  });
+
   test("separates REVIEW decisions from projected STALE artifacts", () => {
     const markup = renderPanel({ model: simulation() });
 

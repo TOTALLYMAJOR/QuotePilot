@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 05:17:00 CDT
+Last updated: 2026-09-09 06:19:39 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1343,6 +1343,22 @@ pending evidence until the exact metadata-aware event projection confirms the
 same allocation revision. Reconcile uncertain outcomes with the original
 request identity.
 
+If the saved quote or a recipe changes after allocation, QuotePilot preserves
+the prior hold and labels it **Retained hold needs reconciliation**. Record the
+new current ingredient requirement, enter an operator reason, and choose
+**Reconcile retained allocation**. The server releases the old quantities and
+allocates the revised demand as one transaction; it may return a new partial
+shortage. You may instead release the stale hold. Do not use **Allocate
+remaining** against stale allocation evidence.
+
+In **Commercial Change**, the **Ingredient consequences** section compares the
+exact saved event projection with the current read-only scenario preview. Menu
+ingredient cost and stock availability appear as separate advisory rails with
+their own missing, partial, stale, or current evidence. They do not change the
+quote price, required commercial authority, apply action, or publish state.
+Changing the draft invalidates the prior scenario preview, and a late response
+for an older draft is not shown as current.
+
 This source-candidate slice supports at most 200 location definitions and 200
 ingredient definitions per organization. The shared server transaction fence
 rejects record 201, and a projection at its bound is labeled **Partial**. That
@@ -1352,11 +1368,13 @@ complete.
 
 The source candidate now supports current recipe/menu-item cost, immutable
 event ingredient demand and projected cost, durable receiving, cumulative
-consumable-stock shortage, and concurrency-safe allocation/release. It does not
+consumable-stock shortage, concurrency-safe allocation/release, historical
+change invalidation, explicit retained-hold reconciliation, and read-only
+Commercial Change consequences. It does not
 yet claim consumption, waste, inventory value, authoritative COGS, deployment,
-or human acceptance. The next slice preserves historical estimates during
-commercial and recipe changes and integrates recipe-cost and ingredient-
-availability consequences into Commercial Change intelligence.
+or human acceptance. The next slice adds consumption, waste, corrections, and
+planned-versus-actual evidence without inventing a multi-receipt valuation
+policy.
 
 ## Commercial Change Authority
 

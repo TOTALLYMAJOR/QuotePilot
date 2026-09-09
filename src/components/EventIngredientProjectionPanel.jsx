@@ -215,6 +215,7 @@ export default function EventIngredientProjectionPanel({
   allocationBlockedReason = "",
   canAllocate = false,
   canRelease = false,
+  canReconcilePlan = false,
   canManageAllocation = false,
   onPreview,
   onRecord,
@@ -222,6 +223,7 @@ export default function EventIngredientProjectionPanel({
   onReset,
   onAllocate,
   onRelease,
+  onReconcilePlan,
   onReconcileAllocation,
   onResetAllocation,
   title = "Ingredient impact"
@@ -231,6 +233,7 @@ export default function EventIngredientProjectionPanel({
   const [actionError, setActionError] = useState("");
   const [allocationLocationId, setAllocationLocationId] = useState("");
   const [releaseReason, setReleaseReason] = useState("");
+  const [reconcileReason, setReconcileReason] = useState("");
   const [previewedFingerprint, setPreviewedFingerprint] = useState(() => preview.state === "current"
     ? JSON.stringify(selectedMenuItems.map(selectionDraft).map(commandSelection))
     : "");
@@ -264,7 +267,8 @@ export default function EventIngredientProjectionPanel({
   const currentAllocationLocationId = text(allocation?.ingredients?.[0]?.locationId);
   const allocationEvidenceCurrent = !quoteDirty && read.state === "recorded"
     && (read.sourceState === undefined || read.sourceState === "current")
-    && read.projection?.freshness !== "stale";
+    && read.projection?.freshness !== "stale"
+    && read.projection?.freshnessState?.allocation?.state !== "stale";
   const allocationLocations = useMemo(() => [...new Set((read.projection?.sourceRevisions?.stockRevisions || [])
     .map((entry) => text(entry.locationId)).filter(Boolean))].sort(), [read.projection]);
   useEffect(() => {
@@ -304,6 +308,16 @@ export default function EventIngredientProjectionPanel({
       return;
     }
     if (await run(() => onRelease({ reason: releaseReason.trim() }))) setReleaseReason("");
+  };
+  const reconcileCurrentAllocation = async () => {
+    if (!reconcileReason.trim()) {
+      setActionError("Enter why the retained allocation is being reconciled.");
+      return;
+    }
+    if (await run(() => onReconcilePlan({
+      locationId: currentAllocationLocationId,
+      reason: reconcileReason.trim()
+    }))) setReconcileReason("");
   };
   return (
     <section className="event-ingredient-panel" aria-labelledby="event-ingredient-panel-title" data-event-ingredient-panel data-capability-state={capabilityState(read.state, quoteDirty)}>
@@ -410,11 +424,24 @@ export default function EventIngredientProjectionPanel({
               </>
             ) : (
               <>
-                {allocation.state === "shortage" && (
+                {allocation.state === "shortage"
+                  && read.projection?.freshnessState?.allocation?.state !== "stale" && (
                   <div className="event-ingredient-panel__allocation-top-up">
                     <p><strong>Stock location</strong><br />{currentAllocationLocationId || "Location evidence unavailable"}</p>
                     <button type="button" onClick={() => void allocateCurrentRequirement()} disabled={!canAllocate || !onAllocate || !currentAllocationLocationId}>
                       Allocate remaining
+                    </button>
+                  </div>
+                )}
+                {read.projection?.freshnessState?.allocation?.state === "stale" && (
+                  <div className="event-ingredient-panel__allocation-top-up" data-allocation-reconciliation="required">
+                    <p><strong>Retained hold needs reconciliation</strong><br />The prior allocation remains active until an administrator explicitly reconciles or releases it.</p>
+                    <label>
+                      <span>Reconciliation reason</span>
+                      <input maxLength={160} value={reconcileReason} onChange={(event) => setReconcileReason(event.target.value)} placeholder="Commercial or recipe requirement changed" />
+                    </label>
+                    <button type="button" onClick={() => void reconcileCurrentAllocation()} disabled={!canReconcilePlan || !onReconcilePlan || !currentAllocationLocationId || !reconcileReason.trim()}>
+                      Reconcile retained allocation
                     </button>
                   </div>
                 )}
@@ -431,7 +458,7 @@ export default function EventIngredientProjectionPanel({
         )}
         {allocationOperation.state === "uncertain" && <button type="button" className="ghost" onClick={() => void run(onReconcileAllocation)} disabled={!onReconcileAllocation || allocationOperation.state === "reconciliation"} data-capability-state="recovery">Reconcile allocation request</button>}
         {allocationOperation.state === "rejected" && <button type="button" className="ghost" onClick={() => void run(onResetAllocation)} disabled={!onResetAllocation} data-capability-state="recovery">Review and reset allocation</button>}
-        {allocationBlockedReason && canManageAllocation && (onAllocate || onRelease) && !canAllocate && !canRelease && (
+        {allocationBlockedReason && canManageAllocation && (onAllocate || onRelease || onReconcilePlan) && !canAllocate && !canRelease && !canReconcilePlan && (
           <p className="event-ingredient-panel__hint">{allocationBlockedReason}</p>
         )}
       </section>

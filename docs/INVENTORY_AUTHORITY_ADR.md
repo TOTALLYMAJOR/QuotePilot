@@ -1,8 +1,8 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 05:17:00 CDT
+Last updated: 2026-09-09 06:19:39 CDT
 
-Status: Accepted scope correction; corrected Phases 2 through 5 complete as default-off local source candidates
+Status: Accepted scope correction; corrected Phases 2 through 6 complete as default-off local source candidates
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -85,6 +85,7 @@ normal reads:
 | `inventoryPackConversionRevisions/{packConversionRevisionId}` | Immutable ingredient-specific purchase-pack conversion evidence. |
 | `inventoryPackConversionHeads/{ingredientId_packUnitId}` | Current revision pointer for an operator-declared ingredient purchase pack. |
 | `inventoryRecipeDependencyIndex/{ingredientId}` | Bounded reverse index of menu items whose current recipes use an ingredient. |
+| `eventIngredientDependencyIndex/{menuItemId}` | Bounded server-only reverse index of recorded events whose current requirements use a menu item. |
 | `inventoryMenuCostProjections/{menuItemId}` | Bounded current recipe quantity/cost projection with coverage and missing evidence. |
 | `eventIngredientRequirements/{quoteId}/revisions/{requirementRevisionId}` | Immutable compiled ingredient demand and projected cost bound to exact inputs. |
 | `eventIngredientRequirementHeads/{quoteId}` | Current numeric requirement revision and immutable requirement pointer used for optimistic concurrency. |
@@ -300,11 +301,31 @@ promote it. Organization, principal, role, or feature-gate changes unsubscribe
 and invalidate late callbacks.
 
 Phase 4's saved event projection is deliberately labeled `as_recorded`, not
-current, because reverse event-dependency refresh authority does not exist yet.
-It preserves the evidence recorded with the immutable requirement. The exact
-listener updates immediately when that saved record changes, while a fresh
-read-only preview is required to evaluate current cost and stock. Recording
-fails if either source changes between preview and transaction commit.
+equivalent to a claim that every upstream source is still current. Phase 6
+adds independent demand, cost, availability, and allocation freshness. Exact
+quote, recipe, and menu-cost source transitions stale only bounded dependent
+event projections, and delayed trigger delivery no-ops when the authoritative
+source has already advanced. Immutable requirements and prior estimates are
+never rewritten. A fresh read-only preview remains required to evaluate a
+proposed scenario, and recording fails if any pinned source changes before the
+transaction commits.
+
+When changed demand leaves an active hold, the hold remains effective and is
+labeled stale rather than silently released. Recording the new requirement
+preserves that allocation evidence. Only an explicit administrator reconcile
+may transactionally release the old quantities and allocate the new demand
+through the same ingredient/location fences. The transaction writes immutable
+intermediate release and final allocation plan revisions plus one idempotent
+receipt. Release remains available from stale evidence; top-up does not.
+
+Commercial Change consumes the saved exact event projection and a server
+preview for the current draft fingerprint. A pure comparator returns separate
+recipe-cost and per-ingredient/base-unit availability deltas with exact source
+provenance. This is read-only advisory consequence intelligence and is kept
+outside the Commercial Dependency Graph's authorization/apply dependents, so
+missing or stale ingredient evidence cannot silently block a valid commercial
+amendment. The browser never reconstructs these consequences from movements,
+receipts, recipes, or raw cost evidence.
 
 The first operator surface is `/app/inventory` under Operations. It lets an
 authorized administrator create an ingredient, record opening stock,
@@ -352,7 +373,7 @@ corrected slices and final qualification complete.
    Edit, Preflight, Operations, and reporting projections plus deterministic
    utilization, shortage, and due-supply insights.
 
-Corrected Phases 2 through 5 are now complete as default-off local source
+Corrected Phases 2 through 6 are now complete as default-off local source
 candidates. Phase 3 adds same-dimension conversions, immutable declared
 purchase-pack revisions, versioned recipes attached to exact existing menu
 items, pure exact costing, bounded reverse dependencies, and materialized menu
@@ -370,9 +391,11 @@ Preview is read-only; only an administrator may record a requirement. Phase 5
 adds immutable receiving evidence and accepted/booked-only cumulative
 allocation through deterministic item/location fences. Partial holds can top
 up without release; every allocation revision is preserved, and exact event and
-ingredient projections update atomically. The next independently committed
-target is Phase 6: historical change reconciliation and separate recipe-cost
-and ingredient-availability nodes in Commercial Change intelligence.
+ingredient projections update atomically. Phase 6 adds bounded reverse event
+dependencies, source-fenced invalidation, independent freshness axes, explicit
+retained-hold reconciliation, and non-governing Commercial Change ingredient-
+cost and availability intelligence. The next independently committed target is
+Phase 7: consumption, waste, and planned-versus-actual evidence.
 
 ## Acceptance anchor
 
@@ -418,6 +441,14 @@ plus `20 lb` demand producing a `15 lb` hold and `5 lb` shortage, true
 simultaneous shared-fence contention without over-allocation, safe shortage
 top-up after receiving, and release without changing on-hand. It does not prove
 consumption, valuation, deployment, or production behavior.
+
+Phase 6 extends the real emulator path through commercial-revision staleness,
+preserved active allocation evidence, recording a revised requirement,
+idempotent release-and-reallocate reconciliation, historical estimate
+preservation, and cost-only reverse-index invalidation. Focused pure/runtime,
+client, hook, and component tests separately prove delayed-source no-ops,
+strict revision substitution rejection, independent freshness, stale-hold
+release without top-up, and non-governing Commercial Change consequences.
 
 The genuinely unresolved product/accounting decision is the valuation policy
 for multiple cost observations and actual consumption. Corrected Phase 2
