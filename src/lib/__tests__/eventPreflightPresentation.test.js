@@ -58,17 +58,97 @@ describe("event preflight presentation", () => {
       "commitment", "accepted-revision", "deposit", "final-balance", "final-count", "beo", "invalidations", "staffing", "schedule"
     ]));
     expect(model.unknown.map((item) => item.id)).toEqual(expect.arrayContaining([
-      "workflow", "phase-issues", "inventory", "attendance"
+      "workflow", "phase-issues", "inventory-allocation", "ingredient-cost", "ingredient-execution", "attendance"
     ]));
     expect(model.boundary).toContain("not a readiness score");
     expect(model).not.toHaveProperty("score");
     expect(model).not.toHaveProperty("readinessPercent");
     expect(model.nextAction.kind).toBe("schedule");
     expect(model.nextReason).toContain("No conflict appears");
-    const inventory = model.unknown.find((item) => item.id === "inventory");
-    expect(inventory.title).toBe("Ingredient availability and usage are governed separately");
-    expect(inventory.detail).toContain("exact ingredient projections");
+    const inventory = model.unknown.find((item) => item.id === "inventory-allocation");
+    expect(inventory.title).toBe("Ingredient allocation is not current");
+    expect(inventory.detail).toContain("exact event ingredient plan");
     expect(inventory.detail).not.toContain("equipment");
+  });
+
+  test("composes current allocation, menu cost, and execution as independent Preflight facts", () => {
+    const input = base({
+      ingredientAuthority: {
+        enabled: true,
+        planRead: {
+          state: "current",
+          sourceState: "current",
+          projection: {
+            quoteId: "event-1",
+            quoteRevisionId: "revision-4",
+            freshness: "as_recorded",
+            freshnessState: {
+              demand: { state: "current", reason: "" },
+              cost: { state: "current", reason: "" },
+              availability: { state: "current", reason: "" },
+              allocation: { state: "current", reason: "" }
+            },
+            demandState: "complete",
+            costState: "partial",
+            allocation: {
+              state: "reserved",
+              eventPlanId: "plan-event-1",
+              eventRequirementRevisionId: "event-requirement-1",
+              allocationRevision: 2,
+              shortageIngredientCount: 0
+            }
+          }
+        },
+        executionRead: { state: "not_recorded", sourceState: "current", projection: null }
+      }
+    });
+
+    const model = buildEventPreflightPresentation(input);
+
+    expect(model.satisfied.map((item) => item.id)).toContain("inventory-allocation");
+    expect(model.unknown.map((item) => item.id)).toEqual(expect.arrayContaining([
+      "ingredient-cost", "ingredient-execution"
+    ]));
+    expect(model.attention.map((item) => item.id)).not.toContain("ingredient-cost");
+    expect(model.unknown.find((item) => item.id === "ingredient-cost")?.title)
+      .toBe("Projected ingredient cost is partial");
+  });
+
+  test("does not pass a saved availability preview without a current allocation receipt", () => {
+    const input = base({
+      ingredientAuthority: {
+        enabled: true,
+        planRead: {
+          state: "current",
+          sourceState: "current",
+          projection: {
+            quoteId: "event-1",
+            quoteRevisionId: "revision-4",
+            freshness: "as_recorded",
+            freshnessState: {
+              demand: { state: "current", reason: "" },
+              cost: { state: "current", reason: "" },
+              availability: { state: "current", reason: "" },
+              allocation: { state: "not_allocated", reason: "" }
+            },
+            demandState: "complete",
+            costState: "complete",
+            availabilityState: "available",
+            currency: "USD",
+            projectedCostMinor: 8000,
+            allocation: null
+          }
+        },
+        executionRead: { state: "not_recorded", sourceState: "current", projection: null }
+      }
+    });
+
+    const model = buildEventPreflightPresentation(input);
+
+    expect(model.attention.find((item) => item.id === "inventory-allocation")?.title)
+      .toBe("Ingredients are not allocated");
+    expect(model.satisfied.map((item) => item.id)).not.toContain("inventory-allocation");
+    expect(model.satisfied.map((item) => item.id)).toContain("ingredient-cost");
   });
 
   test("turns revision drift, payment gaps, stale BEO, staffing gaps, workflow, and schedule conflicts into attention", () => {

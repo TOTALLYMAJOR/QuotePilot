@@ -9411,7 +9411,7 @@
     },
     {
       "id": "event-ingredient-demand-consequence",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -9419,7 +9419,7 @@
         "organization_admins",
         "organization_sales"
       ],
-      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability; accepted/booked commitments reconcile through shared date-independent Firestore fences, Commercial Change shows independent read-only cost and stock consequences, and the exact event Control Room records consumption, waste, and correction evidence.",
+      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability; accepted/booked commitments reconcile through shared date-independent Firestore fences, Commercial Change shows independent read-only cost and stock consequences, the exact event Control Room records consumption, waste, and correction evidence, and Event Preflight plus the selected Operations event compose the same exact projections without collapsing physical, cost, or execution truth.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -9432,6 +9432,7 @@
         "src/hooks/useEventIngredientProjection.js",
         "src/hooks/useEventIngredientExecutionProjection.js",
         "src/lib/commercialInventoryConsequences.js",
+        "src/lib/eventIngredientOperationalPresentation.js",
         "src/lib/inventoryAuthorityClient.js"
       ],
       "backendExports": [
@@ -9449,9 +9450,14 @@
         "src/components/EventIngredientProjectionPanel.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/EventIngredientUsagePanel.jsx",
+        "src/components/EventIngredientOperationsSummary.jsx",
+        "src/components/EventScheduleModal.jsx",
         "src/components/LiveOperationsPlanningViews.jsx",
         "src/components/eventIngredientProjectionPanel.css",
+        "src/components/eventIngredientOperationsSummary.css",
+        "src/components/eventPreflightPresentation.js",
         "src/hooks/useEventIngredientProjection.js",
+        "src/lib/eventIngredientOperationalPresentation.js",
         "src/lib/commercialInventoryConsequences.js",
         "src/lib/inventoryAuthorityClient.js"
       ],
@@ -9471,6 +9477,10 @@
         {
           "path": "src/components/EventIngredientUsagePanel.jsx",
           "locator": "data-event-ingredient-usage"
+        },
+        {
+          "path": "src/components/EventIngredientOperationsSummary.jsx",
+          "locator": "data-event-ingredient-operations-summary"
         }
       ],
       "testPaths": [
@@ -9478,12 +9488,16 @@
         "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/components/__tests__/eventIngredientUsagePanel.test.jsx",
+        "src/components/__tests__/eventIngredientOperationsSummary.test.jsx",
+        "src/components/__tests__/eventScheduleArrival.test.jsx",
         "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
         "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
         "src/hooks/__tests__/useEventIngredientExecutionProjection.test.jsx",
         "src/lib/__tests__/inventoryAuthorityClient.test.js",
         "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
         "src/lib/__tests__/commercialInventoryConsequences.test.js",
+        "src/lib/__tests__/eventIngredientOperationalPresentation.test.js",
+        "src/lib/__tests__/eventPreflightPresentation.test.js",
         "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
         "src/lib/__tests__/inventoryIngredientAllocationCore.server.test.js",
         "src/lib/__tests__/inventoryIngredientExecutionCore.server.test.js",
@@ -9542,6 +9556,26 @@
         {
           "path": "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
           "locator": "mounts ingredient usage from its independent inventory gate without requiring Event Operating Spine"
+        },
+        {
+          "path": "src/lib/__tests__/eventIngredientOperationalPresentation.test.js",
+          "locator": "keeps a current reservation physically satisfied when cost is unknown and usage is not recorded"
+        },
+        {
+          "path": "src/lib/__tests__/eventIngredientOperationalPresentation.test.js",
+          "locator": "does not treat saved availability without an allocation as a stock commitment"
+        },
+        {
+          "path": "src/components/__tests__/eventIngredientOperationsSummary.test.jsx",
+          "locator": "announces realtime axis changes and supports the caller heading hierarchy"
+        },
+        {
+          "path": "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
+          "locator": "uses Control Room as a bounded coordination board and keeps live actuals unavailable"
+        },
+        {
+          "path": "src/components/__tests__/eventScheduleArrival.test.jsx",
+          "locator": "subscribes only the selected Operations event to exact ingredient projections"
         }
       ],
       "documentationPaths": [
@@ -9564,7 +9598,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Quote Edit and Commercial Change preserve their commercial-consequence boundary. The accepted/booked event Control Room adds a separate ingredient-actuals surface behind the inventory gates, uses exact plan and execution listeners with snapshot metadata, requires complete explicit fractional totals and acknowledgement, and offers mutation only to administrators. Allocation settlement, physical depletion, correction, receipt readback, cached or pending evidence, and uncertain recovery remain visibly distinct; saved-planning-basis comparison is never labeled authoritative actual COGS.",
+      "surfaceReviewNote": "Quote Edit and Commercial Change preserve their commercial-consequence boundary. The accepted/booked event Control Room adds a separate ingredient-actuals surface behind the inventory gates, uses exact plan and execution listeners with snapshot metadata, requires complete explicit fractional totals and acknowledgement, and offers mutation only to administrators. Event Preflight and only the currently selected Operations event reuse those exact reads to present physical allocation, menu-cost completeness, and execution as separate facts. A saved availability observation never passes as commitment, cost gaps do not invalidate a current hold, unlike units are never totaled together, and Calendar rows do not each create listeners. Allocation settlement, physical depletion, correction, receipt readback, cached or pending evidence, and uncertain recovery remain visibly distinct; saved-planning-basis comparison is never labeled authoritative actual COGS.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -9640,7 +9674,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote demand, projected ingredient cost, consumable availability, allocation freshness, Commercial Change deltas, and event usage evidence. Only administrators can record requirements, change accepted/booked allocations, or submit complete consumption/waste totals and corrections. Shared fences prevent over-allocation; settlement removes the event hold and changes physical stock exactly once; immutable revisions preserve prior evidence; cached or pending reads are not current; and the capability never mutates selling price, invents valuation policy, claims authoritative actual COGS, or establishes deployment or human acceptance."
+      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote demand, projected ingredient cost, consumable availability, allocation freshness, Commercial Change deltas, event usage evidence, and exact-event Preflight and Operations summaries. Only administrators can record requirements, change accepted/booked allocations, or submit complete consumption/waste totals and corrections. Shared fences prevent over-allocation; settlement removes the event hold and changes physical stock exactly once; immutable revisions preserve prior evidence; cached or pending reads are not current; cost completeness never manufactures or invalidates a physical commitment; and the capability never mutates selling price, invents inbound supply or valuation policy, claims authoritative actual COGS, or establishes deployment or human acceptance."
     }
   ]
 }

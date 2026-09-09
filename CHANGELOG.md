@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09 06:49:55 CDT
+Last updated: 2026-09-09 07:13:08 CDT
 
 All notable project changes are documented in this file.
 
@@ -8,6 +8,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## Unreleased — v0.18.0 capability-realization candidate
 
+- Add Ingredient Inventory Phase 8: Event Preflight and the currently selected
+  Operations event now compose the same two exact metadata-aware ingredient
+  projection listeners into three independent physical-allocation, menu-cost,
+  and execution facts. A saved availability observation never passes as a
+  commitment; only a current reservation or a matching settled execution can
+  satisfy physical inventory. Quantity intelligence remains grouped by unit,
+  cost incompleteness does not invalidate physical allocation, and actual COGS
+  remains unavailable without a declared valuation policy. Calendar rows do
+  not each create listeners, and no tenant-wide or inbound-supply insight is
+  invented from absent authority.
 - Add Ingredient Inventory Phase 7: the accepted/booked event Control Room now
   records complete fractional consumption and waste totals against the pinned
   immutable ingredient plan. One Firestore transaction settles the event hold,

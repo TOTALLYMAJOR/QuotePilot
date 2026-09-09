@@ -1,5 +1,6 @@
 import { buildCommercialPriorityContext } from "../lib/ambientOpportunityStream";
 import { buildAmbientOperationalReceipts } from "../lib/ambientOperationalReceipts";
+import { buildEventIngredientOperationalPresentation } from "../lib/eventIngredientOperationalPresentation";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -37,7 +38,8 @@ export function buildEventPreflightPresentation({
   organizationId = "",
   snapshot = {},
   scheduleAssessment = { state: "unknown", reasons: [] },
-  scheduleAvailable = true
+  scheduleAvailable = true,
+  ingredientAuthority = {}
 } = {}) {
   const satisfied = [];
   const attention = [];
@@ -171,9 +173,36 @@ export function buildEventPreflightPresentation({
     satisfied.push(fact("schedule", "Schedule", "No conflict appears in the current bounded Schedule projection", "The selected event and comparable records contain the date, venue, timing, and guest-load facts needed for this bounded conclusion; this is not resource availability.", "Schedule projection", scheduleAvailable ? scheduleAction : quoteAction));
   }
 
+  const ingredientAuthorityEnabled = ingredientAuthority.enabled === true;
+  const ingredientPresentation = buildEventIngredientOperationalPresentation({
+    planRead: ingredientAuthorityEnabled ? ingredientAuthority.planRead : undefined,
+    executionRead: ingredientAuthorityEnabled ? ingredientAuthority.executionRead : undefined,
+    activeQuoteRevisionId: currentRevisionId
+  });
+  const ingredientPlanAction = Object.freeze({ kind: "quote", label: "Open ingredient plan" });
+  const ingredientFacts = [
+    ["inventory-allocation", "Ingredient stock", ingredientPresentation.physical],
+    ["ingredient-cost", "Menu costing", ingredientPresentation.cost],
+    ["ingredient-execution", "Ingredient actuals", ingredientPresentation.execution]
+  ];
+  ingredientFacts.forEach(([id, domain, axis]) => {
+    const item = fact(
+      id,
+      domain,
+      axis.title,
+      axis.detail,
+      axis.evidence,
+      axis.state === "satisfied" || id === "ingredient-execution" || !ingredientAuthorityEnabled
+        ? null
+        : ingredientPlanAction
+    );
+    if (axis.state === "satisfied") satisfied.push(item);
+    else if (id === "inventory-allocation" && axis.state === "attention") attention.push(item);
+    else unknown.push(item);
+  });
+
   unknown.push(
     fact("phase-issues", "Live execution", "Live phase and unresolved issues are unavailable", "QuotePilot has no server-owned live event session for this event.", "No current authority"),
-    fact("inventory", "Ingredient inventory", "Ingredient availability and usage are governed separately", "Event Preflight does not infer stock, allocation, consumption, waste, or food cost from a checklist. Use the exact ingredient projections where that authority is enabled.", "Ingredient inventory authority"),
     fact("attendance", "Attendance", "Actual attendance is not governed here", "Quoted guests and final-count confirmation are not actual attendance.", "New authority required")
   );
 

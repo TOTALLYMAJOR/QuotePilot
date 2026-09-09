@@ -5,7 +5,8 @@ import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getQuoteHistory: vi.fn()
+  getQuoteHistory: vi.fn(),
+  ingredientExecution: vi.fn()
 }));
 
 vi.mock("../../lib/quoteStore", () => ({
@@ -13,6 +14,9 @@ vi.mock("../../lib/quoteStore", () => ({
   updateQuoteBookingAssignment: vi.fn(),
   updateQuoteKitchenCheckpoints: vi.fn(),
   updateQuoteProductionChecklist: vi.fn()
+}));
+vi.mock("../../hooks/useEventIngredientExecutionProjection", () => ({
+  useEventIngredientExecutionProjection: mocks.ingredientExecution
 }));
 
 import { EventScheduleView } from "../EventScheduleModal";
@@ -64,6 +68,11 @@ let originalScrollIntoView;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.ingredientExecution.mockReturnValue({
+    access: { readEnabled: false, mutationEnabled: false },
+    planRead: { state: "not_evaluated", sourceState: "not_evaluated", projection: null },
+    read: { state: "not_recorded", sourceState: "not_recorded", projection: null }
+  });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -107,6 +116,47 @@ async function renderSchedule({ arrivalContext = contextFor(), onArrivalResoluti
 }
 
 describe("Event Schedule exact arrival consumption", () => {
+  test("subscribes only the selected Operations event to exact ingredient projections", async () => {
+    mocks.ingredientExecution.mockReturnValue({
+      access: { readEnabled: true, mutationEnabled: false, role: "sales" },
+      planRead: { state: "current", sourceState: "current", projection: null },
+      read: { state: "not_recorded", sourceState: "current", projection: null }
+    });
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [quote({ activeVersionId: "revision-4" })],
+      truncated: false
+    });
+
+    act(() => {
+      root.render(
+        <EventScheduleView
+          open
+          presentation="embedded"
+          surfaceTitle="Operations"
+          organizationId={ORGANIZATION_ID}
+          role="sales"
+          inventoryAuthorityEnabled
+          inventoryTenantEnabled
+          arrivalContext={contextFor()}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(mocks.ingredientExecution).toHaveBeenLastCalledWith(expect.objectContaining({
+      active: true,
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      quoteStatus: "accepted",
+      browserEnabled: true,
+      tenantEnabled: true
+    }));
+    expect(container.querySelector('[data-event-ingredient-operations-summary="true"]')).toBeTruthy();
+    expect(container.textContent).toContain("Ingredient demand is not planned");
+  });
+
   test("keeps arrival pending until the exact same-tenant event is selected and focused", async () => {
     const onArrivalResolution = await renderSchedule();
     const target = container.querySelector(`[data-schedule-event-id="${QUOTE_ID}"]`);

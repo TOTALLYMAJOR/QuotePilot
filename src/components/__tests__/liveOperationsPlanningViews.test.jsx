@@ -261,6 +261,8 @@ describe("EventPlanningView recovery journeys", () => {
     expect(markup).toContain('aria-label="Next valid action"');
     expect(markup).toContain("Back to Event Focus");
     expect(markup).toContain("Open quote record");
+    expect(markup).not.toContain("Ingredient demand is not planned");
+    expect(markup).not.toContain("Review ingredient plan");
     expect(markup).not.toContain(">Replay</button>");
   });
 
@@ -293,6 +295,8 @@ describe("EventPlanningView recovery journeys", () => {
     }));
     expect(markup).toContain("Ingredient actuals");
     expect(markup).toContain("administrator must record or correct");
+    expect(markup).toContain("Ingredient demand is not planned");
+    expect(markup).toContain("Projected ingredient cost is not available");
     expect(markup).not.toContain("data-event-operations-entry=\"control-room\"");
   });
 

@@ -300,9 +300,14 @@ export function EventPlanningView({
         organizationId,
         snapshot: state,
         scheduleAssessment,
-        scheduleAvailable
+        scheduleAvailable,
+        ingredientAuthority: {
+          enabled: ingredientExecution.access.readEnabled,
+          planRead: ingredientExecution.planRead,
+          executionRead: ingredientExecution.read
+        }
       })
-    : null, [authorityIdentity, authorityReads, execution, organizationId, scheduleAssessment, scheduleAvailable, selected, state]);
+    : null, [authorityIdentity, authorityReads, execution, ingredientExecution.access.readEnabled, ingredientExecution.planRead, ingredientExecution.read, organizationId, scheduleAssessment, scheduleAvailable, selected, state]);
   const heading = routeMode === "live"
     ? "Control Room"
     : routeMode === "replay"

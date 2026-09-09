@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 06:49:55 CDT
+Last updated: 2026-09-09 07:13:08 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1397,6 +1397,15 @@ temporary limit must be replaced by cursor-based navigation before larger
 catalogs are activated; the browser never silently treats a truncated list as
 complete.
 
+Event Preflight and the selected Operations event now reuse the same exact
+realtime plan and execution reads. They show **Physical stock**, **Menu cost**,
+and **Event usage** as separate checks. A current full allocation may remain
+valid while cost evidence is partial or unknown. Conversely, a saved
+**Available** preview does not mean ingredients were allocated. Cached, pending,
+stale, mismatched, or unavailable evidence cannot appear current. Operations
+subscribes only to the selected event, not every Calendar row, and quantity
+comparisons remain grouped by base unit.
+
 The source candidate now supports current recipe/menu-item cost, immutable
 event ingredient demand and projected cost, durable receiving, cumulative
 consumable-stock shortage, concurrency-safe allocation/release, historical
@@ -1405,8 +1414,9 @@ Commercial Change consequences. It also records event consumption, waste,
 allocation settlement, immutable correction evidence, quantity variance, and
 saved-planning-basis cost comparison in the exact event Control Room. It does
 not claim inventory value, authoritative COGS, deployment, or human
-acceptance. The next slice composes bounded inventory state more deeply into
-Preflight, Operations, and deterministic reporting.
+acceptance. Tenant-wide shortage frequency, inbound-supply risk, ingredient
+freshness/suitability, inventory valuation, and authoritative actual-cost
+reporting remain unavailable until their own bounded evidence authorities exist.
 
 ## Commercial Change Authority
 

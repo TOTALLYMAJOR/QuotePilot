@@ -28,6 +28,8 @@ import {
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
 import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
+import { useEventIngredientExecutionProjection } from "../hooks/useEventIngredientExecutionProjection";
+import EventIngredientOperationsSummary from "./EventIngredientOperationsSummary";
 import "./scheduleMotion.css";
 
 export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
@@ -826,6 +828,7 @@ export function buildScheduledEvents(quotes = [], { preserveUndated = false } = 
     .map((quote) => ({
       id: quote.id,
       quoteNumber: String(quote.quoteNumber || "").trim(),
+      activeRevisionId: String(quote.activeVersionId || quote.versionMeta?.versionId || "").trim(),
       status: String(quote.status || ""),
       date: String(quote.event?.date || ""),
       time: String(quote.event?.time || ""),
@@ -917,12 +920,16 @@ export function EventScheduleView({
   surfaceTitle = "Event Schedule",
   surfaceEyebrow = "",
   organizationId = "",
+  role = "customer",
+  inventoryAuthorityEnabled = false,
+  inventoryTenantEnabled = false,
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
   arrivalContext = null,
   onArrivalResolution = null,
   onOpenOpportunity = null,
+  onOpenIngredientPlan = null,
   onOpenPeople = null,
   onOpenReporting = null,
   returnFocusRef = null
@@ -1263,6 +1270,20 @@ export function EventScheduleView({
   const selectedEvent = selectedEvents.find((item) => item.id === selectedEventId)
     || selectedEvents[0]
     || null;
+  const ingredientExecution = useEventIngredientExecutionProjection({
+    active: Boolean(
+      open
+      && operationsMode
+      && state.source === "firebase"
+      && selectedEvent?.id
+    ),
+    organizationId,
+    role,
+    browserEnabled: inventoryAuthorityEnabled,
+    tenantEnabled: inventoryTenantEnabled,
+    quoteId: selectedEvent?.id || "",
+    quoteStatus: selectedEvent?.status || ""
+  });
   const selectedComparisons = useMemo(() => {
     if (!selectedEvent?.id) return [];
     const eventsById = new Map(scheduledEvents.map((item) => [item.id, item]));
@@ -2052,6 +2073,17 @@ export function EventScheduleView({
                     ) : null}
                   </header>
                   <ScheduleEventFacts item={selectedEvent} compact />
+                  {operationsMode && ingredientExecution.access.readEnabled ? (
+                    <EventIngredientOperationsSummary
+                      planRead={ingredientExecution.planRead}
+                      executionRead={ingredientExecution.read}
+                      activeQuoteRevisionId={selectedEvent.activeRevisionId}
+                      headingLevel={5}
+                      onOpenPlan={typeof onOpenIngredientPlan === "function"
+                        ? ({ actionKind }) => onOpenIngredientPlan(selectedEvent.id, actionKind)
+                        : undefined}
+                    />
+                  ) : null}
                   <details className="schedule-booking-details">
                     <summary>
                       <span>More event details</span>

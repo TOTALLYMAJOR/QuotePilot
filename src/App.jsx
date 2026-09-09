@@ -6930,6 +6930,9 @@ export default function App({
             surfaceTitle="Operations"
             surfaceEyebrow="Calendar-first operations"
             organizationId={authSession.organizationId}
+            role={authSession.role}
+            inventoryAuthorityEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
+            inventoryTenantEnabled={inventoryTenantEnabled}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={currentUserEmail}
@@ -6942,6 +6945,7 @@ export default function App({
               quoteId,
               actionId: `open-calendar-opportunity:${quoteId}`
             })}
+            onOpenIngredientPlan={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             onOpenPeople={authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED
               ? () => navigateWorkspace(WORKSPACE_PATHS.staff)
               : undefined}

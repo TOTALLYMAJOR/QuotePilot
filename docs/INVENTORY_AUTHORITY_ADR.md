@@ -1,8 +1,8 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 06:49:55 CDT
+Last updated: 2026-09-09 07:13:08 CDT
 
-Status: Accepted scope correction; corrected Phases 2 through 7 complete as default-off local source candidates
+Status: Accepted scope correction; corrected Phases 2 through 8 complete as default-off local source candidates
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -397,10 +397,11 @@ corrected slices and final qualification complete.
    corrections, allocation settlement, and planned-versus-actual quantity and
    cost reconciliation.
 8. **Phase 8 — deeper realtime product integration.** Bounded Library, Quote
-   Edit, Preflight, Operations, and reporting projections plus deterministic
-   utilization, shortage, and due-supply insights.
+   Edit, Preflight, and Operations composition over exact event projections,
+   with deterministic per-unit shortage and consumption intelligence. Broader
+   reporting requires its own bounded materialized authority.
 
-Corrected Phases 2 through 7 are now complete as default-off local source
+Corrected Phases 2 through 8 are now complete as default-off local source
 candidates. Phase 3 adds same-dimension conversions, immutable declared
 purchase-pack revisions, versioned recipes attached to exact existing menu
 items, pure exact costing, bounded reverse dependencies, and materialized menu
@@ -427,8 +428,11 @@ active hold without double subtraction, preserves corrections as immutable
 evidence, and publishes a separate exact realtime execution projection in the
 event Control Room. It provides quantity variance and a clearly labeled
 saved-planning-basis cost comparison only when every pinned ingredient cost is
-complete. The next independently committed target is Phase 8: deeper realtime
-Preflight, Operations, and deterministic reporting integration.
+complete. Phase 8 composes those same exact plan and execution reads into Event
+Preflight and only the currently selected Operations event. Physical allocation,
+menu-cost completeness, and execution remain separate facts: cost gaps never
+invalidate a current hold, and a saved availability preview never passes as a
+reservation. The Calendar does not create one listener per row.
 
 ## Acceptance anchor
 
@@ -491,6 +495,16 @@ that creates no movement, exact execution projection readback, and preserved
 unknown actual COGS. Pure reducer tests separately prove other-event hold
 protection, invalid transitions, stale revisions, bounded row counts, exact
 ledger replay, and rational planned-basis comparison.
+
+Phase 8 adds no canonical writes. Focused presentation and component tests prove
+revision-bound physical, cost, and execution classification; fail-closed cached,
+pending, stale, malformed, and mismatched evidence; no cross-unit quantity
+aggregation; selected-event-only Operations subscription; and the rule that
+menu-cost completeness cannot manufacture or invalidate a stock commitment.
+Tenant-wide shortage-frequency, inbound-supply, freshness/suitability, and
+actual-cost reporting remain unavailable until bounded materialized authorities
+exist. In particular, QuotePilot does not infer future supply from an event date
+or an unconfirmed purchase.
 
 The genuinely unresolved product/accounting decision is the valuation policy
 for multiple cost observations and actual consumption. Corrected Phase 2
