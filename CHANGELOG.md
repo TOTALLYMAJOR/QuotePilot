@@ -1,8 +1,14 @@
 # Changelog
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-10 15:16:30 CDT
 
 All notable project changes are documented in this file.
+
+## Documentation governance baseline correction - 2026-09-10
+
+- Corrected local committed-diff validation so documentation timestamps are
+  compared with the selected diff range baseline instead of the current
+  commit, matching the behavior used in CI.
 
 This changelog is backfilled from git history and will be maintained going forward.
 

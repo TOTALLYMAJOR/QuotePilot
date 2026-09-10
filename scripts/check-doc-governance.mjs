@@ -353,7 +353,6 @@ function checkTaskOrchestrationContract(errors) {
 }
 
 function baselineRef() {
-  if (!(process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true")) return "HEAD";
   const range = resolveDiffRange();
   return String(range).split(/\.\.\.?/)[0] || "HEAD";
 }

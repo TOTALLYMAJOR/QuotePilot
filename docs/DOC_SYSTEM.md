@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-10 15:18:10 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -64,7 +64,8 @@ planning, status checkpoints, and completion handoffs separately use the
 planner's exact ISO-8601 UTC `lifecycle.recordedAt`. Documentation governance
 scans the full governed corpus for a valid header and fails when any file is
 missing one. For changed files it also fails when the timestamp was not
-advanced.
+advanced relative to the selected Git diff baseline; local and CI committed-
+diff validation use the same baseline semantics.
 
 ## CI Change-Type Enforcement
 `scripts/check-doc-governance.mjs` enforces these non-negotiable mappings:
