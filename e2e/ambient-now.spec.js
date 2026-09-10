@@ -175,7 +175,7 @@ test.describe("Ambient Now decision ledger", () => {
     await expect(focusedRequest).toBeFocused();
 
     await page.getByRole("navigation", { name: "Primary workspace" })
-      .getByRole("button", { name: "Now", exact: true }).click();
+      .getByRole("link", { name: "Now", exact: true }).click();
     await expect(page.locator(".ambient-now")).toBeVisible();
     await page.getByRole("button", { name: "Open Autumn Benefit Dinner in Calendar" }).click();
     await expect(page).toHaveURL(/\/app\/operations/u);

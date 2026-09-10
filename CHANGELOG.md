@@ -58,6 +58,31 @@ All notable project changes are documented in this file.
   synthetic staff pairs are now replay-safe after an interrupted population;
   incomplete or non-fixture pairs still fail closed.
 
+## Unreleased — current-head audit remediation candidate
+
+- Reconcile the September 10 audit candidate onto committed base
+  `f84234d9d6174c0762cbb1a405dfa88967d42285` while preserving the later
+  Ambient staffing fixture-expiry correction below. Inventory command
+  confirmation now reaches the same fixed point whether the exact current
+  projection or receipt arrives first, while cached, pending, and mismatched
+  projections remain unconfirmed.
+- Reuse shared modal focus/background containment for Client Preview, make
+  repeated blocker review focusable under StrictMode, schedule anniversary
+  Attention against the tenant calendar across daylight-saving boundaries,
+  and give true primary destinations native link behavior without bypassing
+  existing route guards.
+- Generate optional stable Inventory references with the existing safe request
+  identity primitive, rotate them only after confirmed completion, disclose
+  source detail progressively, and explain the existing 200-identity boundary
+  without changing server limits or stock/cost authority.
+- Correct the historical candidate's button-only primary-navigation CSS
+  selectors so native anchors retain the established desktop rail and mobile
+  bottom-bar geometry. Local browser evidence covers 390, 768, and 1440 widths
+  plus a modified-click new tab that leaves the source dirty draft intact.
+- This remains a local source candidate. Pricing-preview v2 parity, durable
+  incomplete working drafts, hosted verification, CI, deployment, and human
+  acceptance remain separate and open.
+
 ## Ambient staffing release-fixture lifecycle - 2026-09-10
 
 - Pinned the Ambient accessibility fixture to an explicit future quote expiry

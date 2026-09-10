@@ -305,7 +305,7 @@ test("saves, reopens, and versions one supported Workbench draft", async ({ page
     .toMatchObject({ versionId: "v0001", versionNumber: 1 });
 
   await page.getByRole("navigation", { name: "Primary workspace" })
-    .getByRole("button", { name: "Opportunities", exact: true }).click();
+    .getByRole("link", { name: "Opportunities", exact: true }).click();
   await expect(page).toHaveURL(/\/app\/quotes$/);
   const opportunity = page.getByRole("article", { name: "Persistence Boundary Dinner", exact: true });
   await expect(opportunity).toBeVisible();

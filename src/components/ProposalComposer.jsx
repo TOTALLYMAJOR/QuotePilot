@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useModalDialog } from "../hooks/useModalDialog";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
@@ -200,7 +201,7 @@ function ImpactTag({ delta }) {
   return <em className="pc-impact" data-tone={tone}>{phrase}</em>;
 }
 
-function ClientPreviewDialog({
+export function ClientPreviewDialog({
   open,
   onClose,
   form,
@@ -211,26 +212,12 @@ function ClientPreviewDialog({
   documentFontPreference
 }) {
   const closeRef = useRef(null);
-  const restoreRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    restoreRef.current = document.activeElement;
-    closeRef.current?.focus();
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
-      if (restoreRef.current && typeof restoreRef.current.focus === "function") {
-        restoreRef.current.focus();
-      }
-    };
-  }, [open, onClose]);
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: onClose,
+    initialFocusRef: closeRef,
+    isolateBackground: true
+  });
 
   if (!open) return null;
 
@@ -256,6 +243,8 @@ function ClientPreviewDialog({
       if (event.target === event.currentTarget) onClose();
     }}>
       <article
+        ref={dialogRef}
+        tabIndex={-1}
         className="pc-preview-dialog"
         style={{ "--pc-preview-font-scale": String(fontPreference.scale) }}
         role="dialog"
@@ -471,6 +460,7 @@ export default function ProposalComposer({
   const activityIdRef = useRef(0);
   const saveReadinessRef = useRef(null);
   const pendingSaveReviewFocusRef = useRef(false);
+  const [saveReviewFocusRequest, setSaveReviewFocusRequest] = useState(0);
 
   const eventTypeChoices = buildChoiceSet(eventTypes, {
     currentValue: form.eventTypeId
@@ -559,6 +549,7 @@ export default function ProposalComposer({
     setPulseOpen(true);
     if (saveAction.mode === "review") {
       pendingSaveReviewFocusRef.current = true;
+      setSaveReviewFocusRequest((value) => value + 1);
       return;
     }
     onSaveQuote?.();
@@ -566,10 +557,12 @@ export default function ProposalComposer({
 
   useEffect(() => {
     if (!pulseOpen || !pendingSaveReviewFocusRef.current) return;
-    pendingSaveReviewFocusRef.current = false;
-    const frame = window.requestAnimationFrame(() => saveReadinessRef.current?.focus());
+    const frame = window.requestAnimationFrame(() => {
+      pendingSaveReviewFocusRef.current = false;
+      saveReadinessRef.current?.focus();
+    });
     return () => window.cancelAnimationFrame(frame);
-  }, [pulseOpen]);
+  }, [pulseOpen, saveReviewFocusRequest]);
 
   const header = buildHeaderModel({ form, editingQuote, quoteDirty, saving });
   const completeness = useMemo(

@@ -13,6 +13,8 @@ import AttentionBadge from "./AttentionBadge";
 import ProductBrandLockup from "./ProductBrandLockup";
 import { PRODUCT_NAME } from "../lib/productIdentity";
 import { AMBIENT_PRIMARY_WORKSPACE_NAVIGATION } from "../lib/workspaceRoutes";
+import { shouldHandleWorkspaceLink } from "../lib/workspaceNavigationLink";
+import "./workspaceNavigationLink.css";
 
 const EMPTY = {};
 const HEADER_MENUS = [
@@ -188,13 +190,17 @@ export default function WorkspaceShell({
     capability,
     current = true,
     active = model.active?.quoteBuilder !== true || routeSection !== "quotes",
-    ambientDestination = ""
+    ambientDestination = "",
+    destinationPath = ""
   ) => {
     const Icon = NAV_ICONS[ambientDestination || routeSection] || NotePencil;
+    const href = typeof action === "function" ? destinationPath : "";
+    const Element = href ? "a" : "button";
     return (
-      <button
+      <Element
         key={ambientDestination || routeSection}
-        type="button"
+        type={href ? undefined : "button"}
+        href={href || undefined}
         className={`ghost shell-nav-action${ambientDestination ? " ambient-orientation-action" : ""}${
           active && section === routeSection ? " nav-view-active" : ""
         }`}
@@ -202,11 +208,17 @@ export default function WorkspaceShell({
         data-capability-entry={capability}
         data-ambient-orientation={ambientDestination || undefined}
         aria-current={current && section === routeSection ? "page" : undefined}
-        onClick={() => navigate(action)}
+        onClick={(event) => {
+          if (href) {
+            if (!shouldHandleWorkspaceLink(event)) return;
+            event.preventDefault();
+          }
+          navigate(action);
+        }}
       >
         <Icon className="shell-nav-icon" size={20} weight={active && section === routeSection ? "fill" : "regular"} aria-hidden="true" />
         <span className="shell-nav-label">{label}</span>
-      </button>
+      </Element>
     );
   };
   const workflowLabel = attentionCount === null
@@ -609,7 +621,8 @@ export default function WorkspaceShell({
                       undefined,
                       true,
                       true,
-                      destination.orientation
+                      destination.orientation,
+                      destination.path
                     ))}
                 </nav>
               ) : (

@@ -202,7 +202,20 @@
         "id=\"proposal-event-template\"",
         "AdaptiveChoiceField"
       ],
-      "testPath": "src/components/__tests__/proposalComposerMarginCost.test.jsx"
+      "testPaths": [
+        "src/components/__tests__/proposalComposerMarginCost.test.jsx",
+        "src/components/__tests__/proposalComposerAuditRegression.test.jsx"
+      ]
+    },
+    {
+      "id": "inventory-entry-and-confirmation-states",
+      "path": "src/components/InventoryWorkspace.jsx",
+      "markers": [
+        "data-inventory-reference",
+        "data-inventory-capacity",
+        "data-capability-state"
+      ],
+      "testPath": "src/components/__tests__/inventoryWorkspace.test.jsx"
     },
     {
       "id": "quote-comparison-choice-states",

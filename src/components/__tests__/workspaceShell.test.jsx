@@ -110,6 +110,11 @@ function buttonsByText(container, label) {
     .filter((button) => button.textContent.trim() === label);
 }
 
+function linksByText(container, label) {
+  return Array.from(container.querySelectorAll("a"))
+    .filter((link) => link.textContent.trim() === label);
+}
+
 function ToolSurfaceProbe({ label, open, presentation = "embedded", onClose, returnFocusRef }) {
   return (
     <button
@@ -204,11 +209,11 @@ describe("WorkspaceShell", () => {
     expect(buttonsByText(container, "Messages")).toHaveLength(0);
     expect(buttonsByText(container, "Workflow")).toHaveLength(0);
 
-    const now = buttonsByText(container, "Now")[0];
-    const opportunities = buttonsByText(container, "Opportunities")[0];
-    const operations = buttonsByText(container, "Operations")[0];
-    const clients = buttonsByText(container, "Clients")[0];
-    const library = buttonsByText(container, "Library")[0];
+    const now = linksByText(container, "Now")[0];
+    const opportunities = linksByText(container, "Opportunities")[0];
+    const operations = linksByText(container, "Operations")[0];
+    const clients = linksByText(container, "Clients")[0];
+    const library = linksByText(container, "Library")[0];
     const search = container.querySelector('button[aria-label="Search"]');
     const newQuote = buttonsByText(container, "New quote")[0];
     expect(now.getAttribute("aria-current")).toBe("page");
@@ -286,7 +291,7 @@ describe("WorkspaceShell", () => {
       ambientNavigation: true,
       model: model(WORKSPACE_ROUTE_IDS.QUOTE_DETAIL, true, true)
     });
-    const opportunities = buttonsByText(container, "Opportunities")[0];
+    const opportunities = linksByText(container, "Opportunities")[0];
     expect(opportunities.classList.contains("nav-view-active")).toBe(true);
     expect(opportunities.getAttribute("aria-current")).toBe("page");
 
@@ -294,7 +299,7 @@ describe("WorkspaceShell", () => {
       ambientNavigation: true,
       model: model(WORKSPACE_ROUTE_IDS.OPERATIONS, true, true)
     });
-    const operations = buttonsByText(container, "Operations")[0];
+    const operations = linksByText(container, "Operations")[0];
     expect(operations.classList.contains("nav-view-active")).toBe(true);
     expect(operations.getAttribute("aria-current")).toBe("page");
 
@@ -302,7 +307,7 @@ describe("WorkspaceShell", () => {
       ambientNavigation: true,
       model: model(WORKSPACE_ROUTE_IDS.CATALOG, true, true)
     });
-    const library = buttonsByText(container, "Library")[0];
+    const library = linksByText(container, "Library")[0];
     expect(library.classList.contains("nav-view-active")).toBe(true);
     expect(library.getAttribute("aria-current")).toBe("page");
 
@@ -325,7 +330,7 @@ describe("WorkspaceShell", () => {
     expect(Array.from(container.querySelectorAll("[data-ambient-orientation]"))
       .map((button) => button.textContent.trim()))
       .toEqual(["Now", "Opportunities", "Operations", "Clients", "Library"]);
-    expect(buttonsByText(container, "Library")).toHaveLength(1);
+    expect(linksByText(container, "Library")).toHaveLength(1);
     expect(buttonsByText(container, "Catalog Admin")).toHaveLength(0);
     expect(container.querySelector('[role="menu"][aria-label="Operations"]')).toBeNull();
   });

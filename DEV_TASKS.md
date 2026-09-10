@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-10 16:05:00 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -64,6 +64,18 @@ This file contains open work only. Completed delivery belongs in
 
 ## P1 — Product and design acceptance
 
+- [ ] Replace remaining browser `calculateQuote` preview consumers with one
+  explicit shared pricing-v2 adapter that distinguishes incomplete,
+  unavailable, and error states. Preserve the 80-case pricing-v1 Golden Corpus
+  as historical characterization and prove exact-money/calendar parity before
+  closing pricing-preview parity.
+- [ ] Establish a governed tenant/principal-scoped authority for incomplete
+  working drafts, including recoverability, conflict handling, emulator/rules
+  proof, and supported promotion to an authoritative quote. Browser-local
+  recovery is not cross-device persistence and quote-save blockers must remain.
+- [ ] Treat bulk receiving and ingredient-context actions as a separate
+  Inventory interaction slice. Pagination may improve navigation but does not
+  expand the existing 200-identity server policy.
 - [ ] Run the exact current candidate at 390, 768, and 1440 pixels for admin and
   sales roles, then record overflow, focus, reduced-motion, forced-colors,
   assistive-technology, and human comprehension evidence separately.
