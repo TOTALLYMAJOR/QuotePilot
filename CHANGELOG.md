@@ -1,8 +1,27 @@
 # Changelog
 
-Last updated: 2026-09-10 16:52:25 CDT
+Last updated: 2026-09-10 17:15:07 CDT
 
 All notable project changes are documented in this file.
+
+## v0.18.2 public release and operating-twin population - 2026-09-10
+
+- Published tag `v0.18.2` at exact SHA
+  `3fb1443bb6e394133340ede3716548c92b24beea` after exact-main CI run
+  `34530609347`, then deployed the safe-off Vercel production profile through
+  workflow `34532297958`. The protected workflow verified the public edge and
+  promoted immutable deployment `quoteflow-c8t2j8jk0-mbmapps.vercel.app` to
+  `https://quotepilot.mbmapps.com`.
+- Applied and read back `ragnakok-operations-v1` for exact organization
+  `mm05366-sandbox` in isolated staging and production. Both environments now
+  contain the 20 generated portrait-backed staff fixtures, ten event quotes,
+  eight Staffing plans, four workflow definitions, and six event/workflow
+  ledgers, with Inventory and Staffing enabled and catalog pricing confirmed.
+  Post-apply dry runs reported zero event quotes left to create.
+- Kept Commercial Change and Event Spine mutation gates off. All fixture
+  acceptances, qualifications, performance history, approvals, and delivery
+  fields remain synthetic and are not customer, employee, provider, supplier,
+  settlement, revenue, or human-acceptance evidence.
 
 ## Operating-twin customer claim provenance correction - 2026-09-10
 
