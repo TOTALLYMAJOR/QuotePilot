@@ -64,10 +64,10 @@ function MomentumFact({ domain, value }) {
   );
 }
 
-function StatusFact({ fact }) {
+function StatusFact({ fact, hideLabel = false }) {
   return (
     <div className="ambient-opportunity__status-fact" data-status-fact={fact.id}>
-      <dt>{fact.label}</dt>
+      <dt className={hideLabel ? "sr-only" : undefined}>{fact.label}</dt>
       <dd>
         {fact.available
           ? <StatusChip family={fact.family} label={fact.value} />
@@ -77,7 +77,49 @@ function StatusFact({ fact }) {
   );
 }
 
-function OpportunityRow({ row, onResolve, position }) {
+function compactObligationCopy(fact) {
+  const raw = String(fact?.raw || "").trim().toLowerCase();
+  if (fact?.id === "booking-confirmation") {
+    if (raw === "pending") return "Booking confirmation pending";
+    if (raw === "sent") return "Booking confirmation sent";
+  }
+  if (fact?.id === "deposit-status") {
+    if (raw === "unpaid") return "Deposit not requested";
+    if (raw === "sent") return "Deposit requested";
+  }
+  if (fact?.id === "final-balance-status") {
+    if (raw === "unpaid") return "Final balance not requested";
+    if (raw === "sent") return "Final balance requested";
+  }
+  return fact.value;
+}
+
+function CompactCommercialPosition({ row }) {
+  const { value, position } = row.commercialPriority;
+  const recordedObligations = [position.booking, position.deposit, position.finalBalance]
+    .filter((fact) => fact.available);
+  return (
+    <section
+      className="ambient-opportunity__commercial-position"
+      aria-label={`Commercial position for ${row.identity.eventName}`}
+    >
+      <div className="ambient-opportunity__saved-value" data-value-available={value.available ? "true" : "false"}>
+        <span>{value.label}</span>
+        <strong>{value.display}</strong>
+      </div>
+      <dl className="ambient-opportunity__compact-status">
+        <StatusFact fact={position.proposal} hideLabel />
+      </dl>
+      <p className="ambient-opportunity__obligations">
+        {recordedObligations.length > 0
+          ? recordedObligations.map(compactObligationCopy).join(" · ")
+          : "Booking and payment evidence not recorded"}
+      </p>
+    </section>
+  );
+}
+
+function OpportunityRow({ row, onResolve, onInspect, position }) {
   const { primaryAction } = row;
   return (
     <li
@@ -85,6 +127,8 @@ function OpportunityRow({ row, onResolve, position }) {
       data-opportunity-id={row.quoteId}
       data-needs-attention={row.requiresAttention ? "true" : "false"}
       data-opportunity-group={row.groupId}
+      data-attention-type={row.workflow.target?.attentionType || ""}
+      data-request-id={row.workflow.target?.requestId || ""}
     >
       <article aria-labelledby={`ambient-opportunity-title-${row.quoteId}`}>
         <span className="ambient-opportunity__index" aria-hidden="true">
@@ -119,6 +163,8 @@ function OpportunityRow({ row, onResolve, position }) {
           </span>
         </p>
 
+        <CompactCommercialPosition row={row} />
+
         <div
           className="ambient-opportunity__next"
           data-layout-audit-group={`opportunity-next-${row.quoteId}`}
@@ -127,21 +173,28 @@ function OpportunityRow({ row, onResolve, position }) {
             className="ambient-opportunity__next-reason"
             data-opportunity-summary-kind={row.queueSummary.kind}
           >
-            {row.queueSummary.text}
+            <strong>{row.commercialPriority.significance.label}</strong>
+            <span>{row.commercialPriority.significance.reason}</span>
+            <small>
+              {row.commercialPriority.significance.timing}
+              {" · "}{row.commercialPriority.significance.consequence}
+            </small>
           </p>
-          <button
-            type="button"
-            className="ambient-opportunity__primary-action"
-            data-ambient-action-id={primaryAction.id}
-            data-workspace-task-id={primaryAction.id}
-            data-ambient-action-purpose={primaryAction.purpose}
-            disabled={!primaryAction.enabled}
-            title={primaryAction.disabledReason || undefined}
-            onClick={() => onResolve(row)}
-          >
-            {primaryAction.outcomeLabel}
-            <span aria-hidden="true">→</span>
-          </button>
+          <div className="ambient-opportunity__actions">
+            <button
+              type="button"
+              className="ambient-opportunity__primary-action"
+              data-ambient-action-id={primaryAction.id}
+              data-workspace-task-id={primaryAction.id}
+              data-ambient-action-purpose={primaryAction.purpose}
+              disabled={!primaryAction.enabled}
+              title={primaryAction.disabledReason || undefined}
+              onClick={() => onResolve(row)}
+            >
+              {primaryAction.outcomeLabel}
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
         {!primaryAction.enabled && (
           <p className="ambient-opportunity__disabled-reason">
@@ -174,6 +227,15 @@ function OpportunityRow({ row, onResolve, position }) {
             <p>
               These details are kept separate. Together, they still do not confirm that the event is ready or every payment is complete.
             </p>
+            <button
+              type="button"
+              className="ambient-opportunity__inspect-action"
+              data-ambient-opportunity-inspect="true"
+              data-opportunity-row-action="inspect"
+              onClick={(event) => onInspect?.(row, event.currentTarget)}
+            >
+              Inspect exact record
+            </button>
           </div>
         </details>
       </article>
@@ -275,6 +337,18 @@ export default function AmbientOpportunitiesStream({
             reason: action.arrivalContract.reason,
             consequence: action.arrivalContract.consequence,
             nextResolutionId: action.arrivalContract.nextResolutionIds[0]
+          }, {
+            preserveReturnContext: true,
+            returnContextSurfaceId: "commercial-priority",
+            returnContextHint: {
+              focus: {
+                kind: "opportunity-action",
+                objectId: row.quoteId,
+                actionId: action.id,
+                controlId: row.workflow.target.requestId,
+                attentionType: row.workflow.target.attentionType
+              }
+            }
           })
         : onOpenOpportunity?.({
             quoteId: row.quoteId,
@@ -512,6 +586,16 @@ export default function AmbientOpportunitiesStream({
                       key={row.quoteId}
                       row={row}
                       onResolve={resolve}
+                      onInspect={capabilities.openOpportunity
+                        ? (candidate) => onOpenOpportunity?.({
+                            quoteId: candidate.quoteId,
+                            actionId: `inspect-opportunity:${candidate.quoteId}`,
+                            object: candidate.primaryAction.arrivalContract.object,
+                            reason: "Review the exact saved opportunity record without changing it.",
+                            consequence: "Opening the quote creates no commercial mutation.",
+                            nextResolutionId: candidate.primaryAction.arrivalContract.nextResolutionIds[0]
+                          })
+                        : undefined}
                       position={stream.rows.findIndex((candidate) => candidate.quoteId === row.quoteId) + 1}
                     />
                   ))}

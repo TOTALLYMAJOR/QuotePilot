@@ -187,6 +187,114 @@ const SERVER_OWNED_OPERATIONAL_STAFFING_PATHS = Object.freeze([
   ["staffInvitationProviderMessageIndex", "provider-message-1"]
 ]);
 
+const SERVER_OWNED_INVENTORY_PATHS = Object.freeze([
+  ["organizations", "org-a", "inventoryLocations", "main-warehouse"],
+  ["organizations", "org-a", "inventoryItems", "chicken"],
+  ["organizations", "org-a", "inventoryIngredients", "chicken"],
+  ["organizations", "org-a", "inventoryMovements", "movement-opening-1"],
+  ["organizations", "org-a", "inventoryStockStates", "chicken_main-warehouse"],
+  ["organizations", "org-a", "inventoryCostEvidence", "cost-opening-1"],
+  ["organizations", "org-a", "inventoryCostStates", "chicken"],
+  ["organizations", "org-a", "inventoryAuthorityState", "current"],
+  ["organizations", "org-a", "inventoryAuthorityReceipts", "authority-request-1"],
+  ["organizations", "org-a", "inventoryRecipePolicies", "recipe-revision-1"],
+  ["organizations", "org-a", "inventoryRecipeHeads", "menu-item-1"],
+  [
+    "organizations",
+    "org-a",
+    "inventoryPackConversionRevisions",
+    "pack-conversion-revision-1"
+  ],
+  ["organizations", "org-a", "inventoryPackConversionHeads", "chicken_case"],
+  ["organizations", "org-a", "inventoryRecipeDependencyIndex", "chicken"],
+  ["organizations", "org-a", "eventIngredientDependencyIndex", "menu-item-1"],
+  ["organizations", "org-a", "eventIngredientRequirementHeads", "q1"],
+  ["organizations", "org-a", "eventIngredientRequirements", "q1"],
+  [
+    "organizations",
+    "org-a",
+    "eventIngredientRequirements",
+    "q1",
+    "revisions",
+    "requirement-v1"
+  ],
+  ["organizations", "org-a", "eventIngredientPlans", "q1"],
+  [
+    "organizations",
+    "org-a",
+    "eventIngredientPlans",
+    "q1",
+    "revisions",
+    "plan-v1"
+  ],
+  ["organizations", "org-a", "eventIngredientExecutions", "q1"],
+  [
+    "organizations",
+    "org-a",
+    "eventIngredientExecutions",
+    "q1",
+    "revisions",
+    "execution-v1"
+  ],
+  ["organizations", "org-a", "inventoryAllocationFences", "chicken_main-warehouse"],
+  ["organizations", "org-a", "inventoryRequirementPolicies", "policy-v1"],
+  ["organizations", "org-a", "eventInventoryRequirements", "q1"],
+  [
+    "organizations",
+    "org-a",
+    "eventInventoryRequirements",
+    "q1",
+    "revisions",
+    "requirement-v1"
+  ],
+  ["organizations", "org-a", "eventInventoryPlans", "q1"],
+  ["organizations", "org-a", "inventoryAllocationFences", "chafer_main-warehouse_2026-05-01"],
+  ["organizations", "org-a", "inventoryReservationReceipts", "reservation-request-1"],
+  ["organizations", "org-a", "inventoryInsights", "2026-05"]
+]);
+
+const EVENT_INVENTORY_PROJECTION_PATH = Object.freeze([
+  "organizations",
+  "org-a",
+  "eventInventoryProjections",
+  "q1"
+]);
+
+const INVENTORY_WORKSPACE_PROJECTION_PATH = Object.freeze([
+  "organizations",
+  "org-a",
+  "inventoryWorkspaceProjections",
+  "current"
+]);
+
+const INVENTORY_INGREDIENT_PROJECTION_PATH = Object.freeze([
+  "organizations",
+  "org-a",
+  "inventoryIngredientProjections",
+  "chicken"
+]);
+
+const INVENTORY_MENU_COST_PROJECTION_PATH = Object.freeze([
+  "organizations",
+  "org-a",
+  "inventoryMenuCostProjections",
+  "menu-item-1"
+]);
+
+const EVENT_INGREDIENT_PROJECTION_PATH = Object.freeze([
+  "organizations",
+  "org-a",
+  "eventIngredientProjections",
+  "q1"
+]);
+
+const EVENT_INGREDIENT_EXECUTION_PROJECTION_PATH = Object.freeze([
+  "organizations",
+  "org-a",
+  "eventIngredientExecutionProjections",
+  "q1"
+]);
+
 const CATALOG_COLLECTIONS = new Set([
   "catalogPackages",
   "catalogAddons",
@@ -2237,6 +2345,474 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       await deleteDoc(doc(context.firestore(), "organizations", "org-a", "settings", "config"));
     });
     await assertFails(setDoc(settingsRef, { eventOperatingSpineEnabled: true }));
+  });
+
+  test("inventory authority records deny every browser read list and write", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const path of SERVER_OWNED_INVENTORY_PATHS) {
+        await setDoc(doc(db, ...path), {
+          schemaVersion: 1,
+          organizationId: "org-a",
+          authority: "server_authoritative",
+          revision: 1
+        });
+      }
+    });
+
+    const contexts = [
+      testEnv.unauthenticatedContext(),
+      testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }),
+      testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }),
+      testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }),
+      testEnv.authenticatedContext("sales-org-b", {
+        email: "sales-b@example.com",
+        email_verified: true,
+        organizationId: "org-b"
+      })
+    ];
+
+    for (const context of contexts) {
+      const db = context.firestore();
+      for (const path of SERVER_OWNED_INVENTORY_PATHS) {
+        const existingRef = doc(db, ...path);
+        const collectionPath = path.slice(0, -1);
+        const forgedRef = doc(db, ...collectionPath, `${path.at(-1)}-browser-created`);
+        await assertFails(getDoc(existingRef));
+        await assertFails(getDocs(query(collection(db, ...collectionPath), limit(5))));
+        await assertFails(setDoc(forgedRef, {
+          organizationId: "org-a",
+          authority: "browser_forged"
+        }));
+        await assertFails(updateDoc(existingRef, { revision: 999 }));
+        await assertFails(deleteDoc(existingRef));
+      }
+    }
+  }, 60_000);
+
+  test("superseded equipment event projections deny every browser actor", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), ...EVENT_INVENTORY_PROJECTION_PATH), {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        quoteId: "q1",
+        state: "shortage",
+        freshness: "current"
+      });
+    });
+
+    const contexts = [
+      testEnv.unauthenticatedContext(),
+      testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }),
+      testEnv.authenticatedContext("sales-org-b", {
+        email: "sales-b@example.com",
+        email_verified: true,
+        organizationId: "org-b"
+      }),
+      testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })
+    ];
+
+    for (const context of contexts) {
+      const db = context.firestore();
+      const projectionRef = doc(db, ...EVENT_INVENTORY_PROJECTION_PATH);
+      const collectionPath = EVENT_INVENTORY_PROJECTION_PATH.slice(0, -1);
+      await assertFails(getDoc(projectionRef));
+      await assertFails(getDocs(query(collection(db, ...collectionPath), limit(5))));
+      await assertFails(setDoc(doc(db, ...collectionPath, "browser-created-denied"), {
+        organizationId: "org-a",
+        quoteId: "browser-created-denied",
+        state: "reserved"
+      }));
+      await assertFails(updateDoc(projectionRef, { state: "reserved" }));
+      await assertFails(deleteDoc(projectionRef));
+    }
+  }, 30_000);
+
+  test("ingredient projections are admin-only, server-owned, and query bounded", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "organizations", "org-a", "settings", "config"), {
+        inventoryAuthorityEnabled: true
+      }, { merge: true });
+      await setDoc(doc(db, ...INVENTORY_WORKSPACE_PROJECTION_PATH), {
+        schemaVersion: 2,
+        organizationId: "org-a",
+        locations: [],
+        workspaceRevision: 1
+      });
+      await setDoc(doc(db, ...INVENTORY_INGREDIENT_PROJECTION_PATH), {
+        schemaVersion: 2,
+        organizationId: "org-a",
+        ingredientId: "chicken",
+        nameSortKey: "chicken",
+        stock: { state: "current" },
+        cost: { state: "not_yet_available" }
+      });
+    });
+
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com", email_verified: true, organizationId: "org-a"
+    }).firestore();
+    const ingredientCollection = collection(
+      adminDb,
+      ...INVENTORY_INGREDIENT_PROJECTION_PATH.slice(0, -1)
+    );
+    await assertSucceeds(getDoc(doc(adminDb, ...INVENTORY_WORKSPACE_PROJECTION_PATH)));
+    await assertSucceeds(getDoc(doc(adminDb, ...INVENTORY_INGREDIENT_PROJECTION_PATH)));
+    await assertSucceeds(getDocs(query(ingredientCollection, limit(200))));
+    await assertFails(getDocs(query(ingredientCollection, limit(201))));
+    await assertFails(setDoc(doc(ingredientCollection, "pasta"), {
+      schemaVersion: 2, organizationId: "org-a", ingredientId: "pasta"
+    }));
+
+    for (const [uid, role, organizationId] of [
+      ["sales-org-a", "sales", "org-a"],
+      ["customer-org-a", "customer", "org-a"],
+      ["admin-org-b", "admin", "org-b"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      }).firestore();
+      await assertFails(getDoc(doc(db, ...INVENTORY_WORKSPACE_PROJECTION_PATH)));
+      await assertFails(getDoc(doc(db, ...INVENTORY_INGREDIENT_PROJECTION_PATH)));
+      await assertFails(getDocs(query(
+        collection(db, ...INVENTORY_INGREDIENT_PROJECTION_PATH.slice(0, -1)),
+        limit(200)
+      )));
+    }
+  }, 30_000);
+
+  test("base ingredient stock projections require the tenant inventory authority setting", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, ...INVENTORY_WORKSPACE_PROJECTION_PATH), {
+        schemaVersion: 2,
+        organizationId: "org-a",
+        locations: [],
+        workspaceRevision: 1
+      });
+      await setDoc(doc(db, ...INVENTORY_INGREDIENT_PROJECTION_PATH), {
+        schemaVersion: 2,
+        organizationId: "org-a",
+        ingredientId: "chicken",
+        nameSortKey: "chicken",
+        stock: { state: "current" },
+        cost: { state: "not_yet_available" }
+      });
+    });
+
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com", email_verified: true, organizationId: "org-a"
+    }).firestore();
+    const workspaceRef = doc(adminDb, ...INVENTORY_WORKSPACE_PROJECTION_PATH);
+    const ingredientRef = doc(adminDb, ...INVENTORY_INGREDIENT_PROJECTION_PATH);
+    const ingredientQuery = query(collection(
+      adminDb,
+      ...INVENTORY_INGREDIENT_PROJECTION_PATH.slice(0, -1)
+    ), limit(200));
+
+    // The seeded settings document omits inventoryAuthorityEnabled.
+    await assertFails(getDoc(workspaceRef));
+    await assertFails(getDoc(ingredientRef));
+    await assertFails(getDocs(ingredientQuery));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ), { inventoryAuthorityEnabled: false }, { merge: true });
+    });
+    await assertFails(getDoc(workspaceRef));
+    await assertFails(getDoc(ingredientRef));
+    await assertFails(getDocs(ingredientQuery));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await deleteDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ));
+    });
+    await assertFails(getDoc(workspaceRef));
+    await assertFails(getDoc(ingredientRef));
+    await assertFails(getDocs(ingredientQuery));
+  }, 30_000);
+
+  test("menu cost projections are staff-readable, server-owned, and query bounded", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "organizations", "org-a", "settings", "config"), {
+        inventoryAuthorityEnabled: true
+      }, { merge: true });
+      await setDoc(doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH), {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        menuItemId: "menu-item-1",
+        state: "complete",
+        recipeRevision: 1,
+        projectedCostMinor: 12000
+      });
+    });
+
+    for (const [uid, role] of [
+      ["admin-org-a", "admin"],
+      ["sales-org-a", "sales"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`,
+        email_verified: true,
+        organizationId: "org-a",
+        role
+      }).firestore();
+      const projectionRef = doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH);
+      const projections = collection(
+        db,
+        ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)
+      );
+
+      await assertSucceeds(getDoc(projectionRef));
+      await assertSucceeds(getDocs(query(projections, limit(200))));
+      await assertFails(getDocs(projections));
+      await assertFails(getDocs(query(projections, limit(201))));
+      await assertFails(setDoc(doc(projections, `${uid}-forged`), {
+        organizationId: "org-a",
+        menuItemId: `${uid}-forged`,
+        state: "complete"
+      }));
+      await assertFails(updateDoc(projectionRef, { state: "stale" }));
+      await assertFails(deleteDoc(projectionRef));
+    }
+
+    for (const [uid, organizationId] of [
+      ["customer-org-a", "org-a"],
+      ["admin-org-b", "org-b"],
+      ["sales-org-b", "org-b"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      }).firestore();
+      await assertFails(getDoc(doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH)));
+      await assertFails(getDocs(query(
+        collection(db, ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)),
+        limit(200)
+      )));
+    }
+
+    const publicDb = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(publicDb, ...INVENTORY_MENU_COST_PROJECTION_PATH)));
+    await assertFails(getDocs(query(
+      collection(publicDb, ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)),
+      limit(200)
+    )));
+
+    // Menu-cost access must not widen the separate admin-only stock projection.
+    const salesDb = testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com", email_verified: true, organizationId: "org-a"
+    }).firestore();
+    await assertFails(getDoc(doc(salesDb, ...INVENTORY_INGREDIENT_PROJECTION_PATH)));
+  }, 30_000);
+
+  test("menu cost projections require the tenant inventory authority setting", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH), {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        menuItemId: "menu-item-1",
+        state: "partial"
+      });
+    });
+
+    for (const [uid, role] of [
+      ["admin-org-a", "admin"],
+      ["sales-org-a", "sales"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId: "org-a", role
+      }).firestore();
+      const projectionRef = doc(db, ...INVENTORY_MENU_COST_PROJECTION_PATH);
+      const projectionQuery = query(collection(
+        db,
+        ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)
+      ), limit(200));
+
+      // The base fixture omits inventoryAuthorityEnabled; false is also denied.
+      await assertFails(getDoc(projectionRef));
+      await assertFails(getDocs(projectionQuery));
+    }
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ), { inventoryAuthorityEnabled: false }, { merge: true });
+    });
+
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com", email_verified: true, organizationId: "org-a"
+    }).firestore();
+    await assertFails(getDoc(doc(adminDb, ...INVENTORY_MENU_COST_PROJECTION_PATH)));
+    await assertFails(getDocs(query(collection(
+      adminDb,
+      ...INVENTORY_MENU_COST_PROJECTION_PATH.slice(0, -1)
+    ), limit(200))));
+  }, 30_000);
+
+  test("event ingredient projections are exact-document staff reads and server-owned", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "organizations", "org-a", "settings", "config"), {
+        inventoryAuthorityEnabled: true
+      }, { merge: true });
+      await setDoc(doc(db, ...EVENT_INGREDIENT_PROJECTION_PATH), {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        quoteId: "q1",
+        demandState: "complete",
+        costState: "partial",
+        availabilityState: "shortage",
+        freshness: "current"
+      });
+    });
+
+    for (const [uid, role] of [["admin-org-a", "admin"], ["sales-org-a", "sales"]]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId: "org-a", role
+      }).firestore();
+      const projectionRef = doc(db, ...EVENT_INGREDIENT_PROJECTION_PATH);
+      const projections = collection(db, ...EVENT_INGREDIENT_PROJECTION_PATH.slice(0, -1));
+      await assertSucceeds(getDoc(projectionRef));
+      await assertFails(getDocs(query(projections, limit(1))));
+      await assertFails(setDoc(doc(projections, `${uid}-forged`), {
+        organizationId: "org-a", quoteId: `${uid}-forged`, freshness: "current"
+      }));
+      await assertFails(updateDoc(projectionRef, { freshness: "stale" }));
+      await assertFails(deleteDoc(projectionRef));
+    }
+
+    for (const [uid, organizationId] of [
+      ["customer-org-a", "org-a"],
+      ["admin-org-b", "org-b"],
+      ["sales-org-b", "org-b"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      }).firestore();
+      await assertFails(getDoc(doc(db, ...EVENT_INGREDIENT_PROJECTION_PATH)));
+    }
+    await assertFails(getDoc(doc(
+      testEnv.unauthenticatedContext().firestore(),
+      ...EVENT_INGREDIENT_PROJECTION_PATH
+    )));
+  }, 30_000);
+
+  test("event ingredient projections require the tenant inventory authority setting", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), ...EVENT_INGREDIENT_PROJECTION_PATH), {
+        organizationId: "org-a", quoteId: "q1", freshness: "current"
+      });
+    });
+    for (const [uid, role] of [["admin-org-a", "admin"], ["sales-org-a", "sales"]]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId: "org-a", role
+      }).firestore();
+      await assertFails(getDoc(doc(db, ...EVENT_INGREDIENT_PROJECTION_PATH)));
+    }
+  }, 30_000);
+
+  test("event ingredient execution projections are exact-document staff reads and server-owned", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "organizations", "org-a", "settings", "config"), {
+        inventoryAuthorityEnabled: true
+      }, { merge: true });
+      await setDoc(doc(db, ...EVENT_INGREDIENT_EXECUTION_PROJECTION_PATH), {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        quoteId: "q1",
+        executionState: "recorded",
+        executionRevision: 1
+      });
+    });
+
+    for (const [uid, role] of [["admin-org-a", "admin"], ["sales-org-a", "sales"]]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId: "org-a", role
+      }).firestore();
+      const projectionRef = doc(db, ...EVENT_INGREDIENT_EXECUTION_PROJECTION_PATH);
+      const projections = collection(db, ...EVENT_INGREDIENT_EXECUTION_PROJECTION_PATH.slice(0, -1));
+      await assertSucceeds(getDoc(projectionRef));
+      await assertFails(getDocs(query(projections, limit(1))));
+      await assertFails(setDoc(doc(projections, `${uid}-forged`), {
+        organizationId: "org-a", quoteId: `${uid}-forged`, executionState: "recorded"
+      }));
+      await assertFails(updateDoc(projectionRef, { executionRevision: 2 }));
+      await assertFails(deleteDoc(projectionRef));
+    }
+
+    for (const [uid, organizationId] of [
+      ["customer-org-a", "org-a"],
+      ["admin-org-b", "org-b"],
+      ["sales-org-b", "org-b"]
+    ]) {
+      const db = testEnv.authenticatedContext(uid, {
+        email: `${uid}@example.com`, email_verified: true, organizationId
+      }).firestore();
+      await assertFails(getDoc(doc(db, ...EVENT_INGREDIENT_EXECUTION_PROJECTION_PATH)));
+    }
+    await assertFails(getDoc(doc(
+      testEnv.unauthenticatedContext().firestore(),
+      ...EVENT_INGREDIENT_EXECUTION_PROJECTION_PATH
+    )));
+  }, 30_000);
+
+  test("inventory authority cannot be promoted by a browser administrator", async () => {
+    const db = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    }).firestore();
+    const settingsRef = doc(db, "organizations", "org-a", "settings", "config");
+
+    await assertFails(updateDoc(settingsRef, { inventoryAuthorityEnabled: true }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await deleteDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ));
+    });
+    await assertFails(setDoc(settingsRef, { inventoryAuthorityEnabled: true }));
   });
 
   test("post-event closeout records and action receipts are callable-only", async () => {

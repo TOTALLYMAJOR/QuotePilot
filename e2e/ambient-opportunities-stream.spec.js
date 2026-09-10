@@ -4,7 +4,8 @@ import { expect, test } from "@playwright/test";
 
 const REQUIRED_GATES = [
   process.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED,
-  process.env.VITE_AMBIENT_UI_ENABLED
+  process.env.VITE_AMBIENT_UI_ENABLED,
+  process.env.VITE_PILOT_NOW_ENABLED
 ].every((value) => ["1", "true", "yes", "on"].includes(
   String(value || "").trim().toLowerCase()
 ));
@@ -55,6 +56,14 @@ const OPPORTUNITIES = [
     totals: { total: 8400, deposit: 2520 },
     booking: { confirmationStatus: "pending" },
     payment: { depositStatus: "unpaid", finalBalance: { status: "unpaid" } },
+    workflow: {
+      followUp: {
+        stage: "proposal_sent",
+        dueDate: "2026-08-10",
+        note: "Confirm sponsor guest count.",
+        completed: false
+      }
+    },
     lifecycle: { draftAtISO: "2026-08-10T12:00:00.000Z" }
   },
   {
@@ -122,6 +131,54 @@ test.describe("Ambient Opportunities stream", () => {
   for (const viewport of VIEWPORTS) {
     test(`stays contextual, accessible, and exact at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
+      await page.goto("/app");
+      const now = page.locator(".ambient-now");
+      await expect(now).toBeVisible({ timeout: 30_000 });
+      const priority = now.locator('[data-now-priority-quote-id="opportunity-autumn"]');
+      await expect(priority).toBeVisible();
+      await expect(priority.getByText("Saved quote total", { exact: true })).toBeVisible();
+      await expect(priority.getByText("$8,400.00", { exact: true })).toBeVisible();
+      await expect(priority).toContainText("Autumn Benefit Dinner");
+      await expect(priority).toContainText("past its follow-up date");
+      await expect(priority).toContainText("Why it matters");
+      expect(await now.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await now.locator("button:visible, details summary:visible").evaluateAll((controls) => (
+        controls.map((control) => {
+          const rect = control.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        }).filter(({ width, height }) => width < 44 || height < 44)
+      ))).toEqual([]);
+      const nowAccessibility = await new AxeBuilder({ page }).include(".ambient-now").analyze();
+      expect(nowAccessibility.violations).toEqual([]);
+
+      if (CAPTURE_PROOF) {
+        mkdirSync(PROOF_DIRECTORY, { recursive: true });
+        await page.evaluate(async () => {
+          await document.fonts.ready;
+          document.activeElement?.blur();
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+          await new Promise((resolve) => window.requestAnimationFrame(resolve));
+        });
+        await page.screenshot({
+          path: `${PROOF_DIRECTORY}/ambient-now-commercial-priority-${viewport.width}.png`,
+          animations: "disabled",
+          fullPage: true
+        });
+      }
+
+      await priority.locator('[data-ambient-action-id^="review-now-priority:"]').click();
+      await expect(page).toHaveURL(/\/app\/workflow\?/u);
+      expect(await page.evaluate(() => Object.fromEntries(new URLSearchParams(window.location.search)))).toMatchObject({
+        attentionType: "follow_up",
+        quoteId: "opportunity-autumn",
+        requestId: "follow-up:opportunity-autumn"
+      });
+      await expect(page.getByRole("button", { name: "Back to Now", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Back to Now", exact: true }).click();
+      await expect(page).toHaveURL(/\/app$/u);
+      await expect(page.locator('[data-now-priority-quote-id="opportunity-autumn"] [data-ambient-action-id^="review-now-priority:"]'))
+        .toBeFocused();
+
       await page.goto("/app/quotes");
 
       const stream = page.locator(".ambient-opportunities");
@@ -135,6 +192,13 @@ test.describe("Ambient Opportunities stream", () => {
         .toHaveCount(0);
       await expect(stream.locator(".ambient-opportunity")).toHaveCount(2);
       await expect(stream.locator(".ambient-opportunity__primary-action")).toHaveCount(2);
+      const autumn = stream.locator('[data-opportunity-id="opportunity-autumn"]');
+      await expect(autumn.getByText("Saved quote total", { exact: true })).toBeVisible();
+      await expect(autumn.getByText("$8,400.00", { exact: true })).toBeVisible();
+      await expect(autumn.getByText("Draft", { exact: true })).toHaveCount(1);
+      await expect(autumn.getByText("Proposal ready", { exact: true })).toBeVisible();
+      await expect(autumn.getByText("Follow-up is overdue", { exact: true })).toBeVisible();
+      await expect(autumn).toContainText("The tracked follow-up date is Aug 10, 2026.");
       await expect(page.getByText("Quote administration", { exact: true })).toBeVisible();
       await expect(page.locator(".history-table-wrap")).toBeHidden();
 
@@ -175,10 +239,24 @@ test.describe("Ambient Opportunities stream", () => {
         });
       }
 
-      const firstOpportunity = stream.locator('[data-opportunity-id="opportunity-autumn"]');
-      await firstOpportunity.locator(".ambient-opportunity__primary-action").click();
-      await expect(page).toHaveURL(/\/app\/quotes\/opportunity-autumn$/u);
-      const livingOpportunity = page.locator('[data-quote-id="opportunity-autumn"].ambient-living-opportunity');
+      const workflowAction = autumn.locator(".ambient-opportunity__primary-action");
+      await workflowAction.click();
+      await expect(page).toHaveURL(/\/app\/workflow\?/u);
+      expect(await page.evaluate(() => Object.fromEntries(new URLSearchParams(window.location.search)))).toMatchObject({
+        attentionType: "follow_up",
+        quoteId: "opportunity-autumn",
+        requestId: "follow-up:opportunity-autumn"
+      });
+      await expect(page.getByRole("button", { name: "Back to Opportunities", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Back to Opportunities", exact: true }).click();
+      await expect(page).toHaveURL(/\/app\/quotes$/u);
+      await expect(page.locator('[data-opportunity-id="opportunity-autumn"] .ambient-opportunity__primary-action')).toBeFocused();
+
+      const currentStream = page.locator(".ambient-opportunities");
+      const gardenAction = currentStream.locator('[data-opportunity-id="opportunity-garden"] .ambient-opportunity__primary-action');
+      await gardenAction.click();
+      await expect(page).toHaveURL(/\/app\/quotes\/opportunity-garden$/u);
+      const livingOpportunity = page.locator('[data-quote-id="opportunity-garden"].ambient-living-opportunity');
       await expect(livingOpportunity).toBeVisible({ timeout: 30_000 });
       await expect(livingOpportunity).toBeFocused();
       await expect(page.locator('[data-arrival-surface="living-opportunity"]'))

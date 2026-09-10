@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-09-08 15:16:08 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -41,6 +41,42 @@ For a UI-classified plan, confirm `dependencies.requiredSkills` contains
 `docs/DESIGN_SYSTEM.md` and `docs/DESIGN_PRINCIPLES.md`. If the skill and local
 product language differ, the repository documents govern QuotePilot-specific
 behavior and the conflict must be reported rather than silently blended.
+
+## Catering-Domain Reconsideration
+
+The planner's execution profile and catering-domain classification are
+orthogonal. A task may be `ui` plus `event_operations` and `staffing`, or
+`core` plus `commercial` and `payments`. Inspect the packet:
+
+```text
+domainClassification:
+  applicable: true|false
+  contexts: [...]
+  matchedSignals: ...
+  authorityReads: [...]
+  referenceSlices: [...]
+```
+
+When `applicable` is true:
+
+1. Load `catering-domain-intelligence` from `requiredSkills`.
+2. Read the packet's `authorityReads` through the normal `readFirst` list and
+   inspect the task-owned implementation.
+3. Reconstruct the objective and form a provisional intended action.
+4. Read only `referenceSlices`; do not load the whole knowledge pack.
+5. Reconcile domain guidance with current QuotePilot authority and code.
+6. Record internally whether the action is retained, refined, replaced,
+   expanded, bounded, or has no material domain effect.
+7. Carry material consequences into implementation and validation.
+
+Routine retain/no-effect outcomes need no domain narration. Explain a revision
+or authority conflict only when it helps the owner understand the work. Domain
+prose alone is not evidence that the decision improved.
+
+When `taskGraph` includes `expertise_eval`, complete deterministic verification
+first, then run the skill's versioned cases in a genuinely fresh agent session.
+Keep the scored model-behavior result and human acceptance separate from source,
+CI, hosted, provider, and production evidence.
 
 ## Product Truth Reconciliation (Source/Local Active, CI Advisory)
 
@@ -140,10 +176,10 @@ npm run plan:task -- --task "<bounded work>" \
 ```
 
 The runner must consume the selected model, reasoning effort, read-first files,
-required skills, documentation obligations, validations, and task graph before
-implementation. If the emitted profile is `frontier`, stop and confirm the
-task really has authority, payment, migration, provider, production, security,
-or deployment scope before changing files.
+required skills, domain classification, documentation obligations, validations,
+and task graph before implementation. If the emitted profile is `frontier`,
+stop and confirm the task really has authority, payment, migration, provider,
+production, security, or deployment scope before changing files.
 
 4. Run the cheapest relevant checks before expanding:
 ```bash

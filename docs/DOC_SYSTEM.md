@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-05 18:51:02 CDT
+Last updated: 2026-09-09 07:13:08 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -19,6 +19,9 @@ Each major topic has one source of truth. Other docs should link to that source 
   tenant-configuration, contextual-UX, migration, and delivery-slice authority.
 - `docs/PRICING_CONSTITUTION.md`: pricing policy, version, exact-money,
   waterfall, historical-compatibility, and payment-provenance authority.
+- `docs/INVENTORY_AUTHORITY_ADR.md`: ingredient stock and purchase-cost
+  evidence, recipe, menu/event demand and cost, consumable allocation,
+  consumption, and inventory-projection authority.
 - `docs/field-state-contract.json`: canonical multi-axis field-state vocabulary,
   semantics, priority, accessibility, provenance, and 0/1/many choice contract.
 - `docs/field-state-surface-contracts.json`: explicit registry of product
@@ -36,6 +39,9 @@ Each major topic has one source of truth. Other docs should link to that source 
   update `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and its accepted ADR.
 - Pricing policy, arithmetic, rounding, receipt, waterfall, or payment amount
   provenance changes: update `docs/PRICING_CONSTITUTION.md`.
+- Ingredient definitions, stock/cost evidence, recipes, requirement mappings,
+  consumable availability, allocations, consumption, or inventory projections: update
+  `docs/INVENTORY_AUTHORITY_ADR.md`.
 - Field, selector, imported/defaulted/suggested value, edit authority,
   save/publish state, or field-level failure/recovery changes: update the field-
   state surface registry and its exact tests; change the field-state contract
@@ -59,7 +65,7 @@ it.
 | Change Type | Trigger Examples | Required Canonical Doc Update |
 |---|---|---|
 | code | `src/`, `functions/`, `e2e/`, `truthloop/`, `evidence/`, runtime behavior files | `CHANGELOG.md` |
-| backend capability | `functions/`, rules/indexes, data/provider clients, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
+| backend capability | `functions/`, rules/indexes, data/provider clients, realtime authority hooks, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
 | process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | backlog | roadmap/backlog/task artifacts | `DEV_TASKS.md` |
@@ -119,7 +125,9 @@ as separate claims.
 | Product truth observability and drift policy | `docs/adr/ADR-0002-product-truth-observability.md`, `docs/design/product-truth-observability-design.md` | Accepted decision and implementation contract for the read-only owner digest and advisory drift gate. `PROJECT_STATUS.md`, the Feature Matrix, release receipts, and other named inputs retain authority; generated digests are projections only. |
 | Commercial kernel, vertical packs, offers, templates, rules, and compatibility migration | `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and `docs/adr/ADR-0003-commercial-platform-vertical-pack.md` | Catering remains the reference vertical and natural UX; shared contracts cannot replace quote, catalog, server-pricing, or payment authority. |
 | Pricing policy, v1/v2 semantics, exact money, waterfalls, and payment amount provenance | `docs/PRICING_CONSTITUTION.md` | Historical v1 receipts stay immutable; v2 behavior changes require Golden Corpus and differential evidence. |
-| Task classification, model tier, dependency reads, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. The external runner owns actual model switching. |
+| Ingredient inventory, recorded purchase cost, versioned recipes, menu/event demand and food cost, consumable availability, allocation, consumption, and projections | `docs/INVENTORY_AUTHORITY_ADR.md` | Inventory owns ingredient stock/cost evidence and bounded operational consequences; Library owns recipe editing against the existing menu catalog, commercial revisions remain historical authority, menu cost and stock promise remain independent rails, and overall event readiness stays separate. |
+| Execution/domain classification, model tier, dependency reads, domain-reference routing, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. Domain references remain advisory, and the external runner owns actual model switching. |
+| Catering-domain agent reconsideration | `.codex/skills/catering-domain-intelligence/SKILL.md` | The skill owns the provisional-action reconsideration workflow and progressively disclosed expertise references. It does not own QuotePilot runtime, product policy, or human acceptance. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
 | Workspace visual system and interaction contracts | `docs/DESIGN_SYSTEM.md` | The canonical staff-workspace visual grammar, motion, hierarchy, and scoped Ambient/customer extensions. UI agents load `design-language` first, then preserve this repository-specific authority. |
@@ -173,7 +181,9 @@ reviewed presentation-only files remain excluded unless their source introduces
 direct provider, Firebase, or network authority signals. Mutation inspection
 includes chained Admin/Firestore writes and modular client writes. These are
 explicit review contracts, not claims that the checker can infer a complete
-semantic call graph.
+semantic call graph. The checker provisions a bounded multi-megabyte Git output
+buffer so the governed Functions entrypoint is compared in full rather than
+failing before contract validation.
 
 Headless work may use only the narrow `headless_operational`,
 `security_private`, or `developer_infrastructure` classifications. Operational

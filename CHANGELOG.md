@@ -1,10 +1,255 @@
 # Changelog
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-09 18:17:25 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — v0.18.0 capability-realization candidate
+
+- Add the explicit `ragnakok-operations` Firebase production profile and
+  protected tenant operators needed to promote the complete operating model
+  without granting unrelated tenants access. The profile binds the exact
+  `mm05366-sandbox` workflow scope, enables the Staffing and Inventory server
+  gates, and applies that same exact-organization runtime fence to Inventory
+  callables and invalidation triggers. It leaves buyer access, Revenue Autopilot sends, SMS, and Stripe
+  Connect unchanged. Separate update-only operators verify the exact tagged
+  all-surface deployment before changing the Staffing, Inventory, or coupled
+  Commercial Change and Event Spine tenant fields, then require provider
+  readback. Source alone is not deployment or tenant-activation evidence.
+- Isolate the new Commercial Scenario, Inventory, and fulfillment modules in a
+  dedicated production chunk. The compatibility build's largest JavaScript
+  chunk falls from 559,531 to 385,181 bytes without increasing its 399,665-byte
+  ceiling. The temporary convergence exception records the resulting
+  3,497,562-byte total, an 18,848-byte (0.54%) measured increase for the new
+  capability rather than an unbounded allowance. The Ambient profile records
+  its corresponding exact 4,596,639-byte total while retaining the existing
+  435,565-byte largest-chunk ceiling; its measured largest chunk is 391,912
+  bytes.
+
+- Evolve the static Living Commercial Twin into the first-slice **Commercial
+  Scenario Workbench**. The saved **Current** commitment is immutable while an
+  operator may edit a whole guest count from 1–400, which creates **Scenario
+  A**, duplicate it once as **Scenario B**, switch among the three session-only
+  views without page navigation, and discard either temporary alternative.
+  Each working scenario is bound to a unique `scenarioId`, exact
+  `baseQuoteRevisionId`, monotonic `generation`, deterministic `inputDigest`,
+  exact whole `guestCount`, and creation time. Cached projections restore
+  instantly on scenario switch;
+  while a newer generation recomputes, the last accepted result may remain
+  visible only as explicitly retained evidence. Exact scope matching prevents
+  a late Commercial or Inventory response from painting a newer scenario.
+  Changing a non-guest draft or ingredient-selection input rotates the bounded
+  scenario context, clears A/B and their caches, and rejects queued work from
+  the prior context. Current non-guest drafts use the same exact five-field
+  preview envelope. A failed consequence read waits for an explicit retry;
+  only a transport-uncertain recovery reuses its simulation request identity,
+  while definitive rejection or stale success starts a new request. The
+  full-width, container-responsive three-zone interface reacts in place with
+  current/working quoted value,
+  deposit, ingredient cost, People, Supply, and Kitchen BEO consequences.
+  Healthy evidence recedes, while the first exact inventory constraint can
+  expand its demand/shortfall explanation and offer the exact safe-through
+  guest count only when revision-bound boundary evidence supports it. The
+  existing deeply frozen `fulfillmentProjection-v1` still composes People and
+  Supply without merging Commercial, Staffing, or Inventory authority. One
+  restored Layer-3 `FulfillmentIntelligence` presenter now owns that projection's
+  user-facing rendering; the Workbench no longer carries a competing inline
+  Fulfillment presenter. Above the People/Supply read model,
+  `fulfillment-decision-answer-v1` may compose an exact guest-count preview,
+  exact ingredient shortage and menu contribution, proposed quote total,
+  Staffing effect, Kitchen BEO effect, and an optional current revision-bound
+  `inventory-sourcing-preview-v1`. The normal application currently supplies
+  no sourcing preview, so no supplier or “best resolution” is invented. Even
+  when a unique declared-policy match is supplied, it is advice rather than
+  stock, reservation, purchase order, supplier confirmation, or procurement,
+  and it cannot turn Supply coverage current. The preview must also match the
+  proposed Inventory event-requirement revision, projection digest, scenario
+  fingerprint, and exact shortage quantity. Its purchasable pack quantity stays
+  distinct from the quantity that covers the shortfall. Proposed quote total
+  is labeled quoted value rather than earned or preserved revenue. “Current
+  assignments cover” appears only from complete current People evidence; BEO
+  review appears only from its exact projected effect. The answer remains **Unverifiable**
+  unless both People and Supply evidence are current and complete. While an old
+  projection is retained during recomputation, supplier, staffing, value, BEO,
+  and related decision actions are withheld until the exact active scenario
+  returns.
+  Staffing may show current coverage and evidence-backed resilience, and an
+  exact empty plan is current zero-assignment evidence without a fabricated
+  plan or receipt; unsupported future headroom remains **Not verified**. The
+  People rail hands off to the exact quote record for staffing detail.
+  Exploration owns no
+  persistence, provider, network, pricing, staffing, inventory, BEO, or apply
+  authority; **Review for commitment** is a separate handoff to the governed
+  amendment path, and no scenario is called best without an explicit objective.
+  Screenshots and focused browser behavior are local deterministic fixture
+  evidence only, not deployment, production-data, provider, UAT, or human
+  acceptance.
+- Refound staff creation around the real minimum operational identity. An admin
+  can add a display name plus one or more roles through the existing safe-profile
+  command with `active:true` and empty availability, receive the immutable
+  profile receipt, and reconcile an ambiguous response using the identical
+  request. A definitive rejection instead locks the retained draft until the
+  operator explicitly clears that local attempt without replay; a later
+  deliberate submit receives a fresh request identity. The flow no longer
+  fabricates event-wide availability or a private
+  record. Rostered, Contactable, Schedulable, Cost-aware, Credential-aware, and
+  Enriched are derived independently, so missing optional contact, availability,
+  rate, or qualification data is neutral until a specific workflow requires it.
+  These additions are source/local evidence only; they do not prove deployment,
+  hosted behavior, provider outcomes, production data, or human acceptance.
+- Correct two unchanged capability review revisions that were advanced without
+  corresponding surface changes. This restores truthful branch-diff governance
+  without changing either the Operations Audit or Steward capability.
+- Add Ingredient Inventory Phase 8: Event Preflight and the currently selected
+  Operations event now compose the same two exact metadata-aware ingredient
+  projection listeners into three independent physical-allocation, menu-cost,
+  and execution facts. A saved availability observation never passes as a
+  commitment; only a current reservation or a matching settled execution can
+  satisfy physical inventory. Quantity intelligence remains grouped by unit,
+  cost incompleteness does not invalidate physical allocation, and actual COGS
+  remains unavailable without a declared valuation policy. Calendar rows do
+  not each create listeners, and no tenant-wide or inbound-supply insight is
+  invented from absent authority. The feature-enabled Preflight browser lane
+  now verifies the ingredient-only unknown states, accessibility, and viewport
+  containment at 390, 768, and 1440 pixels without retaining equipment scope.
+- Add Ingredient Inventory Phase 7: the accepted/booked event Control Room now
+  records complete fractional consumption and waste totals against the pinned
+  immutable ingredient plan. One Firestore transaction settles the event hold,
+  preserves every other commitment, changes on-hand stock exactly once, writes
+  immutable execution and movement evidence, and publishes a separate exact
+  metadata-aware execution projection. Full-replacement corrections apply only
+  their physical delta; zero-net consumed/waste reclassification creates
+  evidence without a stock movement. Quantity variance and saved-planning-basis
+  cost comparison remain separate from explicitly unavailable authoritative
+  actual COGS while multi-observation valuation policy is unresolved.
+- Add Ingredient Inventory Phase 6: exact quote, recipe, and menu-cost source
+  transitions now invalidate only bounded dependent event projections while
+  preserving immutable requirements, historical estimates, and active holds.
+  A receipt-producing reconcile command releases the retained hold and
+  reallocates the current recorded requirement atomically through the same
+  shared consumable fences. Demand, cost, availability, and allocation carry
+  independent freshness, and Commercial Change composes saved exact-document
+  evidence with a read-only scenario preview to show ingredient-cost and stock
+  consequences without changing commercial authorization, selling price, or
+  publication behavior.
+- Add Ingredient Inventory Phase 5: confirmed receiving appends immutable
+  physical and exact known-or-unknown purchase-cost evidence, while shared
+  date-independent ingredient/location fences coordinate accepted/booked event
+  allocations without changing on-hand stock. Transactions recheck current
+  commercial, recipe, requirement, plan, stock, and fence authority; competing
+  events receive only the safe maximum, partial plans preserve their holds and
+  can top up after receiving, and release changes commitment only. Exact
+  metadata-aware ingredient and event projections keep on-hand, committed,
+  available, pending receipt, server-confirmed allocation, shortage, and
+  uncertain recovery distinct. Later receipt costs cannot silently replace an
+  existing planning basis or invent a valuation policy.
+- Add Ingredient Inventory Phase 4: a pure deterministic compiler turns exact
+  saved menu selections, explicit recipe-output quantities, pinned recipe and
+  cost observations, and server-derived event timing into immutable event
+  ingredient requirements. Quote Edit presents independent physical-demand,
+  projected-cost, and consumable-availability rails, previews without writing,
+  records only through the administrator callable, and listens to the exact
+  projection document with metadata-aware stale/cached/pending recovery. Shared
+  ingredients aggregate without losing menu provenance; package inclusions are
+  not double-counted; guest count and billing quantities are never guessed into
+  portions; no allocation, stock movement, selling-price change, or COGS claim
+  occurs in this slice.
+- Add Ingredient Inventory Phase 3: exact same-dimension units, immutable
+  operator-declared purchase-pack conversions, catalog-revision-fenced menu
+  recipes, pure rational recipe costing, bounded reverse dependencies, and
+  materialized per-menu cost projections. Inventory exposes pack management;
+  Library attaches recipes to canonical menu-item IDs and reads a bounded
+  realtime summary plus an exact active-item projection with explicit complete, partial, unavailable, invalid, stale,
+  cached, pending, and uncertain states. Ingredient cost changes reproject only
+  dependent menus, while physical stock, selling price, and manual catalog cost
+  remain separate authorities. Dirty and unresolved recipe outcomes retain the
+  active Library context until publication, reconciliation, or explicit reset,
+  including after a newer realtime recipe revision arrives.
+- Correct the default-off Inventory Authority to its owner-directed ingredient
+  objective. The active Phase 2 now preserves the organization, transaction,
+  ledger, revision, receipt, and authorization substrate while replacing
+  reusable-equipment assumptions with fractional ingredient stock, independent
+  recorded purchase-cost evidence, bounded materialized projections, and an
+  early operator workflow reachable from both supported production build
+  graphs when its exact default-off gates are enabled. The corrected plan makes immutable ingredient demand
+  the shared dependency of independent menu-costing and stock-availability
+  rails and reserves a later slice for Commercial Change intelligence. The
+  demo-only emulator acceptance proves real callable authentication and App
+  Check, shared Firestore contention, replay-safe opening stock, request-ID
+  substitution rejection, and stock/cost independence. The
+  interrupted Library-to-equipment policy, interval availability, and equipment
+  workspace drafts are removed from active scope; no tenant, deployment,
+  migration, or production authority is activated.
+- Establish Phase 1 of the default-off Inventory Authority: stable locations
+  and resource definitions, immutable reasoned physical movements, rebuildable
+  item/location bucket projections, unified idempotent command receipts,
+  transaction-fenced unit immutability, App Check protected callables, and
+  browser-denied canonical Firestore records. This is local source evidence;
+  no tenant, deployment, or production inventory authority is activated. This
+  commit remains an honest historical checkpoint; its equipment-specific
+  semantics are superseded by the ingredient-first correction above.
+- Add schema-v2 task planning and the repository-local
+  `catering-domain-intelligence` skill. Domain-relevant agent work now preserves
+  its existing execution profile while selecting current QuotePilot authorities
+  and the smallest advisory catering reference slices, then reconsiders a
+  provisional action before implementation. Deterministic routing proof,
+  fresh-agent expertise evaluation, and human acceptance remain separate.
+- Add QP-UXR-001 Governed Commercial Amendment to eligible Quote Edit records:
+  the exact current commitment, reversible proposal, semantic differences,
+  authoritative consequence simulation, required authority, governed apply,
+  preserved historical truth, named invalidation, uncertain-outcome
+  reconciliation, focused amendment receipt, and next valid action now read as
+  one workflow. Existing pricing, revision, Commercial Change, payment,
+  acceptance, booking, BEO, staffing, and dependency authorities remain owners;
+  terminal commitments remain locked.
+- Add QP-UXR-002 Clear the Deck decision resolution. Exact pending approvals
+  and retained Decision Debt become business-readable decisions, retain their
+  context through the existing Workflow authority, confirm only after exact
+  same-organization readback, and fail closed against duplicate resolution when
+  an outcome is uncertain.
+- Add QP-UXR-003 Commercial Priority across Now and Opportunities. One shared
+  projection presents exact identity, recorded saved value, independent
+  lifecycle/proposal/booking/payment facts, supported consequence, and one
+  current action without repricing lists, inventing a score, or turning missing
+  evidence into zero or unpaid.
+- Add QP-UXR-004 Commitment-to-Execution across Events, Event Focus, Control
+  Room, exact Schedule continuation, and an explicit Replay boundary. It
+  composes the saved commitment, run of show, checklist, Workflow, BEO, and
+  staffing evidence without creating live-event, attendance, actuals,
+  completion, or event-wide readiness authority.
+- Add QP-UXR-005 Event Preflight inside the selected Control Room. It separates
+  satisfied facts, known attention, and unavailable truth from existing
+  authorities, provides one valid continuation, and never calculates a
+  readiness score or treats stale, partial, malformed, or missing evidence as a
+  pass.
+- Record QP-UXR-006 as **undefined / owner decision required**. No product
+  behavior is implemented or claimed; the bounded recommendation remains
+  unapproved in `docs/QP_UXR_002_006_OWNER_REVIEW.md`.
+- Preserve Quote Edit's existing Quote plan as a sticky left rail at 1440 and
+  compact-desktop 1008 widths, then adapt it to a horizontal domain navigator
+  at tablet and phone widths. A four-width browser contract now prevents the
+  domain context from disappearing while the proposal document is edited.
+- Keep the capability-surfacing gate deterministic as the governed Functions
+  entrypoint grows beyond Node's default child-process output buffer; the gate
+  still compares the full source and preserves every existing ownership check.
+- Preserve an enumerable safe-empty payment presentation when an alternate
+  draft is duplicated, while continuing to clear every source provider link,
+  confirmation, session identifier, and settlement artifact.
+- Align the Quote Composer browser contract with the governed amendment
+  workspace's proposal-and-consequence language.
+- Reconcile cross-feature browser fixtures with Event Preflight by recording
+  complete final-balance evidence only where the committed-event test intends
+  Schedule to remain the next valid action, and target exact disclosure copy
+  when multiple governed evidence sections are present.
+- Fence the Catalog Admin isolation browser check on completed saved-quote
+  hydration so slower CI runners verify the quote's actual event type rather
+  than the builder's transient pre-edit default.
+- These changes are implemented on the governed `v0.18.0` release candidate.
+  Production deployment, connected production-data behavior, provider outcomes,
+  assistive-technology review, and human acceptance remain separate until their
+  exact release evidence is recorded.
 
 ## Unreleased — combined production candidate
 

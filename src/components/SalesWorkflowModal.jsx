@@ -25,6 +25,8 @@ import {
   buildWorkflowTimingCues
 } from "../lib/workflowTimingCues";
 import {
+  WORKSPACE_APPROVAL_TASK_PROOF_TYPE,
+  WORKSPACE_APPROVAL_TASK_VERIFIER_ID,
   WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE,
   WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
 } from "../lib/workspaceTaskJourney";
@@ -66,6 +68,7 @@ import {
   mergeAnniversaryRebookingAttention,
   resolveAnniversaryAttentionCalendar
 } from "../lib/anniversaryRebookingAttention";
+import { buildClearDeckDecisionPresentations } from "../lib/decisionResolutionPresentation";
 
 const WORKFLOW_TABS = ["attention", "followups", "autopilot", "debt", "approvals"];
 const PROVIDER_APPROVAL_ACTIONS = new Set([
@@ -246,6 +249,65 @@ export function verifyFollowUpCompletionReadback({
   }
 }
 
+/**
+ * Confirms one exact approval resolution from the current same-organization
+ * quote record. The returned proof references the existing approval authority;
+ * it does not execute the approved action or create a second receipt source.
+ */
+export function verifyApprovalResolutionReadback({
+  organizationId = "",
+  quoteId = "",
+  requestId = "",
+  requestedState = "",
+  quote = null,
+  nowISO = ""
+} = {}) {
+  const expectedOrganizationId = String(organizationId || "").trim();
+  const expectedQuoteId = String(quoteId || "").trim();
+  const expectedRequestId = String(requestId || "").trim();
+  const expectedState = String(requestedState || "").trim().toLowerCase();
+  if (
+    !expectedOrganizationId
+    || !expectedQuoteId
+    || !expectedRequestId
+    || !["approved", "rejected"].includes(expectedState)
+    || !record(quote)
+  ) {
+    return { ok: false, code: "invalid_readback", request: null };
+  }
+  if (
+    String(quote.id || "").trim() !== expectedQuoteId
+    || String(quote.organizationId || "").trim() !== expectedOrganizationId
+  ) {
+    return { ok: false, code: "scope_mismatch", request: null };
+  }
+  const request = Array.isArray(quote.workflow?.approvalRequests)
+    ? quote.workflow.approvalRequests.find((item) => (
+        String(item?.id || "").trim() === expectedRequestId
+      )) || null
+    : null;
+  if (!request) return { ok: false, code: "request_missing", request: null };
+  const currentState = String(request.state || "").trim().toLowerCase();
+  if (currentState === "pending") return { ok: false, code: "still_pending", request };
+  if (currentState !== expectedState) {
+    return { ok: false, code: "resolved_differently", request };
+  }
+  const resolvedAtISO = confirmedInstant(request.resolvedAtISO, nowISO);
+  const resolvedByEmail = String(request.resolvedByEmail || "").trim().toLowerCase();
+  if (!resolvedAtISO || !/^[^@\s]+@[^@\s]+$/u.test(resolvedByEmail)) {
+    return { ok: false, code: "invalid_resolution_evidence", request };
+  }
+  return {
+    ok: true,
+    request,
+    proof: {
+      verifierId: WORKSPACE_APPROVAL_TASK_VERIFIER_ID,
+      proofId: `approval-resolved:${expectedRequestId}:${resolvedAtISO}`,
+      proofType: WORKSPACE_APPROVAL_TASK_PROOF_TYPE
+    }
+  };
+}
+
 export function buildFollowUpCompletionChangedFacts(taskOutcome) {
   return Object.freeze([
     "Internal follow-up marked complete",
@@ -269,6 +331,37 @@ function followUpTaskJourneyForQuote(journey, organizationId, quoteId) {
     || journey.focus?.quoteId !== scopedQuoteId
     || journey.focus?.attentionType !== "follow_up"
     || journey.focus?.requestId !== expectedRequestId
+  ) {
+    return null;
+  }
+  return journey;
+}
+
+function approvalTaskJourneyForRequest(
+  journey,
+  organizationId,
+  quoteId,
+  requestId,
+  { allowResolved = false } = {}
+) {
+  const scopedOrganizationId = String(organizationId || "").trim();
+  const scopedQuoteId = String(quoteId || "").trim();
+  const scopedRequestId = String(requestId || "").trim();
+  if (
+    !journey
+    || ![
+      "in_progress",
+      "uncertain",
+      ...(allowResolved ? ["resolved", "superseded"] : [])
+    ].includes(journey.phase)
+    || !String(journey.startedAtISO || "").trim()
+    || journey.organizationId !== scopedOrganizationId
+    || journey.destination !== "approval"
+    || journey.intentId !== "review_approval"
+    || journey.object?.type !== "approval"
+    || journey.object?.id !== scopedRequestId
+    || journey.focus?.quoteId !== scopedQuoteId
+    || journey.focus?.requestId !== scopedRequestId
   ) {
     return null;
   }
@@ -577,6 +670,7 @@ export function SalesWorkflowView({
   onArrivalResolution = null,
   activeTaskJourney = null,
   onTaskOutcome = null,
+  onReturnToOrigin = null,
   organizationId = "",
   currentUserEmail = "",
   currentUserRole = "customer",
@@ -608,6 +702,7 @@ export function SalesWorkflowView({
   const [approvalAction, setApprovalAction] = useState(APPROVAL_ACTIONS[0]?.id || "");
   const [approvalNote, setApprovalNote] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState({});
+  const [approvalResolutionOutcomes, setApprovalResolutionOutcomes] = useState({});
   const [handlingNotes, setHandlingNotes] = useState({});
   const [busyKey, setBusyKey] = useState("");
   const [followUpConfirmation, setFollowUpConfirmation] = useState({
@@ -618,6 +713,19 @@ export function SalesWorkflowView({
   });
   const [followUpValidationField, setFollowUpValidationField] = useState("");
   const [workflowReadError, setWorkflowReadError] = useState("");
+  const workflowMutationReviewable = Boolean(
+    !state.loading
+    && !workflowReadError
+    && state.snapshotAtISO
+  );
+  const returnOriginLabel = activeTaskJourney?.origin?.routeId === "home"
+    ? "Now"
+    : activeTaskJourney?.origin?.routeId === "quote-list"
+      ? "Opportunities"
+      : activeTaskJourney?.origin?.routeId === "clear-deck"
+        ? "Clear the Deck"
+        : "";
+  const returnFromWorkflow = Boolean(returnOriginLabel && typeof onReturnToOrigin === "function");
   const [autopilotOperations, setAutopilotOperations] = useState({
     loading: false,
     error: "",
@@ -668,6 +776,7 @@ export function SalesWorkflowView({
   const followUpSaveOperationRef = useRef(null);
   const followUpConfirmationOperationRef = useRef(null);
   const followUpMountedRef = useRef(true);
+  const approvalResolutionOperationsRef = useRef(new Map());
   const autopilotGenerationRef = useRef(0);
   const decisionDebtGenerationRef = useRef(0);
   const workflowScopeRef = useRef("");
@@ -1296,7 +1405,7 @@ export function SalesWorkflowView({
     }
 
     const exactQuote = state.quotes.find((quote) => quote.id === focusQuoteId) || null;
-    if (!exactQuote) {
+    if (!exactQuote && focusAttentionType !== "decision_debt") {
       reportArrivalResolution({
         status: "recovery",
         reason: state.truncated
@@ -1341,13 +1450,24 @@ export function SalesWorkflowView({
         quote.id === focusQuoteId && request.id === focusRequestId
       ));
       if (approval && approval.request.state !== "pending") {
-        reportArrivalResolution({
-          status: "recovery",
-          reason: `The requested approval is now ${String(approval.request.state || "in another state").replaceAll("_", " ")}, so its earlier pending context is no longer current.`,
-          consequence: "No approval was focused as pending, and navigation did not approve, reject, or execute anything.",
-          nextResolution: "Review the current approval history or return to the opportunity for its newly ranked next action."
-        });
-        return undefined;
+        const resolvedInThisJourney = ["confirmed", "superseded"].includes(
+          approvalResolutionOutcomes[approval.request.id]?.phase
+        ) || Boolean(approvalTaskJourneyForRequest(
+          activeTaskJourney,
+          organizationId,
+          focusQuoteId,
+          focusRequestId,
+          { allowResolved: true }
+        ));
+        if (!resolvedInThisJourney) {
+          reportArrivalResolution({
+            status: "recovery",
+            reason: `The requested approval is now ${String(approval.request.state || "in another state").replaceAll("_", " ")}, so its earlier pending context is no longer current.`,
+            consequence: "No approval was focused as pending, and navigation did not approve, reject, or execute anything.",
+            nextResolution: "Review the current approval history or return to the opportunity for its newly ranked next action."
+          });
+          return undefined;
+        }
       }
       target = approval ? { itemId: approval.request.id } : null;
       tab = "approvals";
@@ -1422,7 +1542,16 @@ export function SalesWorkflowView({
             : Array.from(dialogRef.current?.querySelectorAll("[data-attention-id]") || []).find(
                 (candidate) => candidate.dataset.attentionId === target.itemId
               );
-        row?.scrollIntoView({
+        const approvalOutcomeReceipt = rowKind === "approval"
+          && ["confirmed", "superseded", "uncertain"].includes(
+            approvalResolutionOutcomes[focusRequestId]?.phase
+          )
+          ? row?.querySelector(
+              `[data-approval-receipt-id="${safeDomId(focusRequestId)}"]`
+            )
+          : null;
+        const focusTarget = approvalOutcomeReceipt || row;
+        focusTarget?.scrollIntoView({
           behavior: rowKind === "follow_up" ? "auto" : "smooth",
           block: rowKind === "follow_up" ? "start" : "center"
         });
@@ -1472,8 +1601,8 @@ export function SalesWorkflowView({
           }
         };
         alignExactFollowUpRecord();
-        row?.focus({ preventScroll: true });
-        if (row && document.activeElement === row) {
+        focusTarget?.focus({ preventScroll: true });
+        if (focusTarget && document.activeElement === focusTarget) {
           reportArrivalResolution({ status: "resolved", itemId: target.itemId });
           if (rowKind === "follow_up") {
             let remainingAlignmentFrames = 4;
@@ -1505,6 +1634,7 @@ export function SalesWorkflowView({
     return () => arrivalFocusFrames.forEach((frame) => window.cancelAnimationFrame(frame));
   }, [
     approvalQueue,
+    approvalResolutionOutcomes,
     activeTaskJourney,
     attentionSummary.items,
     autopilotAttentionTruncated,
@@ -1666,6 +1796,114 @@ export function SalesWorkflowView({
       ...fields
     });
   };
+
+  const approvalUnchangedFacts = (request) => [
+    `${actionLabel(request?.action)} was not executed by this approval decision`,
+    "Quote pricing and revision were not changed",
+    "Payment, delivery, acceptance, and booking evidence were not rewritten"
+  ];
+
+  const reportApprovalTaskOutcome = (phase, taskJourney, proof = null) => {
+    if (!taskJourney || typeof onTaskOutcome !== "function") return null;
+    return onTaskOutcome({
+      organizationId: String(organizationId || "").trim(),
+      startedAtISO: taskJourney.startedAtISO,
+      taskId: taskJourney.taskId,
+      focus: {
+        quoteId: taskJourney.focus.quoteId,
+        attentionType: "approval",
+        requestId: taskJourney.focus.requestId
+      },
+      phase,
+      proof: phase === "resolved" ? proof : null
+    });
+  };
+
+  const beginApprovalActionFeedback = ({ quote, request, requestedState, taskJourney }) => {
+    if (!workspaceActionFeedbackAvailable) return null;
+    const requestId = String(request?.id || "").trim();
+    const stateLabel = requestedState === "approved" ? "Approve request" : "Reject request";
+    return beginActionFeedback({
+      actionId: "resolve-approval",
+      actionLabel: stateLabel,
+      generation: taskJourney
+        ? `${taskJourney.taskId}:${taskJourney.startedAtISO}`
+        : `approval:${requestId}:${Date.now()}`,
+      object: {
+        kind: "approval",
+        id: requestId,
+        label: `${formatWorkspaceText(quote?.quoteNumber, { emptyLabel: "Quote" })} approval`
+      },
+      message: `${stateLabel} is being sent to the existing approval authority.`,
+      changed: [`${stateLabel} requested`],
+      unchanged: approvalUnchangedFacts(request)
+    });
+  };
+
+  const transitionApprovalActionFeedback = (selector, phase, fields = {}) => {
+    if (!workspaceActionFeedbackAvailable || !selector) return null;
+    return transitionActionFeedback({
+      ...selector,
+      phase,
+      ...fields
+    });
+  };
+
+  const setApprovalOutcome = (requestId, outcome) => {
+    setApprovalResolutionOutcomes((current) => ({
+      ...current,
+      [requestId]: outcome
+    }));
+  };
+
+  useEffect(() => {
+    if (!exactArrivalActive || focusAttentionType !== "approval" || !focusRequestId) return undefined;
+    const outcome = approvalResolutionOutcomes[focusRequestId];
+    if (!outcome || !["confirmed", "superseded", "uncertain"].includes(outcome.phase)) return undefined;
+    const frames = [];
+    const firstFrame = window.requestAnimationFrame(() => {
+      const secondFrame = window.requestAnimationFrame(() => {
+        dialogRef.current?.querySelector(
+          `[data-approval-receipt-id="${safeDomId(focusRequestId)}"]`
+        )?.focus({ preventScroll: true });
+      });
+      frames.push(secondFrame);
+    });
+    frames.push(firstFrame);
+    return () => frames.forEach((frame) => window.cancelAnimationFrame(frame));
+  }, [
+    approvalResolutionOutcomes,
+    exactArrivalActive,
+    focusAttentionType,
+    focusRequestId
+  ]);
+
+  const approvalOperationIsCurrent = (operation) => (
+    approvalResolutionOperationsRef.current.get(operation.requestId) === operation
+    && operation.workflowScope === workflowScopeRef.current
+  );
+
+  useEffect(() => {
+    const abandonedRequestIds = [];
+    approvalResolutionOperationsRef.current.forEach((operation, requestId) => {
+      if (operation.workflowScope === workflowScopeRef.current) return;
+      abandonedRequestIds.push(requestId);
+      approvalResolutionOperationsRef.current.delete(requestId);
+    });
+    if (!abandonedRequestIds.length) return;
+    const abandoned = new Set(abandonedRequestIds);
+    setApprovalResolutionOutcomes((current) => Object.fromEntries(
+      Object.entries(current).filter(([requestId]) => !abandoned.has(requestId))
+    ));
+    setBusyKey((current) => abandonedRequestIds.some((requestId) => (
+      current === `reconcile:${requestId}`
+      || current.startsWith(`resolve:${requestId}:`)
+    )) ? "" : current);
+  }, [currentUserEmail, currentUserRole, organizationId]);
+
+  useEffect(() => () => {
+    approvalResolutionOperationsRef.current.clear();
+  }, []);
 
   const followUpFeedbackSelectorFromRecord = (feedback) => {
     if (!feedback) return null;
@@ -1895,6 +2133,14 @@ export function SalesWorkflowView({
 
   const handleSaveFollowUp = async () => {
     if (!selectedQuote?.id || !isStaff || followUpSaveOperationRef.current) return;
+    if (!workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before saving this follow-up.",
+        feedback: ""
+      }));
+      return;
+    }
     const normalizedFollowUpDueDate = String(followUpDraft.dueDate || "").trim();
     const preflightField = !FOLLOW_UP_STAGES.some((stage) => stage.id === followUpDraft.stage)
       ? "stage"
@@ -2115,6 +2361,14 @@ export function SalesWorkflowView({
 
   const handleRequestApproval = async () => {
     if (!selectedQuote?.id || !isStaff || !resolvedApprovalAction) return;
+    if (!workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before requesting approval.",
+        feedback: ""
+      }));
+      return;
+    }
     if (state.source !== "firebase" && PROVIDER_APPROVAL_ACTIONS.has(resolvedApprovalAction)) {
       setState((prev) => ({
         ...prev,
@@ -2165,14 +2419,251 @@ export function SalesWorkflowView({
     }
   };
 
+  const finishApprovalReadback = ({ operation, authoritativeQuote }) => {
+    if (!approvalOperationIsCurrent(operation)) return { status: "ignored" };
+    const verification = verifyApprovalResolutionReadback({
+      organizationId,
+      quoteId: operation.quoteId,
+      requestId: operation.requestId,
+      requestedState: operation.requestedState,
+      quote: authoritativeQuote,
+      nowISO: new Date().toISOString()
+    });
+    if (record(authoritativeQuote)) {
+      const snapshotContext = captureWorkflowSnapshotContext();
+      setState((prev) => ({
+        ...prev,
+        source: "firebase",
+        quotes: prev.quotes.map((quote) => (
+          quote.id === operation.quoteId ? authoritativeQuote : quote
+        )),
+        ...snapshotContext
+      }));
+    }
+
+    if (verification.ok) {
+      const taskOutcome = reportApprovalTaskOutcome(
+        "resolved",
+        operation.taskJourney,
+        verification.proof
+      );
+      const taskRetained = !operation.taskJourney || taskOutcome?.status === "resolved";
+      const feedbackResult = transitionApprovalActionFeedback(
+        operation.feedbackSelector,
+        taskRetained ? "succeeded" : "recovery",
+        taskRetained
+          ? {
+              message: `The exact approval record confirms this request was ${operation.requestedState}.`,
+              changed: [`Approval request ${operation.requestedState}`],
+              unchanged: approvalUnchangedFacts(verification.request),
+              evidence: {
+                kind: "authoritative_readback",
+                id: verification.proof.proofId,
+                source: "quote.workflow.approvalRequests"
+              }
+            }
+          : {
+              message: "The approval is confirmed, but this device could not close the tracked task.",
+              changed: [`Approval request ${operation.requestedState}`],
+              unchanged: ["Current task tracking remains open", ...approvalUnchangedFacts(verification.request)],
+              nextAction: { id: "reconcile", label: "Review exact approval" }
+            }
+      );
+      setResolutionNotes((prev) => ({ ...prev, [operation.requestId]: "" }));
+      setApprovalOutcome(operation.requestId, {
+        phase: taskRetained ? "confirmed" : "uncertain",
+        requestedState: operation.requestedState,
+        request: verification.request,
+        reason: taskRetained ? "" : "task_outcome_not_retained",
+        shared: Boolean(feedbackResult?.ok)
+      });
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const receipt = dialogRef.current?.querySelector(
+            `[data-approval-receipt-id="${safeDomId(operation.requestId)}"]`
+          );
+          receipt?.focus({ preventScroll: true });
+        });
+      });
+      if (!feedbackResult?.ok && taskRetained) {
+        reportSuccess(`Approval request ${operation.requestedState}; authoritative readback confirmed.`);
+      }
+      return { status: taskRetained ? "confirmed" : "recovery", verification };
+    }
+
+    if (verification.code === "resolved_differently") {
+      reportApprovalTaskOutcome("superseded", operation.taskJourney);
+      transitionApprovalActionFeedback(operation.feedbackSelector, "recovery", {
+        message: `Newer evidence shows this request is ${String(verification.request?.state || "resolved")}, not ${operation.requestedState}.`,
+        changed: ["Approval state was updated elsewhere"],
+        unchanged: approvalUnchangedFacts(verification.request),
+        nextAction: { id: "inspect", label: "Review current approval" }
+      });
+      setApprovalOutcome(operation.requestId, {
+        phase: "superseded",
+        requestedState: operation.requestedState,
+        request: verification.request,
+        reason: verification.code,
+        shared: Boolean(operation.feedbackSelector)
+      });
+      return { status: "superseded", verification };
+    }
+
+    reportApprovalTaskOutcome("uncertain", operation.taskJourney);
+    transitionApprovalActionFeedback(operation.feedbackSelector, "uncertain", {
+      message: verification.code === "still_pending"
+        ? "The exact approval is still pending. The original request will not be sent again."
+        : "The mutation may have completed, but the exact approval outcome is not confirmed.",
+      changed: ["Approval outcome remains unconfirmed"],
+      unchanged: ["Current task remains open", ...approvalUnchangedFacts(operation.request)],
+      nextAction: { id: "reconcile", label: "Return to exact approval" }
+    });
+    setApprovalOutcome(operation.requestId, {
+      phase: "uncertain",
+      requestedState: operation.requestedState,
+      request: verification.request || operation.request,
+      reason: verification.code,
+      shared: Boolean(operation.feedbackSelector)
+    });
+    return { status: "uncertain", verification };
+  };
+
+  const reconcileApprovalResolution = async (operation) => {
+    if (!approvalOperationIsCurrent(operation)) return { status: "ignored" };
+    const actionBusyKey = `reconcile:${operation.requestId}`;
+    const existingFeedback = workspaceActionFeedbackRecords.find((candidate) => (
+      candidate.attemptId === operation.feedbackSelector?.attemptId
+      && candidate.generation === operation.feedbackSelector?.generation
+    ));
+    transitionApprovalActionFeedback(operation.feedbackSelector, "pending", {
+      message: "Checking the exact same-workspace approval record. No approval request will be resent.",
+      changed: ["Authoritative approval readback requested"],
+      unchanged: approvalUnchangedFacts(operation.request),
+      dispatchState: "dispatched",
+      mode: existingFeedback?.phase === "uncertain" ? "reconcile" : undefined
+    });
+    setBusyKey(actionBusyKey);
+    setApprovalOutcome(operation.requestId, {
+      phase: "reconciling",
+      requestedState: operation.requestedState,
+      request: operation.request,
+      reason: "",
+      shared: Boolean(operation.feedbackSelector)
+    });
+    try {
+      const authoritativeQuote = await getQuoteById(operation.quoteId, { serverOnly: true });
+      return finishApprovalReadback({ operation, authoritativeQuote });
+    } catch {
+      if (!approvalOperationIsCurrent(operation)) return { status: "ignored" };
+      reportApprovalTaskOutcome("uncertain", operation.taskJourney);
+      transitionApprovalActionFeedback(operation.feedbackSelector, "uncertain", {
+        message: "The exact approval record could not be read. The original request will not be sent again.",
+        changed: ["Approval outcome remains unconfirmed"],
+        unchanged: ["Current task remains open", ...approvalUnchangedFacts(operation.request)],
+        nextAction: { id: "reconcile", label: "Return to exact approval" }
+      });
+      setApprovalOutcome(operation.requestId, {
+        phase: "uncertain",
+        requestedState: operation.requestedState,
+        request: operation.request,
+        reason: "readback_unavailable",
+        shared: Boolean(operation.feedbackSelector)
+      });
+      return { status: "uncertain" };
+    } finally {
+      if (approvalOperationIsCurrent(operation)) {
+        setBusyKey((current) => (current === actionBusyKey ? "" : current));
+      }
+    }
+  };
+
   const handleResolveApproval = async (quoteId, requestId, nextState) => {
-    if (!isAdmin) return;
-    const actionScope = workflowScopeRef.current;
+    if (!isAdmin || approvalResolutionOperationsRef.current.has(requestId)) return;
+    if (nextState === "approved" && !workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before approving this request.",
+        feedback: ""
+      }));
+      return;
+    }
+    const quote = state.quotes.find((item) => item.id === quoteId);
+    const request = quote?.workflow?.approvalRequests?.find((item) => item.id === requestId);
+    if (!quote || !request || request.state !== "pending") return;
+    const taskJourney = approvalTaskJourneyForRequest(
+      activeTaskJourney,
+      organizationId,
+      quoteId,
+      requestId
+    );
+    if (taskJourney?.phase === "uncertain") return;
+    const unresolvedFeedback = workspaceActionFeedbackRecords.some((candidate) => (
+      candidate.actionId === "resolve-approval"
+      && candidate.object?.kind === "approval"
+      && candidate.object?.id === requestId
+      && ["pending", "uncertain"].includes(candidate.phase)
+    ));
+    if (unresolvedFeedback) {
+      setApprovalOutcome(requestId, {
+        phase: "uncertain",
+        requestedState: nextState,
+        request,
+        reason: "existing_feedback_unresolved",
+        shared: false
+      });
+      return;
+    }
+    const startedFeedback = taskJourney
+      ? beginApprovalActionFeedback({ quote, request, requestedState: nextState, taskJourney })
+      : null;
+    if (taskJourney && !startedFeedback?.ok) {
+      setApprovalOutcome(requestId, {
+        phase: "uncertain",
+        requestedState: nextState,
+        request,
+        reason: "feedback_contract_unavailable",
+        shared: false
+      });
+      return;
+    }
+    const taskFence = taskJourney
+      ? reportApprovalTaskOutcome("uncertain", taskJourney)
+      : null;
+    if (taskJourney && taskFence?.status !== "uncertain") {
+      transitionApprovalActionFeedback(startedFeedback?.selector, "recovery", {
+        message: "The approval was not sent because this device could not retain the duplicate-write fence.",
+        changed: ["No approval decision was sent"],
+        unchanged: ["Current approval remains pending", ...approvalUnchangedFacts(request)],
+        nextAction: { id: "inspect", label: "Review exact approval" }
+      });
+      setState((prev) => ({
+        ...prev,
+        error: "The approval was not sent because safe task recovery could not be retained. Review the exact request and try again."
+      }));
+      return;
+    }
+    const operation = Object.freeze({
+      workflowScope: workflowScopeRef.current,
+      quoteId,
+      requestId,
+      requestedState: nextState,
+      request,
+      taskJourney,
+      feedbackSelector: startedFeedback?.selector || null
+    });
+    approvalResolutionOperationsRef.current.set(requestId, operation);
     const actionBusyKey = `resolve:${requestId}:${nextState}`;
     setBusyKey(actionBusyKey);
+    setApprovalOutcome(requestId, {
+      phase: "pending",
+      requestedState: nextState,
+      request,
+      reason: "",
+      shared: Boolean(operation.feedbackSelector)
+    });
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
-      const result = await resolveQuoteApprovalRequest({
+      const mutationPromise = resolveQuoteApprovalRequest({
         quoteId,
         requestId,
         state: nextState,
@@ -2180,33 +2671,46 @@ export function SalesWorkflowView({
         actorEmail: currentUserEmail,
         actorRole: currentUserRole
       });
-      if (workflowScopeRef.current !== actionScope) return;
-      applyQuoteLocally(quoteId, (quote) => ({
-        ...quote,
-        workflow: {
-          ...(quote.workflow || {}),
-          approvalRequests: (quote.workflow?.approvalRequests || []).map((item) => (
-            item.id === requestId ? result.request : item
-          ))
-        }
-      }));
-      setResolutionNotes((prev) => ({ ...prev, [requestId]: "" }));
-      reportSuccess(`Approval request ${nextState}.`);
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          const resolvedRow = Array.from(dialogRef.current?.querySelectorAll(".approval-row") || [])
-            .find((element) => element.dataset.requestId === requestId);
-          (resolvedRow || tabRefs.current.approvals)?.focus();
-        });
+      transitionApprovalActionFeedback(operation.feedbackSelector, "pending", {
+        message: "The approval decision was sent. Waiting for its exact authoritative result.",
+        changed: [`Approval request ${nextState} requested`],
+        unchanged: approvalUnchangedFacts(request),
+        dispatchState: "dispatched"
       });
-    } catch (err) {
-      if (workflowScopeRef.current !== actionScope) return;
-      setState((prev) => ({ ...prev, error: err?.message || "Failed to resolve approval." }));
+      const result = await mutationPromise;
+      if (!approvalOperationIsCurrent(operation)) return;
+      if (result?.storage !== "firebase") {
+        reportApprovalTaskOutcome("uncertain", taskJourney);
+        transitionApprovalActionFeedback(operation.feedbackSelector, "uncertain", {
+          message: "This browser changed local data, but no connected approval record confirmed the outcome.",
+          changed: ["Browser-local approval state changed"],
+          unchanged: ["Current task remains open", ...approvalUnchangedFacts(request)],
+          nextAction: { id: "reconcile", label: "Return to exact approval" }
+        });
+        setApprovalOutcome(requestId, {
+          phase: "uncertain",
+          requestedState: nextState,
+          request: result?.request || request,
+          reason: "connected_readback_required",
+          shared: Boolean(operation.feedbackSelector)
+        });
+        return;
+      }
+      await reconcileApprovalResolution(operation);
+    } catch {
+      if (!approvalOperationIsCurrent(operation)) return;
+      await reconcileApprovalResolution(operation);
     } finally {
-      if (workflowScopeRef.current === actionScope) {
+      if (approvalOperationIsCurrent(operation)) {
         setBusyKey((current) => (current === actionBusyKey ? "" : current));
       }
     }
+  };
+
+  const handleReconcileApproval = (requestId) => {
+    const operation = approvalResolutionOperationsRef.current.get(requestId);
+    if (!operation || busyKey) return;
+    void reconcileApprovalResolution(operation);
   };
 
   const handleReviewFollowUp = (quoteId) => {
@@ -2596,6 +3100,14 @@ export function SalesWorkflowView({
 
   const handleChangeRequestAction = async (item, action) => {
     if (!isStaff || !item?.quoteId || item.unhandleable) return;
+    if (!workflowMutationReviewable) {
+      setState((prev) => ({
+        ...prev,
+        error: "Refresh Workflow successfully before changing this exact request.",
+        feedback: ""
+      }));
+      return;
+    }
     const actionScope = workflowScopeRef.current;
     const note = handlingNotes[item.id] || "";
     const busyId = `change-request:${item.quoteId}:${action}`;
@@ -2712,8 +3224,12 @@ export function SalesWorkflowView({
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
             </button>
-            <button type="button" className="ghost" onClick={onClose}>
-              {embedded ? "Back to Home" : "Close"}
+            <button
+              type="button"
+              className="ghost"
+              onClick={returnFromWorkflow ? onReturnToOrigin : onClose}
+            >
+              {embedded ? returnFromWorkflow ? `Back to ${returnOriginLabel}` : "Back to Home" : "Close"}
             </button>
           </div>
         </div>
@@ -2933,7 +3449,7 @@ export function SalesWorkflowView({
                                 type="button"
                                 className="ghost compact"
                                 onClick={() => handleChangeRequestAction(item, "acknowledge")}
-                                disabled={itemBusy}
+                                disabled={itemBusy || !workflowMutationReviewable}
                                 aria-label={acknowledging
                                   ? `Saving... acknowledgment — ${quoteLabel}`
                                   : `Acknowledge internally — ${quoteLabel}`}
@@ -2947,7 +3463,7 @@ export function SalesWorkflowView({
                                 type="button"
                                 className="cta compact"
                                 onClick={() => handleChangeRequestAction(item, "mark_handled")}
-                                disabled={itemBusy || !handlingNote.trim()}
+                                disabled={itemBusy || !handlingNote.trim() || !workflowMutationReviewable}
                                 aria-label={markingHandled
                                   ? `Saving... handled state — ${quoteLabel}`
                                   : `Mark handled internally — ${quoteLabel}`}
@@ -3329,6 +3845,7 @@ export function SalesWorkflowView({
                         data-follow-up-save-action="true"
                         onClick={handleSaveFollowUp}
                         disabled={Boolean(busyKey)
+                          || !workflowMutationReviewable
                           || selectedFollowUpTaskJourney?.phase === "uncertain"
                           || (
                             followUpConfirmation.quoteId === selectedQuote.id
@@ -3373,7 +3890,9 @@ export function SalesWorkflowView({
                               type="button"
                               className="ghost compact"
                               onClick={handleRequestApproval}
-                              disabled={!resolvedApprovalAction || busyKey === `request:${selectedQuote.id}`}
+                              disabled={!resolvedApprovalAction
+                                || !workflowMutationReviewable
+                                || busyKey === `request:${selectedQuote.id}`}
                             >
                               {busyKey === `request:${selectedQuote.id}` ? "Requesting..." : "Request"}
                             </button>
@@ -3703,9 +4222,50 @@ export function SalesWorkflowView({
             {approvalQueue.map(({ quote, request }) => {
               const approvalDomId = `workflow-approval-${safeDomId(quote.id)}-${safeDomId(request.id)}`;
               const quoteLabel = formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" });
+              const approvalOutcome = approvalResolutionOutcomes[request.id] || null;
+              const exactApprovalArrival = exactArrivalActive
+                && focusAttentionType === "approval"
+                && focusQuoteId === quote.id
+                && focusRequestId === request.id;
+              const exactApprovalTask = approvalTaskJourneyForRequest(
+                activeTaskJourney,
+                organizationId,
+                quote.id,
+                request.id
+              );
+              const detachedUncertainApproval = exactApprovalTask?.phase === "uncertain"
+                && !approvalOutcome;
+              const openedFromClearDeck = exactApprovalArrival
+                && activeTaskJourney?.origin?.routeId === "clear-deck";
+              let decisionPresentation = null;
+              if (exactApprovalArrival && request.state === "pending") {
+                try {
+                  [decisionPresentation] = buildClearDeckDecisionPresentations({
+                    source: state.source,
+                    loading: state.loading,
+                    error: workflowReadError || state.error,
+                    stale: Boolean((workflowReadError || state.error) && state.quotes.length > 0),
+                    truncated: state.truncated,
+                    items: [{
+                      id: `approval:${quote.id}`,
+                      type: "approval",
+                      quoteId: quote.id,
+                      quote,
+                      pendingRequests: [request]
+                    }]
+                  }, { nowISO: state.snapshotAtISO });
+                } catch {
+                  decisionPresentation = null;
+                }
+              }
               const resolvingApproval = busyKey === `resolve:${request.id}:approved`;
               const resolvingRejection = busyKey === `resolve:${request.id}:rejected`;
-              const requestResolving = resolvingApproval || resolvingRejection;
+              const reconcilingApproval = busyKey === `reconcile:${request.id}`;
+              const requestResolving = resolvingApproval
+                || resolvingRejection
+                || reconcilingApproval
+                || detachedUncertainApproval
+                || ["pending", "reconciling", "uncertain"].includes(approvalOutcome?.phase);
               const awaitingExecution = request.state === "approved"
                 && (!request.executionState || request.executionState === "awaiting_execution")
                 && APPROVAL_ACTIONS.some((action) => action.id === request.action);
@@ -3714,6 +4274,13 @@ export function SalesWorkflowView({
                   requireActivePortal: state.source === "firebase"
                 })
                 : null;
+              const approvalEvidenceReviewable = workflowMutationReviewable
+                && (!exactApprovalArrival || decisionPresentation?.reviewable === true);
+              const receiptNext = approvalOutcome?.requestedState === "approved"
+                ? executionEligibility?.eligible
+                  ? "Continue to the exact quote and execute the separately governed action."
+                  : `Review current quote evidence; the approved action is not executable${executionEligibility?.reason ? `: ${executionEligibility.reason}` : "."}`
+                : "Return to Clear the Deck for the next unresolved decision.";
               return (
               <article
                 key={`${quote.id}-${request.id}`}
@@ -3735,8 +4302,34 @@ export function SalesWorkflowView({
                     <time dateTime={request.requestedAtISO}>{fmtDateTime(request.requestedAtISO)}</time>
                   </div>
                 </div>
-                {request.note && <p className="approval-note">{request.note}</p>}
-                {request.state === "pending" && isAdmin && (
+                {exactApprovalArrival && (
+                  <section className="approval-decision-context" aria-label="Exact approval decision context">
+                    <p className="eyebrow">{openedFromClearDeck ? "Decision opened from Clear the Deck" : "Exact Workflow decision"}</p>
+                    <h4>Resolve this exact request</h4>
+                    <dl>
+                      <div><dt>Requested decision</dt><dd>{actionLabel(request.action)}</dd></div>
+                      <div><dt>Affected event</dt><dd>{decisionPresentation?.eventLabel || quote.event?.name || "Event not recorded"}</dd></div>
+                      <div><dt>Customer</dt><dd>{decisionPresentation?.customerLabel || quote.customer?.name || quote.customer?.email || "Customer not recorded"}</dd></div>
+                      <div><dt>Lifecycle</dt><dd>{decisionPresentation?.lifecycleLabel || humanizeWorkspaceValue(quote.status)}</dd></div>
+                      <div><dt>Rationale</dt><dd>{request.note || "No rationale was recorded with this request."}</dd></div>
+                      <div><dt>{decisionPresentation?.sourceRevisionTitle || "Current quote revision"}</dt><dd>{decisionPresentation?.sourceRevisionLabel || quote.activeVersionId || "Not recorded"}</dd></div>
+                      <div><dt>{decisionPresentation?.stakeLabel || "Commercial stake"}</dt><dd>{decisionPresentation?.stakeValue || "Not established for this request"}</dd></div>
+                      <div><dt>Dependencies</dt><dd>{decisionPresentation?.dependencySummary || "Current dependency evidence is unavailable; refresh before deciding."}</dd></div>
+                      <div><dt>Evidence</dt><dd>{decisionPresentation?.evidenceSummary || "Exact decision evidence could not be projected; refresh before deciding."}</dd></div>
+                      <div><dt>Authority</dt><dd>{isAdmin ? "You may approve or reject. Execution remains a separate governed action." : "Administrator review required. You can inspect this request but cannot resolve it."}</dd></div>
+                    </dl>
+                  </section>
+                )}
+                {request.note && !exactApprovalArrival && <p className="approval-note">{request.note}</p>}
+                {request.state === "pending" && !approvalEvidenceReviewable && (
+                  <div className="inline-alert" role="alert">
+                    <strong>Current evidence does not support approval.</strong>
+                    <span>
+                      Refresh current Workflow evidence before approving. You may reject the stale request without executing it.
+                    </span>
+                  </div>
+                )}
+                {request.state === "pending" && isAdmin && !approvalOutcome && !detachedUncertainApproval && (
                   <div className="approval-resolution">
                     <input
                       type="text"
@@ -3744,23 +4337,26 @@ export function SalesWorkflowView({
                       placeholder="Resolution note"
                       aria-label={`Resolution note for ${actionLabel(request.action)} on ${quoteLabel}`}
                       value={resolutionNotes[request.id] || ""}
+                      disabled={requestResolving}
                       onChange={(event) => setResolutionNotes((prev) => ({
                         ...prev,
                         [request.id]: event.target.value
                       }))}
                     />
-                    <button
-                      type="button"
-                      className="cta compact"
-                      onClick={() => handleResolveApproval(quote.id, request.id, "approved")}
-                      disabled={requestResolving}
-                      aria-label={resolvingApproval
-                        ? `Approving... ${actionLabel(request.action)} for ${quoteLabel}`
-                        : `Approve ${actionLabel(request.action)} for ${quoteLabel}`}
-                      aria-busy={resolvingApproval}
-                    >
-                      {resolvingApproval ? "Approving..." : "Approve"}
-                    </button>
+                    {approvalEvidenceReviewable && (
+                      <button
+                        type="button"
+                        className="cta compact"
+                        onClick={() => handleResolveApproval(quote.id, request.id, "approved")}
+                        disabled={requestResolving}
+                        aria-label={resolvingApproval
+                          ? `Approving... ${actionLabel(request.action)} for ${quoteLabel}`
+                          : `Approve ${actionLabel(request.action)} for ${quoteLabel}`}
+                        aria-busy={resolvingApproval}
+                      >
+                        {resolvingApproval ? "Approving..." : "Approve"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="ghost compact"
@@ -3774,6 +4370,85 @@ export function SalesWorkflowView({
                       {resolvingRejection ? "Rejecting..." : "Reject"}
                     </button>
                   </div>
+                )}
+                {detachedUncertainApproval && (
+                  <section className="approval-resolution-receipt state-uncertain" role="alert">
+                    <p className="eyebrow">Uncertain operation restored</p>
+                    <h4>Review current evidence before choosing again</h4>
+                    <p>
+                      This session retained the exact uncertain task, but the prior decision intent is no longer held in this view.
+                      Refresh Workflow. If the request remains pending, explicitly stop tracking the old attempt before making a new decision.
+                    </p>
+                    <button type="button" className="cta compact" onClick={() => load()} disabled={state.loading}>
+                      {state.loading ? "Refreshing exact approval..." : "Refresh exact approval evidence"}
+                    </button>
+                  </section>
+                )}
+                {approvalOutcome?.phase === "uncertain" && (
+                  <section
+                    className="approval-resolution-receipt state-uncertain"
+                    role="alert"
+                    tabIndex={-1}
+                    data-approval-receipt-id={safeDomId(request.id)}
+                  >
+                    <p className="eyebrow">Outcome needs confirmation</p>
+                    <h4>Do not submit this approval again</h4>
+                    <p>
+                      The original operation kept its identity, but the exact authoritative result is not yet confirmed.
+                      A read-only check is the only available continuation.
+                    </p>
+                    <button
+                      type="button"
+                      className="cta compact"
+                      onClick={() => handleReconcileApproval(request.id)}
+                      disabled={Boolean(busyKey)}
+                      aria-busy={reconcilingApproval}
+                    >
+                      {reconcilingApproval ? "Checking current state..." : "Check current approval state"}
+                    </button>
+                  </section>
+                )}
+                {approvalOutcome?.phase === "confirmed" && (
+                  <section
+                    className="approval-resolution-receipt state-confirmed"
+                    role="status"
+                    tabIndex={-1}
+                    data-approval-receipt-id={safeDomId(request.id)}
+                  >
+                    <p className="eyebrow">Governed outcome</p>
+                    <h4>Approval request {approvalOutcome.requestedState}</h4>
+                    <dl>
+                      <div><dt>Changed</dt><dd>The exact approval request is now {approvalOutcome.requestedState}.</dd></div>
+                      <div><dt>Preserved</dt><dd>Pricing, revision, payment, delivery, acceptance, and booking evidence were not rewritten.</dd></div>
+                      <div><dt>Next</dt><dd>{receiptNext}</dd></div>
+                    </dl>
+                    {approvalOutcome.requestedState === "approved" && executionEligibility?.eligible && (
+                      <button
+                        type="button"
+                        className="cta compact"
+                        onClick={() => handleOpenQuoteHistory(quote, request)}
+                      >
+                        Continue to execute in Quotes
+                      </button>
+                    )}
+                    {returnFromWorkflow && (
+                      <button type="button" className="ghost compact" onClick={onReturnToOrigin}>
+                        Return to {returnOriginLabel}
+                      </button>
+                    )}
+                  </section>
+                )}
+                {approvalOutcome?.phase === "superseded" && (
+                  <section
+                    className="approval-resolution-receipt state-superseded"
+                    role="status"
+                    tabIndex={-1}
+                    data-approval-receipt-id={safeDomId(request.id)}
+                  >
+                    <p className="eyebrow">Updated elsewhere</p>
+                    <h4>Current evidence replaced the requested outcome</h4>
+                    <p>The approval is {String(approvalOutcome.request?.state || "resolved")}. No duplicate decision was sent.</p>
+                  </section>
                 )}
                 {request.state !== "pending" && (
                   <div className="approval-resolution-summary">
@@ -3792,7 +4467,7 @@ export function SalesWorkflowView({
                     )}
                     {request.executionReference && <span>{request.executionReference}</span>}
                     {request.executionError && <span>{request.executionError}</span>}
-                    {isAdmin && awaitingExecution && (
+                    {isAdmin && awaitingExecution && approvalOutcome?.phase !== "confirmed" && (
                       executionEligibility?.eligible ? (
                         <button
                           type="button"

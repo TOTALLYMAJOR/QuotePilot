@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 import CommercialChangeImpactPanel, {
-  buildCommercialChangeImpactPanelState
+  buildCommercialChangeImpactPanelState,
+  groupCommercialConsequences
 } from "../CommercialChangeImpactPanel";
 import { COMMERCIAL_CHANGE_IMPACT_BOUNDARY } from "../../lib/commercialChangeImpact";
 import { buildUnifiedCommercialConsequenceReview } from "../../lib/unifiedCommercialConsequenceReview";
@@ -13,12 +14,20 @@ const APP_SOURCE = readFileSync(
   fileURLToPath(new URL("../../App.jsx", import.meta.url)),
   "utf8"
 );
+const LEGACY_APP_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../LegacyApp.jsx", import.meta.url)),
+  "utf8"
+);
 const QUOTE_DRAFT_RUNTIME_SOURCE = readFileSync(
   fileURLToPath(new URL("../../lib/quoteDraftRuntime.js", import.meta.url)),
   "utf8"
 );
 const QUOTE_DRAFT_RUNTIME_BASE_SOURCE = readFileSync(
   fileURLToPath(new URL("../../lib/quoteDraftRuntimeBase.js", import.meta.url)),
+  "utf8"
+);
+const AMENDMENT_WORKSPACE_SOURCE = readFileSync(
+  fileURLToPath(new URL("../CommercialAmendmentWorkspace.jsx", import.meta.url)),
   "utf8"
 );
 const FUNCTIONS_SOURCE = readFileSync(
@@ -182,6 +191,108 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain("+$1,110.00");
   });
 
+  test("renders independent read-only ingredient cost and stock consequences without changing commercial authority", () => {
+    const inventoryConsequences = {
+      state: "current",
+      authority: "read_only_advisory",
+      expected: {
+        quoteId: "quote-henderson-picnic",
+        savedQuoteRevisionId: "v0014",
+        scenarioFingerprint: '{"guests":175}'
+      },
+      provenance: {
+        before: {
+          eventRequirementRevisionId: "requirement-before",
+          requirementRevision: 3,
+          requirementDigest: "a".repeat(64),
+          projectionDigest: "b".repeat(64),
+          sourceFingerprint: '{"recipes":["recipe-1"]}'
+        },
+        proposedAfter: {
+          eventRequirementRevisionId: "requirement-after",
+          requirementDigest: "c".repeat(64),
+          projectionDigest: "d".repeat(64),
+          sourceFingerprint: '{"recipes":["recipe-1"]}'
+        }
+      },
+      cost: {
+        state: "changed",
+        currency: "USD",
+        before: { projectedCostMinor: 8000 },
+        proposedAfter: { projectedCostMinor: 9500 },
+        deltaMinor: 1500
+      },
+      availability: {
+        state: "changed",
+        ingredients: [{
+          ingredientId: "chicken",
+          baseUnitId: "lb",
+          requiredDeltaMicros: 5_000_000,
+          shortageDeltaMicros: 2_000_000,
+          changed: true,
+          proposedAfter: { availabilityState: "shortage" }
+        }]
+      }
+    };
+    const markup = renderPanel({ model: emptySimulation(), inventoryConsequences });
+    expect(markup).toContain('data-capability-state="empty"');
+    expect(markup).toContain('data-commercial-inventory-consequence="current"');
+    expect(markup).toContain('data-authority="read-only-advisory"');
+    expect(markup).toContain("Food cost and stock impact");
+    expect(markup).toContain("+$15.00");
+    expect(markup).toContain("Requirement +5 lb · Shortage +2 lb");
+    expect(markup).toContain("does not reserve ingredients");
+    expect(markup).not.toContain("Apply this exact change");
+  });
+
+  test("does not render stale inventory values as current and keeps unknown cost explicit", () => {
+    const unavailable = renderPanel({
+      model: emptySimulation(),
+      inventoryConsequences: {
+        state: "stale",
+        cost: { state: "unavailable" },
+        availability: { state: "unavailable", ingredients: [] }
+      }
+    });
+    expect(unavailable).toContain('data-commercial-inventory-consequence="stale"');
+    expect(unavailable).toMatch(/cached, pending, stale, or mismatched evidence is never shown as current/i);
+    expect(unavailable).not.toContain("Projected ingredient cost</h5>");
+
+    const incomplete = renderPanel({
+      model: emptySimulation(),
+      inventoryConsequences: {
+        state: "current",
+        expected: { quoteId: "q", savedQuoteRevisionId: "v", scenarioFingerprint: "f" },
+        provenance: {
+          before: { eventRequirementRevisionId: "rb", requirementRevision: 1, requirementDigest: "a", projectionDigest: "b", sourceFingerprint: "s" },
+          proposedAfter: { eventRequirementRevisionId: "ra", requirementDigest: "c", projectionDigest: "d", sourceFingerprint: "s" }
+        },
+        cost: { state: "incomplete", before: {}, proposedAfter: {}, deltaMinor: null },
+        availability: { state: "unchanged", ingredients: [] }
+      }
+    });
+    expect(incomplete).toMatch(/unknown cost is not treated as zero/i);
+    expect(incomplete).toMatch(/No ingredient requirement or shortage change/i);
+  });
+
+  test("inventory evidence cannot alter the commercial apply fence", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: false,
+      scopeCurrent: true,
+      onApply: () => {},
+      inventoryConsequences: {
+        state: "stale",
+        cost: { state: "unavailable" },
+        availability: { state: "unavailable", ingredients: [] }
+      }
+    });
+    expect(markup).toContain('data-commercial-inventory-consequence="stale"');
+    expect(markup).toMatch(/>Apply reviewed change<\/button>/);
+    expect(markup).not.toMatch(/<button[^>]*disabled=""[^>]*>Apply reviewed change<\/button>/);
+  });
+
   test("separates REVIEW decisions from projected STALE artifacts", () => {
     const markup = renderPanel({ model: simulation() });
 
@@ -193,6 +304,25 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain(">Out of date<");
     expect(markup).toContain("1 to review · 1 out of date · 2 related items");
     expect(markup).toContain("Because this changed: Guest count, Venue");
+  });
+
+  test("groups graph evidence into operator-facing consequence domains without inventing new truth", () => {
+    expect(groupCommercialConsequences(simulation().impact.dependentNodes)).toEqual([
+      {
+        id: "staffing",
+        label: "Staffing",
+        items: [expect.objectContaining({ id: "output.staffing_requirement" })]
+      },
+      {
+        id: "production",
+        label: "Production & rentals",
+        items: [expect.objectContaining({ id: "artifact.beo" })]
+      }
+    ]);
+    const markup = renderPanel({ model: simulation() });
+    expect(markup).toContain('data-consequence-domain="staffing"');
+    expect(markup).toContain('data-consequence-domain="production"');
+    expect(markup).toContain("Where this proposal changes the work");
   });
 
   test("exposes exact source, graph, revision, authority, and bound provenance", () => {
@@ -293,6 +423,27 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain("enforcement is dormant");
     expect(markup).not.toContain("Authorize exact change");
     expect(markup).not.toContain("Apply authorized change");
+  });
+
+  test("lets dormant and enforced no-impact reviews continue through the same exact simulation envelope", () => {
+    const dormant = renderPanel({
+      model: simulation(),
+      authorityState: "dormant",
+      authorizationRequired: true,
+      scopeCurrent: true,
+      onApply: vi.fn()
+    });
+    const noImpact = renderPanel({
+      model: emptySimulation(),
+      authorityState: "enforced",
+      authorizationRequired: false,
+      scopeCurrent: true,
+      onApply: vi.fn()
+    });
+    expect(dormant).toContain("Apply reviewed change");
+    expect(dormant).toContain("no dependency invalidation or production authority is created");
+    expect(noImpact).toContain("Apply reviewed change");
+    expect(noImpact).toContain("No administrator authorization receipt is required");
   });
 
   test("renders every literal canonical Commercial Change Authority mutation marker", () => {
@@ -459,9 +610,15 @@ describe("CommercialChangeImpactPanel", () => {
     expect(APP_SOURCE).toContain("authorizeCommercialQuoteChange({");
     expect(APP_SOURCE).toContain("commercialChangeAuthority: {");
     expect(APP_SOURCE).toContain("applyRequestId");
-    expect(APP_SOURCE).toContain("Preview change impact");
-    expect(APP_SOURCE).toContain("onRetry={() => handlePreviewChangeImpact({ recovery: true })}");
-    expect(APP_SOURCE).toContain("No client-calculated substitute is shown");
+    expect(APP_SOURCE).toContain('import("./components/CommercialAmendmentWorkspace")');
+    expect(LEGACY_APP_SOURCE).toContain('import("./components/CommercialAmendmentWorkspace")');
+    expect(LEGACY_APP_SOURCE).toContain("expectedActiveVersionId: editingQuote.activeVersionId");
+    expect(LEGACY_APP_SOURCE).toContain("navigateAfterSave: false");
+    expect(AMENDMENT_WORKSPACE_SOURCE).toContain("Preview consequences");
+    expect(APP_SOURCE).toContain("onRetry={proposalComposerActive");
+    expect(APP_SOURCE).toContain(": () => handlePreviewChangeImpact({ recovery: true })}");
+    expect(APP_SOURCE).toContain("onRetryConsequences: (request) => handlePreviewChangeImpact({");
+    expect(AMENDMENT_WORKSPACE_SOURCE).toContain("No client-calculated substitute is shown");
     expect(FUNCTIONS_SOURCE).toContain("exports.simulateCommercialQuoteChange =");
     expect(FUNCTIONS_SOURCE).toContain("exports.requestCommercialQuoteChangeAuthorization =");
     expect(FUNCTIONS_SOURCE).toContain("exports.authorizeCommercialQuoteChange =");

@@ -21,8 +21,10 @@ import {
   formatWorkspaceInteger,
   formatWorkspaceMoney,
   formatWorkspaceSource,
-  formatWorkspaceText
+  formatWorkspaceText,
+  hasWorkspaceNumber
 } from "./workspacePresentation";
+import { readCommercialEvidencePresence } from "./commercialEvidencePresence";
 
 export const AMBIENT_OPPORTUNITY_STREAM_MODEL = "ambient-opportunity-stream-v1";
 
@@ -141,6 +143,7 @@ function semanticFact({ id, label, raw, allowed, classify }) {
 }
 
 function statusFacts(quote) {
+  const evidencePresence = readCommercialEvidencePresence(quote);
   const lifecycle = semanticFact({
     id: "quote-lifecycle",
     label: "Quote lifecycle",
@@ -151,36 +154,102 @@ function statusFacts(quote) {
   const booking = semanticFact({
     id: "booking-confirmation",
     label: "Booking confirmation",
-    raw: quote?.booking?.confirmationStatus,
+    raw: evidencePresence.bookingStatus ? evidencePresence.bookingStatusValue : "",
     allowed: BOOKING_STATES,
     classify: classifyBookingConfirmation
   });
   const deposit = semanticFact({
     id: "deposit-status",
     label: "Deposit",
-    raw: quote?.payment?.depositStatus,
+    raw: evidencePresence.depositStatus ? evidencePresence.depositStatusValue : "",
     allowed: DEPOSIT_STATES,
     classify: classifyDepositStatus
   });
-  const finalBalanceRecord = quote?.payment?.finalBalance;
-  const finalBalanceStatus = normalizedText(finalBalanceRecord?.status);
-  const finalBalanceCheckoutState = normalizedText(finalBalanceRecord?.stripeCheckoutState);
+  const finalBalanceStatus = normalizedText(evidencePresence.finalBalanceStatusValue);
+  const finalBalanceCheckoutState = normalizedText(
+    evidencePresence.finalBalanceCheckoutStateValue
+  );
   const finalBalanceRaw = finalBalanceStatus === "paid"
     ? "paid"
-    : ["prepared", "processing", "failed", "expired"].includes(finalBalanceCheckoutState)
-      ? finalBalanceCheckoutState
-      : ["unpaid", "sent"].includes(finalBalanceStatus)
-        ? finalBalanceStatus
-        : "";
+    : finalBalanceCheckoutState || finalBalanceStatus;
   const finalBalance = semanticFact({
     id: "final-balance-status",
     label: "Final balance",
-    raw: finalBalanceRaw,
+    raw: evidencePresence.finalBalanceStatus ? finalBalanceRaw : "",
     allowed: FINAL_BALANCE_STATES,
     classify: classifyFinalBalanceDisplayStatus
   });
 
   return { lifecycle, booking, deposit, finalBalance };
+}
+
+export function buildCommercialPriorityContext(quote) {
+  const evidencePresence = readCommercialEvidencePresence(quote);
+  const facts = statusFacts(quote);
+  const proposal = evidencePresence.quote ? buildProposalReadiness(quote) : null;
+  const rawTotal = quote?.totals?.total;
+  const total = hasWorkspaceNumber(rawTotal) ? Number(rawTotal) : null;
+  const totalAvailable = total !== null && total >= 0;
+  const recommendedGapCount = proposal?.recommendedGaps.length || 0;
+
+  return deepFreeze({
+    value: {
+      label: "Saved quote total",
+      available: totalAvailable,
+      amount: totalAvailable ? total : null,
+      display: totalAvailable ? formatWorkspaceMoney(total) : "Value unavailable",
+      reason: totalAvailable
+        ? "Recorded on this saved quote; this view does not reprice, forecast, or validate margin."
+        : "No valid saved quote total is available; missing value is not treated as zero."
+    },
+    position: {
+      lifecycle: facts.lifecycle,
+      proposal: proposal ? {
+        id: "proposal-readiness",
+        label: "Proposal",
+        available: true,
+        family: proposal.complete ? STATUS_FAMILY.CONFIRMED : STATUS_FAMILY.ACTION,
+        value: proposal.complete ? "Proposal ready" : "Proposal needs review",
+        complete: proposal.complete,
+        gapCount: proposal.gaps.length,
+        recommendedGapCount,
+        completenessPercent: proposal.score,
+        criteriaCount: proposal.requiredCriteria.length,
+        recordedCriteriaCount: proposal.requiredCriteria.filter((criterion) => criterion.passed).length,
+        reason: proposal.complete
+          ? recommendedGapCount > 0
+            ? `All required proposal fields are recorded; ${recommendedGapCount} recommended contact ${recommendedGapCount === 1 ? "detail remains" : "details remain"}.`
+            : "All required proposal fields are recorded."
+          : `${proposal.gaps.length} required proposal ${proposal.gaps.length === 1 ? "field needs" : "fields need"} review.`
+      } : {
+        ...unavailableFact(
+          "proposal-readiness",
+          "Proposal",
+          "No saved quote identity is available, so proposal readiness is not asserted."
+        ),
+        complete: false,
+        gapCount: 0,
+        recommendedGapCount: 0,
+        completenessPercent: null,
+        criteriaCount: 0,
+        recordedCriteriaCount: 0
+      },
+      booking: facts.booking,
+      deposit: facts.deposit,
+      finalBalance: facts.finalBalance
+    },
+    event: {
+      date: formatWorkspaceDate(quote?.event?.date || quote?.date, {
+        emptyLabel: "Event date not set"
+      }),
+      time: formatWorkspaceText(quote?.event?.time || quote?.time, {
+        emptyLabel: "Time not set"
+      }),
+      venue: formatWorkspaceText(quote?.event?.venue || quote?.venue, {
+        emptyLabel: "Venue not set"
+      })
+    }
+  });
 }
 
 function identityFor(quote, quoteId) {
@@ -215,6 +284,7 @@ function attentionLabel(item) {
       label: item.state === "invalid" ? "Review customer request" : "Review requested changes",
       reason: text(item.sourceMessage)
         || "A customer change request is recorded on this exact opportunity.",
+      consequence: "The request remains unresolved, so the current proposal may no longer match what the customer asked for.",
       category: "customer_reply_or_approval",
       severity: item.state === "invalid" ? "warning" : "attention"
     };
@@ -224,6 +294,7 @@ function attentionLabel(item) {
     return {
       label: count === 1 ? "Review pending approval" : `Review ${count} pending approvals`,
       reason: "A role-gated approval request is waiting on this exact opportunity.",
+      consequence: "The protected action cannot proceed until an authorized decision is recorded.",
       category: "authority_or_safety_blocker",
       severity: "warning"
     };
@@ -234,6 +305,7 @@ function attentionLabel(item) {
       reason: item.dateISO
         ? `The tracked follow-up date is ${formatWorkspaceDate(item.dateISO)}.`
         : "A tracked follow-up is due on this exact opportunity.",
+      consequence: "Until reviewed, this customer follow-up remains an unresolved commercial obligation.",
       category: "deadline",
       severity: item.state === "overdue" ? "warning" : "attention"
     };
@@ -244,6 +316,9 @@ function attentionLabel(item) {
     reason: blocked
       ? "The bounded closeout record cannot advance until its source or configuration boundary is reviewed."
       : "A bounded post-event closeout is due on this exact opportunity.",
+    consequence: blocked
+      ? "Closeout remains blocked until the named source or configuration boundary is resolved."
+      : "The internal post-event record remains incomplete until this closeout is reviewed.",
     category: blocked ? "authority_or_safety_blocker" : "deadline",
     severity: blocked || item.state === "overdue" ? "warning" : "attention"
   };
@@ -306,14 +381,13 @@ function customerMomentum(lifecycle) {
   };
 }
 
-function commercialMomentum(quote) {
-  const total = Number(quote?.totals?.total);
-  const hasRecordedTotal = Number.isFinite(total) && total > 0;
+function commercialMomentum(commercialPriority) {
+  const hasRecordedTotal = commercialPriority.value.available;
   return {
     state: "unavailable",
     summary: hasRecordedTotal
-      ? `A saved quoted total of ${formatWorkspaceMoney(total)} is recorded.`
-      : "No positive saved quoted total is recorded.",
+      ? `A saved quoted total of ${commercialPriority.value.display} is recorded.`
+      : "No valid saved quoted total is recorded.",
     reason: hasRecordedTotal
       ? "This saved total has not been checked against current pricing, complete costs, or margin."
       : "Pricing and margin still need an authoritative price and complete cost details.",
@@ -376,7 +450,7 @@ function queueSummary({ proposal, workflow, lifecycle }) {
   if (!proposal.complete) {
     return {
       kind: "proposal",
-      text: `${proposal.gaps.length} proposal field${proposal.gaps.length === 1 ? "" : "s"} need review`
+      text: `${proposal.gapCount} proposal field${proposal.gapCount === 1 ? "" : "s"} need review`
     };
   }
   if (!workflow.evaluated) {
@@ -427,6 +501,7 @@ function primaryIntent({ quoteId, identity, proposal, workflow, lifecycle, capab
         ? "The exact Workflow item opens for role-gated review; navigation changes no quote, customer, payment, or provider state."
         : "The exact opportunity opens without resolving the tracked Workflow item or changing any record.",
       purpose: useWorkflow ? "resolve" : "reveal_context",
+      businessConsequence: attention.consequence,
       targetKind: useWorkflow ? "workflow" : "opportunity",
       targetId: useWorkflow ? getWorkflowAttentionFocusId(workflow.item) : quoteId,
       surfaceId: useWorkflow ? "workflow" : "living-opportunity",
@@ -455,11 +530,18 @@ function primaryIntent({ quoteId, identity, proposal, workflow, lifecycle, capab
     severity: hasProposalGap ? "attention" : "info",
     object,
     reason: hasProposalGap
-      ? `${proposal.gaps.length} required proposal field${proposal.gaps.length === 1 ? "" : "s"} need review.`
+      ? `${proposal.gapCount} required proposal field${proposal.gapCount === 1 ? "" : "s"} need review.`
       : lifecycleNeedsReview
         ? `This opportunity is recorded as ${lifecycle.value.toLowerCase()}, and no tracked follow-up is due.`
       : "There isn’t a due follow-up or an unfinished proposal detail in this record.",
     consequence: "The exact opportunity opens for review. No quote, customer, payment, booking, or provider state changes through navigation.",
+    businessConsequence: hasProposalGap
+      ? "The proposal is not ready for customer review until the required details are resolved."
+      : ["sent", "viewed"].includes(lifecycle.raw)
+        ? "A customer decision is still outstanding; this record has no separate due follow-up."
+        : lifecycleNeedsReview
+          ? "This closed state has no tracked continuation, so any further pursuit requires a deliberate review."
+          : "No due commercial obligation is recorded for this opportunity in the current bounded view.",
     purpose: hasProposalGap ? "resolve" : "reveal_context",
     targetKind: "opportunity",
     targetId: quoteId,
@@ -475,9 +557,10 @@ function primaryIntent({ quoteId, identity, proposal, workflow, lifecycle, capab
 function opportunityProjection(quote, options) {
   const quoteId = text(quote?.id || quote?.quoteId);
   const identity = identityFor(quote, quoteId);
-  const facts = statusFacts(quote);
-  const proposal = buildProposalReadiness(quote);
-  const recommendedProposalGapCount = proposal.recommendedGaps.length;
+  const commercialPriority = buildCommercialPriorityContext(quote);
+  const facts = commercialPriority.position;
+  const proposal = facts.proposal;
+  const recommendedProposalGapCount = proposal.recommendedGapCount;
   const workflow = workflowEvidence(quote, options);
   const intent = primaryIntent({
     quoteId,
@@ -487,24 +570,21 @@ function opportunityProjection(quote, options) {
     lifecycle: facts.lifecycle,
     capabilities: options.capabilities
   });
+  const summary = queueSummary({ proposal, workflow, lifecycle: facts.lifecycle });
   const momentum = createOpportunityMomentum({
     domains: {
       proposal: {
         state: proposal.complete ? "healthy" : "attention",
-        summary: proposal.complete
-          ? recommendedProposalGapCount > 0
-            ? `All required proposal fields are recorded; ${recommendedProposalGapCount} recommended contact ${recommendedProposalGapCount === 1 ? "detail remains" : "details remain"}.`
-            : "All required proposal fields are recorded."
-          : `${proposal.gaps.length} required proposal ${proposal.gaps.length === 1 ? "field needs" : "fields need"} review.`,
+        summary: proposal.reason,
         evidence: [{
           model: "proposal-readiness-v1",
-          criteriaCount: proposal.requiredCriteria.length,
-          recordedCriteriaCount: proposal.requiredCriteria.filter((criterion) => criterion.passed).length,
+          criteriaCount: proposal.criteriaCount,
+          recordedCriteriaCount: proposal.recordedCriteriaCount,
           recommendedGapCount: recommendedProposalGapCount
         }],
-        completenessPercent: proposal.score
+        completenessPercent: proposal.completenessPercent
       },
-      commercial: commercialMomentum(quote),
+      commercial: commercialMomentum(commercialPriority),
       customer: customerMomentum(facts.lifecycle),
       operational: operationalMomentum(workflow)
     },
@@ -565,7 +645,24 @@ function opportunityProjection(quote, options) {
   return {
     quoteId,
     identity,
-    statusFacts: facts,
+    statusFacts: {
+      lifecycle: facts.lifecycle,
+      booking: facts.booking,
+      deposit: facts.deposit,
+      finalBalance: facts.finalBalance
+    },
+    commercialPriority: deepFreeze({
+      ...commercialPriority,
+      significance: {
+        label: summary.text,
+        reason: intent.reason,
+        consequence: intent.businessConsequence,
+        timing: workflow.item?.dateISO
+          ? formatWorkspaceDate(workflow.item.dateISO)
+          : commercialPriority.event.date
+      },
+      nextActionId: primaryAction.id
+    }),
     momentum,
     workflow: {
       evaluated: workflow.evaluated,
@@ -576,11 +673,7 @@ function opportunityProjection(quote, options) {
       target: intent.workflowTarget,
       reason: workflow.reason
     },
-    queueSummary: queueSummary({
-      proposal,
-      workflow,
-      lifecycle: facts.lifecycle
-    }),
+    queueSummary: summary,
     primaryAction,
     requiresAttention,
     groupId,

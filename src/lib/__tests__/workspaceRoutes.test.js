@@ -31,6 +31,7 @@ describe("workspace route parsing and construction", () => {
     ["/app/messages", WORKSPACE_ROUTE_IDS.MESSAGING, "first-release"],
     ["/app/workflow", WORKSPACE_ROUTE_IDS.WORKFLOW, "first-release"],
     ["/app/operations", WORKSPACE_ROUTE_IDS.OPERATIONS, "follow-on"],
+    ["/app/inventory", WORKSPACE_ROUTE_IDS.INVENTORY, "follow-on"],
     ["/app/schedule", WORKSPACE_ROUTE_IDS.SCHEDULE, "follow-on"],
     ["/app/reporting", WORKSPACE_ROUTE_IDS.REPORTING, "follow-on"],
     ["/app/catalog", WORKSPACE_ROUTE_IDS.CATALOG, "follow-on"],
@@ -145,6 +146,7 @@ describe("workspace route parsing and construction", () => {
       .toBe("/app/quotes/q-1/edit");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_NEW)).toBe(WORKSPACE_PATHS.quoteNew);
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.CLEAR_DECK)).toBe(WORKSPACE_PATHS.clearDeck);
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.INVENTORY)).toBe(WORKSPACE_PATHS.inventory);
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.EVENT_DETAIL, { quoteId: "q-1" }))
       .toBe("/app/events/q-1");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.EVENT_LIVE, { quoteId: "q-1" }))

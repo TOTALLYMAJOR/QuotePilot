@@ -100,9 +100,15 @@ describe("AmbientOpportunitiesStream", () => {
     expect(markup.match(/class="ambient-opportunity__primary-action"/gu)).toHaveLength(2);
     expect(rows.every((row) => (
       row.querySelectorAll(".ambient-opportunity__primary-action").length === 1
-      && row.querySelector(".ambient-opportunity__next-reason")?.textContent === "No tracked follow-up due"
+      && row.querySelector(".ambient-opportunity__next-reason")?.textContent.startsWith("No tracked follow-up due")
       && row.querySelector(".ambient-opportunity__details summary span")?.textContent === "Details"
     ))).toBe(true);
+    expect(markup).toContain("Saved quote total");
+    expect(rows.every((row) => (
+      row.querySelectorAll(".ambient-opportunity__lifecycle").length === 1
+      && row.querySelector('[data-status-fact="quote-lifecycle"]') === null
+    ))).toBe(true);
+    expect(markup).toContain("Proposal ready");
     expect(markup).not.toContain("Opportunity details");
     expect(markup).not.toContain("<table");
     expect(markup).not.toContain("Quote readiness");
@@ -225,6 +231,18 @@ describe("AmbientOpportunitiesStream", () => {
       reason: "A role-gated approval request is waiting on this exact opportunity.",
       consequence: "The exact Workflow item opens for role-gated review; navigation changes no quote, customer, payment, or provider state.",
       nextResolutionId: "review-focused-workflow-outcome"
+    }, {
+      preserveReturnContext: true,
+      returnContextSurfaceId: "commercial-priority",
+      returnContextHint: {
+        focus: {
+          kind: "opportunity-action",
+          objectId: "quote-1",
+          actionId: "review-opportunity-workflow:quote-1:approval-42",
+          controlId: "approval-42",
+          attentionType: "approval"
+        }
+      }
     });
     expect(container.querySelector(".ambient-opportunities__acknowledgement").textContent)
       .toContain("Opening review pending approval with its opportunity and reason");

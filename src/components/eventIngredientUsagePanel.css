@@ -1,0 +1,117 @@
+.event-ingredient-usage {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.event-ingredient-usage__header,
+.event-ingredient-usage__actions,
+.event-ingredient-usage__feedback {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.event-ingredient-usage__header h2,
+.event-ingredient-usage__header p,
+.event-ingredient-usage__feedback p {
+  margin: 0;
+}
+
+.event-ingredient-usage__read-state {
+  border: 1px solid var(--line, #d7d9dc);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.event-ingredient-usage__table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.event-ingredient-usage table {
+  width: 100%;
+  min-width: 42rem;
+  border-collapse: collapse;
+}
+
+.event-ingredient-usage caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.event-ingredient-usage th,
+.event-ingredient-usage td {
+  border-bottom: 1px solid var(--line, #d7d9dc);
+  padding: 0.65rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.event-ingredient-usage tbody th small {
+  display: block;
+  color: var(--muted, #5f6368);
+  font-weight: 400;
+}
+
+.event-ingredient-usage input[type="text"],
+.event-ingredient-usage input:not([type]) {
+  width: 100%;
+}
+
+.event-ingredient-usage td input {
+  width: 7rem;
+  min-height: 2.75rem;
+}
+
+.event-ingredient-usage__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.event-ingredient-usage__fields label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.event-ingredient-usage__attestation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.event-ingredient-usage__feedback,
+.event-ingredient-usage__cost {
+  border-left: 3px solid var(--accent, #8b5e34);
+  padding: 0.75rem 0 0.75rem 0.9rem;
+}
+
+.event-ingredient-usage__feedback code {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .event-ingredient-usage__header,
+  .event-ingredient-usage__feedback {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .event-ingredient-usage__read-state {
+    align-self: flex-start;
+  }
+
+  .event-ingredient-usage__fields {
+    grid-template-columns: 1fr;
+  }
+}

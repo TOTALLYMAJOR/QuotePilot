@@ -49,7 +49,315 @@ function quoteRoundTrip(store, overrides = {}) {
   return prepared;
 }
 
+function decisionRoundTrip(store, overrides = {}) {
+  store.setScope(scope);
+  return store.prepare({
+    entry: originEntry,
+    origin: {
+      routeId: "clear-deck",
+      pathname: "/app/clear-the-deck",
+      search: ""
+    },
+    destination: {
+      routeId: "workflow",
+      pathname: "/app/workflow",
+      search: "?quoteId=rivera-wedding&attentionType=approval&requestId=approval-rivera-4"
+    },
+    surfaceId: "decision-resolution",
+    view: {
+      routeId: "clear-deck",
+      disclosureIds: ["decision:approval-rivera-4"],
+      scrollY: 604,
+      focus: {
+        kind: "decision-action",
+        objectId: "approval-rivera-4",
+        actionId: "review-workflow:approval-rivera-4"
+      }
+    },
+    ...overrides
+  });
+}
+
+function commercialPriorityRoundTrip(store, { originRouteId = "home", ...overrides } = {}) {
+  const fromNow = originRouteId === "home";
+  const quoteId = "rivera-wedding";
+  const requestId = "follow-up:rivera-wedding";
+  store.setScope(scope);
+  return store.prepare({
+    entry: originEntry,
+    origin: {
+      routeId: originRouteId,
+      pathname: fromNow ? "/app" : "/app/quotes",
+      search: ""
+    },
+    destination: {
+      routeId: "workflow",
+      pathname: "/app/workflow",
+      search: `?quoteId=${quoteId}&attentionType=follow_up&requestId=${encodeURIComponent(requestId)}`
+    },
+    surfaceId: "commercial-priority",
+    view: {
+      routeId: originRouteId,
+      structured: fromNow ? {} : { eventTypeFilter: "all", statusFilter: "all" },
+      scrollY: 428,
+      focus: {
+        kind: fromNow ? "priority-action" : "opportunity-action",
+        objectId: quoteId,
+        actionId: fromNow
+          ? `review-now-priority:${requestId}`
+          : `review-opportunity-workflow:${quoteId}:${requestId}`,
+        controlId: requestId,
+        attentionType: "follow_up"
+      }
+    },
+    ...overrides
+  });
+}
+
 describe("workspace return context", () => {
+  test.each([
+    ["home", "priority-action"],
+    ["quote-list", "opportunity-action"]
+  ])("returns an exact commercial priority from %s after Workflow", (originRouteId, focusKind) => {
+    const store = createWorkspaceReturnContextStore();
+    const prepared = commercialPriorityRoundTrip(store, { originRouteId });
+
+    expect(prepared).toMatchObject({
+      ok: true,
+      token: {
+        origin: { routeId: originRouteId },
+        destination: { routeId: "workflow" },
+        surfaceId: "commercial-priority"
+      }
+    });
+    expect(store.commit({ token: prepared.token, destinationEntry })).toEqual({ ok: true });
+    expect(store.resolveOrigin({
+      entry: destinationEntry,
+      state: withWorkspaceReturnContextState(null, prepared.token),
+      route: prepared.token.destination
+    })).toMatchObject({
+      ok: true,
+      routeId: originRouteId,
+      view: {
+        scrollY: 428,
+        focus: {
+          kind: focusKind,
+          objectId: "rivera-wedding",
+          controlId: "follow-up:rivera-wedding",
+          attentionType: "follow_up"
+        }
+      }
+    });
+  });
+
+  test("rejects mismatched commercial priority quote, request, action, and surface pairs", () => {
+    const invalidInputs = [
+      {
+        view: {
+          routeId: "home",
+          focus: {
+            kind: "priority-action",
+            objectId: "another-quote",
+            actionId: "review-now-priority:follow-up:rivera-wedding",
+            controlId: "follow-up:rivera-wedding",
+            attentionType: "follow_up"
+          }
+        }
+      },
+      {
+        view: {
+          routeId: "home",
+          focus: {
+            kind: "priority-action",
+            objectId: "rivera-wedding",
+            actionId: "review-now-priority:follow-up:rivera-wedding",
+            controlId: "follow-up:rivera-wedding",
+            attentionType: "approval"
+          }
+        }
+      },
+      {
+        view: {
+          routeId: "home",
+          focus: {
+            kind: "priority-action",
+            objectId: "rivera-wedding",
+            actionId: "review-now-priority:follow-up:rivera-wedding",
+            controlId: "another-request",
+            attentionType: "follow_up"
+          }
+        }
+      },
+      {
+        origin: { routeId: "clear-deck", pathname: "/app/clear-the-deck", search: "" }
+      },
+      {
+        surfaceId: "decision-resolution"
+      }
+    ];
+
+    invalidInputs.forEach((invalid) => {
+      const store = createWorkspaceReturnContextStore();
+      expect(commercialPriorityRoundTrip(store, invalid)).toEqual({
+        ok: false,
+        reason: "invalid_context"
+      });
+    });
+  });
+
+  test("returns from the exact Workflow request to its Clear the Deck decision action", () => {
+    const store = createWorkspaceReturnContextStore();
+    const prepared = decisionRoundTrip(store);
+
+    expect(prepared).toMatchObject({
+      ok: true,
+      token: {
+        origin: {
+          routeId: "clear-deck",
+          pathname: "/app/clear-the-deck",
+          search: ""
+        },
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?attentionType=approval&quoteId=rivera-wedding&requestId=approval-rivera-4"
+        },
+        surfaceId: "decision-resolution"
+      }
+    });
+    const state = withWorkspaceReturnContextState(null, prepared.token);
+    expect(readWorkspaceReturnContextToken(state)).toEqual(prepared.token);
+    expect(store.commit({ token: prepared.token, destinationEntry })).toEqual({ ok: true });
+    expect(store.resolveOrigin({
+      entry: destinationEntry,
+      state,
+      route: {
+        routeId: "workflow",
+        pathname: "/app/workflow",
+        search: "?requestId=approval-rivera-4&quoteId=rivera-wedding&attentionType=approval"
+      }
+    })).toMatchObject({
+      ok: true,
+      delta: -1,
+      routeId: "clear-deck",
+      view: {
+        disclosureIds: ["decision:approval-rivera-4"],
+        scrollY: 604,
+        focus: {
+          kind: "decision-action",
+          objectId: "approval-rivera-4",
+          actionId: "review-workflow:approval-rivera-4"
+        }
+      }
+    });
+    expect(store.readOriginView({ entry: originEntry, routeId: "clear-deck" }))
+      .toMatchObject({ ok: true, view: { focus: { objectId: "approval-rivera-4" } } });
+  });
+
+  test("rejects malformed, unsupported, nearby, or request-mismatched decision returns", () => {
+    const invalidInputs = [
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=follow_up&requestId=approval-rivera-4"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=approval-rivera-4&nearby=true"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=approval-rivera-4&requestId=approval-rivera-5"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=unsafe%2Frequest"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval&requestId=bad%"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=rivera-wedding&attentionType=approval"
+        }
+      },
+      {
+        destination: {
+          routeId: "workflow",
+          pathname: "/app/workflow",
+          search: "?quoteId=&attentionType=approval&requestId=approval-rivera-4"
+        }
+      },
+      {
+        origin: {
+          routeId: "clear-deck",
+          pathname: "/app/clear-the-deck/nearby",
+          search: ""
+        }
+      },
+      {
+        view: {
+          routeId: "clear-deck",
+          focus: {
+            kind: "decision-action",
+            objectId: "approval-rivera-5",
+            actionId: "review-workflow:approval-rivera-5"
+          }
+        }
+      },
+      {
+        view: {
+          routeId: "clear-deck",
+          focus: {
+            kind: "decision-action",
+            objectId: "approval-rivera-4",
+            actionId: "review-workflow:approval-rivera-5"
+          }
+        }
+      }
+    ];
+
+    for (const invalid of invalidInputs) {
+      const store = createWorkspaceReturnContextStore();
+      expect(decisionRoundTrip(store, invalid)).toEqual({ ok: false, reason: "invalid_context" });
+    }
+  });
+
+  test("does not accept an altered Workflow request token after commit", () => {
+    const store = createWorkspaceReturnContextStore();
+    const prepared = decisionRoundTrip(store);
+    expect(store.commit({ token: prepared.token, destinationEntry })).toEqual({ ok: true });
+    const alteredToken = {
+      ...prepared.token,
+      destination: {
+        ...prepared.token.destination,
+        search: "?attentionType=approval&quoteId=rivera-wedding&requestId=approval-rivera-5"
+      }
+    };
+    expect(store.resolveOrigin({
+      entry: destinationEntry,
+      state: withWorkspaceReturnContextState(null, alteredToken),
+      route: alteredToken.destination
+    })).toEqual({ ok: false, reason: "origin_unavailable" });
+  });
+
   test("keeps view state runtime-only while native Back resolves the exact adjacent origin", () => {
     vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("11111111-2222-4333-8444-555555555555");
     const store = createWorkspaceReturnContextStore();
@@ -168,6 +476,46 @@ describe("workspace return context", () => {
       disclosureIds: ["about"],
       scrollY: 0,
       focus: null
+    });
+  });
+
+  test("retains only bounded commercial source generations and allowlisted attention types", () => {
+    expect(sanitizeWorkspaceReturnView({
+      routeId: "home",
+      transient: { sourceLoadedAt: 1_786_000_000_000, extra: "private" },
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    })).toMatchObject({
+      transient: { sourceLoadedAt: 1_786_000_000_000 },
+      focus: { attentionType: "follow_up" }
+    });
+    expect(sanitizeWorkspaceReturnView({
+      routeId: "quote-list",
+      transient: {
+        query: "Autumn",
+        sourceLoadedAtISO: "2026-09-08T10:00:00-05:00"
+      },
+      focus: {
+        kind: "opportunity-action",
+        objectId: "quote-1",
+        actionId: "review-opportunity-workflow:quote-1:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "forged"
+      }
+    })).toMatchObject({
+      transient: {
+        query: "Autumn",
+        sourceLoadedAtISO: "2026-09-08T15:00:00.000Z"
+      },
+      focus: {
+        kind: "opportunity-action",
+        objectId: "quote-1"
+      }
     });
   });
 

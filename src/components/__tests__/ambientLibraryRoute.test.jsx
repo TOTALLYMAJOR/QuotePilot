@@ -32,6 +32,7 @@ vi.mock("../AdminCatalogModal", async () => {
           data-section-id={props.focusRequest?.sectionId}
           data-record-id={props.focusRequest?.recordId}
           data-surface-title={props.surfaceTitle}
+          data-recipe-extension={props.inventoryRecipeExtension?.enabled ? "enabled" : "disabled"}
         >
           Catalog editor
           <button type="button" onClick={props.onClose}>Back</button>
@@ -340,6 +341,34 @@ describe("AmbientLibraryRoute", () => {
     expect(container.textContent).not.toContain("View only");
     expect(container.querySelectorAll("[data-library-readonly]")).toHaveLength(1);
     expect(container.querySelector('[data-testid="catalog-editor"]')).toBeNull();
+  });
+
+  test("shows bounded menu-cost intelligence to sales without exposing recipe mutation", () => {
+    mount({
+      currentUserRole: "sales",
+      inventoryRecipeExtension: {
+        enabled: true,
+        menuCostProjections: [{
+          menuItemId: "menu-chicken",
+          menuItemName: "Chicken dinner",
+          state: "partial",
+          costPerYieldUnitDisplay: "$2.10 / portion"
+        }]
+      }
+    });
+
+    expect(container.querySelector("[data-menu-cost-summary]")).not.toBeNull();
+    expect(container.textContent).toContain("Chicken dinner");
+    expect(container.textContent).toContain("Partial · $2.10 / portion");
+    expect(container.querySelector('[data-testid="catalog-editor"]')).toBeNull();
+  });
+
+  test("forwards the prop-gated recipe authority seam to the exact menu editor", async () => {
+    mount({ inventoryRecipeExtension: { enabled: true } });
+    act(() => container.querySelector('[data-library-action-id="review-library-menu"]').click());
+    await settleEditorOpen();
+
+    expect(container.querySelector('[data-testid="catalog-editor"]').dataset.recipeExtension).toBe("enabled");
   });
 });
 

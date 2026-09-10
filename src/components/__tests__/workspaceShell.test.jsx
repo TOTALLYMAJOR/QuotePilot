@@ -40,6 +40,7 @@ function createProps(overrides = {}) {
     onEvents: vi.fn(),
     onClearDeck: vi.fn(),
     onOperations: vi.fn(),
+    onInventory: vi.fn(),
     onMessages: vi.fn(),
     onWorkflow: vi.fn(),
     onStaff: vi.fn(),
@@ -386,6 +387,34 @@ describe("WorkspaceShell", () => {
     expect(currentProps.actions.onStaff).toHaveBeenCalledTimes(1);
     expect(currentProps.actions.onIntegrations).toHaveBeenCalledTimes(1);
     expect(currentProps.actions.onImports).toHaveBeenCalledTimes(1);
+  });
+
+  test("surfaces ingredient Inventory only for an enabled administrator", () => {
+    render({
+      ambientNavigation: true,
+      capabilities: {
+        ...createProps().capabilities,
+        inventoryAuthority: true
+      },
+      menu: { openId: "more", onOpenChange: vi.fn() }
+    });
+    const tools = container.querySelector('[role="dialog"][aria-labelledby="workspace-tools-title"]');
+    const operationalTools = tools.querySelector('[data-workspace-tools-group="operations"]');
+    const inventory = buttonsByText(operationalTools, "Inventory")[0];
+    expect(inventory.dataset.capabilityEntry).toBe("inventory-workspace");
+    act(() => inventory.click());
+    expect(currentProps.actions.onInventory).toHaveBeenCalledTimes(1);
+
+    render({
+      ambientNavigation: true,
+      principal: { email: "sales@smith.test", role: "sales", isAdmin: false },
+      capabilities: {
+        ...createProps().capabilities,
+        inventoryAuthority: true
+      },
+      menu: { openId: "more", onOpenChange: vi.fn() }
+    });
+    expect(buttonsByText(container, "Inventory")).toHaveLength(0);
   });
 
   test("keeps progressive administration collapsed, unmounted, and role-safe", () => {

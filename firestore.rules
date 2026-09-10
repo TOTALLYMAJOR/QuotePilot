@@ -53,6 +53,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role in ["admin", "sales"];
     }
 
+    function inventoryAuthorityEnabled(orgId) {
+      let settingsPath = /databases/$(database)/documents/organizations/$(orgId)/settings/config;
+      return exists(settingsPath)
+        && get(settingsPath).data.get("inventoryAuthorityEnabled", false) == true;
+    }
+
     function managedMenuAvailabilityUpdateAllowed() {
       let previousActive = resource.data.get("active", true);
       let nextActive = request.resource.data.get("active", true);
@@ -732,6 +738,7 @@ service cloud.firestore {
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
+        "inventoryAuthorityEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -754,6 +761,7 @@ service cloud.firestore {
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
+        "inventoryAuthorityEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -1174,6 +1182,198 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/staffingScheduleFences/{fenceId} {
+      allow read, write: if false;
+    }
+
+    // Ingredient definitions, immutable stock/cost evidence, rebuildable
+    // current states, recipes, event demand, allocations, receipts, and
+    // deterministic insights are trusted-server authority. Browser clients
+    // may read only the bounded projections declared below.
+    match /organizations/{orgId}/inventoryLocations/{locationId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryItems/{itemId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryIngredients/{ingredientId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryMovements/{movementId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryStockStates/{stockStateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryCostEvidence/{evidenceId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryCostStates/{costStateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryAuthorityState/{stateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryAuthorityReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Recipe and pack-conversion publications are immutable server evidence.
+    // Mutable heads and the reverse dependency index are coordination state,
+    // not browser authority. Publication receipts share the existing inventory
+    // receipt collection above so request IDs remain collision-safe across the
+    // whole ingredient authority.
+    match /organizations/{orgId}/inventoryRecipePolicies/{recipeRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryRecipeHeads/{menuItemId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryPackConversionRevisions/{packConversionRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryPackConversionHeads/{conversionHeadId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryRecipeDependencyIndex/{ingredientId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientDependencyIndex/{menuItemId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientRequirementHeads/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientRequirements/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientRequirements/{quoteId}/revisions/{requirementRevisionId} {
+      allow read, write: if false;
+    }
+
+    // Current consumable allocation plans and their immutable revisions are
+    // callable-owned coordination/evidence. Staff consume only the exact safe
+    // event projection below; no browser actor reads or mutates allocation truth.
+    match /organizations/{orgId}/eventIngredientPlans/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientPlans/{quoteId}/revisions/{planRevisionId} {
+      allow read, write: if false;
+    }
+
+    // Event ingredient execution heads and immutable revisions are physical-use
+    // authority. Browsers consume only the bounded, exact-event projection
+    // below; direct reads and every mutation stay server-owned.
+    match /organizations/{orgId}/eventIngredientExecutions/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventIngredientExecutions/{quoteId}/revisions/{executionRevisionId} {
+      allow read, write: if false;
+    }
+
+    // Location/setup data stays in one exact, server-owned projection. The
+    // first Phase-2 route is administrator-only and has no browser write path.
+    match /organizations/{orgId}/inventoryWorkspaceProjections/{projectionId} {
+      allow get: if projectionId == "current"
+        && isOrgAdmin(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Ingredient rows are materialized independently to avoid a tenant-global
+    // hot document. Realtime list reads must remain explicitly bounded.
+    match /organizations/{orgId}/inventoryIngredientProjections/{ingredientId} {
+      allow get: if isOrgAdmin(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if isOrgAdmin(orgId)
+        && inventoryAuthorityEnabled(orgId)
+        && request.query.limit != null
+        && request.query.limit <= 200;
+      allow create, update, delete: if false;
+    }
+
+    // Menu costing is safe commercial consequence intelligence for same-tenant
+    // staff. Reads stay feature-gated and bounded; canonical recipes, cost
+    // evidence, dependency state, and every projection write remain server-only.
+    match /organizations/{orgId}/inventoryMenuCostProjections/{menuItemId} {
+      allow get: if isOrgStaff(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if isOrgStaff(orgId)
+        && inventoryAuthorityEnabled(orgId)
+        && request.query.limit != null
+        && request.query.limit <= 200;
+      allow create, update, delete: if false;
+    }
+
+    // Event ingredient consequence intelligence is consumed from one exact
+    // quote projection. Collection scans and every browser mutation remain
+    // forbidden; canonical requirements and heads stay private above.
+    match /organizations/{orgId}/eventIngredientProjections/{quoteId} {
+      allow get: if isOrgStaff(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Physical-use settlement is intentionally projected separately from
+    // commercial demand/cost intelligence so one authority cannot manufacture
+    // freshness for the other. Only exact event reads are allowed.
+    match /organizations/{orgId}/eventIngredientExecutionProjections/{quoteId} {
+      allow get: if isOrgStaff(orgId)
+        && inventoryAuthorityEnabled(orgId);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /organizations/{orgId}/inventoryRequirementPolicies/{policyRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventInventoryRequirements/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventInventoryRequirements/{quoteId}/revisions/{requirementRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventInventoryPlans/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryAllocationFences/{fenceId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryReservationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // The superseded equipment-event projection has no active browser surface.
+    // Ingredient event projections receive a separate contract in their slice.
+    match /organizations/{orgId}/eventInventoryProjections/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inventoryInsights/{periodKey} {
       allow read, write: if false;
     }
 

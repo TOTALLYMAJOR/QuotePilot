@@ -1,6 +1,184 @@
 # Project Status
 
-Last updated: 2026-09-05 20:17:12 CDT
+Last updated: 2026-09-09 18:17:25 CDT
+
+## Complete operations production candidate
+
+The current `v0.18.0` candidate now includes a governed production path for the
+RagnaKoK founder-pilot organization (`mm05366-sandbox`). The explicit
+`ragnakok-operations` profile keeps the existing deployment-scoped tenant
+boundary, enables the Staffing and Inventory runtime gates, applies that exact
+organization fence to Inventory callables and invalidation triggers, and compiles both
+browser surfaces. Commercial Change and Event Spine retain their independent
+tenant settings and receipt chains; their settings are activated together
+because workflow-bound operational changes are invalid until Commercial Change
+enforcement is present. Inventory and Staffing retain their own tenant fields.
+
+Three protected, update-only tenant workflows verify the exact tagged
+all-surface Firebase deployment before changing the named settings and then
+read them back from Firestore. Buyer access, Revenue Autopilot sends, SMS, and
+Stripe Connect are outside this activation. At this checkpoint the controls
+are source candidates: CI, deployment, provider readback, tenant activation,
+hosted production behavior, and human acceptance remain separate evidence.
+
+## Ingredient inventory scope correction
+
+The default-off inventory branch remains local and unpushed. Its first local
+commit established an organization-scoped transaction, immutable ledger,
+rebuildable projection, expected-revision, receipt, authorization, and rules
+substrate, but interpreted the domain as reusable equipment. The owner has
+superseded that interpretation: ingredient stock, recorded purchase cost,
+versioned recipes, menu/event demand, projected food cost, consumable
+availability, allocation, and consumption evidence now govern the program.
+
+Corrected Phases 2 through 6 are complete as default-off local source
+candidates. Phase 2 lets
+administrators create ingredient identities and locations, record fractional
+opening stock, independently record exact purchase-cost evidence, and read
+bounded materialized stock/cost projections through metadata-aware realtime
+listeners. The canonical Operations route is present in both supported build
+graphs and fails closed outside its exact workspace, browser, tenant, Firebase,
+and administrator gates. Equipment policies, interval
+availability, rentals, checkout/return, turnaround, and damage/repair behavior
+are removed from active scope. Nothing is deployed or tenant-enabled, and the
+earlier local commit remains historical rather than being rewritten.
+
+Phase 3 adds deterministic same-dimension conversion, immutable explicit
+ingredient purchase-pack revisions, versioned recipes attached to exact
+existing menu-item IDs and the current catalog revision, and exact rational
+recipe costing. Library administrators edit recipes in the existing menu-item
+workspace; authorized sales staff receive only safe menu-cost projections.
+Current ingredient changes mark only reverse-indexed dependent menu projections
+stale and repair those bounded projections idempotently. The browser never
+walks raw recipes, receipts, or stock movements to answer current menu cost,
+uses an exact-document listener for the actively edited menu item in addition
+to the bounded Library summary,
+and derived ingredient cost never overwrites `menuItems.priceMinor` or the
+operator-declared `menuItems.costMinor`.
+
+Phase 4 adds a pure exact-rational event-demand compiler and server-owned
+preview/recording path. It requires explicit recipe-output quantities for each
+saved menu selection, verifies the current immutable quote and recipe inputs,
+derives the required-by instant from the quote event start and tenant business
+timezone, and preserves package inclusion only as provenance. The resulting
+immutable requirement aggregates shared ingredients while retaining per-menu
+contributions. Its exact event projection exposes physical demand, projected
+ingredient cost, and consumable availability as independent evidence rails, so
+missing cost cannot hide a shortage and a shortage cannot invalidate a valid
+cost estimate. Quote Edit subscribes to that exact document with snapshot
+metadata, retains stale evidence visibly, and provides a read-only preview to
+sales plus receipt-producing recording and recovery to administrators. No
+Phase 4 action allocates or consumes stock.
+
+Phase 5 adds confirmed receiving and cumulative consumable allocation. A
+receiving transaction appends one immutable physical movement plus exact known-
+or-unknown cost evidence; only an absent planning-cost state may be established
+from that first known observation, so later receipts cannot invent latest-cost
+or weighted-average policy. Accepted/booked events allocate against deterministic
+ingredient/location fences that span all dates. The transaction revalidates the
+active quote version, current recipes, immutable requirement, current plan,
+physical stock, and every fence before writing a partial or full allocation,
+immutable plan revision, receipt, and exact projections. Receiving changes
+on-hand only; allocation/release changes commitment only. A short plan can top
+up after receiving without surrendering its existing hold. Administrators own
+mutations; sales receive the same exact read-only event evidence.
+
+Phase 6 preserves historical estimates and active holds when commercial,
+recipe, or menu-cost evidence changes. Exact source-transition triggers use a
+bounded menu-to-event dependency index and no-op when an older trigger arrives
+after the projection or source has advanced. Demand, projected cost,
+availability, and allocation now carry independent freshness: a cost-only
+change does not stale physical availability, while a quantity change retains
+the prior allocation as a visibly stale hold. After recording the revised
+requirement, an administrator may explicitly reconcile that hold; one
+transaction releases its old fence quantities, reallocates the current demand,
+writes both immutable plan revisions, and returns an idempotent receipt.
+Commercial Change shows saved-versus-proposed ingredient-cost and per-unit
+stock consequences from exact server projections as read-only advisory
+intelligence. These consequences are deliberately outside the commercial
+authorization, apply, pricing, and publication graph.
+
+Phase 2's full-march checkpoint included 5,342 passing unit tests with 94
+intentional skips and 88 passing Firestore-rules tests. Phase 3 qualification
+passes 5,414 unit tests with 96 intentional skips, 90 Firestore-rules tests, the
+real demo-emulator recipe/cost scenario, both supported production builds,
+environment validation, documentation governance, and project-state checks.
+The capability-surfacing check reaches only the pre-existing unrelated
+`steward-private-validation-foundation` branch-base drift; its Phase 3
+inventory contract has no remaining finding. All results are source or local
+emulator evidence, not CI, hosted, production, or human-acceptance proof.
+
+Phase 4 qualification passes 5,458 unit tests with 98 intentional skips, 92
+Firestore-rules tests, the real demo-emulator owner fixture, both supported
+production builds, environment validation, documentation governance, and
+project-state checks. The capability-surfacing check reaches only the
+pre-existing unrelated `steward-private-validation-foundation` branch-base
+drift; its Phase 4 inventory contracts have no remaining finding. These local
+results do not establish CI, deployment, activation, production behavior, or
+human acceptance.
+
+Phase 5 qualification passes 5,485 unit tests with 98 intentional skips, 92
+Firestore-rules tests, and the real Auth/Firestore/Functions emulator scenario,
+including simultaneous allocations that contend on the same ingredient and
+location fence. The fixture proves cross-date commitments remain cumulative,
+partial allocation never promises more than on-hand stock, release leaves
+physical stock unchanged, receiving is retry-safe, and exact event projections
+confirm immutable receipts. Both supported production builds, environment
+validation, documentation governance, and project-state checks pass. The
+capability-surfacing and product-drift gates still report only the pre-existing
+unrelated `steward-private-validation-foundation` branch-base issue; product
+drift also correctly reports this not-yet-committed worktree as dirty. These
+results remain local evidence only.
+
+Phase 6 qualification passes 5,508 unit tests with 98 intentional skips, 92
+Firestore-rules tests, 142 focused runtime/client/hook/component tests, and the
+real Auth/Firestore/Functions emulator change-and-reconcile scenario. Default
+and Ambient production builds, environment validation, documentation
+governance, and project-state checks pass. The capability-surfacing and
+product-drift checks reach only the same pre-existing unrelated
+`bounded-security-operations-audit` and/or
+`steward-private-validation-foundation` branch-base findings plus the expected
+dirty-worktree notice before this phase commit. No local result establishes CI,
+hosted, deployed, tenant-enabled, production, or human-acceptance proof.
+
+The corrected architecture keeps menu costing and stock promise as independent
+siblings over one immutable ingredient-demand revision. Missing cost cannot
+hide a valid shortage, and a shortage cannot invalidate a valid projected food
+cost. Commercial Change now presents both rails without changing authoritative
+selling prices or turning advisory evidence into a universal publish blocker.
+The multiple-receipt inventory valuation and actual-consumption
+cost policy remains an owner decision; the current slice records exact evidence
+without inventing FIFO, LIFO, or weighted-average behavior.
+
+## v0.18.0 Capability Realization Release Candidate
+
+The release branch starts from exact tagged `v0.17.0` main commit `530f31e9`
+and contains one isolated commit for each implemented QP-UXR capability:
+QP-UXR-001 Governed Commercial Amendment, QP-UXR-002 decision resolution,
+QP-UXR-003 commercial priority, QP-UXR-004 commitment-to-execution, and
+QP-UXR-005 Event Preflight. QP-UXR-006 is a documentation-only owner decision
+because no approved feature definition exists. A separate acceptance repair
+keeps Quote Edit's domain plan in the left rail at 1008px compact-desktop width
+and in a horizontal navigator at 768px and 390px.
+
+This is a reconstructed release candidate, not a promotion of the stale
+integration branch. Each feature commit was replayed onto current main with
+conflicts resolved in favor of the newer pricing, workflow-pack, attendance,
+tenant, catalog, field-state, and release safeguards. QP-UXR-001 reuses the
+existing server-authoritative pricing and Commercial Change apply/reconciliation
+chain; QP-UXR-002 reuses Workflow approval and readback; QP-UXR-003 reuses the
+bounded commercial snapshot and arrival/return contracts; QP-UXR-004 and 005
+reuse the existing run-of-show, Schedule, BEO, staffing, dependency, and
+Workflow reads. No second business authority or generalized Event aggregate is
+introduced.
+
+Focused feature coverage passed during reconstruction, including 53 QP-UXR-001,
+143 QP-UXR-002, 150 QP-UXR-003, 39 QP-UXR-004, and 53 QP-UXR-005 tests. The
+responsive Quote Edit rail contract passes at 1440, 1008, 768, and 390 pixels.
+Full unit, build, governance, capability, bundle, release-lane, exact-SHA CI,
+candidate deployment, production deployment, provider readback, and hosted
+acceptance evidence are still being established and must not be inferred from
+these focused results.
 
 ## Combined production candidate
 

@@ -1,0 +1,152 @@
+name: Set Inventory Tenant
+run-name: inventory-tenant/v1/${{ inputs.organization_id }}/${{ inputs.enabled }}/${{ inputs.deployed_release_sha }}/${{ inputs.firebase_deploy_run_id }}/${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployed_release_sha:
+        description: Full tagged commit SHA currently deployed by the supplied Firebase all-scope run
+        required: true
+        type: string
+      firebase_deploy_run_id:
+        description: Successful ragnakok-operations Firebase all-scope deployment run id
+        required: true
+        type: string
+      organization_id:
+        description: Exact numeric organization id or approved founder-pilot organization
+        required: true
+        type: string
+      enabled:
+        description: Requested tenant authority state
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      confirmation:
+        description: SET inventory authority STATE for organization ID
+        required: true
+        type: string
+
+concurrency:
+  group: inventory-tenant-${{ inputs.organization_id }}
+  cancel-in-progress: false
+
+jobs:
+  set_tenant:
+    name: Verify deployment + Set Tenant
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout exact operator workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact deployed inventory runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}
+          FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${WORKFLOW_SHA}"
+          git cat-file -e "${DEPLOYED_RELEASE_SHA}^{commit}"
+          git tag --points-at "${DEPLOYED_RELEASE_SHA}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+          git show "${DEPLOYED_RELEASE_SHA}:.github/workflows/deploy-firebase-hosting.yml" \
+            > "${RUNNER_TEMP}/deployed-firebase-workflow.yml"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const source = fs.readFileSync(process.argv[1], "utf8");
+            const serverGate = source.split("\n").filter((line) =>
+              line.includes("INVENTORY_AUTHORITY_ENABLED:")
+              && line.includes("ragnakok-operations")
+              && line.includes("true")
+              && line.includes("false")
+            ).length;
+            const browserGate = (source.match(/VITE_INVENTORY_AUTHORITY_ENABLED: "true"/g) || []).length;
+            if (serverGate !== 1 || browserGate !== 1) {
+              throw new Error("The deployed release workflow does not bind both inventory gates exactly once.");
+            }
+          ' "${RUNNER_TEMP}/deployed-firebase-workflow.yml"
+          gh run view "${FIREBASE_DEPLOY_RUN_ID}" \
+            --json conclusion,event,headSha,workflowName,displayTitle \
+            > "${RUNNER_TEMP}/firebase-deploy.json"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const evidence = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const release = process.env.DEPLOYED_RELEASE_SHA;
+            const valid = evidence.conclusion === "success"
+              && evidence.event === "workflow_dispatch"
+              && evidence.headSha === release
+              && evidence.workflowName === "Deploy Firebase Production"
+              && evidence.displayTitle.includes(`/ragnakok-operations/firebase-all/${release}/`);
+            if (!valid) throw new Error("The supplied run is not the successful ragnakok-operations Firebase all-scope deployment for this release.");
+          ' "${RUNNER_TEMP}/firebase-deploy.json"
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Validate inventory tenant workload identity configuration
+        env:
+          FIREBASE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT: ${{ vars.FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "${FIREBASE_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT}"
+          [[ "${FIREBASE_WORKLOAD_IDENTITY_PROVIDER}" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[^/]+/providers/[^/]+$ ]]
+          [[ "${FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT}" =~ ^[^@[:space:]]+@tonicatering\.iam\.gserviceaccount\.com$ ]]
+
+      - name: Authenticate inventory tenant operator
+        id: google_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/datastore
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Set and verify exact tenant field
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.google_auth.outputs.access_token }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          REQUESTED_ENABLED: ${{ inputs.enabled }}
+          TENANT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          node ./scripts/set-inventory-tenant.mjs \
+            --project tonicatering \
+            --organization "${ORGANIZATION_ID}" \
+            --enabled "${REQUESTED_ENABLED}" \
+            --confirm "${TENANT_CONFIRMATION}"
+
+      - name: Record activation
+        env:
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          REQUESTED_ENABLED: ${{ inputs.enabled }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}
+          FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
+        run: |
+          {
+            echo "### Inventory tenant state verified"
+            echo "- Organization: ${ORGANIZATION_ID}"
+            echo "- Enabled: ${REQUESTED_ENABLED}"
+            echo "- Operator workflow SHA: ${WORKFLOW_SHA}"
+            echo "- Deployed release SHA: ${DEPLOYED_RELEASE_SHA}"
+            echo "- Firebase deploy run: ${FIREBASE_DEPLOY_RUN_ID}"
+          } >> "${GITHUB_STEP_SUMMARY}"

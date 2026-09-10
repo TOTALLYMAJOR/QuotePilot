@@ -34,7 +34,7 @@ export const AIUI01_ROLES = deepFreeze([
   {
     id: "admin",
     staff: true,
-    routeAuthority: ["catalog", "imports", "staff"],
+    routeAuthority: ["catalog", "imports", "inventory", "staff"],
     quoteAuthority: ["proposal", "payment", "booking", "delete"],
     providerAuthority: "manage"
   },
@@ -51,6 +51,7 @@ export const AIUI01_GATES = deepFreeze({
   workspace: "VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED",
   ambient: "VITE_AMBIENT_UI_ENABLED",
   operationalStaffing: "VITE_OPERATIONAL_STAFFING_ENABLED",
+  inventoryAuthority: "VITE_INVENTORY_AUTHORITY_ENABLED",
   productionPilot: [
     "VITE_PILOT_NOW_ENABLED",
     "VITE_PILOT_EVENT_ROOM_ENABLED",
@@ -68,6 +69,7 @@ const ALL_GATES = [
   AIUI01_GATES.workspace,
   AIUI01_GATES.ambient,
   AIUI01_GATES.operationalStaffing,
+  AIUI01_GATES.inventoryAuthority,
   ...AIUI01_GATES.productionPilot,
   ...AIUI01_GATES.localOnlyPilot
 ];
@@ -124,6 +126,7 @@ export function resolveAiui01Flags(environment = {}) {
     workspace: raw[AIUI01_GATES.workspace],
     ambient: raw[AIUI01_GATES.ambient],
     operationalStaffing: raw[AIUI01_GATES.operationalStaffing],
+    inventoryAuthority: raw[AIUI01_GATES.workspace] && raw[AIUI01_GATES.inventoryAuthority],
     now: raw[AIUI01_GATES.workspace] && raw.VITE_PILOT_NOW_ENABLED,
     eventRoom: raw.VITE_PILOT_EVENT_ROOM_ENABLED,
     guidedSelling: raw.VITE_PILOT_GUIDED_SELLING_ENABLED,
@@ -264,6 +267,15 @@ export const AIUI01_SURFACES = deepFreeze([
     probes: { default: ".staff-workspace" }
   },
   {
+    id: "inventory",
+    routeId: WORKSPACE_ROUTE_IDS.INVENTORY,
+    path: WORKSPACE_PATHS.inventory,
+    roles: ["admin"],
+    requiresWorkspace: true,
+    requiresInventoryAuthority: true,
+    probes: { default: '[data-capability-id="inventory-workspace"]' }
+  },
+  {
     id: "workflow",
     routeId: WORKSPACE_ROUTE_IDS.WORKFLOW,
     path: WORKSPACE_PATHS.workflow,
@@ -337,6 +349,7 @@ export const AIUI01_SHELL_ACTIONS = deepFreeze([
   { id: "quotes", label: "Quotes", classification: "primary_route", targetSurfaceId: "quotes", roles: ["admin", "sales"], requiresWorkspace: false, entry: "header" },
   { id: "messages", label: "Messages", classification: "primary_route", targetSurfaceId: "messages", roles: ["admin", "sales"], requiresWorkspace: true, entry: "header" },
   { id: "staff", label: "Staff", classification: "primary_route", targetSurfaceId: "staff", roles: ["admin"], requiresWorkspace: true, requiresOperationalStaffing: true, entry: "operations" },
+  { id: "inventory", label: "Inventory", classification: "primary_route", targetSurfaceId: "inventory", roles: ["admin"], requiresWorkspace: true, requiresInventoryAuthority: true, entry: "operations" },
   { id: "workflow", label: "Workflow", namePattern: "^Workflow(?:,|$)", classification: "primary_route", targetSurfaceId: "workflow", roles: ["admin", "sales"], requiresWorkspace: false, entry: "header" },
   { id: "schedule", label: "Event Schedule", classification: "primary_route", targetSurfaceId: "schedule", roles: ["admin", "sales"], requiresWorkspace: false, entry: "operations", legacyOutcome: "modal_context" },
   { id: "reporting", label: "Reporting Dashboard", classification: "primary_route", targetSurfaceId: "reporting", roles: ["admin", "sales"], requiresWorkspace: false, entry: "operations", legacyOutcome: "modal_context" },
@@ -471,6 +484,7 @@ export const AIUI01_SCOPE_LIMITS = deepFreeze([
   "Local portal rendering proves routing precedence only. Exact Firebase token authorization stays in the separate firebase-auth-rules lane.",
   "Ambient Event Workspace parity remains open where the host has no full-controls handoff; this baseline records those gaps and does not close AIUI-01.",
   "Operational Staffing is represented only when its independent presentation gate is enabled; backend and tenant authority remain separately qualified.",
+  "Ingredient Inventory is represented only when its independent browser presentation gate is enabled; its tenant setting and server authority remain separately qualified.",
   "No hosted deployment, production data, provider behavior, timed human comprehension, or human acceptance is established."
 ]);
 
@@ -485,7 +499,8 @@ export function getAiui01SurfaceExpectation(surfaceId, { role = "sales", flags =
   const authorized = surface.roles.includes(role);
   const available = authorized
     && (!surface.requiresWorkspace || resolvedFlags.effective.workspace)
-    && (!surface.requiresOperationalStaffing || resolvedFlags.effective.operationalStaffing);
+    && (!surface.requiresOperationalStaffing || resolvedFlags.effective.operationalStaffing)
+    && (!surface.requiresInventoryAuthority || resolvedFlags.effective.inventoryAuthority);
   let probe = surface.probes.default || "";
   if (surface.id === "home") {
     probe = resolvedFlags.effective.workspace
@@ -514,6 +529,7 @@ export function getAiui01EnabledShellActions({ role = "sales", flags = {} } = {}
     action.roles.includes(role)
     && (!action.requiresWorkspace || resolvedFlags.effective.workspace)
     && (!action.requiresOperationalStaffing || resolvedFlags.effective.operationalStaffing)
+    && (!action.requiresInventoryAuthority || resolvedFlags.effective.inventoryAuthority)
   ));
 }
 

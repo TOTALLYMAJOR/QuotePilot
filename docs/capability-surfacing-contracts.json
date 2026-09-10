@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 75,
+  "catalogVersion": 82,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -2475,14 +2475,14 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 5,
+      "reviewRevision": 11,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, advisory REVIEW or STALE consequences, and one six-group source-labeled consequence review before any save.",
+      "summary": "The trusted Quote Edit flow presents the Living Commercial Twin as a session-only Commercial Scenario Workbench: immutable Current plus at most Scenario A and B, exact 1-400 guest experiments, cached switching, and exact consequence fencing. One Layer-3 FulfillmentIntelligence presenter renders the rebuildable fulfillmentProjection-v1 without merging authority. fulfillment-decision-answer-v1 may compose exact guest, Supply, menu-causality, quote-value, Staffing, BEO, and optional sourcing evidence, but it is supported or conditional only when People and Supply are both current and complete. Retained evidence withholds current decision claims and actions. inventory-sourcing-preview-v1 must match the proposed Inventory requirement revision, projection digest, scenario fingerprint, and exact shortage quantity; purchase quantity remains distinct from shortfall coverage. The normal app supplies no sourcing preview, and invalid or missing evidence cannot name a supplier or best resolution.",
       "backendPaths": [
         "functions/commercialChangeImpactPreview.js",
         "functions/commercialPlatformCore.cjs",
@@ -2495,12 +2495,18 @@
         "functions/starterCatalogPacks.js",
         "src/data/mockCatalog.js",
         "src/hooks/useCatalogData.js",
+        "src/hooks/useCommercialScenarioWorkbench.js",
         "src/lib/ambientLibrary.js",
         "src/lib/catalogWriteShapes.js",
         "src/lib/commerceOps.js",
         "src/lib/commercialPlatform.js",
         "src/lib/commercialPlatformCore.cjs",
+        "src/lib/commercialAmendmentContext.js",
         "src/lib/commercialChangeImpact.js",
+        "src/lib/commercialInventoryConsequences.js",
+        "src/lib/commercialScenarioWorkbench.js",
+        "src/lib/fulfillmentProjection.js",
+        "src/lib/livingCommercialTwinProjection.js",
         "src/lib/pricingContracts.js",
         "src/lib/pricingV2.js",
         "src/lib/pricingV2Core.cjs",
@@ -2515,19 +2521,48 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
+        "src/LegacyApp.jsx",
         "src/components/AdminCatalogModal.jsx",
         "src/components/AmbientLibraryRoute.jsx",
+        "src/components/CommercialAmendmentWorkspace.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
-        "src/components/UnifiedCommercialConsequenceReview.jsx"
+        "src/components/CommercialScenarioWorkbench.jsx",
+        "src/components/EventIngredientProjectionPanel.jsx",
+        "src/components/FulfillmentIntelligence.jsx",
+        "src/components/LivingCommercialTwin.jsx",
+        "src/components/ProposalComposer.jsx",
+        "src/components/UnifiedCommercialConsequenceReview.jsx",
+        "src/components/commercialScenarioWorkbench.css",
+        "src/components/fulfillmentIntelligence.css",
+        "src/hooks/useCommercialScenarioWorkbench.js",
+        "src/hooks/useEventIngredientProjection.js",
+        "src/hooks/useFulfillmentStaffingSnapshot.js",
+        "src/styles.css"
       ],
       "entryPointLocators": [
         {
           "path": "src/App.jsx",
-          "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-preview\""
+          "locator": "<div data-capability-id=\"cwf-15b-commercial-change-impact-preview\">"
+        },
+        {
+          "path": "src/LegacyApp.jsx",
+          "locator": "<div data-capability-id=\"cwf-15b-commercial-change-impact-preview\">"
         },
         {
           "path": "src/components/CommercialChangeImpactPanel.jsx",
           "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-presentation\""
+        },
+        {
+          "path": "src/components/CommercialAmendmentWorkspace.jsx",
+          "locator": "data-capability-id=\"qp-uxr-001-governed-commercial-amendment\""
+        },
+        {
+          "path": "src/components/CommercialScenarioWorkbench.jsx",
+          "locator": "COMMERCIAL_SCENARIO_WORKBENCH_CAPABILITY_ID = \"commercial-scenario-workbench\""
+        },
+        {
+          "path": "src/components/FulfillmentIntelligence.jsx",
+          "locator": "data-capability-id=\"living-commercial-twin-fulfillment\""
         },
         {
           "path": "src/components/UnifiedCommercialConsequenceReview.jsx",
@@ -2538,10 +2573,22 @@
         "e2e/customer-centered-workspace.spec.js",
         "e2e/firebase-authoritative-pricing.smoke.spec.js",
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/components/__tests__/commercialScenarioWorkbench.test.jsx",
+        "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+        "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+        "src/components/__tests__/governedCommercialAmendment.test.jsx",
+        "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+        "src/hooks/__tests__/useCommercialScenarioWorkbench.test.jsx",
+        "src/hooks/__tests__/useFulfillmentStaffingSnapshot.test.jsx",
+        "src/lib/__tests__/commercialAmendmentContext.test.js",
         "src/lib/__tests__/commercialChangeImpact.test.js",
         "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
+        "src/lib/__tests__/commercialInventoryConsequences.test.js",
         "src/lib/__tests__/commercialPlatformCore.test.js",
+        "src/lib/__tests__/commercialScenarioWorkbench.test.js",
         "src/lib/__tests__/finalBalancePayment.server.test.js",
+        "src/lib/__tests__/fulfillmentProjection.test.js",
+        "src/lib/__tests__/livingCommercialTwinProjection.test.js",
         "src/lib/__tests__/pricingEngine.authoritative.test.js",
         "src/lib/__tests__/pricingV1GoldenCorpus.test.js",
         "src/lib/__tests__/pricingV2Core.test.js",
@@ -2572,6 +2619,98 @@
           "locator": "is mechanically bound to the trusted quote edit and authoritative pricing path"
         },
         {
+          "path": "src/components/__tests__/governedCommercialAmendment.test.jsx",
+          "locator": "assembles current commitment, lifecycle consequence, and preview into one decision surface"
+        },
+        {
+          "path": "src/components/__tests__/governedCommercialAmendment.test.jsx",
+          "locator": "presents an authority-safe scenario workbench and requests one coordinated consequence refresh"
+        },
+        {
+          "path": "src/components/__tests__/commercialScenarioWorkbench.test.jsx",
+          "locator": "resolves and restores the exact inventory constraint by editing the active scenario"
+        },
+        {
+          "path": "src/components/__tests__/commercialScenarioWorkbench.test.jsx",
+          "locator": "duplicates and switches independent cached scenarios without treating either as a quote revision"
+        },
+        {
+          "path": "src/components/__tests__/commercialScenarioWorkbench.test.jsx",
+          "locator": "retains the last exact result during a fenced recompute and separates review from commitment"
+        },
+        {
+          "path": "src/components/__tests__/commercialScenarioWorkbench.test.jsx",
+          "locator": "rejects every mismatched field in the five-field projection envelope"
+        },
+        {
+          "path": "src/components/__tests__/commercialScenarioWorkbench.test.jsx",
+          "locator": "keeps exact preview failures explicit and retries only through the recovery action"
+        },
+        {
+          "path": "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+          "locator": "renders an evidence-bounded 175 guest decision answer across Supply, Staffing, Commercial, and BEO"
+        },
+        {
+          "path": "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+          "locator": "keeps sourcing and menu attribution visibly unavailable instead of inventing a resolution"
+        },
+        {
+          "path": "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+          "locator": "separates purchasable quantity from the amount that covers the shortfall"
+        },
+        {
+          "path": "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+          "locator": "withholds retained decision claims and actions until the exact active scenario returns"
+        },
+        {
+          "path": "src/lib/__tests__/commercialScenarioWorkbench.test.js",
+          "locator": "rejects a late 175 result after the input advances to 160"
+        },
+        {
+          "path": "src/hooks/__tests__/useCommercialScenarioWorkbench.test.jsx",
+          "locator": "keeps Scenario A and B caches independent and restores them on switch"
+        },
+        {
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "shares exact preview inputs with the commercial orchestrator and hides a competing preview action"
+        },
+        {
+          "path": "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+          "locator": "keeps only the newest scenario across rapid 175 → 150 → 160 previews"
+        },
+        {
+          "path": "src/lib/__tests__/livingCommercialTwinProjection.test.js",
+          "locator": "composes the 125 to 175 Chicken Alfredo scenario from exact commercial and inventory evidence"
+        },
+        {
+          "path": "src/lib/__tests__/livingCommercialTwinProjection.test.js",
+          "locator": "keeps an inventory integration failure independent from current commercial evidence"
+        },
+        {
+          "path": "src/lib/__tests__/livingCommercialTwinProjection.test.js",
+          "locator": "builds one conditional decision answer from exact Commercial, Staffing, Inventory, BEO, and sourcing evidence"
+        },
+        {
+          "path": "src/lib/__tests__/livingCommercialTwinProjection.test.js",
+          "locator": "keeps the integrated answer partial when supplier selection or menu causality is not evidenced"
+        },
+        {
+          "path": "src/lib/__tests__/commercialInventoryConsequences.test.js",
+          "locator": "retains exact menu contribution identity so a shortage can explain its causal menu source"
+        },
+        {
+          "path": "src/lib/__tests__/commercialInventoryConsequences.test.js",
+          "locator": "fails the availability comparison closed when contribution provenance is malformed"
+        },
+        {
+          "path": "src/lib/__tests__/fulfillmentProjection.test.js",
+          "locator": "composes exact 125 to 175 People and Supply evidence with the first valid boundary"
+        },
+        {
+          "path": "src/hooks/__tests__/useFulfillmentStaffingSnapshot.test.jsx",
+          "locator": "keeps only the newest quote response across rapid scope changes"
+        },
+        {
           "path": "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
           "locator": "never places customer contact content in the preview"
         },
@@ -2591,21 +2730,31 @@
       "documentationPaths": [
         "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
         "docs/FEATURE_MATRIX.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md",
+        "docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md",
         "docs/PRICING_CONSTITUTION.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "CWF-15B read-only Commercial Change Impact preview:"
+          "locator": "Commercial Change Authority / QP-UXR-001 Governed Commercial Amendment Experience, including the first-slice Commercial Scenario Workbench and unified Fulfillment read model"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "## Quote Builder Details"
+          "locator": "### Governed Commercial Amendment Experience (QP-UXR-001)"
+        },
+        {
+          "path": "docs/INVENTORY_AUTHORITY_ADR.md",
+          "locator": "The first-slice Commercial Scenario Workbench replaces the Living Commercial"
+        },
+        {
+          "path": "docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md",
+          "locator": "## Fulfillment Projection Boundary"
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 4 binds the existing authoritative simulation to one six-group consequence review. Apply all/selected only rebuild the exact proposed form and rerun simulation; Keep restores the loaded form without writing. Quote, catalog, and proposed-form fences fail closed. No second pricing or version authority was introduced.",
+      "surfaceReviewNote": "Revision 11 hardens the single Layer-3 presenter and decision projection against cross-generation claims. A decision remains unverifiable unless People and Supply are both current and complete. During a retained recomputation, the prior projection may remain visible only as reference evidence; its supplier, Staffing, quote-value, BEO conclusions, and decision actions are withheld. Optional sourcing advice must match the proposed Inventory event-requirement revision, projection digest, scenario fingerprint, and exact shortage quantity as well as the commercial scope. Purchasable pack quantity is displayed separately from the quantity covering the shortfall. None of this establishes stock, procurement, coverage, revenue, acceptance, readiness, or apply authority.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -2651,7 +2800,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can simulate the exact blast radius of an unsaved quote edit, review six separately sourced consequence groups, and stage all, selected, or no recommendations without exposing customer-safe internal evidence or implying that any save, authorization, invalidation, regeneration, reconciliation, or publication occurred."
+      "safeOutcome": "Staff can receive one evidence-bounded answer only for the exact current scenario. Both People and Supply must be current and complete before the answer can be supported or conditional; a retained prior decision is presented as stale and withholds its conclusions and actions. Exact menu causality remains fail-closed. A sourcing option appears only from a matching proposed Inventory basis and keeps pack purchase quantity distinct from shortfall coverage. Advice never changes Supply, and proposed quote total remains quoted value rather than revenue. Exploration performs no save, assignment, reservation, purchase, allocation, acceptance, booking, payment, or provider action."
     },
     {
       "id": "commercial-dependency-graph-beo-provenance",
@@ -2737,7 +2886,7 @@
     },
     {
       "id": "commercial-change-authority",
-      "reviewRevision": 6,
+      "reviewRevision": 8,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2745,7 +2894,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, atomic application, and exact transport-ambiguous outcome reconciliation remain exposed inside the trusted quote-edit path. The v0.16 Living Opportunity adds contextual Quick Updates for one allowlisted service-style delta: opening is write-free, the draft stays local, and a Firebase draft review projects the requested change plus enumerated material pricing, staffing, version, proposal, portal, lifecycle, and dependency effects through the existing server authority. Save is single-flight and bound to that simulation, active revision, catalog digest, and policy; browser-local, sent, and viewed records hand off to the full editor. Success requires the trusted write receipt, a server-only same-tenant quote reread, and refreshed opportunity-list state. The panel duplicates no commercial rule. Living Opportunity also retains its role-gated advisory guest-count simulation: local mode produces a deterministic ImpactPreview without a receipt, while the connected path may return an immutable simulation receipt; neither path saves, authorizes, or applies that scenario.",
+      "summary": "QP-UXR-001 composes receipt-bound commercial change simulation, approval handoff, authorization, atomic application, preserved historical evidence, named invalidation, exact transport-ambiguous outcome reconciliation, and the next valid action into trusted Quote Edit. Dormant review, enforced no-impact review, and authorized changes all carry the exact simulation envelope through the existing write authority; success remains on the amendment surface long enough to present Changed, Preserved, Needs attention, and Next. Living Opportunity Quick Updates and guest-count simulation retain their narrower contracts and create no second commercial rule.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -2755,6 +2904,7 @@
         "src/lib/commercialChangeAuthorityClient.js",
         "src/lib/commercialChangePersistedEffectsDisabled.js",
         "src/lib/commercialChangePersistedEffectsEnabled.js",
+        "src/lib/commercialAmendmentContext.js",
         "src/lib/quickUpdatesState.js",
         "src/lib/quoteStore.js",
         "functions/quoteCreation.js",
@@ -2789,6 +2939,8 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/CommercialAmendmentWorkspace.jsx",
         "src/components/CommercialChangeImpactPanel.jsx",
         "src/components/AmbientLivingOpportunityRoute.jsx",
         "src/components/AmbientLivingOpportunity.jsx",
@@ -2797,8 +2949,24 @@
       ],
       "entryPointLocators": [
         {
+          "path": "src/App.jsx",
+          "locator": "<div data-capability-id=\"cwf-15b-commercial-change-impact-preview\">"
+        },
+        {
+          "path": "src/LegacyApp.jsx",
+          "locator": "<div data-capability-id=\"cwf-15b-commercial-change-impact-preview\">"
+        },
+        {
           "path": "src/components/CommercialChangeImpactPanel.jsx",
           "locator": "data-capability-id=\"cwf-15c-commercial-change-authority\""
+        },
+        {
+          "path": "src/components/CommercialAmendmentWorkspace.jsx",
+          "locator": "data-capability-id=\"qp-uxr-001-governed-commercial-amendment\""
+        },
+        {
+          "path": "src/components/CommercialChangeImpactPanel.jsx",
+          "locator": "data-capability-id=\"qp-uxr-001-amendment-receipt\""
         },
         {
           "path": "src/components/AmbientLivingOpportunity.jsx",
@@ -2811,6 +2979,8 @@
       ],
       "testPaths": [
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/components/__tests__/governedCommercialAmendment.test.jsx",
+        "src/lib/__tests__/commercialAmendmentContext.test.js",
         "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
         "src/components/__tests__/ambientPricingRouteHost.test.jsx",
         "src/components/__tests__/QuickUpdatesPanel.test.jsx",
@@ -2836,6 +3006,14 @@
         {
           "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
           "locator": "is mechanically bound to the trusted quote edit and authoritative pricing path"
+        },
+        {
+          "path": "src/components/__tests__/governedCommercialAmendment.test.jsx",
+          "locator": "renders and focuses a complete outcome receipt while preserving an explicit next action"
+        },
+        {
+          "path": "src/lib/__tests__/commercialAmendmentContext.test.js",
+          "locator": "projects the exact saved commitment and bounded preserved evidence without provider secrets"
         },
         {
           "path": "src/lib/__tests__/commercialChangeAuthority.server.test.js",
@@ -2909,7 +3087,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 4 reviews contextual Quick Updates together with the existing trusted quote-edit and Commercial Change authority. The drawer/sheet is write-free on open, keeps one allowlisted service-style draft local and visible, guards every destructive dismissal path, and renders the server authority's enumerated material persisted-effects projection rather than claiming a whole-document preview across time-assigned fields. Firebase draft saves are single-flight and bound to the persisted simulation, active revision, catalog digest, and policy even while Commercial Change enforcement is dormant; local, sent, viewed, authorization-required, rejected, and uncertain cases retain explicit handoff or reconciliation boundaries. A saved result requires the write receipt, server-only quote verification, and refreshed opportunity-list state. Executable emulator evidence covers form mismatch, catalog drift, stale revision, zero-write failures, and one successful dormant save/readback. The panel exposes staffing, pricing, and Library as contextual handoffs rather than parallel rules or global destinations. The existing advisory guest-count counterfactual retains its distinct deterministic local-calculation and connected immutable-receipt sources. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
+      "surfaceReviewNote": "Revision 8 preserves QP-UXR-001 as Quote Edit's sole commercial amendment authority while adding a session-only Workbench handoff. A Workbench consequence result reaches governed review only after scenario ID, generation, input digest, base quote revision, and guest count round-trip exactly; non-guest draft or ingredient-input changes create a new bounded context and reject queued or cached evidence from the prior context. Current non-guest drafts use the same envelope before review. Transport-uncertain simulation recovery alone reuses the prior request ID; a definitive rejection or stale successful preview starts a new request. Pricing, payment, provider, dependency, workflow-pack, attendance, authorization, and apply ownership remain unchanged. Successful apply and committed reconciliation still retain the focused Changed, Preserved, Needs attention, and Next receipt, while accepted, booked, paid, and other terminal commitments remain outside trusted edit.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2985,7 +3163,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can use contextual Quick Updates for one exact service-style draft without changing the underlying opportunity until explicit review and save. Every destructive exit protects that draft. A Firebase draft save delegates to existing calculation and persistence authority and is fenced to the reviewed simulation, revision, catalog, and policy; only its exact write receipt, server-only same-tenant quote verification, and refreshed list state may produce the saved outcome. Browser-local, sent, viewed, authorization-required, and uncertain states hand off or reconcile without an implicit retry or write. Staffing, pricing, tax, margin, proposal, client, catalog, and dependency rules remain owned by their existing governed workflows. Existing Commercial Change authorization, apply, and reconciliation boundaries remain intact. Eligible staff may still compare a staged guest-count scenario with the saved quote through either a local deterministic ImpactPreview or a connected immutable simulation receipt; that advisory surface cannot save, authorize, or apply the change, and uncertain connected requests retain exact identity for reconciliation."
+      "safeOutcome": "Eligible staff can carry one exact draft, sent, or viewed amendment from current commitment through semantic difference, supported consequence, required authority, atomic application, preserved historical evidence, named invalidation, receipt, and next valid action. Dormant review never claims persisted invalidations, enforced work never bypasses authorization, uncertain apply never dispatches a blind retry, and terminal customer/booking/payment commitments remain locked. Existing Quick Updates, guest-count preview, attendance, and workflow-pack paths remain narrower projections with no added authority."
     },
     {
       "id": "commercial-dependency-state-and-reconciliation",
@@ -4677,7 +4855,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 23,
+      "reviewRevision": 24,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4695,6 +4873,9 @@
         "src/lib/ambientGlobalPilotTarget.js",
         "src/lib/ambientNowBriefing.js",
         "src/lib/ambientOpportunityStream.js",
+        "src/lib/commercialEvidencePresence.js",
+        "src/lib/commandCenterEvidence.js",
+        "src/lib/decisionResolutionPresentation.js",
         "src/lib/ambientLibrary.js",
         "src/lib/customerDecisionRoom.js",
         "src/lib/quoteStore.js",
@@ -4723,6 +4904,7 @@
       "affectedBackendExports": [],
       "frontendPaths": [
         "src/App.jsx",
+        "src/hooks/useCommercialWorkspaceSnapshot.js",
         "src/components/WorkspaceRoute.jsx",
         "src/components/WorkspaceShell.jsx",
         "src/components/QuoteHistoryModal.jsx",
@@ -4731,6 +4913,8 @@
         "src/components/customerPortalView.css",
         "src/components/AmbientGlobalPilotSurface.jsx",
         "src/components/AmbientNowView.jsx",
+        "src/components/ambientNowView.css",
+        "src/components/nowPresentation.js",
         "src/components/AmbientOpportunitiesStream.jsx",
         "src/components/ambientOpportunitiesStream.css",
         "src/components/AmbientCustomerDirectoryView.jsx",
@@ -4739,6 +4923,9 @@
         "src/components/AmbientLibraryRoute.jsx",
         "src/components/EventTemplatesEditor.jsx",
         "src/components/AdminCatalogModal.jsx",
+        "src/components/LiveOperationsPlanningViews.jsx",
+        "src/components/eventWorkspacePresentation.js",
+        "src/components/EventPreflightPanel.jsx",
         "src/components/StaffEvidenceRail.jsx",
         "src/components/AmbientLivingOpportunity.jsx",
         "src/components/AmbientOperationalReceipts.jsx",
@@ -4751,11 +4938,24 @@
         "src/components/MessagingStation.jsx",
         "src/components/QuoteConversationPanel.jsx",
         "src/components/SalesWorkflowModal.jsx",
+        "src/components/WorkspaceActionFeedbackNotice.jsx",
         "src/components/WorkspaceTaskJourneyNotice.jsx",
         "src/components/EventScheduleModal.jsx",
         "src/components/ReportingDashboardModal.jsx"
       ],
       "entryPointLocators": [
+        {
+          "path": "src/components/LiveOperationsPlanningViews.jsx",
+          "locator": "data-capability-id=\"qp-uxr-002-decision-resolution\""
+        },
+        {
+          "path": "src/components/LiveOperationsPlanningViews.jsx",
+          "locator": "data-execution-surface=\"control-room\""
+        },
+        {
+          "path": "src/components/EventPreflightPanel.jsx",
+          "locator": "data-event-preflight={model.state}"
+        },
         {
           "path": "src/App.jsx",
           "locator": "data-workspace-return-state={returnContextStatus.state}"
@@ -4862,6 +5062,8 @@
         }
       ],
       "testPaths": [
+        "e2e/commitment-to-execution-loop.spec.js",
+        "e2e/event-preflight.spec.js",
         "e2e/ambient-intelligence-accessibility.spec.js",
         "e2e/ambient-opportunities-stream.spec.js",
         "e2e/ambient-library.spec.js",
@@ -4882,6 +5084,8 @@
         "src/components/__tests__/customerWorkspaceStates.test.jsx",
         "src/components/__tests__/workspaceRoutePresentation.test.jsx",
         "src/components/__tests__/ambientLibraryRoute.test.jsx",
+        "src/components/__tests__/clearDeckView.test.jsx",
+        "src/components/__tests__/eventPreflightPanel.test.jsx",
         "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
         "src/components/__tests__/eventTemplatesEditor.test.jsx",
         "src/components/__tests__/eventTemplatesEditorModel.test.js",
@@ -4910,13 +5114,20 @@
         "src/components/__tests__/workspaceShell.test.jsx",
         "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
         "src/hooks/__tests__/useBrowserLocation.test.js",
+        "src/hooks/__tests__/useCommercialWorkspaceSnapshot.test.js",
         "src/lib/__tests__/ambientGlobalPilot.test.js",
         "src/lib/__tests__/ambientNowBriefing.test.js",
         "src/lib/__tests__/ambientOpportunityStream.test.js",
+        "src/lib/__tests__/commercialEvidencePresence.test.js",
+        "src/lib/__tests__/decisionResolutionPresentation.test.js",
+        "src/lib/__tests__/eventPreflightPresentation.test.js",
+        "src/lib/__tests__/eventWorkspace.test.js",
         "src/lib/__tests__/ambientOpportunityStreamIntegration.test.js",
         "src/lib/__tests__/ambientLibrary.test.js",
         "src/lib/__tests__/customerDecisionRoom.test.js",
         "src/lib/__tests__/quoteStore.portal.test.js",
+        "src/lib/__tests__/quoteStore.workflow.test.js",
+        "src/components/__tests__/nowPresentation.test.js",
         "src/hooks/__tests__/useCatalogData.savePlan.test.js",
         "src/lib/__tests__/menuService.test.js",
         "src/lib/__tests__/menuService.writeFallback.test.js",
@@ -4947,6 +5158,42 @@
         "src/lib/__tests__/ambientLegacyRetirement.test.js"
       ],
       "testLocators": [
+        {
+          "path": "src/components/__tests__/clearDeckView.test.jsx",
+          "locator": "renders every exact approval as decision-complete business context"
+        },
+        {
+          "path": "src/lib/__tests__/decisionResolutionPresentation.test.js",
+          "locator": "expands two pending requests on one quote into exact stable decision records"
+        },
+        {
+          "path": "src/components/__tests__/ambientNowView.test.jsx",
+          "locator": "acknowledges a priority immediately and carries its exact Workflow focus"
+        },
+        {
+          "path": "src/lib/__tests__/ambientOpportunityStream.test.js",
+          "locator": "projects saved commercial value without repricing and distinguishes zero from missing"
+        },
+        {
+          "path": "src/lib/__tests__/commercialEvidencePresence.test.js",
+          "locator": "keeps absent source evidence missing after hydration supplies compatibility defaults"
+        },
+        {
+          "path": "e2e/commitment-to-execution-loop.spec.js",
+          "locator": "preserves commitment, coordination, evidence boundary, and focus"
+        },
+        {
+          "path": "src/lib/__tests__/eventWorkspace.test.js",
+          "locator": "composes a committed event into planning, consequence, evidence, and one next action"
+        },
+        {
+          "path": "e2e/event-preflight.spec.js",
+          "locator": "separates satisfied, attention, and unavailable truth"
+        },
+        {
+          "path": "src/lib/__tests__/eventPreflightPresentation.test.js",
+          "locator": "never converts stale, partial, truncated, malformed, or absent evidence into a pass"
+        },
         {
           "path": "e2e/customer-decision-room.spec.js",
           "locator": "is calm, complete, and overlap-safe at"
@@ -5505,10 +5752,48 @@
           "locator": "### Returning without losing your place"
         },
         {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Clear the Deck decision resolution (QP-UXR-002)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-002 Clear the Deck decision resolution"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Clear the Deck decision resolution (QP-UXR-002)"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Commercial-priority composition (QP-UXR-003)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-003 Commercial Priority Loop"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Commitment-to-execution composition (QP-UXR-004)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-004 Commitment-to-Execution Loop"
+        },
+        {
+          "path": "docs/DESIGN_SYSTEM.md",
+          "locator": "### Event Preflight synthesis (QP-UXR-005)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "QP-UXR-005 Event Preflight"
+        },
+        {
           "path": "docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md",
           "locator": "### 16. Preserve the operator's place \u2014 P1"
         }
       ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Revision 24 composes QP-UXR-002 through QP-UXR-005 over current v0.17 authorities. Clear the Deck retains exact Workflow decision identity and readback; Now and Opportunities share one evidence-preserving commercial-priority projection; Events, Event Focus, Control Room, Schedule, and Replay preserve the commitment-to-execution boundary; Event Preflight separates satisfied, attention, and unavailable evidence without a score. Current retained-data failures withdraw consequential controls, exact same-object return requires a completed fresh read, selected Control Room alone requests operational authorities, and missing or malformed payment, BEO, staffing, conflict, live-event, attendance, actuals, and issue evidence remains unavailable. No pricing, approval, payment, booking, staffing, BEO, Schedule, Workflow, or event-session authority is added.",
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
       "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, truthful local fallback, and one exact session-only task thread without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Follow-up completion uses the existing guarded quote mutation, confirms only an exact same-tenant server readback, and otherwise remains visibly uncertain without repeating the write. Staff-route Back/Forward may restore only an exact adjacent same-runtime, same-organization, same-principal view; private view and draft state stays memory-only, accepted discard cannot reappear on Forward, and invalid context falls back without selecting another record. The return-context layer adds no write authority and ordinary non-expiry fixtures retain byte-equivalent business state; the existing admin quote-history read may still persist automatic expiry under its unchanged lifecycle authority, including local-fallback normalization and versioning. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, blocked, or Needs confirmation with a safe next resolution."
     },
@@ -6237,7 +6522,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 7,
+      "reviewRevision": 10,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -6245,7 +6530,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded admin-managed operational profiles, operator-recorded availability, admin-or-sales operator-confirmed assignments, explicit coverage gaps, cross-date schedule fences, and immutable replay-stable profile and plan receipts. An administrator-only Staff workspace adds separately stored private contact, photo, qualification, availability-preference, rate, travel, briefing, attendance-summary, reliability and note fields with paired optimistic receipts. Its briefing sheet joins only an exact operator-confirmed assignment and exact quote revision. An administrator may also preview and manually dispatch one provider-backed invitation to the verified private email for that exact assignment. Provider acceptance, signed-webhook delivery or bounce evidence, and the staff member's bearer-link accept or decline acknowledgement remain separate visible states. Acknowledgement never mutates the staffing plan, attendance, payroll, payment, booking, or readiness evidence. The presentation preserves a local_draft fallback, while local bypass review may use a visibly non-authoritative local_fixture directory without a Firebase or provider write.",
+      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded profiles, operator-recorded availability, operator-confirmed assignments, explicit gaps, schedule fences, and immutable receipts. Staff creation requires only name and role; other maturity evidence remains independent. The Living Commercial Twin consumes the bounded safe snapshot through fulfillmentProjection-v1 and one Layer-3 presenter. Current assignments cover the proposal only when current complete People evidence reports an exact zero gap. The higher-order decision answer remains unverifiable unless Supply is also current and complete, and retained evidence supplies no current Staffing claim or action. No Staffing authority is merged into Commercial or Inventory.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -6261,7 +6546,11 @@
         "src/lib/staffBriefingSheet.js",
         "src/lib/staffDirectoryClient.js",
         "src/lib/staffInvitationClient.js",
-        "functions/tenantWorkflowRuntime.js"
+        "functions/tenantWorkflowRuntime.js",
+        "src/hooks/useFulfillmentStaffingSnapshot.js",
+        "src/lib/fulfillmentProjection.js",
+        "src/lib/livingCommercialTwinProjection.js",
+        "src/lib/staffMaturity.js"
       ],
       "backendExports": [
         "functions/index.js#getOperationalStaffingSnapshot",
@@ -6286,13 +6575,21 @@
         "functions/index.js#respondToStaffInvitation"
       ],
       "frontendPaths": [
+        "src/App.jsx",
+        "src/LegacyApp.jsx",
         "src/components/AmbientLivingOpportunity.jsx",
+        "src/components/CommercialScenarioWorkbench.jsx",
+        "src/components/FulfillmentIntelligence.jsx",
         "src/components/OperationalStaffingPanel.jsx",
         "src/components/StaffInvitationResponsePage.jsx",
         "src/components/StaffWorkspace.jsx",
         "src/components/WorkspaceShell.jsx",
+        "src/components/commercialScenarioWorkbench.css",
+        "src/components/fulfillmentIntelligence.css",
         "src/main.jsx",
+        "src/hooks/useFulfillmentStaffingSnapshot.js",
         "src/lib/staffBriefingSheet.js",
+        "src/lib/staffMaturity.js",
         "src/lib/staffInvitationClient.js",
         "src/components/EventExecutionContextPanel.jsx"
       ],
@@ -6314,6 +6611,14 @@
           "locator": "Preview invitation"
         },
         {
+          "path": "src/components/StaffWorkspace.jsx",
+          "locator": "className=\"staff-command-add\""
+        },
+        {
+          "path": "src/components/FulfillmentIntelligence.jsx",
+          "locator": "data-capability-id=\"living-commercial-twin-fulfillment\""
+        },
+        {
           "path": "src/components/StaffInvitationResponsePage.jsx",
           "locator": "Accept assignment"
         },
@@ -6325,10 +6630,13 @@
       "testPaths": [
         "scripts/operational-staffing-emulator-acceptance.mjs",
         "src/components/__tests__/operationalStaffingPanel.test.jsx",
+        "src/components/__tests__/commercialScenarioWorkbench.test.jsx",
+        "src/components/__tests__/fulfillmentIntelligence.test.jsx",
         "src/components/__tests__/QuickUpdatesPanel.test.jsx",
         "src/components/__tests__/workspaceShell.test.jsx",
         "src/components/__tests__/staffInvitationResponsePage.test.jsx",
         "src/components/__tests__/staffWorkspace.test.jsx",
+        "src/hooks/__tests__/useFulfillmentStaffingSnapshot.test.jsx",
         "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/functionsEnvMaterializer.test.js",
         "src/lib/__tests__/operationalStaffingAuthority.server.test.js",
@@ -6336,6 +6644,9 @@
         "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
         "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
         "src/lib/__tests__/operationalStaffingTenantActivation.server.test.js",
+        "src/lib/__tests__/fulfillmentProjection.test.js",
+        "src/lib/__tests__/livingCommercialTwinProjection.test.js",
+        "src/lib/__tests__/staffMaturity.test.js",
         "src/lib/__tests__/staffBriefingSheet.test.js",
         "src/lib/__tests__/staffDirectoryClient.localFixture.test.js",
         "src/lib/__tests__/staffDirectoryAuthority.server.test.js",
@@ -6387,6 +6698,38 @@
           "locator": "opens the exact private staff record with role-safe briefing outcomes"
         },
         {
+          "path": "src/components/__tests__/staffWorkspace.test.jsx",
+          "locator": "adds Taylor Smith as an active roster member with only a name and Server role"
+        },
+        {
+          "path": "src/components/__tests__/staffWorkspace.test.jsx",
+          "locator": "clears a definitive aborted roster failure without replay, then submits a fresh request"
+        },
+        {
+          "path": "src/lib/__tests__/staffMaturity.test.js",
+          "locator": "keeps optional omissions quiet until a decision actually needs them"
+        },
+        {
+          "path": "src/hooks/__tests__/useFulfillmentStaffingSnapshot.test.jsx",
+          "locator": "expires an unchanged revision after a bounded freshness window instead of labeling it current forever"
+        },
+        {
+          "path": "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+          "locator": "renders an evidence-bounded 175 guest decision answer across Supply, Staffing, Commercial, and BEO"
+        },
+        {
+          "path": "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+          "locator": "keeps sourcing and menu attribution visibly unavailable instead of inventing a resolution"
+        },
+        {
+          "path": "src/components/__tests__/fulfillmentIntelligence.test.jsx",
+          "locator": "withholds retained decision claims and actions until the exact active scenario returns"
+        },
+        {
+          "path": "src/lib/__tests__/livingCommercialTwinProjection.test.js",
+          "locator": "builds one conditional decision answer from exact Commercial, Staffing, Inventory, BEO, and sourcing evidence"
+        },
+        {
           "path": "src/lib/__tests__/staffDirectoryClient.localFixture.test.js",
           "locator": "loads a photo-rich staff directory only for local bypass review"
         },
@@ -6425,6 +6768,7 @@
       ],
       "documentationPaths": [
         "docs/FEATURE_MATRIX.md",
+        "docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
@@ -6435,10 +6779,14 @@
         {
           "path": "docs/USER_MANUAL.md",
           "locator": "## Authoritative operational staffing"
+        },
+        {
+          "path": "docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md",
+          "locator": "## Progressive Staff Maturity"
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 5 preserves every revision 4 staffing, protected tenant-gate, WIF, role, and mutation boundary while moving Staff out of persistent primary navigation. Administrators reach the existing Staff workspace from desktop Operations or mobile Workspace & tools; eligible opportunity users reach the same staffing context through the task-specific Quick Updates handoff. The photo-rich local_fixture remains available only under explicit local authentication bypass and performs no Firebase or provider write. The independently gated Event Workspace context, administrator-only Staff route, public exact-token response route, and protected tenant-gate operator remain bound to exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundaries, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read/mutation states. The tenant-gate operator still accepts only a short-lived WIF Datastore token from its distinct service account and changes only the named tenant field with readback. No new role, profile field, assignment command, invitation path, provider evidence, or readiness claim is introduced. Slice D adds a read-only current execution context consumer of the existing trusted getter, with source revisions, observation time and independent failure handling. No mutation, authority, provider effect or historical execution claim is added.",
+      "surfaceReviewNote": "Revision 10 preserves every Staffing authority boundary while hardening the decision presentation. Current assignments cover the proposed requirement remains available only from complete current People evidence with an exact zero gap, and the whole cross-authority answer remains unverifiable unless Supply is also current and complete. A retained projection supplies no current Staffing conclusion or decision action. This read-only projection does not assign, contact, schedule, waive review, or establish attendance, payroll, booking, or event readiness.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -6514,7 +6862,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Same-tenant admins can scan a compact photo roster, prioritize the next assignment and readiness evidence, record bounded operational profiles and separate private staff records, print or hand off a revision-bound role briefing, then preview and manually send one exact-assignment invitation to a verified private email. The workspace distinguishes provider acceptance, signed provider delivery or bounce, and the person's accept or decline acknowledgement. Same-tenant admins or sales staff can still read or apply one exact-revision operational staffing plan with immutable replay-stable receipts. Local fallback remains explicitly local_draft; the local_fixture review directory is development-only and cannot prove Firebase or provider state. An email-app handoff, provider acceptance, operator-recorded availability, operator-confirmed assignment, invitation acknowledgement, stored attendance summaries, or complete coverage never proves attendance, hours, payroll, payment, booking, event completion, or readiness."
+      "safeOutcome": "Same-tenant admins retain the existing roster, plan, briefing, and invitation authorities. Fulfillment can report exact current role coverage and say current assignments cover only from complete current People evidence with zero exact gap; otherwise it exposes the gap or uncertainty. The cross-authority decision is unverifiable without complete current Supply, and retained evidence withholds current Staffing claims/actions. Staffing headroom and resilience still require separate complete evidence. No presenter, decision answer, roster save, plan, invitation, provider outcome, or maturity stage proves attendance, hours, payroll, payment, booking, completion, or readiness."
     },
     {
       "id": "sms-provider-choice-and-delivery-evidence",
@@ -8904,6 +9252,629 @@
       ],
       "headlessReason": "Developer-only launchers and synthetic fixture seeders are restricted to disposable demo projects and loopback Auth/Firestore/Functions. Fresh local setup creates named taxonomy before native pricing confirmation, then staff sign-in/display fixtures and native-planned synthetic acceptance/booking after verifying current catalog authority and preserving version, pricing and payment. The shared Firebase browser seed separately requires a demo project plus loopback Auth and Firestore before creating its active portal fixture. There is no hosted seed or tenant activation mode.",
       "safeOutcome": "Operators rehearse existing user surfaces locally with explicit synthetic evidence, normal role checks and providers disabled. Native acceptance and coordination fixtures are never customer or provider proof."
+    },
+    {
+      "id": "ingredient-inventory-workspace",
+      "reviewRevision": 4,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "organization_admins"
+      ],
+      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock and later receiving, independently retain exact purchase-cost evidence, publish explicit ingredient-specific purchase packs, and observe on-hand, committed, and available-to-allocate projections in realtime.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/inventoryAuthority.js",
+        "functions/inventoryAuthorityCore.cjs",
+        "functions/inventoryIngredientCore.cjs",
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getInventoryWorkspace",
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getInventoryWorkspace",
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/InventoryWorkspace.jsx",
+        "src/components/WorkspaceShell.jsx",
+        "src/lib/aiui01CompatibilityBaseline.js",
+        "src/lib/inventoryAuthorityClient.js",
+        "src/lib/workspaceRoutes.js",
+        "src/lib/workspaceShellModel.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/InventoryWorkspace.jsx",
+          "locator": "data-capability-id=\"inventory-workspace\""
+        }
+      ],
+      "testPaths": [
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/components/__tests__/inventoryWorkspace.test.jsx",
+        "src/components/__tests__/workspaceShell.test.jsx",
+        "src/lib/__tests__/aiui01CompatibilityBaseline.test.js",
+        "src/lib/__tests__/deploymentSafety.test.js",
+        "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+        "src/lib/__tests__/inventoryIngredientCore.server.test.js",
+        "src/lib/__tests__/inventoryProductionRoute.test.js",
+        "src/lib/__tests__/workspaceRoutes.test.js",
+        "src/lib/__tests__/workspaceShellModel.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "keeps physical stock and purchase-cost evidence as separate axes"
+        },
+        {
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "emits exact receiving evidence without changing allocation authority"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryAuthorityClient.test.js",
+          "locator": "subscribes to the exact workspace doc and bounded ordered ingredient query with metadata"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "base ingredient stock projections require the tenant inventory authority setting"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryProductionRoute.test.js",
+          "locator": "wires the triple-gated inventory route into the default production graph"
+        },
+        {
+          "path": "src/lib/__tests__/aiui01CompatibilityBaseline.test.js",
+          "locator": "keeps admin-only Catalog, Imports, Inventory, and Staff absent for sales"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Corrected Ingredient Inventory Phase 2"
+        },
+        {
+          "path": "docs/INVENTORY_AUTHORITY_ADR.md",
+          "locator": "## Corrected delivery sequence"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Ingredient inventory"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The Operations route uses the established workspace shell and exact tenant route, renders physical stock, active commitment, available-to-allocate, and purchase cost as separate evidence axes, adds contextual receiving and explicit-pack controls, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical read-state locators without promoting cached or pending evidence",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/inventoryWorkspace.test.jsx",
+          "locator": "exposes canonical mutation and recovery locators on each independent axis",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "With every gate enabled, a same-tenant administrator can record an ingredient, physical opening quantity, later confirmed receiving, optional exact purchase-cost observations, and explicit purchase-pack conversions through receipt-producing commands and watch server-confirmed bounded projections update. Receiving changes on-hand only, later receipt cost cannot silently replace an existing planning basis, cached or pending data cannot authorize writes, customers and sales cannot read stock, and this surface never changes selling price, booking, deployment, or production readiness."
+    },
+    {
+      "id": "ingredient-menu-recipe-costing",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "organization_admins",
+        "organization_sales"
+      ],
+      "summary": "Library attaches immutable ingredient recipes to exact existing menu-item identities and exposes independently calculated, revision-bound ingredient-cost evidence through bounded summaries plus an exact realtime projection for the menu item being edited.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/inventoryAuthority.js",
+        "functions/inventoryIngredientCore.cjs",
+        "functions/inventoryRecipeCore.cjs",
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/hooks/useInventoryRecipeExtension.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/AmbientLibraryRoute.jsx",
+        "src/components/InventoryRecipeEditor.jsx",
+        "src/hooks/useInventoryRecipeExtension.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/InventoryRecipeEditor.jsx",
+          "locator": "data-inventory-recipe-editor"
+        }
+      ],
+      "testPaths": [
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/components/__tests__/ambientLibraryRoute.test.jsx",
+        "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+        "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+        "src/lib/__tests__/inventoryProductionRoute.test.js",
+        "src/lib/__tests__/inventoryRecipeCore.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/inventoryRecipeCore.server.test.js",
+          "locator": "calculates the owner fixture exactly without a rounded unit-cost intermediate"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+          "locator": "publishes a catalog-fenced recipe and materializes exact $0.80 per-portion costing without stock"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryAuthorityClient.test.js",
+          "locator": "uses an exact-document listener for the active menu item and treats only a current missing document as no recipe"
+        },
+        {
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "clears a definitive rejected request before allowing a corrected retry"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "menu cost projections are staff-readable, server-owned, and query bounded"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Ingredient Inventory Phase 3"
+        },
+        {
+          "path": "docs/INVENTORY_AUTHORITY_ADR.md",
+          "locator": "## Versioned recipes and pure costing"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "To cost an existing menu item:"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Recipe composition is embedded in the existing Library menu-item editor in both production app graphs. The tenant-wide cost summary remains bounded, while the active editor subscribes to its exact projection document so truncation can never masquerade as no recipe. Pending, uncertain, committed, and definitively rejected attempts lock the visible inputs until reconciliation, projection refresh, or explicit reset.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "renders loading while the exact active-menu projection is unresolved",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "shows no-recipe state and only units supplied by ingredient authority",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "publishes an exact menu-item recipe payload without deriving cost in React",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "keeps partial, stale, unavailable, and invalid evidence explicit",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "keeps partial, stale, unavailable, and invalid evidence explicit",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "keeps partial, stale, unavailable, and invalid evidence explicit",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "disables publication for retained ingredient data and explains recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "publishes an exact menu-item recipe payload without deriving cost in React",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "locks the recipe while a publication is submitting",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "locks an uncertain request to its reconciliation action",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "locks an uncertain request to its reconciliation action",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+          "locator": "publishes an exact menu-item recipe payload without deriving cost in React",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "With all inventory gates enabled, administrators can publish immutable recipes and explicit pack conversions without changing menu selling price or manual declared catalog cost. Administrators and sales can read safe cost projections; only administrators can read ingredient stock or mutate recipes. Missing costs and conversions remain incomplete evidence, cached or pending snapshots cannot authorize writes, and recipe costing remains independent from stock availability, quote demand, allocation, COGS, deployment, production behavior, and human acceptance."
+    },
+    {
+      "id": "event-ingredient-demand-consequence",
+      "reviewRevision": 5,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "organization_admins",
+        "organization_sales"
+      ],
+      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability; accepted/booked commitments reconcile through shared date-independent Firestore fences, Commercial Change shows independent read-only cost and stock consequences, the exact event Control Room records consumption, waste, and correction evidence, and Event Preflight plus the selected Operations event compose the same exact projections without collapsing physical, cost, or execution truth.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/inventoryAuthority.js",
+        "functions/inventoryEventDemandCore.cjs",
+        "functions/inventoryIngredientAllocationCore.cjs",
+        "functions/inventoryIngredientReconciliationCore.cjs",
+        "functions/inventoryIngredientExecutionCore.cjs",
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/hooks/useEventIngredientProjection.js",
+        "src/hooks/useEventIngredientExecutionProjection.js",
+        "src/lib/commercialInventoryConsequences.js",
+        "src/lib/eventIngredientOperationalPresentation.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#previewEventInventory",
+        "functions/index.js#invalidateEventIngredientsOnQuoteChange",
+        "functions/index.js#invalidateEventIngredientsOnRecipeChange",
+        "functions/index.js#invalidateEventIngredientsOnMenuCostChange"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#applyInventoryCommand"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/LegacyApp.jsx",
+        "src/components/EventIngredientProjectionPanel.jsx",
+        "src/components/CommercialChangeImpactPanel.jsx",
+        "src/components/EventIngredientUsagePanel.jsx",
+        "src/components/EventIngredientOperationsSummary.jsx",
+        "src/components/EventScheduleModal.jsx",
+        "src/components/LiveOperationsPlanningViews.jsx",
+        "src/components/eventIngredientProjectionPanel.css",
+        "src/components/eventIngredientOperationsSummary.css",
+        "src/components/eventPreflightPresentation.js",
+        "src/hooks/useEventIngredientProjection.js",
+        "src/lib/eventIngredientOperationalPresentation.js",
+        "src/lib/commercialInventoryConsequences.js",
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/App.jsx",
+          "locator": "data-capability-id=\"inventory-event-ingredient-consequence\""
+        },
+        {
+          "path": "src/LegacyApp.jsx",
+          "locator": "data-capability-id=\"inventory-event-ingredient-consequence\""
+        },
+        {
+          "path": "src/components/CommercialChangeImpactPanel.jsx",
+          "locator": "data-commercial-inventory-consequence"
+        },
+        {
+          "path": "src/components/EventIngredientUsagePanel.jsx",
+          "locator": "data-event-ingredient-usage"
+        },
+        {
+          "path": "src/components/EventIngredientOperationsSummary.jsx",
+          "locator": "data-event-ingredient-operations-summary"
+        }
+      ],
+      "testPaths": [
+        "e2e/event-preflight.spec.js",
+        "scripts/inventory-ingredient-emulator-acceptance.mjs",
+        "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+        "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/components/__tests__/eventIngredientUsagePanel.test.jsx",
+        "src/components/__tests__/eventIngredientOperationsSummary.test.jsx",
+        "src/components/__tests__/eventScheduleArrival.test.jsx",
+        "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
+        "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+        "src/hooks/__tests__/useEventIngredientExecutionProjection.test.jsx",
+        "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
+        "src/lib/__tests__/commercialInventoryConsequences.test.js",
+        "src/lib/__tests__/eventIngredientOperationalPresentation.test.js",
+        "src/lib/__tests__/eventPreflightPresentation.test.js",
+        "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
+        "src/lib/__tests__/inventoryIngredientAllocationCore.server.test.js",
+        "src/lib/__tests__/inventoryIngredientExecutionCore.server.test.js",
+        "src/lib/__tests__/inventoryProductionRoute.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/event-preflight.spec.js",
+          "locator": "separates satisfied, attention, and unavailable truth"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
+          "locator": "compiles the 100-portion owner fixture to 20 lb chicken, 10 lb pasta, and $80"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryEventDemandCore.server.test.js",
+          "locator": "unknown pasta cost preserves valid physical shortage evidence"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryIngredientAllocationCore.server.test.js",
+          "locator": "tops up only the remaining shortage after stock is received and preserves the prior hold"
+        },
+        {
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "shows partial allocation independently and emits exact admin allocate and release intents"
+        },
+        {
+          "path": "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+          "locator": "builds exact saved menu evidence without inferring portions from guests or billing quantities"
+        },
+        {
+          "path": "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
+          "locator": "preserves release for a stale active hold while forbidding top-up and reconcile"
+        },
+        {
+          "path": "src/lib/__tests__/commercialInventoryConsequences.test.js",
+          "locator": "returns immutable cost and per-unit availability deltas with exact provenance"
+        },
+        {
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders independent read-only ingredient cost and stock consequences without changing commercial authority"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "event ingredient projections are exact-document staff reads and server-owned"
+        },
+        {
+          "path": "src/lib/__tests__/inventoryIngredientExecutionCore.server.test.js",
+          "locator": "settles an allocation, decrements physical stock once, and reports exact planned-basis usage cost"
+        },
+        {
+          "path": "src/hooks/__tests__/useEventIngredientExecutionProjection.test.jsx",
+          "locator": "submits a complete sorted closeout and commits only after exact projection readback"
+        },
+        {
+          "path": "src/components/__tests__/eventIngredientUsagePanel.test.jsx",
+          "locator": "requires explicit consumed and waste totals, time, reason, and final acknowledgement"
+        },
+        {
+          "path": "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
+          "locator": "mounts ingredient usage from its independent inventory gate without requiring Event Operating Spine"
+        },
+        {
+          "path": "src/lib/__tests__/eventIngredientOperationalPresentation.test.js",
+          "locator": "keeps a current reservation physically satisfied when cost is unknown and usage is not recorded"
+        },
+        {
+          "path": "src/lib/__tests__/eventIngredientOperationalPresentation.test.js",
+          "locator": "does not treat saved availability without an allocation as a stock commitment"
+        },
+        {
+          "path": "src/components/__tests__/eventIngredientOperationsSummary.test.jsx",
+          "locator": "announces realtime axis changes and supports the caller heading hierarchy"
+        },
+        {
+          "path": "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
+          "locator": "uses Control Room as a bounded coordination board and keeps live actuals unavailable"
+        },
+        {
+          "path": "src/components/__tests__/eventScheduleArrival.test.jsx",
+          "locator": "subscribes only the selected Operations event to exact ingredient projections"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Ingredient Inventory Phase 4"
+        },
+        {
+          "path": "docs/INVENTORY_AUTHORITY_ADR.md",
+          "locator": "## Shared event demand with independent result rails"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "To evaluate an event, open the saved quote in **Quote Edit**"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Quote Edit and Commercial Change preserve their commercial-consequence boundary. The accepted/booked event Control Room adds a separate ingredient-actuals surface behind the inventory gates, uses exact plan and execution listeners with snapshot metadata, requires complete explicit fractional totals and acknowledgement, and offers mutation only to administrators. Event Preflight and only the currently selected Operations event reuse those exact reads to present physical allocation, menu-cost completeness, and execution as separate facts. A saved availability observation never passes as commitment, cost gaps do not invalidate a current hold, unlike units are never totaled together, and Calendar rows do not each create listeners. Allocation settlement, physical depletion, correction, receipt readback, cached or pending evidence, and uncertain recovery remain visibly distinct; saved-planning-basis comparison is never labeled authoritative actual COGS.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "requires explicit per-menu recipe output quantity and unit without guessing from guests or billing",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "shows a read-only preview without treating it as a recorded requirement",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "requires explicit per-menu recipe output quantity and unit without guessing from guests or billing",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "labels a dirty quote as draft-not-evaluated while retaining the saved projection separately",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "locks target inputs in uncertain recovery and exposes one reconcile action",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "locks target inputs in uncertain recovery and exposes one reconcile action",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "locks target inputs in uncertain recovery and exposes one reconcile action",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "requires explicit per-menu recipe output quantity and unit without guessing from guests or billing",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/eventIngredientProjectionPanel.test.jsx",
+          "locator": "exposes loading and committed receipt states without promoting either to current evidence",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote demand, projected ingredient cost, consumable availability, allocation freshness, Commercial Change deltas, event usage evidence, and exact-event Preflight and Operations summaries. Only administrators can record requirements, change accepted/booked allocations, or submit complete consumption/waste totals and corrections. Shared fences prevent over-allocation; settlement removes the event hold and changes physical stock exactly once; immutable revisions preserve prior evidence; cached or pending reads are not current; cost completeness never manufactures or invalidates a physical commitment; and the capability never mutates selling price, invents inbound supply or valuation policy, claims authoritative actual COGS, or establishes deployment or human acceptance."
     }
   ]
 }

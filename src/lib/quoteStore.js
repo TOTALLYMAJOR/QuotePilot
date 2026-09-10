@@ -41,6 +41,12 @@ import {
 } from "./quoteWorkflow";
 import { normalizeDecisionRoomOptions } from "./customerDecisionRoom";
 import { deriveAttendanceState } from "../components/attendanceState";
+import {
+  attachBookingEvidencePresence,
+  attachPaymentEvidencePresence,
+  captureCommercialEvidencePresence,
+  restoreCommercialEvidenceSource
+} from "./commercialEvidencePresence";
 
 // Local demo storage has no server authority. Preserve reviewed evidence using
 // the same read-model schema; Firebase requests always go through quoteCreation.
@@ -69,7 +75,6 @@ function localAttendancePlanning(form, { referenceId, versionId, actorUid, nowIS
   deriveAttendanceState({ quote: { activeVersionId: versionId, event: { guests: Number(form.guests), attendance } } });
   return { attendance };
 }
-
 const LOCAL_QUOTES_KEY = "quoteWizard.quotes";
 const LOCAL_QUOTE_HISTORY_KEY = "quoteWizard.quoteHistory";
 const QUOTES_COLLECTION = "quotes";
@@ -107,11 +112,7 @@ export const PROPOSAL_ACCEPTANCE_CONSENT_VERSION = "proposal-acceptance-v1";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
-const FINAL_BALANCE_STATUSES = new Set([
-  "unpaid",
-  "sent",
-  "paid"
-]);
+const FINAL_BALANCE_STATUSES = new Set(["unpaid", "sent", "paid"]);
 const FINAL_BALANCE_CHECKOUT_STATES = new Set([
   "",
   "prepared",
@@ -1001,7 +1002,7 @@ function buildPortalSnapshot(quoteId, quote) {
     },
     status: normalizeStatus(quote.status),
     expiresAtISO: quote.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS),
-    payment: hydratePayment(quote.payment, quote.totals),
+    payment: materializePortalPayment(quote.payment, quote.totals),
     booking: {
       bookedAtISO: portalBooking.bookedAtISO,
       contractNumber: portalBooking.contractNumber,
@@ -1183,6 +1184,26 @@ function moneyToRoundedCents(value) {
   return Number.isSafeInteger(cents) ? cents : 0;
 }
 
+function hydratedRecord(source, values) {
+  const payload = source && typeof source === "object" && !Array.isArray(source)
+    ? source
+    : {};
+  const hydrated = { ...payload };
+  Object.entries(values).forEach(([key, value]) => {
+    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+      hydrated[key] = value;
+      return;
+    }
+    Object.defineProperty(hydrated, key, {
+      configurable: true,
+      enumerable: false,
+      value,
+      writable: true
+    });
+  });
+  return hydrated;
+}
+
 function hydrateFinalBalance(finalBalance, totals = {}) {
   const source = finalBalance && typeof finalBalance === "object" && !Array.isArray(finalBalance)
     ? finalBalance
@@ -1203,7 +1224,7 @@ function hydrateFinalBalance(finalBalance, totals = {}) {
   const rawCheckoutState = String(source.stripeCheckoutState || "").trim().toLowerCase();
   const checkoutGeneration = Number(source.checkoutGeneration);
   const currency = String(source.currency || "usd").trim().toLowerCase();
-  return {
+  return hydratedRecord(source, {
     amountCents,
     currency: /^[a-z]{3}$/.test(currency) ? currency : "usd",
     status,
@@ -1221,30 +1242,30 @@ function hydrateFinalBalance(finalBalance, totals = {}) {
         .map((value) => String(value || "").trim())
         .filter((value) => /^cs_[A-Za-z0-9_]+$/.test(value))
     )).slice(-20)
-  };
+  });
 }
 
 function hydratePayment(payment, totals = {}) {
   const payload = payment || {};
+  const evidencePresence = captureCommercialEvidencePresence({ payment: payload });
   const depositLink = (payload.depositLink || "").trim();
   const defaultStatus = depositLink ? "sent" : "unpaid";
-  return {
-    ...payload,
+  return attachPaymentEvidencePresence(hydratedRecord(payload, {
     depositLink,
     depositStatus: normalizePaymentStatus(payload.depositStatus || defaultStatus),
     depositConfirmedAtISO: payload.depositConfirmedAtISO || "",
     finalBalance: hydrateFinalBalance(payload.finalBalance, totals)
-  };
+  }), evidencePresence);
 }
 
 function hydrateBooking(booking) {
   const payload = booking || {};
+  const evidencePresence = captureCommercialEvidencePresence({ booking: payload });
   const sentAtISO = payload.confirmationSentAtISO || "";
   const confirmedAtISO = payload.confirmedAtISO || "";
   const inferredStatus = confirmedAtISO ? "confirmed" : sentAtISO ? "sent" : "pending";
   const confirmationStatus = normalizeBookingConfirmationStatus(payload.confirmationStatus || inferredStatus);
-  return {
-    ...payload,
+  return attachBookingEvidencePresence(hydratedRecord(payload, {
     bookedAtISO: payload.bookedAtISO || "",
     bookedByEmail: normalizeEmail(payload.bookedByEmail),
     staffLead: String(payload.staffLead || "").trim(),
@@ -1263,6 +1284,50 @@ function hydrateBooking(booking) {
         : {},
     kitchenCheckpoints: normalizeKitchenCheckpoints(payload.kitchenCheckpoints),
     productionChecklist: normalizeProductionChecklist(payload.productionChecklist)
+  }), evidencePresence);
+}
+
+function materializeBooking(booking) {
+  const hydrated = hydrateBooking(booking);
+  return {
+    ...hydrated,
+    bookedAtISO: hydrated.bookedAtISO,
+    bookedByEmail: hydrated.bookedByEmail,
+    staffLead: hydrated.staffLead,
+    staffAssignedAtISO: hydrated.staffAssignedAtISO,
+    contractNumber: hydrated.contractNumber,
+    contractConvertedAtISO: hydrated.contractConvertedAtISO,
+    contractConvertedByEmail: hydrated.contractConvertedByEmail,
+    confirmationStatus: hydrated.confirmationStatus,
+    confirmationSentAtISO: hydrated.confirmationSentAtISO,
+    confirmedAtISO: hydrated.confirmedAtISO,
+    confirmationUpdatedByEmail: hydrated.confirmationUpdatedByEmail,
+    availabilityCheckedAtISO: hydrated.availabilityCheckedAtISO,
+    availabilitySummary: hydrated.availabilitySummary,
+    kitchenCheckpoints: hydrated.kitchenCheckpoints,
+    productionChecklist: hydrated.productionChecklist
+  };
+}
+
+function materializePortalPayment(payment, totals = {}) {
+  const hydrated = hydratePayment(payment, totals);
+  const finalBalance = hydrated.finalBalance;
+  return {
+    ...hydrated,
+    depositLink: hydrated.depositLink,
+    depositStatus: hydrated.depositStatus,
+    depositConfirmedAtISO: hydrated.depositConfirmedAtISO,
+    finalBalance: {
+      amountCents: finalBalance.amountCents,
+      currency: finalBalance.currency,
+      status: finalBalance.status,
+      paymentLink: finalBalance.paymentLink,
+      confirmedAtISO: finalBalance.confirmedAtISO,
+      stripeSessionId: finalBalance.stripeSessionId,
+      stripeCheckoutState: finalBalance.stripeCheckoutState,
+      checkoutGeneration: finalBalance.checkoutGeneration,
+      knownStripeSessionIds: finalBalance.knownStripeSessionIds
+    }
   };
 }
 
@@ -1754,7 +1819,7 @@ export async function saveQuoteVersion(
 ) {
   const quote = await readQuoteById(quoteId);
   const timestamp = isoNow();
-  const localSnapshot = JSON.parse(JSON.stringify(quote));
+  const localSnapshot = JSON.parse(JSON.stringify(restoreCommercialEvidenceSource(quote)));
   const organizationCandidate = organizationId !== undefined ? organizationId : quote.organizationId;
   const resolvedOrganizationId = firebaseReady
     ? requireWriteOrganizationId(organizationCandidate, "saveQuoteVersion")
@@ -2318,7 +2383,16 @@ async function persistQuotePatch({
   const next = existing.map((item) => {
     if (item.id !== quoteId) return item;
     found = true;
-    return { ...item, updatedAtISO: nowISO, ...localPatch(item) };
+    const sourcePresence = captureCommercialEvidencePresence({
+      payment: item.payment,
+      booking: item.booking
+    });
+    const patched = { ...item, updatedAtISO: nowISO, ...localPatch(item) };
+    return restoreCommercialEvidenceSource({
+      ...patched,
+      payment: attachPaymentEvidencePresence({ ...(patched.payment || {}) }, sourcePresence),
+      booking: attachBookingEvidencePresence({ ...(patched.booking || {}) }, sourcePresence)
+    });
   });
   if (!found) throw new Error(QUOTE_NOT_FOUND);
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
@@ -3889,8 +3963,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),
     status: "draft",
     deletedAtISO: "",
-    payment: hydratePayment({}, source.totals || {}),
-    booking: hydrateBooking({}),
+    payment: materializePortalPayment({}, source.totals || {}),
+    booking: materializeBooking({}),
     workflow: {
       followUp: normalizeFollowUp({ stage: "new" }),
       approvalRequests: []
@@ -4139,7 +4213,10 @@ export async function getQuoteHistory(filters = {}) {
     for (const quoteId of autoExpiredIds) {
       await saveQuoteVersion(quoteId);
     }
-    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(nextQuotes));
+    localStorage.setItem(
+      LOCAL_QUOTES_KEY,
+      JSON.stringify(nextQuotes.map((quote) => restoreCommercialEvidenceSource(quote)))
+    );
   }
 
   const filteredQuotes = applyQuoteHistoryFilters(nextQuotes, {
@@ -4210,7 +4287,9 @@ export async function updateQuoteStatus(quoteId, status) {
     const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
     const next = existing.map((quote) => {
       if (quote.id !== id) return quote;
-      const booking = hydrateBooking(quote.booking);
+      const booking = quote.booking && typeof quote.booking === "object"
+        ? { ...quote.booking }
+        : {};
       return {
         ...quote,
         status: nextStatus,
@@ -4226,7 +4305,10 @@ export async function updateQuoteStatus(quoteId, status) {
         lifecycle: lifecycleObject(nextStatus, nowISO, quote.lifecycle)
       };
     });
-    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
+    localStorage.setItem(
+      LOCAL_QUOTES_KEY,
+      JSON.stringify(next.map((quote) => restoreCommercialEvidenceSource(quote)))
+    );
   }
 
   return {
@@ -4476,7 +4558,7 @@ export async function getPortalQuote(portalKey) {
     return {
       portalKey: key,
       ...portalData,
-      payment: hydratePayment(portalData.payment, portalData.totals || {
+      payment: materializePortalPayment(portalData.payment, portalData.totals || {
         total: portalData.total,
         deposit: portalData.deposit
       }),

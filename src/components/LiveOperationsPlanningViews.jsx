@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
 import { lazy, Suspense } from "react";
 const EventOperationsPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
@@ -11,9 +12,21 @@ import StaffEvidenceRail from "./StaffEvidenceRail";
 import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
+import { useWorkspaceReturnContextAdapter } from "../context/WorkspaceNavigationContext";
+import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
+import { buildClearDeckDecisionPresentations } from "../lib/decisionResolutionPresentation";
+import { buildCommitmentExecutionPresentation } from "./eventWorkspacePresentation";
+import { getKitchenBeoArtifactStatus } from "../lib/kitchenBeoClient";
+import { getOperationalStaffingSnapshot } from "../lib/operationalStaffingClient";
+import EventPreflightPanel from "./EventPreflightPanel";
+import { buildEventPreflightPresentation } from "./eventPreflightPresentation";
+import EventIngredientUsagePanel from "./EventIngredientUsagePanel";
+import { useEventIngredientExecutionProjection } from "../hooks/useEventIngredientExecutionProjection";
+import { buildScheduleConflictAssessment, buildScheduledEvents } from "./EventScheduleModal";
 import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
+  formatWorkspaceMoney,
   formatWorkspaceText,
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
@@ -33,6 +46,17 @@ function findEvent(quotes = [], quoteId = "") {
   return acceptedEvents(quotes).find((quote) => String(quote?.id || "") === id) || null;
 }
 
+function formatEvidenceTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Time not recorded";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "Time not recorded";
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(parsed);
+}
+
 function EvidenceRail({ snapshot, organizationName, organizationId, presentation = "standard" }) {
   return (
     <StaffEvidenceRail
@@ -48,6 +72,7 @@ function EvidenceRail({ snapshot, organizationName, organizationId, presentation
       truncationKnown={snapshot?.truncationKnown}
       reads={snapshot?.reads}
       presentation={presentation}
+      headingLevel={2}
     />
   );
 }
@@ -85,8 +110,8 @@ function LiveAuthorityNotice({ compact = false }) {
     <div className={compact ? "live-ops-authority live-ops-authority-compact" : "live-ops-authority"}>
       <strong>Planning view only</strong>
       <span>
-        Event details are available. Live phase, issues, labor actuals, and replay stay
-        unavailable until live operations are enabled.
+        Event details and the saved plan are available. Live phase, issues, labor actuals,
+        and execution replay remain unavailable without server-owned event-session evidence.
       </span>
     </div>
   );
@@ -161,6 +186,11 @@ export function EventPlanningView({
   principalId = "",
   role = "customer",
   eventOperationsEnabled = false,
+  inventoryAuthorityEnabled = false,
+  inventoryTenantEnabled = false,
+  tenantTimeZone = "",
+  scheduleAvailable = true,
+  scheduleCapacityLimit = 400,
   routeMode = "list",
   quoteId = "",
   onRefresh,
@@ -169,12 +199,17 @@ export function EventPlanningView({
   onOpenLive,
   onOpenReplay,
   onOpenCustomer,
+  onOpenWorkflow,
+  onOpenSchedule,
   onOpenOperations,
   onOpenEvents,
   onOpenOpportunities,
   onStartOpportunity
 }) {
   const headingRef = useWorkspaceRouteHeadingFocus(true);
+  useEffect(() => {
+    headingRef.current?.focus({ preventScroll: true });
+  }, [headingRef, quoteId, routeMode]);
   const state = snapshot || { loading: true, error: "", quotes: [] };
   const events = acceptedEvents(state.quotes);
   const selected = routeMode === "list" ? null : findEvent(state.quotes, quoteId);
@@ -190,7 +225,89 @@ export function EventPlanningView({
     || state.truncationKnown === false
   );
   const eventOperationsAvailable = eventOperationsEnabled && state.source === "firebase" && ["admin", "sales"].includes(role) && selected?.status === "booked" && Boolean(principalId);
+  const ingredientExecution = useEventIngredientExecutionProjection({
+    active: routeMode === "live" && state.source === "firebase" && Boolean(selected?.id),
+    organizationId,
+    role,
+    browserEnabled: inventoryAuthorityEnabled,
+    tenantEnabled: inventoryTenantEnabled,
+    quoteId: selected?.id || "",
+    quoteStatus: selected?.status || ""
+  });
   const unavailableMode = routeMode === "live" || routeMode === "replay";
+  const execution = selected
+    ? buildCommitmentExecutionPresentation(selected, {
+        source: state.source,
+        now: new Date(),
+        tenantTimeZone,
+        scheduleAvailable
+      })
+    : null;
+  const currentRevisionId = String(selected?.activeVersionId || selected?.versionMeta?.versionId || "").trim();
+  const authorityIdentity = `${organizationId}:${selected?.id || ""}:${currentRevisionId}:${state.loadedAt || ""}`;
+  const [authorityReads, setAuthorityReads] = useState({
+    identity: "",
+    beo: { state: "idle", value: null },
+    staffing: { state: "idle", value: null }
+  });
+  useEffect(() => {
+    const identity = authorityIdentity;
+    if (routeMode !== "live" || !selected?.id) {
+      setAuthorityReads({ identity: "", beo: { state: "idle", value: null }, staffing: { state: "idle", value: null } });
+      return undefined;
+    }
+    if (state.source !== "firebase" || !organizationId) {
+      setAuthorityReads({
+        identity,
+        beo: { state: "unavailable", value: null },
+        staffing: { state: "unavailable", value: null }
+      });
+      return undefined;
+    }
+    let current = true;
+    setAuthorityReads({
+      identity,
+      beo: { state: "loading", value: null },
+      staffing: { state: "loading", value: null }
+    });
+    getKitchenBeoArtifactStatus({ organizationId, quoteId: selected.id })
+      .then((value) => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, beo: { state: "current", value } }
+        : prior))
+      .catch(() => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, beo: { state: "unavailable", value: null } }
+        : prior));
+    getOperationalStaffingSnapshot({ organizationId, quoteId: selected.id })
+      .then((value) => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, staffing: { state: String(value?.state || "unavailable"), value } }
+        : prior))
+      .catch(() => current && setAuthorityReads((prior) => prior.identity === identity
+        ? { ...prior, staffing: { state: "unavailable", value: null } }
+        : prior));
+    return () => { current = false; };
+  }, [authorityIdentity, organizationId, routeMode, selected?.id, state.source]);
+  const scheduleAssessment = useMemo(() => {
+    if (!selected?.id) return { state: "unknown", reasons: [] };
+    const scheduled = buildScheduledEvents(state.quotes || [], { preserveUndated: true });
+    return buildScheduleConflictAssessment(scheduled, selected.id, scheduleCapacityLimit);
+  }, [scheduleCapacityLimit, selected?.id, state.quotes]);
+  const preflight = useMemo(() => selected && execution
+    ? buildEventPreflightPresentation({
+        quote: selected,
+        execution,
+        authorityReads,
+        authorityIdentity,
+        organizationId,
+        snapshot: state,
+        scheduleAssessment,
+        scheduleAvailable,
+        ingredientAuthority: {
+          enabled: ingredientExecution.access.readEnabled,
+          planRead: ingredientExecution.planRead,
+          executionRead: ingredientExecution.read
+        }
+      })
+    : null, [authorityIdentity, authorityReads, execution, ingredientExecution.access.readEnabled, ingredientExecution.planRead, ingredientExecution.read, organizationId, scheduleAssessment, scheduleAvailable, selected, state]);
   const heading = routeMode === "live"
     ? "Control Room"
     : routeMode === "replay"
@@ -205,14 +322,14 @@ export function EventPlanningView({
         <div className="command-center-head">
           <div>
             <p className="eyebrow">{heading}</p>
-            <h2
+            <h1
               ref={headingRef}
               id="live-ops-heading"
               className="workspace-route-heading"
               tabIndex={-1}
             >
               {selected ? eventTitle(selected) : "Accepted and booked events"}
-            </h2>
+            </h1>
           </div>
           <div className="right-actions">
             {!showUnavailableRecovery && (
@@ -282,41 +399,195 @@ export function EventPlanningView({
           />
         )}
 
-        {!selected && !expectsSelection && hasEvents && (eventOperationsEnabled && state.source === "firebase" && ["admin", "sales"].includes(role)
-          ? <p className="source-note">Open a booked event to review its recorded phase, checkpoints, issues, and actuals. Replay reads operational receipts for the current accepted source.</p>
-          : <LiveAuthorityNotice />)}
-
         {selected && routeMode === "live" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading event operations...</p>}><EventOperationsPanel organizationId={organizationId} quoteId={selected.id} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} quoteStatus={selected.status} sourceVersionId={selected.activeVersionId || selected.versionMeta?.versionId || ""} acceptanceReceiptId={selected.acceptanceReceipt?.receiptId || ""} /></Suspense>}
 
         {selected && routeMode === "replay" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading Replay...</p>}><EventOperatingHistoryPanel organizationId={organizationId} quoteId={selected.id} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} sourceVersionId={selected.activeVersionId || selected.versionMeta?.versionId || ""} acceptanceReceiptId={selected.acceptanceReceipt?.receiptId || ""} /></Suspense>}
         {selected && routeMode === "live" && eventOperationsAvailable && <Suspense fallback={<p role="status">Loading execution context...</p>}><EventExecutionContextPanel organizationId={organizationId} quote={selected} principalId={principalId} role={role} source={state.source} enabled={eventOperationsEnabled} onOpenQuote={onOpenQuote} onOpenCustomer={onOpenCustomer} /></Suspense>}
-        {selected && (
-          <div className="live-ops-focus-grid">
-            <section className="live-ops-focus-card" aria-label="Event basics">
-              <h3>Event basics</h3>
-              <dl className="live-ops-facts">
-                <div><dt>Date</dt><dd>{formatWorkspaceDate(selected.event?.date)}</dd></div>
-                <div><dt>Guests</dt><dd>{formatWorkspaceInteger(selected.event?.guests, { emptyLabel: "Guest count not set" })}</dd></div>
-                <div><dt>Venue</dt><dd>{formatWorkspaceText(selected.event?.venue, { emptyLabel: "Venue not set" })}</dd></div>
-                <div><dt>Customer</dt><dd>{formatWorkspaceText(selected.customer?.name || selected.customer?.email, { emptyLabel: "Customer not set" })}</dd></div>
+        {!selected && !expectsSelection && hasEvents && (
+          <p className="live-ops-intro">
+            Commercial commitments ready for operational planning. Open one event to carry its accepted scope into a bounded briefing.
+          </p>
+        )}
+
+        {selected && execution && routeMode === "detail" && (
+          <div className="commitment-execution" data-execution-surface="event-focus">
+            <section className="execution-hero" aria-label="Current commitment">
+              <div>
+                <p className="eyebrow">Current commitment · {execution.timingLabel}</p>
+                <h2>{execution.workspace.customerName}</h2>
+                <p>{execution.workspace.eventDate} at {execution.workspace.eventTime} · {execution.workspace.venue}</p>
+              </div>
+              <StatusChip {...execution.workspace.status} />
+              <dl className="execution-fact-strip">
+                <div><dt>Guests</dt><dd>{execution.workspace.guests}</dd></div>
+                <div><dt>Saved total</dt><dd>{execution.workspace.total}</dd></div>
+                <div><dt>Commitment</dt><dd>{execution.runOfShow.quoteStatus === "booked" ? "Booked" : "Accepted"}</dd></div>
+                <div><dt>Payment context</dt><dd>{execution.commercialEvidence.deposit}</dd></div>
               </dl>
             </section>
-            <section className="live-ops-focus-card" aria-label="Planning status">
-              <h3>Planning status</h3>
-              <p className="source-note">
-                {classifyQuoteStatus(selected.status).label} is the recorded opportunity state. The scheduled date does not by itself confirm operational readiness.
-              </p>
-              {eventOperationsAvailable
-                ? <p className="source-note">Control Room records event phases, checkpoints, issues, and actuals against the accepted source. Replay reads operational receipts for the current accepted source.</p>
-                : <LiveAuthorityNotice compact />}
-              {unavailableMode && !eventOperationsAvailable && (
-                <p className="error-note" role="status">
-                  {routeMode === "live"
-                    ? "Control Room is unavailable until live operations authority is enabled."
-                    : "Replay is unavailable until immutable event ledger evidence exists."}
-                </p>
+
+            <div className="execution-briefing-grid">
+              <section className="execution-card" aria-labelledby="event-plan-title">
+                <p className="eyebrow">Event plan</p>
+                <h2 id="event-plan-title">The day as currently recorded</h2>
+                <dl className="live-ops-facts">
+                  <div><dt>Quote</dt><dd>{execution.workspace.quoteNumber}</dd></div>
+                  <div><dt>Revision</dt><dd>{execution.commitment.revision}</dd></div>
+                  <div><dt>Duration</dt><dd>{execution.commitment.duration}</dd></div>
+                  <div><dt>Address</dt><dd>{execution.commitment.address}</dd></div>
+                  <div><dt>Package</dt><dd>{execution.commitment.package}</dd></div>
+                  <div><dt>Service</dt><dd>{execution.commitment.serviceStyle}</dd></div>
+                  <div><dt>Staff lead</dt><dd>{formatWorkspaceText(execution.runOfShow.staffing.staffLead, { emptyLabel: "Not recorded" })}</dd></div>
+                  <div><dt>Team</dt><dd>{execution.staffingSummary}</dd></div>
+                  <div><dt>Run of show</dt><dd>{execution.runOfShow.timeline.length - execution.timingUnknownCount} of {execution.runOfShow.timeline.length} checkpoint times known</dd></div>
+                  <div><dt>Production</dt><dd>{execution.runOfShow.productionChecklist.completedCount} of {execution.runOfShow.productionChecklist.totalCount} checklist items recorded complete</dd></div>
+                  <div><dt>Final balance</dt><dd>{execution.commercialEvidence.finalBalance}</dd></div>
+                  <div><dt>Acceptance</dt><dd>{execution.commitment.acceptance}</dd></div>
+                </dl>
+              </section>
+              <section className="execution-card execution-attention" aria-labelledby="handoff-title">
+                <p className="eyebrow">Handoff</p>
+                <h2 id="handoff-title">{execution.attention.length ? "What needs attention" : "Continue into coordination"}</h2>
+                <p>{execution.attention[0]?.title || "The accepted plan is ready to coordinate from its current evidence."}</p>
+                <p className="source-note">{execution.proofBoundary}</p>
+              </section>
+            </div>
+
+            <div className="live-ops-actions" aria-label="Event Focus actions">
+              {eventOperationsAvailable && (
+                <button
+                  type="button"
+                  className="cta"
+                  data-event-operations-entry="control-room"
+                  onClick={() => onOpenLive?.(selected.id)}
+                >
+                  Open Control Room
+                </button>
+              )}
+              {!eventOperationsAvailable && (
+                <button type="button" className="cta" onClick={() => onOpenLive?.(selected.id)}>
+                  Enter Control Room
+                </button>
+              )}
+              {eventOperationsAvailable && (
+                <button
+                  type="button"
+                  className="ghost"
+                  data-event-operations-entry="replay"
+                  onClick={() => onOpenReplay?.(selected.id)}
+                >
+                  Open Replay
+                </button>
+              )}
+              <button type="button" className="ghost" onClick={() => onOpenQuote?.(selected.id)}>Open commercial truth</button>
+            </div>
+          </div>
+        )}
+
+        {selected && execution && routeMode === "live" && (
+          <div className="commitment-execution" data-execution-surface="control-room">
+            {!eventOperationsAvailable && <LiveAuthorityNotice compact />}
+            <section className="execution-hero execution-hero-compact" aria-label="Control Room event identity">
+              <div>
+                <p className="eyebrow">Coordinate · {execution.timingLabel}</p>
+                <h2>{execution.workspace.eventName}</h2>
+                <p>{execution.workspace.eventDate} at {execution.workspace.eventTime} · {execution.workspace.venue}</p>
+              </div>
+              <StatusChip {...execution.workspace.status} />
+            </section>
+
+            <EventPreflightPanel model={preflight} />
+
+            <div className="execution-next" aria-label="Next valid action">
+              <div><p className="eyebrow">Next</p><strong>{preflight.nextAction.label}</strong><span>{preflight.nextReason}</span></div>
+              {preflight.nextAction.kind === "workflow" ? (
+                <button type="button" className="cta" onClick={() => onOpenWorkflow?.(preflight.nextAction.target)}>{preflight.nextAction.label}</button>
+              ) : preflight.nextAction.kind === "schedule" ? (
+                <button type="button" className="cta" onClick={() => onOpenSchedule?.(selected.id)}>{preflight.nextAction.label}</button>
+              ) : preflight.nextAction.kind === "refresh" ? (
+                <button type="button" className="cta" onClick={() => onRefresh?.({ force: true })} disabled={state.loading}>{state.loading ? "Refreshing…" : preflight.nextAction.label}</button>
+              ) : (
+                <button type="button" className="cta" onClick={() => onOpenQuote?.(selected.id)}>{preflight.nextAction.label}</button>
+              )}
+            </div>
+
+            <div className="execution-control-grid">
+              <section className="execution-card" aria-labelledby="run-event-title">
+                <p className="eyebrow">Run event</p>
+                <h2 id="run-event-title">Planned sequence</h2>
+                <ol className="execution-timeline">
+                  {execution.runOfShow.timeline.map((item) => (
+                    <li key={item.id} data-timing-state={item.timingState}>
+                      <time>{item.timeLabel || "Time unknown"}</time>
+                      <span><strong>{item.label}</strong><small>{item.timingBasis === "booking_override" ? "Saved booking time" : "Generated from event plan"}</small></span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+              <section className="execution-card" aria-labelledby="production-title">
+                <p className="eyebrow">Production</p>
+                <h2 id="production-title">Recorded checklist</h2>
+                <div className="execution-checklist-summary">
+                  <strong>{execution.runOfShow.productionChecklist.completedCount}/{execution.runOfShow.productionChecklist.totalCount}</strong>
+                  <span>items recorded complete</span>
+                </div>
+                {execution.runOfShow.productionChecklist.groups.map((group) => (
+                  <details key={group.group} className="execution-checklist-group">
+                    <summary>{group.group}</summary>
+                    <ul>{group.items.map((item) => <li key={item.id} data-check-state={item.state}>{item.label}<span>{item.state === "completed" ? "Complete" : item.state === "not_completed" ? "Not complete" : "Not recorded"}</span></li>)}</ul>
+                  </details>
+                ))}
+              </section>
+              <section className="execution-card execution-unavailable" aria-labelledby="actuals-title">
+                <p className="eyebrow">Actuals</p>
+                <h2 id="actuals-title">{execution.actuals.title}</h2>
+                <p>{execution.actuals.detail}</p>
+              </section>
+              {ingredientExecution.access.readEnabled && (
+                <EventIngredientUsagePanel
+                  planRead={ingredientExecution.planRead}
+                  read={ingredientExecution.read}
+                  operation={ingredientExecution.operation}
+                  access={ingredientExecution.access}
+                  controlsLocked={ingredientExecution.controlsLocked}
+                  blockedReason={ingredientExecution.blockedReason}
+                  onRecord={ingredientExecution.canRecord ? ingredientExecution.record : undefined}
+                  onCorrect={ingredientExecution.canCorrect ? ingredientExecution.correct : undefined}
+                  onReconcile={ingredientExecution.reconcile}
+                  onReset={ingredientExecution.reset}
+                />
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {selected && execution && routeMode === "replay" && (
+          <div className="commitment-execution" data-execution-surface="replay">
+            <section className="execution-hero execution-hero-compact" aria-label="Replay event identity">
+              <div><p className="eyebrow">Evidence review</p><h2>{execution.workspace.eventName}</h2><p>{execution.workspace.eventDate} · {execution.workspace.quoteNumber}</p></div>
+              <StatusChip {...execution.workspace.status} />
+            </section>
+            <section className="execution-replay execution-unavailable" aria-labelledby="replay-evidence-title">
+              <p className="eyebrow">Replay boundary</p>
+              <h2 id="replay-evidence-title">{execution.replay.title}</h2>
+              <p>{execution.replay.detail}</p>
+              {execution.evidence.length > 0 && (
+                <details className="execution-supporting-evidence">
+                  <summary>Supporting record evidence</summary>
+                  <p className="source-note">These current-record facts may support investigation. They are not a complete or immutable execution chronology.</p>
+                  <ol>
+                    {execution.evidence.map((item) => (
+                      <li key={item.id}>
+                        <time>{formatEvidenceTime(item.atISO)}</time>
+                        <div><strong>{item.action}</strong><p>{item.transition}</p><small>{item.actor} · {item.channel} · {item.revision}</small></div>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
               )}
             </section>
+            <LiveAuthorityNotice compact />
           </div>
         )}
 
@@ -324,20 +595,32 @@ export function EventPlanningView({
           <ul className="command-center-list live-ops-event-list" aria-label="Accepted and booked events">
             {events.map((quote) => {
               const { family, label } = classifyQuoteStatus(quote.status);
+              const item = buildCommitmentExecutionPresentation(quote, {
+                source: state.source,
+                now: new Date(),
+                tenantTimeZone,
+                scheduleAvailable
+              });
               return (
                 <li key={quote.id} className="command-center-row">
                   <div className="command-center-row-main">
                     <p className="command-center-row-detail">
                       <strong>{eventTitle(quote)}</strong>
+                      {" · "}{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number not recorded" })}
                       {" · "}{formatWorkspaceDate(quote.event?.date)}
                     </p>
                     <p className="command-center-row-meta">
-                      {formatWorkspaceText(quote.customer?.name || quote.customer?.email, { emptyLabel: "Customer not set" })}
+                      {item?.timingLabel || formatWorkspaceDate(quote.event?.date)}
+                      {" · "}{formatWorkspaceText(quote.customer?.name || quote.customer?.email, { emptyLabel: "Customer not set" })}
                       {" · "}{formatWorkspaceText(quote.event?.venue, { emptyLabel: "Venue not set" })}
                       {" · "}{formatWorkspaceInteger(quote.event?.guests, { emptyLabel: "Guest count not set" })}
                       {hasWorkspaceNumber(quote.event?.guests) ? " guests" : ""}
                     </p>
-                    <StatusChip family={family} label={label} />
+                    <div className="live-ops-event-commercial">
+                      <StatusChip family={family} label={label} />
+                      <span>{formatWorkspaceMoney(quote.totals?.total, { emptyLabel: "Total not recorded" })}</span>
+                      <span>{item?.commercialEvidence.deposit}</span>
+                    </div>
                   </div>
                   <div className="right-actions">
                     <button type="button" className="ghost" onClick={() => onOpenQuote?.(quote.id)}>Quote</button>
@@ -349,15 +632,13 @@ export function EventPlanningView({
           </ul>
         )}
 
-        {selected && (
+        {selected && unavailableMode && (
           <div className="live-ops-actions">
             {routeMode === "detail" && eventOperationsAvailable && <button type="button" className="cta" data-event-operations-entry="control-room" onClick={() => onOpenLive?.(selected.id)}>Open Control Room</button>}
             {routeMode !== "replay" && eventOperationsAvailable && <button type="button" className="ghost" data-event-operations-entry="replay" onClick={() => onOpenReplay?.(selected.id)}>Open Replay</button>}
             {routeMode === "replay" && eventOperationsAvailable && <button type="button" className="ghost" onClick={() => onOpenLive?.(selected.id)}>Open Control Room</button>}
             <button type="button" className="ghost" onClick={() => onOpenQuote?.(selected.id)}>Open quote record</button>
-            {unavailableMode && (
-              <button type="button" className="ghost" onClick={() => onOpenEvent?.(selected.id)}>Back to Event Focus</button>
-            )}
+            <button type="button" className="ghost" onClick={() => onOpenEvent?.(selected.id)}>Back to Event Focus</button>
           </div>
         )}
       </section>
@@ -373,12 +654,130 @@ export function ClearDeckView({
   onOpenWorkflow
 }) {
   const headingRef = useWorkspaceRouteHeadingFocus(true);
-  const items = snapshot?.attentionSummary?.items || [];
-  const decisionItems = items.filter((item) => ["approval", "decision_debt"].includes(item.type)).slice(0, 3);
+  const restoreCancelRef = useRef(null);
+  const returnStateRef = useRef({ decisionItems: [], incompleteRead: true });
+  const projection = useMemo(() => {
+    try {
+      const loadedAt = snapshot?.loadedAt;
+      const parsed = typeof loadedAt === "number" ? new Date(loadedAt) : new Date(String(loadedAt || ""));
+      const quoteById = new Map(
+        (Array.isArray(snapshot?.quotes) ? snapshot.quotes : []).map((quote) => [
+          String(quote?.id || "").trim(),
+          quote
+        ])
+      );
+      const decisionDebtItems = (Array.isArray(snapshot?.decisionDebtItems)
+        ? snapshot.decisionDebtItems
+        : []).map((item) => ({
+          ...item,
+          type: "decision_debt",
+          quote: quoteById.get(String(item?.quoteId || "").trim()) || null
+        }));
+      const projectionSnapshot = decisionDebtItems.length
+        ? {
+            ...snapshot,
+            items: [
+              ...(Array.isArray(snapshot?.attentionSummary?.items)
+                ? snapshot.attentionSummary.items
+                : []),
+              ...decisionDebtItems
+            ]
+          }
+        : snapshot;
+      return {
+        decisions: buildClearDeckDecisionPresentations(projectionSnapshot, {
+          nowISO: Number.isFinite(parsed.getTime()) ? parsed.toISOString() : ""
+        }),
+        error: ""
+      };
+    } catch (error) {
+      return {
+        decisions: [],
+        error: error?.message || "Decision identity could not be verified."
+      };
+    }
+  }, [snapshot]);
+  const decisionItems = projection.decisions;
+  const incompleteRead = Boolean(
+    snapshot?.loading
+    || snapshot?.error
+    || snapshot?.partial
+    || snapshot?.stale
+    || snapshot?.truncated
+    || projection.error
+  );
+  returnStateRef.current = { decisionItems, incompleteRead };
+
+  const captureClearDeckReturnView = useCallback((hint = {}) => ({
+    routeId: "clear-deck",
+    structured: {},
+    disclosureIds: [],
+    scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+    focus: hint?.focus || { kind: "route-heading" }
+  }), []);
+  const restoreClearDeckReturnView = useCallback((view) => {
+    restoreCancelRef.current?.();
+    return new Promise((resolve) => {
+      let active = true;
+      let frameId = null;
+      let attempt = 0;
+      const finish = (status) => resolve({ status });
+      const restore = () => {
+        if (!active) return;
+        const focus = view?.focus || {};
+        const currentReturnState = returnStateRef.current;
+        const root = headingRef.current?.closest("main");
+        const target = focus.kind === "decision-action"
+          ? Array.from(root?.querySelectorAll("[data-decision-action-id]") || []).find((element) => (
+              element.dataset.decisionActionId === focus.actionId
+              && element.closest("[data-decision-request-id]")?.dataset.decisionRequestId === focus.objectId
+            ))
+          : headingRef.current;
+        const obligationReconciled = focus.kind === "decision-action"
+          && !currentReturnState.incompleteRead
+          && !currentReturnState.decisionItems.some((item) => item.requestId === focus.objectId);
+        const targetIsCurrent = Boolean(target && !currentReturnState.incompleteRead);
+        if (!targetIsCurrent && !obligationReconciled && attempt < 30) {
+          attempt += 1;
+          frameId = window.requestAnimationFrame(restore);
+          return;
+        }
+        restoreCancelRef.current = null;
+        restoreWorkspaceReturnViewport({
+          focusTarget: targetIsCurrent ? target : headingRef.current,
+          scrollY: view?.scrollY
+        });
+        finish(targetIsCurrent || obligationReconciled ? "restored" : "recovery");
+      };
+      restoreCancelRef.current = () => {
+        active = false;
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        finish("cancelled");
+      };
+      frameId = window.requestAnimationFrame(restore);
+    });
+  }, [headingRef]);
+  useWorkspaceReturnContextAdapter({
+    routeId: "clear-deck",
+    capture: captureClearDeckReturnView,
+    restore: restoreClearDeckReturnView
+  });
+  useEffect(() => () => restoreCancelRef.current?.(), []);
 
   return (
     <main className="container workspace-route-main live-ops-route">
-      <section className="panel live-ops-panel" aria-labelledby="clear-deck-heading">
+      <section
+        className="panel live-ops-panel"
+        aria-labelledby="clear-deck-heading"
+        data-capability-id="qp-uxr-002-decision-resolution"
+        data-capability-state={projection.error
+          ? "error"
+          : incompleteRead
+            ? "partial"
+            : decisionItems.length
+              ? "success"
+              : "empty"}
+      >
         <div className="command-center-head">
           <div>
             <p className="eyebrow">Clear the Deck</p>
@@ -391,24 +790,76 @@ export function ClearDeckView({
           </button>
         </div>
         <EvidenceRail snapshot={snapshot} organizationName={organizationName} organizationId={organizationId} />
-        <LiveAuthorityNotice />
-        {!decisionItems.length && !snapshot?.loading && !snapshot?.error && (
+        {projection.error && (
+          <div className="inline-alert" role="alert">
+            <strong>Decision context is not safe to present.</strong>
+            <span>{projection.error} Refresh before opening or resolving a request.</span>
+          </div>
+        )}
+        {!decisionItems.length && !incompleteRead && (
           <p className="source-note">
-            No decision items appear in this bounded snapshot. Clear the Deck will stay review-only until durable decision receipts ship.
+            No pending approval decisions appear in this complete bounded snapshot.
+          </p>
+        )}
+        {!decisionItems.length && incompleteRead && !projection.error && (
+          <p className="source-note" role="status">
+            No decisions are shown, but the bounded evidence is incomplete. Refresh before treating the deck as clear.
           </p>
         )}
         {decisionItems.map((item) => (
-          <article key={item.id} className="live-ops-decision">
-            <StatusChip family="warning" label={item.type === "approval" ? "Approval" : "Decision"} />
-            <h3>{formatWorkspaceText(item.quote?.quoteNumber || item.quoteId, { emptyLabel: "Quote decision" })}</h3>
-            <p className="source-note">
-              Review the current source evidence in Workflow. Skip/defer does not resolve this item in this slice.
-            </p>
-            <button type="button" className="cta" onClick={() => onOpenWorkflow?.({
-              quoteId: item.quoteId,
-              attentionType: item.type,
-              requestId: item.sourceRequestId || item.id
-            })}>
+          <article
+            key={item.stableId}
+            className="live-ops-decision clear-deck-decision"
+            data-decision-request-id={item.requestId}
+          >
+            <div className="clear-deck-decision__heading">
+              <div>
+                <StatusChip
+                  family={item.reviewable ? "warning" : "muted"}
+                  label={item.attentionType === "approval" ? "Approval" : "Decision"}
+                />
+                <h3>{item.title}</h3>
+                <p>{item.eventLabel} · {item.customerLabel}</p>
+              </div>
+              <p className="clear-deck-decision__quote">{item.quoteLabel} · {item.lifecycleLabel}</p>
+            </div>
+            <p className="clear-deck-decision__request">{item.requestSummary}</p>
+            <dl className="clear-deck-decision__facts">
+              <div><dt>{item.stakeLabel}</dt><dd>{item.stakeValue}</dd></div>
+              <div><dt>{item.timingLabel}</dt><dd>{item.timingValue}</dd></div>
+              <div><dt>{item.requestAgeLabel}</dt><dd>{item.requestAgeValue}</dd></div>
+              <div><dt>Requested by</dt><dd>{item.requesterLabel}</dd></div>
+              <div><dt>{item.sourceRevisionTitle}</dt><dd>{item.sourceRevisionLabel}</dd></div>
+              <div><dt>Evidence</dt><dd>{item.evidenceSourceLabel}</dd></div>
+            </dl>
+            <div className="clear-deck-decision__meaning">
+              <p><strong>Dependencies</strong><span>{item.dependencySummary}</span></p>
+              <p><strong>Authority</strong><span>{item.authoritySummary}</span></p>
+              <p><strong>Evidence boundary</strong><span>{item.evidenceSummary}</span></p>
+            </div>
+            <p className="source-note">{item.nextStepSummary}</p>
+            <button
+              type="button"
+              className="cta"
+              data-decision-action-id={`review-workflow:${item.requestId}`}
+              onClick={() => onOpenWorkflow?.({
+                quoteId: item.quoteId,
+                attentionType: item.attentionType,
+                requestId: item.requestId,
+                actionId: `review-workflow:${item.requestId}`
+              }, {
+                actionId: `review-workflow:${item.requestId}`,
+                preserveReturnContext: true,
+                returnContextSurfaceId: "decision-resolution",
+                returnContextHint: {
+                  focus: {
+                    kind: "decision-action",
+                    objectId: item.requestId,
+                    actionId: `review-workflow:${item.requestId}`
+                  }
+                }
+              })}
+            >
               Review in Workflow
             </button>
           </article>

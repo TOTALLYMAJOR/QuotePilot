@@ -45,7 +45,7 @@ const MENU_ICONS = {
 
 const WORKSPACE_TOOL_GROUPS = Object.freeze({
   frequent: ["Workflow", "Messages", "Pilot"],
-  operations: ["Operations", "Clear the Deck", "Staff"],
+  operations: ["Operations", "Clear the Deck", "Inventory", "Staff"],
   administration: [
     "Reporting Dashboard",
     "Integrations Ops",
@@ -270,6 +270,14 @@ export default function WorkspaceShell({
         { capability: "ambient-pilot-context" }
       ],
       [operations && capabilities.eventSchedule !== false, actions.onSchedule, "Event Schedule", true],
+      [
+        operations && isAdmin && capabilities.inventoryAuthority === true,
+        actions.onInventory,
+        "Inventory",
+        true,
+        false,
+        { capability: "inventory-workspace" }
+      ],
       [
         operations && isAdmin && capabilities.staffDirectory !== false,
         actions.onStaff,

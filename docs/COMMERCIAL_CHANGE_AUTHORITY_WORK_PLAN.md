@@ -1,6 +1,7 @@
 # Work Plan: Commercial Change Authority
 
 Created: August 9, 2026
+Last updated: 2026-09-08 00:18:31 CDT
 Type: feature
 Review scope: current `feature/customer-centered-workspace` source diff against `origin/main`; no deployment or gate promotion
 Estimated impact: multi-surface Functions, client, rules, UI, tests, and docs
@@ -169,13 +170,28 @@ flowchart TD
   target version, or writes a transaction fence that proves not committed and
   prevents that exact timed-out request from committing later.
 
-- [ ] Re-run all focused tests after final source convergence.
+- [x] Compose QP-UXR-001 into the existing Quote Edit path: current commitment,
+  semantic change, grouped consequences, supported preserved evidence,
+  required authority, retained apply/reconciliation outcome, focused amendment
+  receipt, and explicit next action without adding a second authority.
+
+- [x] Re-run all focused tests after final source convergence.
 - [ ] Pass `npm run check:env`, full unit, Firestore/emulator and authoritative-
   pricing lanes, `npm run build`, bundle, Playwright, capability surfacing,
   docs governance, secrets, and `git diff --check`.
-- [ ] Complete requirement-by-requirement audit against ADR/design/UI spec.
-- [ ] Record final local evidence in `PROJECT_STATUS.md` without calling it
+- [x] Complete requirement-by-requirement audit against ADR/design/UI spec.
+- [x] Record final local evidence in `PROJECT_STATUS.md` without calling it
   hosted/provider/production/human acceptance.
+
+  The combined gate remains open because compatibility and Ambient bundle
+  ceilings fail, ten non-amendment cases in the complete customer-centered
+  workspace file remain red, and the checkpoint-existing Stripe-shaped unit
+  fixtures still fail the secret scanner. The exact amendment browser case,
+  authoritative-pricing lane, rules, unit, build, capability, environment,
+  project-state, documentation, and diff evidence are green. Direct edit URLs
+  for terminal commitments now also fail closed before draft hydration in both
+  application graphs; accepted/booked amendment authority remains a separate
+  owner decision rather than an implicit Quote Edit extension.
 
 ### Separate release gate (not authorized by this plan)
 
@@ -198,3 +214,8 @@ items; source/local success cannot satisfy them.
   for `v0.7.0`; they do not replace plan-specific hosted-role qualification.
 - Provider outcomes, production-data acceptance, global/tenant gate promotion,
   and human acceptance remain open.
+- QP-UXR-001 is implemented in the current source checkout for the existing
+  editable `draft`/`sent`/`viewed` authority. Exact local validation is recorded
+  in `PROJECT_STATUS.md`; commit, CI, deployment, hosted acceptance, production
+  data, gate promotion, and human acceptance remain separate. Terminal
+  commitment amendment remains an explicit authority gap, not inferred scope.

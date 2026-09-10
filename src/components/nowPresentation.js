@@ -1,5 +1,6 @@
 import { classifyAttentionItem } from "../lib/statusSemantics";
 import { getWorkflowAttentionFocusId } from "../lib/quoteWorkflow";
+import { buildCommercialPriorityContext } from "../lib/ambientOpportunityStream";
 import { formatWorkspaceText } from "../lib/workspacePresentation";
 
 // Deterministic presentation contract for the flag-gated NOW surface. It
@@ -188,6 +189,7 @@ export function buildNowCard(item, quotes = [], { signal: evidenceSignal = null,
     whyNow: item.type === "follow_up" || item.type === "post_event_closeout"
       ? ""
       : String(timingCue?.label || "").trim(),
+    commercialPriority: buildCommercialPriorityContext(quote),
     action: { id: "resolve", label: actionLabel, target }
   };
 }

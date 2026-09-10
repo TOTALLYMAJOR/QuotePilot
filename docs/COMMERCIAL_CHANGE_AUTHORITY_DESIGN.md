@@ -2,6 +2,7 @@
 
 Status: As-built source design; runtime enforcement remains gated
 Date: August 9, 2026
+Last updated: 2026-09-07 23:16:23 CDT
 
 ## Overview
 
@@ -12,6 +13,29 @@ eligibility, and Decision Debt. It reuses the trusted quote edit and pricing
 paths and adds no second calculator, customer portal, or automatic publisher.
 
 Referenced UI Spec: `docs/COMMERCIAL_CHANGE_AUTHORITY_UI_SPEC.md`
+
+## QP-UXR-001 capability-realization layer
+
+The reference amendment experience adds no domain truth and no authority. A
+pure presentation projection (`commercialAmendmentContext`) carries bounded
+commitment, lifecycle, total/deposit, and already-recorded protected-evidence
+facts from the loaded quote into Quote Edit. It intentionally excludes customer
+contact, portal keys, and provider session identifiers. The existing simulation
+remains the only source of semantic fact differences, money consequences, and
+affected graph nodes.
+
+`CommercialAmendmentWorkspace` composes that evidence around the operator's
+decision. `CommercialChangeImpactPanel` groups returned nodes by business
+meaning while retaining exact graph evidence under disclosure. Every connected
+editor save requires a current simulation; dormant/no-impact and authorized
+apply share the existing envelope and `updateQuoteDraft` transaction. A
+successful write no longer navigates before its receipt is perceptible. An
+uncertain write keeps the original apply identity and only reconciliation may
+resolve it.
+
+Conceptual economy remains one authority plus multiple projections: no second
+calculator, consequence engine, persistence path, payment truth, artifact
+generator, or terminal-commitment mutation was added.
 
 ## Design summary
 

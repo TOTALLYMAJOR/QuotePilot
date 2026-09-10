@@ -5,6 +5,15 @@ import { join } from "node:path";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+const navigationMocks = vi.hoisted(() => ({ adapter: null }));
+
+vi.mock("../../context/WorkspaceNavigationContext", () => ({
+  useWorkspaceReturnContextAdapter: (adapter) => {
+    navigationMocks.adapter = adapter;
+  }
+}));
+
 import AmbientNowView from "../AmbientNowView";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -73,6 +82,9 @@ let container;
 let root;
 
 beforeEach(() => {
+  navigationMocks.adapter = null;
+  window.requestAnimationFrame = (callback) => window.setTimeout(() => callback(Date.now()), 0);
+  window.cancelAnimationFrame = (handle) => window.clearTimeout(handle);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -113,8 +125,12 @@ describe("AmbientNowView", () => {
     expect(markup.match(/class="ambient-now-priority"/gu)).toHaveLength(3);
     expect(markup.match(/data-ambient-action-id="review-now-priority:/gu)).toHaveLength(3);
     expect(markup.match(/data-workspace-task-id="review-now-priority:/gu)).toHaveLength(3);
+    expect(markup).toContain('id="ambient-now-priorities-title" class="sr-only ambient-now__return-anchor" tabindex="-1"');
     expect(markup).toContain("Event 0");
     expect(markup).toContain("Customer 0");
+    expect(markup).toContain("Saved quote total");
+    expect(markup).toContain("Value unavailable");
+    expect(markup).toContain("Why it matters");
     expect(markup).not.toContain("Event 3");
     expect(markup.indexOf("Three urgent items need you today.")).toBeLessThan(markup.indexOf("Event 0"));
     expect(markup.indexOf("Event 0")).toBeLessThan(markup.indexOf("About this view"));
@@ -165,6 +181,18 @@ describe("AmbientNowView", () => {
       attentionType: "follow_up",
       requestId: "follow-up:quote-1",
       actionId: "review-now-priority:follow-up:quote-1"
+    }, {
+      preserveReturnContext: true,
+      returnContextSurfaceId: "commercial-priority",
+      returnContextHint: {
+        focus: {
+          kind: "priority-action",
+          objectId: "quote-1",
+          actionId: "review-now-priority:follow-up:quote-1",
+          controlId: "follow-up:quote-1",
+          attentionType: "follow_up"
+        }
+      }
     });
     expect(container.querySelector(".ambient-now__acknowledgement").textContent).toContain("Opening follow up");
   });
@@ -191,7 +219,136 @@ describe("AmbientNowView", () => {
       attentionType: "change_request",
       requestId: "request-1",
       actionId: "review-now-priority:change-request:quote-1"
+    }, expect.objectContaining({
+      preserveReturnContext: true,
+      returnContextSurfaceId: "commercial-priority"
+    }));
+  });
+
+  test("restores the same quote's newly current action only after a newer source generation", async () => {
+    const onRefresh = vi.fn();
+    const initial = attentionItem(1);
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [initial] },
+        quotes: [quote(1)]
+      })
     });
+    const view = navigationMocks.adapter.capture({
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    });
+    let outcomePromise;
+    act(() => {
+      outcomePromise = navigationMocks.adapter.restore(view);
+    });
+    expect(onRefresh).toHaveBeenCalledWith({ force: true });
+
+    const current = attentionItem(1, { id: "follow-up:quote-1:updated" });
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        loadedAt: LOADED_AT + 1,
+        attentionSummary: { itemCount: 1, items: [current] },
+        quotes: [quote(1)]
+      })
+    });
+    let outcome;
+    await act(async () => {
+      outcome = await outcomePromise;
+    });
+
+    expect(outcome).toEqual({ status: "restored" });
+    expect(document.activeElement?.dataset.ambientActionId)
+      .toBe("review-now-priority:follow-up:quote-1:updated");
+  });
+
+  test("focuses the revealed resolved anchor without substituting another quote", async () => {
+    const onRefresh = vi.fn();
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [attentionItem(1)] },
+        quotes: [quote(1)]
+      })
+    });
+    const view = navigationMocks.adapter.capture({
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    });
+    let outcomePromise;
+    act(() => {
+      outcomePromise = navigationMocks.adapter.restore(view);
+    });
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        loadedAt: LOADED_AT + 1,
+        attentionSummary: { itemCount: 1, items: [attentionItem(2)] },
+        quotes: [quote(1), quote(2)]
+      })
+    });
+    let outcome;
+    await act(async () => {
+      outcome = await outcomePromise;
+    });
+
+    const anchor = container.querySelector("#ambient-now-priorities-title");
+    expect(outcome).toEqual({ status: "restored" });
+    expect(document.activeElement).toBe(anchor);
+    expect(anchor.classList.contains("sr-only")).toBe(true);
+    expect(document.activeElement?.closest('[data-now-priority-quote-id="quote-2"]')).toBeNull();
+  });
+
+  test("returns recovery when the forced source refresh fails", async () => {
+    const onRefresh = vi.fn();
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [attentionItem(1)] },
+        quotes: [quote(1)]
+      })
+    });
+    const view = navigationMocks.adapter.capture({
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    });
+    let outcomePromise;
+    act(() => {
+      outcomePromise = navigationMocks.adapter.restore(view);
+    });
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        error: "Refresh failed.",
+        stale: true,
+        attentionSummary: { itemCount: 1, items: [attentionItem(1)] },
+        quotes: [quote(1)]
+      })
+    });
+    let outcome;
+    await act(async () => {
+      outcome = await outcomePromise;
+    });
+
+    expect(outcome).toEqual({ status: "recovery" });
+    expect(document.activeElement).toBe(container.querySelector(".workspace-route-heading"));
   });
 
   test("keeps refresh as an explicit non-mutating view action", () => {
@@ -228,6 +385,24 @@ describe("AmbientNowView", () => {
     expect(healthy).toContain("You are caught up on the work tracked here.");
     expect(paymentPending).toContain('data-caught-up="false"');
     expect(paymentPending).toContain("recorded payment steps remain below");
+  });
+
+  test("does not invent an unpaid deposit obligation when payment evidence is missing", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientNowView
+        {...baseProps}
+        snapshot={snapshot({
+          quotes: [quote(1, {
+            status: "accepted",
+            totals: { deposit: 1200 }
+          })]
+        })}
+      />
+    );
+
+    expect(markup).toContain('data-caught-up="true"');
+    expect(markup).not.toContain("Payment steps");
+    expect(markup).not.toContain("Deposit due");
   });
 
   test("shows only internal receipt-backed quiet progress", () => {
@@ -273,7 +448,6 @@ describe("AmbientNowView", () => {
     );
 
     expect(markup).toContain("Coming up");
-    expect(markup).toContain("Commercial steps");
     expect(markup.indexOf("Thursday Dinner")).toBeLessThan(markup.indexOf("Friday Dinner"));
     expect(markup).toContain("17:00 · Garden Terrace");
     expect(markup).toContain("30 guests");
@@ -298,6 +472,7 @@ describe("AmbientNowView", () => {
     expect(css).toMatch(/@media \(max-width: 760px\)/u);
     expect(css).toMatch(/@media \(max-width: 470px\)/u);
     expect(css).toContain("var(--font-editorial)");
+    expect(css).toContain(".ambient-now__return-anchor.sr-only:focus");
   });
 
   test("keeps provider-dependent payment states in the quiet waiting band", () => {

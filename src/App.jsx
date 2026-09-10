@@ -10,6 +10,7 @@ import { buildMarginPresentation } from "./components/marginPresentation";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import WorkspaceActionFeedbackNotice, {
   buildWorkspaceActionFeedbackFollowUpIdentity,
+  resolveWorkspaceActionFeedbackApprovalAction,
   resolveWorkspaceActionFeedbackFollowUpAction,
   workspaceActionFeedbackMatchesTaskJourney
 } from "./components/WorkspaceActionFeedbackNotice";
@@ -51,6 +52,23 @@ import { useWorkspaceActionFeedback } from "./context/WorkspaceActionFeedbackCon
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useCatalogData } from "./hooks/useCatalogData";
 import { useCommercialWorkspaceSnapshot } from "./hooks/useCommercialWorkspaceSnapshot";
+import { useInventoryRecipeExtension } from "./hooks/useInventoryRecipeExtension";
+import {
+  buildEventIngredientSelectionInputs,
+  useEventIngredientProjection
+} from "./hooks/useEventIngredientProjection";
+import { useFulfillmentStaffingSnapshot } from "./hooks/useFulfillmentStaffingSnapshot";
+import EventIngredientProjectionPanel from "./components/EventIngredientProjectionPanel";
+import { buildCommercialInventoryConsequences } from "./lib/commercialInventoryConsequences";
+import { buildCommercialScenarioProjectionRequest } from "./lib/commercialScenarioWorkbench";
+import {
+  buildLivingCommercialTwinInventoryFingerprint,
+  buildLivingCommercialTwinProjection,
+  buildLivingCommercialTwinScenarioContextFingerprint,
+  getSavedInventoryComparisonRead,
+  hasCommercialFormChanges,
+  isGuestCountOnlyProposal
+} from "./lib/livingCommercialTwinProjection";
 import {
   calculateQuotePricing,
   notifyOwnerNewQuote
@@ -124,6 +142,8 @@ import {
   readWorkspaceTaskJourney,
   transitionWorkspaceTaskContext,
   transitionWorkspaceTaskOutcome,
+  WORKSPACE_APPROVAL_TASK_PROOF_TYPE,
+  WORKSPACE_APPROVAL_TASK_VERIFIER_ID,
   WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE,
   WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID,
   workspaceTaskJourneyBelongsToPrincipal,
@@ -146,6 +166,7 @@ const EVENT_OPERATING_SPINE_UI_ENABLED = import.meta.env.VITE_EVENT_OPERATING_SP
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
+const INVENTORY_AUTHORITY_UI_ENABLED = import.meta.env.VITE_INVENTORY_AUTHORITY_ENABLED === "true";
 const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
@@ -168,6 +189,10 @@ const CommercialChangeImpactPanel = createRecoverableLazy(
   () => import("./components/CommercialChangeImpactPanel"),
   "CommercialChangeImpactPanel"
 );
+const CommercialAmendmentWorkspace = createRecoverableLazy(
+  () => import("./components/CommercialAmendmentWorkspace"),
+  "CommercialAmendmentWorkspace"
+);
 const EventPlanningView = createRecoverableLazy(
   () => import("./components/LiveOperationsPlanningViews").then((module) => ({ default: module.EventPlanningView })),
   "EventPlanningView"
@@ -187,6 +212,10 @@ const CustomerWorkspaceView = createRecoverableLazy(
 const StaffWorkspace = createRecoverableLazy(
   () => import("./components/StaffWorkspace"),
   "StaffWorkspace"
+);
+const InventoryWorkspace = createRecoverableLazy(
+  () => import("./components/InventoryWorkspace"),
+  "InventoryWorkspace"
 );
 const MessagingStation = createRecoverableLazy(
   () => import("quotepilot-active-messaging-station"),
@@ -394,7 +423,8 @@ const EMPTY_EDITING_QUOTE = Object.freeze({
   catalogRevisionReview: null,
   selection: {},
   baseForm: null,
-  rebooking: null
+  rebooking: null,
+  commercialAmendment: null
 });
 
 const EMPTY_CATALOG_REVISION_REVIEW = Object.freeze({
@@ -425,9 +455,40 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   mutationMessage: "",
   applyResult: null,
   applyOutcome: null,
-  catalogRevision: null
+  catalogRevision: null,
+  appliedQuote: null,
+  workbenchRequest: null
 });
+const EMPTY_EVENT_INGREDIENT_PREVIEW_INPUT = Object.freeze({ valid: false, selections: [] });
 const EMPTY_LIBRARY_INTERACTION = Object.freeze({ dirty: false, busy: false });
+
+function normalizeLivingTwinGuestCount(value) {
+  const candidate = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(candidate) && candidate >= 1 && candidate <= 400
+    ? candidate
+    : null;
+}
+
+function normalizeLivingTwinProjectionRequest(value, scopeKey) {
+  try {
+    return buildCommercialScenarioProjectionRequest({ ...value, scopeKey });
+  } catch {
+    return null;
+  }
+}
+
+function focusLivingTwinCommitmentReview() {
+  if (typeof document === "undefined") return false;
+  const target = document.getElementById("commercial-change-impact-title")
+    || document.querySelector('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
+  if (!target) return false;
+  if (!target.matches("button, a, input, select, textarea, [tabindex]")) {
+    target.setAttribute("tabindex", "-1");
+  }
+  target.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  target.focus?.({ preventScroll: true });
+  return true;
+}
 
 function readPortalKeyFromUrl() {
   if (typeof window === "undefined") return "";
@@ -886,16 +947,30 @@ export function applyWorkspaceTaskOutcome({
     : null;
   const phase = outcome.phase;
   const proof = outcome.proof;
-  const exactOutcomeArrival = outcomeFocus ? {
-    destination: "workflow",
-    object: {
-      id: outcomeFocus.requestId,
-      type: "workflow-item"
-    },
-    focus: outcomeFocus,
-    intentId: "review_follow_up"
-  } : null;
-  const proofIsAuthoritativeConfirmation = phase === "resolved"
+  const approvalOutcome = outcomeFocus?.attentionType === "approval";
+  const exactOutcomeArrival = outcomeFocus ? approvalOutcome
+    ? {
+        destination: "approval",
+        object: {
+          id: outcomeFocus.requestId,
+          type: "approval"
+        },
+        focus: {
+          quoteId: outcomeFocus.quoteId,
+          requestId: outcomeFocus.requestId
+        },
+        intentId: "review_approval"
+      }
+    : {
+        destination: "workflow",
+        object: {
+          id: outcomeFocus.requestId,
+          type: "workflow-item"
+        },
+        focus: outcomeFocus,
+        intentId: "review_follow_up"
+      } : null;
+  const proofIsFollowUpConfirmation = phase === "resolved"
     && proof
     && Object.keys(proof).length === 3
     && proof.verifierId === WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
@@ -903,7 +978,23 @@ export function applyWorkspaceTaskOutcome({
       String(proof.proofId || "")
     )
     && proof.proofType === WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE;
-  const proofIsAbsentForUncertainty = phase === "uncertain" && proof === null;
+  const proofIsApprovalConfirmation = phase === "resolved"
+    && approvalOutcome
+    && proof
+    && Object.keys(proof).length === 3
+    && proof.verifierId === WORKSPACE_APPROVAL_TASK_VERIFIER_ID
+    && (() => {
+      const prefix = `approval-resolved:${String(outcomeFocus?.requestId || "").trim()}:`;
+      const proofId = String(proof.proofId || "");
+      return proofId.startsWith(prefix)
+        && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(proofId.slice(prefix.length));
+    })()
+    && proof.proofType === WORKSPACE_APPROVAL_TASK_PROOF_TYPE;
+  const proofIsAuthoritativeConfirmation = approvalOutcome
+    ? proofIsApprovalConfirmation
+    : proofIsFollowUpConfirmation;
+  const proofIsAbsentForOpenOutcome = ["uncertain", "superseded"].includes(phase)
+    && proof === null;
   const exactFeedbackOwnedOutcome = Boolean(
     feedbackIdentity
     && Object.keys(outcome).length === 6
@@ -919,7 +1010,8 @@ export function applyWorkspaceTaskOutcome({
     && outcomeFocus.quoteId === feedbackIdentity.focus.quoteId
     && outcomeFocus.attentionType === feedbackIdentity.focus.attentionType
     && outcomeFocus.requestId === feedbackIdentity.focus.requestId
-    && (proofIsAuthoritativeConfirmation || proofIsAbsentForUncertainty)
+    && !approvalOutcome
+    && (proofIsAuthoritativeConfirmation || proofIsAbsentForOpenOutcome)
   );
   const feedbackIdentityMatchesCurrentTask = Boolean(
     exactFeedbackOwnedOutcome
@@ -954,14 +1046,14 @@ export function applyWorkspaceTaskOutcome({
     && outcome.organizationId === currentTaskSession.organizationId
     && outcome.taskId === currentWorkspaceTaskJourney.taskId
     && outcome.startedAtISO === currentWorkspaceTaskJourney.startedAtISO
-    && currentWorkspaceTaskJourney.intentId === "review_follow_up"
-    && currentWorkspaceTaskJourney.destination === "workflow"
+    && currentWorkspaceTaskJourney.intentId === exactOutcomeArrival?.intentId
+    && currentWorkspaceTaskJourney.destination === exactOutcomeArrival?.destination
     && exactOutcomeArrival
     && workspaceTaskJourneyMatchesArrival(
       currentWorkspaceTaskJourney,
       exactOutcomeArrival
     )
-    && (proofIsAuthoritativeConfirmation || proofIsAbsentForUncertainty)
+    && (proofIsAuthoritativeConfirmation || proofIsAbsentForOpenOutcome)
   );
   if (!exactOutcome) {
     return {
@@ -997,13 +1089,17 @@ export function applyWorkspaceTaskOutcome({
   if (!stored.ok) {
     return {
       status: "recovery",
-      reason: "The follow-up outcome is recorded, but this device could not retain its task status.",
+      reason: approvalOutcome
+        ? "The approval outcome is recorded, but this device could not retain its task status."
+        : "The follow-up outcome is recorded, but this device could not retain its task status.",
       consequence: "The confirmed business record was not retried.",
-      nextResolution: "Inspect the exact follow-up before changing it again.",
+      nextResolution: approvalOutcome
+        ? "Inspect the exact approval before taking another action."
+        : "Inspect the exact follow-up before changing it again.",
       ...stored.recovery
     };
   }
-  if (phase === "resolved") {
+  if (["resolved", "superseded"].includes(phase)) {
     requestAttentionRefresh({ force: true });
     if (feedbackIdentityMatchesCurrentTask) clearFeedbackReconciliation();
   }
@@ -1371,7 +1467,11 @@ export default function App({
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
     const handoff = createWorkspaceArrivalHandoff(ambientWorkflowArrivalInput(target, options));
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
-    return navigateAmbientTaskHandoff(handoff, ambientTaskActionId(target, options));
+    return navigateAmbientTaskHandoff(
+      handoff,
+      ambientTaskActionId(target, options),
+      options
+    );
   }, [navigateAmbientTaskHandoff]);
   const navigateAmbientConversation = useCallback((quoteId, options = {}) => {
     if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
@@ -1458,6 +1558,7 @@ export default function App({
   const autopilotAppliedRef = useRef(new Set());
   const directEditLoadRef = useRef({ key: "", generation: 0 });
   const changeImpactPreviewGenerationRef = useRef(0);
+  const livingTwinScenarioScopeRef = useRef({ key: "", generation: 0 });
   const catalogReconciliationNoticeRef = useRef("");
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { organization, setOrganizationId } = useOrganization();
@@ -1687,6 +1788,7 @@ export default function App({
   const importsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.IMPORTS);
   const catalogRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.CATALOG);
   const staffRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.STAFF);
+  const inventoryRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INVENTORY);
   const diagnosticsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.DIAGNOSTICS);
   const scheduleModalOpen = shellModalOpen(scheduleOpen, WORKSPACE_ROUTE_IDS.SCHEDULE);
   const reportingModalOpen = shellModalOpen(dashboardOpen, WORKSPACE_ROUTE_IDS.REPORTING);
@@ -1776,6 +1878,9 @@ export default function App({
     enabled: Boolean(authSession.isStaff && authSession.organizationId),
     includeHistory: CUSTOMER_CENTERED_WORKSPACE_ENABLED,
     includeRevenueAttention: CUSTOMER_CENTERED_WORKSPACE_ENABLED && firebaseReady,
+    includeDecisionDebt: CUSTOMER_CENTERED_WORKSPACE_ENABLED
+      && firebaseReady
+      && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CLEAR_DECK,
     tenantTimeZone: String(catalog.settings?.businessTimeZone || "").trim(),
     organizationId: authSession.organizationId
   });
@@ -1812,6 +1917,7 @@ export default function App({
   const dashboardMounted = useStickyMount(reportingModalOpen);
   const catalogRouteMounted = useStickyMount(catalogRouteOpen);
   const staffRouteMounted = useStickyMount(staffRouteOpen);
+  const inventoryRouteMounted = useStickyMount(inventoryRouteOpen);
   const scheduleRouteMounted = useStickyMount(scheduleRouteOpen);
   const reportingRouteMounted = useStickyMount(reportingRouteOpen);
   const integrationsRouteMounted = useStickyMount(integrationsRouteOpen);
@@ -1835,6 +1941,10 @@ export default function App({
   // change-request version linking").
   const [pendingResolutionLink, setPendingResolutionLink] = useState(null);
   const [changeImpactPreview, setChangeImpactPreview] = useState(EMPTY_CHANGE_IMPACT_PREVIEW);
+  const [eventIngredientPreviewInput, setEventIngredientPreviewInput] = useState(
+    EMPTY_EVENT_INGREDIENT_PREVIEW_INPUT
+  );
+  const [pendingLivingTwinConsequenceRequest, setPendingLivingTwinConsequenceRequest] = useState(null);
   const [catalogRevisionReview, setCatalogRevisionReview] = useState(EMPTY_CATALOG_REVISION_REVIEW);
   const [quoteEditLoadState, setQuoteEditLoadState] = useState({
     quoteId: "",
@@ -2151,6 +2261,12 @@ export default function App({
     workspaceActionFeedbackReturnIdentity,
     workspaceActionFeedbackReturnOwnsCurrentArrival
   ]);
+  const workflowTaskJourney = feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney;
+  const workflowReturnFallback = workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.QUOTE_LIST
+    ? WORKSPACE_PATHS.quotes
+    : workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.CLEAR_DECK
+      ? WORKSPACE_PATHS.clearDeck
+      : WORKSPACE_PATHS.home;
 
   useEffect(() => {
     if (
@@ -2181,13 +2297,20 @@ export default function App({
     const selected = feedback || currentWorkspaceActionFeedback;
     if (!selected) return { status: "idle" };
     const nextActionId = String(nextAction?.id || selected.nextAction?.id || "").trim();
-    const resolution = resolveWorkspaceActionFeedbackFollowUpAction({
-      feedback: selected,
-      nextActionId,
-      activeTaskJourney: activeWorkspaceTaskJourney
-    });
+    const approvalFeedback = selected.actionId === "resolve-approval";
+    const resolution = approvalFeedback
+      ? resolveWorkspaceActionFeedbackApprovalAction({
+          feedback: selected,
+          nextActionId,
+          activeTaskJourney: activeWorkspaceTaskJourney
+        })
+      : resolveWorkspaceActionFeedbackFollowUpAction({
+          feedback: selected,
+          nextActionId,
+          activeTaskJourney: activeWorkspaceTaskJourney
+        });
     if (!resolution.ok) return resolution;
-    const { identity } = resolution;
+    const { identity = null } = resolution;
 
     let navigationResult;
     if (resolution.strategy === "continue") {
@@ -2201,7 +2324,7 @@ export default function App({
     const navigationAccepted = typeof navigationResult === "string"
       || navigationResult?.status === "pending";
     if (!navigationAccepted) return navigationResult || { status: "recovery" };
-    if (["recovery", "uncertain"].includes(selected.phase)) {
+    if (!approvalFeedback && ["recovery", "uncertain"].includes(selected.phase)) {
       setWorkspaceActionFeedbackReconciliationContext({
         attemptId: selected.attemptId,
         generation: selected.generation,
@@ -2649,9 +2772,40 @@ export default function App({
   const integrationsEnabled = featureFlags.integrationsOps !== false;
   const diagnosticsEnabled = featureFlags.diagnostics !== false;
   const dashboardEnabled = featureFlags.reportingDashboard !== false;
+  const inventoryTenantEnabled = effectiveSettings.inventoryAuthorityEnabled === true;
+  const inventoryWorkspaceEnabled = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && INVENTORY_AUTHORITY_UI_ENABLED
+    && inventoryTenantEnabled
+    && firebaseReady
+    && authSession.isAdmin;
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
+  const navigateEventSchedule = useCallback((quoteId) => {
+    const normalizedQuoteId = String(quoteId || "").trim();
+    if (!eventScheduleEnabled || !normalizedQuoteId) {
+      return { status: "recovery", reason: "The exact event Schedule destination is unavailable." };
+    }
+    if (!AMBIENT_UI_ENABLED) return navigateWorkspace(WORKSPACE_PATHS.schedule);
+    const handoff = createWorkspaceArrivalHandoff({
+      destination: "schedule",
+      object: { id: normalizedQuoteId, type: "opportunity" },
+      focus: { quoteId: normalizedQuoteId },
+      intentId: "review_event_schedule"
+    });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    return navigateAmbientTaskHandoff(handoff, "review-event-schedule", {
+      preserveReturnContext: true,
+      returnContextSurfaceId: "schedule",
+      returnContextHint: {
+        focus: {
+          kind: "event-control-room-action",
+          objectId: normalizedQuoteId,
+          actionId: "review-event-schedule"
+        }
+      }
+    });
+  }, [eventScheduleEnabled, navigateAmbientTaskHandoff, navigateWorkspace]);
   useEffect(() => {
     setStepValidation(buildStepValidation(form));
   }, [form]);
@@ -2727,7 +2881,108 @@ export default function App({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const inventoryRecipeExtension = useInventoryRecipeExtension({
+    active: adminOpen || catalogRouteOpen || catalogModalOpen || isEditingQuote,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled
+  });
+  const eventIngredientSelections = useMemo(() => buildEventIngredientSelectionInputs({
+    quote: editingQuote,
+    recipeProjectionsByMenuItemId: inventoryRecipeExtension.menuCostProjectionsByMenuItemId
+  }), [editingQuote, inventoryRecipeExtension.menuCostProjectionsByMenuItemId]);
   const currentChangeImpactFormKey = JSON.stringify(form);
+  const livingTwinNonGuestContextKey = useMemo(
+    () => buildLivingCommercialTwinScenarioContextFingerprint({
+      form,
+      selections: eventIngredientPreviewInput.selections
+    }),
+    [eventIngredientPreviewInput.selections, form]
+  );
+  const livingTwinScenarioScopeIdentity = JSON.stringify([
+    String(authSession.organizationId || "").trim(),
+    String(editingQuote.id || "").trim(),
+    String(editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || "").trim(),
+    livingTwinNonGuestContextKey
+  ]);
+  if (livingTwinScenarioScopeRef.current.key !== livingTwinScenarioScopeIdentity) {
+    livingTwinScenarioScopeRef.current = {
+      key: livingTwinScenarioScopeIdentity,
+      generation: livingTwinScenarioScopeRef.current.generation + 1
+    };
+  }
+  const currentInventoryScenarioFingerprint = useMemo(
+    () => buildLivingCommercialTwinInventoryFingerprint({
+      commercialFormFingerprint: currentChangeImpactFormKey,
+      selections: eventIngredientPreviewInput.selections
+    }),
+    [currentChangeImpactFormKey, eventIngredientPreviewInput.selections]
+  );
+  const inventoryGuestScenarioEligible = useMemo(() => isGuestCountOnlyProposal({
+    currentForm: editingQuote.baseForm,
+    proposedForm: form
+  }), [editingQuote.baseForm, form]);
+  const eventIngredientProjection = useEventIngredientProjection({
+    active: isEditingQuote && firebaseReady,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled,
+    quoteId: editingQuote.id,
+    quoteStatus: editingQuote.status,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim(),
+    selections: eventIngredientSelections,
+    scenarioFingerprint: currentInventoryScenarioFingerprint,
+    draftDirty: quoteDirty
+  });
+  const fulfillmentStaffingActive = isEditingQuote
+    && firebaseReady
+    && authSession.isStaff
+    && OPERATIONAL_STAFFING_UI_ENABLED
+    && effectiveSettings.operationalStaffingAuthorityEnabled === true;
+  const fulfillmentStaffing = useFulfillmentStaffingSnapshot({
+    active: fulfillmentStaffingActive,
+    organizationId: authSession.organizationId,
+    quoteId: editingQuote.id,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim()
+  });
+  const proposedStaffingRequirements = useMemo(() => {
+    const roleCounts = [Number(form.servers), Number(form.chefs), Number(form.bartenders)];
+    if (roleCounts.some((value) => !Number.isSafeInteger(value) || value < 0)) return null;
+    return {
+      lead: 0,
+      server: roleCounts[0],
+      chef: roleCounts[1],
+      bartender: roleCounts[2]
+    };
+  }, [
+    form.bartenders,
+    form.chefs,
+    form.servers
+  ]);
+  const commercialInventoryConsequences = useMemo(() => buildCommercialInventoryConsequences({
+    savedRead: getSavedInventoryComparisonRead(eventIngredientProjection.read),
+    scenarioPreview: eventIngredientProjection.preview,
+    organizationId: authSession.organizationId,
+    quoteId: editingQuote.id,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim(),
+    scenarioFingerprint: currentInventoryScenarioFingerprint
+  }), [
+    authSession.organizationId,
+    currentInventoryScenarioFingerprint,
+    editingQuote.activeVersionId,
+    editingQuote.id,
+    editingQuote.versionMeta?.versionId,
+    eventIngredientProjection.preview,
+    eventIngredientProjection.read
+  ]);
   const changeImpactPresentationError = changeImpactPreview.error || (
     changeImpactPreview.model
       ? changeImpactPreview.formKey
@@ -2753,6 +3008,123 @@ export default function App({
   ]);
   const changeImpactPreviewAvailable = isEditingQuote
     && String(catalog.source || "").trim().toLowerCase().startsWith("firebase");
+  const livingTwinBaseQuoteRevisionId = String(
+    editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+  ).trim();
+  const livingTwinScopeKey = JSON.stringify([
+    String(authSession.organizationId || "").trim(),
+    String(editingQuote.id || "").trim(),
+    `draft-context-${livingTwinScenarioScopeRef.current.generation}`
+  ]);
+  const livingCommercialTwinProjection = useMemo(() => buildLivingCommercialTwinProjection({
+    organizationId: authSession.organizationId,
+    quoteId: editingQuote.id,
+    quoteRevisionId: livingTwinBaseQuoteRevisionId,
+    scenarioId: currentInventoryScenarioFingerprint,
+    commitment: editingQuote.commercialAmendment,
+    proposedGuestCount: form.guests,
+    draftDirty: quoteDirty,
+    selectedMenuItemNames: eventIngredientSelections.map((selection) => selection.menuItemName),
+    selectedMenuItems: eventIngredientSelections.map((selection) => ({
+      menuItemId: selection.menuItemId,
+      label: selection.menuItemName
+    })),
+    previewAvailable: changeImpactPreviewAvailable,
+    previewRequested: changeImpactPreview.requested,
+    previewLoading: changeImpactPreview.loading,
+    previewError: changeImpactPresentationError,
+    previewScopeCurrent: !changeImpactPresentationError,
+    commercialModel: changeImpactPreview.model,
+    authorityState: changeImpactPreview.authorityState,
+    authorizationRequired: changeImpactPreview.authorizationRequired,
+    authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
+    inventoryEnabled: eventIngredientProjection.access.readEnabled,
+    inventoryScenarioEligible: inventoryGuestScenarioEligible,
+    inventoryPreviewAvailable: eventIngredientProjection.canPreview,
+    inventoryInputReady: eventIngredientPreviewInput.valid,
+    inventoryConsequences: commercialInventoryConsequences,
+    inventoryPreview: eventIngredientProjection.preview,
+    staffingRead: fulfillmentStaffing.read,
+    proposedStaffingRequirements,
+    proposedStaffingRequirementsSource: "proposed_commercial_and_canonical_counts",
+    appliedQuote: changeImpactPreview.appliedQuote,
+    workbenchRequest: changeImpactPreview.workbenchRequest
+  }), [
+    authSession.organizationId,
+    changeImpactPresentationError,
+    changeImpactPreview.appliedQuote,
+    changeImpactPreview.authorityState,
+    changeImpactPreview.authorizationReceiptId,
+    changeImpactPreview.authorizationRequired,
+    changeImpactPreview.loading,
+    changeImpactPreview.model,
+    changeImpactPreview.requested,
+    changeImpactPreview.workbenchRequest,
+    changeImpactPreviewAvailable,
+    commercialInventoryConsequences,
+    currentInventoryScenarioFingerprint,
+    editingQuote.commercialAmendment,
+    editingQuote.activeVersionId,
+    editingQuote.id,
+    editingQuote.versionMeta?.versionId,
+    eventIngredientPreviewInput.valid,
+    eventIngredientProjection.access.readEnabled,
+    eventIngredientProjection.canPreview,
+    eventIngredientProjection.preview,
+    eventIngredientSelections,
+    form.guests,
+    inventoryGuestScenarioEligible,
+    livingTwinBaseQuoteRevisionId,
+    proposedStaffingRequirements,
+    fulfillmentStaffing.read,
+    quoteDirty
+  ]);
+  const handleLivingTwinGuestCountChange = (value) => {
+    const guestCount = normalizeLivingTwinGuestCount(value);
+    if (guestCount === null || guestCount === Number(form.guests)) return false;
+    const nextForm = { ...form, guests: guestCount };
+    setPendingLivingTwinConsequenceRequest(null);
+    resetChangeImpactPreview();
+    setForm(nextForm);
+    setQuoteDirty(hasCommercialFormChanges({
+      currentForm: editingQuote.baseForm,
+      proposedForm: nextForm
+    }));
+    return true;
+  };
+  const handleRevertLivingTwinGuestCount = () => {
+    const savedGuestCount = livingCommercialTwinProjection.scenario.currentGuestCount;
+    return savedGuestCount === null
+      ? false
+      : handleLivingTwinGuestCountChange(savedGuestCount);
+  };
+  const handleLivingTwinConsequenceRequest = (request = {}) => {
+    const projectionRequest = normalizeLivingTwinProjectionRequest(request, livingTwinScopeKey);
+    if (
+      !projectionRequest
+      || !livingTwinBaseQuoteRevisionId
+      || projectionRequest.baseQuoteRevisionId !== livingTwinBaseQuoteRevisionId
+    ) return false;
+    const {
+      scenarioId,
+      generation,
+      inputDigest,
+      baseQuoteRevisionId,
+      guestCount
+    } = projectionRequest;
+    const candidateForm = { ...form, guests: guestCount };
+    setPendingLivingTwinConsequenceRequest({
+      scenarioId,
+      generation,
+      inputDigest,
+      baseQuoteRevisionId,
+      guestCount,
+      scopeKey: livingTwinScopeKey,
+      candidateForm,
+      formKey: JSON.stringify(candidateForm)
+    });
+    return true;
+  };
   const organizationName = String(organization?.name || "").trim();
   const tenantBrandName = String(catalog.settings?.brandName || "").trim();
   const tenantBrandTagline = String(catalog.settings?.brandTagline || "").trim();
@@ -2788,6 +3160,7 @@ export default function App({
       && authSession.isAdmin
       && OPERATIONAL_STAFFING_UI_ENABLED)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && eventScheduleEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && inventoryWorkspaceEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
@@ -2805,6 +3178,7 @@ export default function App({
       || ([
         WORKSPACE_ROUTE_IDS.STAFF,
         WORKSPACE_ROUTE_IDS.OPERATIONS,
+        WORKSPACE_ROUTE_IDS.INVENTORY,
         WORKSPACE_ROUTE_IDS.SCHEDULE,
         WORKSPACE_ROUTE_IDS.REPORTING,
         WORKSPACE_ROUTE_IDS.CATALOG,
@@ -2822,6 +3196,7 @@ export default function App({
         WORKSPACE_ROUTE_IDS.EVENT_LIVE,
         WORKSPACE_ROUTE_IDS.EVENT_REPLAY,
         WORKSPACE_ROUTE_IDS.OPERATIONS,
+        WORKSPACE_ROUTE_IDS.INVENTORY,
         WORKSPACE_ROUTE_IDS.MESSAGING
       ].includes(resolvedWorkspaceRouteId))
   };
@@ -3491,12 +3866,57 @@ export default function App({
     }
   });
 
-  const handlePreviewChangeImpact = async ({ recovery = false, candidateForm = form } = {}) => {
+  const handlePreviewChangeImpact = async ({
+    recovery = false,
+    candidateForm = form,
+    workbenchRequest = null
+  } = {}) => {
     if (!isEditingQuote || !editingQuote.id) return;
+    const formKey = JSON.stringify(candidateForm);
+    const suppliedWorkbenchRequest = normalizeLivingTwinProjectionRequest(
+      workbenchRequest,
+      livingTwinScopeKey
+    );
+    if (workbenchRequest !== null && !suppliedWorkbenchRequest) return false;
+    const recoveredWorkbenchRequest = recovery && !suppliedWorkbenchRequest
+        ? normalizeLivingTwinProjectionRequest(
+          changeImpactPreview.workbenchRequest,
+          livingTwinScopeKey
+        )
+        : null;
+    if (
+      recovery
+      && !suppliedWorkbenchRequest
+      && changeImpactPreview.workbenchRequest
+      && !recoveredWorkbenchRequest
+    ) return false;
+    const exactWorkbenchRequest = suppliedWorkbenchRequest || recoveredWorkbenchRequest;
     const generation = changeImpactPreviewGenerationRef.current + 1;
     changeImpactPreviewGenerationRef.current = generation;
-    const formKey = JSON.stringify(candidateForm);
-    const priorRequestId = recovery ? changeImpactPreview.simulationRequestId : "";
+    const inventoryScenarioEligibleForRequest = isGuestCountOnlyProposal({
+      currentForm: editingQuote.baseForm,
+      proposedForm: candidateForm
+    });
+    if (
+      formKey === currentChangeImpactFormKey
+      && inventoryScenarioEligibleForRequest
+      && eventIngredientProjection.access.readEnabled
+      && eventIngredientProjection.canPreview
+      && eventIngredientPreviewInput.valid
+    ) {
+      void eventIngredientProjection.previewCurrent({
+        selections: eventIngredientPreviewInput.selections
+      }).catch((error) => {
+        recordDiagnosticError(error, {
+          surface: "quote-builder",
+          action: "preview-commercial-twin-inventory",
+          quoteId: editingQuote.id
+        });
+      });
+    }
+    const priorRequestId = recovery && changeImpactPreview.mutationState === "uncertain"
+      ? changeImpactPreview.simulationRequestId
+      : "";
     setChangeImpactPreview((current) => ({
       ...current,
       requested: true,
@@ -3507,6 +3927,7 @@ export default function App({
         ? priorRequestId ? "reconciliation" : "recovery"
         : "submitting",
       mutationKind: "simulation",
+      workbenchRequest: exactWorkbenchRequest,
       mutationMessage: recovery
         ? priorRequestId
           ? "Reconciling the exact commercial change simulation request."
@@ -3550,7 +3971,9 @@ export default function App({
           : "The exact simulation receipt is ready; enforcement remains dormant for this workspace.",
         applyResult: null,
         applyOutcome: null,
-        catalogRevision: Number(catalog.settings?.catalogRevision)
+        catalogRevision: Number(catalog.settings?.catalogRevision),
+        appliedQuote: null,
+        workbenchRequest: exactWorkbenchRequest
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -3581,6 +4004,35 @@ export default function App({
       }));
     }
   };
+
+  useEffect(() => {
+    const pending = pendingLivingTwinConsequenceRequest;
+    if (!pending) return;
+    if (
+      !livingTwinBaseQuoteRevisionId
+      || pending.baseQuoteRevisionId !== livingTwinBaseQuoteRevisionId
+    ) {
+      setPendingLivingTwinConsequenceRequest(null);
+      return;
+    }
+    if (
+      pending.scopeKey !== livingTwinScopeKey
+      || pending.formKey !== currentChangeImpactFormKey
+    ) {
+      setPendingLivingTwinConsequenceRequest(null);
+      return;
+    }
+    setPendingLivingTwinConsequenceRequest(null);
+    void handlePreviewChangeImpact({
+      candidateForm: pending.candidateForm,
+      workbenchRequest: pending
+    });
+  }, [
+    currentChangeImpactFormKey,
+    livingTwinBaseQuoteRevisionId,
+    livingTwinScopeKey,
+    pendingLivingTwinConsequenceRequest
+  ]);
 
   const unifiedConsequenceScopeIsCurrent = () => unifiedConsequenceFenceCurrent(
     unifiedConsequenceReview,
@@ -3870,6 +4322,14 @@ export default function App({
           error: "",
           applyOutcome: result.outcomeReceipt,
           applyResult: result.commercialChange,
+          appliedQuote: {
+            quoteId: editingQuote.id,
+            quoteNumber: editingQuote.quoteNumber || editingQuote.id,
+            previousRevisionId: changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId,
+            activeVersionId: result.outcomeReceipt.newRevisionId || "",
+            latestVersionNumber: Number(editingQuote.commercialAmendment?.versionNumber || 0) + 1,
+            status: "draft"
+          },
           mutationState: "receipt",
           mutationKind: "apply",
           mutationMessage: result.outcomeReceipt.appliedRevisionIsActive
@@ -3879,7 +4339,6 @@ export default function App({
         pushToast("Authorized quote change reconciled as committed.", "success");
         requestWorkflowAttentionRefresh({ force: true });
         setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
-        navigateWorkspace(buildQuotePath(editingQuote.id));
         return;
       }
       setChangeImpactPreview((current) => ({
@@ -3887,6 +4346,7 @@ export default function App({
         error: "",
         applyOutcome: result.outcomeReceipt,
         applyResult: null,
+        appliedQuote: null,
         mutationState: "recovery",
         mutationKind: "apply",
         mutationMessage: result.outcomeReceipt.sourceChanged
@@ -3928,6 +4388,7 @@ export default function App({
       applyRequestId: "",
       applyResult: null,
       applyOutcome: null,
+      appliedQuote: null,
       mutationState: "recovery",
       mutationKind: "simulation",
       mutationMessage: "Starting a fresh simulation after the prior apply request was safely fenced."
@@ -3936,7 +4397,12 @@ export default function App({
   };
 
   const handleApplyCommercialChange = async () => {
-    if (!changeImpactScopeIsCurrent() || (changeImpactPreview.authorizationRequired && !changeImpactPreview.authorizationReceiptId)) return;
+    const requiresAuthorization = changeImpactPreview.authorityState === "enforced"
+      && changeImpactPreview.authorizationRequired;
+    if (
+      !changeImpactScopeIsCurrent()
+      || (requiresAuthorization && !changeImpactPreview.authorizationReceiptId)
+    ) return;
     if (changeImpactPreview.applyRequestId) {
       await handleReconcileCommercialChangeApplyOutcome();
       return;
@@ -3953,22 +4419,35 @@ export default function App({
       error: "",
       mutationState: "applying",
       mutationKind: "apply",
-      mutationMessage: "Applying the authorized edit atomically with its immutable invalidation receipts."
+      mutationMessage: requiresAuthorization
+        ? "Applying the authorized edit atomically with its immutable invalidation receipts."
+        : "Applying the reviewed edit through the existing quote authority."
     }));
     try {
       const result = await handleSubmitQuote({
         commercialChangeAuthority: {
           simulationReceiptId: changeImpactPreview.simulationReceiptId,
-          authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
+          authorizationReceiptId: requiresAuthorization
+            ? changeImpactPreview.authorizationReceiptId
+            : "",
           applyRequestId
         },
-        propagateError: true
+        propagateError: true,
+        navigateAfterSave: false
       });
       if (!result) return;
       setChangeImpactPreview((current) => ({
         ...current,
         applyResult: result.commercialChange,
         applyOutcome: null,
+        appliedQuote: {
+          quoteId: result.id,
+          quoteNumber: result.quoteNumber,
+          previousRevisionId: changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId,
+          activeVersionId: result.activeVersionId,
+          latestVersionNumber: result.latestVersionNumber,
+          status: result.status || "draft"
+        },
         mutationState: "receipt",
         mutationKind: "apply",
         mutationMessage: attendanceChange ? "Reviewed attendance was applied to a new draft revision. Prior payment and booking history remain preserved. Separate customer acceptance and administrator booking revalidation are required; no payment was charged." : result.commercialChange?.authorityState === "enforced"
@@ -3980,6 +4459,7 @@ export default function App({
       setChangeImpactPreview((current) => ({
         ...current,
         applyOutcome: null,
+        appliedQuote: null,
         error: error?.message || "The commercial change apply did not return a receipt.",
         mutationState: definitive ? "error" : "uncertain",
         mutationKind: "apply",
@@ -4176,7 +4656,13 @@ export default function App({
       }
       if (
         changeImpactPreview.authorityState === "enforced"
-        && (changeImpactPreview.authorizationRequired || changeImpactPreview.model?.attendanceBinding)
+        && (
+          changeImpactPreview.model?.attendanceBinding
+          || (
+            changeImpactPreview.authorizationRequired
+            && !changeImpactPreview.authorizationReceiptId
+          )
+        )
       ) {
         setStep(5);
         setSubmitState((current) => ({
@@ -4186,6 +4672,16 @@ export default function App({
         }));
         return null;
       }
+      if (changeImpactPreview.applyResult || changeImpactPreview.applyOutcome?.state === "committed") {
+        setStep(5);
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "This governed amendment already produced a new revision. Review that exact quote before making another change."
+        }));
+        return null;
+      }
+      return handleApplyCommercialChange();
     }
     if (submissionMenuItemCount < 1) {
       const message = "Choose at least one menu item before saving this quote.";
@@ -5780,6 +6276,7 @@ export default function App({
               onEventTypeChange={setGlobalEventTypeId}
               onInteractionStateChange={setCatalogModalInteraction}
               onToast={pushToast}
+              inventoryRecipeExtension={inventoryRecipeExtension}
             />
           </WorkspaceLazyTool>
         )}
@@ -5803,7 +6300,8 @@ export default function App({
       onReload: catalog.reload,
       saving: catalog.saving,
       initialTab: adminInitialTab,
-      onToast: pushToast
+      onToast: pushToast,
+      inventoryRecipeExtension
     },
     route: {
       mounted: catalogRouteMounted,
@@ -5816,6 +6314,11 @@ export default function App({
         principalId: authSession.user?.uid || "",
         workflowStudioEnabled: EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true,
         workflowSource: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source,
+        inventoryRecipeAccess: {
+          browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+          tenantEnabled: inventoryTenantEnabled
+        },
+        inventoryRecipeExtension,
         arrivalContext: workspaceArrivalContext?.surfaceId === "ambient-library"
           ? workspaceArrivalContext
           : null,
@@ -5854,6 +6357,20 @@ export default function App({
       organizationName: workspaceName
     },
     route: { mounted: staffRouteMounted, open: staffRouteOpen },
+    modal: { mounted: false, open: false }
+  };
+  const inventoryTool = {
+    surfaceName: "Inventory",
+    component: InventoryWorkspace,
+    enabled: inventoryWorkspaceEnabled,
+    onClose: returnWorkspaceHome,
+    surfaceProps: {
+      organizationId: authSession.organizationId,
+      role: authSession.role,
+      browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+      tenantEnabled: inventoryTenantEnabled
+    },
+    route: { mounted: inventoryRouteMounted, open: inventoryRouteOpen },
     modal: { mounted: false, open: false }
   };
   const importsTool = {
@@ -6140,43 +6657,58 @@ export default function App({
   // saved quote being edited. Shared so it renders identically in the
   // Proposal Composer document and the Guided-mode wizard's save step.
   const changeImpactSurface = isEditingQuote ? (
-    <section
-      className="quote-change-impact-preview"
-      data-capability-id="cwf-15b-commercial-change-impact-preview"
-    >
-      <div className="quote-change-impact-preview-head">
-        <div>
-          <p className="eyebrow">Saved quote</p>
-          <h3>What will this change affect?</h3>
-          <p className="source-note">
-            A server-checked comparison of the saved quote against your current edits. Previewing changes nothing; when a governed item is affected, applying asks for an exact authorization first.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="ghost compact"
-          onClick={() => handlePreviewChangeImpact({
+    <>
+      {eventIngredientProjection.access.readEnabled && (
+        <details className="commercial-twin-evidence-disclosure">
+          <summary>Ingredient quantity, cost, and allocation evidence</summary>
+          <div data-capability-id="inventory-event-ingredient-consequence" id="commercial-twin-inventory-evidence">
+          <EventIngredientProjectionPanel
+            selectedMenuItems={eventIngredientSelections}
+            read={eventIngredientProjection.read}
+            preview={eventIngredientProjection.preview}
+            operation={eventIngredientProjection.operation}
+            allocationOperation={eventIngredientProjection.allocationOperation}
+            quoteDirty={quoteDirty}
+            canPreview={eventIngredientProjection.canPreview}
+            canRecord={eventIngredientProjection.canRecord}
+            controlsLocked={eventIngredientProjection.controlsLocked}
+            allocationControlsLocked={eventIngredientProjection.allocationControlsLocked}
+            canManageAllocation={eventIngredientProjection.canManageAllocation}
+            canAllocate={eventIngredientProjection.canAllocate}
+            canRelease={eventIngredientProjection.canRelease}
+            canReconcilePlan={eventIngredientProjection.canReconcilePlan}
+            allocationBlockedReason={eventIngredientProjection.allocationBlockedReason}
+            recordBlockedReason={eventIngredientProjection.recordBlockedReason}
+            onPreview={eventIngredientProjection.previewCurrent}
+            onRecord={authSession.isAdmin ? eventIngredientProjection.recordCurrentPreview : undefined}
+            onReconcile={eventIngredientProjection.reconcile}
+            onReset={eventIngredientProjection.reset}
+            onAllocate={eventIngredientProjection.allocate}
+            onRelease={eventIngredientProjection.release}
+            onReconcilePlan={eventIngredientProjection.reconcileStaleAllocation}
+            onReconcileAllocation={eventIngredientProjection.reconcileAllocation}
+            onResetAllocation={eventIngredientProjection.resetAllocation}
+            onPreviewInputChange={setEventIngredientPreviewInput}
+            showPreviewAction={!livingCommercialTwinProjection.scenario.proposalChanged}
+          />
+          </div>
+        </details>
+      )}
+    <div data-capability-id="cwf-15b-commercial-change-impact-preview">
+      <Suspense fallback={<p className="source-note" role="status">Loading governed amendment context…</p>}>
+        <CommercialAmendmentWorkspace
+          commitment={editingQuote.commercialAmendment}
+          dirty={quoteDirty}
+          previewAvailable={changeImpactPreviewAvailable}
+          previewRequested={changeImpactPreview.requested}
+          previewLoading={changeImpactPreview.loading}
+          previewRecovering={changeImpactPreview.recovering}
+          previewError={changeImpactPresentationError}
+          previewActionVisible={!proposalComposerActive}
+          onPreview={() => handlePreviewChangeImpact({
             recovery: Boolean(changeImpactPresentationError)
           })}
-          disabled={!changeImpactPreviewAvailable || changeImpactPreview.loading}
-          title={changeImpactPreviewAvailable
-            ? "Create an immutable server simulation receipt for the current form and saved revision."
-            : "Change impact requires a Firebase-backed canonical quote and trusted pricing."}
         >
-          {changeImpactPreview.recovering
-            ? "Retrying preview…"
-            : changeImpactPreview.loading
-              ? "Building preview…"
-            : changeImpactPreview.model
-              ? "Refresh impact preview"
-              : "Preview change impact"}
-        </button>
-      </div>
-      {!changeImpactPreviewAvailable && (
-        <p className="warning-note">
-          Authoritative change impact is unavailable in browser-local mode. No client-calculated substitute is shown.
-        </p>
-      )}
       {changeImpactPreview.requested && (
         <RecoverableErrorBoundary
           active
@@ -6191,6 +6723,7 @@ export default function App({
               workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
               principalId={authSession.user?.uid || ""}
               model={changeImpactPreview.model}
+              commitment={editingQuote.commercialAmendment}
               loading={changeImpactPreview.loading}
               recovering={changeImpactPreview.recovering}
               error={changeImpactPresentationError}
@@ -6205,8 +6738,14 @@ export default function App({
               mutationMessage={changeImpactPreview.mutationMessage}
               applyResult={changeImpactPreview.applyResult}
               applyOutcome={changeImpactPreview.applyOutcome}
+              appliedQuote={changeImpactPreview.appliedQuote}
+              inventoryConsequences={eventIngredientProjection.access.readEnabled
+                ? commercialInventoryConsequences
+                : null}
               scopeCurrent={!changeImpactPresentationError}
-              onRetry={() => handlePreviewChangeImpact({ recovery: true })}
+              onRetry={proposalComposerActive
+                ? undefined
+                : () => handlePreviewChangeImpact({ recovery: true })}
               onRequestAuthorization={handleRequestChangeAuthorization}
               onRefreshAuthorization={handleRefreshChangeAuthorization}
               onAuthorize={handleAuthorizeChange}
@@ -6217,6 +6756,11 @@ export default function App({
               onApplyAllConsequences={handleApplyUnifiedConsequences}
               onApplySelectedConsequences={handleApplyUnifiedConsequences}
               onKeepQuotedPlan={handleKeepUnifiedQuotedPlan}
+              onOpenAppliedQuote={() => {
+                const quoteId = changeImpactPreview.appliedQuote?.quoteId || editingQuote.id;
+                setHistoryTarget({ quoteId, reason: "updated" });
+                navigateWorkspace(buildQuotePath(quoteId));
+              }}
               onReturnToEdit={() => {
                 if (!proposalComposerActive) setStep(1);
                 window.requestAnimationFrame(() => {
@@ -6227,7 +6771,10 @@ export default function App({
           </Suspense>
         </RecoverableErrorBoundary>
       )}
-    </section>
+        </CommercialAmendmentWorkspace>
+      </Suspense>
+    </div>
+    </>
   ) : null;
 
   const proposalComposerChangeImpactScopeCurrent = !(
@@ -6302,6 +6849,48 @@ export default function App({
       reviewSurfaces={draftReviewSurfaces}
       statusNotes={builderStatusNotes}
       changeImpactSurface={changeImpactSurface}
+      livingCommercialTwin={isEditingQuote ? {
+        projection: livingCommercialTwinProjection,
+        scopeKey: livingTwinScopeKey,
+        baseQuoteRevisionId: livingTwinBaseQuoteRevisionId,
+        currentGuestCount: livingCommercialTwinProjection.scenario.currentGuestCount,
+        proposedGuestCount: form.guests,
+        eventName: editingQuote.commercialAmendment?.event?.name
+          || editingQuote.baseForm?.eventName
+          || "",
+        eventDate: editingQuote.commercialAmendment?.event?.date
+          || editingQuote.baseForm?.date
+          || "",
+        eventTime: editingQuote.commercialAmendment?.event?.time
+          || editingQuote.baseForm?.time
+          || "",
+        venue: editingQuote.commercialAmendment?.event?.venue
+          || editingQuote.baseForm?.venue
+          || "",
+        proposedEventName: form.eventName,
+        proposedEventDate: form.date,
+        proposedEventTime: form.time,
+        proposedVenue: form.venue,
+        onGuestCountChange: handleLivingTwinGuestCountChange,
+        onRequestConsequences: handleLivingTwinConsequenceRequest,
+        onRetryConsequences: (request) => handlePreviewChangeImpact({
+          recovery: true,
+          workbenchRequest: request
+        }),
+        onReviewForCommitment: focusLivingTwinCommitmentReview,
+        onPreview: (request) => handlePreviewChangeImpact({
+          recovery: Boolean(changeImpactPresentationError),
+          workbenchRequest: request
+        }),
+        onRevertGuestCount: handleRevertLivingTwinGuestCount,
+        inventoryEvidenceAvailable: eventIngredientProjection.access.readEnabled,
+        onOpenStaffing: AMBIENT_UI_ENABLED && fulfillmentStaffingActive
+          ? () => navigateWorkspace(buildQuotePath(editingQuote.id))
+          : undefined,
+        onRefreshStaffing: fulfillmentStaffingActive
+          ? () => void fulfillmentStaffing.refresh().catch(() => {})
+          : undefined
+      } : null}
       impactWatch={isEditingQuote
         ? {
             available: changeImpactPreviewAvailable,
@@ -6334,6 +6923,7 @@ export default function App({
         customerPortal: customerPortalEnabled,
         staffDirectory: CUSTOMER_CENTERED_WORKSPACE_ENABLED && OPERATIONAL_STAFFING_UI_ENABLED,
         eventSchedule: eventScheduleEnabled,
+        inventoryAuthority: inventoryWorkspaceEnabled,
         reportingDashboard: dashboardEnabled,
         integrationsOps: integrationsEnabled,
         diagnostics: diagnosticsEnabled
@@ -6365,6 +6955,9 @@ export default function App({
         onClearDeck: () => navigateWorkspace(WORKSPACE_PATHS.clearDeck),
         onOperations: eventScheduleEnabled
           ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
+          : undefined,
+        onInventory: inventoryWorkspaceEnabled
+          ? () => navigateWorkspace(WORKSPACE_PATHS.inventory)
           : undefined,
         onMessages: () => navigateWorkspace(WORKSPACE_PATHS.messaging),
         onWorkflow: () => navigateWorkspace(WORKSPACE_PATHS.workflow),
@@ -6618,7 +7211,9 @@ export default function App({
             organizationName={organizationName}
             organizationId={authSession.organizationId}
             onRefresh={commercialSnapshot.refresh}
-            onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenWorkflow={AMBIENT_UI_ENABLED
+              ? openAmbientWorkflow
+              : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
           />
         </WorkspaceLazyRoute>
       )}
@@ -6634,9 +7229,14 @@ export default function App({
             principalId={authSession.user?.uid || ""}
             role={authSession.role}
             eventOperationsEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
+            inventoryAuthorityEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
+            inventoryTenantEnabled={inventoryTenantEnabled}
             snapshot={commercialSnapshot}
             organizationName={organizationName}
             organizationId={authSession.organizationId}
+            tenantTimeZone={tenantTimeZone}
+            scheduleAvailable={eventScheduleEnabled && AMBIENT_UI_ENABLED}
+            scheduleCapacityLimit={scheduleCapacityLimit}
             routeMode={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.EVENT_LIVE
               ? "live"
               : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.EVENT_REPLAY
@@ -6651,6 +7251,10 @@ export default function App({
             onOpenLive={(quoteId) => navigateWorkspace(buildEventLivePath(quoteId))}
             onOpenReplay={(quoteId) => navigateWorkspace(buildEventReplayPath(quoteId))}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onOpenWorkflow={AMBIENT_UI_ENABLED
+              ? openAmbientWorkflow
+              : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenSchedule={eventScheduleEnabled ? navigateEventSchedule : undefined}
             onOpenOperations={eventScheduleEnabled
               ? () => navigateWorkspace(WORKSPACE_PATHS.operations)
               : undefined}
@@ -6671,6 +7275,9 @@ export default function App({
             surfaceTitle="Operations"
             surfaceEyebrow="Calendar-first operations"
             organizationId={authSession.organizationId}
+            role={authSession.role}
+            inventoryAuthorityEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
+            inventoryTenantEnabled={inventoryTenantEnabled}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={currentUserEmail}
@@ -6683,6 +7290,7 @@ export default function App({
               quoteId,
               actionId: `open-calendar-opportunity:${quoteId}`
             })}
+            onOpenIngredientPlan={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             onOpenPeople={authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED
               ? () => navigateWorkspace(WORKSPACE_PATHS.staff)
               : undefined}
@@ -6803,6 +7411,7 @@ export default function App({
 
       {renderWorkspaceTools("route", [
         staffTool,
+        inventoryTool,
         catalogTool,
         importsTool,
         scheduleTool,
@@ -6819,6 +7428,10 @@ export default function App({
               ? !authSession.isAdmin
                 ? "role-denied"
                 : "feature-disabled"
+              : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY
+                ? !authSession.isAdmin
+                  ? "role-denied"
+                  : "feature-disabled"
               : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG
                 && !authSession.isAdmin
                 && !AMBIENT_UI_ENABLED
@@ -7407,8 +8020,9 @@ export default function App({
               ? workspaceArrivalContext
               : null}
             onArrivalResolution={handleWorkspaceArrivalResolution}
-            activeTaskJourney={feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney}
+            activeTaskJourney={workflowTaskJourney}
             onTaskOutcome={handleWorkspaceTaskOutcome}
+            onReturnToOrigin={() => returnToWorkspaceOrigin(workflowReturnFallback)}
             onEditQuote={(quote) => {
               handleEditQuote(quote);
             }}

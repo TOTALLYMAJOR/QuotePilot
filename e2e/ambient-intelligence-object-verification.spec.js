@@ -504,7 +504,7 @@ test.describe("Ambient intelligent-object browser verification", () => {
       let dialog = page.getByRole("dialog", { name: "Guest count connections" });
       await expect(dialog).toBeVisible();
       await expect(page.getByRole("dialog")).toHaveCount(1);
-      await expect(dialog.locator("summary")).toHaveText("Why this view");
+      await expect(dialog.getByText("Why this view", { exact: true })).toBeVisible();
       await expect(dialog.getByText("Saved priced count", { exact: true })).toBeVisible();
       await expect(dialog).toContainText("Exact commercial basis on this quote");
       await expect(dialog).toContainText("Planning estimate: about 120 guests (100–140)");
@@ -1002,6 +1002,133 @@ test.describe("Ambient intelligent-object browser verification", () => {
       });
     }
   });
+
+  for (const viewport of VIEWPORTS) {
+    test(`keeps Clear the Deck decision context complete and overflow-safe at ${viewport.width}px`, async ({ page }) => {
+      await page.addInitScript(({ quote }) => {
+        localStorage.setItem("quoteWizard.quotes", JSON.stringify([quote]));
+      }, {
+        quote: {
+          ...WORKFLOW_ARRIVAL_QUOTE,
+          workflow: {
+            approvalRequests: [{
+              ...WORKFLOW_ARRIVAL_QUOTE.workflow.approvalRequests[0],
+              note: "Customer says the original access link was forwarded.",
+              requestedByEmail: "sales@example.test"
+            }]
+          }
+        }
+      });
+      await page.setViewportSize(viewport);
+      await page.goto("/app/clear-the-deck");
+
+      const decision = page.locator('[data-decision-request-id="approval-ambient-rotate"]');
+      await expect(decision).toBeVisible();
+      await expect(decision).toContainText("Autumn Benefit Dinner");
+      await expect(decision).toContainText("Maya Bennett");
+      await expect(decision).toContainText("Customer access at stake");
+      await expect(decision).toContainText("Dependencies");
+      await expect(decision).toContainText("Authority");
+      await expect(decision).toContainText("Browser-local quote and approval evidence only");
+      await expect(decision.getByRole("button", { name: "Review in Workflow" })).toBeVisible();
+
+      const geometry = await page.evaluate(() => {
+        const documentElement = document.documentElement;
+        const card = document.querySelector('[data-decision-request-id="approval-ambient-rotate"]');
+        const button = card?.querySelector("button");
+        const buttonRect = button?.getBoundingClientRect();
+        return {
+          documentOverflowPx: documentElement.scrollWidth - documentElement.clientWidth,
+          cardOverflowPx: card ? card.scrollWidth - card.clientWidth : null,
+          actionHeight: buttonRect?.height || 0,
+          actionWidth: buttonRect?.width || 0
+        };
+      });
+      expect(geometry.documentOverflowPx).toBeLessThanOrEqual(1);
+      expect(geometry.cardOverflowPx).toBeLessThanOrEqual(1);
+      expect(geometry.actionHeight).toBeGreaterThanOrEqual(44);
+      expect(geometry.actionWidth).toBeGreaterThanOrEqual(44);
+
+      if (CAPTURE_PROOF) {
+        await page.evaluate(() => document.fonts.ready);
+        await page.screenshot({
+          path: `${PROOF_DIRECTORY}/clear-deck-decision-${viewport.width}.png`,
+          animations: "disabled",
+          fullPage: true
+        });
+      }
+    });
+  }
+
+  for (const viewport of VIEWPORTS) {
+    test(`carries Clear the Deck into the exact approval and preserves uncertain local outcomes at ${viewport.width}px`, async ({ page }) => {
+    await page.addInitScript(({ quote }) => {
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify([quote]));
+    }, {
+      quote: {
+        ...WORKFLOW_ARRIVAL_QUOTE,
+        workflow: {
+          approvalRequests: [{
+            ...WORKFLOW_ARRIVAL_QUOTE.workflow.approvalRequests[0],
+            note: "Customer says the original access link was forwarded.",
+            requestedByEmail: "sales@example.test"
+          }]
+        }
+      }
+    });
+    await page.setViewportSize(viewport);
+    await page.goto("/app/clear-the-deck");
+    const sourceAction = page.locator(
+      '[data-decision-request-id="approval-ambient-rotate"] [data-decision-action-id="review-workflow:approval-ambient-rotate"]'
+    );
+    await sourceAction.focus();
+    await sourceAction.click();
+
+    await expect(page).toHaveURL(/\/app\/workflow\?quoteId=ambient-workflow-arrival&attentionType=approval&requestId=approval-ambient-rotate/u);
+    const exactRow = page.locator('[data-request-id="approval-ambient-rotate"]');
+    await expect(exactRow).toBeFocused();
+    await expect(exactRow).toContainText("Decision opened from Clear the Deck");
+    await expect(exactRow).toContainText("Resolve this exact request");
+    await expect(exactRow).toContainText("Execution remains a separate governed action");
+
+    await exactRow.getByRole("button", { name: /^Approve /u }).click();
+    const uncertainty = exactRow.locator(".approval-resolution-receipt.state-uncertain");
+    await expect(uncertainty).toBeVisible();
+    await expect(uncertainty).toBeFocused();
+    await expect(uncertainty).toContainText("Do not submit this approval again");
+    await expect(uncertainty.getByRole("button", { name: "Check current approval state" })).toBeVisible();
+    await expect(exactRow.getByRole("button", { name: /^Approve /u })).toHaveCount(0);
+    const persisted = await readPersistedQuote(page, WORKFLOW_ARRIVAL_QUOTE.id);
+    expect(persisted.workflow.approvalRequests[0].state).toBe("approved");
+    await expect(page.locator('[data-workspace-task-state="uncertain"]')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Stop tracking" })).toBeVisible();
+    const workflowGeometry = await page.evaluate(() => {
+      const documentElement = document.documentElement;
+      const row = document.querySelector('[data-request-id="approval-ambient-rotate"]');
+      const action = row?.querySelector(".approval-resolution-receipt button");
+      const actionRect = action?.getBoundingClientRect();
+      return {
+        documentOverflowPx: documentElement.scrollWidth - documentElement.clientWidth,
+        rowOverflowPx: row ? row.scrollWidth - row.clientWidth : null,
+        actionHeight: actionRect?.height || 0,
+        actionWidth: actionRect?.width || 0
+      };
+    });
+    expect(workflowGeometry.documentOverflowPx).toBeLessThanOrEqual(1);
+    expect(workflowGeometry.rowOverflowPx).toBeLessThanOrEqual(1);
+    expect(workflowGeometry.actionHeight).toBeGreaterThanOrEqual(44);
+    expect(workflowGeometry.actionWidth).toBeGreaterThanOrEqual(44);
+
+    if (CAPTURE_PROOF) {
+      await page.evaluate(() => document.fonts.ready);
+      await page.screenshot({
+        path: `${PROOF_DIRECTORY}/workflow-approval-uncertain-${viewport.width}.png`,
+        animations: "disabled",
+        fullPage: true
+      });
+    }
+    });
+  }
 
   test("carries Customer 360 context into Messages and recovers rather than trusting stale local evidence", async ({ page }) => {
     await page.addInitScript(({ quote }) => {

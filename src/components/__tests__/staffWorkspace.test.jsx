@@ -12,12 +12,25 @@ const clientMocks = vi.hoisted(() => ({
   dispatchStaffInvitation: vi.fn()
 }));
 
+const staffingMocks = vi.hoisted(() => ({
+  buildOperationalStaffingRequestId: vi.fn(),
+  configureOperationalStaffProfile: vi.fn(),
+  resetDefinitiveOperationalStaffingAttempt: vi.fn()
+}));
+
 vi.mock("../../lib/staffDirectoryClient", async (importOriginal) => ({
   ...(await importOriginal()),
   getStaffDirectory: clientMocks.getStaffDirectory,
   saveStaffRecord: clientMocks.saveStaffRecord,
   previewStaffInvitation: clientMocks.previewStaffInvitation,
   dispatchStaffInvitation: clientMocks.dispatchStaffInvitation
+}));
+
+vi.mock("../../lib/operationalStaffingClient", async (importOriginal) => ({
+  ...(await importOriginal()),
+  buildOperationalStaffingRequestId: staffingMocks.buildOperationalStaffingRequestId,
+  configureOperationalStaffProfile: staffingMocks.configureOperationalStaffProfile,
+  resetDefinitiveOperationalStaffingAttempt: staffingMocks.resetDefinitiveOperationalStaffingAttempt
 }));
 
 import StaffWorkspace from "../StaffWorkspace";
@@ -72,6 +85,29 @@ describe("StaffWorkspace", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     clientMocks.getStaffDirectory.mockResolvedValue(fixture());
+    staffingMocks.buildOperationalStaffingRequestId.mockReturnValue("staffing-configure-profile:test-request-0001");
+    staffingMocks.configureOperationalStaffProfile.mockImplementation(async (command) => ({
+      ok: true,
+      idempotent: false,
+      snapshot: {
+        schemaVersion: 1,
+        authority: "server_authoritative",
+        authorityVersion: "operational-staffing-authority-v1",
+        organizationId: command.organizationId,
+        staffId: command.staffId,
+        displayName: command.profile.displayName,
+        active: command.profile.active,
+        capabilities: [...command.profile.capabilities],
+        availabilityWindows: [...command.profile.availabilityWindows],
+        availabilityBoundary: "operator_recorded_not_staff_acknowledged",
+        revision: 1
+      },
+      receipt: {
+        receiptId: "staffing-receipt-profile-0001",
+        requestId: command.requestId
+      }
+    }));
+    staffingMocks.resetDefinitiveOperationalStaffingAttempt.mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -94,13 +130,14 @@ describe("StaffWorkspace", () => {
     expect(container.textContent).toContain("Avery");
     expect(container.textContent).toContain("People");
     expect(container.textContent).toContain("Assigned today");
-    expect(container.textContent).toContain("Next to complete");
+    expect(container.textContent).toContain("Profile maturity");
     expect(container.querySelector(".staff-readiness-ledger")).not.toBeNull();
     expect(container.querySelector('input[placeholder="Find a teammate…"]')).not.toBeNull();
     expect(container.textContent).toContain("Next assignment");
     expect(container.textContent).toContain("Personal details");
-    expect(container.textContent).toContain("Profile checklist");
-    expect(container.textContent).toContain("Add availability to make scheduling easier");
+    expect(container.textContent).toContain("Independent facts");
+    expect(container.textContent).toContain("Availability not recorded");
+    expect(container.textContent).toContain("Qualifications not recorded");
     expect(container.textContent).toContain("A fresh start—team activity will appear here");
     expect(container.textContent).toContain("$27.50");
     expect(container.querySelector('[aria-label="Server"]')).not.toBeNull();
@@ -118,6 +155,190 @@ describe("StaffWorkspace", () => {
     expect(container.textContent).toContain("Not dispatched");
     expect(container.textContent).toContain("Awaiting staff response");
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  test("adds Taylor Smith as an active roster member with only a name and Server role", async () => {
+    await act(async () => {
+      root.render(<StaffWorkspace organizationId="org-alpha" organizationName="Smith Catering" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent.trim() === "Add person")
+        .click();
+    });
+
+    const quickAdd = container.querySelector(".staff-quick-add");
+    const displayName = quickAdd.querySelector("input");
+    expect(quickAdd).not.toBeNull();
+    expect(container.querySelector(".staff-editor-disclosure")).toBeNull();
+    expect(quickAdd.textContent).toContain("can be added later");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")
+        .set.call(displayName, "Taylor Smith");
+      displayName.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      quickAdd.querySelector(".staff-quick-add__submit").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const command = staffingMocks.configureOperationalStaffProfile.mock.calls[0][0];
+    expect(command).toEqual({
+      requestId: "staffing-configure-profile:test-request-0001",
+      organizationId: "org-alpha",
+      staffId: expect.stringMatching(/^staff-/u),
+      expectedRevision: 0,
+      profile: {
+        displayName: "Taylor Smith",
+        active: true,
+        capabilities: ["server"],
+        availabilityWindows: []
+      }
+    });
+    expect(clientMocks.saveStaffRecord).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-capability-state="receipt"][data-staff-operation="create_profile"]')).not.toBeNull();
+    expect(container.textContent).toContain("Taylor Smith is Active and Rostered");
+    expect(container.textContent).toContain("Receipt staffing-receipt-profile-0001");
+    expect(container.textContent).toContain("Contact not recorded");
+    expect(container.textContent).toContain("Availability not recorded");
+    expect(container.textContent).toContain("Rate not recorded");
+    expect(container.textContent).toContain("Qualifications not recorded");
+    expect(container.textContent).not.toMatch(/incomplete|needs attention|error/iu);
+  });
+
+  test("reconciles an uncertain roster save with the identical request and locked draft", async () => {
+    staffingMocks.configureOperationalStaffProfile
+      .mockRejectedValueOnce(Object.assign(new Error("Roster receipt timed out."), { code: "functions/unavailable" }))
+      .mockImplementationOnce(async (command) => ({
+        ok: true,
+        idempotent: true,
+        snapshot: {
+          organizationId: command.organizationId,
+          staffId: command.staffId,
+          displayName: command.profile.displayName,
+          active: true,
+          capabilities: [...command.profile.capabilities],
+          availabilityWindows: [],
+          revision: 1
+        },
+        receipt: {
+          receiptId: "staffing-receipt-profile-reconciled",
+          requestId: command.requestId
+        }
+      }));
+
+    await act(async () => {
+      root.render(<StaffWorkspace organizationId="org-alpha" organizationName="Smith Catering" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent.trim() === "Add person")
+        .click();
+    });
+    const name = container.querySelector(".staff-quick-add input");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Jordan Reed");
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector(".staff-quick-add__submit").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const original = staffingMocks.configureOperationalStaffProfile.mock.calls[0][0];
+    expect(container.querySelector('[data-capability-state="uncertain"]')).not.toBeNull();
+    expect(container.querySelector(".staff-quick-add input").disabled).toBe(true);
+    expect(container.querySelector(".staff-quick-add__submit").disabled).toBe(true);
+    await act(async () => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent === "Check previous roster save")
+        .click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(staffingMocks.configureOperationalStaffProfile.mock.calls[1][0]).toBe(original);
+    expect(container.textContent).toContain("Jordan Reed is Active and Rostered");
+    expect(container.textContent).toContain("staffing-receipt-profile-reconciled");
+  });
+
+  async function expectDefinitiveRosterFailureCanBeCleared(code) {
+      staffingMocks.buildOperationalStaffingRequestId
+        .mockReturnValueOnce("staffing-configure-profile:definitive-request-0001")
+        .mockReturnValueOnce("staffing-configure-profile:fresh-request-0002");
+      staffingMocks.configureOperationalStaffProfile.mockRejectedValueOnce(
+        Object.assign(new Error(`Definitive ${code} failure.`), { code: `functions/${code}` })
+      );
+
+      await act(async () => {
+        root.render(<StaffWorkspace organizationId="org-alpha" organizationName="Smith Catering" />);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        Array.from(container.querySelectorAll("button"))
+          .find((entry) => entry.textContent.trim() === "Add person")
+          .click();
+      });
+      const name = container.querySelector(".staff-quick-add input");
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")
+          .set.call(name, "Morgan Lee");
+        name.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        container.querySelector(".staff-quick-add__submit").click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(staffingMocks.configureOperationalStaffProfile).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('[data-staff-operation="create_profile"][data-capability-state="error"]'))
+        .not.toBeNull();
+      expect(container.querySelector(".staff-quick-add input").disabled).toBe(true);
+      const clear = Array.from(container.querySelectorAll("button"))
+        .find((entry) => entry.textContent === "Clear failed roster attempt");
+      expect(clear).not.toBeUndefined();
+      await act(async () => clear.click());
+
+      expect(staffingMocks.resetDefinitiveOperationalStaffingAttempt).toHaveBeenCalledWith({
+        operation: "configure_profile",
+        organizationId: "org-alpha",
+        staffId: expect.stringMatching(/^staff-/u),
+        requestId: "staffing-configure-profile:definitive-request-0001"
+      });
+      expect(staffingMocks.configureOperationalStaffProfile).toHaveBeenCalledTimes(1);
+      expect(container.querySelector(".staff-quick-add input").value).toBe("Morgan Lee");
+      expect(container.querySelector(".staff-quick-add input").disabled).toBe(false);
+
+      await act(async () => {
+        container.querySelector(".staff-quick-add__submit").click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(staffingMocks.configureOperationalStaffProfile).toHaveBeenCalledTimes(2);
+      expect(staffingMocks.configureOperationalStaffProfile.mock.calls[1][0].requestId)
+        .toBe("staffing-configure-profile:fresh-request-0002");
+      expect(container.textContent).toContain("Morgan Lee is Active and Rostered");
+  }
+
+  test("clears a definitive aborted roster failure without replay, then submits a fresh request", async () => {
+    await expectDefinitiveRosterFailureCanBeCleared("aborted");
+    expect(staffingMocks.configureOperationalStaffProfile).toHaveBeenCalledTimes(2);
+  });
+
+  test("clears a definitive data-loss roster failure without replay, then submits a fresh request", async () => {
+    await expectDefinitiveRosterFailureCanBeCleared("data-loss");
+    expect(staffingMocks.configureOperationalStaffProfile).toHaveBeenCalledTimes(2);
   });
 
   test("keeps assignment selection interactive when a teammate has multiple events", async () => {
@@ -345,7 +566,7 @@ describe("StaffWorkspace", () => {
     expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent.includes("Refresh the team"))).toBe(true);
   });
 
-  test("renders inactive and incomplete records without invented operational values", async () => {
+  test("renders inactive records and neutral optional-field absences without invented values", async () => {
     const inactive = createStaffRecordDraft({
       organizationId: "org-alpha",
       staffId: "staff-long-name",
@@ -369,8 +590,8 @@ describe("StaffWorkspace", () => {
     });
 
     expect(container.textContent).toContain("Inactive");
-    expect(container.textContent).toContain("Rate not configured");
-    expect(container.textContent).toContain("Add availability to make scheduling easier");
+    expect(container.textContent).toContain("Rate not recorded");
+    expect(container.textContent).toContain("Availability not recorded");
     expect(container.textContent).toContain("No event assigned yet");
     expect(container.textContent).not.toContain("$0.00/hr");
   });
@@ -435,7 +656,7 @@ describe("StaffWorkspace", () => {
         .set.call(search, "");
       search.dispatchEvent(new Event("input", { bubbles: true }));
       Array.from(container.querySelectorAll("button"))
-        .find((button) => button.textContent.trim() === "Available")
+        .find((button) => button.textContent.trim() === "Schedulable")
         .click();
     });
     expect(container.textContent).toContain("No teammates match this view yet.");
@@ -481,7 +702,7 @@ describe("StaffWorkspace", () => {
     });
 
     expect(container.textContent).toContain("Unavailable");
-    expect(container.textContent).not.toContain("Add availability to make scheduling easier");
+    expect(container.textContent).not.toContain("Availability not recorded");
     expect(container.textContent).toContain("$12,345.67");
     expect(container.textContent).toContain("executive-banquet-captain-and-guest-experience-lead");
     expect(container.textContent).toContain("Expired");

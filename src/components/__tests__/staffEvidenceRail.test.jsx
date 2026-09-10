@@ -16,6 +16,14 @@ describe("buildStaffEvidenceRailModel", () => {
 });
 
 describe("StaffEvidenceRail", () => {
+  test("supports a route-level h2 without changing the reusable default hierarchy", () => {
+    const routeMarkup = renderToStaticMarkup(<StaffEvidenceRail headingLevel={2} />);
+    const nestedMarkup = renderToStaticMarkup(<StaffEvidenceRail />);
+
+    expect(routeMarkup).toContain('<h2 id="staff-evidence-rail-title">Staff read context</h2>');
+    expect(nestedMarkup).toContain('<h3 id="staff-evidence-rail-title">Staff read context</h3>');
+  });
+
   test("binds scope, contract, source, timestamp, truncation, and proof caveat to the Home snapshot", () => {
     const markup = renderToStaticMarkup(
       <StaffEvidenceRail
@@ -162,6 +170,37 @@ describe("StaffEvidenceRail", () => {
     expect(completeMarkup).toContain("unread customer-reply Attention projection");
     expect(partialMarkup).toContain("unread customer-reply Attention did not complete.");
     expect(partialMarkup).toContain('data-capability-state="partial"');
+  });
+
+  test("includes the optional Decision Debt read in Clear the Deck completeness", () => {
+    const completeMarkup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        source="firebase"
+        loadedAt={1}
+        reads={{
+          attention: { status: "success" },
+          history: { status: "success" },
+          unreadReplies: { status: "success" },
+          decisionDebt: { status: "success" }
+        }}
+      />
+    );
+    const partialMarkup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        source="firebase"
+        partial
+        error="Decision Debt unavailable."
+        reads={{
+          attention: { status: "success" },
+          history: { status: "success" },
+          unreadReplies: { status: "success" },
+          decisionDebt: { status: "error" }
+        }}
+      />
+    );
+
+    expect(completeMarkup).toContain("All four tenant reads completed.");
+    expect(partialMarkup).toContain("Decision Debt did not complete.");
   });
 
   test("keeps the standard presentation as the default", () => {

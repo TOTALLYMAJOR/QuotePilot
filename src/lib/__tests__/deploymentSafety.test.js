@@ -35,6 +35,18 @@ const STAFFING_TENANT_WORKFLOW = path.join(
   "workflows",
   "set-operational-staffing-tenant.yml"
 );
+const INVENTORY_TENANT_WORKFLOW = path.join(
+  ROOT,
+  ".github",
+  "workflows",
+  "set-inventory-tenant.yml"
+);
+const EVENT_COMMERCIAL_TENANT_WORKFLOW = path.join(
+  ROOT,
+  ".github",
+  "workflows",
+  "set-event-commercial-tenant.yml"
+);
 const FIREBASE_STUB = path.join(ROOT, "scripts", "deploy-firebase-production.mjs");
 const VERCEL_STUB = path.join(ROOT, "scripts", "deploy-vercel-production.mjs");
 const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-customer.mjs");
@@ -147,7 +159,7 @@ describe("direct production deployment safety", () => {
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("binds the %s Ambient and staffing production flags once", (_provider, workflow) => {
+  ])("binds the %s Ambient, staffing, and inventory production presentation flags once", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
     const quoteHistory = fs.readFileSync(
@@ -164,8 +176,11 @@ describe("direct production deployment safety", () => {
     expect(source.match(/VITE_AMBIENT_UI_ENABLED/g)).toHaveLength(1);
     expect(source.match(/VITE_OPERATIONAL_STAFFING_ENABLED: "true"/g)).toHaveLength(1);
     expect(source.match(/VITE_OPERATIONAL_STAFFING_ENABLED/g)).toHaveLength(1);
+    expect(source.match(/VITE_INVENTORY_AUTHORITY_ENABLED: "true"/g)).toHaveLength(1);
+    expect(source.match(/VITE_INVENTORY_AUTHORITY_ENABLED/g)).toHaveLength(1);
     expect(envExample).toMatch(/^VITE_AMBIENT_UI_ENABLED=false$/m);
     expect(envExample).toMatch(/^VITE_OPERATIONAL_STAFFING_ENABLED=false$/m);
+    expect(envExample).toMatch(/^VITE_INVENTORY_AUTHORITY_ENABLED=false$/m);
     expect(envExample).toMatch(/^VITE_PILOT_DECISION_ROOM_ENABLED=false$/m);
     expect(quoteHistory).toMatch(
       /const AMBIENT_UI_ENABLED = import\.meta\.env\.VITE_AMBIENT_UI_ENABLED === "1"[\s\S]*const AmbientLivingOpportunityRoute = AMBIENT_UI_ENABLED[\s\S]*\? lazy/
@@ -195,7 +210,7 @@ describe("direct production deployment safety", () => {
     );
   });
 
-  test("keeps operational staffing authority safe-off in production", () => {
+  test("keeps staffing and inventory server authority restricted to the explicit operations profile", () => {
     const firebaseWorkflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
     const vercelWorkflow = fs.readFileSync(VERCEL_WORKFLOW, "utf8");
     const functionsExample = fs.readFileSync(
@@ -203,9 +218,15 @@ describe("direct production deployment safety", () => {
       "utf8"
     );
 
-    expect(firebaseWorkflow.match(/OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false"/g)).toHaveLength(1);
+    expect(firebaseWorkflow).toContain(
+      "OPERATIONAL_STAFFING_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
+    );
+    expect(firebaseWorkflow).toContain(
+      "INVENTORY_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
+    );
     expect(vercelWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
     expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
+    expect(functionsExample).toMatch(/^INVENTORY_AUTHORITY_ENABLED=false$/m);
   });
 
   test("materializes an explicit email profile while keeping every other authority safe-off", () => {
@@ -215,7 +236,6 @@ describe("direct production deployment safety", () => {
       'NOTIFICATIONS_SMS_PROVIDER: none',
       'STRIPE_MODE: live',
       'COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"',
-      'OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false"',
       'REVENUE_AUTOPILOT_ENABLED: "false"',
       'REVENUE_AUTOPILOT_SENDS_ENABLED: "false"',
       'BUYER_ACCESS_ENABLED: "false"',
@@ -224,10 +244,11 @@ describe("direct production deployment safety", () => {
       expect(source).toContain(binding);
     }
     expect(source).toContain("- email-active");
+    expect(source).toContain("- ragnakok-operations");
     expect(source).toMatch(
-      /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ \(inputs\.release_profile == 'email-active' \|\| inputs\.release_profile == 'ragnakok-workflows'\) && 'resend' \|\| 'none' \}\}/
+      /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ \(inputs\.release_profile == 'email-active' \|\| inputs\.release_profile == 'ragnakok-workflows' \|\| inputs\.release_profile == 'ragnakok-operations'\) && 'resend' \|\| 'none' \}\}/
     );
-    expect(source).toMatch(/email-active\|ragnakok-workflows\)[\s\S]*FIREBASE_SCOPE[\s\S]*EXPECTED_EMAIL_PROVIDER[\s\S]*resend/);
+    expect(source).toMatch(/email-active\|ragnakok-workflows\|ragnakok-operations\)[\s\S]*FIREBASE_SCOPE[\s\S]*EXPECTED_EMAIL_PROVIDER[\s\S]*resend/);
     expect(source).not.toContain("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
     expect(source).not.toContain("NOTIFICATIONS_OWNER_PHONE");
     expect(source).not.toContain("NOTIFICATIONS_OWNER_SMS_CONSENT");
@@ -251,15 +272,18 @@ describe("direct production deployment safety", () => {
     );
     const batches = planFunctionDeployBatches(ids);
 
-    expect(ids).toHaveLength(122);
-    expect(new Set(ids).size).toBe(122);
+    expect(ids).toHaveLength(128);
+    expect(new Set(ids).size).toBe(128);
     expect(ids).toEqual(expect.arrayContaining([
       "getEventOperatingSnapshot", "applyEventOperatingCommand", "getWorkflowConfiguration",
       "applyWorkflowDefinitionCommand", "getQuoteAttendance", "submitQuoteAttendanceResponse",
-      "getWorkflowPackSnapshot", "applyWorkflowPackCommand"
+      "getWorkflowPackSnapshot", "applyWorkflowPackCommand",
+      "getInventoryWorkspace", "applyInventoryCommand", "previewEventInventory",
+      "invalidateEventIngredientsOnQuoteChange", "invalidateEventIngredientsOnRecipeChange",
+      "invalidateEventIngredientsOnMenuCostChange"
     ]));
     expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
-    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 17]);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 23]);
     expect(batches.flat()).toEqual(ids);
     expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
     expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(
@@ -283,6 +307,7 @@ describe("direct production deployment safety", () => {
       COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",
       EVENT_OPERATING_SPINE_ENABLED: "false",
       OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
+      INVENTORY_AUTHORITY_ENABLED: "false",
       REVENUE_AUTOPILOT_ENABLED: "false",
       REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
       BUYER_ACCESS_ENABLED: "false",
@@ -327,6 +352,18 @@ describe("direct production deployment safety", () => {
     expect(() => validateProductionFunctionsReadback(scopedResponse, expectedIds, "email-active")).toThrow(/TENANT_WORKFLOW_ORGANIZATION_ID/);
     scopedResponse.result[0].environmentVariables.TENANT_WORKFLOW_ORGANIZATION_ID = "other";
     expect(() => validateProductionFunctionsReadback(scopedResponse, expectedIds, "ragnakok-workflows")).toThrow(/TENANT_WORKFLOW_ORGANIZATION_ID/);
+    const operationsResponse = { ...response, result: expectedIds.map(id => entry(id, {
+      ...runtime,
+      NOTIFICATIONS_EMAIL_PROVIDER: "resend",
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true"
+    })) };
+    expect(validateProductionFunctionsReadback(
+      operationsResponse,
+      expectedIds,
+      "ragnakok-operations"
+    ).profile).toBe("ragnakok-operations");
     expect(() => validateProductionFunctionsReadback(
       response,
       expectedIds,
@@ -374,8 +411,12 @@ describe("direct production deployment safety", () => {
     expect(source).toMatch(/--candidate-profile "\$\{CANDIDATE_PROFILE\}"/);
   });
 
-  test("keeps tenant activation inputs out of executable workflow text", () => {
-    const source = fs.readFileSync(STAFFING_TENANT_WORKFLOW, "utf8");
+  test.each([
+    ["staffing", STAFFING_TENANT_WORKFLOW],
+    ["inventory", INVENTORY_TENANT_WORKFLOW],
+    ["event-commercial", EVENT_COMMERCIAL_TENANT_WORKFLOW]
+  ])("keeps %s tenant activation inputs out of executable workflow text", (_authority, workflow) => {
+    const source = fs.readFileSync(workflow, "utf8");
     const runLines = [];
     let runIndent = -1;
     for (const line of source.split("\n")) {
@@ -403,8 +444,7 @@ describe("direct production deployment safety", () => {
     expect(source).toContain("ref: ${{ github.sha }}");
     expect(source).toContain("DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}");
     expect(source).toContain('git tag --points-at "${DEPLOYED_RELEASE_SHA}"');
-    expect(source).toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
-    expect(source).toContain("VITE_OPERATIONAL_STAFFING_ENABLED");
+    expect(source).toContain("ragnakok-operations");
     expect(source).not.toContain("github.sha == inputs.deployed_release_sha");
     expect(source).not.toContain("git merge-base --is-ancestor");
     expect(source).not.toContain("secrets.FIREBASE_TOKEN");

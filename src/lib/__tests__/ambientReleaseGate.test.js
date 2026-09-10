@@ -37,6 +37,7 @@ function fixture(overrides = {}) {
           VITE_PILOT_COMMAND_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+          VITE_INVENTORY_AUTHORITY_ENABLED: "true"
       - name: Build compatibility production bundle
         run: npm run build && npm run check:perf:bundle
         env:
@@ -47,6 +48,7 @@ function fixture(overrides = {}) {
         env:
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+          VITE_INVENTORY_AUTHORITY_ENABLED: "true"
           BUNDLE_BUDGET_PROFILE: ambient-production
       - name: Continue protected lane
         run: npm run build
@@ -57,7 +59,7 @@ function fixture(overrides = {}) {
 });
 `,
     orchestration: "npm run check:ambient-release-gate\n",
-    deploy: "env:\n  VITE_AMBIENT_UI_ENABLED: \"true\"\n  VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"\n",
+    deploy: "env:\n  VITE_AMBIENT_UI_ENABLED: \"true\"\n  VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"\n  VITE_INVENTORY_AUTHORITY_ENABLED: \"true\"\n",
     workPlan: Array.from(
       { length: 50 },
       (_, index) => `- **AIUI-${String(index + 1).padStart(2, "0")} [EVOLVE]** Contract.`

@@ -28,6 +28,8 @@ import {
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
 import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
+import { useEventIngredientExecutionProjection } from "../hooks/useEventIngredientExecutionProjection";
+import EventIngredientOperationsSummary from "./EventIngredientOperationsSummary";
 import "./scheduleMotion.css";
 
 export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
@@ -425,7 +427,6 @@ function addComparisonPair(comparisonsById, a, b, reason) {
   addComparison(comparisonsById, a, b, reason);
   addComparison(comparisonsById, b, a, reason);
 }
-
 export function buildConflictInsights(events, capacityLimit) {
   const grouped = new Map();
   const reasonsById = new Map();
@@ -525,6 +526,50 @@ export function buildConflictInsights(events, capacityLimit) {
       ])
     )
   };
+}
+
+export function buildScheduleConflictAssessment(events, quoteId, capacityLimit) {
+  const source = Array.isArray(events) ? events : [];
+  const selectedId = String(quoteId || "").trim();
+  const selected = source.find((item) => String(item?.id || "") === selectedId);
+  if (!selected) {
+    return Object.freeze({ state: "unknown", reasons: Object.freeze(["selected_event_missing"]) });
+  }
+
+  const selectedDate = String(selected.date || "").trim();
+  const selectedVenue = normalizeVenueKey(selected.venue);
+  const selectedWindow = toTimeWindow(selected.time, selected.hours);
+  const selectedGuests = Number(selected.guests);
+  const unknownReasons = new Set();
+  if (!parseIsoDate(selectedDate)) unknownReasons.add("selected_date_unknown");
+  if (!selectedVenue) unknownReasons.add("selected_venue_unknown");
+  if (!selectedWindow) unknownReasons.add("selected_time_unknown");
+  if (selected.guests === null || selected.guests === undefined || selected.guests === ""
+    || !Number.isFinite(selectedGuests) || selectedGuests < 0) unknownReasons.add("selected_guest_load_unknown");
+
+  source.forEach((item) => {
+    if (String(item?.id || "") === selectedId) return;
+    const date = String(item?.date || "").trim();
+    const venue = normalizeVenueKey(item?.venue);
+    if (!parseIsoDate(date)) unknownReasons.add("peer_date_unknown");
+    if (!venue) unknownReasons.add("peer_venue_unknown");
+    if (!selectedDate || !selectedVenue || date !== selectedDate || venue !== selectedVenue) return;
+    if (!toTimeWindow(item.time, item.hours)) unknownReasons.add("peer_time_unknown");
+    const guests = Number(item.guests);
+    if (item.guests === null || item.guests === undefined || item.guests === ""
+      || !Number.isFinite(guests) || guests < 0) unknownReasons.add("peer_guest_load_unknown");
+  });
+
+  const conflicts = buildConflictInsights(source, capacityLimit).reasonsById.get(selectedId) || new Set();
+  if (conflicts.has("time_unknown")) unknownReasons.add("peer_time_unknown");
+  const conflictReasons = [...conflicts].filter((reason) => reason !== "time_unknown");
+  if (unknownReasons.size) {
+    return Object.freeze({ state: "unknown", reasons: Object.freeze([...unknownReasons]) });
+  }
+  return Object.freeze({
+    state: conflictReasons.length ? "conflict" : "clear",
+    reasons: Object.freeze(conflictReasons)
+  });
 }
 
 // Drop physics: one-shot settle-bounce + tone-tinted lane glow after a staff
@@ -777,12 +822,13 @@ export function getScheduleCalendarCountLabels(counts = {}) {
   };
 }
 
-export function buildScheduledEvents(quotes = []) {
-  return (Array.isArray(quotes) ? quotes : [])
+export function buildScheduledEvents(quotes = [], { preserveUndated = false } = {}) {
+  const events = (Array.isArray(quotes) ? quotes : [])
     .filter((quote) => STATUS_SET.has(String(quote?.status || "")))
     .map((quote) => ({
       id: quote.id,
       quoteNumber: String(quote.quoteNumber || "").trim(),
+      activeRevisionId: String(quote.activeVersionId || quote.versionMeta?.versionId || "").trim(),
       status: String(quote.status || ""),
       date: String(quote.event?.date || ""),
       time: String(quote.event?.time || ""),
@@ -802,8 +848,9 @@ export function buildScheduledEvents(quotes = []) {
       confirmationStatus: String(quote.booking?.confirmationStatus || "pending").trim(),
       confirmationSentAtISO: String(quote.booking?.confirmationSentAtISO || ""),
       confirmedAtISO: String(quote.booking?.confirmedAtISO || "")
-    }))
-    .filter((item) => parseIsoDate(item.date))
+    }));
+  return events
+    .filter((item) => preserveUndated || parseIsoDate(item.date))
     .sort((a, b) => {
       const dateCmp = a.date.localeCompare(b.date);
       if (dateCmp !== 0) return dateCmp;
@@ -873,12 +920,16 @@ export function EventScheduleView({
   surfaceTitle = "Event Schedule",
   surfaceEyebrow = "",
   organizationId = "",
+  role = "customer",
+  inventoryAuthorityEnabled = false,
+  inventoryTenantEnabled = false,
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
   arrivalContext = null,
   onArrivalResolution = null,
   onOpenOpportunity = null,
+  onOpenIngredientPlan = null,
   onOpenPeople = null,
   onOpenReporting = null,
   returnFocusRef = null
@@ -1170,7 +1221,7 @@ export function EventScheduleView({
     const target = Array.from(
       dialogRef.current?.querySelectorAll("[data-schedule-event-id]") || []
     ).find((element) => element.dataset.scheduleEventId === quoteId);
-    target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    target?.scrollIntoView?.({ behavior: "smooth", block: "start" });
     target?.focus({ preventScroll: true });
     if (target && document.activeElement === target) {
       reportArrivalResolution({
@@ -1219,6 +1270,20 @@ export function EventScheduleView({
   const selectedEvent = selectedEvents.find((item) => item.id === selectedEventId)
     || selectedEvents[0]
     || null;
+  const ingredientExecution = useEventIngredientExecutionProjection({
+    active: Boolean(
+      open
+      && operationsMode
+      && state.source === "firebase"
+      && selectedEvent?.id
+    ),
+    organizationId,
+    role,
+    browserEnabled: inventoryAuthorityEnabled,
+    tenantEnabled: inventoryTenantEnabled,
+    quoteId: selectedEvent?.id || "",
+    quoteStatus: selectedEvent?.status || ""
+  });
   const selectedComparisons = useMemo(() => {
     if (!selectedEvent?.id) return [];
     const eventsById = new Map(scheduledEvents.map((item) => [item.id, item]));
@@ -2008,6 +2073,17 @@ export function EventScheduleView({
                     ) : null}
                   </header>
                   <ScheduleEventFacts item={selectedEvent} compact />
+                  {operationsMode && ingredientExecution.access.readEnabled ? (
+                    <EventIngredientOperationsSummary
+                      planRead={ingredientExecution.planRead}
+                      executionRead={ingredientExecution.read}
+                      activeQuoteRevisionId={selectedEvent.activeRevisionId}
+                      headingLevel={5}
+                      onOpenPlan={typeof onOpenIngredientPlan === "function"
+                        ? ({ actionKind }) => onOpenIngredientPlan(selectedEvent.id, actionKind)
+                        : undefined}
+                    />
+                  ) : null}
                   <details className="schedule-booking-details">
                     <summary>
                       <span>More event details</span>

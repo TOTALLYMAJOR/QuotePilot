@@ -223,6 +223,14 @@ if (!["true", "false"].includes(operationalStaffingAuthorityEnabled)) {
   throw new Error("OPERATIONAL_STAFFING_AUTHORITY_ENABLED must be true or false.");
 }
 
+const inventoryAuthorityEnabled = optional(
+  "INVENTORY_AUTHORITY_ENABLED",
+  "false"
+).toLowerCase();
+if (!["true", "false"].includes(inventoryAuthorityEnabled)) {
+  throw new Error("INVENTORY_AUTHORITY_ENABLED must be true or false.");
+}
+
 const revenueAutopilotEnabled = optional(
   "REVENUE_AUTOPILOT_ENABLED",
   "false"
@@ -329,6 +337,7 @@ const values = {
   EVENT_OPERATING_SPINE_ENABLED: "false",
   ...(tenantWorkflowOrganizationId ? { TENANT_WORKFLOW_ORGANIZATION_ID: tenantWorkflowOrganizationId } : {}),
   OPERATIONAL_STAFFING_AUTHORITY_ENABLED: operationalStaffingAuthorityEnabled,
+  INVENTORY_AUTHORITY_ENABLED: inventoryAuthorityEnabled,
   REVENUE_AUTOPILOT_ENABLED: revenueAutopilotEnabled,
   REVENUE_AUTOPILOT_SENDS_ENABLED: revenueAutopilotSendsEnabled,
   BUYER_ACCESS_ENABLED: buyerAccessEnabled,

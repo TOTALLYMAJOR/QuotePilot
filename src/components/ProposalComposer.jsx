@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
@@ -30,6 +30,8 @@ import {
   previewPatchImpact
 } from "./proposalComposerPresentation";
 import "./proposalComposer.css";
+
+const LivingCommercialTwin = lazy(() => import("./LivingCommercialTwin"));
 
 // Margin stays behind the same default-off gate LiveBreakdown uses; the
 // composer never introduces a wider margin surface than the wizard had.
@@ -442,6 +444,7 @@ export default function ProposalComposer({
   reviewSurfaces = null,
   statusNotes = null,
   changeImpactSurface = null,
+  livingCommercialTwin = null,
   impactWatch = null,
   isAdmin = false,
   onOpenCatalogPricing = null
@@ -1280,6 +1283,12 @@ export default function ProposalComposer({
         </div>
       </header>
 
+      {livingCommercialTwin ? (
+        <Suspense fallback={<div className="pc-surface-note">Preparing scenario intelligence…</div>}>
+          <LivingCommercialTwin {...livingCommercialTwin} />
+        </Suspense>
+      ) : null}
+
       <div className="pc-columns">
         <nav className="pc-quote-plan" aria-label="Quote plan" data-testid="commercial-workbench-plan">
           <div className="pc-quote-plan-head">
@@ -1318,7 +1327,7 @@ export default function ProposalComposer({
         <div className="pc-document" data-testid="pc-document">
           {reviewSurfaces}
 
-          {consequences ? (
+          {!livingCommercialTwin && consequences ? (
             <aside className="pc-consequences" aria-label="Guest count consequences" data-testid="pc-consequences">
               <p className="pc-eyebrow">Guests {consequences.from || "—"} → {consequences.to}</p>
               <div className="pc-consequence-grid">

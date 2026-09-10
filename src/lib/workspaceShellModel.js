@@ -5,6 +5,7 @@ import { WORKSPACE_ROUTE_IDS } from "./workspaceRoutes";
 const TOOLS = Object.freeze([
   ["staff", WORKSPACE_ROUTE_IDS.STAFF, "staffDirectory", true],
   ["schedule", WORKSPACE_ROUTE_IDS.SCHEDULE, "eventSchedule"],
+  ["inventory", WORKSPACE_ROUTE_IDS.INVENTORY, "inventoryAuthority", true],
   ["reporting", WORKSPACE_ROUTE_IDS.REPORTING, "reportingDashboard"],
   ["catalog", WORKSPACE_ROUTE_IDS.CATALOG, ""],
   ["imports", WORKSPACE_ROUTE_IDS.IMPORTS, ""],
@@ -33,6 +34,7 @@ const LEGACY_GAPS = [
   WORKSPACE_ROUTE_IDS.EVENT_LIVE,
   WORKSPACE_ROUTE_IDS.EVENT_REPLAY,
   WORKSPACE_ROUTE_IDS.OPERATIONS,
+  WORKSPACE_ROUTE_IDS.INVENTORY,
   WORKSPACE_ROUTE_IDS.MESSAGING
 ];
 const SURFACES = Object.freeze({
@@ -48,6 +50,7 @@ const SURFACES = Object.freeze({
   [WORKSPACE_ROUTE_IDS.EVENT_LIVE]: "event-live",
   [WORKSPACE_ROUTE_IDS.EVENT_REPLAY]: "event-replay",
   [WORKSPACE_ROUTE_IDS.OPERATIONS]: "operations",
+  [WORKSPACE_ROUTE_IDS.INVENTORY]: "inventory",
   [WORKSPACE_ROUTE_IDS.MESSAGING]: "messages"
 });
 
@@ -91,7 +94,12 @@ export function buildWorkspaceShellModel({
     : browserRouteId;
   const features = Object.fromEntries(
     TOOLS.filter(([, , feature]) => feature)
-      .map(([, , feature]) => [feature, featureFlags?.[feature] !== false])
+      .map(([, , feature]) => [
+        feature,
+        feature === "inventoryAuthority"
+          ? featureFlags?.[feature] === true
+          : featureFlags?.[feature] !== false
+      ])
   );
   const selectedTool = TOOLS.find(([, routeId]) => routeId === resolvedRouteId);
   const routedTool = selectedTool?.[0] || "";

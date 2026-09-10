@@ -15,7 +15,10 @@ const quoteFixture = {
   id: "q-1",
   quoteNumber: "Q-260810-0900-00001",
   customerId: "cust-1",
-  customer: { name: "Elena Rivera", email: "elena@example.test" }
+  customer: { name: "Elena Rivera", email: "elena@example.test" },
+  status: "sent",
+  event: { date: "2026-09-18", venue: "Garden Terrace" },
+  totals: { total: 4825 }
 };
 
 describe("buildNowCard", () => {
@@ -43,6 +46,11 @@ describe("buildNowCard", () => {
       quoteId: "q-1",
       attentionType: "change_request",
       requestId: "req-9"
+    });
+    expect(card.commercialPriority).toMatchObject({
+      value: { label: "Saved quote total", available: true, amount: 4825, display: "$4,825.00" },
+      position: { lifecycle: { value: "Sent" } },
+      event: { date: "Sep 18, 2026", venue: "Garden Terrace" }
     });
   });
 

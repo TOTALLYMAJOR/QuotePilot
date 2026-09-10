@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-05 12:05:00 CDT
+Last updated: 2026-09-08 09:45:47 CDT
 
 Status: shipped in v0.5.0 (PR #50). This records the visual system, its
 contracts, and the intentional decisions so future work extends it instead of
@@ -155,6 +155,59 @@ console diagnostics or leave the initiating control looking idle.
   and 1440 they remain a stable orientation rail. Exact-head CI, hosted
   role/reachability proof, and human acceptance remain separate qualification
   boundaries.
+
+### Commercial-priority composition (QP-UXR-003)
+
+Now remains an editorial daily briefing and Opportunities remains the
+commercial work queue. Their shared priority projection reads in this order:
+exact quote/event/customer identity, recorded saved value, independent
+lifecycle/proposal/booking/payment facts, supported significance and timing,
+consequence, then one existing valid action. It is not a scorecard and does not
+reprice list data. Recorded zero remains zero; absent or invalid value is
+**Value unavailable**. Missing payment evidence is **not recorded**, never
+**unpaid**.
+
+Now retains existing Workflow order. Opportunities keeps four detailed momentum
+domains under **Details** because they support, rather than compete with, the
+primary decision. Exact Workflow return may restore only the initiating action,
+the same quote's newly current action, or the source heading after a completed
+fresh read. Retained context with a failed refresh is useful for orientation but
+cannot keep a consequential mutation eligible.
+
+### Commitment-to-execution composition (QP-UXR-004)
+
+Accepted and booked work crosses a presentation boundary from commercial
+decision-making into event-centered planning. **Events** is the commitment
+index, **Event Focus** the briefing, **Control Room** a read-only coordination
+board, and **Replay** an unavailable execution claim until an immutable event-
+session ledger exists. This hierarchy does not create a universal Event
+aggregate or duplicate quote, staffing, BEO, dependency, payment, Schedule, or
+Workflow authority.
+
+Event Focus leads with the current commitment, timing, identity, saved value,
+recorded payment context, and saved plan. Control Room then reads: needs
+attention, planned run of show, recorded checklist, Actuals boundary, preserved
+evidence, and one valid next action. Checklist completion is never styled or
+worded as live phase, attendance, readiness, or event completion. Exact BEO and
+staffing reads stay independent, and unavailable evidence remains unavailable.
+At 760px and below the coordination columns become one reading-order stack;
+controls remain at least 44px and route transitions focus the exact H1.
+
+### Event Preflight synthesis (QP-UXR-005)
+
+Event Preflight is the dominant Control Room decision object, not a readiness
+authority. It separates **Ready / satisfied facts**, **Needs attention**, and
+**Unknown / unavailable**. Each item names its domain, conclusion, reason, and
+existing source; there is no percentage, blended score, or event-wide green
+state. The first supported attention condition, then resolvable unknown, governs
+one **Next** action; otherwise the exact Schedule continuation remains.
+
+The synthesis may compose saved lifecycle, exact accepted/current-revision
+relationship, allowlisted payment states, final-count checklist, exact BEO
+freshness, exact staffing coverage, bounded Workflow, complete Schedule
+conflicts, and BEO invalidations. Missing, stale, partial, truncated, malformed,
+or unclassified evidence never passes. Inventory, actual attendance, live phase,
+and live issues remain unavailable until separately governed authority exists.
 
 ## Ambient Intelligence extension (source proof, release-profile enabled)
 
@@ -405,6 +458,41 @@ projected effects and offers the existing deeper workflows. It must not invent
 a parallel staffing, pricing, tax, margin, proposal, portal, lifecycle, or
 dependency calculator in order to make the compact interaction appear more
 consequential.
+
+### Governed amendment composition (QP-UXR-001)
+
+Quote Edit uses one consequential-change grammar: **current → proposed →
+difference → authoritative consequence → authority → application → preserved
+truth → invalidated truth → receipt → next action**. The current commitment and
+lifecycle consequence stay in the primary reading path; technical graph and
+receipt identity use progressive disclosure. Successful apply must leave a
+perceptible, focusable **Changed / Preserved / Needs attention / Next** receipt
+before navigation. This presentation reuses the Commercial Change Authority and
+may not make terminal records editable or invent missing evidence.
+
+The existing **Quote plan** remains attached to the proposal object. It is a
+sticky left rail at wide and compact desktop widths, including 1008px; when the
+document and rail no longer fit safely at 820px and below, it becomes a
+horizontal navigator above the same document. The Quote Pulse may become the
+existing review drawer before domain context is omitted. At every breakpoint,
+the five domains remain present, keyboard reachable, and associated with one
+draft rather than presented as separate records.
+
+### Clear the Deck decision resolution (QP-UXR-002)
+
+**Now** orients, **Clear the Deck** explains the judgment, and **Workflow** owns
+exact resolution. Clear the Deck expands existing approval and Decision Debt
+evidence into event/customer context, lifecycle, stake, timing, revision,
+dependency consequence, evidence boundary, and required authority. It does not
+calculate commercial truth, infer missing money, resolve Decision Debt, or
+execute an approved action.
+
+Exact request identity and context survive the Workflow handoff. Confirmed
+resolution focuses an outcome naming **Changed**, **Preserved**, and **Next**;
+return after a complete fresh read restores that decision or the source heading
+when it correctly disappears. An uncertain same-runtime operation exposes only
+its exact read-only check and keeps duplicate decisions unavailable. Reload
+cannot turn missing request identity into permission to guess or retry.
 
 ### Behavioral chromatic and sensory semantics
 

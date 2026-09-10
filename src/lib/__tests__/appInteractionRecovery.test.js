@@ -4,6 +4,8 @@ import { applyWorkspaceTaskOutcome } from "../../App";
 import {
   createWorkspaceTaskJourney,
   transitionWorkspaceTaskOutcome,
+  WORKSPACE_APPROVAL_TASK_PROOF_TYPE,
+  WORKSPACE_APPROVAL_TASK_VERIFIER_ID,
   WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE,
   WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID
 } from "../workspaceTaskJourney";
@@ -33,6 +35,20 @@ function followUpJourney({
   });
   expect(created.ok).toBe(true);
   return created.journey;
+}
+
+function approvalJourney() {
+  return createWorkspaceTaskJourney({
+    organizationId: "organization-42",
+    principal: { id: "staff-42", role: "admin" },
+    taskId: "review-workflow:approval-42",
+    startedAtISO: "2026-09-03T03:15:00.000Z",
+    origin: { routeId: "clear-deck", pathname: "/app/clear-the-deck" },
+    destination: "approval",
+    object: { id: "approval-42", type: "approval" },
+    focus: { quoteId: "quote-42", requestId: "approval-42" },
+    intentId: "review_approval"
+  }).journey;
 }
 
 function followUpFeedbackIdentity(journey) {
@@ -227,8 +243,17 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("persistTaskJourney(transitioned.journey)");
     expect(appSource).toContain("requestAttentionRefresh({ force: true })");
     expect(appSource).toContain(
-      "activeTaskJourney={feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney}"
+      "const workflowTaskJourney = feedbackOwnedFollowUpTaskContext || activeWorkspaceTaskJourney;"
     );
+    expect(appSource).toContain("activeTaskJourney={workflowTaskJourney}");
+    expect(appSource).toContain(
+      "workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.QUOTE_LIST"
+    );
+    expect(appSource).toContain("? WORKSPACE_PATHS.quotes");
+    expect(appSource).toContain(
+      "workflowTaskJourney?.origin?.routeId === WORKSPACE_ROUTE_IDS.CLEAR_DECK"
+    );
+    expect(appSource).toContain("onReturnToOrigin={() => returnToWorkspaceOrigin(workflowReturnFallback)}");
     expect(appSource).toContain("resolveWorkspaceActionFeedbackFollowUpAction({");
     expect(appSource).toContain('resolution.strategy === "continue"');
     expect(appSource).toContain("onTaskOutcome={handleWorkspaceTaskOutcome}");
@@ -324,5 +349,95 @@ describe("workspace interaction recovery wiring", () => {
     expect(persistTaskJourney).not.toHaveBeenCalled();
     expect(requestAttentionRefresh).toHaveBeenCalledWith({ force: true });
     expect(clearFeedbackReconciliation).toHaveBeenCalledTimes(1);
+  });
+
+  test("persists an exact approval outcome only with authoritative approval proof", () => {
+    const current = approvalJourney();
+    const persistTaskJourney = vi.fn((journey) => ({ ok: true, journey }));
+    const requestAttentionRefresh = vi.fn();
+    const outcome = {
+      organizationId: current.organizationId,
+      startedAtISO: current.startedAtISO,
+      taskId: current.taskId,
+      focus: {
+        quoteId: "quote-42",
+        attentionType: "approval",
+        requestId: "approval-42"
+      },
+      phase: "resolved",
+      proof: {
+        verifierId: WORKSPACE_APPROVAL_TASK_VERIFIER_ID,
+        proofId: "approval-resolved:approval-42:2026-09-03T03:16:00.000Z",
+        proofType: WORKSPACE_APPROVAL_TASK_PROOF_TYPE
+      }
+    };
+
+    expect(applyWorkspaceTaskOutcome({
+      outcome,
+      currentTaskSession: {
+        organizationId: current.organizationId,
+        principal: current.principal
+      },
+      readTaskJourney: () => ({ ok: true, journey: current }),
+      persistTaskJourney,
+      requestAttentionRefresh,
+      clearFeedbackReconciliation: vi.fn()
+    })).toEqual({ status: "resolved", taskState: "persisted" });
+    expect(persistTaskJourney).toHaveBeenCalledWith(expect.objectContaining({
+      phase: "resolved",
+      proof: outcome.proof
+    }));
+    expect(requestAttentionRefresh).toHaveBeenCalledWith({ force: true });
+
+    expect(applyWorkspaceTaskOutcome({
+      outcome: {
+        ...outcome,
+        proof: { ...outcome.proof, verifierId: WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID }
+      },
+      currentTaskSession: {
+        organizationId: current.organizationId,
+        principal: current.principal
+      },
+      readTaskJourney: () => ({ ok: true, journey: current }),
+      persistTaskJourney,
+      requestAttentionRefresh,
+      clearFeedbackReconciliation: vi.fn()
+    })).toMatchObject({ status: "recovery" });
+
+    expect(applyWorkspaceTaskOutcome({
+      outcome: {
+        ...outcome,
+        proof: {
+          ...outcome.proof,
+          proofId: "approval-resolved:approval-nearby:2026-09-03T03:16:00.000Z"
+        }
+      },
+      currentTaskSession: {
+        organizationId: current.organizationId,
+        principal: current.principal
+      },
+      readTaskJourney: () => ({ ok: true, journey: current }),
+      persistTaskJourney,
+      requestAttentionRefresh,
+      clearFeedbackReconciliation: vi.fn()
+    })).toMatchObject({ status: "recovery" });
+
+    expect(applyWorkspaceTaskOutcome({
+      outcome: {
+        ...outcome,
+        proof: {
+          ...outcome.proof,
+          proofId: "approval-resolved:approval-42:nearby:2026-09-03T03:16:00.000Z"
+        }
+      },
+      currentTaskSession: {
+        organizationId: current.organizationId,
+        principal: current.principal
+      },
+      readTaskJourney: () => ({ ok: true, journey: current }),
+      persistTaskJourney,
+      requestAttentionRefresh,
+      clearFeedbackReconciliation: vi.fn()
+    })).toMatchObject({ status: "recovery" });
   });
 });
