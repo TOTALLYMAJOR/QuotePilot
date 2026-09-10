@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 18:17:25 CDT
+Last updated: 2026-09-09 20:50:56 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1274,6 +1274,13 @@ administrator can open **Workspace tools → Operations → Inventory**. The rou
 is not available to customers or sales staff in the first ingredient slice.
 It requires a connected Firebase workspace; there is no browser-local stock or
 cost authority.
+
+If a command reports **Unauthenticated** while the workspace still identifies
+you as the signed-in administrator, do not create a replacement request. Retry
+the original command only through its displayed recovery action, refresh the
+workspace once, and report the persistent failure as an application-integrity
+or deployment issue. A rejected request is not a stock receipt and must never
+be treated as a successful inventory change.
 
 The initial setup is intentionally small:
 

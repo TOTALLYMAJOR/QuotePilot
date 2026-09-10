@@ -413,15 +413,15 @@ const inventoryAuthorityRuntime = createInventoryAuthorityRuntime({
   logger: functions.logger
 });
 exports.getInventoryWorkspace = functions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: false })
   .region(REGION)
   .https.onCall((data, context) => inventoryAuthorityRuntime.getInventoryWorkspace(data, context));
 exports.applyInventoryCommand = functions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: false })
   .region(REGION)
   .https.onCall((data, context) => inventoryAuthorityRuntime.applyInventoryCommand(data, context));
 exports.previewEventInventory = functions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: false })
   .region(REGION)
   .https.onCall((data, context) => inventoryAuthorityRuntime.previewEventInventory(data, context));
 exports.invalidateEventIngredientsOnQuoteChange = functions
