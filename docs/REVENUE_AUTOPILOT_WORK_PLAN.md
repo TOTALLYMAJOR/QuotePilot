@@ -1,5 +1,10 @@
 # Work Plan: Revenue Autopilot
 
+Last updated: 2026-09-10 15:09:08 CDT
+
+Status: Historical implementation plan. Current runtime, provider-send, and
+acceptance evidence belongs in `PROJECT_STATUS.md`.
+
 Created: August 9, 2026
 Type: feature
 Review scope: current `feature/customer-centered-workspace` source diff against `origin/main`; no provider/deployment/gate mutation

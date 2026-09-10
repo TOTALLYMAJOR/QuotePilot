@@ -1,5 +1,7 @@
 # Customer-Centered Workspace Plan
 
+Last updated: 2026-09-10 15:09:08 CDT
+
 Status: accepted product and architecture direction. Current qualification and
 release evidence lives in `PROJECT_STATUS.md`; remaining rollout work lives in
 `DEV_TASKS.md`. This document defines contracts, sequence, and the scope boundary
@@ -7,8 +9,6 @@ of named source tranches. A tranche described here as present or source-complete
 identifies the accepted implementation boundary only; it is not mutable test,
 deployment, provider, production-data, flag-promotion, or human-acceptance
 evidence.
-
-Last updated: August 9, 2026
 
 ## Product direction
 

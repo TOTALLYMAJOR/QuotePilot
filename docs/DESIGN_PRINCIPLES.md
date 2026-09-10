@@ -2,7 +2,7 @@
 
 **Status:** Living document. Every design, copy, and feature decision gets checked against these five commitments.
 **Owner:** Michael Major
-Last updated: 2026-09-05 12:05:00 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 ## Purpose
 
@@ -16,7 +16,7 @@ The app is a growth tool for the business owner, not just software that stores t
 
 **In practice:** Copy speaks to business outcomes (margin protected, deposit collected, kitchen never cooking from a stale sheet), not capabilities ("versioned revisions," "approval workflow"). Features earn their place by changing what the operator can do, not by filling a comparison chart.
 
-**Where it lives today:** The landing page tells the burden story — what running events costs you — before it mentions the product. The event workspace leads with readiness, not records.
+**Where it lives today:** The landing page tells the burden story — what running events costs you — before it mentions the product. Living Opportunity and Operations lead with exact state, evidence-backed blockers, and one safe next action rather than a blended readiness claim.
 
 **Rules out:** Feature lists as a value proposition. Dashboards that report without pointing at an action.
 
@@ -38,7 +38,7 @@ Strip anything that doesn't serve the user's next decision. Noise isn't just clu
 
 Running a business is monotonous. The app breaks that monotony with game theory and reward — and there are two distinct readings of that, both deliberate:
 
-**a. Reward the operator for using the tools.** The reward is the business visibly coming under control, celebrated at real state transitions: the PAID stamp landing, the revision chip flipping, the kitchen copy going CURRENT, the readiness score filling. We celebrate outcomes the operator actually cares about. We do not invent points, badges, or streaks detached from the business.
+**a. Reward the operator for using the tools.** The reward is the business visibly coming under control, celebrated at real state transitions: the PAID stamp landing, the revision chip flipping, the kitchen copy going CURRENT, or an exact blocker resolving from named evidence. We celebrate outcomes the operator actually cares about. We do not invent blended readiness scores, points, badges, or streaks detached from the business.
 
 **b. Give the operator mechanism design against real counterparties.** The caterer's hardest games are with clients who ghost, change scope late, and sit on deposits. Choice architecture (Good/Better/Best tiering), deposit deadlines, quote expiry, and risk reversal (the $1 test access) change the payoffs of those games in the operator's favor. This is the deeper read of "incentives" and the harder one for competitors to copy.
 

@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-09 07:13:08 CDT
+Last updated: 2026-09-10 15:18:10 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -22,6 +22,12 @@ Each major topic has one source of truth. Other docs should link to that source 
 - `docs/INVENTORY_AUTHORITY_ADR.md`: ingredient stock and purchase-cost
   evidence, recipe, menu/event demand and cost, consumable allocation,
   consumption, and inventory-projection authority.
+- `docs/DESIGN_SYSTEM.md` and `docs/DESIGN_PRINCIPLES.md`: canonical staff
+  visual/interaction language and product-design review lens.
+- `docs/DESIGN-CONTRACT.md`: subordinate commercial-workflow composition
+  contract. It governs how current quote, proposal, staffing, payment,
+  Inventory, and BEO evidence is presented together but creates no business
+  authority.
 - `docs/field-state-contract.json`: canonical multi-axis field-state vocabulary,
   semantics, priority, accessibility, provenance, and 0/1/many choice contract.
 - `docs/field-state-surface-contracts.json`: explicit registry of product
@@ -56,8 +62,10 @@ and `AGENTS.md` must include and advance this exact header format:
 Use the repository's local wall-clock timezone for document readability. Task
 planning, status checkpoints, and completion handoffs separately use the
 planner's exact ISO-8601 UTC `lifecycle.recordedAt`. Documentation governance
-fails when a governed document lacks the header or changes without advancing
-it.
+scans the full governed corpus for a valid header and fails when any file is
+missing one. For changed files it also fails when the timestamp was not
+advanced relative to the selected Git diff baseline; local and CI committed-
+diff validation use the same baseline semantics.
 
 ## CI Change-Type Enforcement
 `scripts/check-doc-governance.mjs` enforces these non-negotiable mappings:
@@ -132,6 +140,7 @@ as separate claims.
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
 | Workspace visual system and interaction contracts | `docs/DESIGN_SYSTEM.md` | The canonical staff-workspace visual grammar, motion, hierarchy, and scoped Ambient/customer extensions. UI agents load `design-language` first, then preserve this repository-specific authority. |
 | Product design principles and review lens | `docs/DESIGN_PRINCIPLES.md` | The review rubric for copy, hierarchy, story, incentive, and CTA decisions; surface-specific design docs may extend it but should not contradict it. |
+| Commercial workspace composition contract | `docs/DESIGN-CONTRACT.md` | Subordinate to the Design System, Design Principles, and business-authority ADRs. It defines evidence-first composition and route placement without creating quote, Inventory, Staffing, payment, or BEO authority. |
 | Field-state semantics and adopted UI surfaces | `docs/field-state-contract.json` and `docs/field-state-surface-contracts.json` | Separates availability, origin, editability, persistence, and evidence; the registry binds each adopted surface to exact runtime markers and tests. |
 | Attendance planning, confirmation, commercial-basis, and actual-count boundaries | `docs/ATTENDANCE_STATE_ADR.md` | Accepted phased architecture and source/local Slice A–E contracts around the unchanged exact `event.guests` commercial basis. Role journeys, external patterns, hypotheses, interview guide, and measurement plan live in `docs/ATTENDANCE_JOURNEY_RESEARCH.md`; operational actual attendance remains a separate unfinished slice. |
 | Package Workspace product and implementation program | `docs/PACKAGE_WORKSPACE.md` | Entry point for the QuotePilot Package Workspace audit, PRD, UI specification, ADR, technical design, and phased plan. Current implementation truth remains in the Feature Matrix; operational proof remains in `PROJECT_STATUS.md`. |

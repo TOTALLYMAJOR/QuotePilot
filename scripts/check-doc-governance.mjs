@@ -353,7 +353,6 @@ function checkTaskOrchestrationContract(errors) {
 }
 
 function baselineRef() {
-  if (!(process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true")) return "HEAD";
   const range = resolveDiffRange();
   return String(range).split(/\.\.\.?/)[0] || "HEAD";
 }
@@ -370,7 +369,38 @@ function readBaselineFile(ref, file) {
   }
 }
 
+function listMarkdownFiles(directory) {
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listMarkdownFiles(absolute));
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) {
+      files.push(normalizePath(path.relative(ROOT, absolute)));
+    }
+  }
+  return files;
+}
+
+function governedMarkdownFiles() {
+  return [...new Set([
+    "AGENTS.md",
+    ...CANONICAL_DOCS,
+    ...listMarkdownFiles(path.join(ROOT, "docs"))
+  ])].sort();
+}
+
 function checkDocumentationTimestamps(changedFiles, errors) {
+  for (const file of governedMarkdownFiles()) {
+    const filePath = path.join(ROOT, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    const current = fs.readFileSync(filePath, "utf8");
+    if (!DOCUMENT_TIMESTAMP_PATTERN.test(current)) {
+      errors.push(`${file} must include Last updated: YYYY-MM-DD HH:MM:SS TZ.`);
+    }
+  }
+
   const ref = baselineRef();
   for (const file of changedFiles) {
     const requiresTimestamp = file === "AGENTS.md"
@@ -381,10 +411,7 @@ function checkDocumentationTimestamps(changedFiles, errors) {
 
     const current = fs.readFileSync(filePath, "utf8");
     const currentTimestamp = current.match(DOCUMENT_TIMESTAMP_PATTERN)?.[0] || "";
-    if (!currentTimestamp) {
-      errors.push(`${file} must include Last updated: YYYY-MM-DD HH:MM:SS TZ.`);
-      continue;
-    }
+    if (!currentTimestamp) continue;
 
     const baseline = readBaselineFile(ref, file);
     const baselineTimestamp = baseline.match(/^Last updated:.*$/m)?.[0] || "";

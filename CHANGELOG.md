@@ -1,10 +1,83 @@
 # Changelog
 
-Last updated: 2026-09-09 22:25:04 CDT
+Last updated: 2026-09-10 15:47:23 CDT
 
 All notable project changes are documented in this file.
 
+## Ambient staffing release-fixture lifecycle - 2026-09-10
+
+- Pinned the Ambient accessibility fixture to an explicit future quote expiry
+  so its enabled staffing-recommendation contract remains deterministic instead
+  of silently aging into the correctly restricted expired lifecycle.
+
+## Documentation governance baseline correction - 2026-09-10
+
+- Corrected local committed-diff validation so documentation timestamps are
+  compared with the selected diff range baseline instead of the current
+  commit, matching the behavior used in CI.
+
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — documentation authority reconciliation
+
+- Reconcile current operational docs around the split evidence surface:
+  `v0.16.6` public Vercel frontend, `v0.18.1` Firebase Functions, `v0.16.3`
+  Firebase Hosting fallback, live synthetic founder Inventory population, and
+  the later local operating-twin branch.
+- Define current application placement for Living Opportunity, Quote
+  administration, governed edit, Operations, Inventory, Library, Staff, and
+  Customer 360. Mark the CWF-16 Event Workspace suite as historical foundation
+  and compatibility provenance rather than the ordinary Ambient exact route.
+- Reconcile Inventory Phases 2–8 as merged/backend-deployed while preserving
+  public-browser and human-acceptance gaps. Record the operating-twin loader as
+  a privileged exact-tenant migration because it can change tenant gates and
+  pricing confirmation.
+- Reduce Project Status and Dev Tasks to their canonical current/open roles,
+  refresh the machine state and project indexes, register the Design Contract,
+  and make documentation governance require a valid timestamp across the full
+  governed Markdown corpus while retaining changed-file advancement checks.
+
+## Unreleased — realistic founder-pilot operating twin
+
+- Add a second, dry-run-first, confirmation-gated population operation that
+  composes the existing commercial, quote, approval, Staffing, workflow, and
+  event authorities for the same exact founder-pilot tenant. Its coherent
+  `ragnakok-operations-v1` fixture contains eight configurable Offers, eight
+  add-ons, five rentals, eight Event Templates, four Configuration Rules, 20
+  rich staff records, ten priced event quotes, eight Staffing plans, four
+  published workflow definitions, and six prepared event/workflow ledgers.
+- Add 20 generated, non-person staff portraits as public app assets. Every
+  fixture acceptance, provider-delivery field, approval, qualification,
+  availability claim, and performance history is marked synthetic and is not
+  customer, employee, provider, supplier, settlement, or human-acceptance
+  proof. Commercial Change and Event Spine mutation gates remain unchanged.
+- Preserve the three-layer architecture: Offers, pricing, margin, and quote
+  revisions remain Commercial truth; event commitments, Staffing, and
+  Inventory remain Operational truth; workflows and approvals coordinate those
+  authorities without replacing them.
+
+- Add a fixed, dry-run-first, confirmation-gated population operation for the
+  exact `mm05366-sandbox` tenant in isolated staging and production. The
+  versioned fixture adds 130 creative catering menu items, five kitchen stock
+  locations, 132 ingredient definitions, explicit synthetic opening and cost
+  projections, and 200 versioned recipes. It composes the existing catalog
+  import and Inventory command/receipt authorities; it does not create a
+  parallel menu, pricing, staffing, commercial, or supplier authority.
+- Preserve the requested Chicken Alfredo decision scenario as fixture math:
+  `0.4 lb × 175 guests = 70 lb` against a `64 lb` projected opening balance,
+  producing a six-pound shortage. `Supplier B` remains a clearly labelled
+  synthetic cost-source assumption, not supplier acknowledgement or a purchase
+  action.
+- Treat catalog population as a commercial consequence: every newly applied
+  menu batch advances the catalog revision and clears pricing confirmation for
+  deliberate operator review before authoritative quote saves.
+- Apply and read back the fixture in both exact live targets. Isolated staging
+  verifies 525 menu items, 132 ingredients, 132 stock states, 132 cost states,
+  and 200 recipe/menu-cost projections at catalog revision 23. Production
+  verifies 538 menu items with the same 132/132/132/200 Inventory counts at
+  catalog revision 60; its pre-existing Chicken identity and stock location
+  were preserved. Both pricing confirmations are intentionally false pending
+  human review.
 
 ## v0.18.1 — Inventory callable hotfix
 

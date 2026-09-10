@@ -1,6 +1,9 @@
 # CWF-16 Event Workspace Product Requirements
 
-Status: Accepted for source implementation from the approved concept
+Last updated: 2026-09-10 15:09:08 CDT
+
+Status: Historical accepted CWF-16 requirements. They document the deployed
+foundation, not the current Ambient-enabled exact-quote route.
 Date: August 9, 2026
 Owner: QuotePilot maintainers
 Visual target: `docs/design/cwf-16-event-workspace-concept.png`

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 20:50:56 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -98,7 +98,7 @@ make and publish catalog changes.
    click, is delivery evidence.
 7. Return to **Opportunities** to track the next recorded action.
 
-### Commercial Workbench (`v0.18.0` candidate)
+### Commercial Workbench (v0.18 source contract)
 
 When Proposal Composer is enabled, use **Quote plan** to move among Event,
 Customer, Experience, Staffing, and Commercials. These are views of one draft,
@@ -112,7 +112,7 @@ sticky left rail at desktop and compact-desktop widths, including 1008px. At
 tablet and phone widths it becomes a horizontal navigator above the same
 proposal document so domain context is adapted, never omitted.
 
-### Calendar-first Operations (source candidate)
+### Calendar-first Operations (current source contract)
 
 Open primary **Operations** or `/app/operations` to use the existing
 accepted/booked Event Schedule as the canonical operational lens.
@@ -139,16 +139,17 @@ accepted/booked Event Schedule as the canonical operational lens.
 opportunity** returns to that exact record. `/app/schedule` remains a
 compatibility path to the same Calendar.
 
-Desktop **Operations** and the mobile Operations group contain only
-**Operations**, **Clear the Deck**, and **Staff**. Use Frequent tools for
+Desktop **Operations** and the mobile Operations group contain
+**Operations**, **Clear the Deck**, and **Staff**, plus administrator-only
+**Inventory** when its independent gates permit it. Use Frequent tools for
 **Workflow**, **Messages**, and **Pilot**. Expand **Administration** for
 role-authorized **Reporting Dashboard**, **Integrations Ops**, **Import
 Studio**, and **Session Diagnostics**. Event and Event Schedule routes remain
 available from their exact context or direct route rather than appearing again
-as menu inventory. These changes describe the local source candidate; they do
-not establish exact-head promotion, deployment, hosted behavior, or human
-acceptance. Planning and checklist details are not live attendance, issue,
-payment, inventory, or readiness telemetry.
+as menu inventory. These changes are implemented in current source, while the
+public Vercel edge remains older. Source and backend deployment do not establish
+hosted route availability or human acceptance. Planning and checklist details
+are not live attendance, issue, payment, Inventory, or readiness telemetry.
 
 ### Read state labels literally
 
@@ -247,7 +248,7 @@ or publish the private setup draft.
 
 ## Primary workspace
 
-The converged local candidate keeps five persistent primary destinations. The
+The converged current source contract keeps five persistent primary destinations. The
 earlier v0.16 release contract used Calm Four; the later convergence contract
 adds Calendar-first Operations without changing its underlying authority:
 
@@ -280,8 +281,9 @@ workspace/account controls stay quiet; primary **Operations** opens Calendar
 directly. On mobile, select the workspace/avatar control in the standard
 header to open **Workspace & tools**. That focus-contained sheet provides
 Search; Frequent **Workflow**, **Messages**, and **Pilot** tools; the same three
-Operations-group paths (**Operations**, **Clear the Deck**, and role-gated
-**Staff**); progressively disclosed **Administration**; workspace
+Operations-group paths (**Operations**, **Clear the Deck**, role-gated
+**Staff**, and independently gated administrator **Inventory**); progressively
+disclosed **Administration**; workspace
 identity; account settings; sound preference; and sign-out without adding
 fifth or sixth bottom-navigation items. Staff-only and administrator-only
 entries retain their existing role and feature gates.
@@ -458,23 +460,20 @@ code.
   requested" totals. A final balance never appears as actionable until its
   deposit is Stripe-paid, matching the existing final-balance request gate.
 
-## Event Workspace (Quote Detail)
+## Living Opportunity (exact quote context)
 
-- With the v0.16 Ambient presentation enabled, open a quote from Now, Client
-  360, or Opportunities to use `/app/quotes/:quoteId` as its exact Opportunity
-  workspace. Use `Back to Opportunities` or `Quote administration` to return
-  to the full role-gated quote table.
+- With the current Ambient presentation enabled, open a quote from Now, Client
+  360, or Opportunities to use `/app/quotes/:quoteId` as its Living Opportunity.
+  Use `Back to Opportunities` for the work queue or `Quote administration` for
+  the full role-gated provider/payment/booking/portal/contract controls.
 - Review the exact customer/event identity, quoted scope, lifecycle, and bounded
   current condition. `No tracked quote attention` means only that the bounded
   quote/Workflow read has no due item; it does not mean the event is ready or
   complete.
-- The intelligence strip reuses the existing proposal-readiness calculation and
-  labels it `Proposal readiness`; it measures required proposal fields, not
-  operational event readiness. `Flexibility` and `Alignment` show `Unavailable`
-  until QuotePilot has the required change-window and combined-integrity facts.
-  Open `Why?` to review the exact missing proposal fields, evidence bounds, and
-  stable reason codes. Do not interpret an unavailable dimension as zero or as
-  a negative score.
+- Read current state, exact blockers, evidence availability, consequence, and
+  one next action independently. Proposal completeness, payment, Staffing,
+  Inventory, BEO freshness, attendance, and event execution are separate rails;
+  no blended score establishes event readiness.
 - Customer phone is recommended contact enrichment, not a required proposal
   field. A missing phone does not lower required proposal completeness or add a
   readiness blocker; QuotePilot may still show it separately when it would help
@@ -487,6 +486,9 @@ code.
   selected sold scope. Production/BEO, PDF, and conversation actions retain
   their existing source, freshness, portal, role, and artifact gates. A local
   BEO is explicitly a browser download with no server receipt.
+- The older CWF-16 `EventWorkspaceView` remains historical implementation
+  provenance and compatibility coverage. Its proposal-readiness strip is not
+  the ordinary Ambient-enabled exact-quote composition.
   Selecting a quote or payment row opens the authoritative quote record. When
   a row has a stable `customerId`, selecting the customer name opens Customer
   360 instead.
@@ -1275,6 +1277,10 @@ is not available to customers or sales staff in the first ingredient slice.
 It requires a connected Firebase workspace; there is no browser-local stock or
 cost authority.
 
+The Inventory backend is deployed and exact-tenant enabled in v0.18.1, but the
+public Vercel frontend remains older. Treat route presence, successful hosted
+operator use, and human acceptance as separate evidence.
+
 If a command reports **Unauthenticated** while the workspace still identifies
 you as the signed-in administrator, do not create a replacement request. Retry
 the original command only through its displayed recovery action, refresh the
@@ -1304,6 +1310,40 @@ realtime. **Cached**, **pending**, **stale**, **unavailable**, and **uncertain**
 states are not confirmation. If an action may have reached the server but no
 receipt returned, keep the entered values and use **Check exact request**; do
 not start a replacement request.
+
+The founder-pilot staging and production workspaces may contain the
+`ragnakok-realistic-v1` planning fixture: five kitchen locations, 132
+ingredients, at least 500 menu items, and 200 recipe projections. Records whose
+source or note begins **Projected ragnakok-realistic-v1** or **Synthetic
+founder-pilot** are demonstration assumptions. Do not treat them as a count,
+invoice, supplier confirmation, purchase order, allocation, or receiving
+receipt. Replace them through normal Inventory actions before relying on them
+for a live event. After this menu population, an administrator must review and
+confirm **Catalog → Pricing setup** because the import deliberately invalidates
+the prior pricing confirmation.
+
+The same founder-pilot workspace may also contain the
+`ragnakok-operations-v1` operating twin. It adds eight named Offers with
+recorded costs and choice groups, add-ons and rentals, Event Templates and
+Configuration Rules, 20 staff profiles with generated portraits and detailed
+operational records, ten example opportunities/events, Staffing plans,
+approvals, and workflow/event ledgers. Use these records to exercise Library,
+Opportunities, Operations, Staff, Workflow, approvals, pricing, and margin
+presentation as one connected system.
+
+The operating-twin loader is a privileged exact-tenant fixture migration. It
+may enable Inventory and Staffing settings and reconfirm the exact current
+catalog revision. Do not run a hosted apply unless those transitions have been
+reviewed and separately authorized; preserve dry-run, apply, and readback
+receipts.
+
+Every customer acceptance, provider-delivery field, approval, staff
+qualification, availability window, attendance statistic, and performance
+note in that fixture is synthetic. It is safe demonstration coverage, not
+proof that a customer consented, a provider delivered, an employee is
+qualified or available, a supplier acted, inventory exists, or a human
+accepted the workflow. Replace synthetic evidence through the normal governed
+surface before relying on it for live operations.
 
 For an ingredient bought in a supplier pack, open **Declare or revise pack** on
 that ingredient. Give the pack a stable reference, label, exact quantity in the
@@ -1451,14 +1491,15 @@ stale, mismatched, or unavailable evidence cannot appear current. Operations
 subscribes only to the selected event, not every Calendar row, and quantity
 comparisons remain grouped by base unit.
 
-The source candidate now supports current recipe/menu-item cost, immutable
+The merged v0.18 source and deployed v0.18.1 Inventory backend support current recipe/menu-item cost, immutable
 event ingredient demand and projected cost, durable receiving, cumulative
 consumable-stock shortage, concurrency-safe allocation/release, historical
 change invalidation, explicit retained-hold reconciliation, and read-only
-Commercial Change consequences. It also records event consumption, waste,
+Commercial Change consequences. Current public-browser parity remains open. It
+also records event consumption, waste,
 allocation settlement, immutable correction evidence, quantity variance, and
 saved-planning-basis cost comparison in the exact event Control Room. It does
-not claim inventory value, authoritative COGS, deployment, or human
+not claim inventory value, authoritative COGS, public-browser parity, or human
 acceptance. Tenant-wide shortage frequency, inbound-supply risk, ingredient
 freshness/suitability, inventory valuation, and authoritative actual-cost
 reporting remain unavailable until their own bounded evidence authorities exist.
@@ -2023,7 +2064,10 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   duration, venue, guest count, or lifecycle changes and Calendar recomputes.
   Use the conflict comparison to open the exact related record.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
-- Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
+- Checklist completion is an operational task record only. Even when Inventory
+  is enabled, checklist state does not confirm stock, allocation, menu-cost
+  completeness, consumption, or item availability; those require exact current
+  Inventory evidence.
 - `Run of show` is a bounded, read-only sequence for the selected date. It
   includes only accepted or booked records from the current Schedule read,
   labels the source and result bounds, and exposes the recorded timing basis or

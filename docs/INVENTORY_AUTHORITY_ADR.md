@@ -1,8 +1,10 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 22:25:04 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
-Status: Accepted scope correction; Phase 2 deployed and exact-tenant enabled, with corrected Phases 3 through 8 complete as default-off local source candidates
+Status: Accepted scope correction; corrected Phases 2 through 8 are merged in
+the v0.18 source line, the Inventory backend is deployed and exact-tenant
+enabled in v0.18.1, and public-browser parity plus human acceptance remain open.
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -510,10 +512,54 @@ provider readback verified all 128 Functions active on the
 `ragnakok-operations` profile. This is deployment evidence, not a substitute
 for a successful operator retry or human acceptance.
 
+### Founder-pilot population boundary
+
+`scripts/populate-ragnakok-inventory.mjs` is the bounded population operation
+for the exact `mm05366-sandbox` tenant in `quotepilot-staging-20260804` and
+`tonicatering`. It composes, rather than bypasses, the existing authorities:
+the canonical seed establishes missing event/category/menu records, the catalog
+import core creates 130 additional creative menu items under one replay-stable
+batch receipt, and Inventory commands create five locations, 132 ingredients,
+their separate opening/cost evidence, and at most 200 current recipe
+projections under individual replay-stable receipts.
+
+The fixture remains below the 200-definition workspace and 200-menu-projection
+bounds. Its stock and supplier-labelled costs are synthetic founder-pilot
+planning evidence and say so on every record. They are not physical counts,
+receiving, supplier acknowledgements, purchase orders, allocations, or
+consumption. A later real count or purchase observation must enter through the
+ordinary Inventory authority. Catalog import still advances the commercial
+catalog revision and clears pricing confirmation; the population operation
+never reconfirms pricing on the operator's behalf.
+
+The first applied `ragnakok-realistic-v1` run verified 525 menu items, 132
+ingredients, 132 stock states, 132 cost states, and 200 recipe/menu-cost
+projections in isolated staging at catalog revision 23. Production verified 538
+menu items with the same 132/132/132/200 Inventory counts at catalog revision
+60; its earlier Chicken identity and stock location were preserved. Both
+catalogs correctly report pricing confirmation unavailable pending human
+review. These provider readbacks prove population state, not physical counts,
+supplier outcomes, pricing acceptance, or human UI acceptance.
+
+The follow-on `ragnakok-operations-v1` fixture composes this Inventory baseline
+with Offers, authoritative-priced quotes, Staffing plans, and coordination
+workflows, but performs no Inventory receiving, allocation, consumption, or
+supplier mutation. Its operation may enable the already-deployed Inventory and
+Staffing tenant settings and reconfirm the separately advanced commercial
+catalog revision; neither action upgrades projected stock into physical
+evidence or turns a workflow/approval into Inventory authority.
+
+Because it can change tenant gates and pricing confirmation, this follow-on is
+a privileged exact-tenant fixture migration, not an ordinary population path.
+Hosted use requires explicit review and separate dry-run, apply, and readback
+authorization. The operation must not be cited as user-surface availability or
+human acceptance.
+
 ## Corrected delivery sequence
 
-Each completed slice receives its own local commit. Nothing is pushed until all
-corrected slices and final qualification complete.
+The numbered sequence below is retained as historical implementation
+provenance. Current merge, deployment, tenant, and acceptance evidence belongs
+in `PROJECT_STATUS.md`.
 
 1. **Historical Phase 1 — authority substrate.** Preserve the organization,
    transaction, ledger, receipt, revision, and rule foundations; supersede its
@@ -543,8 +589,10 @@ corrected slices and final qualification complete.
    with deterministic per-unit shortage and consumption intelligence. Broader
    reporting requires its own bounded materialized authority.
 
-Corrected Phases 2 through 8 are now complete as default-off local source
-candidates. Phase 3 adds same-dimension conversions, immutable declared
+Corrected Phases 2 through 8 are merged in the v0.18 source line. The applicable
+Inventory backend is deployed in v0.18.1; public frontend parity, hosted role
+exercise, and human acceptance remain open. Phase 3 adds same-dimension
+conversions, immutable declared
 purchase-pack revisions, versioned recipes attached to exact existing menu
 items, pure exact costing, bounded reverse dependencies, and materialized menu
 cost projections. Library uses bounded summary listeners and an exact active
