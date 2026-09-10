@@ -1,6 +1,6 @@
 # QuotePilot Pricing Constitution
 
-Last updated: 2026-09-04 13:30:00 CDT
+Last updated: 2026-09-10 10:00:00 CDT
 
 ## Purpose
 
@@ -91,6 +91,17 @@ Every pricing-v2 charge line records catalog/base minor units, supported
 context adjustment, bundle-inclusion adjustment when applicable, effective
 unit/line value, source policy, reason, and authority. Waterfalls are immutable
 inside the saved pricing receipt and do not read mutable current catalog state.
+
+## Synthetic operating-twin publication
+
+The bounded `ragnakok-operations-v1` population advances the exact tenant
+catalog revision, publishes recorded Offer/component costs, and then records a
+new pricing confirmation bound to that revision and the resolved verified
+tenant administrator. Its ten example quotes are calculated by the normal
+authoritative server pricing function and retain the resulting catalog
+authority and waterfall. This explicit fixture publication is not an inferred
+margin policy, a customer acceptance, earned revenue, settlement evidence, or
+permission for Commercial Change mutation.
 
 ## Payment handoff
 

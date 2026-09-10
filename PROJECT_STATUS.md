@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-10 04:44:56 CDT
+Last updated: 2026-09-10 10:00:00 CDT
 
 ## Realistic founder-pilot population applied and verified
 
@@ -19,6 +19,21 @@ Change, Event Spine, supplier, purchasing, allocation, or consumption write.
 Supplier names and quantities are synthetic planning assumptions. Applying the
 menu batch intentionally clears pricing confirmation and requires a human
 Catalog pricing review before authoritative quote saves.
+
+The follow-on `ragnakok-operations-v1` operating-twin source is locally
+prepared and focused-test qualified. It plans eight Offers, eight add-ons, five
+rentals, eight Event Templates, four Configuration Rules, 20 staff profiles
+with generated portraits, ten event quotes, eight Staffing plans, four
+workflow definitions, and six prepared event/workflow ledgers. Hosted asset
+publication and exact staging/production population readback remain required
+before this paragraph may claim deployment or live data state.
+
+The fixture keeps all simulated customer acceptance, provider delivery,
+approval, qualification, availability, and performance values explicitly
+synthetic. It does not change Commercial Change or Event Spine mutation gates
+and cannot establish customer consent, employee verification, provider
+delivery, supplier action, settlement, physical stock, human acceptance, or
+commercial outcome.
 
 ## v0.18.1 Inventory callable hotfix deployed
 

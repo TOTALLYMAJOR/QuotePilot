@@ -1,6 +1,6 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-10 04:44:56 CDT
+Last updated: 2026-09-10 10:00:00 CDT
 
 Status: Accepted scope correction; Phase 2 deployed and exact-tenant enabled, with corrected Phases 3 through 8 complete as default-off local source candidates
 Date: September 8, 2026
@@ -538,6 +538,14 @@ menu items with the same 132/132/132/200 Inventory counts at catalog revision
 catalogs correctly report pricing confirmation unavailable pending human
 review. These provider readbacks prove population state, not physical counts,
 supplier outcomes, pricing acceptance, or human UI acceptance.
+
+The follow-on `ragnakok-operations-v1` fixture composes this Inventory baseline
+with Offers, authoritative-priced quotes, Staffing plans, and coordination
+workflows, but performs no Inventory receiving, allocation, consumption, or
+supplier mutation. Its operation may enable the already-deployed Inventory and
+Staffing tenant settings and reconfirm the separately advanced commercial
+catalog revision; neither action upgrades projected stock into physical
+evidence or turns a workflow/approval into Inventory authority.
 
 ## Corrected delivery sequence
 

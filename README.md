@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-10 04:44:56 CDT
+Last updated: 2026-09-10 10:00:00 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -535,6 +535,45 @@ receiving/count evidence before live operational reliance. The catalog import
 advances `catalogRevision` and clears pricing confirmation, so **Catalog →
 Pricing setup** must be reviewed and confirmed again before authoritative quote
 saves.
+
+### Founder-pilot organization and operations twin
+
+After the realistic Inventory fixture is present, the dry-run-first
+`ragnakok-operations-v1` operation can complete the same exact tenant with a
+coherent commercial, operations, and coordination dataset: eight configurable
+Offers, eight add-ons, five rentals, eight Event Templates, four Configuration
+Rules, 20 richly described staff profiles with generated portraits, ten priced
+event quotes, eight staffing plans, four published workflow definitions, and
+six prepared event/workflow ledgers.
+
+```bash
+npm run populate:operations:ragnakok -- \
+  --project quotepilot-staging-20260804 \
+  --organization mm05366-sandbox \
+  --dry-run
+
+npm run populate:operations:ragnakok -- \
+  --project tonicatering \
+  --organization mm05366-sandbox \
+  --dry-run
+```
+
+Apply requires `--apply` and the exact `POPULATE OPERATIONS <project>
+<organization> ragnakok-operations-v1` confirmation printed by the dry run.
+The operation uses the existing catalog, server-pricing, quote/version,
+approval, Staffing, workflow-definition, and event-ledger authorities. It
+refuses non-fixture collisions and replays only records carrying its stable
+receipt identity. The 20 portrait files must already be published from
+`public/fixtures/ragnakok-staff/` before apply.
+
+All acceptance, provider-delivery, approval, qualification, availability, and
+performance examples are explicitly synthetic operating-twin evidence. They
+exercise app states; they do not prove customer consent, employee credentials,
+supplier action, provider delivery, settlement, physical inventory, or human
+acceptance. Publishing the fixture advances the catalog revision and records a
+new explicit pricing confirmation for that exact revision and verified tenant
+administrator; it does not change Commercial Change or Event Spine mutation
+gates.
 
 The root `.env.example` is for browser-safe `VITE_*` values only. Server-side
 Firebase Functions placeholders live in

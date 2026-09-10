@@ -1,6 +1,6 @@
 # QuotePilot Commercial Platform Program
 
-Last updated: 2026-09-04 13:41:00 CDT
+Last updated: 2026-09-10 10:00:00 CDT
 
 ## Program status
 
@@ -84,6 +84,14 @@ bypass kernel validation or server pricing authority.
 Supplies organization-scoped catalog records, selections, pricing settings,
 and declared rules. Publication stays revision-fenced and pricing confirmation
 stays bound to the exact catalog revision and declaring actor/time.
+
+The bounded `ragnakok-operations-v1` fixture exercises this layer for the exact
+founder-pilot tenant with eight configurable Offers, explicit recorded costs,
+choice groups, Event Templates, and recommendation-only Configuration Rules.
+It publishes through the existing catalog collections, advances the revision,
+and records a fresh confirmation from the resolved verified tenant
+administrator. It does not create a second commercial authority or enable
+Commercial Change mutation.
 
 ### Contextual UX
 

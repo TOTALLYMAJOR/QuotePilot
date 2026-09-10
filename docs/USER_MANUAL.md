@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-10 04:44:56 CDT
+Last updated: 2026-09-10 10:00:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1315,6 +1315,23 @@ receipt. Replace them through normal Inventory actions before relying on them
 for a live event. After this menu population, an administrator must review and
 confirm **Catalog → Pricing setup** because the import deliberately invalidates
 the prior pricing confirmation.
+
+The same founder-pilot workspace may also contain the
+`ragnakok-operations-v1` operating twin. It adds eight named Offers with
+recorded costs and choice groups, add-ons and rentals, Event Templates and
+Configuration Rules, 20 staff profiles with generated portraits and detailed
+operational records, ten example opportunities/events, Staffing plans,
+approvals, and workflow/event ledgers. Use these records to exercise Library,
+Opportunities, Operations, Staff, Workflow, approvals, pricing, and margin
+presentation as one connected system.
+
+Every customer acceptance, provider-delivery field, approval, staff
+qualification, availability window, attendance statistic, and performance
+note in that fixture is synthetic. It is safe demonstration coverage, not
+proof that a customer consented, a provider delivered, an employee is
+qualified or available, a supplier acted, inventory exists, or a human
+accepted the workflow. Replace synthetic evidence through the normal governed
+surface before relying on it for live operations.
 
 For an ingredient bought in a supplier pack, open **Declare or revise pack** on
 that ingredient. Give the pack a stable reference, label, exact quantity in the

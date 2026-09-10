@@ -47,6 +47,7 @@
     "env:local:firebase": "node ./scripts/configure-local-firebase-env.mjs",
     "seed:menu:firestore": "node ./scripts/seed-firestore-menu.mjs",
     "populate:inventory:ragnakok": "node ./scripts/populate-ragnakok-inventory.mjs",
+    "populate:operations:ragnakok": "node ./scripts/populate-ragnakok-operations.mjs",
     "customer:provision": "node ./scripts/provision-customer-order.mjs",
     "migrate:multi-tenant": "node ./scripts/migrate-to-multi-tenant.mjs",
     "migrate:multi-tenant:dry-run:evidence": "node ./scripts/migrate-to-multi-tenant.mjs --dry-run --evidence-out ./artifacts/migration/multi-tenant-dry-run-evidence.json",
