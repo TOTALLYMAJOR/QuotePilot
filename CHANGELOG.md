@@ -1,8 +1,16 @@
 # Changelog
 
-Last updated: 2026-09-10 15:47:23 CDT
+Last updated: 2026-09-10 16:32:59 CDT
 
 All notable project changes are documented in this file.
+
+## Operating-twin customer claim provenance correction - 2026-09-10
+
+- Correct the privileged operating-twin loader to use the canonical trusted
+  quote-projection provenance for its derived customer-email claim while
+  retaining separate synthetic fixture provenance on every populated record.
+  The loader persists only the authority-owned claim patch. Quote claim
+  validation remains unchanged and fail-closed.
 
 ## Ambient staffing release-fixture lifecycle - 2026-09-10
 
