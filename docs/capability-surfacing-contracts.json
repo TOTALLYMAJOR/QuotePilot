@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 83,
+  "catalogVersion": 84,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -4855,7 +4855,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 24,
+      "reviewRevision": 25,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -4897,7 +4897,11 @@
         "src/lib/ambientOperationalReceipts.js",
         "src/lib/ambientGestureController.js",
         "src/lib/ambientLegacyRetirement.js",
+        "src/lib/anniversaryRebookingAttention.js",
+        "src/lib/modalBackgroundIsolation.js",
+        "src/lib/workspaceNavigationLink.js",
         "src/hooks/useBrowserLocation.js",
+        "src/hooks/useModalDialog.js",
         "src/context/WorkspaceNavigationContext.jsx"
       ],
       "backendExports": [],
@@ -4907,6 +4911,9 @@
         "src/hooks/useCommercialWorkspaceSnapshot.js",
         "src/components/WorkspaceRoute.jsx",
         "src/components/WorkspaceShell.jsx",
+        "src/components/workspaceNavigationLink.css",
+        "src/components/ProposalComposer.jsx",
+        "src/components/QuickUpdatesPanel.jsx",
         "src/components/QuoteHistoryModal.jsx",
         "src/components/ConfiguredQuoteActionRail.jsx",
         "src/components/CustomerPortalView.jsx",
@@ -5112,9 +5119,15 @@
         "src/components/__tests__/eventScheduleArrival.test.jsx",
         "src/components/__tests__/reportingDashboardArrival.test.jsx",
         "src/components/__tests__/workspaceShell.test.jsx",
+        "src/components/__tests__/workspaceShellAuditLinks.test.jsx",
+        "src/components/__tests__/proposalComposerAuditRegression.test.jsx",
         "src/context/__tests__/WorkspaceNavigationContext.test.jsx",
         "src/hooks/__tests__/useBrowserLocation.test.js",
         "src/hooks/__tests__/useCommercialWorkspaceSnapshot.test.js",
+        "src/hooks/__tests__/useCommercialWorkspaceSnapshot.calendar.test.jsx",
+        "src/lib/__tests__/anniversaryCalendarBoundary.test.js",
+        "src/lib/__tests__/modalBackgroundIsolation.test.js",
+        "src/lib/__tests__/workspaceNavigationLink.test.js",
         "src/lib/__tests__/ambientGlobalPilot.test.js",
         "src/lib/__tests__/ambientNowBriefing.test.js",
         "src/lib/__tests__/ambientOpportunityStream.test.js",
@@ -5793,7 +5806,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 24 composes QP-UXR-002 through QP-UXR-005 over current v0.17 authorities. Clear the Deck retains exact Workflow decision identity and readback; Now and Opportunities share one evidence-preserving commercial-priority projection; Events, Event Focus, Control Room, Schedule, and Replay preserve the commitment-to-execution boundary; Event Preflight separates satisfied, attention, and unavailable evidence without a score. Current retained-data failures withdraw consequential controls, exact same-object return requires a completed fresh read, selected Control Room alone requests operational authorities, and missing or malformed payment, BEO, staffing, conflict, live-event, attendance, actuals, and issue evidence remains unavailable. No pricing, approval, payment, booking, staffing, BEO, Schedule, Workflow, or event-session authority is added.",
+      "surfaceReviewNote": "Revision 25 preserves the QP-UXR-002 through QP-UXR-005 authority boundaries while repairing current-head interaction integrity: tenant-calendar Attention refresh, exact shared modal isolation and focus restoration, repeatable blocker focus, and native primary-destination links that retain caller-owned route and dirty-draft guards. Current retained-data failures still withdraw consequential controls, selected Control Room alone requests operational authorities, and missing or malformed payment, BEO, staffing, conflict, live-event, attendance, actuals, and issue evidence remains unavailable. No pricing, approval, payment, booking, staffing, BEO, Schedule, Workflow, or event-session authority is added.",
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
       "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, truthful local fallback, and one exact session-only task thread without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Follow-up completion uses the existing guarded quote mutation, confirms only an exact same-tenant server readback, and otherwise remains visibly uncertain without repeating the write. Staff-route Back/Forward may restore only an exact adjacent same-runtime, same-organization, same-principal view; private view and draft state stays memory-only, accepted discard cannot reappear on Forward, and invalid context falls back without selecting another record. The return-context layer adds no write authority and ordinary non-expiry fixtures retain byte-equivalent business state; the existing admin quote-history read may still persist automatic expiry under its unchanged lifecycle authority, including local-fallback normalization and versioning. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, blocked, or Needs confirmation with a safe next resolution."
     },

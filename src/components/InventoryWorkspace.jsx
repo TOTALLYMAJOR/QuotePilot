@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  INVENTORY_INGREDIENT_PROJECTION_LIMIT,
   applyInventoryCommand,
   buildInventoryRequestId,
   getInventoryBrowserAccess,
@@ -318,11 +319,25 @@ function PackConversionEditor({ ingredient, current, attempt, onSubmit, onReconc
 function LocationSetup({ disabled, attempt, onSubmit, onReconcile, onReset }) {
   const [locationId, setLocationId] = useState("");
   const [name, setName] = useState("");
+  const [referenceError, setReferenceError] = useState("");
+  const generatedReferenceRef = useRef("");
   const submit = (event) => {
     event.preventDefault();
+    if (disabled) return;
+    let reference = locationId.trim();
+    try {
+      if (!reference) {
+        generatedReferenceRef.current ||= `location_${buildInventoryRequestId().replace("inventory_request_", "")}`;
+        reference = generatedReferenceRef.current;
+      }
+    } catch {
+      setReferenceError("A location reference could not be generated. Enter an optional reference and try again.");
+      return;
+    }
+    setReferenceError("");
     onSubmit("location", {
       kind: "upsert_location",
-      locationId: locationId.trim(),
+      locationId: reference,
       name: name.trim(),
       active: true,
       expectedRevision: 0
@@ -335,17 +350,21 @@ function LocationSetup({ disabled, attempt, onSubmit, onReconcile, onReset }) {
       <p className="muted">A location is required before physical stock evidence can be recorded.</p>
       <form aria-label="Create stock location" onSubmit={submit} style={stackStyle}>
         <div style={formGridStyle}>
-          <label className="field">
-            Location reference
-            <input required maxLength={180} value={locationId} disabled={disabled} onChange={(event) => setLocationId(event.target.value)} aria-describedby="inventory-location-id-help" />
-            <span id="inventory-location-id-help" className="source-note">Stable internal reference, such as main-kitchen.</span>
-          </label>
+          <details data-inventory-reference="location">
+            <summary>Reference (optional)</summary>
+            <label className="field">
+              Location reference
+              <input maxLength={180} value={locationId} disabled={disabled} onChange={(event) => setLocationId(event.target.value)} aria-describedby="inventory-location-id-help" />
+              <span id="inventory-location-id-help" className="source-note">Leave blank to generate a stable reference, or enter an existing code such as main-kitchen.</span>
+            </label>
+          </details>
           <label className="field">
             Location name
             <input required maxLength={100} value={name} disabled={disabled} onChange={(event) => setName(event.target.value)} />
           </label>
         </div>
-        <button className="cta" type="submit" disabled={disabled || !locationId.trim() || !name.trim()}>Create stock location</button>
+        {referenceError && <p className="error-note" role="alert">{referenceError}</p>}
+        <button className="cta" type="submit" disabled={disabled || !name.trim()}>Create stock location</button>
       </form>
       <AttemptState axis="location" attempt={attempt} onReconcile={onReconcile} onReset={onReset} />
     </section>
@@ -357,11 +376,36 @@ function IngredientSetup({ disabled, locations, attempt, onSubmit, onReconcile, 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [baseUnit, setBaseUnit] = useState("lb");
+  const [referenceError, setReferenceError] = useState("");
+  const generatedReferenceRef = useRef("");
+
+  useEffect(() => {
+    if (attempt.state !== "committed") return;
+    generatedReferenceRef.current = "";
+    setItemId("");
+    setName("");
+    setReferenceError("");
+    // Retain the operator's category/unit for the next entry. Never reset on
+    // a receipt alone, an uncertain outcome, or a definitive rejection.
+  }, [attempt.state]);
+
   const submit = (event) => {
     event.preventDefault();
+    if (disabled) return;
+    let reference = itemId.trim();
+    try {
+      if (!reference) {
+        generatedReferenceRef.current ||= `ingredient_${buildInventoryRequestId().replace("inventory_request_", "")}`;
+        reference = generatedReferenceRef.current;
+      }
+    } catch {
+      setReferenceError("An ingredient reference could not be generated. Enter an optional reference and try again.");
+      return;
+    }
+    setReferenceError("");
     onSubmit("ingredient", {
       kind: "upsert_ingredient",
-      ingredientId: itemId.trim(),
+      ingredientId: reference,
       name: name.trim(),
       category: category.trim(),
       baseUnitId: baseUnit,
@@ -376,11 +420,14 @@ function IngredientSetup({ disabled, locations, attempt, onSubmit, onReconcile, 
       <p className="muted">Define what is stocked. Quantity and cost remain independent evidence added afterward.</p>
       <form aria-label="Add ingredient" data-inventory-command="upsert_ingredient" onSubmit={submit} style={stackStyle}>
         <div style={formGridStyle}>
-          <label className="field">
-            Ingredient reference
-            <input required maxLength={180} value={itemId} disabled={disabled} onChange={(event) => setItemId(event.target.value)} aria-describedby="inventory-ingredient-id-help" />
-            <span id="inventory-ingredient-id-help" className="source-note">Stable internal reference; do not reuse it for another ingredient.</span>
-          </label>
+          <details data-inventory-reference="ingredient">
+            <summary>Reference (optional)</summary>
+            <label className="field">
+              Ingredient reference
+              <input maxLength={180} value={itemId} disabled={disabled} onChange={(event) => setItemId(event.target.value)} aria-describedby="inventory-ingredient-id-help" />
+              <span id="inventory-ingredient-id-help" className="source-note">Leave blank to generate a stable reference. A supplied code must not be reused for another ingredient.</span>
+            </label>
+          </details>
           <label className="field">
             Ingredient name
             <input required maxLength={100} value={name} disabled={disabled} onChange={(event) => setName(event.target.value)} />
@@ -400,7 +447,8 @@ function IngredientSetup({ disabled, locations, attempt, onSubmit, onReconcile, 
           </label>
         </div>
         <p className="source-note">The ingredient can be stocked at {locations.length === 1 ? locations[0].name : `${locations.length} active locations`}.</p>
-        <button className="cta" type="submit" disabled={disabled || !itemId.trim() || !name.trim() || !category.trim() || !baseUnit}>Add ingredient</button>
+        {referenceError && <p className="error-note" role="alert">{referenceError}</p>}
+        <button className="cta" type="submit" disabled={disabled || !name.trim() || !category.trim() || !baseUnit}>Add ingredient</button>
       </form>
       <AttemptState axis="ingredient" attempt={attempt} onReconcile={onReconcile} onReset={onReset} />
     </section>
@@ -814,6 +862,10 @@ export function InventoryWorkspaceView({
   const sourcesCurrent = currentSource(model, "workspace") && currentSource(model, "ingredients");
   const canConfigure = access?.mutationEnabled === true && sourcesCurrent;
   const hasCurrentLocation = locations.length > 0;
+  // This is the supported ingredient-v2 capacity, not an invitation to fetch
+  // or paginate the raw ledger. Server command limits remain unchanged.
+  const ingredientCapacityReached = model.bounded === true
+    || ingredients.length >= INVENTORY_INGREDIENT_PROJECTION_LIMIT;
   const capabilityState = readCapabilityState(access, read, model);
 
   return (
@@ -841,14 +893,22 @@ export function InventoryWorkspaceView({
       ) : (
         <div style={stackStyle}>
           <ReadBoundary state={read.state} model={model} error={read.error} onRetry={onRetry} />
-          <section className="panel" aria-labelledby="inventory-source-state-title">
+          <details className="panel" aria-labelledby="inventory-source-state-title">
+            <summary id="inventory-source-state-title">Connection and verification details</summary>
             <p className="eyebrow">Projection evidence</p>
-            <h2 id="inventory-source-state-title">Currentness by source</h2>
+            <p>Currentness by source</p>
             <ul className="plain-list">
               <EvidenceSourceState label="Location setup" state={model.sources?.workspace?.state || "loading"} />
               <EvidenceSourceState label="Ingredient list" state={model.sources?.ingredients?.state || "loading"} bounded={model.bounded === true} />
             </ul>
-          </section>
+          </details>
+          {ingredientCapacityReached && (
+            <p className="warning-note" role="status" data-inventory-capacity="reached">
+              This inventory version supports up to {INVENTORY_INGREDIENT_PROJECTION_LIMIT} ingredient identities.
+              Adding another ingredient is unavailable at this boundary. Existing stock and cost actions remain available when their records are current.
+              Expanding capacity requires a separately reviewed inventory upgrade.
+            </p>
+          )}
 
           <IngredientEvidenceTable
             ingredients={ingredients}
@@ -874,7 +934,7 @@ export function InventoryWorkspaceView({
               )}
               {hasCurrentLocation && (
                 <IngredientSetup
-                  disabled={!canConfigure || model.bounded === true || axisLocked(attempts.ingredient)}
+                  disabled={!canConfigure || ingredientCapacityReached || axisLocked(attempts.ingredient)}
                   locations={locations}
                   attempt={attempts.ingredient}
                   onSubmit={onSubmit}
@@ -1014,9 +1074,11 @@ export default function InventoryWorkspace({
           changed = true;
         }
       });
+      // The projection can arrive before the callable response. Reconsider on
+      // either arrival; returning the same object makes the fixed point inert.
       return changed ? next : current;
     });
-  }, [read.model, read.state]);
+  }, [attempts, read.model, read.state]);
 
   const setAttempt = useCallback((axis, value) => {
     setAttempts((current) => ({ ...current, [axis]: value }));

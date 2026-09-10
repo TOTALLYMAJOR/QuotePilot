@@ -8,6 +8,7 @@ import {
   useState
 } from "react";
 import { createPortal } from "react-dom";
+import { isolateModalBackground as isolateBackground } from "../lib/modalBackgroundIsolation";
 import {
   CheckCircle,
   CurrencyDollar,
@@ -47,47 +48,6 @@ function focusableChildren(node) {
     element.getAttribute("aria-hidden") !== "true"
     && element.getClientRects().length > 0
   ));
-}
-
-function isolateBackground(portalNode) {
-  if (!portalNode || typeof document === "undefined") return () => {};
-  const snapshots = new Map();
-  const isolate = (node) => {
-    if (
-      !(node instanceof HTMLElement)
-      || node === portalNode
-      || ["SCRIPT", "STYLE", "LINK"].includes(node.tagName)
-      || snapshots.has(node)
-    ) return;
-    snapshots.set(node, {
-      hadAriaHidden: node.hasAttribute("aria-hidden"),
-      ariaHidden: node.getAttribute("aria-hidden"),
-      hadInert: node.hasAttribute("inert"),
-      inert: node.getAttribute("inert"),
-      inertProperty: "inert" in node ? node.inert : undefined
-    });
-    node.setAttribute("aria-hidden", "true");
-    node.setAttribute("inert", "");
-    if ("inert" in node) node.inert = true;
-  };
-  const isolateBodyChildren = () => Array.from(document.body.children).forEach(isolate);
-  isolateBodyChildren();
-  const observer = typeof MutationObserver === "function"
-    ? new MutationObserver(isolateBodyChildren)
-    : null;
-  observer?.observe(document.body, { childList: true });
-  return () => {
-    observer?.disconnect();
-    snapshots.forEach((snapshot, node) => {
-      if ("inert" in node && snapshot.inertProperty !== undefined) {
-        node.inert = snapshot.inertProperty;
-      }
-      if (snapshot.hadInert) node.setAttribute("inert", snapshot.inert ?? "");
-      else node.removeAttribute("inert");
-      if (snapshot.hadAriaHidden) node.setAttribute("aria-hidden", snapshot.ariaHidden ?? "");
-      else node.removeAttribute("aria-hidden");
-    });
-  };
 }
 
 function requestError(result, fallback) {

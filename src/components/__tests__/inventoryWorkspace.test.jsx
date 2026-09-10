@@ -305,6 +305,58 @@ describe("InventoryWorkspace ingredient evidence presentation", () => {
 });
 
 describe("InventoryWorkspace operator commands", () => {
+  test("generates a stable optional reference and resets only after confirmation", async () => {
+    const onSubmit = vi.fn();
+    const renderView = async (state = "ready") => act(async () => root.render(
+      <InventoryWorkspaceView access={ADMIN_ACCESS}
+        read={{ state: "current", model: projectionModel(), error: "" }}
+        attempts={attempts({ ingredient: attempt(state) })}
+        onRetry={() => {}} onSubmit={onSubmit} onReconcile={() => {}} onReset={() => {}} />
+    ));
+    await renderView();
+    const form = container.querySelector('form[aria-label="Add ingredient"]');
+    expect(form.querySelector('[data-inventory-reference="ingredient"]')).not.toBeNull();
+    const [reference, name, category] = form.querySelectorAll("input");
+    expect(reference.required).toBe(false);
+    await act(async () => {
+      setInput(name, "Pasta");
+      setInput(category, "Dry goods");
+    });
+    const submit = () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await act(async () => submit());
+    const generated = onSubmit.mock.calls[0][1].ingredientId;
+    expect(generated).toMatch(/^ingredient_[a-f0-9]{32}$/);
+    await renderView("error");
+    await act(async () => submit());
+    expect(onSubmit.mock.calls[1][1].ingredientId).toBe(generated);
+    await renderView("receipt");
+    expect(name.value).toBe("Pasta");
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(true);
+    await renderView("committed");
+    expect(name.value).toBe("");
+    expect(category.value).toBe("Dry goods");
+    await act(async () => setInput(name, "Rice"));
+    await act(async () => submit());
+    expect(onSubmit.mock.calls[2][1].ingredientId).not.toBe(generated);
+  });
+
+  test("explains capacity without disabling existing receiving actions", async () => {
+    const ingredients = Array.from({ length: 200 }, (_, index) => ({
+      ...projectionModel().ingredients[0], ingredientId: `ingredient-${index}`,
+      name: `Ingredient ${index}`, nameSortKey: `ingredient-${index}`
+    }));
+    await act(async () => root.render(
+      <InventoryWorkspaceView access={ADMIN_ACCESS}
+        read={{ state: "current", model: projectionModel({ ingredients }), error: "" }}
+        attempts={attempts()} onRetry={() => {}} onSubmit={() => {}}
+        onReconcile={() => {}} onReset={() => {}} />
+    ));
+    expect(container.querySelector('[data-inventory-capacity="reached"]').textContent).toContain("200");
+    expect(container.querySelector('form[aria-label="Add ingredient"] input').disabled).toBe(true);
+    expect(container.querySelector('form[aria-label="Receive ingredient stock"] select').disabled).toBe(false);
+    expect(container.querySelector('details[aria-labelledby="inventory-source-state-title"]').open).toBe(false);
+  });
+
   test("emits the exact flat ingredient command", async () => {
     const onSubmit = vi.fn();
     await act(async () => {
@@ -543,7 +595,7 @@ describe("InventoryWorkspace operator commands", () => {
 });
 
 describe("InventoryWorkspace subscription lifecycle", () => {
-  test("holds a pack command pending until its exact projection confirms the receipt", async () => {
+  test.each(["receipt-first", "projection-first"])("confirms the exact pack command in %s order", async (arrivalOrder) => {
     let subscription;
     let resolveCommand;
     const submitCommand = vi.fn(() => new Promise((resolve) => { resolveCommand = resolve; }));
@@ -592,8 +644,10 @@ describe("InventoryWorkspace subscription lifecycle", () => {
       packConversionRevisionId: `ipc_${"a".repeat(48)}`,
       revision: 1
     };
-    await act(async () => resolveCommand({ receipt, confirmation }));
-    expect(container.textContent).toContain("Waiting for the server-confirmed purchase-pack projection");
+    if (arrivalOrder === "receipt-first") {
+      await act(async () => resolveCommand({ receipt, confirmation }));
+      expect(container.textContent).toContain("Waiting for the server-confirmed purchase-pack projection");
+    }
 
     const ingredient = {
       ...projectionModel().ingredients[0],
@@ -607,8 +661,48 @@ describe("InventoryWorkspace subscription lifecycle", () => {
         packConversionRevisionId: confirmation.packConversionRevisionId
       }]
     };
-    await act(async () => subscription.onData(projectionModel({ ingredients: [ingredient] })));
+    const confirmedModel = projectionModel({ ingredients: [ingredient] });
+    // Cached, locally pending, and mismatched projections never substitute for
+    // the current server projection that confirms this exact receipt.
+    for (const unconfirmedModel of [
+      {
+        ...confirmedModel,
+        freshness: "cached",
+        sources: {
+          workspace: { state: "cached", fromCache: true, hasPendingWrites: false },
+          ingredients: { state: "cached", fromCache: true, hasPendingWrites: false }
+        }
+      },
+      {
+        ...confirmedModel,
+        freshness: "pending",
+        sources: {
+          workspace: { state: "pending", fromCache: false, hasPendingWrites: true },
+          ingredients: { state: "pending", fromCache: false, hasPendingWrites: true }
+        }
+      },
+      projectionModel({
+        ingredients: [{
+          ...ingredient,
+          packConversions: [{
+            ...ingredient.packConversions[0],
+            packConversionRevisionId: `ipc_${"f".repeat(48)}`
+          }]
+        }]
+      })
+    ]) {
+      await act(async () => subscription.onData(unconfirmedModel));
+      expect(container.textContent).not.toContain("Purchase pack is confirmed in the current projection");
+    }
+    await act(async () => subscription.onData(confirmedModel));
+    if (arrivalOrder === "projection-first") {
+      expect(container.textContent).toContain("Publishing purchase pack…");
+      await act(async () => resolveCommand({ receipt, confirmation }));
+    }
+    // No second snapshot, timer, refresh, or new request is needed.
     expect(container.textContent).toContain("Purchase pack is confirmed in the current projection");
+    expect(container.querySelector('[data-inventory-axis="conversion"]').getAttribute("data-capability-state")).toBe("committed");
+    expect(submitCommand).toHaveBeenCalledTimes(1);
   });
 
   test("restores and reconciles the exact unresolved pack request", async () => {

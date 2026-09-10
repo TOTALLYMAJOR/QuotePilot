@@ -1,6 +1,29 @@
 # Project Status
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-10 16:12:00 CDT
+
+## Audit remediation — isolated current-head candidate
+
+An isolated review branch based on current captured source
+`f84234d9d6174c0762cbb1a405dfa88967d42285` reconciles Inventory
+receipt/projection ordering, modal containment, repeatable blocker focus,
+tenant-calendar Attention refresh, native primary destinations, and bounded
+Inventory entry behavior. It changes no Functions, Firestore rules, tenant
+settings, payment behavior, quote-revision authority, or production data.
+
+The current local core lane passes: 487 unit files, 5,697 tests, compatibility
+build, capability/field-state/doc governance, bundle budget, and 136 Truthloop
+tests. Firestore rules pass 93/93. The affected feature-enabled browser matrix
+passes 17/17, and the standalone Proposal Composer profile passes 14/14.
+`check:env` remains blocked by six absent local Firebase browser configuration
+variables. CI, hosted, deployment, assistive-technology, and human evidence
+remain separate. Pricing-preview v2 parity and durable incomplete working
+drafts are not repaired by this candidate.
+
+The `f84234d9` Ambient accessibility fixture-expiry correction and its
+changelog entry are preserved verbatim. The previous captured-base changelog
+collision is therefore resolved in this candidate. The preserved original
+checkout remains clean and unchanged.
 
 ## Current evidence boundary
 
@@ -14,7 +37,7 @@ artifact and must not be described as one release.
 | Firebase Functions | `v0.18.1`, exact SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce`, CI `34430375712`, production deployment `34431964494` | Provider readback found 128 active Functions on the `ragnakok-operations` profile. This does not prove browser reachability or operator success. |
 | Firebase Hosting fallback | `v0.16.3` static release | It is an origin/fallback, not the current public edge or backend version. |
 | Repository `origin/main` | `961e688b` documentation receipt for the v0.18.1 deployment | Repository state is not runtime state. |
-| Current local branch | `feat/realistic-inventory-population` at `8c029f1b`, two commits ahead of `origin/main` before this documentation reconciliation | `ec2a7c83` adds the applied realistic Inventory population operation; `8c029f1b` adds a source-qualified operating-twin population operation. Neither local commit is a public frontend release. |
+| Captured audit review base | isolated `review/audit-remediation-current-f84234d9` at `f84234d9` | The review patch preserves the fixture-expiry correction and is base-bound local evidence, not a public frontend release. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
 the browser had no reviewed provider registration while the callable enforced a

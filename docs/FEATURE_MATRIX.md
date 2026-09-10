@@ -1,12 +1,24 @@
 # Feature Matrix
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-10 16:05:00 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
 current operational status. Use [`CHANGELOG.md`](../CHANGELOG.md) for the full
 change record and [`PROJECT_STATUS.md`](../PROJECT_STATUS.md) for current
 release, deployment, provider, risk, and acceptance state.
+
+## Current-head audit remediation candidate
+
+| Existing capability | Current-source repair | Evidence boundary |
+|---|---|---|
+| Inventory command lifecycle | Exact current receipt and projection may arrive in either order; cached, pending, or mismatched projections cannot confirm a command. Optional generated references remain stable through rejected or uncertain outcomes and rotate only after confirmed completion. | Browser presentation/client reconciliation only; server commands, receipts, role gates, tenant gates, revisions, stock, cost, and the 200-identity policy are unchanged. |
+| Client Preview and blocker review | Client Preview uses the shared modal focus/background contract; repeated blocker review refocuses the existing readiness section, including under StrictMode. | Local component/DOM evidence only; assistive-technology, hosted, and human proof remain open. |
+| Anniversary Attention | Refresh uses the existing effective tenant timezone and next observed tenant date, including 23/25-hour business days. | Read-only Attention projection; no quote, rebook, customer, or scheduling authority. |
+| Primary workspace | True global destinations are native links; ordinary activation still delegates to existing route and dirty-draft guards, while modified activation remains browser-native. | Contextual actions and menus remain buttons. Browser route/new-tab qualification remains separate. |
+
+Pricing-preview parity and durable incomplete working drafts remain open; this
+candidate does not change pricing or persistence authority.
 
 ## Current reconciliation
 

@@ -1,0 +1,11 @@
+/* Keep the existing navigation geometry and state classes. Native anchors
+   supply open-in-new-tab/copy-link behavior; no competing visual language. */
+a.shell-nav-action.ambient-orientation-action {
+  text-decoration: none;
+  font: inherit;
+}
+
+a.shell-nav-action.ambient-orientation-action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
