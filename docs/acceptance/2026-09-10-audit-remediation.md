@@ -1,11 +1,17 @@
 # Audit Remediation Current-Head Reconciliation
 
-Last updated: 2026-09-10 16:18:00 CDT
+Last updated: 2026-09-10 16:49:18 CDT
 
 ## Review binding and evidence boundary
 
 - Captured source base: `f84234d9d6174c0762cbb1a405dfa88967d42285`.
 - Isolated review branch: `review/audit-remediation-current-f84234d9`.
+- Release integration base: current `origin/main`
+  `2f4246846496f066e909d16fb46886cd0cc193fc`, which preserves `v0.18.2`, its
+  deployment receipts, the merged population retry corrections, and the
+  split-deployment activation receipt correction.
+- Isolated release branch: `release/v0.18.3`; it contains only the remediation
+  delta above the current main release base.
 - Historical candidate base: `961e688bb3d651862161599e48264b890a98e8e2`.
 - The historical base is an ancestor of the captured base. The six intervening
   commits were inspected by source diff and scoped implementation review, not
@@ -13,9 +19,10 @@ Last updated: 2026-09-10 16:18:00 CDT
 - The latest intervening commit changes `CHANGELOG.md` and
   `e2e/ambient-intelligence-accessibility.spec.js`. Its future fixture expiry
   and explanatory changelog entry are preserved verbatim in this candidate.
-- All evidence below is local source/test evidence. No CI, hosted environment,
-  production mutation, provider outcome, assistive-technology review, or human
-  acceptance is claimed.
+- All evidence below is local source/test evidence. The reconciled current-main
+  core lane passes, while exact release-branch CI, hosted candidate UAT,
+  semantic tagging, production mutation, provider outcome,
+  assistive-technology review, and human acceptance remain unclaimed.
 
 ## Finding classifications
 
@@ -51,9 +58,11 @@ because it combined mutually different legacy and Ambient rollout profiles.
 Those failures were not relabeled as product regressions: affected suites were
 rerun under their documented profiles, producing the passing matrices above.
 
-## Remaining integration boundary
+## Remaining release boundary
 
-The generated patch may be reviewed or applied only against the captured
-`f84234d9` base. The previous changelog collision is resolved. CR-02, UX-01,
-broader Inventory UX, CI, hosted verification, production, provider outcomes,
+The historical generated patch remains bound to captured `f84234d9`; it must
+not be applied to current main. Its remediation delta has instead been
+reconciled onto the isolated `release/v0.18.3` branch from current main. The
+previous changelog collision is resolved. CR-02, UX-01, broader Inventory UX,
+exact PR/main CI, candidate UAT, production, provider outcomes,
 assistive-technology review, and human acceptance remain open.
