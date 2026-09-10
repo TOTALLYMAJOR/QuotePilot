@@ -1,38 +1,44 @@
 # Project Status
 
-Last updated: 2026-09-09 20:50:56 CDT
+Last updated: 2026-09-09 22:25:04 CDT
 
-## Complete operations production candidate
+## v0.18.1 Inventory callable hotfix deployed
 
 The first production stock-location command on September 9 reached
 `applyInventoryCommand` with a valid Firebase identity but without an App Check
 token. The deployed callable had hard enforcement enabled even though the
 canonical production browser policy still keeps its provider off pending
 registration, so the platform returned HTTP 401 before Inventory's admin and
-tenant authority could run. The active hotfix candidate moves all three
+tenant authority could run. The v0.18.1 hotfix moves all three
 Inventory callables to explicit App Check monitoring. Verified email, admin or
 staff role as appropriate, exact organization, runtime and tenant settings,
 revision fences, idempotency, immutable receipts, and server-only writes remain
-enforced. Source and focused-test completion do not establish the required
-fresh exact-SHA CI, Functions deployment, provider readback, successful
-production command, or human acceptance.
+enforced.
 
-The current `v0.18.0` candidate now includes a governed production path for the
+Release SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce` is merged to
+`main`, tagged `v0.18.1`, qualified by exact-main CI run `34430375712`, and
+deployed by Firebase production run `34431964494`. Provider readback verified
+all 128 active Functions on the `ragnakok-operations` profile. The first denied
+request wrote no Inventory state; a successful operator retry and human
+acceptance remain separate evidence.
+
+The v0.18.0 base release established the governed production path for the
 RagnaKoK founder-pilot organization (`mm05366-sandbox`). The explicit
 `ragnakok-operations` profile keeps the existing deployment-scoped tenant
 boundary, enables the Staffing and Inventory runtime gates, applies that exact
 organization fence to Inventory callables and invalidation triggers, and compiles both
-browser surfaces. Commercial Change and Event Spine retain their independent
-tenant settings and receipt chains; their settings are activated together
-because workflow-bound operational changes are invalid until Commercial Change
-enforcement is present. Inventory and Staffing retain their own tenant fields.
+browser surfaces. The v0.18.1 deployment preserves those Inventory and Staffing
+runtime gates. Commercial Change and Event Spine retain independent tenant
+settings and receipt chains and remain runtime-off; this hotfix does not
+activate either mutation authority.
 
 Three protected, update-only tenant workflows verify the exact tagged
 all-surface Firebase deployment before changing the named settings and then
 read them back from Firestore. Buyer access, Revenue Autopilot sends, SMS, and
-Stripe Connect are outside this activation. At this checkpoint the controls
-are source candidates: CI, deployment, provider readback, tenant activation,
-hosted production behavior, and human acceptance remain separate evidence.
+Stripe Connect are outside this activation. v0.18.1 required no tenant-setting
+mutation because the existing exact-tenant Inventory and Staffing activation
+was retained. Hosted operator retry and human acceptance remain separate from
+the completed CI, deployment, and provider-readback evidence.
 
 ## Ingredient inventory scope correction
 

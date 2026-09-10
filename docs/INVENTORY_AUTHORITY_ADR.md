@@ -1,8 +1,8 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 20:50:56 CDT
+Last updated: 2026-09-09 22:25:04 CDT
 
-Status: Accepted scope correction; corrected Phases 2 through 8 complete as default-off local source candidates
+Status: Accepted scope correction; Phase 2 deployed and exact-tenant enabled, with corrected Phases 3 through 8 complete as default-off local source candidates
 Date: September 8, 2026
 Decision owner: QuotePilot maintainers
 
@@ -502,6 +502,13 @@ role, runtime, tenant setting, and server-only persistence. Hard enforcement
 may be promoted only with the corresponding browser provider and hosted token
 evidence; enabling it earlier makes valid administrators fail before Inventory
 authority is evaluated.
+
+Release `v0.18.1` deployed that monitoring policy at exact SHA
+`8bada8d16300a9f897df5f7a640e07b4830ab7ce`. Exact-main CI run
+`34430375712` passed, Firebase production run `34431964494` completed, and its
+provider readback verified all 128 Functions active on the
+`ragnakok-operations` profile. This is deployment evidence, not a substitute
+for a successful operator retry or human acceptance.
 
 ## Corrected delivery sequence
 
