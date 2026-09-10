@@ -1,10 +1,10 @@
 # QuotePilot Commercial Platform Program
 
-Last updated: 2026-09-10 10:00:00 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
 ## Program status
 
-This document is the canonical implementation program that amends the frozen
+This document is the canonical as-built program that amends the frozen
 UX convergence contract without replacing it. The existing Commercial
 Workbench and calendar-first Operations work remains the presentation
 substrate. This program widens the commercial model beneath those surfaces so
@@ -21,17 +21,18 @@ Operators continue to see Packages, Guests, Menu, Venue, Staffing, BEO, and Run
 of Show. Kernel contracts use domain-neutral names only where shared truth or
 authority benefits from it.
 
-## Reconciled starting point
+## Reconciled delivery state
 
-- Remote `main` at program start: `8f2d2dcf78d4512aa7d02495ee27cbeeea4ccc12`.
-- Active implementation: `feat/ux-convergence-workbench-operations`, PR #129.
-- Local starting candidate: `2d4bc90a76fb6a1902dfeb5229e9c805eb26d3ae`.
+- The program began from `8f2d2dcf` and the PR #129 UX-convergence branch; those
+  identifiers are historical provenance, not current status.
+- Slices 2–7 merged through `v0.18.0` at `b90fb5d5`. The Inventory App Check
+  correction is deployed in Firebase Functions as `v0.18.1` at `8bada8d1`.
+- The public Vercel edge still serves `v0.16.6`; current frontend/browser
+  exposure, authenticated hosted role journeys, and human acceptance remain
+  separate from the merged source and backend deployment.
 - Existing Workbench, quote draft, catalog, pricing, payment, Operations, and
   Library authorities are reused. No parallel Quote Builder or catalog is
   authorized.
-- The IDE checkout's unrelated `CHANGELOG.md`, `docs/DOC_SYSTEM.md`, design
-  archives, portable-governance documents, and portfolio work are outside this
-  branch and remain untouched.
 
 ## Ordered slices
 
@@ -46,8 +47,8 @@ authority benefits from it.
 Each slice is additive and reversible until the final branch candidate is
 qualified. Historical pricing-v1 receipts are never recalculated.
 
-Implementation checkpoint: Slices 2-7 are source-complete and entering final
-local qualification. Existing Packages
+Implementation checkpoint: Slices 2-7 are merged in the v0.18 source line and
+the applicable Firebase authority is deployed in v0.18.1. Existing Packages
 adapt to Configurable Offers without migration; bounded choice groups validate
 minimums, maximums, active references, and authoritative quote selections.
 Existing Event Templates adapt to Commercial Templates, explicit operator work

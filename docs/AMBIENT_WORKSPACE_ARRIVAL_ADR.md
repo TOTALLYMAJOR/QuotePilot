@@ -1,5 +1,7 @@
 # Ambient Workspace Exact-Arrival Architecture Decision
 
+Last updated: 2026-09-10 12:09:03 CDT
+
 Status: Accepted for source implementation only; default off
 Date: August 11, 2026
 Decision owners: QuotePilot maintainers

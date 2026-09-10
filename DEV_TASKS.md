@@ -1,662 +1,129 @@
-# Dev Tasks
+# QuotePilot Development Tasks
 
-Last updated: 2026-09-09 06:19:39 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
-Only open work belongs here. Current operational truth lives in
-[`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
-[`CHANGELOG.md`](CHANGELOG.md).
+This file contains open work only. Completed delivery belongs in
+[`CHANGELOG.md`](CHANGELOG.md), current evidence in
+[`PROJECT_STATUS.md`](PROJECT_STATUS.md), and full capability inventory in
+[`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md).
 
-## Ingredient inventory and menu-costing march
+## P0 — Reconcile the current release surface
 
-1. Add consumption, waste, corrections, allocation settlement, and
-   planned-versus-actual quantity/cost evidence after an owner-declared
-   multi-receipt valuation policy exists.
-2. Deepen bounded realtime Library, Quote Edit, Preflight, Operations, and
-   reporting projections. Keep cached, pending, stale, unavailable, and
-   uncertain evidence distinct.
+- [ ] Build, qualify, and separately authorize promotion of one exact frontend
+  candidate compatible with the deployed `v0.18.1` Firebase backend. Record the
+  source SHA, exact CI, immutable deployment, public route probes, and rollback.
+- [ ] Run an authenticated `mm05366-sandbox` administrator acceptance journey
+  across Living Opportunity, Quote administration, Operations, Inventory,
+  Library pricing review, and exact readback. Include sales/non-admin and
+  cross-tenant denial checks.
+- [ ] Retry the Inventory operator workflow only through its displayed recovery
+  path and record whether App Check monitoring, identity, role, tenant gates,
+  command receipt, and projection readback agree. Do not repeat an uncertain
+  write.
+- [ ] Register and review the browser App Check provider before considering hard
+  enforcement. Keep monitoring until hosted token evidence exists.
 
-Each completed slice receives a local commit. Preserve the historical Phase 1
-checkpoint, keep equipment workflows outside active scope, and do not push the
-branch until the corrected march passes final qualification. PR, merge,
-deployment, migration, tenant activation, production proof, and human
-acceptance require separate evidence and authorization.
+## P0 — Govern founder-pilot population
 
-## v0.18.0 capability campaign promotion
+- [ ] Review `ragnakok-operations-v1` as a privileged exact-tenant fixture
+  migration before any hosted apply. Explicitly approve or remove its ability
+  to enable Inventory/Staffing settings and reconfirm the current catalog
+  revision; those are authority transitions, not ordinary fixture writes.
+- [ ] If separately authorized, publish the generated staff assets, run the
+  staging dry-run/apply/readback first, then repeat for production with exact
+  target, organization, counts, revisions, receipts, and rollback evidence.
+- [ ] Replace synthetic stock, costs, availability, qualifications, customer
+  decisions, and provider states through their normal governed workflows before
+  relying on the operating twin for a live event.
+- [ ] Complete a human Catalog pricing review for revisions 23 and 60 before
+  authoritative quote saves use the populated catalogs.
 
-- Qualify the reconstructed QP-UXR-001 through QP-UXR-005 release branch with
-  full unit, environment, project-state, documentation, capability-surfacing,
-  secret, workflow, build, bundle, release-lane, and responsive browser gates.
-- Publish the exact release branch, require its protected PR checks, deploy the
-  immutable candidate, complete the tracked UAT boundary, merge without
-  collapsing the capability-level commit history, require all exact-main CI
-  lanes, and create the same-SHA `v0.18.0` tag.
-- Deploy only through the tracked target-specific production workflows with
-  exact `v0.17.0` rollback identity and provider readback. Keep Vercel public
-  edge and Firebase origin/backend evidence separate; do not infer one from the
-  other.
-- Verify authenticated staff role/tenant behavior for the governed amendment,
-  decision resolution, commercial priority, event planning, and Preflight
-  routes. Provider outcomes, production-data correctness, assistive-technology
-  review, and human acceptance remain separate evidence classes.
-- Keep both Commercial Change enforcement gates, automated customer
-  communication, automatic staffing/BEO mutations, Revenue Autopilot scheduler,
-  and payment rails unchanged unless a separately authorized release item
-  explicitly owns them.
-- QP-UXR-006 remains an owner decision. Do not implement or market the bounded
-  recommendation until the owner defines, rejects, or defers it.
+## P0 — Provider and customer safety
 
-## Commercial platform proof remaining after source qualification
+- [ ] Complete ordinary proposal-email provider, webhook, recipient, and human
+  acceptance without treating provider acceptance as inbox receipt.
+- [ ] Complete coordinated hosted Stripe deposit and final-balance acceptance;
+  preserve request, browser return, webhook settlement, and reconciliation as
+  separate evidence.
+- [ ] Keep buyer access closed until restricted test credentials, webhook
+  checks, Turnstile checks, and a bounded hosted acceptance plan pass.
 
-- Require exact-head CI for the single pushed UX Convergence refinement SHA.
-- Keep merge, deployment, production tenant migration, provider readback,
-  authenticated hosted role/tenant checks, cross-browser/device checks,
-  assistive-technology review, and human acceptance as separately authorized
-  proof events. Do not infer them from local or CI success.
+## P1 — Operational coherence
 
-## Capability-to-Backlog Execution Map
+- [ ] Verify Commercial Change and Event Spine tenant activation only through
+  their protected coupled workflow; Inventory or Staffing activation must not
+  imply either mutation authority.
+- [ ] Exercise accepted/booked changes through quote amendment, Event Preflight,
+  Staffing, Inventory, Schedule conflicts, and Kitchen BEO freshness. Confirm
+  that each stale or unavailable result owns one safe recovery action.
+- [ ] Add cursor-based Inventory navigation before any organization exceeds the
+  current bounded ingredient/location or menu-projection limits.
+- [ ] Decide whether the legacy CWF-16 Event Workspace should remain as a
+  compatibility surface after hosted Living Opportunity parity and rollback
+  evidence are accepted.
 
-This map is the execution index for the detailed open work below. Capability
-state comes from [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md); operational
-and production proof comes from [`PROJECT_STATUS.md`](PROJECT_STATUS.md). A
-source implementation, local test, provider acknowledgement, deployment, and
-human acceptance are separate evidence levels.
+## P1 — Product and design acceptance
 
-Execution rules:
+- [ ] Run the exact current candidate at 390, 768, and 1440 pixels for admin and
+  sales roles, then record overflow, focus, reduced-motion, forced-colors,
+  assistive-technology, and human comprehension evidence separately.
+- [ ] Finish terminology cleanup where internal names such as Decision Debt or
+  Revenue Autopilot appear in ordinary operator copy without helping a decision.
+- [ ] Preserve the canonical route hierarchy: global orientation, exact-object
+  context, and contextual action. Do not promote capability existence into a
+  permanent destination without a recurring user job.
 
-- Work in dependency order, but skip a blocked slice and take the next `ready`
-  slice. Never weaken an authority or proof boundary to make a task appear
-  unblocked.
-- Before implementation, give the slice an exact planner task and file set.
-  One slice owns one independently reviewable commit. Do not push.
-- A slice may be committed only when its files or hunks have proven ownership,
-  required checks pass, canonical docs are synchronized, and residual risks are
-  explicit. Mixed-ownership worktree changes are a blocker to that commit, not
-  permission to include them.
-- `human/external` means repository work cannot produce the missing evidence.
-  Prepare the immutable checklist or harness, then stop before the external or
-  human action and continue with another `ready` slice.
+## P1 — Bounded future programs
 
-Release checkpoint: the owner authorized publication and governed deployment
-pursuit for the 74-commit v0.16.0 candidate on 2026-08-29. This authorizes the
-release workflow, not bypassing it. The local high-risk plus CWV profile passes;
-exact code-bearing candidate `e620ce80f096033abfdc420e649499f4ed92dff1`
-passes all eight PR #111 CI Quality jobs in run `33245272679` and exact-SHA
-Stripe Connect source-only runs `33245272566` and `33245272601`. Governed
-Firebase and Vercel candidate commands stopped before mutation: staging first
-needs separately authorized enabled versions for the eleven names recorded in
-`docs/RELEASE_V0_16_PROMOTION_REPORT.md`, then an exact Firebase safe-off
-deploy/readback must prove
-`COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false` before Vercel preview can proceed.
-Full production qualification remains blocked by the positive-path items in the
-tracked UAT plan. `docs/RELEASE_V0_16_PROMOTION_REPORT.md` owns the point-in-time
-candidate inventory and human-input checklist. Source-only commits remain
-separate from release publication, and dormant gates remain off.
+- [ ] Keep Stripe Connect provider-disabled until an exact isolated staging plan
+  is reviewed and separately authorized.
+- [ ] Keep Steward non-authoritative and private until transport, consent,
+  persistence, and human-comparison protocols are approved.
+- [ ] Reconcile tenant operating-model and workflow-pack pilots against current
+  authority before activation; do not infer usage or outcome from seeded data.
+- [ ] Complete hosted acceptance for Customer 360 identity, structured change-
+  request resolution, Workflow timing, run of show, Reporting intelligence,
+  portal decision recovery, rebooking/closeout, and commercial measures. Treat
+  this as proof work for existing capabilities, not reconstruction.
+- [ ] Run tenant-scoped dry runs for portal projection and legacy customer
+  identity binding. Review exact conflicts and counts before any separately
+  authorized apply.
+- [ ] Keep model-assisted intake dormant until provider choice, secret binding,
+  privacy review, hosted denial cases, and deterministic fallback are accepted.
 
-| Order | Task ID and outcome | Capability truth | Dependencies | Acceptance criteria | Current boundary |
-|---:|---|---|---|---|---|
-| 0 | `QP-OBS-018` — Product Truth Digest and drift control | Cross-cutting source/release/capability/evidence observability; no new product authority | Accepted ADR/design; deterministic source adapters; current contradiction fixtures; existing task evidence, capability, release, and canonical-doc contracts | `status:product` answers live/candidate/proof/drift/owner-decision questions; `check:product-drift` detects conflicting release identity, branch divergence, evidence gaps, and capability-gate failures; every finding cites exact sources; unavailable evidence stays `unknown`; no generated digest becomes authority | Repository implementation and advisory CI wiring are complete locally. The clean reconciled candidate resolves exact v0.15 production identity with no product-truth drift. Exact CI observation, owner comprehension review, freshness calibration, and any required-gate promotion remain human/external. Hosted/provider/production/human evidence remains independently sourced. |
-| 1 | `QP-GOV-001` — restore a truthful capability-surfacing gate | Row 32: no-orphan-capability gate | Exact clean baseline; ownership of the stale Quote History locator and six ambient/workflow path declarations | `npm run check:capability-surfaces` passes from the validated baseline; every changed authority path maps to a real role-safe surface/test or a valid headless classification; no manifest entry claims UI, deployment, provider, or human proof it does not have | Complete locally: the clean committed candidate passes the capability-surfacing gate; remote CI observation remains `human/external` |
-| 2 | `QP-PERF-002` — close temporary bundle exceptions | Rows 29, 60, 62, 64 and the performance guardrail | Clean-main/candidate measurements; exact graph profile; accepted optimization or reviewed baseline recalibration | Compatibility and Ambient graphs pass the standard budget without a no-headroom exception; build, browser/CWV, and docs gates pass; no route, accessibility, or authority regression | The verification repair preserves 445 bytes of compatibility headroom. Its isolated route adds 2,262 aggregate bytes to the Ambient graph, now recorded exactly in the existing named exception without changing the largest-chunk ceiling. Full exception retirement remains a reviewed graph-optimization or baseline decision. |
-| 3 | `QP-CONFIG-003` — remove remaining `functions.config()` compatibility | Runtime/deployment capabilities using Firebase Functions | Source migration complete; exact coordinated backend release; runtime readback; March 2027 deadline | No production runtime depends on `functions.config()`; local fallback and secret boundaries remain intact; function tests, env materialization, build, emulator lanes, and deployment docs pass | Source candidate complete; deployment/runtime proof is `human/external` |
-| 4 | `QP-ACCEPT-004` — exact authenticated staff/operator acceptance | Rows 5, 8, 18, 27, 29–30, 34–45, 47–60, 63, 68–72 as applicable to the candidate | Immutable exact SHA and flag profile; real QuotePilot staff session; canonical tenant data; rollback artifact | Named route/task matrix proves create, save, exact readback/version, export, Workflow, Event Workspace, Customer 360, Messaging, BEO, Decision Debt, payments, staffing boundaries, and role denials; every result is tied to the SHA and evidence level | Machine contract prepared as `operator.authenticated-workspace-journey`; execution remains `human/external` |
-| 5 | `QP-TENANT-005` — disposable tenant lifecycle and isolation proof | Rows 1, 18, 25–26, 30 | Exact provisioning candidate; verified disposable owner; cleanup/tombstone plan; hosted auth | Plan/create/activate/defaults/starter review/pricing/quote/portal/cross-tenant denial/cleanup all produce exact receipts; no foreign-tenant or expired-token disclosure; cleanup is verified | `human/external` production coordination |
-| 6 | `QP-BUYER-006` — bounded buyer-access test window | Row 26 plus quote/payment isolation in row 8 | Dedicated restricted Stripe test key; exact webhook events; existing Turnstile verification; rollback/close plan | Test-mode invoice creation, idempotency, rate limits, signed lifecycle, paid preparation, invitation/activation, eligible repair, negative paths, and quote-rail isolation pass; gate is closed afterward unless launch is separately approved | `human/external` credential and provider dashboard actions |
-| 7 | `QP-DELIVERY-007` — quote-email provider-to-recipient evidence chain | Row 8 delivery authority and row 63 Operations Audit | Approved sender; exact Resend webhook/signing configuration; controlled recipient; current valid portal issuance | One exact attempt keeps provider acceptance, delivered/bounced reconciliation, portal validity, and recipient inbox/view as separate receipts; invalid/expired issuance fails closed or requires rotation | `human/external` provider and recipient evidence |
-| 8 | `QP-AUTO-008` — Revenue Autopilot preparation-only promotion | Rows 37 and 46 | Authenticated admin acceptance; `QP-DELIVERY-007` webhook evidence; named rollback; sends remain off | Policy, controls, materialization, operations projection, and unread-reply acknowledgement pass hosted checks; preparation gate is on, send gate is off, and no recovered-revenue claim is made | `human/external` hosted/provider gate promotion |
-| 9 | `QP-STAFF-009` — one-tenant authoritative staffing qualification | Row 59 and Commercial Change/Workflow dependencies | Repaired tenant settings precondition; exact all-scope deployment; admin/sales/customer/cross-tenant role matrix; rollback | Profile, availability, assignment, reconciliation, conflict, immutable receipts, responsive accessibility, and denials pass; exactly one approved tenant is enabled; acknowledgement is not attendance/payroll/readiness | In progress with owner authorization: positive staging-profile source is implemented and focused tests pass; WIF/IAM, staging deployment/UAT, canonical tenant provisioning, production activation, rollback, and named human acceptance remain unproven |
-| 10 | `QP-SMS-010` — one governed owner-SMS provider path | Row 67 | Choose Pingram or Twilio; credentials in Secret Manager; sender/A2P/consent; exact origin/generation; signed webhook; rollback | One controlled owner-only UAT separates request acceptance, indeterminate dispatch, carrier delivery/failure, opt-out hold, and recipient receipt; STOP/unsubscribe blocks all providers; no automatic retry of claimed/indeterminate sends | `human/external` compliance, provider, and recipient evidence |
-| 11 | `QP-CONNECT-011` — isolated Stripe Connect Sandbox foundation | Rows 65–66 | Reviewed cloud plan/digest; separate state; exact database/IAM/egress identities; authority publisher; App Check observation then enforcement | Applied resources match the secret-free manifest; edge cannot read the Stripe key; worker-only provider access, replay/quarantine, authority drift, and withheld-link paths pass; only then may exports be considered; Hosted Sandbox UAT is the stopping gate | `human/external` cloud apply and provider UAT; exports remain empty |
-| 12 | `QP-AMBIENT-012` — qualify and promote the canonical Quote Workspace and Ambient candidate | Rows 60, 64 and related source/local rows 61, 68–72 | `QP-GOV-001`; `QP-PERF-002`; immutable candidate; exact flag/rollback profile; authenticated roles | The canonical `/app/quotes/:quoteId` dinner-table workspace and all 50 material Ambient items satisfy their complete acceptance contracts at 390/768/1440, keyboard/AT boundaries, connected data, first-minute comprehension, role denial, administration fallback, rollback, and explicit promotion approval; AIUI-48 deletion waits for parity and accepted release | Owner approved the canonical visual direction and source promotion is implemented with compatibility aliases and preserved governed administration arrivals. Exact-candidate CI, hosted tenant-250 responsive review, and owner acceptance remain; exception retirement remains under `QP-PERF-002` |
-| 13 | `QP-PACKAGE-013` — Package Workspace hosted acceptance | Row 70 | Immutable candidate; admin and sales fixtures; catalog revision-conflict fixture; rollback | Hosted admin access, sales denial/availability, production-data review, revision recovery, responsive accessibility, and moderated operator acceptance pass without changing pricing, selected-at-zero, managed-menu, or missing-cost behavior | `human/external`; local proof is already complete |
-| 14 | `QP-STEWARD-014` — consenting silent Difficult Question Desk pilot | Row 71 | Reviewed private runtime/provider transport; canonical context reads; private persistence; consent; kill/rollback; billing/privacy review | No model output is user-visible; exact packet validation and tenant/revision fences hold; 100 actual human packet reviews are recorded separately from the pinned corpus; promotion thresholds cannot self-authorize | Secret-scan preflight blocker repaired without weakening policy; Phase 1 private runtime and 100 reviews remain `human/external`; later product phases remain backlog |
-| 15 | `QP-ATTEND-015` — attendance persistence and confirmation bridge | Row 60 attendance source note; attendance ADR Slice B onward | Direct terminology/channel research; accepted migration and authority plan; unchanged exact `event.guests`; existing Commercial Change receipts | Versioned planning/confirmation evidence persists with source/actor/time; legacy reads remain valid; differing confirmed counts remain proposed until exact-revision apply; BEO/closeout freshness stays separate; portal, rules, role, tenant, and browser acceptance pass | `blocked on product/human decisions`; read-only Slice A/C is complete locally |
-| 16 | `QP-PWA-016` — qualify the installable safe recovery shell | Row 62 | Repository manifest, cache namespace, asset allowlist, navigation fallback, responsive recovery, and production-preview proof complete; exact deployment and supported test devices remain | On the exact hosted candidate, supported desktop/mobile browsers install and relaunch; offline navigation reaches the truthful recovery page; reconnect succeeds; no authenticated data or trusted mutation is represented as offline-capable | Repository slice complete; exact deployment, hosted install/relaunch, and physical-device acceptance are `human/external` |
-| 17 | `QP-AUDIT-017` — complete optional cross-surface security/audit depth | Row 21 plus row 63 Operations Audit | Bounded taxonomy, retention/privacy boundary, server receipt authority, tenant/role visibility, and legacy-event compatibility are implemented locally | Final quote approvals and organization role changes have server-owned, tenant-scoped, role-stamped immutable receipt projections; Operations Audit exposes only bounded safe fields; replay, failed execution, foreign-tenant rejection, retention, truncation, and export/clear policy tests pass | Repository slice complete; deployment, authenticated hosted role/tenant denial, production-data review, and human acceptance are `human/external`; provider-derived outcomes remain separately evidenced |
-| 18 | `QP-TOM-020` — Tenant Operating Model packs and pilot | Event Operating Spine, Configuration Studio and four bounded domain packs are implemented locally; real pilot and release evidence remain open | Accepted Phase 0 ADR and fixed workflow vocabulary; owner-approved policy allowlist, role matrix, migration rule, founder-pilot boundary, and offline decision; fresh sibling worktree | Every instance pins an immutable tenant workflow version and exact subject revisions; existing domain authorities remain authoritative; at least three bounded workflow packs reuse the execution contract; one tenant pilot proves role/tenant denial, replay, rollback, operator comprehension, and separately labeled evidence | Source through Phase 4 is implemented in the isolated worktree; see [current status](PROJECT_STATUS.md#tenant-operating-model-local-development) and [program plan](docs/plans/20260905-tenant-operating-model.md). Remaining: real tenant migration decisions, bounded pilot, commit/release qualification and separately evidenced hosted/human outcomes. |
+## P1 — Release, performance, and recovery infrastructure
 
-`QP-OBS-018` is the implemented source/local cross-cutting control before
-additional provider promotion work. Its deterministic commands and advisory CI
-job now exist. Observe the first exact CI digest, review owner comprehension and
-false positives, calibrate freshness, and require a separate owner decision
-before enforcement.
+- [ ] Retire the remaining `functions.config()` compatibility only through an
+  exact coordinated backend release and runtime readback before its platform
+  deadline.
+- [ ] Complete workload-identity deployment and tenant-operator proof before
+  retiring any legacy deployment credential; never replace it with a service-
+  account key.
+- [ ] Close temporary bundle exceptions through reviewed graph optimization or
+  clean-main baseline recalibration, then rerun both graph profiles, browser,
+  and Core Web Vitals gates.
+- [ ] Verify the installable recovery shell on supported hosted desktop/mobile
+  browsers. Offline recovery must never present cached authenticated data or a
+  trusted mutation as current.
+- [ ] Complete hosted Package Workspace and Import Workbench role, revision-
+  conflict, responsive, recovery, and human acceptance.
 
-The repository-preparable slices for `QP-GOV-001`, `QP-CONFIG-003`,
-`QP-ACCEPT-004`, `QP-AMBIENT-012`, and the current `QP-PERF-002` headroom
-repair are complete. Tasks `QP-ACCEPT-004` through `QP-CONNECT-011` may proceed
-only when their named external evidence is available. Full `QP-PERF-002`
-exception retirement requires reviewed graph ownership or baseline policy;
-Ambient promotion, Package acceptance, Steward pilot execution, and attendance
-authority likewise remain behind their explicit human/external decisions.
-`QP-AUDIT-017` and `QP-PWA-016` are repository-complete and retain only their
-exact deployment, hosted-role/data, device, or human gates. The explicitly
-partial matrix rows now remain `QP-CONNECT-011` and `QP-STEWARD-014`, with
-their higher-risk infrastructure, provider, privacy, and human gates.
-The `QP-CONNECT-011` dormant repository foundation is also complete: its three
-source checks pass and the read-only live staging inventory preflight is
-`READY`. It remains partial because the saved-plan review/authorization,
-Terraform apply, identity/manifest reconciliation, App Check observation and
-promotion, restricted provider credential, exports, and hosted Sandbox UAT are
-human/external work. Do not manufacture another source slice across that gate.
-The `QP-STEWARD-014` deploy-dormant compiler, consent/evaluation contract,
-unavailable-state UI, security fixtures, and manual fallback are likewise
-repository-complete before the private-runtime gate. Eight focused files pass
-84 tests, the secret scan passes, and three responsive browser checks pass.
-Provider/credential and privacy/billing review, canonical context reads,
-private persistence, consenting silent execution, 100 actual human reviews,
-hosted rules evidence, deployment, and acceptance are human/external. Do not
-expose model output or create a runtime adapter merely to remove `Partial`.
-The remaining sections retain the detailed task contracts; this table does not
-replace their safety conditions.
+## P2 — Integrations and workspace cohesion
 
-## P0 - Production Acceptance
+- [ ] Normalize route frames, mobile editorial type, search behavior, evidence
+  disclosures, selected-object relationships, and truthful imagery using the
+  existing staff-app cohesion acceptance matrix.
+- [ ] Add CRM or webhook bridges only with tenant isolation, idempotency, audit,
+  and provider acceptance. Add accounting export only against reconciled
+  invoice/payment evidence, never operational quote measures as revenue.
+- [ ] Specify two-way SMS only after sender/A2P, opt-out, inbound webhook,
+  thread authority, privacy, and retention policy are settled.
+- [ ] Move additional pricing and escalation behavior into reviewed tenant
+  policy and add finer approval/reporting roles only with exact migration and
+  denial evidence.
 
-- Complete `QP-AUTH-019`: qualify and deploy the QuotePilot-owned staging
-  `/app/auth/action` handler, bind only the staging Firebase verification
-  callback to that exact hosted route, request a fresh message from the signed-in
-  `flightcontrol@quietpilot.us` account, and record provider verification plus
-  owner acceptance before tenant membership is bound. Never mark the Auth user
-  verified administratively, expose the one-time code, reuse an old message, or
-  change production Auth configuration as part of the staging repair.
+## P2 — Commercial proof
 
-- Through the separately authorized staging secret process, create and enable
-  non-provider staging versions for all eleven candidate-required secret names
-  recorded in `docs/RELEASE_V0_16_PROMOTION_REPORT.md` without exposing their
-  values. Re-run the governed Firebase candidate deployment for the latest
-  clean, published, exact-CI SHA. After its Functions readback proves every
-  safe-off gate, run the governed Vercel preview deployment. Do not bypass the
-  prerequisite checker or use production/provider credentials.
-- Repair the tenant-data precondition for organization `250` before retrying
-  operational staffing activation. Run `32425529671` verified the exact
-  successful `v0.14.0` Firebase all-scope receipt, then stopped before mutation
-  because `organizations/250/settings/config` was missing. Use a separately
-  reviewed tenant-scoped migration/provisioning dry run and apply path; do not
-  create a sparse settings document or bypass the protected activation
-  workflow. Then rerun activation and retain the verified field readback.
-- Run an authenticated production staff pass with a real QuotePilot user:
-  create and finish a quote, save, read back the exact revision, reopen from
-  Quotes, export PDF, and verify the Event Workspace, Customer 360, Workflow,
-  Schedule, Reporting, Messaging Station, Kitchen BEO, Decision Debt, and
-  Operations Audit role boundaries. Include the deployed NOW, Event Room,
-  guided-selling, CREATE, staged-change, Pilot command, margin, and structured
-  change-request-record surfaces under their production flag combination.
-- Run a disposable second-tenant lifecycle: platform-admin plan/create,
-  verified owner invitation and activation, neutral defaults, starter-pack
-  review, pricing confirmation, trusted quote create/readback/version,
-  signed-out portal decision, cross-tenant denial, and exact cleanup/tombstone.
-- Run the deployed cross-tenant and portal-path matrix: active exact issuance
-  succeeds; expired, deleted, legacy-without-delivery-evidence, mismatched, and
-  foreign-tenant paths fail closed.
-- Capture one exact quote-email acceptance sequence using the approved Resend
-  sender. Keep provider acceptance, delivered/bounced webhook evidence, and
-  recipient inbox/view evidence as separate receipts.
-- Exercise the staff Kitchen BEO on hosted canonical data: generate, download,
-  stale after a commercial revision, regenerate, and verify immutable receipt
-  history. Do not describe this as kitchen review or event readiness.
-
-## P0 - Buyer and Payments Safety
-
-- Replace `BUYER_ACCESS_STRIPE_SECRET_KEY` with a dedicated test-mode restricted
-  key. The currently bound credential identifies as live mode and cannot be
-  used by the test-only buyer contract.
-- In Stripe test mode, verify the exact
-  `buyerAccessStripeWebhook` endpoint and the four allowed invoice events:
-  `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, and
-  `invoice.marked_uncollectible`.
-- Verify the existing Turnstile widget on both approved production hostnames;
-  reuse the current widget and secret rather than creating another integration.
-- Open buyer access only for a bounded acceptance window after the key and
-  webhook checks pass. Cover true Hosted Invoice Page creation, idempotency,
-  rate limits, signed lifecycle events, paid workspace preparation, pending
-  invitation, exact-email verification/activation, repair of eligible terminal
-  unpaid test invoices, negative paths, and isolation from the quote-payment
-  rail. Close the server gate after acceptance unless launch is separately
-  approved.
-- Run coordinated hosted acceptance for deposit and final-balance rails,
-  including signed webhook replay, asynchronous success/failure/expiry,
-  reconciliation, late settlement, cross-rail isolation, customer-safe
-  projection, and negative paths. Keep provider evidence distinct from local
-  emulator coverage.
-- Continue the separately gated Stripe Connect program from its source-only
-  owner-authority and deploy-empty `functions-connect` foundations. The
-  owner/admin Team access surface, password/Google recent reauthentication,
-  exact-role mutation receipts, claim synchronization, and App Check
-  monitor-then-enforce source contracts are complete locally. The isolated
-  staging Terraform/database/IAM/identity/network/egress/OIDC source and
-  credential-free validation workflow are also complete locally. Next review a
-  cloud-authenticated saved staging plan, separately authorize its exact digest,
-  bootstrap separate state, apply it, deploy deny-all named-database rules, and
-  reconcile the real resource IDs into the secret-free manifest. Then register
-  the isolated staging reCAPTCHA Enterprise application/site key, observe App
-  Check monitoring without enforcement, and promote enforcement plus consumed
-  limited-use tokens only after hosted negative/replay evidence.
-  The strict redacted status, receipt-bound current-role projection, exact
-  named-database repository, fail-closed reviewed rate windows, immutable edge
-  commands with the sole `qpcmd` provider identity, leased-worker terminal
-  receipts, exact quarantine replay, private post-provider identity/occurrence
-  retention, pre- and post-provider authority checks, `provider_withheld`
-  recovery, an owner-bound replay-stable handoff, and the Accounts v2 Sandbox
-  adapter with exact platform/mode preflight are now source-complete but
-  deliberately uninstantiated and unexported. The next runtime review must bind
-  a trusted authority publisher, prove that the edge identity cannot access the
-  Stripe key, prove worker-only provider access, private quarantine/dead-letter
-  operations, and no Account Link disclosure after authority drift, and enable
-  exact App Check enforcement/limited-use token consumption. Only after those
-  infrastructure/App Check evidence gates may the applied database/platform/
-  resource IDs be reconciled into the staging manifest and the callable/HTTP
-  exports be considered. Do not expose a partial browser surface or return an
-  Account Link to application JavaScript.
-  The exact consumed-invite owner backfill is source-complete but still needs
-  governed production dry-run review and separately confirmed apply evidence;
-  zero, multiple, unverified, or conflicting candidates remain
-  `ownership_required`.
-  After the infrastructure evidence gate, bind and validate Sandbox-only
-  Accounts v2 merchant onboarding with direct charges, full Stripe Dashboard
-  access, Stripe fee and negative-balance responsibility, zero platform
-  application fee, and strict credential/webhook/ledger isolation from deposit,
-  final-balance, and buyer-access rails. Hosted Sandbox UAT is the stopping
-  gate; live-mode account creation, charges, payouts, refunds, disputes,
-  tax/accounting promotion, and production enablement require separate evidence
-  and approval.
-- Sequence the next Connect and commercial-access rollout as four governed
-  slices, in order. Slice 1: ship one owner-first Sandbox onboarding path from
-  the landing page and staff workspace with the existing recent-auth, same-tab
-  handoff, recovery-first return, and capability-status contracts. Keep the
-  recommendation fixed to direct charges, full Stripe Dashboard access, Stripe
-  fee collection, and Stripe negative-balance liability until a later reviewed
-  commercial change says otherwise.
-- Slice 2: separate `connected account health` from `payment routing active`.
-  A connected Sandbox account may exist, refresh, and recover without changing
-  buyer-access, deposit, or final-balance behavior. Add explicit manual
-  activation, readiness, rollback, and audit-receipt states before any payment
-  rail may route to a connected account.
-- Slice 3: build one canonical commercial control plane for buyer-access
-  receipts, discounts, referrals, post-purchase access, and recovery. Signed
-  provider events and server-owned receipts remain the only authority for
-  payment, entitlement, and email/reset outcomes; browser returns, URLs, and
-  polling may not activate access or imply delivery.
-- Slice 4: only after the control plane exists, expose tenant-authored tier,
-  circumstance-discount, and referral configuration. Resolve the launch policy
-  for one-time versus subscription access, upgrade/downgrade, refund/dispute
-  handling, tax treatment, anti-abuse limits, and receipt template ownership
-  before enabling any public commercial variation.
-
-## P0 - Runtime-Gate Promotion
-
-- Qualify authoritative operational staffing as one coordinated
-  frontend/Functions/rules release. Keep `VITE_OPERATIONAL_STAFFING_ENABLED`
-  and `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` off until exact hosted admin
-  profile/availability, admin-and-sales assignment/reconciliation, customer and
-  cross-tenant denial, responsive accessibility, conflict, immutable receipt,
-  and rollback checks pass. Promote only one explicitly approved tenant setting
-  `operationalStaffingAuthorityEnabled=true`; never bulk-enable tenants or infer
-  acknowledgement, attendance, payroll, payment, booking, BEO, or readiness.
-- Complete authenticated hosted admin acceptance for Revenue Autopilot policy,
-  customer controls, materialization, operations projection, and unread-reply
-  acknowledgement. Then promote `REVENUE_AUTOPILOT_ENABLED=true` with
-  `REVENUE_AUTOPILOT_SENDS_ENABLED=false` as a preparation-only release.
-- Verify the exact Revenue Autopilot Resend webhook registration, signing
-  secret, and delivery/bounce/complaint event set in the provider dashboard.
-  Promote outbound sends only in a later release with controlled recipient
-  evidence and an immediate stop/rollback path.
-- Complete hosted sales/admin/reconciliation acceptance for Commercial Change
-  simulation, approval, exact apply outcome, dependency reconciliation,
-  Kitchen BEO freshness, and Decision Debt. Enable the global enforcement gate
-  only with an explicitly named tenant and rollback record; never bulk-enable
-  all tenants.
-- Exact `v0.15.0` selected `NOTIFICATIONS_SMS_PROVIDER=pingram` with generation
-  `pingram-2026-08-14-a`, but the owner-SMS rail remains operationally off and
-  unaccepted. Do not run another provider attempt or enable automatic alerts
-  while qualifying the one selected provider. Create `PINGRAM_API_KEY`,
-  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` only in Firebase
-  Secret Manager; choose one exact approved US/CA/EU origin and a new lowercase
-  `PINGRAM_CONFIGURATION_GENERATION`; verify the
-  server-owned E.164 owner destination, explicit consent, sender/A2P state, and
-  exact signed-webhook registration; then use the governed release path for one
-  controlled owner-only UAT. Preserve request acceptance, signed
-  delivery/failure, and recipient receipt as separate evidence. Require a
-  signed delivered diagnostic before automatic alerts, verify that signed
-  unsubscribe/STOP creates an indefinite v1 hold on all owner SMS sends across
-  provider selection with no browser or callable clear path, and never
-  automatically resend a claimed or indeterminate attempt.
-- If Twilio remains the selected alternative, complete its Messaging Service
-  US A2P registration and approval before deploying
-  `NOTIFICATIONS_SMS_PROVIDER=twilio`. Do not configure both providers, fall
-  back between them, or retry known carrier-rejected traffic. Neither path adds
-  customer SMS or two-way messaging; signed inbound callbacks are quarantined
-  and opt-out signals fail closed.
-
-## P0 - Release and Security Controls
-
-- Review and merge narrow security PR #112 at exact
-  `204f0d2eefd72a8f2d41a6fbb4e7ec6728bd454c` to resolve default-branch
-  Dependabot alert #139 while v0.16 remains held. Its eight-job CI Quality run
-  `33246642372` and Stripe source-only runs `33246642371`/`33246642373` pass;
-  the alert remains open until the remediation reaches `main`. Do not dismiss
-  it merely because either candidate branch audits clean.
-- Provision and independently review the production Google Cloud workload
-  identity pool/provider, least-privilege Firebase deploy service account, and
-  repository variables `FIREBASE_WORKLOAD_IDENTITY_PROVIDER`,
-  `FIREBASE_DEPLOY_SERVICE_ACCOUNT`, and
-  `FIREBASE_TENANT_OPERATOR_SERVICE_ACCOUNT`; then prove one governed deploy
-  and one authorized tenant-gate rollback/readback before revoking the legacy
-  `FIREBASE_TOKEN` secret. Repository source now accepts only ephemeral WIF
-  credentials and never accepts a service-account key.
-- Add an independently enforceable review/UAT control when repository ownership
-  permits it. Preserve the current solo-operator allowlist until that stronger
-  control exists; do not imply independent review in the meantime. Current
-  readback shows `RELEASE_APPROVAL_MODE=solo-operator`, one attester/operator id,
-  and zero required PR approvals.
-- Keep Vercel Git deployment disabled and both provider deployments behind the
-  exact tagged-main, exact-CI, rollback-receipt, typed-confirmation workflows.
-- Exercise the locked candidate provider clients after external prerequisites
-  exist. Firebase CLI reads/mutation use the checksum-verified official 15.24.0
-  binary; Firestore Rules readback uses exact `google-auth-library` 10.5.0 ADC;
-  Vercel preview uses Build Output API v3 plus narrow REST calls. Acceptance is
-  an exact Firebase safe-off receipt proving Hosting/Functions/rules, followed
-  by an exact Vercel preview receipt proving immutable source and READY state;
-  neither receipt may weaken the separate human/UAT gates.
-- Rehearse an immutable staging/UAT pass and rejected invalid-evidence deploy
-  without mutating production.
-- Deploy the environment-only Functions configuration candidate through an
-  exact coordinated backend release and verify runtime readback before March
-  2027. Source no longer reads `functions.config()`; deployment remains open.
-
-## P1 - Tenant Operating Model Program
-
-- Complete the customer-facing first-value pass recorded in the
-  [review log](docs/acceptance/tenant-operating-model.md#customer-facing-first-use-review):
-  business-language presentation, discoverable next actions and visible durable
-  outcomes before advanced configuration. Include eligible final-count requests
-  in the quote's existing next-action presentation; reduce the long mobile
-  inspector and fix the observed Studio header overlap. Route the suggested closeout action
-  directly to its exact event review and focus the actionable control. Separate fixture-only onboarding and
-  retired-state friction from product defects. Validate staff and end-customer
-  journeys before claiming immediate customer value.
-- Complete the owner's whole-app local rehearsal from the
-  [run instructions](README.md#local-tenant-workflow-rehearsal) and record
-  comprehension, friction and an explicit continue/revise/pause decision.
-- Select the real tenant, explicit event cohort and operator for the
-  [pilot acceptance matrix](docs/acceptance/tenant-operating-model.md). Record
-  connectivity needs and baseline effort where observable.
-- Review tenant-scoped migration inventory and initialize only approved exact
-  current sources. Retain unknown historical evidence without synthesis.
-- Complete moderated role/tenant, recovery, rollback and comprehension evidence,
-  then record an explicit continue/revise/pause decision.
-- Use the locally qualified committed candidate for any separately authorized
-  publication, deployment and tenant activation. Hosted behavior, provider outcomes, human
-  acceptance, adoption and customer impact remain distinct proof gates.
-
-## P1 - Ambient Intelligence Interface Program
-
-- Execute the 50-item [Ambient Intelligence work plan](docs/AMBIENT_INTELLIGENCE_WORK_PLAN.md)
-  under its AIUI-00 Experience Constitution, beginning with Pilot Slice Alpha
-  as the vertical proof before broader replacement. The production workflow
-  source now enables the Ambient presentation and the protected CI lane enforces
-  its zero-dead-click Alpha contract; do not describe either source binding as a
-  deployment or acceptance receipt. Keep operational staffing and every
-  independent server/provider authority gate default-off until its exact
-  compatibility, role, interaction, accessibility, rollback, and approval gates
-  pass; source completion, deployment, provider evidence, production-data
-  acceptance, and human acceptance remain separate milestones.
-- Qualify all 50 materially implemented AIUI items against their complete
-  acceptance contracts. AIUI-50 still needs preview, authenticated staff and
-  portal acceptance, first-minute/timing review, explicit promotion approval,
-  and an exact rollback artifact. AIUI-48 permits later reviewed deletion only
-  after parity, rollback, accepted-release, and promotion evidence all pass;
-  until then the legacy stepper, Command Center, table disclosure, older search,
-  and presentation flags remain intentional compatibility assets.
-- The operational staffing live-test release now includes a protected,
-  reversible one-tenant activation workflow. Dispatch it only after the exact
-  Firebase all-scope deployment succeeds, retain its readback evidence, and do
-  not interpret activation as provider delivery or staff acceptance.
-
-## P1 - QuotePilot Steward
-
-- Finish the read-only Difficult Question Desk shadow slice. The deploy-dormant
-  fixed compiler, minimized typed context, zero-tool/storage/background provider
-  contract, exact claim inventory, whole-output validation, hidden evaluation
-  packet, pseudonymous audit, manual provider-outage path, current owner/admin
-  and participant consent, 100-case pinned corpus, digest-only human-comparison
-  receipts, and non-authoritative evidence thresholds now pass 30 focused cases.
-  The authorized Quote Workspace now exposes the full read-only status matrix
-  with its live state fixed to provider-unavailable, Steward handoff disabled,
-  and only the ordinary manual-message path enabled. Next bind the contracts to
-  a reviewed private runtime, run the consenting silent pilot, and complete 100
-  actual human packet reviews before any model output is visible or staging is
-  enabled. The model gets no write, messaging, payment, browsing, or resource-
-  discovery authority.
-- Keep every authoritative price, margin, staffing, production, catalog,
-  revision, and entitlement value outside model authority. Steward may prepare,
-  compare, explain, and stage an unsaved review; existing trusted paths alone
-  may import, save, approve, publish, send, book, charge, or reconcile.
-- Deliver the expanded Setup and Configuration Studio through existing guarded
-  surfaces: menu import preview, versioned workflow-policy editors, and bounded
-  non-secret Integration Ops/Stripe Connect readiness. Steward may prepare a
-  typed diff or checklist, but it must never receive credentials, create a
-  provider object, change routing, enable a gate, deploy, or apply settings.
-- Add Margin Advisor only on complete current recorded-cost evidence from the
-  existing deterministic margin/pricing/Commercial Change adapters. Missing
-  costs remain unavailable; monitoring is deterministic; all scenarios stay in
-  the existing review-before-draft and trusted-save path.
-- Add Client Advisor with exact tenant/client binding, canonical accepted/booked
-  activity, explicit preferences, and operator-reviewed memory facts. Require
-  source, freshness, review, dispute, correction, expiry, deletion, and tenant-
-  cleanup contracts; prohibit sensitive/protected inference, sentiment,
-  vulnerability, perceived wealth, willingness-to-pay, approximate identity,
-  hidden profiles, and cross-tenant learning.
-- Design the paid add-on on a separate Stripe Billing rail. Do not reuse quote
-  deposits, final balances, buyer access, Connect, their customer identities,
-  products, keys, webhooks, collections, or state machines. MVP has a hard
-  included allowance and no automatic overage.
-- Treat provider/project/model/data controls, retention, DPA/privacy terms,
-  Stripe test evidence, hosted role/tenant denial, production-data acceptance,
-  human review, and promotion approval as separate gates. The Feature Matrix
-  may record the private unexported foundation as security evidence, but do not
-  present Steward in the User Manual or as a user capability until a
-  discoverable role-safe surface and its executable state evidence ship
-  together.
-
-## P1 - Workspace Design Follow-ups
-
-Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
-
-- Run the next acceptance and governance pass for the materially implemented
-  QuotePilot Package Workspace in `Library -> Packages`: authenticated hosted
-  admin verification, sales-role denial/availability verification, production-
-  data review, rollback evidence, and moderated operator acceptance. Local
-  390/768/1440 responsive, Axe, overflow, target-size, staged-selection,
-  activation, dependency-review, dirty-switch, and revert proof is complete.
-  Preserve per-person pricing, selected-at-$0 inclusion behavior, catalog
-  revision fencing, managed-menu mutation separation, and missing-cost fail-
-  closed behavior.
-- Keep lifecycle persistence, event-type eligibility, minimums, staffing rules,
-  allowances/substitutions, customer preview, and package comparison behind
-  their separate Phase 5/6 approval gates. Do not let a menu-availability filter
-  imply package eligibility or Quote Builder authority.
-- Validate the materially implemented Ambient Library and first-class Event
-  Templates surfaces on the immutable candidate with authenticated admin and
-  sales roles, revision-conflict recovery, responsive layout, and rollback
-  evidence before describing AIUI-20 as complete.
-- Continue reducing the production-equivalent Ambient aggregate from the
-  exact-candidate 3,928,552-byte CI-equivalent local measurement toward the
-  standard clean-main budget. Exact-SHA CI run `33239048234` measured 3,928,479
-  aggregate bytes and a 388,269-byte largest chunk; the local build measured a
-  388,303-byte largest chunk. CI independently enforces detected compatibility
-  and Ambient graph profiles; the temporary 3,928,552 Ambient aggregate ceiling
-  is pinned to the larger literal measurement, retaining only the observed
-  73-byte environment difference and no general growth headroom.
-  Close the exception through optimization or an explicit reviewed clean-main
-  recalibration before AIUI-48 retirement or Ambient production promotion.
-- Add inline editing on the event workspace quote page: editable fields with
-  simulate-pricing round trips and Commercial Change Authority integration for
-  committed quotes; saving stays intentional and versioned.
-- Continue the plain-language terminology pass on remaining expert labels
-  (Decision Debt, Revenue Autopilot, attention projections).
-- Execute the P1 staff-app cohesion contracts in recommendations 15–18 and
-  20–23 of the
-  [staff-app UI cohesion audit](docs/design/staff-app-ui-cohesion-audit.md):
-  close the cross-route task loop, preserve exact return context, unify durable
-  action feedback, keep commercial evidence rails independent, establish one
-  object signature and date/time grammar, label state domains, and use one
-  Calm Four read/recovery contract. Each recommendation is one bounded commit
-  unless the task planner proves an inseparable shared contract.
-- Apply the shared
-  [staff-app cohesion acceptance matrix](docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md)
-  to every slice. Preserve zero-write presentation behavior, exact tenant/role
-  gates, duplicate-name and contradictory-state fixtures, 390/768/1440
-  geometry, keyboard/focus behavior, and separate local, hosted,
-  assistive-technology, provider, and human evidence.
-
-## P1 - Data Operations
-
-- Run tenant-scoped dry runs for portal projection and legacy customer identity/
-  normalized-email claim binding. Review conflicts and counts before requesting
-  separate production-apply authorization.
-- Preserve customer IDs and private email claims as server-owned. Do not add a
-  second identity, mutable customer-wide thread, or public customer account
-  until recovery, revocation, multi-organization membership, and exact-token
-  coexistence are specified.
-- Complete hosted acceptance for the deployed callable-only structured
-  change-request record and the source-built, write-once
-  `linkChangeRequestResolutionVersion` follow-up that binds a recorded
-  resolution to the later saved quote version. Keep the current freeform
-  request-changes path and ordinary save authority intact.
-
-## P1 - Customer-Flow Follow-through
-
-- Complete hosted acceptance for CWF-07/08 Workflow aging and bounded run of
-  show, CWF-09 Reporting intelligence, CWF-10 portal decision recovery, CWF-11
-  rebooking/closeout, CWF-13 commercial measures, CWF-15 proposal completeness,
-  and the customer-centered route shell. Their runtime is deployed; remaining
-  work is authenticated/production-data/human proof, not reconstruction.
-- Make CWF-17 the next intelligence slice. Add a new deterministic conclusion
-  only where bounded canonical evidence exists; preserve explicit unavailable,
-  partial, stale, and truncation states.
-- Treat Flexibility authority as a separate CWF-18 prerequisite program. Do not
-  infer it from Decision Debt, proposal completeness, or edit history.
-- Keep CWF-19 and later intelligence dependent on the evidence contracts
-  established by CWF-17/18.
-- Continue the CWF-14 no-orphan-capability contract for every new user-relevant
-  backend/data authority: discoverable role-safe UI, canonical state markers,
-  executable state tests, Feature Matrix, User Manual, and capability manifest.
-
-## P1 - Post-Competitive Pilot Program
-
-The destination design (docs/POST_COMPETITIVE_DESIGN.md) has its source
-capabilities grouped behind eight build gates: NOW home, Event Room ring +
-decide stack + cascade receipts, guided-selling decide cards, CREATE intake
-with band pricing, the client-request panel with the structured record
-callable (plus best-effort structured change-request version linking; see
-the `structured-change-request-record` capability contract), the Pilot
-command bar, the fail-closed margin strip (plus Catalog Admin cost
-entry, a below-target commercial advisor card, a margin range in the CREATE
-intake band-pricing preview, and margin awareness in Scenario Compare and
-the change-request/command-bar impact preview; see the
-`catalog-cost-and-pricing-data-entry` capability contract), and the
-decision-room ask-about affordance in the customer portal. PR #53 merged
-the original seven-gate source to `main`, and `v0.6.0` deployed all seven
-gates to both production providers (PROJECT_STATUS.md has the exact
-CI/deployment run evidence). PR #57 then merged the post-`v0.6.0` follow-up
-source to `main` at
-`fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, now tagged and deployed as
-`v0.7.0` through governed Firebase and Vercel runs recorded in
-`PROJECT_STATUS.md`. Those receipts do not establish authenticated hosted or
-human acceptance. Remaining program work:
-
-On 2026-08-11 the owner settled this program's open decisions in one round;
-each bullet below carries its decided direction. The source completed by PR
-#57 is merged and tagged; open production, provider, hosted-role, human-
-acceptance, and explicitly deferred product work remains listed here.
-
-- Run an authenticated staff acceptance pass across the exact production
-  `v0.7.0` eight-gate combination. Public route reachability and provider
-  acceptance do not substitute for that pass.
-- Bundle-baseline recalibration: owner-approved (2026-08-11), contingent
-  on it benefiting the app — execute from a clean `main` checkout per
-  docs/PERFORMANCE_GUARDRAILS.md (regenerate baseline, delete the exception,
-  keep the 5% allowance). Until then the
-  zero-headroom exception continues to be re-measured per checkpoint.
-- Proposal decision room (design §4.7): the default-off source/local slice now
-  includes the calm content-first room, pricing section, recorded assumptions,
-  tenant terms, contextual question acknowledgement, reversible staff-marked
-  addition notes, local exact-token fallback parity, and three-width
-  accessibility/overlap proof. Remaining work is a governed connected exact-
-  token pass of the full staff mark → canonical projection → customer note →
-  staff review path, authenticated hosted review at 390/768/1440px, and human
-  acceptance. Preserve exact proposal-acceptance, pricing, payment, booking,
-  conversation, and provider boundaries. Activity counsel remains deferred by
-  owner decision (2026-08-11); revisit only with a separate privacy review.
-- Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md — decided: yes,
-  with BOTH OpenAI and Anthropic as selectable providers. The pure core
-  module is built and tested (src/lib/intentParserCore.cjs, contract
-  model-assisted-intent-parse): config gate, sanitization, strict-JSON
-  prompt, provider request builders, untrusted-output validation forcing
-  low confidence. The CREATE integration is built: functions/ runtime twin,
-  the parseIntentDraft callable (staff-only, same-org, stateless), the
-  client boundary, and the Model assist UI with full read-state evidence
-  (model-assisted-intent-parse rev 2). Remaining owner actions at enable
-  time: create INTENT_PARSER_OPENAI_KEY / INTENT_PARSER_ANTHROPIC_KEY in
-  Secret Manager, set INTENT_PARSER_ENABLED/PROVIDER on the function, and
-  have the .runWith secrets binding added; keep the src/lib and functions/
-  copies of intentParserCore.cjs in sync when either changes. Trusted
-  `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
-  provider `none` (defaults unchanged: off, deterministic lane remains the
-  availability floor), Secret Manager-bound keys, full backend capability
-  contract required. Owner action needed at enable time: create the
-  Secret Manager secrets for the chosen provider key(s); the code ships
-  dormant without them.
-- Deterministic intake reader (owner-directed strongest-deterministic
-  goal): staff counts, time ranges, party-of-N, reversed dates,
-  confirm-only relative weekdays, "noon"/"midnight" clock words (bare and
-  in a range), written-out guest counts ("eighty guests", "two hundred
-  and fifty guests"), a multi-day-mention note (never the draft date),
-  and labeled venue names ("Venue: X", "the venue is X") beyond the
-  original "at X" pattern are all built. The queued family list from the
-  prior checkpoint is now fully closed out.
-- Memory defaults (design §4.10) — decided scope for the first slice:
-  event-shape memory is built and tested (`src/lib/eventShapeMemory.js`,
-  contract `event-shape-memory`): staffing/hours by exact event type and
-  fixed guest band, median-aggregated from the tenant's own accepted/
-  booked quotes, plus any rental in a strict majority of matches shown as
-  a read-only mention. Wired into CREATE behind `VITE_PILOT_MEMORY_ENABLED`
-  (default off, deliberately not production-bound — a separate future
-  owner decision, same as the decision-room gate's initial posture);
-  applying writes only staffing/hours to the draft. Venue/client/season
-  memory stay later phases. Tenant-isolated, no cross-tenant learning,
-  honest cold start below a minimum sample of 3.
-
-## P1 - Performance and Accessibility
-
-- The compatibility build now retains 21.7 KB of headroom under the unchanged
-  temporary exception through tested function-to-arrow minification. Close the
-  exception itself only through reviewed route/chunk graph optimization or a
-  reviewed clean-main baseline recalibration; rerun both graph profiles,
-  browser, and CWV gates before removing it.
-- Continue mobile-density, wrapping, overflow, keyboard/focus, reduced-motion,
-  and screen-reader acceptance across the routed workspace.
-- Add intentional motion only where it improves state comprehension and remains
-  safe under reduced motion.
-
-## P2 - Workspace Cohesion Follow-ups
-
-- Complete recommendations 9, 10, 12, 13, 19, and 24 in the
-  [staff-app UI cohesion audit](docs/design/staff-app-ui-cohesion-audit.md):
-  normalize the four route frames, moderate mobile editorial type, unify search
-  behavior, standardize evidence disclosures, add a selected-object
-  relationship spine, and give imagery a truthful route role.
-- Do not begin a cosmetic restyle in place of these contracts. Reuse the Calm
-  Four tokens and components, and require the corresponding formidable criteria
-  in the
-  [cohesion acceptance matrix](docs/acceptance/staff-app-ui-cohesion-acceptance-matrix.md)
-  before marking a recommendation locally complete.
-
-## P2 - Integrations and Configurability
-
-- Add server-authorized CRM adapters or a reviewed webhook bridge with tenant
-  isolation, idempotency, audit, and provider acceptance.
-- Add accounting export/synchronization for invoice and payment reconciliation;
-  do not treat operational quote measures as accounting revenue.
-- Specify two-way SMS only after A2P, opt-out, inbound webhook, thread authority,
-  and retention policies close.
-- Move additional pricing and escalation behavior into reviewed tenant policy,
-  and add finer role controls for approvals and reporting visibility.
+- [ ] Record direct buyer validation, paying customers, recurring production
+  usage, revenue, retention, and measurable outcomes. Until receipts exist,
+  leave `USED` and `COMMERCIALLY_PROVEN` unclaimed.

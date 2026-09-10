@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "lastReconciled": "2026-09-03",
-  "reconciliationHead": "ad3517b39109b91dd735ee3700e8c79a4e2ca956",
+  "lastReconciled": "2026-09-10",
+  "reconciliationHead": "961e688bb3d651862161599e48264b890a98e8e2",
   "project": {
     "id": "quote-pilot",
     "name": "QuotePilot by MBMApps",
@@ -10,7 +10,7 @@
     "archetype": "commercial_saas",
     "primaryActors": ["catering owner", "administrator", "sales operator", "event operator", "customer"],
     "economicBuyer": "catering business owner or operating administrator",
-    "stage": "v0.16.5 deployed to Firebase Functions and the Vercel production edge with incomplete production acceptance"
+    "stage": "split production evidence: v0.16.6 public Vercel frontend, v0.18.1 Firebase Functions, v0.16.3 Firebase Hosting fallback, and incomplete authenticated acceptance"
   },
   "canonicalSources": {
     "capabilities": "docs/FEATURE_MATRIX.md",
@@ -94,11 +94,26 @@
       "description": "Tenant-scoped staffing profiles, plans, assignments, invitations, and evidence-separated acknowledgements.",
       "lifecycle_state": "DEPLOYED",
       "confidence": "HIGH",
-      "evidence": [{"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "DEPLOYED_DEFAULT_OFF", "verifiedAt": "2026-08-25", "note": "Exact v0.15.0 deployed the staffing authority; tenant 250 activation remains blocked because its required settings document is absent."}],
+      "evidence": [{"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "DEPLOYED_TENANT_ENABLED", "verifiedAt": "2026-09-09", "note": "The v0.18.1 Functions deployment retained the ragnakok-operations profile and exact mm05366-sandbox Staffing tenant gate; hosted human acceptance remains open."}],
       "dependencies": ["int-firebase", "int-resend"],
-      "blockers": ["block-tenant-250-provisioning"],
-      "last_verified": "2026-08-25",
+      "blockers": ["block-authenticated-production-acceptance"],
+      "last_verified": "2026-09-09",
       "owner_or_authority": "operational staffing Firebase Functions"
+    },
+    {
+      "id": "cap-ingredient-inventory",
+      "name": "Ingredient Inventory and menu costing",
+      "description": "Tenant-scoped ingredient stock, recorded purchase cost, receipts, allocations, consumption, versioned recipes, and bounded menu/event projections.",
+      "lifecycle_state": "DEPLOYED",
+      "confidence": "MEDIUM",
+      "evidence": [
+        {"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "FIREBASE_FUNCTIONS_DEPLOYED", "verifiedAt": "2026-09-09", "note": "Exact v0.18.1 deployed the monitored Inventory callables and ragnakok-operations tenant profile."},
+        {"type": "provider_readback", "path": "PROJECT_STATUS.md", "status": "SYNTHETIC_POPULATION_VERIFIED", "verifiedAt": "2026-09-10", "note": "Exact staging and production readbacks verified the synthetic founder Inventory and menu-cost counts and revisions; physical stock and human acceptance remain unverified."}
+      ],
+      "dependencies": ["cap-authoritative-pricing", "int-firebase"],
+      "blockers": ["block-frontend-backend-divergence", "block-inventory-operator-retry", "block-catalog-pricing-review"],
+      "last_verified": "2026-09-10",
+      "owner_or_authority": "Inventory Firebase Functions, Firestore projections, and Library recipe adapters"
     },
     {
       "id": "cap-ambient-workspace",
@@ -107,12 +122,12 @@
       "lifecycle_state": "DEPLOYED",
       "confidence": "MEDIUM",
       "evidence": [
-        {"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "VERCEL_AND_FIREBASE_DEPLOYED", "verifiedAt": "2026-08-25", "note": "Exact v0.15.0 is recorded at Vercel and Firebase; authenticated and human acceptance are not."},
+        {"type": "deployment_record", "path": "PROJECT_STATUS.md", "status": "VERCEL_V0_16_6", "verifiedAt": "2026-09-04", "note": "The public Vercel edge serves v0.16.6 while the current Functions backend is v0.18.1; authenticated and human acceptance are not established."},
         {"type": "test", "path": "docs/acceptance/quotepilot-v16-calm-four-acceptance-matrix.md", "status": "PASSED", "verifiedAt": "2026-08-30", "note": "The integrated v0.16 Calm Four exact candidate has current local evidence: 10/10 scenario browser tests, 26/26 responsive/accessibility tests, 73/73 latest focused tests, a preceding 196/196 integrated Quick Updates cohort, and a Firebase emulator authority trace. Candidate deployment, authenticated hosted proof, and founder acceptance remain pending."}
       ],
       "dependencies": ["cap-quote-lifecycle", "int-vercel"],
-      "blockers": ["block-authenticated-production-acceptance"],
-      "last_verified": "2026-08-30",
+      "blockers": ["block-frontend-backend-divergence", "block-authenticated-production-acceptance"],
+      "last_verified": "2026-09-04",
       "owner_or_authority": "React workspace routes and existing server authorities"
     },
     {
@@ -175,7 +190,7 @@
       "steps": ["qualify demand", "create authoritative quote", "save exact revision", "issue proposal", "record customer decision", "collect payment evidence", "produce BEO and staffing handoff"],
       "lifecycle_state": "DEPLOYED",
       "confidence": "MEDIUM",
-      "blockers": ["block-tenant-250-provisioning", "block-authenticated-production-acceptance", "block-provider-acceptance"]
+      "blockers": ["block-frontend-backend-divergence", "block-authenticated-production-acceptance", "block-provider-acceptance"]
     },
     {
       "id": "journey-buyer-activation",
@@ -195,20 +210,24 @@
     {"id": "decision-proof-boundaries", "status": "ACCEPTED", "statement": "Source, local tests, CI, deployment, provider outcomes, recipient behavior, human acceptance, and commercial proof are separate claims.", "evidence": "PROJECT_STATUS.md"}
   ],
   "integrations": [
-    {"id": "int-firebase", "name": "Firebase Auth, Firestore, Functions, and Hosting", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["tenant 250 provisioning and staffing activation", "authenticated human acceptance"]},
-    {"id": "int-vercel", "name": "Vercel public production edge", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["authenticated human acceptance"]},
+    {"id": "int-firebase", "name": "Firebase Auth, Firestore, Functions, and Hosting", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["Inventory operator retry after App Check correction", "authenticated human acceptance", "Firebase Hosting remains v0.16.3"]},
+    {"id": "int-vercel", "name": "Vercel public production edge", "state": "DEPLOYED", "evidence": "PROJECT_STATUS.md", "unknowns": ["v0.18 frontend promotion", "authenticated human acceptance"]},
     {"id": "int-stripe", "name": "Stripe payments and isolated Connect program", "state": "PARTIAL", "evidence": "docs/STRIPE_CONNECT_PROGRAM.md", "unknowns": ["coordinated hosted rail acceptance", "Connect Sandbox runtime"]},
     {"id": "int-resend", "name": "Resend email", "state": "PARTIAL", "evidence": "PROJECT_STATUS.md", "unknowns": ["recipient inbox confirmation for the controlled delivered message", "ordinary quote and onboarding email acceptance"]},
     {"id": "int-turnstile", "name": "Cloudflare Turnstile", "state": "IMPLEMENTED", "evidence": "DEV_TASKS.md", "unknowns": ["both approved production hostname checks"]}
   ],
   "risks": [
-    {"id": "risk-acceptance-drift", "severity": "HIGH", "statement": "Exact v0.16.5 deployment and one controlled delivered Resend message can be mistaken for tenant availability, recipient behavior, ordinary customer-email readiness, human acceptance, or commercial proof.", "mitigation": "Keep deployment, provider, inbox, workflow, human, and commercial receipts separate and leave each missing downstream evidence class UNVERIFIED."},
+    {"id": "risk-acceptance-drift", "severity": "HIGH", "statement": "The split v0.16.6 public browser, v0.18.1 Functions backend, v0.16.3 Hosting fallback, and live synthetic Inventory data can be mistaken for one coherent accepted release.", "mitigation": "Keep source, CI, target deployment, tenant readback, provider, human, usage, and commercial receipts separate."},
+    {"id": "risk-privileged-fixture-transition", "severity": "HIGH", "statement": "The local ragnakok-operations-v1 fixture can enable Inventory and Staffing settings and reconfirm pricing while appearing to be ordinary data population.", "mitigation": "Treat it as a privileged exact-tenant migration and require explicit review, dry-run, apply, and readback authorization before hosted use."},
     {"id": "risk-proof-inflation", "severity": "HIGH", "statement": "Large source and test coverage can be mistaken for provider, production, human, or commercial proof.", "mitigation": "Keep evidence types explicit and fail unverified claims closed."},
     {"id": "risk-program-sprawl", "severity": "MEDIUM", "statement": "Many gated source programs increase reconciliation and adoption cost.", "mitigation": "Fund work through one observable next proof event and retire or defer programs that do not reduce its uncertainty."}
   ],
   "blockers": [
-    {"id": "block-tenant-250-provisioning", "priority": "P0", "status": "OPEN", "statement": "Tenant 250 lacks organizations/250/settings/config, so the protected staffing activation workflow failed closed without mutation.", "source": "PROJECT_STATUS.md"},
+    {"id": "block-frontend-backend-divergence", "priority": "P0", "status": "OPEN", "statement": "The public Vercel browser is v0.16.6 while Firebase Functions are v0.18.1 and the Firebase Hosting fallback is v0.16.3.", "source": "PROJECT_STATUS.md"},
     {"id": "block-authenticated-production-acceptance", "priority": "P0", "status": "OPEN", "statement": "No current authenticated end-to-end production staff acceptance receipt exists.", "source": "DEV_TASKS.md"},
+    {"id": "block-inventory-operator-retry", "priority": "P0", "status": "OPEN", "statement": "The v0.18.1 Inventory App Check correction is deployed, but a successful hosted operator retry and human acceptance are not recorded.", "source": "DEV_TASKS.md"},
+    {"id": "block-catalog-pricing-review", "priority": "P0", "status": "OPEN", "statement": "Founder Inventory population advanced catalog revisions 23 and 60 and intentionally cleared pricing confirmation pending human review.", "source": "DEV_TASKS.md"},
+    {"id": "block-operating-twin-governance", "priority": "P0", "status": "OPEN", "statement": "The local operating-twin population can change exact-tenant gates and pricing confirmation and requires separate hosted-apply review.", "source": "DEV_TASKS.md"},
     {"id": "block-provider-acceptance", "priority": "P0", "status": "OPEN", "statement": "One controlled email transport reached provider delivered; recipient inbox confirmation, ordinary customer-email acceptance, and coordinated payment provider acceptance remain unverified.", "source": "DEV_TASKS.md"},
     {"id": "block-buyer-safety", "priority": "P0", "status": "OPEN", "statement": "Buyer access needs a dedicated restricted test key, webhook checks, Turnstile checks, and bounded hosted acceptance.", "source": "DEV_TASKS.md"},
     {"id": "block-connect-hosted-sandbox", "priority": "P1", "status": "OPEN", "statement": "Connect lacks an approved applied staging foundation, trusted runtime binding, and hosted Sandbox proof.", "source": "DEV_TASKS.md"},
@@ -219,13 +238,13 @@
     {
       "id": "proof-current-production-journey",
       "isNext": true,
-      "title": "Exact v0.16.5 authenticated quote-to-operations production journey",
-      "hypothesis": "After reviewed tenant provisioning and protected staffing activation, one authorized operator can complete the primary quote-to-operations journey on exact v0.16.5 without authority or evidence gaps.",
-      "preconditions": ["run an approved tenant-250 provisioning migration and activate staffing only after verified readback"],
-      "observableEvent": "One authorized tenant-250 operator creates and saves an exact quote revision, reopens it, issues the current proposal, records a customer decision, and generates the revision-bound BEO while role and cross-tenant denials remain intact.",
-      "acceptanceCriteria": ["exact release SHA and Firebase deployment receipt", "authenticated role-safe journey receipts", "exact saved revision readback", "cross-tenant and invalid portal paths fail closed", "provider and recipient outcomes remain separately labeled when absent"],
+      "title": "Exact frontend/backend convergence and authenticated founder-tenant journey",
+      "hypothesis": "After an exact frontend candidate compatible with v0.18.1 is promoted, one authorized mm05366-sandbox administrator can traverse the canonical commercial, Operations, Inventory, and Library surfaces without authority or evidence gaps.",
+      "preconditions": ["qualify and separately authorize one exact frontend candidate", "retain the existing v0.18.1 backend and exact founder-tenant gates", "complete the required human Catalog pricing review"],
+      "observableEvent": "One authorized mm05366-sandbox administrator uses Living Opportunity, Quote administration, Operations, Inventory, and Library pricing review with exact readback while sales-role and cross-tenant denials remain intact.",
+      "acceptanceCriteria": ["exact source SHA, CI, immutable deployment, public probes, and rollback", "authenticated role-safe journey receipts", "Inventory App Check outcome and exact command/projection readback", "exact catalog revision and pricing-confirmation readback", "provider, recipient, human, usage, and commercial outcomes remain separately labeled when absent"],
       "evidenceDestination": "PROJECT_STATUS.md",
-      "reducesUncertaintyFor": ["cap-quote-lifecycle", "cap-proposal-decision", "cap-event-operations", "cap-operational-staffing", "cap-ambient-workspace"]
+      "reducesUncertaintyFor": ["cap-quote-lifecycle", "cap-proposal-decision", "cap-event-operations", "cap-operational-staffing", "cap-ingredient-inventory", "cap-ambient-workspace"]
     }
   ],
   "commercialEvidence": [
@@ -236,8 +255,9 @@
     {"id": "commercial-outcome", "claim": "QuotePilot measurably improves conversion, speed, margin, or operational quality.", "verdict": "UNVERIFIED", "evidence": [], "note": "No before-and-after customer outcome evidence is present."}
   ],
   "nextActions": [
-    {"id": "action-next-proof", "priority": 1, "action": "Complete the single next proof event after approved tenant provisioning and protected staffing activation on exact v0.16.5.", "owner": "release owner and authorized tenant operator"},
-    {"id": "action-provider-receipts", "priority": 2, "action": "Confirm the exact controlled inbox arrival, then capture ordinary quote-email provider, reconciliation, and recipient receipts separately.", "owner": "operations owner"},
-    {"id": "action-commercial-proof", "priority": 3, "action": "Collect buyer, paid-customer, usage, revenue, retention, and outcome evidence or leave each claim UNVERIFIED.", "owner": "product owner"}
+    {"id": "action-next-proof", "priority": 1, "action": "Qualify and separately authorize one exact frontend candidate, then complete the authenticated founder-tenant proof event against v0.18.1.", "owner": "release owner and authorized tenant operator"},
+    {"id": "action-operating-twin-review", "priority": 2, "action": "Review the operating-twin population's tenant-gate and pricing-confirmation transitions before any hosted apply.", "owner": "product and operations owner"},
+    {"id": "action-provider-receipts", "priority": 3, "action": "Capture ordinary quote-email and payment provider, reconciliation, recipient, and settlement receipts separately.", "owner": "operations owner"},
+    {"id": "action-commercial-proof", "priority": 4, "action": "Collect buyer, paid-customer, usage, revenue, retention, and outcome evidence or leave each claim UNVERIFIED.", "owner": "product owner"}
   ]
 }

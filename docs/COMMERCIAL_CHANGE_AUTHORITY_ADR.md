@@ -1,5 +1,7 @@
 # Commercial Change Authority Architecture Decision
 
+Last updated: 2026-09-10 12:09:03 CDT
+
 Status: Accepted for source implementation; runtime enforcement remains gated
 Date: August 9, 2026
 Decision owners: QuotePilot maintainers

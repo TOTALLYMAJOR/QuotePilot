@@ -1,5 +1,7 @@
 # Revenue Autopilot Design Document
 
+Last updated: 2026-09-10 12:09:03 CDT
+
 Status: As-built source design; runtime and sends remain gated
 Date: August 9, 2026
 

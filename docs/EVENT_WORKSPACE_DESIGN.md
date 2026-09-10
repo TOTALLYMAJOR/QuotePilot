@@ -1,6 +1,10 @@
 # CWF-16 Event Workspace Design and Repository Audit
 
-Status: Approved design direction and pre-code audit
+Last updated: 2026-09-10 12:09:03 CDT
+
+Status: Historical approved CWF-16 design and pre-code audit. The current
+Ambient-enabled exact-quote composition is governed by `DESIGN_SYSTEM.md` and
+the Living Opportunity contracts.
 Date: August 9, 2026
 Visual source: `docs/design/cwf-16-event-workspace-concept.png`
 

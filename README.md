@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-10 10:00:00 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -13,6 +13,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - Commercial platform program: [docs/COMMERCIAL_PLATFORM_PROGRAM.md](docs/COMMERCIAL_PLATFORM_PROGRAM.md)
 - Pricing Constitution: [docs/PRICING_CONSTITUTION.md](docs/PRICING_CONSTITUTION.md)
+- Ingredient Inventory authority: [docs/INVENTORY_AUTHORITY_ADR.md](docs/INVENTORY_AUTHORITY_ADR.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
   Firebase staging or Vercel preview only; checksum-verified Firebase binary,
   ADC Rules readback, direct Vercel APIs, and an explicit safe-off, bounded
@@ -22,6 +23,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Design system: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
 - Design principles: [docs/DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md)
+- Commercial workspace design contract: [docs/DESIGN-CONTRACT.md](docs/DESIGN-CONTRACT.md)
 - Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Post-competitive destination design: [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md)
@@ -66,21 +68,14 @@ evidence paths, freshness, blocker references, and the single next proof event.
   authority.
 - `/app/quotes`, `/app/quotes/new`, `/app/quotes/:quoteId`, and
   `/app/quotes/:quoteId/edit`: routed Opportunities, sticky-mounted builder,
-  canonical connected Quote Workspace, and trusted edit entry points. The
-  exact quote route now leads with the approved dinner-table workspace over
-  saved tenant data, consolidated **Now**, **Opportunities**, **Clients**, and
-  role-safe **Library** orientation, visible completeness/save-health evidence,
-  and explicit handoffs to the unchanged editing, messaging, proposal,
-  payment, lifecycle, delivery, and recovery authorities. The explicit
-  `?view=administration` continuation and governed administration arrivals
-  retain the prior full control surface. The workspace composes existing quote/Workflow evidence plus the existing
-  proposal-readiness selector through one deterministic presentation contract;
-  it labels that result as proposal completeness and does not create an
-  event-wide readiness or data-authority contract. An independently default-off
-  Ambient build may expose tenant-isolated operational staffing inside the
-  selected quote's Staffing object. That authority has separate presentation,
-  server, and exact-tenant gates and does not change quoted labor, pricing,
-  booking, BEO, portal, payment, attendance, payroll, or readiness evidence.
+  Ambient-enabled Living Opportunity, and trusted edit entry points. The exact
+  quote route keeps identity, bounded condition and next action, sold scope,
+  commercial lifecycle, and contextual evidence together. The explicit
+  `?view=administration` continuation retains provider, payment, booking,
+  portal, contract, and other role-gated quote actions. The edit route owns
+  ordinary draft editing or the governed amendment flow for accepted/booked
+  work. Neither presentation creates event-wide readiness or new quote,
+  Staffing, Inventory, payment, BEO, or provider authority.
 - `/app/quote-workspace` and `/app/quote-workspace-concept`: authenticated
   admin/sales-only compatibility aliases for the canonical connected Quote
   Workspace. Existing bookmarks continue to work, but new exact-quote
@@ -112,7 +107,7 @@ evidence paths, freshness, blocker references, and the single next proof event.
 - `/staffing/respond?staffing=<signed-token>`: public bearer response for one
   exact staff assignment invitation. The link records accept or decline only;
   it does not establish attendance, hours, payroll, completion, or readiness.
-- `/app/operations`: source-candidate canonical Calendar for accepted/booked
+- `/app/operations`: canonical Calendar-first workspace for accepted/booked
   operations. It composes the existing month/week schedule, conflicts,
   capacity, staff-lead assignment, production checklist, and run-of-show
   context without adding backend or live-telemetry authority. Month gives the
@@ -123,6 +118,13 @@ evidence paths, freshness, blocker references, and the single next proof event.
   directly; the secondary Workspace & tools Operations group contains
   **Operations**, **Clear the Deck**, and role-gated **Staff** without a
   duplicate header menu.
+- `/app/inventory`: administrator ingredient stock, recorded purchase cost,
+  receiving, allocation, consumption, receipts, and bounded projections when
+  the browser, server, exact-tenant, role, and Firebase gates all permit it.
+  Library owns recipes and menu-cost editing; rentals remain sold quote scope,
+  not ingredient Inventory. The public Vercel frontend is older than the
+  v0.18.1 Inventory backend, so hosted browser availability and operator
+  acceptance remain separate evidence.
 - `/app/schedule`: compatibility path to the same Calendar capability. Event
   and schedule deep routes remain reachable from their exact context or URL;
   they are not duplicated in the Operations menu.
@@ -130,8 +132,8 @@ evidence paths, freshness, blocker references, and the single next proof event.
   workspace. **Reporting Dashboard**, **Integrations Ops**, **Import Studio**,
   and **Session Diagnostics** remain progressively disclosed Administration
   tools, while **Workflow**, **Messages**, and **Pilot** remain Frequent tools.
-  These navigation changes are a local source candidate; exact-head CI, hosted
-  behavior, and human acceptance remain pending.
+  These navigation changes are the current source contract; the public Vercel
+  edge is older, and hosted role behavior plus human acceptance remain pending.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
   workspaces; the existing admin gate remains authoritative. A default-off
   Ambient build presents `/app/catalog` as **Library**, separating catalog
@@ -164,16 +166,16 @@ authenticated hosted and human acceptance remain separate. See the
 for the delivery and evidence contract.
 
 ## Product Scope
-The current product direction is a customer-centered quote-to-booking workspace:
-Commercial Command Center, Customer Directory and Customer 360, routed Quotes,
-the Event Messaging Station, Workflow, Schedule, Reporting, and guarded
-administration, with the five-step quote builder retained as one focused
-commercial capability. The exact-token customer decision center remains the
-sole customer-facing experience.
+The current product direction is a customer-centered quote-to-booking and
+event-operations workspace: Now, Opportunities/Living Opportunity, Operations,
+Clients, Library, Workflow, Messaging, Inventory, Staffing, Reporting, and
+guarded administration. The five-step quote builder remains one focused
+commercial capability, and the exact-token proposal room remains the sole
+customer-facing decision experience.
 
-The live `v0.7.0` release promotes the reviewed customer-centered workspace,
-CWF-16 Event Workspace, Event Messaging Station, and all eight production pilot
-surfaces. QuotePilot also includes dynamic
+The public browser, Firebase backend, and source branch currently differ; see
+[`PROJECT_STATUS.md`](PROJECT_STATUS.md) before making a release claim.
+QuotePilot includes dynamic
 event-type menus, authoritative pricing, proposal export and decisions,
 tenant-locked customer/catalog CSV imports, separate deposit and final-balance
 rails in current source, public invoice-first buyer onboarding on the existing
@@ -565,6 +567,12 @@ approval, Staffing, workflow-definition, and event-ledger authorities. It
 refuses non-fixture collisions and replays only records carrying its stable
 receipt identity. The 20 portrait files must already be published from
 `public/fixtures/ragnakok-staff/` before apply.
+
+Treat this as a privileged exact-tenant fixture migration, not an ordinary
+population script. It may enable the already-deployed Inventory and Staffing
+tenant settings and reconfirm the exact current catalog revision. Review and
+separately authorize those transitions before any hosted apply; preserve the
+dry-run, apply, and provider-readback receipts.
 
 All acceptance, provider-delivery, approval, qualification, availability, and
 performance examples are explicitly synthetic operating-twin evidence. They
@@ -1536,6 +1544,8 @@ the primary targets.
 - Skill index: [docs/SKILLS.md](docs/SKILLS.md)
 - Staff/admin operations guide: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature inventory and implementation chronology: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Commercial workspace design contract: [docs/DESIGN-CONTRACT.md](docs/DESIGN-CONTRACT.md)
+- Ingredient Inventory authority: [docs/INVENTORY_AUTHORITY_ADR.md](docs/INVENTORY_AUTHORITY_ADR.md)
 - Customer-centered workspace architecture: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Customer identity/360 backend contract: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Cloud/local orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)

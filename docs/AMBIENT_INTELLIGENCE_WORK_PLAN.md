@@ -1,34 +1,28 @@
 # QuotePilot Ambient Intelligence Work Plan
 
-Last updated: 2026-08-29 21:20:35 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
-Status: approved product direction and open implementation plan. The Pilot Slice
-Alpha source implementation is included with this document behind a default-off
-presentation gate; the broader 50-item program remains open. Local tests and
-browser review establish only local implementation evidence, not deployment,
-provider acceptance, production-data acceptance, or human acceptance.
+Status: historical implementation plan and acceptance ledger. All 50 items are
+materially represented in current source, but none is promoted here into
+hosted, provider, production-data, assistive-technology, or human acceptance.
+Current priorities belong in `DEV_TASKS.md`; operational evidence belongs in
+`PROJECT_STATUS.md`.
 
-Canonical-adoption checkpoint: the owner approved the connected dinner-table
-Quote Workspace as the product's primary exact-quote presentation. The source
-candidate now routes `/app/quotes/:quoteId` to that connected workspace,
-reduces persistent Ambient orientation to **Now**, **Opportunities**,
-**Clients**, and role-safe **Library**, and moves Events and Staff into
-contextual Operations access. Existing pricing, tenant, quote-edit,
+Canonical-adoption checkpoint: the current Ambient-enabled source routes
+`/app/quotes/:quoteId` to Living Opportunity, promotes capability-gated
+Operations into the five-destination orientation, and retains the connected
+dinner-table Quote Workspace as compatibility and Ambient-off rollback. Event
+planning and Staff remain available through their exact operational contexts.
+Existing pricing, tenant, quote-edit,
 conversation, proposal, payment, lifecycle, delivery, and recovery authority
 remains unchanged behind explicit exact-object continuations. Compatibility
 aliases and the prior administration presentation remain rollback paths until
 hosted responsive and owner acceptance are recorded.
 
-Production checkpoint: the annotated `v0.7.0` tag resolves to
-`fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`; governed Firebase and Vercel
-deployment receipts are recorded in
-[`PROJECT_STATUS.md`](../PROJECT_STATUS.md). Those receipts do not establish
-authenticated hosted behavior, production-data correctness, provider outcomes,
-or human acceptance. The current Ambient completion candidate starts from
-`origin/main` at `2908fc281215ff9297645f7e05db91b65de04fdf`, nine commits after
-tagged `v0.8.1`; neither branch position nor a tag proves deployment. Priority
-and sequencing are owned by
-[`DEV_TASKS.md`](../DEV_TASKS.md).
+Release evidence has advanced beyond the historical v0.7/v0.8 checkpoints.
+The public edge, Firebase backend, Hosting fallback, and local source are
+currently different versions; [`PROJECT_STATUS.md`](../PROJECT_STATUS.md) is
+the only current operational authority.
 
 ## AIUI-00 — Experience Constitution
 

@@ -1,10 +1,29 @@
 # Changelog
 
-Last updated: 2026-09-10 10:00:00 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — documentation authority reconciliation
+
+- Reconcile current operational docs around the split evidence surface:
+  `v0.16.6` public Vercel frontend, `v0.18.1` Firebase Functions, `v0.16.3`
+  Firebase Hosting fallback, live synthetic founder Inventory population, and
+  the later local operating-twin branch.
+- Define current application placement for Living Opportunity, Quote
+  administration, governed edit, Operations, Inventory, Library, Staff, and
+  Customer 360. Mark the CWF-16 Event Workspace suite as historical foundation
+  and compatibility provenance rather than the ordinary Ambient exact route.
+- Reconcile Inventory Phases 2–8 as merged/backend-deployed while preserving
+  public-browser and human-acceptance gaps. Record the operating-twin loader as
+  a privileged exact-tenant migration because it can change tenant gates and
+  pricing confirmation.
+- Reduce Project Status and Dev Tasks to their canonical current/open roles,
+  refresh the machine state and project indexes, register the Design Contract,
+  and make documentation governance require a valid timestamp across the full
+  governed Markdown corpus while retaining changed-file advancement checks.
 
 ## Unreleased — realistic founder-pilot operating twin
 

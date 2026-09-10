@@ -1,5 +1,7 @@
 # Commercial Dependency Graph Architecture Decision
 
+Last updated: 2026-09-10 12:09:03 CDT
+
 Status: Accepted CWF-15A foundation; amended for current authoritative consumers
 Date: August 9, 2026
 Decision owners: QuotePilot maintainers

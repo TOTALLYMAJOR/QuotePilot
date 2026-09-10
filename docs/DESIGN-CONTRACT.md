@@ -1,8 +1,9 @@
 # QuotePilot Design Contract
 
-Last updated: 2026-08-20 19:13:17 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
-Status: governing product contract for staff and customer commercial workflows.
+Status: subordinate composition contract for staff and customer commercial
+workflows. It creates no quote, Inventory, Staffing, payment, or BEO authority.
 
 ## Purpose
 
@@ -16,8 +17,9 @@ Use these authorities in order:
 1. Product truth, authorization, pricing, payment, and provider boundaries in
    code and domain policy.
 2. `DESIGN_PRINCIPLES.md` for product judgment and hard constraints.
-3. This contract for commercial workflow composition and interaction.
-4. `DESIGN_SYSTEM.md` and the tokens in `src/styles.css` for visual execution.
+3. `DESIGN_SYSTEM.md` and the tokens in `src/styles.css` for visual and
+   interaction execution.
+4. This contract for commercial workflow composition within those authorities.
 
 If they conflict, the higher authority wins. No visual treatment may imply that
 a quote saved, a message delivered, a payment settled, or an event booked when
@@ -38,6 +40,23 @@ terminal. Each surface should help an operator answer:
 - What value or obligation matters now?
 - What blocks progress?
 - What is the one useful next action?
+
+## Application placement
+
+| User job | Canonical surface | What it may not absorb |
+|---|---|---|
+| Understand one exact opportunity | `/app/quotes/:quoteId` Living Opportunity | Provider actions, ordinary editing, physical Inventory, universal event readiness |
+| Administer proposal, portal, payment, booking, contract, and recovery | exact quote `?view=administration` | A second quote or payment authority |
+| Edit a draft or govern an accepted/booked change | `/app/quotes/:quoteId/edit` | Silent rewrite of accepted truth or stale downstream artifacts |
+| Plan accepted/booked event work | `/app/operations` | Quote lifecycle, physical stock, staffing acknowledgement, or BEO currentness |
+| Record ingredient stock and cost | `/app/inventory` | Sold rentals, recipes, selling price, supplier action, or overall readiness |
+| Configure Offers, components, templates, rules, recipes, and menu cost | Library | Physical stock or quote lifecycle |
+| Maintain people profiles | `/app/staff` | Exact event assignments, attendance, payroll, or readiness |
+| Review the customer relationship | `/app/customers/:id` | Internal evidence not permitted by the role projection |
+
+The CWF-16 Event Workspace remains historical foundation and compatibility
+provenance. In the Ambient-enabled profile, Living Opportunity is the ordinary
+exact-quote composition.
 - What evidence will exist after I act?
 
 ## Repository Fit

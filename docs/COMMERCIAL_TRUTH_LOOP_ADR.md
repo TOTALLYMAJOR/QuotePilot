@@ -1,8 +1,9 @@
 # Architecture Decision: Python as a Read-Only Reconciliation Tier
 
-Last updated: 2026-08-21 13:10:00 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
-Status: Proposed
+Status: Accepted and implemented as a read-only reconciliation tier. It has no
+credential, network, mutation, pricing, approval, or customer-facing authority.
 Date: August 21, 2026
 Decision owner: QuotePilot owner
 

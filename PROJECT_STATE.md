@@ -1,99 +1,57 @@
 # QuotePilot Canonical Project State
 
-Last updated: 2026-09-04 18:11:13 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
-## Current State
-
-The active draft PR #129 branch contains an intentionally unpushed local
-commercial-platform and UX-convergence refinement. The owner has authorized
-local commits only; no final push is currently authorized. It
-preserves the deployed production boundary below: pricing-v2, Offers,
-Templates, Rules, Library changes, and exact payment amount provenance remain
-source-candidate capabilities until a separately authorized future push and
-exact-head CI complete. They are not deployed, used, or commercially proven.
-Local implementation commit `5dd97a20133b592f210d56e2454e699c17d45200`
-corrects Calendar-first Operations to the selected compositions. Month uses a
-full-width calendar with the selected context below; Week uses a true
-seven-day time grid with duration geometry, collision lanes, and a secondary
-context rail. Collapsed operational detail, the derived-conflict workflow, and
-Calendar capability gates reuse the existing schedule, event, staffing,
-checklist, and arrival authority. The exact-source 12-case browser matrix and
-390/768/1440/1487 captures pass; the full local release/CWV lane also passes
-with the synchronized documentation content. AC-236 remains UNVERIFIABLE
-because the owner explicitly prohibited a push; local success is not remote CI
-or hosted acceptance.
-
-QuotePilot is a deployed commercial SaaS product with a broad, tested source
-surface. Exact `v0.16.5` (`ad3517b39109b91dd735ee3700e8c79a4e2ca956`)
-passed the required exact-main CI matrix and is recorded at the Vercel public
-edge and Firebase Functions production target; the Firebase Hosting
-origin/fallback remains on the prior static release. A later receipt-only
-documentation commit may place repository `main` ahead of that runtime artifact
-without changing application behavior. One controlled non-customer Resend
-message has QuotePilot `provider_accepted` and provider `delivered` evidence,
-but recipient inbox confirmation and ordinary customer-email acceptance remain
-open. The primary operating journey exists, while tenant-250 provisioning/
-activation, authenticated end-to-end production, human acceptance, adoption,
-and revenue evidence remain incomplete or UNVERIFIED.
+QuotePilot is a deployed catering commercial and operations system with a split
+current evidence surface: the public Vercel browser is `v0.16.6`, Firebase
+Functions are `v0.18.1`, Firebase Hosting remains `v0.16.3`, and the local
+founder-population branch contains two later unmerged commits. These artifacts
+must not be collapsed into one production-version claim.
 
 The machine-readable reconciliation is [`.project/state.json`](.project/state.json).
-This page is an entry point, not a replacement for established authorities.
+This page is only its human entry point.
 
-## Canonical Authority Map
+## Canonical authority map
 
 | Question | Canonical source |
 |---|---|
 | What capabilities exist in source? | [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md) |
-| What is deployed or operational now? | [`PROJECT_STATUS.md`](PROJECT_STATUS.md) |
+| What is deployed, populated, or operational now? | [`PROJECT_STATUS.md`](PROJECT_STATUS.md) |
 | What work remains and in what order? | [`DEV_TASKS.md`](DEV_TASKS.md) |
 | What changed historically? | [`CHANGELOG.md`](CHANGELOG.md) |
 | How does an operator use the product? | [`docs/USER_MANUAL.md`](docs/USER_MANUAL.md) |
 | What claim has what evidence? | [`docs/project/PROOF.md`](docs/project/PROOF.md) |
-| What decisions and explorations shape the work? | [`docs/project/DECISIONS.md`](docs/project/DECISIONS.md) and [`docs/project/EXPLORATIONS.md`](docs/project/EXPLORATIONS.md) |
+| What decisions govern the system? | [`docs/project/DECISIONS.md`](docs/project/DECISIONS.md) |
 
-## Lifecycle Vocabulary
+## Lifecycle vocabulary
 
 `IDEA`, `SPECIFIED`, `DESIGNED`, `IMPLEMENTED`, `TESTED`, `VERIFIED`,
 `DEPLOYED`, `USED`, `COMMERCIALLY_PROVEN`, `DEPRECATED`, and `BLOCKED` are
-distinct states. A higher state is recorded only when its own evidence exists.
-Source or local test success never proves deployment, provider behavior, human
-acceptance, use, or commercial value.
+distinct. Source, tests, CI, deployment, provider results, tenant activation,
+human acceptance, usage, and commercial outcomes require their own evidence.
 
-## Reconciled Product View
+## Reconciled product view
 
-- Primary user: catering owners and sales/event operators; customers act in the
-  proposal, decision, and payment portions of the journey.
-- Economic buyer: a catering business owner or operating administrator. Actual
-  buyer validation remains UNVERIFIED.
-- Primary journey: demand intake → authoritative quote → exact saved revision →
-  proposal → customer decision → payment evidence → BEO/staffing handoff.
-- Strongest current evidence: source inventory, focused/local tests, exact-main
-  CI run `33818617920`, exact `v0.16.5` Firebase Functions and Vercel
-  deployments, role-gated production UI evidence, one QuotePilot
-  `provider_accepted` receipt, one bounded audit row, and exact-message Resend
-  `delivered` readback.
-- Largest uncertainty: the exact current authenticated production journey and
-  the commercial adoption/revenue layer.
+- Primary actors are catering owners, administrators, sales operators, event
+  operators, staff, and customers at their authorized projection.
+- The primary journey is demand intake → authoritative quote → exact saved
+  revision → proposal → customer decision → payment evidence → event planning,
+  Staffing, Inventory, and BEO handoff.
+- Exact quote context belongs to Living Opportunity; authoritative provider and
+  commercial controls stay in Quote administration and governed edit; event
+  planning belongs to Operations; ingredient stock/cost belongs to Inventory;
+  recipes and menu cost belong to Library.
+- The strongest current proof is source and test coverage, exact CI/deployment
+  receipts, v0.18.1 Functions readback, and exact founder Inventory population
+  readback. Current public-browser parity and human acceptance remain open.
 
 ## NEXT PROOF EVENT
 
-After tenant `250` is established through a reviewed provisioning/migration
-path and the protected staffing activation workflow succeeds, one authorized
-tenant-250 operator completes the exact quote-to-operations journey on
-`v0.16.5`: create and save a quote revision, reopen it, issue its current
-proposal, record the customer decision, and generate the revision-bound BEO.
-The proof must include the recorded exact release/deployment receipts, tenant
-setting readback, exact revision readback, role-safe UI evidence, cross-tenant
-and invalid-portal denial, and honest separation of any missing provider or
-recipient outcome.
+Promote an exact frontend candidate compatible with the v0.18.1 backend and
+record one authenticated `mm05366-sandbox` administrator journey through the
+canonical surfaces with exact role, tenant, App Check, revision, and readback
+evidence. Provider, recipient, human, usage, and commercial outcomes remain
+separate claims.
 
-This is the only designated next proof event. It reduces uncertainty across the
-quote, proposal, event-operations, staffing, and Ambient presentation cohorts.
-
-## Control Plane
-
-Run `npm run check:project-state` to detect invalid lifecycle values, missing or
-stale evidence, broken repository references, contradictory blocked states,
-duplicate IDs, and multiple or missing next proof events. `lane:quick` runs the
-same check. A passing check establishes internal consistency only; it does not
-promote any product or commercial claim.
+Run `npm run check:project-state` to validate ledger consistency. A pass proves
+the control plane only; it does not promote runtime or outcome evidence.

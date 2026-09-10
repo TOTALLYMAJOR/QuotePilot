@@ -1,6 +1,10 @@
 # CWF-16 Event Workspace Architecture Decision
 
-Status: Accepted for source implementation
+Last updated: 2026-09-10 12:09:03 CDT
+
+Status: Historical accepted CWF-16 foundation. In the current Ambient-enabled
+profile, the ordinary exact-quote route is the Living Opportunity; this
+component remains compatibility and implementation provenance only.
 Date: August 9, 2026
 
 ## Context

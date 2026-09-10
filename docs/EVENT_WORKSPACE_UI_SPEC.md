@@ -1,6 +1,9 @@
 # CWF-16 Event Workspace UI Specification
 
-Status: Accepted implementation contract
+Last updated: 2026-09-10 12:09:03 CDT
+
+Status: Historical CWF-16 implementation contract. Current ordinary
+Ambient-enabled quote detail follows the Living Opportunity contract.
 Date: August 9, 2026
 Visual target: `docs/design/cwf-16-event-workspace-concept.png`
 

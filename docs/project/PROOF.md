@@ -1,32 +1,23 @@
 # Claim and Evidence Register
 
-Last updated: 2026-08-25 02:06:28 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
-## Evidence Rule
-
-Each verdict is limited to the evidence type named. Missing evidence is
-`UNVERIFIED`; it is never silently promoted from source, test, deployment, or
-configuration evidence.
+Missing evidence is `UNVERIFIED`. Source, test, CI, deployment, provider,
+recipient, tenant readback, human acceptance, usage, and commercial evidence do
+not substitute for one another.
 
 | Claim | Evidence currently present | Verdict |
 |---|---|---|
-| Exact `v0.15.0` source passed its recorded required CI matrix. | Exact SHA `bc495c8c948d440b12363d5da34209a11ff151fd`, tag, and CI run `32817744859` are recorded in [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md). | `VERIFIED` for CI only |
-| The public Vercel edge serves exact `v0.15.0`. | Governed deployment run `32819363438` and its public-edge probe are recorded. | `DEPLOYED` at Vercel |
-| Firebase Hosting, Functions, rules, and indexes serve exact `v0.15.0`. | Governed all-scope run `32818605404` completed and its origin probe passed. | `DEPLOYED` at Firebase |
-| The reconciled candidate is in production. | Exact `v0.15.0` reached both governed targets; later receipt-only documentation does not change the runtime artifact. | `DEPLOYED` at both targets |
-| An authenticated operator can complete the current primary journey in production. | Source, tests, and older deployment history exist; the current authenticated acceptance pass is open. | `UNVERIFIED` |
-| Proposal email was accepted, delivered, and received for an exact current portal issuance. | Resend configuration exists; the exact provider, webhook, and recipient sequence is open. | `UNVERIFIED` |
-| Deposit and final-balance rails behave correctly with Stripe in the hosted environment. | Source/emulator evidence exists; coordinated hosted provider acceptance is open. | `UNVERIFIED` for hosted/provider behavior |
-| Operational staffing authority is deployed and available for tenant 250. | The authority shipped in `v0.15.0`, but activation run `32425529671` found no `organizations/250/settings/config` and stopped before mutation. | `DEPLOYED` code; tenant availability `UNVERIFIED` |
-| Stripe Connect can onboard a merchant in Sandbox. | Tested source foundation exists, but runtime is unexported, unbound, and provider disabled. | `UNVERIFIED` |
-| Steward improves operator decisions safely. | Exact `v0.15.0` carries its unavailable-state UI and tested source foundation; no provider runtime, consenting pilot, or human comparison exists. | `UNVERIFIED` |
-| QuotePilot has validated buyers, paying customers, recurring usage, revenue, retention, or measurable outcomes. | No repository-backed commercial receipts or metrics were found in the reconciliation sources. | `UNVERIFIED` |
+| The public Vercel edge serves exact `v0.16.6`. | SHA `a350b72a`, CI `33889897821`, deployment `33890996339`, and route probes are recorded in `PROJECT_STATUS.md`. | `DEPLOYED` at Vercel |
+| Firebase Functions serve exact `v0.18.1`. | SHA `8bada8d1`, CI `34430375712`, production run `34431964494`, and 128-Function readback are recorded. | `DEPLOYED` backend only |
+| The public browser and backend are one exact current release. | The recorded versions differ and Firebase Hosting remains `v0.16.3`. | `UNVERIFIED`; currently split |
+| Founder Inventory/menu-cost records exist in both live targets. | Exact provider readbacks record staging 525/132/132/132/200 at revision 23 and production 538/132/132/132/200 at revision 60. | `VERIFIED` for synthetic population state |
+| Those records prove physical stock, supplier action, or accepted pricing. | Records are explicitly synthetic and pricing confirmation is cleared. | `UNVERIFIED` |
+| The larger founder operating twin is live. | Local source and focused tests exist; hosted assets and apply/readback do not. | `TESTED` source only |
+| Inventory works for a hosted operator after the App Check fix. | Deployment and provider readback exist; successful retry is open. | `UNVERIFIED` |
+| Living Opportunity, Operations, Inventory, and Library placement is implemented in current source. | Current route/component and feature-contract evidence exists. | `IMPLEMENTED` in source; public parity open |
+| An authenticated operator can complete the current quote-to-operations journey. | Source/test and partial deployment evidence exist; current exact hosted acceptance does not. | `UNVERIFIED` |
+| QuotePilot has paying customers, recurring use, revenue, retention, or measured outcomes. | No corresponding repository receipts are recorded. | `UNVERIFIED` |
 
-## Evidence Classes
-
-`source` proves an implementation exists. `test` proves a named local or CI
-assertion under its fixture. `deployment` proves an exact artifact reached a
-named target. `provider` proves the provider accepted or emitted a named event.
-`recipient` proves user receipt or action. `human_acceptance` proves a recorded
-person completed an acceptance protocol. `usage` and `commercial` require
-actual product and business evidence. None substitutes for another.
+The complete operational narrative belongs in
+[`PROJECT_STATUS.md`](../../PROJECT_STATUS.md).

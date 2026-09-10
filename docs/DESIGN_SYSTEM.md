@@ -1,10 +1,10 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-08 09:45:47 CDT
+Last updated: 2026-09-10 12:09:03 CDT
 
-Status: shipped in v0.5.0 (PR #50). This records the visual system, its
-contracts, and the intentional decisions so future work extends it instead of
-rediscovering it.
+Status: living canonical staff-workspace design system. Its v0.5.0 foundation
+has been extended by the Ambient, UX-convergence, commercial, Staffing, and
+Inventory contracts below; release evidence remains in `PROJECT_STATUS.md`.
 
 ## Agent UI Workflow
 
@@ -104,7 +104,7 @@ readable disabled treatment, forced-colors behavior, and reduced-motion
 fallbacks are mandatory. A caught user-triggered failure may not disappear into
 console diagnostics or leave the initiating control looking idle.
 
-## UX Convergence surfaces (source candidate)
+## UX Convergence surfaces (current source contract)
 
 - **Commercial Workbench:** retain the sheet-on-bone proposal as the living
   object. Desktop uses Quote Plan / proposal / Commercial Truth; tablet and
@@ -142,7 +142,7 @@ console diagnostics or leave the initiating control looking idle.
   plumbing stay out of the ordinary task surface unless they are necessary for
   honest recovery.
 - **Converged navigation:** when the existing Calendar capability is enabled,
-  the local candidate uses five persistent primary destinations in this order:
+  the current source contract uses five persistent primary destinations in this order:
   Now, Opportunities, Operations, Clients, and role-gated Library. Operations
   opens the reused Calendar capability directly; it is not duplicated as a
   header menu. Workspace & tools retains Operations, Clear the Deck, and Staff
@@ -206,16 +206,19 @@ The synthesis may compose saved lifecycle, exact accepted/current-revision
 relationship, allowlisted payment states, final-count checklist, exact BEO
 freshness, exact staffing coverage, bounded Workflow, complete Schedule
 conflicts, and BEO invalidations. Missing, stale, partial, truncated, malformed,
-or unclassified evidence never passes. Inventory, actual attendance, live phase,
-and live issues remain unavailable until separately governed authority exists.
+or unclassified evidence never passes. Inventory may join only through its
+exact current event projection and remains independent of allocation and menu-
+cost completeness. Actual attendance, live phase, and live issues remain
+unavailable until separately governed authority exists.
 
-## Ambient Intelligence extension (source proof, release-profile enabled)
+## Ambient Intelligence extension (current source, release-profile enabled)
 
 Pilot Slice Alpha extends this system behind `VITE_AMBIENT_UI_ENABLED`. The
 gate remains default-off outside governed release profiles and changes no data
-or provider authority. The v0.16 candidate and production release profiles
-bind it on. When off, the connected Quote Workspace remains the ordinary
-exact-quote rollback presentation.
+or provider authority. Current source profiles may bind it on; the public edge,
+Firebase backend, and Hosting fallback have separate release evidence in
+`PROJECT_STATUS.md`. When off, the connected Quote Workspace remains the
+ordinary exact-quote rollback presentation.
 
 The Alpha visual grammar is an open editorial instrument rather than a card
 dashboard: the selected opportunity leads with identity, lifecycle state,
@@ -254,7 +257,7 @@ are conditionally rendered only after the user expands Administration, so a
 collapsed section cannot leak gated controls into keyboard order. Closing the
 sheet resets that secondary disclosure without changing any route or authority.
 
-### UX convergence primary-navigation overlay (local source candidate)
+### UX convergence primary-navigation overlay (current source contract)
 
 The later frozen UX convergence contract promotes the qualified Calendar-first
 **Operations** surface into a five-destination primary set: **Now**,
@@ -1127,10 +1130,11 @@ retention never crosses organization, quote, source, role, or gate identity.
 - Hairlines: `#e4e4e0` borders, `#efefec` row separators.
 - Radii: 8/10/14 (`--radius-sm/md/lg`). Shadows are soft and small
   (`--shadow-soft/panel/elevated`).
-- Type: Manrope everywhere in the staff workspace (`--font-ui`,
-  `--font-display`). Bodoni Moda serif is reserved for editorial/brand
-  moments via `--font-editorial` (brand lockup, portal h1, event title,
-  quote-summary total). 12px minimum font size.
+- Type: Manrope is the default staff UI family (`--font-ui` and ordinary
+  working display text). Bodoni Moda is reserved for editorial/brand moments
+  via `--font-editorial` (brand lockup, portal h1, event title, quote-summary
+  total). DM Mono is bounded to document artifacts and exact financial/evidence
+  details. 12px minimum font size.
 
 ## Layout contracts
 
@@ -1196,10 +1200,10 @@ retention never crosses organization, quote, source, role, or gate identity.
   status chip and one-sentence outcome visible; collapse the rest.
 - Alert notes: `.error-note`/`.warning-note` are tinted bordered cards,
   not bare colored text.
-- Event workspace (quote page): `.event-workspace-body` = main column +
-  304px sticky side rail (quote summary from `quote.totals`, lifecycle).
-  Readiness donut is a conic-gradient driven by the `--readiness-score`
-  inline variable.
+- Historical CWF-16 Event Workspace: `.event-workspace-body` uses a main column
+  and 304px sticky side rail. Its proposal-readiness visualization is legacy
+  presentation evidence, not event readiness. In the Ambient-enabled profile,
+  Living Opportunity owns ordinary exact-quote composition.
 
 ## Feature flag
 
@@ -1210,8 +1214,7 @@ covers the production default.
 
 ## Known follow-ups
 
-Tracked in DEV_TASKS.md: promote Catalog into primary sidebar nav
-(admin-gated), a first-class Templates surface for event-type presets,
-inline editing on the event workspace (requires simulate-pricing round
-trips and change-authority integration), and a terminology pass on the
-remaining expert labels (e.g. Decision Debt, Revenue Autopilot).
+Tracked in `DEV_TASKS.md`: exact frontend/backend convergence, hosted admin and
+sales acceptance, Inventory App Check retry, privileged operating-twin review,
+responsive/assistive-technology acceptance, compatibility retirement, and the
+remaining terminology pass.
