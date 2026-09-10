@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-09 20:50:56 CDT
+Last updated: 2026-09-10 04:44:56 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1304,6 +1304,17 @@ realtime. **Cached**, **pending**, **stale**, **unavailable**, and **uncertain**
 states are not confirmation. If an action may have reached the server but no
 receipt returned, keep the entered values and use **Check exact request**; do
 not start a replacement request.
+
+The founder-pilot staging and production workspaces may contain the
+`ragnakok-realistic-v1` planning fixture: five kitchen locations, 132
+ingredients, at least 500 menu items, and 200 recipe projections. Records whose
+source or note begins **Projected ragnakok-realistic-v1** or **Synthetic
+founder-pilot** are demonstration assumptions. Do not treat them as a count,
+invoice, supplier confirmation, purchase order, allocation, or receiving
+receipt. Replace them through normal Inventory actions before relying on them
+for a live event. After this menu population, an administrator must review and
+confirm **Catalog → Pricing setup** because the import deliberately invalidates
+the prior pricing confirmation.
 
 For an ingredient bought in a supplier pack, open **Declare or revise pack** on
 that ingredient. Give the pack a stable reference, label, exact quantity in the

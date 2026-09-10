@@ -1,10 +1,35 @@
 # Changelog
 
-Last updated: 2026-09-09 22:25:04 CDT
+Last updated: 2026-09-10 04:44:56 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — realistic founder-pilot inventory population
+
+- Add a fixed, dry-run-first, confirmation-gated population operation for the
+  exact `mm05366-sandbox` tenant in isolated staging and production. The
+  versioned fixture adds 130 creative catering menu items, five kitchen stock
+  locations, 132 ingredient definitions, explicit synthetic opening and cost
+  projections, and 200 versioned recipes. It composes the existing catalog
+  import and Inventory command/receipt authorities; it does not create a
+  parallel menu, pricing, staffing, commercial, or supplier authority.
+- Preserve the requested Chicken Alfredo decision scenario as fixture math:
+  `0.4 lb × 175 guests = 70 lb` against a `64 lb` projected opening balance,
+  producing a six-pound shortage. `Supplier B` remains a clearly labelled
+  synthetic cost-source assumption, not supplier acknowledgement or a purchase
+  action.
+- Treat catalog population as a commercial consequence: every newly applied
+  menu batch advances the catalog revision and clears pricing confirmation for
+  deliberate operator review before authoritative quote saves.
+- Apply and read back the fixture in both exact live targets. Isolated staging
+  verifies 525 menu items, 132 ingredients, 132 stock states, 132 cost states,
+  and 200 recipe/menu-cost projections at catalog revision 23. Production
+  verifies 538 menu items with the same 132/132/132/200 Inventory counts at
+  catalog revision 60; its pre-existing Chicken identity and stock location
+  were preserved. Both pricing confirmations are intentionally false pending
+  human review.
 
 ## v0.18.1 — Inventory callable hotfix
 

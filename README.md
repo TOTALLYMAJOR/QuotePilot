@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-05 19:05:50 CDT
+Last updated: 2026-09-10 04:44:56 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -497,6 +497,44 @@ npm run env:local:firebase -- --project tonicatering
 The command is create-only by default. If `.env.local` already exists, it
 refuses to overwrite it. An intentional replacement requires both `--replace`
 and the exact confirmation token printed by the command.
+
+### Founder-pilot realistic inventory population
+
+The fixed `ragnakok-realistic-v1` population gives the isolated staging and
+production founder-pilot tenant a useful catering dataset without creating a
+second menu, pricing, staffing, or commercial authority. It bootstraps the
+existing canonical catalog when records are absent, adds 130 creative menu
+items through the receipt-bound catalog import core, and publishes five stock
+locations, 132 ingredients, projected opening balances and cost bases, and 200
+versioned menu recipes through Inventory command receipts.
+
+The default mode is read-only:
+
+```bash
+npm run populate:inventory:ragnakok -- \
+  --project quotepilot-staging-20260804 \
+  --organization mm05366-sandbox
+
+npm run populate:inventory:ragnakok -- \
+  --project tonicatering \
+  --organization mm05366-sandbox
+```
+
+Apply requires `--apply` plus the exact `POPULATE <project> <organization>
+ragnakok-realistic-v1` confirmation printed by the dry run. The command is
+fixed to those two projects and that organization, resolves the canonical
+verified owner/admin, enables the tenant Inventory gate only in isolated
+staging, refuses to silently enable production, reuses matching canonical
+records, and is restart-safe through stable import and Inventory request
+identities.
+
+Every opening balance and supplier-labelled cost in this fixture is explicitly
+synthetic founder-pilot planning evidence—not a physical count, supplier
+acknowledgement, purchase order, or observed invoice. Replace it with real
+receiving/count evidence before live operational reliance. The catalog import
+advances `catalogRevision` and clears pricing confirmation, so **Catalog →
+Pricing setup** must be reviewed and confirmed again before authoritative quote
+saves.
 
 The root `.env.example` is for browser-safe `VITE_*` values only. Server-side
 Firebase Functions placeholders live in

@@ -1,6 +1,24 @@
 # Project Status
 
-Last updated: 2026-09-09 22:25:04 CDT
+Last updated: 2026-09-10 04:44:56 CDT
+
+## Realistic founder-pilot population applied and verified
+
+The `ragnakok-realistic-v1` population operation was applied and provider-read
+back for `mm05366-sandbox` in both live targets. Isolated staging now has 525
+menu items, five kitchen locations, 132 ingredients, 132 stock states, 132 cost
+states, and 200 recipe/menu-cost projections at catalog revision 23. Production
+now has 538 menu items, six total locations (five canonical fixture locations
+plus the pre-existing location), 132 ingredients, 132 stock states, 132 cost
+states, and 200 recipe/menu-cost projections at catalog revision 60. The
+existing production Chicken identity was reused rather than duplicated.
+
+The operation uses the existing catalog import authority and Inventory command
+runtime with stable replay identities. It makes no Staffing, Commercial
+Change, Event Spine, supplier, purchasing, allocation, or consumption write.
+Supplier names and quantities are synthetic planning assumptions. Applying the
+menu batch intentionally clears pricing confirmation and requires a human
+Catalog pricing review before authoritative quote saves.
 
 ## v0.18.1 Inventory callable hotfix deployed
 
