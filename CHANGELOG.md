@@ -1,8 +1,14 @@
 # Changelog
 
-Last updated: 2026-09-10 15:16:30 CDT
+Last updated: 2026-09-10 15:47:23 CDT
 
 All notable project changes are documented in this file.
+
+## Ambient staffing release-fixture lifecycle - 2026-09-10
+
+- Pinned the Ambient accessibility fixture to an explicit future quote expiry
+  so its enabled staffing-recommendation contract remains deterministic instead
+  of silently aging into the correctly restricted expired lifecycle.
 
 ## Documentation governance baseline correction - 2026-09-10
 
